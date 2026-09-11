@@ -20,6 +20,10 @@ import {
     upsertComposableOutcomeBehavior,
 } from "@/lib/lifecycle/stageOutcomeAutomation";
 import { CASE_CLOSE_REASONS } from "@/lib/lifecycle/caseCloseReasonVocabulary";
+import {
+    candidateStatusOperatorLabel,
+    OUTCOME_CANDIDATE_STATUS_VALUES,
+} from "@/lib/lifecycle/stageOutcomeAutomation";
 
 type Props = {
     outcomeKey: string;
@@ -32,6 +36,22 @@ type Props = {
     transitionDestinations?: Array<{ key: string; label: string }>;
     /** Configured closed case statuses. Resolved by the parent from `status_definitions`. */
     closedStatusOptions?: ReadonlyArray<{ status_key: string; status_label: string }>;
+    /**
+     * The stage's journey segment. Decides which durable consequences this outcome may author.
+     *
+     * Grain is not decoration here: a child-grain stage moves ONE child's enrollment track, and
+     * offering it the family case status would let an outcome on one child write the whole family's
+     * state. The vocabularies are deliberately kept apart — see
+     * `STAGE_PARTICIPANT_DECISION_ALLOWED_TARGET_KINDS`, which excludes `update_family_case_status`
+     * for exactly this reason.
+     */
+    stageGrain?: "family" | "child";
+    /**
+     * Configured CHILD ENROLLMENT statuses, from the `opportunity_customer_members` status domain.
+     * Resolved by the parent, like `closedStatusOptions`, so this component reads one catalog and
+     * invents none.
+     */
+    childEnrollmentStatusOptions?: ReadonlyArray<{ status_key: string; status_label: string }>;
     /**
      * Creates the exit path to `targetStageKey` AND points this outcome at it, in one draft edit.
      * The caller owns both halves on purpose — doing them as two writes here dropped the path.
@@ -140,6 +160,8 @@ export default function LifecycleStageOutcomeBehaviorEditor({
     transitionOptions,
     transitionDestinations,
     closedStatusOptions,
+    stageGrain,
+    childEnrollmentStatusOptions,
     onCreateTransition,
     onRulesChange,
 }: Props) {
@@ -278,6 +300,97 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                         />
                         Close this lead
                     </label>
+                ) : null}
+
+                {/*
+                  * CHILD-GRAIN CONSEQUENCES.
+                  *
+                  * A child-grain stage owns one child's enrollment track, so these are the durable
+                  * states its outcomes can write. They are deliberately SEPARATE from movement: the
+                  * per-child paths editor already established that the operator picks the
+                  * destination AND the resulting status, because the second is not derivable from
+                  * the first. Collapsing them would silently choose a disposition on the operator's
+                  * behalf.
+                  *
+                  * Family-grain stages never see these controls. The reverse is deliberately NOT
+                  * claimed: the close panel above still renders on a child-grain stage, because
+                  * removing it would silently drop configuration some stage may already rely on.
+                  * What IS guaranteed is that the two catalogs never mix — the child picker resolves
+                  * from `opportunity_customer_members` and the case picker from `opportunities`, so
+                  * a family status cannot be written into a child's enrollment state by choosing the
+                  * wrong option.
+                  */}
+                {stageGrain === "child" ? (
+                    <div
+                        className="mt-1.5 space-y-1.5 rounded-md bg-alloy-midnight/[0.025] p-1.5"
+                        data-testid={`stage-outcome-child-consequences-${outcomeKey}`}
+                    >
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[0.6875rem] text-alloy-midnight/70">
+                                Child enrollment status
+                            </span>
+                            <AlloySelect
+                                value={draft.child_enrollment_status?.status_key ?? ""}
+                                aria-label="Child enrollment status"
+                                placeholder={
+                                    childEnrollmentStatusOptions?.length
+                                        ? "No change"
+                                        : "No child statuses configured"
+                                }
+                                density="compact"
+                                className="w-auto"
+                                testId={`stage-outcome-child-status-${outcomeKey}`}
+                                options={(childEnrollmentStatusOptions ?? []).map((status) => ({
+                                    value: status.status_key,
+                                    label: status.status_label,
+                                }))}
+                                onChange={(next) =>
+                                    apply({
+                                        ...draft,
+                                        // Empty clears the consequence rather than writing a blank
+                                        // status: "no change" is a real answer for most outcomes.
+                                        ...(next.trim()
+                                            ? { child_enrollment_status: { status_key: next.trim() } }
+                                            : { child_enrollment_status: undefined }),
+                                    })
+                                }
+                            />
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[0.6875rem] text-alloy-midnight/70">
+                                Candidate status
+                            </span>
+                            <AlloySelect
+                                value={draft.candidate_status?.candidate_status ?? ""}
+                                aria-label="Candidate status"
+                                placeholder="No change"
+                                density="compact"
+                                className="w-auto"
+                                testId={`stage-outcome-candidate-status-${outcomeKey}`}
+                                // Code-owned closed union, not a tenant catalog — anything else
+                                // would fail the plan parser, so offering more would offer a choice
+                                // that cannot be saved.
+                                options={OUTCOME_CANDIDATE_STATUS_VALUES.map((value) => ({
+                                    value,
+                                    label: candidateStatusOperatorLabel(value),
+                                }))}
+                                onChange={(next) =>
+                                    apply({
+                                        ...draft,
+                                        ...(next.trim()
+                                            ? {
+                                                  candidate_status: {
+                                                      candidate_status:
+                                                          next.trim() as (typeof OUTCOME_CANDIDATE_STATUS_VALUES)[number],
+                                                  },
+                                              }
+                                            : { candidate_status: undefined }),
+                                    })
+                                }
+                            />
+                        </div>
+                    </div>
                 ) : null}
 
                 {/*
