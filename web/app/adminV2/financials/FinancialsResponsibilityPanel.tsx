@@ -157,6 +157,7 @@ export default function FinancialsResponsibilityPanel({
     customerId,
     customerMemberId,
     chargeId,
+    arrangement,
     parties,
     onCommitted,
 }: {
@@ -164,6 +165,11 @@ export default function FinancialsResponsibilityPanel({
     customerMemberId: string | null;
     /** The obligation being looked at — carried so an arrangement in force can still be edited. */
     chargeId?: string | null;
+    /*
+     * THE ACCOUNT'S ARRANGEMENT, which is not the same fact as this charge's allocation. Without it
+     * the panel went on inviting the operator to create an arrangement they had just created.
+     */
+    arrangement?: { effectiveStart: string | null; shares: { responsiblePartyId: string | null }[] } | null;
     /** The parties already on record, so the operator edits what exists rather than inventing it. */
     parties: { personId: string | null; name: string }[];
     onCommitted: () => Promise<void> | void;
@@ -205,8 +211,18 @@ export default function FinancialsResponsibilityPanel({
                 if (mode === "preview") {
                     setPreview(out.preview ?? null);
                 } else {
-                    /* Committed truth is re-read; nothing here edits a figure to look successful. */
+                    /*
+                     * Committed truth is re-read; nothing here edits a figure to look successful.
+                     *
+                     * The panel CLOSES on success, and not merely for tidiness: the confirmation
+                     * and the re-read record both live in the closed state, so an execute that left
+                     * the form open committed the arrangement and showed the operator nothing at
+                     * all. Pressing Confirm and watching nothing happen is indistinguishable from a
+                     * failure.
+                     */
                     setPreview(null);
+                    setShares([]);
+                    setOpen(false);
                     setDone("Responsibility updated.");
                     await onCommitted();
                 }
@@ -231,10 +247,30 @@ export default function FinancialsResponsibilityPanel({
                     Manage responsibility →
                 </button>
                 {parties.filter((p) => p.personId).length === 0 ? (
-                    /* A statement of fact and an invitation — not a reason the control is unusable. */
-                    <p className="mt-1 text-[11px] text-alloy-midnight/50" data-financials-responsibility-empty="true">
-                        No responsibility arrangement yet.
-                    </p>
+                    arrangement ? (
+                        /*
+                         * AN ARRANGEMENT IN FORCE, AND A CHARGE NOT YET DIVIDED UNDER IT. Both are
+                         * true at once whenever the charge was billed before the arrangement was
+                         * made: Thread 6 refuses to move posted money without an explicit decision.
+                         * Saying only the first would claim this charge is divided; saying only the
+                         * second told operators their own arrangement did not exist.
+                         */
+                        <p
+                            className="mt-1 text-[11px] text-alloy-midnight/50"
+                            data-financials-responsibility-arrangement="in-force"
+                        >
+                            {arrangement.shares.length === 1
+                                ? "1 responsible party"
+                                : `${arrangement.shares.length} responsible parties`}
+                            {arrangement.effectiveStart ? ` from ${arrangement.effectiveStart}` : ""}. This posted
+                            charge is not divided under it.
+                        </p>
+                    ) : (
+                        /* A statement of fact and an invitation — not a reason the control is unusable. */
+                        <p className="mt-1 text-[11px] text-alloy-midnight/50" data-financials-responsibility-empty="true">
+                            No responsibility arrangement yet.
+                        </p>
+                    )
                 ) : null}
                 {done ? (
                     <p className="mt-1 text-[11px] text-alloy-bend-pine" data-financials-responsibility-done="true">

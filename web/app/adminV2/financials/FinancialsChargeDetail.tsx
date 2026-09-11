@@ -64,6 +64,12 @@ type ChargeDetail = {
     };
     expectedFunding: { label: string; sourceType: string; expectedCents: number | null }[];
     applications: Application[];
+    /* Who bears the ACCOUNT, from a date — a different fact from who bears this charge. */
+    accountArrangement: {
+        id: string;
+        effectiveStart: string | null;
+        shares: { responsiblePartyId: string | null }[];
+    } | null;
 };
 
 function money(cents: number, currency: string): string {
@@ -244,6 +250,7 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                     customerId={detail.customerId}
                     customerMemberId={detail.customerMemberId}
                     chargeId={detail.chargeId}
+                    arrangement={detail.accountArrangement}
                     parties={detail.responsibility.parties}
                     onCommitted={reload}
                 />

@@ -38,6 +38,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { readResponsibility } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
+import {
+    readAccountArrangement,
+    type AccountArrangement,
+} from "@/lib/financials/responsibility/readAccountArrangement";
 import type { CollectiblePosition } from "@/lib/financials/subsidy/collectiblePosition";
 
 /** One payment that satisfied part of this charge, as the operator needs to read it. */
@@ -105,6 +109,17 @@ export type ChargeDetail = {
 
     /** WHAT HAS ACTUALLY BEEN PAID AGAINST IT. */
     applications: ChargeDetailApplication[];
+
+    /*
+     * THE ACCOUNT'S ARRANGEMENT, WHICH IS NOT THIS CHARGE'S ALLOCATION.
+     *
+     * `responsibility` above says who bears THIS obligation. This says who bears the ACCOUNT, from
+     * a date. A posted charge is not re-divided when an arrangement is configured — Thread 6
+     * refuses to move billed money without an explicit decision — so the two can legitimately
+     * disagree, and a surface that knows only the first tells an operator who has just created an
+     * arrangement that there isn't one.
+     */
+    accountArrangement: AccountArrangement | null;
 };
 
 function t(v: unknown): string {
@@ -204,6 +219,7 @@ export async function resolveChargeDetail(
     }
 
     const responsibilityRead = await readResponsibility(supabase, args.orgId, [chargeId]);
+    const accountArrangement = await readAccountArrangement(supabase, { orgId: args.orgId, customerId });
 
     const { data: allocationRows, error: allocationError } = await supabase
         .from("payment_allocations")
@@ -265,6 +281,7 @@ export async function resolveChargeDetail(
                 assignedCents: p.assignedCents,
             })),
         },
+        accountArrangement,
         expectedFunding: responsibilityRead.expectedFunding.map((f) => ({
             label: f.label,
             sourceType: f.sourceType,

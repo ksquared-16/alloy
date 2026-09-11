@@ -175,18 +175,32 @@ test.describe("responsibility can be configured from an account that has none", 
         const afterCommit = await detail.innerText();
         // eslint-disable-next-line no-console
         console.log("[responsibility:after-commit] full detail text:\n" + afterCommit);
-        expect(afterCommit, "the obligation now names who bears it").toContain(ADULTS[0]);
-        await expect(
-            page.locator('[data-financials-charge-line="responsibility-party"]').first(),
-            "a responsibility line must appear on the obligation",
-        ).toBeVisible({ timeout: 60_000 });
-        await page.screenshot({ path: `${OUT}/responsibility-03-committed.png`, fullPage: false });
 
-        // 13 · AND THE REST OF THE OBLIGATION IS STILL UNASSIGNED, said rather than implied.
+        /*
+         * 13 · AND IT NO LONGER SAYS THERE IS NO ARRANGEMENT.
+         *
+         * This is the assertion that closes the original defect, and it is deliberately NOT
+         * "a responsibility line appears on this charge". The charge was posted before the
+         * arrangement existed, and Thread 6 refuses to re-divide billed money without an explicit
+         * decision — so the honest state is an arrangement in force over an obligation not yet
+         * divided under it, and the surface has to say both. Asserting an allocation here would be
+         * asserting a behaviour the authority correctly refuses.
+         */
         await expect(
-            page.locator('[data-financials-charge-line="responsibility-unassigned"]'),
-            "money nobody has been made responsible for is named, not silently absorbed",
-        ).toBeVisible();
+            page.locator('[data-financials-responsibility-empty="true"]'),
+            "the account has an arrangement now; it must stop inviting the operator to create one",
+        ).toHaveCount(0);
+        const inForce = page.locator('[data-financials-responsibility-arrangement="in-force"]');
+        await expect(inForce, "the arrangement in force must be stated on the obligation").toBeVisible({
+            timeout: 60_000,
+        });
+        // eslint-disable-next-line no-console
+        console.log("[responsibility:in-force] " + (await inForce.innerText()));
+        expect(
+            await inForce.innerText(),
+            "an arrangement over a charge it does not govern must say so, not imply division",
+        ).toMatch(/not divided under it/i);
+        await page.screenshot({ path: `${OUT}/responsibility-03-committed.png`, fullPage: false });
 
         // 14 · A COLD RELOAD REPRODUCES IT. Anything less is a rendering, not a record.
         await page.reload();
@@ -200,7 +214,11 @@ test.describe("responsibility can be configured from an account that has none", 
         const reloaded = await detailAfter.innerText();
         // eslint-disable-next-line no-console
         console.log("[responsibility:after-reload] full detail text:\n" + reloaded);
-        expect(reloaded, "the arrangement did not persist past a reload").toContain(ADULTS[0]);
+        await expect(
+            page.locator('[data-financials-responsibility-arrangement="in-force"]'),
+            "the arrangement did not persist past a reload",
+        ).toBeVisible({ timeout: 60_000 });
+        await expect(page.locator('[data-financials-responsibility-empty="true"]')).toHaveCount(0);
         await page.screenshot({ path: `${OUT}/responsibility-04-reloaded.png`, fullPage: false });
     });
 
@@ -234,6 +252,14 @@ test.describe("responsibility can be configured from an account that has none", 
         // eslint-disable-next-line no-console
         console.log("[responsibility:payments-before] " + JSON.stringify({ appliedBefore, outstandingBefore }));
 
+        /*
+         * THE ACCOUNT ALREADY HAS ONE — the previous case created it — so this is the edit path,
+         * deliberately following creation rather than replacing it.
+         */
+        await expect(
+            page.locator('[data-financials-responsibility-arrangement="in-force"]'),
+            "this case edits an arrangement, so one must already be in force",
+        ).toBeVisible({ timeout: 60_000 });
         await page.locator('[data-financials-manage-responsibility="open"]').click();
         await page.waitForTimeout(8_000);
         const opened = await logPanel(page, "reconfigure-opened");
@@ -243,6 +269,16 @@ test.describe("responsibility can be configured from an account that has none", 
          * dropped off the picker could never be corrected.
          */
         for (const adult of ADULTS) expect(opened, `${adult} must still be offered`).toContain(adult);
+
+        /*
+         * FROM A LATER DATE, because the authority says so. `configureResponsibilityArrangement`
+         * refuses an arrangement starting on or before one already in force — "Supersede it from a
+         * later date" — and it is right to: two arrangements claiming the same day is an
+         * unanswerable question about who owed what on it. An operator changing the split does it
+         * from a date, and so does this.
+         */
+        const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        await page.locator('[data-financials-responsibility-effective="true"]').fill(tomorrow);
 
         await assign(page, ADULTS[0], "40");
         await assign(page, ADULTS[1], "35");
@@ -261,11 +297,15 @@ test.describe("responsibility can be configured from an account that has none", 
         const after = await detail.innerText();
         // eslint-disable-next-line no-console
         console.log("[responsibility:divided] full detail text:\n" + after);
-        for (const adult of ADULTS) expect(after, `${adult} bears part of this obligation`).toContain(adult);
-        expect(
-            await page.locator('[data-financials-charge-line="responsibility-party"]').count(),
-            "two people were made responsible and the surface shows two",
-        ).toBeGreaterThanOrEqual(2);
+        const inForce = page.locator('[data-financials-responsibility-arrangement="in-force"]');
+        await expect(inForce, "the superseding arrangement must be the one stated").toBeVisible({ timeout: 60_000 });
+        const stated = await inForce.innerText();
+        // eslint-disable-next-line no-console
+        console.log("[responsibility:divided-in-force] " + stated);
+        expect(stated, "two people were made responsible and the surface says two").toMatch(
+            /2 responsible parties/i,
+        );
+        expect(stated, "it takes effect from the date the operator chose").toContain(tomorrow);
         /*
          * AND THE MONEY THAT HAD ALREADY MOVED DID NOT MOVE. This is the sentence the panel shows
          * the operator — "changing it does not change who has already paid" — held to account.
