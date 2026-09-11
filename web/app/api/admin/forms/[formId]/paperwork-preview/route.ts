@@ -41,7 +41,7 @@ import type { FormSchemaV1 } from "@/lib/forms/schema";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") return jsonError("Forbidden", 403);
@@ -73,7 +73,17 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         schema_json: unknown;
         pdf_mapping_json: unknown;
     }>;
-    const version = rows.find((r) => r.status === "draft") ?? rows.find((r) => r.status === "published");
+    /*
+     * `version_id` pins WHICH version's paperwork to draw.
+     *
+     * The editing canvas passes the version its region geometry came from. Without that, the
+     * overlays and the page could be resolved from different versions and the boxes would sit in
+     * the wrong places — a silent, very convincing kind of wrong.
+     */
+    const requestedVersionId = request.nextUrl.searchParams.get("version_id");
+    const version = requestedVersionId
+        ? rows.find((r) => r.id === requestedVersionId)
+        : (rows.find((r) => r.status === "draft") ?? rows.find((r) => r.status === "published"));
     if (!version) return jsonError("This form has no version to preview yet.", 404, { code: "NO_VERSION" });
 
     const mapping = parseFidelityPdfMapping(version.pdf_mapping_json);
@@ -113,6 +123,24 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         for (const extra of target.compose_with ?? []) {
             sampleValues[extra] = `{${labelByFieldId.get(extra) ?? extra}}`;
         }
+    }
+
+    /*
+     * `?raw=1` — the document as the school published it, with nothing written into it.
+     *
+     * The EDITING canvas needs this. Placeholder text printed into every box is right for a preview
+     * ("what will this produce?") and wrong for an editor, where the operator is selecting boxes and
+     * the braces would just be noise sitting on top of the thing they are clicking.
+     */
+    if (request.nextUrl.searchParams.get("raw") === "1") {
+        return new NextResponse(Buffer.from(source.bytes), {
+            status: 200,
+            headers: {
+                "content-type": "application/pdf",
+                "content-disposition": "inline",
+                "cache-control": "no-store",
+            },
+        });
     }
 
     const filled = await fillPdfWithFidelity({
