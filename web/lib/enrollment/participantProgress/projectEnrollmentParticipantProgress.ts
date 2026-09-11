@@ -49,6 +49,8 @@ function artifactIdFor(ref: StageRequirementV1["ref"]): string {
             return ref.rule_id;
         case "form":
             return ref.form_definition_id;
+        case "packet":
+            return ref.packet_definition_id;
         case "document":
             return ref.document_type_key;
         case "consent":

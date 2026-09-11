@@ -66,10 +66,13 @@ const FORM_REQUIREMENT = {
 };
 
 describe("requirement kinds — architectural vocabulary vs executable subset", () => {
-    it("declares all six kinds", () => {
+    it("declares all seven kinds", () => {
+        // `packet` joined the vocabulary when a stage gained the ability to require the Enrollment
+        // Packet itself rather than each of its Forms.
         expect([...REQUIREMENT_KINDS_V1]).toEqual([
             "field",
             "form",
+            "packet",
             "document",
             "consent",
             "acknowledgment",
@@ -78,7 +81,13 @@ describe("requirement kinds — architectural vocabulary vs executable subset", 
     });
 
     it("authorizes only the kinds with real canonical substrate", () => {
-        expect([...REQUIREMENT_KINDS_AUTHORABLE_V1]).toEqual(["field", "form"]);
+        /*
+         * The test this assertion exists for is EVIDENCE, not count. `packet` is authorable because
+         * a packet session and its items already prove, per step, what a family completed and
+         * against which Form version. The four below stay refused because nothing can prove them.
+         */
+        expect([...REQUIREMENT_KINDS_AUTHORABLE_V1]).toEqual(["field", "form", "packet"]);
+        expect(isAuthorableRequirementKind("packet")).toBe(true);
         expect(isAuthorableRequirementKind("form")).toBe(true);
         expect(isAuthorableRequirementKind("consent")).toBe(false);
     });

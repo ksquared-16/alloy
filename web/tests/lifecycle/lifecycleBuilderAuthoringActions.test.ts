@@ -185,9 +185,16 @@ describe("set_stage_requirements", () => {
     });
 
     it("refuses an unauthorable kind through the guard the route uses", () => {
-        expect(isAuthorableRequirementKind("form")).toBe(true);
-        expect(isAuthorableRequirementKind("field")).toBe(true);
-        for (const kind of REQUIREMENT_KINDS_V1.filter((k) => k !== "form" && k !== "field")) {
+        /*
+         * The authorable set is the one with durable evidence behind it, not a fixed pair. `packet`
+         * joined `form` and `field` because a packet session and its items prove, per step, what a
+         * family completed and against which Form version. The remaining four stay refused because
+         * nothing in the platform can prove them.
+         */
+        for (const authorable of ["form", "field", "packet"] as const) {
+            expect(isAuthorableRequirementKind(authorable), authorable).toBe(true);
+        }
+        for (const kind of REQUIREMENT_KINDS_V1.filter((k) => k !== "form" && k !== "field" && k !== "packet")) {
             expect(isAuthorableRequirementKind(kind), kind).toBe(false);
         }
     });

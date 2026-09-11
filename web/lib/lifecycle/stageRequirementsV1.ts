@@ -72,6 +72,17 @@ import type {
 export const REQUIREMENT_KINDS_V1 = [
     "field",
     "form",
+    /**
+     * An ordered participant package — the Enrollment Packet, not its individual Forms.
+     *
+     * A stage says WHEN enrolment paperwork is required and how strictly; the packet says what
+     * completing it consists of. Listing every Form on the stage made the process know about
+     * composition it does not own, and an administrator adding a step had to edit the lifecycle.
+     *
+     * Unlike the four kinds below, this one has a real evidence owner: a packet session and its
+     * items already prove, per step, what was completed and against which Form version.
+     */
+    "packet",
     "document",
     "consent",
     "acknowledgment",
@@ -108,11 +119,14 @@ export type RequirementKindV1 = (typeof REQUIREMENT_KINDS_V1)[number];
 export const REQUIREMENT_KINDS_AUTHORABLE_V1: readonly RequirementKindV1[] = Object.freeze([
     "field",
     "form",
+    // `packet` joins these two because it satisfies the same test they do: a packet session is a
+    // durable record that can prove the requirement was met.
+    "packet",
 ]);
 
 /** Why a declared kind cannot yet be authored. Surfaced to operators and to controls. */
 export const REQUIREMENT_KIND_UNSUPPORTED_REASON_V1: Readonly<
-    Record<Exclude<RequirementKindV1, "field" | "form">, string>
+    Record<Exclude<RequirementKindV1, "field" | "form" | "packet">, string>
 > = Object.freeze({
     document:
         "No canonical document-requirement owner exists. Document evidence is bound to a form submission, so a document required outside a form has no owner that can prove it was satisfied.",
@@ -142,6 +156,11 @@ export function isAuthorableRequirementKind(kind: RequirementKindV1): boolean {
 export type RequirementRefV1 =
     | { readonly kind: "field"; readonly rule_id: string }
     | { readonly kind: "form"; readonly form_definition_id: string }
+    /**
+     * The packet DEFINITION, not a version — the same rule `form` follows. Which published packet
+     * version a family executes is resolved at launch, where the session pins it.
+     */
+    | { readonly kind: "packet"; readonly packet_definition_id: string }
     | { readonly kind: "document"; readonly document_type_key: string }
     | { readonly kind: "consent"; readonly consent_key: string }
     | { readonly kind: "acknowledgment"; readonly acknowledgment_key: string }
@@ -231,6 +250,10 @@ function parseRef(kindRaw: unknown, row: Record<string, unknown>): RequirementRe
         case "form": {
             const form_definition_id = trimmedString(row.form_definition_id);
             return form_definition_id ? { kind, form_definition_id } : null;
+        }
+        case "packet": {
+            const packet_definition_id = trimmedString(row.packet_definition_id);
+            return packet_definition_id ? { kind, packet_definition_id } : null;
         }
         case "document": {
             const document_type_key = trimmedString(row.document_type_key);
@@ -343,6 +366,8 @@ function refFields(ref: RequirementRefV1): Record<string, string> {
             return { rule_id: ref.rule_id };
         case "form":
             return { form_definition_id: ref.form_definition_id };
+        case "packet":
+            return { packet_definition_id: ref.packet_definition_id };
         case "document":
             return { document_type_key: ref.document_type_key };
         case "consent":
@@ -450,7 +475,7 @@ export function refuseUnauthorableRequirement(
     if (!isAuthorableRequirementKind(candidate.ref.kind)) {
         const reason =
             REQUIREMENT_KIND_UNSUPPORTED_REASON_V1[
-                candidate.ref.kind as Exclude<RequirementKindV1, "field" | "form">
+                candidate.ref.kind as Exclude<RequirementKindV1, "field" | "form" | "packet">
             ];
         return { code: "unsupported_kind", detail: reason };
     }
