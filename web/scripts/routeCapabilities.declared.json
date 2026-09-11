@@ -1988,6 +1988,84 @@
         "status": "pending"
       }
     },
+    "app/api/admin/integrations/applications/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/capabilities/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/activity/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/credentials/[credentialId]/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      },
+      "DELETE": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/credentials/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
+      },
+      "PATCH": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "authorizeIntegrationsAdmin"
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/locations/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/openapi/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
     "app/api/admin/intelligence/operational/route.ts": {
       "GET": {
         "status": "declared",
