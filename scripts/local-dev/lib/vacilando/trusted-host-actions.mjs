@@ -2715,7 +2715,7 @@ export function executeLedgerRepairTrustedHostAction(action, { actor = "director
   action.updated_at = iso(nowMs);
   writeAction(action);
 
-  const run = (evidence.runSql || defaultRunLedgerRepairSql)({ sql: built.sql });
+  const run = (evidence.runSql || defaultRunLedgerRepairSql)({ sql: built.sql, target: inputs.target });
   if (!run?.ok) {
     return failTrustedAction(action, run?.code || "ledger_repair_failed",
       run?.detail || "The ledger repair transaction did not commit.", { nowMs });
@@ -2829,7 +2829,7 @@ function defaultLedgerRepairEvidence({ inputs = {}, nowMs = Date.now() } = {}) {
     : derived;
 }
 
-function defaultRunLedgerRepairSql({ sql }) {
+function defaultRunLedgerRepairSql({ sql, target }) {
   const tmpDir = join(storeDir(), "tmp");
   mkdirSync(tmpDir, { recursive: true });
   const file = join(tmpDir, `ledger-repair-${Date.now()}.sql`);
@@ -2837,7 +2837,18 @@ function defaultRunLedgerRepairSql({ sql }) {
   const errFile = `${file}.err`;
   writeFileSync(file, sql);
   try { chmodSync(APPLY_MIGRATION_SH, 0o755); } catch { /* */ }
-  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile], {
+  /*
+   * THE REPAIR OWES THE CHILD A TARGET LIKE EVERY OTHER CALLER.
+   *
+   * This path ran the same child with three arguments and no environment, from
+   * before the child had one to take. Now that the child resolves its database
+   * from that argument, an absent one is a hard refusal — so every ledger
+   * repair would have exited 45 without touching anything, silently, at exactly
+   * the moment a ledger disagreeing with its schema needed fixing. The apply
+   * path found this the loud way, after three failed production attempts; this
+   * one would have found it on the day it mattered most.
+   */
+  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile, String(target ?? "")], {
     env: {
       ...process.env,
       ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
