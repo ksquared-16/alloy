@@ -24,6 +24,13 @@ import { test, expect, type Page } from "@playwright/test";
 
 const STORAGE = "/Users/vacilando/.local/state/alloy-dev/gateway/auth/slot2/storage-state.json";
 const OPPORTUNITY = "d097e1a8-c3c0-4c51-a113-2275b009b9a9";
+/*
+ * The lane's subject is the CANDIDATE, not the case. The rendered rows carry a plain
+ * `data-entity-id` candidate id, so a bare OPPORTUNITY id matches no row and the view answers
+ * "not present in this work unit's evaluated page" — which is what every earlier attempt hit, and
+ * why the record looked missing while the lane in fact holds 17 rows headed by this family.
+ */
+const ROW_ID = "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8"; // Wrigley Kurzman, row 0 of the rendered lane
 const CUSTOMER = "0658832a-48d6-4b80-beae-0b12d573fdf2";
 /* The Waitlist WORK VIEW (new_work_view_4, stage-filtered), not the work-unit key route: that one
  * selects no view and falls back to the candidate queue, which filters status and is empty. */
@@ -57,7 +64,7 @@ test("Kurzman mounts in the work view that contains it, and Financials asks for 
     test.setTimeout(300_000);
     const reads = watch(page);
 
-    await page.goto(`${ROUTE}&subject_id=${OPPORTUNITY}`);
+    await page.goto(`${ROUTE}&subject_id=${encodeURIComponent(ROW_ID)}`);
     await page.waitForLoadState("domcontentloaded");
     await page.waitForTimeout(25_000);
 
