@@ -5366,8 +5366,10 @@ fixtures instead.
 exactly**: it ran after both `.ts` edits and before the only later change, a comment block. The six directly
 affected suites re-ran green after it (**153 passed**). Two further typecheck re-runs returned **exit 144 /
 `blocked by compute_capacity`** — the *real* wall, not the CLI defect below, and transient (the same command
-admitted in 9s minutes earlier). Recorded as **not re-confirmed on the final tree** rather than assumed. Tier D
-not run and should not be: nothing user-visible changed under `legacy-all`.
+admitted in 9s minutes earlier). ~~Recorded as **not re-confirmed on the final tree** rather than assumed.~~
+**Re-confirmed after the capacity wall cleared: `rc=0 class=ok` on the committed tree `d2e9a76c43fb`
+(`req_1789184329190984_50697`).** Tier D not run and should not be: nothing user-visible changed under
+`legacy-all`.
 
 **A note on the capacity wall, since three lanes recorded it as an environment verdict.** `vac run test -- <paths>`
 passes `--` through to vitest, which reads it as end-of-options; the paths stop filtering and the whole suite
