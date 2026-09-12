@@ -45,7 +45,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { getDurableLane, listDurableLanes, WORK_CLASS_PRODUCT } from "./development-lane.mjs";
+import {
+  getDurableLane, listDurableLanes, recordLaneInstructionBaseline,
+  stampLaneBootstrapContract, WORK_CLASS_PRODUCT,
+} from "./development-lane.mjs";
+import { instructionBaselineVersion } from "./agent-configuration.mjs";
 import { resolveLaneWorktree } from "./lane-worktree-lifecycle.mjs";
 import { qaIdentityForSlot } from "./browser-auth.mjs";
 import { LANE_BOOTSTRAP_CONTRACT_VERSION, laneBootstrapIsStale } from "./lane-bootstrap-contract.mjs";
@@ -126,9 +130,18 @@ function instructionPackFor(worktreePath) {
   if (!worktreePath) return { resolvable: false, reason: "no_worktree" };
   const claude = join(worktreePath, "CLAUDE.md");
   if (!existsSync(claude)) return { resolvable: false, reason: "no_claude_md", path: claude };
-  let bytes = 0;
-  try { bytes = readFileSync(claude, "utf8").length; } catch { /* unreadable is not present */ }
-  return { resolvable: bytes > 0, path: claude, bytes };
+  let text = "";
+  try { text = readFileSync(claude, "utf8"); } catch { /* unreadable is not present */ }
+  const bytes = text.length;
+  return {
+    resolvable: bytes > 0,
+    path: claude,
+    bytes,
+    // The CURRENT baseline this lane would resolve. The resolver already had the
+    // bytes in hand; hashing them here means the drift comparison and the stamp
+    // can never be computed from two different reads of the same file.
+    baseline_version: bytes > 0 ? instructionBaselineVersion(text) : null,
+  };
 }
 
 /**
@@ -267,6 +280,94 @@ export function resolveLaneBootstrap(laneId, {
   };
 }
 
+
+
+/* ── revalidation: the one seam that may write a stamp ────────────────────── */
+
+export const REVALIDATION = Object.freeze({
+  SATISFIED: "SATISFIED",
+  UNRESOLVED: "UNRESOLVED",
+  LANE_NOT_FOUND: "LANE_NOT_FOUND",
+});
+
+/**
+ * Re-measure one lane against the current contract, and stamp it only if it
+ * actually satisfies it.
+ *
+ * WHY THIS EXISTS AND WHY IT IS NARROW. Every active lane on this host predates
+ * the bootstrap contract, so all of them read stale — and the tempting repair is
+ * to stamp them all and watch the health check go green. That would be a lie
+ * with a timestamp on it. A lane is stamped here only when `resolveLaneBootstrap`
+ * returns no unresolved gaps, which is the same measurement the health check
+ * makes, so the two can never disagree about what "satisfies the contract" means.
+ *
+ * TWO STAMPS, DIFFERENT RULES. The instruction baseline pointer is recorded
+ * whenever it can be MEASURED — a lane with a readable CLAUDE.md has a baseline
+ * whether or not its worktree resolves, and recording it is how drift becomes
+ * visible. The bootstrap contract version is stamped only on full satisfaction,
+ * because that stamp is a compliance claim rather than an observation.
+ *
+ * Writes nothing else. Durable decisions, mission, progress and history are not
+ * this seam's business and it holds no reference to them.
+ */
+export function revalidateLaneBootstrap(laneId, {
+  root = undefined,
+  nowMs = Date.now(),
+  stampBootstrap = true,
+  recordBaseline = true,
+  resolve = resolveLaneBootstrap,
+} = {}) {
+  const resolved = root === undefined ? resolve(laneId) : resolve(laneId, { root });
+  if (!resolved?.ok) {
+    return { ok: false, state: REVALIDATION.LANE_NOT_FOUND, lane_id: laneId || null, error: resolved?.error || "lane_not_found" };
+  }
+  const opts = root === undefined ? { nowMs } : { nowMs, root };
+
+  const baseline = recordBaseline
+    ? recordLaneInstructionBaseline(resolved.lane_id, opts)
+    : { ok: true, state: "SKIPPED", written: false };
+
+  const satisfied = Array.isArray(resolved.unresolved) && resolved.unresolved.length === 0;
+  const bootstrap = (stampBootstrap && satisfied)
+    ? stampLaneBootstrapContract(resolved.lane_id, { ...opts, revalidation: resolved })
+    : {
+      ok: true,
+      state: satisfied ? "SKIPPED" : "REFUSED",
+      written: false,
+      unresolved: resolved.unresolved,
+      detail: satisfied ? null : "the lane has unresolved baseline gaps; nothing was stamped",
+    };
+
+  return {
+    ok: true,
+    state: satisfied ? REVALIDATION.SATISFIED : REVALIDATION.UNRESOLVED,
+    lane_id: resolved.lane_id,
+    contract_version: resolved.contract_version,
+    observed_contract_version: resolved.observed_contract_version,
+    current_baseline: resolved.baseline?.instruction_pack?.baseline_version ?? null,
+    unresolved: resolved.unresolved,
+    instruction_baseline: baseline,
+    bootstrap,
+  };
+}
+
+/**
+ * The same, for every active lane. Reports per lane; writes only where the lane
+ * earned it. A fleet sweep must never become a fleet edit.
+ */
+export function revalidateFleetBootstrap({ root = undefined, nowMs = Date.now(), ...rest } = {}) {
+  const lanes = root === undefined ? listDurableLanes() : listDurableLanes(root);
+  const rows = lanes.map((l) => revalidateLaneBootstrap(l.lane_id, root === undefined ? { nowMs, ...rest } : { root, nowMs, ...rest }));
+  const by = {};
+  for (const r of rows) by[r.state] = (by[r.state] || 0) + 1;
+  return {
+    lanes: rows.length,
+    by_state: by,
+    baselines_written: rows.filter((r) => r.instruction_baseline?.written).length,
+    bootstraps_stamped: rows.filter((r) => r.bootstrap?.written).length,
+    rows,
+  };
+}
 
 
 /**
