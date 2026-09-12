@@ -82,6 +82,15 @@ export type StageWorkCompletionPolicyV1 = {
 export type StageWorkTemplateActionRefV1 = {
     action_ref: string;
     override_label?: string;
+    /**
+     * The stage work this action operates on, when the action takes one as an input.
+     *
+     * Carried from the stage's configured candidate action so it survives the journey to the
+     * operator's control. Dropping it here is what made `stage_work.start` unreachable: the action
+     * requires a `template_key`, the configuration could name one, and the ref in between could not
+     * hold it.
+     */
+    work_template_key?: string;
 };
 
 export type StageWorkTemplateTransitionRefV1 = {

@@ -307,7 +307,12 @@ export default function CurrentWorkCard({
                 icon: action.icon ?? null,
                 style: null,
                 display_style: "outline",
-                payload: {},
+                /*
+                 * Configured arguments, not an empty object. This was hardcoded `{}`, so an action
+                 * whose contract requires an input could be configured, resolved, rendered and
+                 * pressed — and would then refuse, because the one thing it needed never travelled.
+                 */
+                payload: action.workTemplateKey ? { template_key: action.workTemplateKey } : {},
                 workflow_id: null,
             });
         }
