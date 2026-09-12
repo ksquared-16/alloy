@@ -93,6 +93,13 @@ const lanesRaw = await safely(async () => {
 // Freshness, like bootstrap, is a READ. It runs git plumbing against each
 // lane's worktree and acquires no slot, server, browser or provider.
 // Knowledge coverage, a READ over the existing lane-memory store.
+// The promotion gate contract, a pure READ over declarations. No network, no
+// GitHub, no database: it audits what the gates say about themselves.
+const promotionGates = await safely(async () => {
+  const { auditPromotionGates } = await import("./lib/vacilando/promotion-gate-contract.mjs");
+  return auditPromotionGates();
+}, null);
+
 const laneKnowledge = await safely(async () => {
   const { inventoryLaneKnowledge } = await import("./lib/vacilando/lane-knowledge.mjs");
   return inventoryLaneKnowledge({ lanes: lanesRaw });
@@ -420,7 +427,7 @@ const report = composeReport({
   hw, thresholds, only, startedAt,
   endedAt: new Date().toISOString(),
   probeResults: {
-    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, laneKnowledge, worktreeLifecycle, slotOwnership,
+    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, laneKnowledge, worktreeLifecycle, slotOwnership, promotionGates,
     run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, configured_max: configuredMax,
     validation_routing: validationRouting, validation_bypasses: validationBypasses,

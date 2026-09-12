@@ -107,9 +107,12 @@ const HEALTHY_PROBES = {
     rows: [{ name: "wt-a", state: "ACTIVE", reclaimable: false, disk_mb: 0 }],
   },
   slotOwnership: { slots_claimed: 1, conflicts: [] },
-  // Fourth check added to the report, fourth time this fixture has grown. The
+  // Fifth check added to the report, fifth time this fixture has grown. The
   // pattern is now the rule: a composition claiming every check passes must
-  // supply every check, or the newest one correctly reports INCOMPLETE.
+  // supply every check, or the newest one correctly reports INCOMPLETE. The
+  // temptation each time is to relax the assertion instead; the value of this
+  // fixture is precisely that it cannot be satisfied by omission.
+  promotionGates: { version: "vacilando.promotion_gate_contract.v1", gates: 6, findings: [], clean: true },
   laneKnowledge: {
     lanes: 1,
     by_state: { CURRENT: 1 },

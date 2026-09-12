@@ -47,6 +47,7 @@ export const CHECKS = Object.freeze([
   "worktrees.lifecycle",
   "slots.ownership",
   "lane.knowledge",
+  "promotion.gates",
   "ports.registry",
   "worktrees.registry",
   "toolkit.retention",
@@ -972,6 +973,48 @@ export function checkSlotOwnership({ conflicts = null }) {
  * subsystem exists to prevent: documentation becoming authority by outliving the
  * thing it recorded.
  */
+
+/**
+ * ARE THE PROMOTION GATES STILL HONEST ABOUT THEMSELVES?
+ *
+ * Not "did a promotion pass" — that is the gates' own business. This reads the
+ * declared contract and reports the five defect classes that made
+ * `hosted_migration_parity` deny a clean candidate for a week: an undeclared
+ * lifecycle boundary, a reconstructed fact, recorded evidence with no freshness
+ * rule, a gate that can only say true or false, and a precondition that can only
+ * be met after the thing it gates.
+ *
+ * A circular precondition is a `problem` and nothing else, because it is not a
+ * risk: it is a gate that has already made some class of work unpromotable, and
+ * the only question left is which class.
+ */
+export function checkPromotionGates({ audit = null }) {
+  if (!audit) return incompleteFinding("promotion.gates", "no promotion gate audit available");
+  const circular = (audit.findings || []).filter((f) => f.defect === "circular_precondition");
+  const failOpen = (audit.findings || []).filter((f) => f.defect === "unmeasured_may_pass");
+  const rest = (audit.findings || []).filter((f) => !circular.includes(f) && !failOpen.includes(f));
+  const sev = circular.length || failOpen.length ? "problem" : rest.length ? "watch" : "healthy";
+  return finding({
+    check: "promotion.gates",
+    severity: sev,
+    owner_resource: "vacilando.promotion_gates",
+    measurements: {
+      gates: audit.gates,
+      findings: (audit.findings || []).length,
+      circular: circular.length,
+      fail_open: failOpen.length,
+    },
+    evidence: (audit.findings || []).slice(0, 8).map((f) => `${f.gate}: ${f.defect} — ${f.detail}`),
+    explanation: circular.length
+      ? "A promotion gate requires something that can only become true after the gate passes. Work in its class cannot be promoted at all."
+      : failOpen.length
+        ? "A promotion gate treats an unmeasured result as a pass."
+        : rest.length
+          ? "A promotion gate cannot fully explain itself; a denial from it will not say what to do about it."
+          : "Every canonical promotion gate declares its lifecycle boundary, owner, freshness and explanation.",
+  });
+}
+
 export function checkLaneKnowledge({ inventory = null }) {
   if (!inventory) return incompleteFinding("lane.knowledge", "no lane knowledge inventory available");
   const rows = Array.isArray(inventory.rows) ? inventory.rows : [];
@@ -1296,6 +1339,7 @@ export function composeReport({
   safe("worktrees.lifecycle", () => checkWorktreeLifecycle({ inventory: probeResults.worktreeLifecycle }));
   safe("slots.ownership", () => checkSlotOwnership({ conflicts: probeResults.slotOwnership }));
   safe("lane.knowledge", () => checkLaneKnowledge({ inventory: probeResults.laneKnowledge }));
+  safe("promotion.gates", () => checkPromotionGates({ audit: probeResults.promotionGates }));
   safe("lanes.consistency", () => checkLanesConsistency({ lanes: probeResults.lanes || [], seats: probeResults.seats || [] }));
   safe("ports.registry", () => checkPortsRegistry({ ports: probeResults.ports || [] }));
   safe("worktrees.registry", () => checkWorktreesRegistry({ ...(probeResults.worktrees || {}), states: probeResults.reconciliation || null }));
