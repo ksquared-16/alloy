@@ -36,23 +36,72 @@ const queue = fs.readFileSync(
 /** A context is only its composed truth as far as the financial subject rule is concerned. */
 const ctx = (truth: Record<string, unknown>) => ({ truth }) as unknown as OperationalContext;
 
+/**
+ * The FLAT column list of a candidate select — everything ahead of the first nested block.
+ *
+ * Nesting is the entire subject of this file. `opportunities!inner ( ..., customer_id, ... )` puts
+ * the text "customer_id" inside the select while leaving the flat key absent, which is precisely the
+ * shape that stranded Financials. A substring check across the whole select therefore goes green on
+ * the defect it exists to catch — verified by planting it, which passed every assertion here before
+ * this helper existed. `opportunity_customer_member_id` sets the same trap for "customer_member_id".
+ *
+ * So the nested blocks are cut away and what remains is compared as whole comma-delimited tokens,
+ * never as substrings.
+ */
+const flatColumns = (select: string): string[] => {
+    const nestedAt = select.indexOf("(");
+    return (nestedAt === -1 ? select : select.slice(0, nestedAt))
+        .replace(/`/g, "")
+        .split(",")
+        .map((column) => column.trim())
+        .filter(Boolean);
+};
+
 describe("the waitlist candidate projection", () => {
     it("selects the household and member columns the candidate row already carries", () => {
         const selects = queue.match(/id, org_id, opportunity_id, status, site_id[^`]*/g) ?? [];
         expect(selects.length, "both candidate reads must be covered").toBeGreaterThanOrEqual(2);
         for (const select of selects) {
-            expect(select, "the candidate's own household column must be read").toContain("customer_id");
-            expect(select, "and the child it names").toContain("customer_member_id");
+            const columns = flatColumns(select);
+            expect(columns, "the candidate's own household column must be read").toContain("customer_id");
+            expect(columns, "and the child it names").toContain("customer_member_id");
         }
     });
 
     /*
      * NO NEW READ. The columns are on `placement_candidates`, which this query already reads — same
      * table, same round trip. The brief forbids another database read and this does not add one.
+     *
+     * This pins the invariant rather than a census of reads. The original assertion pinned the count
+     * at two, which is not the same claim: it failed the moment an unrelated lens was added, and one
+     * was — the child-grain membership lens brought a third read that carries the columns perfectly
+     * well. A test that goes red on correct growth teaches the next reader to delete it rather than
+     * reason about it, and then the real invariant is unguarded.
+     *
+     * What must stay true is narrower and permanent: the household rides along on EVERY read of the
+     * candidate table and never earns one of its own. A dedicated household lookup is the regression
+     * this is here to catch, and a fourth legitimate lens that carries its columns is not.
      */
-    it("adds no second read to obtain them", () => {
-        const candidateReads = (queue.match(/\.from\("placement_candidates"\)/g) ?? []).length;
-        expect(candidateReads, "the candidate table is still read in the same two places").toBe(2);
+    it("obtains them without a read of its own", () => {
+        const reads = queue.split('.from("placement_candidates")').slice(1);
+        expect(reads.length, "the candidate table must still be read").toBeGreaterThanOrEqual(1);
+
+        reads.forEach((read, i) => {
+            const open = read.indexOf("`");
+            const close = open === -1 ? -1 : read.indexOf("`", open + 1);
+            expect(
+                close,
+                `candidate read ${i + 1} has no template-literal select; look at it by hand rather than loosening this`,
+            ).toBeGreaterThan(-1);
+
+            const columns = flatColumns(read.slice(open, close + 1));
+            expect(columns, `candidate read ${i + 1} must carry the household inline`).toContain(
+                "customer_id",
+            );
+            expect(columns, `candidate read ${i + 1} must carry the child inline`).toContain(
+                "customer_member_id",
+            );
+        });
     });
 
     /*
