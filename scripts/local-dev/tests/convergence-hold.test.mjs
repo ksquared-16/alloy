@@ -6,6 +6,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -110,4 +111,60 @@ test("normal development is unaffected: only host mutation is gated", () => {
     const window = src.slice(i, i + 400);
     assert.ok(!window.includes("assertGatewayHostMutationAllowed"), `${other} must not be gated by the host hold`);
   }
+});
+
+/* ── the Surfaces incident, as a regression proof ───────────────────────── */
+test("a governed toolkit install is REFUSED while a soak holds the host", async () => {
+  /*
+   * THE DIRECT REGRESSION FOR THE SURFACES INCIDENT.
+   *
+   * On 2026-09-12 at 03:42Z another lane completed host.install_toolkit,
+   * relinked toolkit/current from 14b0e01dcd06 to 5c7b100bcd64 and restarted the
+   * Gateway — invalidating an authoritative 24-hour soak mid-flight. Nothing
+   * refused it, because the governed path never asked who held the host.
+   *
+   * This drives the REAL executor, with the REAL resource held, and asserts it
+   * refuses and names the holder — so the next authoritative soak can protect
+   * itself by holding `gateway_host_mutation` for its observation window.
+   */
+  const TH = await import("../lib/vacilando/trusted-host-actions.mjs");
+  const soak = realRun("Authoritative Soak");
+  const intruder = realRun("Unrelated Lane");
+
+  const held = acquireGatewayHostMutation({
+    runId: soak.runId, laneId: soak.laneId, reason: "authoritative 24h host lifecycle soak", root: ROOT,
+  });
+  assert.equal(held.granted, true, `the soak must hold the host: ${JSON.stringify(held).slice(0, 200)}`);
+
+  const req = TH.requestTrustedHostAction({
+    missionId: "msn_intruder",
+    assignmentId: intruder.runId,
+    actionType: "host.install_toolkit",
+    inputs: {
+      // The real promoted staging SHA: the registry validates it, so this is a
+      // genuine, well-formed install request — refused solely by the hold.
+      expected_staging_sha: execFileSync("git", ["rev-parse", "origin/staging"], {
+        cwd: join(HERE, "..", "..", ".."), encoding: "utf8",
+      }).trim(),
+      reason: "unrelated lane installing a toolkit during someone else's soak",
+    },
+  });
+  assert.equal(req.ok, true, `could not request: ${JSON.stringify(req).slice(0, 200)}`);
+
+  // Execute it. The install branch must consult the hold before doing anything.
+  const out = TH.executeTrustedHostAction(req.action.id, { actor: "director" });
+  assert.equal(out.ok, false, "an install must not proceed while the host is held");
+  assert.equal(out.error, "gateway_host_mutation_held");
+  assert.ok(out.holder, "the refusal must identify the holder");
+  assert.equal(out.holder.run_id, soak.runId);
+  assert.equal(out.holder.lane_id, soak.laneId);
+  assert.match(out.detail, /Wait for release/);
+
+  // And the action is recorded as failed, not silently dropped.
+  assert.equal(out.action.state, "failed");
+  assert.equal(out.action.failureReason, "gateway_host_mutation_held");
+
+  // Releasing the soak's hold lets the ordinary path work again.
+  releaseGatewayHostMutation({ runId: soak.runId, root: ROOT });
+  assert.equal(assertGatewayHostMutationAllowed({ runId: intruder.runId, root: ROOT }).ok, true);
 });
