@@ -23,6 +23,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const GATEWAY_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim()
   || join(homedir(), ".local", "state", "alloy-dev", "gateway");
@@ -227,18 +228,89 @@ async function ownHostMutation() {
     try { mod.releaseGatewayHostMutation({ runId, requestId: res.request.request_id, origin: "agent", root: GATEWAY_ROOT }); } catch { /* exiting anyway */ }
   };
   // A completed observation window is a terminal soak, and a terminal soak must
-  // not keep the host. Signals are covered too, so an operator stopping the soak
-  // frees the host immediately rather than waiting for a reader to notice.
+  // not keep the host. Deliberate stops are covered too, so an operator stopping
+  // the soak frees the host immediately rather than waiting for a reader to
+  // notice.
   process.on("exit", release);
-  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  for (const sig of ["SIGINT", "SIGTERM"]) {
     process.on(sig, () => { release(); process.exit(0); });
   }
+
   return res.request.request_id;
+}
+
+/**
+ * RE-LAUNCH THIS SAME SCRIPT IN ITS OWN SESSION, THEN GET OUT OF THE WAY.
+ *
+ * THE OTHER HALF OF THE DEFECT. Ignoring SIGHUP stops the signal from killing
+ * the soak, but the soak should not be in the launcher's process group at all —
+ * anything that signals that group, or a hard session teardown, still reaches
+ * it. The previous launch was a bare `node …` with no `nohup`, no `setsid` and
+ * no detach, so it inherited the run's session and everything that happened to
+ * it.
+ *
+ * Owning the detachment HERE, rather than leaving it to whoever types the
+ * command, is the point: the last launch was correct in every argument it
+ * passed and still died, because the one thing that mattered was not an argument.
+ *
+ * `detached: true` puts the child in a new session (setsid), stdio goes to the
+ * log rather than to an inherited terminal, and `unref()` lets this process exit
+ * without waiting. The parent prints the child's pid and start identity so the
+ * caller can verify survival rather than assume it.
+ */
+async function detachAndExit() {
+  const { spawn } = await import("node:child_process");
+  const { openSync } = await import("node:fs");
+  const logPath = flag("log", `${out}.log`);
+  const passthrough = args.filter((a) => a !== "--detach" && a !== "--log" && a !== logPath);
+  const fd = openSync(logPath, "a");
+  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...passthrough], {
+    detached: true,
+    stdio: ["ignore", fd, fd],
+    env: process.env,
+  });
+  child.unref();
+  // The caller needs the pid to verify survival, and the start identity to tell
+  // this process from whatever later reuses the number.
+  process.stdout.write(`${JSON.stringify({ ok: true, detached: true, pid: child.pid, log: logPath, out }, null, 2)}\n`);
+  process.exit(0);
 }
 
 if (args.includes("--report")) {
   report(out);
+} else if (args.includes("--run") && args.includes("--detach")) {
+  await detachAndExit();
 } else if (args.includes("--run")) {
+  /*
+ * SIGHUP IS NOT A DELIBERATE STOP, AND TREATING IT AS ONE KILLED THE LAST SOAK.
+ *
+ * MEASURED. `soak-authoritative-388789f8bd8c` was granted the host claim at
+ * 12:21:25.876Z, sampled for three minutes, and died 25 seconds after its
+ * launching run erun_c21c711135756ef2 reached COMPLETE at 12:24:01.734Z. It
+ * had been started as a child of that run's session, so the teardown delivered
+ * SIGHUP — and SIGHUP was in the list above. The handler did exactly what it
+ * was written to do: released `gateway_host_mutation` and exited 0. Cleanly,
+ * silently, with no error anywhere, which is why nothing looked broken until
+ * someone went looking for the process.
+ *
+ * The claim model was never the defect. The commit that introduced this block
+ * is titled "protection that outlives its requester", and it delivers exactly
+ * that: the CLAIM outlives the requesting run. What it did not give the claim
+ * was a PROCESS that outlives it. Two failure modes that look alike; only one
+ * was closed.
+ *
+ * For a 24-hour background observer, SIGHUP means "the session that started me
+ * has gone away" — which is the NORMAL and intended case for a process whose
+ * entire purpose is to outlive its launcher. So it is ignored explicitly. It
+ * is registered rather than left to the default because Node's default action
+ * for SIGHUP is to terminate: silence here is a decision, not an omission.
+ *
+ * SIGINT and SIGTERM keep their meaning. An operator stopping the soak still
+ * frees the host immediately.
+ */
+process.on("SIGHUP", () => {
+  process.stderr.write(`host-soak: ignoring SIGHUP — a 24h observer is meant to outlive its launcher (pid ${process.pid})\n`);
+});
   const intervalMs = Number(flag("interval", "60")) * 1000;
   const hours = Number(flag("hours", "24"));
   const until = Date.now() + hours * 3_600_000;
