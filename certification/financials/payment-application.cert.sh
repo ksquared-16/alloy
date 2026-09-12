@@ -377,6 +377,44 @@ if [ -z "$JOB_PAY" ]; then bad "could not create a job-source payment"; else
         "delete from payments where id='$JOB_PAY'"
 fi
 
+# ══ P17 — concurrency: an application reverses exactly once ══════════════════════════════════════
+# The service guards reversal with `.eq(status,'active')` in the WHERE clause rather than with the
+# status check it makes first. Two operators who both read an active row both pass that check, so the
+# WHERE clause is the only thing standing between them and two reversals of one application. A mock
+# cannot exercise that — it has no row lock — which is exactly why it is proven here.
+note "P17 — two concurrent reversals of one application cannot both take effect"
+CHG_REV="$(post_charge enrollment_agreement "$AGREEMENT" 50000)"
+PAY_REV="$(record_payment enrollment_agreement "$AGREEMENT" 50000 posted "cert-reverse-race" "")"
+must_ok "P17 · the payment applies" "$(apply_sql "$PAY_REV" "$CHG_REV" 50000)"
+must_eq "P17 · the balance is settled before the reversal" "$(printf 'select %s' "$(outstanding "$CHG_REV")")" "0"
+ALLOC_REV="$(q "select id from payment_allocations
+                 where payment_id='$PAY_REV' and charge_id='$CHG_REV' and status='active'")"
+if [ -z "$ALLOC_REV" ]; then bad "P17 · could not find the application to reverse"; else
+    REV_SQL="update payment_allocations
+                set status='reversed', reversed_at=now(), reversal_reason='cert race', updated_at=now()
+              where org_id='$ORG' and id='$ALLOC_REV' and status='active'"
+    (psql "$DB" -q -tAc "$REV_SQL" >/dev/null 2>&1) &
+    (psql "$DB" -q -tAc "$REV_SQL" >/dev/null 2>&1) &
+    wait
+    must_eq "P17 · the application is reversed, exactly once" \
+        "select count(*)::text from payment_allocations where id='$ALLOC_REV' and status='reversed'" "1"
+    must_eq "P17 · no active application survived the race" \
+        "select count(*)::text from payment_allocations where id='$ALLOC_REV' and status='active'" "0"
+    # The obligation must come back ONCE. Two effective reversals of a single $500 application would
+    # show here as a charge owing more than it was ever charged.
+    must_eq "P17 · the obligation came back once, not twice" \
+        "$(printf 'select %s' "$(outstanding "$CHG_REV")")" "50000"
+    must_eq "P17 · the receipt is untouched by the correction" \
+        "select (amount_cents=50000 and direction='inbound' and status='posted')::text
+           from payments where id='$PAY_REV'" "true"
+    must_eq "P17 · unapplying is not refunding — no refund row exists" \
+        "select count(*)::text from payments where refunds_payment_id='$PAY_REV'" "0"
+    # The money is available again, which is the point of the correction.
+    must_eq "P17 · the money is unapplied and can go elsewhere" \
+        "select (50000 - coalesce(sum(allocated_amount_cents) filter (where status='active'),0))::text
+           from payment_allocations where payment_id='$PAY_REV'" "50000"
+fi
+
 note ""
 note "RESULT: ${PASS} passed, ${FAIL} failed"
 mkdir -p "$CERT_DIR/evidence"
