@@ -1,5 +1,5 @@
 -- Read-only census: PHYSICAL state and LEDGER identity of the two Processing capability migrations
--- (20260912040000, 20260912050000) on the deployed primary, in ONE reading.
+-- (20260912113000, 20260912114000) on the deployed primary, in ONE reading.
 --
 -- WHY THIS EXISTS. `post_apply_verification_failed` is only reachable AFTER the migration runner
 -- reports success, so it never means "nothing happened" — it means the schema may be there while
@@ -12,14 +12,14 @@
 -- under question ids `m<last six of version>`, with the ledger head and total in the same result.
 -- A version counts as present only when every one of its rows matched.
 --
--- WHAT EACH VERSION IS ASKED FOR. 20260912040000 defines the four capabilities and the
+-- WHAT EACH VERSION IS ASKED FOR. 20260912113000 defines the four capabilities and the
 -- compatibility grants, so its evidence is the catalog rows AND the SHAPE of those grants — admin
 -- holding all four, ops holding `processing.operate` and none of the other three. A census that
 -- only counted catalog rows would call a half-applied migration applied, and the half that matters
 -- most here is the ops exclusion: `documents.write` was deliberately NOT reused because ops holds
 -- it everywhere, and a migration that widened ops after all would be invisible to a key count.
 --
--- 20260912050000 rewrites `seed_default_rbac` so a NEW organization is born with the same grants,
+-- 20260912114000 rewrites `seed_default_rbac` so a NEW organization is born with the same grants,
 -- so its evidence is the installed function's own text and the trigger that calls it. Reading
 -- `pg_get_functiondef` is what makes this a statement about the database rather than the repository.
 --
@@ -80,59 +80,59 @@ director_any as (
       and g.permission_key like 'processing.%'
 ),
 check_rows as (
-    -- 20260912040000 — the capability model itself.
-    select 'm040000'::text as qid, 'four processing keys in catalog'::text as obj, '4'::text as expected,
+    -- 20260912113000 — the capability model itself.
+    select 'm113000'::text as qid, 'four processing keys in catalog'::text as obj, '4'::text as expected,
            (select count(*)::text from public.permission_definitions d
              where d.key in ('processing.operate', 'processing.archive',
                              'processing.documents.manage', 'processing.dev_cleanup')
                and d.group_key = 'processing' and d.is_active) as observed,
            'a1'::text as sort_key
     union all
-    select 'm040000', 'every admin role holds all four', 'yes',
+    select 'm113000', 'every admin role holds all four', 'yes',
            case when (select n from admin_full) >= (select n from admin_roles) then 'yes' else 'no' end, 'a2'
     union all
-    select 'm040000', 'every ops role holds processing.operate', 'yes',
+    select 'm113000', 'every ops role holds processing.operate', 'yes',
            case when (select n from ops_operate) >= (select n from ops_roles) then 'yes' else 'no' end, 'a3'
     union all
     -- The exclusion that documents.write was refused to protect. An absence, so it is asserted.
-    select 'm040000', 'ops holds none of archive, documents.manage, dev_cleanup', 'yes',
+    select 'm113000', 'ops holds none of archive, documents.manage, dev_cleanup', 'yes',
            case when (select n from ops_widened) = 0 then 'yes' else 'no' end, 'a4'
     union all
-    select 'm040000', 'director roles hold no processing key', 'yes',
+    select 'm113000', 'director roles hold no processing key', 'yes',
            case when (select n from director_any) = 0 then 'yes' else 'no' end, 'a5'
 
-    -- 20260912050000 — a NEW organization is born with the same grants.
+    -- 20260912114000 — a NEW organization is born with the same grants.
     union all
-    select 'm050000', 'seed_default_rbac exists', 'present',
+    select 'm114000', 'seed_default_rbac exists', 'present',
            case when (select length(def) from src) > 0 then 'present' else 'absent' end, 'b1'
     union all
-    select 'm050000', 'admin enumeration carries processing.operate', 'yes',
+    select 'm114000', 'admin enumeration carries processing.operate', 'yes',
            case when (select strpos(admin_region, '''processing.operate''') from regions) > 0 then 'yes' else 'no' end, 'b2'
     union all
-    select 'm050000', 'admin enumeration carries processing.archive', 'yes',
+    select 'm114000', 'admin enumeration carries processing.archive', 'yes',
            case when (select strpos(admin_region, '''processing.archive''') from regions) > 0 then 'yes' else 'no' end, 'b3'
     union all
-    select 'm050000', 'admin enumeration carries processing.documents.manage', 'yes',
+    select 'm114000', 'admin enumeration carries processing.documents.manage', 'yes',
            case when (select strpos(admin_region, '''processing.documents.manage''') from regions) > 0 then 'yes' else 'no' end, 'b4'
     union all
-    select 'm050000', 'admin enumeration carries processing.dev_cleanup', 'yes',
+    select 'm114000', 'admin enumeration carries processing.dev_cleanup', 'yes',
            case when (select strpos(admin_region, '''processing.dev_cleanup''') from regions) > 0 then 'yes' else 'no' end, 'b5'
     union all
-    select 'm050000', 'ops enumeration carries processing.operate', 'yes',
+    select 'm114000', 'ops enumeration carries processing.operate', 'yes',
            case when (select strpos(ops_region, '''processing.operate''') from regions) > 0 then 'yes' else 'no' end, 'b6'
     union all
     -- Three absences, each asserted separately: an exclusion is exactly what an editor restores by
     -- accident when reproducing a sixty-key enumeration to add one line to it.
-    select 'm050000', 'ops enumeration withholds processing.archive', 'yes',
+    select 'm114000', 'ops enumeration withholds processing.archive', 'yes',
            case when (select strpos(ops_region, '''processing.archive''') from regions) = 0 then 'yes' else 'no' end, 'b7'
     union all
-    select 'm050000', 'ops enumeration withholds processing.documents.manage', 'yes',
+    select 'm114000', 'ops enumeration withholds processing.documents.manage', 'yes',
            case when (select strpos(ops_region, '''processing.documents.manage''') from regions) = 0 then 'yes' else 'no' end, 'b8'
     union all
-    select 'm050000', 'ops enumeration withholds processing.dev_cleanup', 'yes',
+    select 'm114000', 'ops enumeration withholds processing.dev_cleanup', 'yes',
            case when (select strpos(ops_region, '''processing.dev_cleanup''') from regions) = 0 then 'yes' else 'no' end, 'b9'
     union all
-    select 'm050000', 'orgs_seed_default_rbac trigger present', 'present',
+    select 'm114000', 'orgs_seed_default_rbac trigger present', 'present',
            case when exists (select 1 from pg_trigger t where t.tgname = 'orgs_seed_default_rbac' and not t.tgisinternal)
                 then 'present' else 'absent' end, 'c1'
 )
@@ -152,7 +152,7 @@ from (
             (case when exists (select 1 from supabase_migrations.schema_migrations m where m.version = v.version)
                   then 'true' else 'false' end))::text,
            'y' || v.version
-    from (values ('20260912040000'), ('20260912050000')) as v(version)
+    from (values ('20260912113000'), ('20260912114000')) as v(version)
 
     union all
     select 'ledger_head'::text, 'max'::text, coalesce(max(m.version)::text, 'none'), 'zz1'::text

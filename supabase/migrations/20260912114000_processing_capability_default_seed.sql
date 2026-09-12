@@ -1,6 +1,6 @@
 -- A NEW ORGANIZATION COULD NOT WORK ITS OWN PROCESSING QUEUE.
 --
--- `20260912040000` defined the four Processing capabilities and granted them to the roles of every
+-- `20260912113000` defined the four Processing capabilities and granted them to the roles of every
 -- organization that existed at that moment. It did not touch `seed_default_rbac`, which is the
 -- function the `orgs` insert trigger calls — so an organization created afterwards would receive
 -- four roles, the pre-Processing grant set, and no Processing authority at all. Its administrator
@@ -23,7 +23,7 @@
 --
 -- They do NOT join the catalog literal inside the function. That literal reproduces what
 -- `permission_definitions` held on 2026-07-29, carried forward unchanged; widening it would quietly
--- rewrite history, and `20260912040000` is where these keys enter the catalog.
+-- rewrite history, and `20260912113000` is where these keys enter the catalog.
 --
 -- Nothing is granted to `school_director` or `regional_lead`.
 --
