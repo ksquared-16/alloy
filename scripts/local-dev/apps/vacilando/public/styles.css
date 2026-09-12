@@ -2456,6 +2456,42 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   border-left: 2px solid var(--needs-border, #b7791f);
 }
 
+/* ---------------------------------------------------------------------------
+   A DECISION IN FLIGHT, AND A MESSAGE THAT HAS LEFT THE COMPOSER.
+
+   Both exist for the same reason: the operator acted, the server has not
+   answered yet, and that gap used to render as nothing at all. Nothing is the
+   one thing these must never look like, so each state gets a visible treatment
+   rather than inheriting the resting one.
+   --------------------------------------------------------------------------- */
+.gw-approval-pending, .gw-approval-settled { display: inline-flex; gap: 8px; }
+/* Disabled, but deliberately not faded to the point of looking absent: while a
+   decision is in flight this is the only thing on screen saying it was heard. */
+.gw-approval-pending .btn[disabled] { opacity: .85; cursor: progress; }
+.gw-approval-settled .btn[disabled] { opacity: .9; cursor: default; }
+.gw-approval-failed {
+  margin: 0 0 6px; font-size: 12.5px; line-height: 1.4;
+  padding: 6px 8px; border-radius: 6px;
+  background: rgba(197, 48, 48, .10);
+  border-left: 2px solid var(--err-border, #c53030);
+}
+
+.gw-pending-send {
+  margin: 0 0 8px; padding: 8px 10px; border-radius: 8px;
+  background: var(--panel-2, rgba(127, 127, 127, .07));
+  border-left: 2px solid var(--accent, #4a5568);
+}
+.gw-pending-send[data-state="recoverable"] { border-left-color: var(--err-border, #c53030); }
+.gw-pending-send-h { margin: 0; font-size: 11.5px; font-weight: 650; letter-spacing: .02em; opacity: .7; }
+/* The operator's own words, kept legible and kept whole — pre-wrap because
+   whatever line breaks they typed are part of what they wrote. */
+.gw-pending-send-body {
+  margin: 4px 0 0; font-size: 13px; line-height: 1.45;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.gw-pending-send-recover { margin: 6px 0 0; font-size: 12px; opacity: .85; }
+.gw-pending-send-recover .btn { margin-left: 6px; }
+
 /* ===========================================================================
    VACILANDO UI V2
    ===========================================================================
