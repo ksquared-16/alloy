@@ -50,6 +50,7 @@ import { tuitionGenerationActions } from "@/lib/adminV2/actions/definitions/tuit
 import { financialPaymentActions } from "@/lib/adminV2/actions/definitions/financialPaymentActions";
 import { healthFactActions } from "@/lib/adminV2/actions/definitions/healthFactActions";
 import { enrollmentRequirementExceptionActions } from "@/lib/adminV2/actions/definitions/enrollmentRequirementExceptionActions";
+import { stageWorkStartAction } from "@/lib/adminV2/actions/definitions/stageWorkStartAction";
 
 /** Actions with fully code-owned, executable handlers. */
 const REGISTERED_ACTION_LIST: RegisteredAction[] = [
@@ -85,6 +86,8 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     ...healthFactActions,
     // Governed requirement exception: make one requirement non-blocking, and put it back.
     ...enrollmentRequirementExceptionActions,
+    // Start a piece of work the child's current stage already configures (e.g. Offer spot).
+    stageWorkStartAction,
 ];
 
 const REGISTERED_ACTIONS: Map<string, RegisteredAction> = new Map(

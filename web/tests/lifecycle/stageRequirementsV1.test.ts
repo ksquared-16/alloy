@@ -66,10 +66,11 @@ const FORM_REQUIREMENT = {
 };
 
 describe("requirement kinds — architectural vocabulary vs executable subset", () => {
-    it("declares all six kinds", () => {
+    it("declares all seven kinds", () => {
         expect([...REQUIREMENT_KINDS_V1]).toEqual([
             "field",
             "form",
+            "work",
             "document",
             "consent",
             "acknowledgment",
@@ -78,8 +79,17 @@ describe("requirement kinds — architectural vocabulary vs executable subset", 
     });
 
     it("authorizes only the kinds with real canonical substrate", () => {
-        expect([...REQUIREMENT_KINDS_AUTHORABLE_V1]).toEqual(["field", "form"]);
+        /*
+         * `work` joined the authorable set because it MET the bar the other four still fail,
+         * not because it was wanted. The stage work runtime already reports `completed` per
+         * template key for a subject, so satisfaction has a canonical owner that predates the
+         * requirement kind — nothing had to be invented to prove it. That is the whole
+         * distinction this constant exists to hold: architecture may admit a kind, and the
+         * platform still refuses to pretend it can satisfy one.
+         */
+        expect([...REQUIREMENT_KINDS_AUTHORABLE_V1]).toEqual(["field", "form", "work"]);
         expect(isAuthorableRequirementKind("form")).toBe(true);
+        expect(isAuthorableRequirementKind("work")).toBe(true);
         expect(isAuthorableRequirementKind("consent")).toBe(false);
     });
 

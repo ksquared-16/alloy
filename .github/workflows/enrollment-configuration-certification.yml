@@ -100,6 +100,38 @@ concurrency:
   group: enrollment-config-cert-${{ github.ref }}
   cancel-in-progress: true
 
+# Track adoption added three: `processTrackAdoption` (the generic evaluator and writer — an
+# existing builder-owned process may adopt the canonical track model without losing its stage
+# inventory, validated before it is written and all-or-nothing), `adoptedTracksActivateRouting`
+# (the claim that matters — the REAL resolver routes family stages by case and child stages by
+# child only after adoption, asserted against a before/after pair) and
+# `trackAdoptionSettingsAuthoring` (the operator path exists in Settings, and previewing writes
+# no draft revision). They gate here because adoption flips lane routing for a whole process at
+# once: a regression would not show up as one wrong lane, it would show up as every lane being
+# decided by something else.
+
+# Work-backed stage-exit requirements added two: `workRequirementEvaluation` (required work
+# blocks an exit only where configuration says that work is required for THAT transition — the
+# Lead -> Waitlist case is asserted by name, because it is the one a blanket "required work always
+# blocks" rule would break) and `workRequirementAuthoring` (the reference gate, and the reason
+# both requirement editors carry the kinds they do not edit: `set_stage_requirements` replaces the
+# whole section, so a kind-specific editor submitting only its own rows silently deletes the
+# others).
+
+# Candidate-grain pagination added one: `candidateGrainWaitlistPagination` — a page of two is two
+# rows even when it lands on a family with three waitlisted children. Pagination was already
+# candidate-first where the page is sliced; the expansion that rebuilds rows from each page
+# candidate's opportunity was filtered against every MATCHED candidate instead, so `limit` stopped
+# bounding the rows and a sibling rendered twice. The suite walks all three pages and checks
+# duplicates and gaps together, because trimming the surplus would have turned one into the other.
+
+# Configured-action arguments added one: `configuredActionWorkTemplate` — a configured action may
+# name the stage work it operates on. `stage_work.start` takes the template as an INPUT so it needs
+# no per-template action, which left it requiring a `template_key` that no configuration could
+# carry: not the candidate action, not the plan's action ref, not the action view model, and the
+# invoke path hardcoded `payload: {}`. Each hop is asserted separately because the argument was lost
+# at a different hop than the one anybody suspected.
+
 jobs:
   run:
     name: Enrollment configuration certification
@@ -130,6 +162,11 @@ jobs:
             tests/lifecycle/participantProviderAuthorization.test.ts \
             tests/lifecycle/startEnrollmentParticipantLaunch.test.ts \
             tests/lifecycle/startEnrollmentIdempotentReuse.test.ts \
+            tests/lifecycle/offerSpotIsAnOperatorAct.test.ts \
+            tests/queues/childGrainQueueFollowsChildTruth.test.ts \
+            tests/queues/candidateGrainWaitlistQueue.test.ts \
+            tests/queues/candidateGrainWaitlistSiteScope.test.ts \
+            tests/platform/commands/capabilityRegistry.test.ts \
             tests/lifecycle/participantSurfaceHookOrder.test.ts \
             tests/lifecycle/participantExperienceConvergence.test.ts \
             tests/lifecycle/participantArtifactHandoff.test.ts \
@@ -141,4 +178,23 @@ jobs:
             tests/forms/resolveActiveStepEnvelope.test.ts \
             tests/forms/pdf/documentDestinationDateFormat.test.ts \
             tests/forms/pdf/fidelityEngine.test.ts \
-            tests/forms/pdf/fidelityMappingVertical.test.ts
+            tests/forms/pdf/fidelityMappingVertical.test.ts \
+            tests/lifecycle/outcomeBehaviorRoundTrip.test.ts \
+            tests/lifecycle/childGrainOutcomeAuthoring.test.ts \
+            tests/lifecycle/stageEntryWorkForWaitlist.test.ts \
+            tests/admin/enrollmentStatus/placementWaitlistingConvergesOnProcessMembership.test.ts \
+            tests/admin/enrollmentStatus/enrollmentStatusTransitionOutcomeEffects.test.ts \
+            tests/adminV2/runtime/childStageAuthorityIsTheProcessInstance.test.ts \
+            tests/adminV2/runtime/processStageAuthority.test.ts \
+            tests/adminV2/viewModel/lifecycleRailStageIsNotTheLens.test.ts \
+            tests/runtime/childGrainSurfaceComposition.test.ts \
+            tests/lifecycle/childTrackBeginsAtGrainCrossing.test.ts \
+            tests/lifecycle/stageOutcomeChildProcessInstanceWrite.test.ts \
+            tests/lifecycle/startEnrollmentIdempotentReuse.test.ts \
+            tests/lifecycle/processTrackAdoption.test.ts \
+            tests/lifecycle/trackAdoptionSettingsAuthoring.test.ts \
+            tests/queues/adoptedTracksActivateRouting.test.ts \
+            tests/lifecycle/workRequirementEvaluation.test.ts \
+            tests/lifecycle/workRequirementAuthoring.test.ts \
+            tests/queues/candidateGrainWaitlistPagination.test.ts \
+            tests/lifecycle/configuredActionWorkTemplate.test.ts

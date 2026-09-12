@@ -39,6 +39,7 @@ import {
 import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
 import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
+import { ensureChildEnrollmentTrack } from "@/lib/lifecycle/ensureChildEnrollmentTrack";
 import {
     ENROLLED_CHILD_STATUS_KEY,
     ENROLLING_CHILD_STATUS_KEY,
@@ -400,7 +401,25 @@ export async function applyStageOutcomeRuleTarget(
         }
 
         case "update_child_enrollment_status": {
-            const dispositionKey = target.disposition_key?.trim();
+            /*
+             * `status_key` IS a disposition here, under its other authored name.
+             *
+             * The target schema declares both `disposition_key` and `status_key` as optional fields
+             * on this kind, and the parser preserves whichever was authored — so
+             * `{ kind: "update_child_enrollment_status", status_key: "enrolling" }` is
+             * schema-valid configuration. The executor read only the first, which made that config
+             * validate and then refuse: an operator could publish a Waitlist plan whose Spot offered
+             * rule could never run.
+             *
+             * Found by running it. The deployed tenant's `spot_offered` rule authors `status_key`,
+             * so recording the offer outcome aborted with "Child enrollment disposition required"
+             * after the stage move had already been applied — the transaction unwound correctly, and
+             * the outcome was simply unreachable.
+             *
+             * Reading both loosens nothing: they name the same child disposition, and an unnamed
+             * one is still refused below.
+             */
+            const dispositionKey = target.disposition_key?.trim() || target.status_key?.trim();
             if (!dispositionKey) return { error: "Child enrollment disposition required" };
             // Resolve the child from the threaded identity (no OCM read on the primary path).
             const childId = await resolveChildSubjectId(supabase, orgId, subject);
@@ -1007,6 +1026,39 @@ export async function applyStageOutcomeRuleTarget(
                 const childId = await resolveChildSubjectId(supabase, orgId, subject);
                 if (!childId) return { error: "Child enrollment track required for move_to_stage" };
                 stageMoveChildId = childId;
+
+                /*
+                 * ── THE GRAIN CROSSING THAT BEGINS THE CHILD TRACK ──
+                 *
+                 * A child riding the family segment (`lead`, `tour`, `decision`) has no process
+                 * instance, because until now they have had no position of their own to record.
+                 * This is the moment that changes: the destination has already passed the grain
+                 * guard above, so it IS a child-grain stage, and the child is about to stand in it.
+                 *
+                 * Without this the move found nothing to write and returned `moved: 0`, which the
+                 * single-write assertion below correctly refused — "no enrollment track was found
+                 * for them on this lead". Every legitimate first waitlisting from Lead failed there,
+                 * having already written the disposition and minted a placement candidate, which is
+                 * the half-recorded state this whole seam exists to prevent.
+                 *
+                 * Placed HERE deliberately, not in each caller. This branch is the single chokepoint
+                 * every stage-move path inherits — outcome rules, status-entry automation, the
+                 * manual transition and the waitlist command all resolve to it — so the boundary is
+                 * defined once and cannot be reached around. It is also AFTER the referential-
+                 * integrity and grain guards, so a destination that is not configured, or not
+                 * child-grain, still refuses without a track ever being created.
+                 *
+                 * Nothing is created for a child that already has one, and nothing is created at a
+                 * fabricated starting stage: the track begins with `stage_key` null and the move
+                 * immediately below writes the operator's actual destination.
+                 */
+                const track = await ensureChildEnrollmentTrack(supabase, {
+                    orgId,
+                    opportunityId: subject.opportunity_id,
+                    customerMemberId: childId,
+                    opportunityCustomerMemberId: subject.opportunity_customer_member_id ?? null,
+                });
+                if (!track.ok) return { error: track.error };
                 // The move reports the row it touched; the compensation names that row rather than
                 // re-deriving it under a predicate the move itself may have changed.
                 const stageInstanceId = subject.process_instance_id ?? null;

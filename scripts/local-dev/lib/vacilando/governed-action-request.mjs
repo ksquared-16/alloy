@@ -27,6 +27,7 @@ import { dirname, join } from "node:path";
 import {
   ACTION_TYPES,
   DEFAULT_TARGET,
+  artifactContractFor,
   classifyActionAvailability,
   getActionDefinition,
 } from "./trusted-host-action-registry.mjs";
@@ -68,6 +69,7 @@ import {
   previewTrustedHostAuthorization,
 } from "./trusted-host-actions.mjs";
 import { resolveDeployedTarget } from "./deployed-target-registry.mjs";
+import { qaActionNeedsDevelopmentSlot } from "./qa-slot-preflight.mjs";
 import { resolveActionAuthorizationIdentity } from "./action-authorization-identity.mjs";
 import { ACCESS_IDENTITY_STAGING_MIGRATIONS } from "./trusted-host-migrate.mjs";
 import { createDecision, listDecisions, answerDecision } from "./decisions.mjs";
@@ -79,6 +81,7 @@ import {
   findExecutionRun,
   getExecutionRun as getExecutionRun,
   isTerminalRunState as isTerminalRunState,
+  isIrreversibleRunState,
   patchRunFields as patchRunFields,
   patchRunResourceWait as patchRunResourceWait,
   publicExecutionRun,
@@ -190,6 +193,40 @@ function bound(s, max) {
   const t = String(s || "").trim();
   if (!t) return null;
   return t.length > max ? t.slice(0, max) : t;
+}
+
+/**
+ * THE OBSERVABILITY CLOCK, DELIBERATELY SEPARATE FROM THE AUTHORIZATION CLOCK.
+ *
+ * THE DEFECT. `approveGovernedAction` captures one `nowMs` at entry and threads
+ * it through every downstream `appendAudit`. Every event of a single approval —
+ * `operator_approved`, `executing`, `grant_consumed`, `complete` — therefore
+ * carries an IDENTICAL timestamp. The audit looks like a timeline and is not
+ * one: computed over the 962 approvals with a terminal event in the 23 days to
+ * 2026-09-11, the median approve-to-terminal duration reads as 0.0s, which is
+ * not a fast system, it is a fabricated one. The question "how long did the
+ * operator wait" was unanswerable from the ledger that exists to answer it.
+ *
+ * WHY NOT JUST USE Date.now() EVERYWHERE. Because `nowMs` is load-bearing for
+ * AUTHORIZATION: grant expiry, decision validity windows and every test that
+ * pins time all depend on one injected, deterministic clock. Replacing it would
+ * make wall-clock timing part of authorization correctness, and make the suite
+ * non-deterministic — a bad trade for a metric.
+ *
+ * So the two clocks are split by role. `nowMs` stays the authorization clock and
+ * nothing about it changes. These stamps are observability only: nothing reads
+ * them to decide anything, and a test that pins `nowMs` still gets identical
+ * authorization behaviour while these move. They are recorded under
+ * `decision_timing` rather than beside the semantic timestamps precisely so that
+ * the distinction survives someone skimming the record.
+ */
+function observedNow() {
+  return new Date().toISOString();
+}
+
+function stampDecisionTiming(rec, field) {
+  if (!rec) return;
+  rec.decision_timing = { ...(rec.decision_timing || {}), [field]: observedNow() };
 }
 
 /**
@@ -1064,6 +1101,10 @@ export function publicGovernedAction(req) {
     continuation_intent: req.continuation_intent || null,
     successor_of: req.successor_of || null,
     revived_from_stale_registry: Boolean(req.revived_from_stale_registry),
+    // Infrastructure scheduling that happened on this request's behalf. Not an
+    // approval and never gated on one — but a slot that moved silently is a
+    // capacity change nobody can audit, so it is projected where it can be read.
+    slot_preflight: req.slot_preflight || null,
     approve_label: presentation.approve_label,
     deny_label: presentation.deny_label,
     wait_label: presentation.wait_label,
@@ -1075,6 +1116,11 @@ export function publicGovernedAction(req) {
     director_approval: req.director_approval || null,
     director_decision: req.director_decision || null,
     escalation_reason: req.escalation_reason || null,
+    // The answer to "why did you not ask me about this one?", on the record
+    // itself rather than only in the audit stream.
+    authorization_basis: req.authorization_basis || null,
+    // Observed lifecycle stamps. Never used to decide anything — see observedNow.
+    decision_timing: req.decision_timing || null,
     /*
      * "I APPROVED IT" IS NOT "THE LANE KNOWS."
      *
@@ -1273,6 +1319,16 @@ function appendAudit(rec, event, extra = {}, root = runtimeRoot()) {
     target: rec.target || null,
     artifact_refs: rec.artifact_refs || [],
     policy_decision: rec.policy_decision || null,
+    // The two halves of accountability, carried on every audit line rather than
+    // reconstructed later from a store that retains only the last 200 requests:
+    // why this ran unattended, and why it had to ask.
+    authorization_basis: rec.authorization_basis || null,
+    escalation_reason: rec.escalation_reason || null,
+    // Every audit line carries the observed lifecycle so far, so duration is
+    // readable from the append-only stream without re-reading a store that
+    // retains only the last 200 requests. `at` above stays on the authorization
+    // clock and is deliberately NOT a substitute for these.
+    decision_timing: rec.decision_timing || null,
     // Inspectable authority: what the mission delegated, and the Director's own
     // sentence that delegated it. Present only when delegation supplied the
     // approval; `delegation_declined` says why it did not when it could have.
@@ -1497,6 +1553,10 @@ function failRequest(rec, code, reason, { nowMs, root, skipResume = false } = {}
   rec.status = "failed";
   rec.failure_code = code;
   rec.failure_reason = bound(reason || code, 500);
+  // A refusal is a settlement. Timing that only covered the happy path would
+  // answer "how long does an approval take" while quietly excluding every
+  // approval that went wrong, which is the half worth measuring.
+  stampDecisionTiming(rec, "execution_settled_at");
   rec.updated_at = iso(nowMs);
   saveRequest(rec, root);
   appendAudit(rec, "failed", { nowMs, detail: { failure_code: code } }, root);
@@ -1746,6 +1806,69 @@ function defaultModeForAction(actionKey, requested) {
   return "read_only";
 }
 
+/**
+ * THE DEFAULT TARGET OF AN ACTION IS THE THING THE ACTION ACTUALLY TOUCHES.
+ *
+ * THE DEFECT. `target` was defaulted to DEFAULT_TARGET — the deployed DATABASE
+ * identifier — for every action key except the four promotion ones. But `target`
+ * is not only a database name: `environmentOf` in director-authority reads it as
+ * the POLICY ENVIRONMENT, and `alloy_deployed_primary` is a member of
+ * OPERATOR_ONLY_ENVIRONMENTS. That check runs at step 3 of the evaluation, BEFORE
+ * a policy can be matched at step 5. So every action that did not name a target
+ * declared itself to be operating on the production database, and escalated with
+ * "This targets alloy_deployed_primary, which is always an operator decision" —
+ * whatever its tier, and however complete its delegated policy.
+ *
+ * MEASURED, not reasoned about. In the 23 days to 2026-09-11, host.install_toolkit
+ * — tier A, enabled policy, and a policy that already names a "host" environment
+ * precisely because someone hit the tail of this — was requested 83 times and sent
+ * to the operator on 67 of them, 61 in the last 7 days, every one carrying that
+ * reason and every one approved. Not one was ever denied. The same silence covered
+ * the enabled policies for close_pull_request, delete_remote_branch,
+ * retire_worktree, apply_reconciliation_plan, set_provider_ceiling and
+ * dispatch_measurement_instruction.
+ *
+ * WHAT THIS IS NOT. It is not a widening of what may run unattended. Every gate,
+ * every policy and every operator-owned action key is untouched; an action still
+ * has to match an enabled policy and pass every gate, measured. All this does is
+ * stop an action lying about where it runs. The direction of the lie mattered:
+ * a host-local toolkit install claiming to be a production database operation
+ * escalated, so the failure was expensive rather than unsafe — but a value nobody
+ * set, standing in for a fact nobody checked, is the wrong thing to have governing.
+ *
+ * FAIL-CLOSED BY CONSTRUCTION. Anything absent from this table keeps
+ * DEFAULT_TARGET, so a newly registered action escalates until someone states
+ * where it runs. THE DATABASE ACTIONS ARE ABSENT DELIBERATELY AND MUST STAY
+ * ABSENT: read_census, apply_migration, apply_promoted_migration and
+ * repair_migration_ledger really do address the deployed database, and for
+ * repair_migration_ledger the operator-only environment was, until this change
+ * added it to OPERATOR_OWNED_ACTION_KEYS, the ONLY thing standing between a
+ * delegate and a production ledger write. The environment.* actions are
+ * operator-owned in V1 by explicit action key, so their target is left as it was.
+ */
+const DEFAULT_TARGET_BY_ACTION = Object.freeze({
+  // Promotion surface — unchanged from the four-way condition this replaces.
+  [ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST]: "staging",
+  [ACTION_TYPES.DATABASE_APPLY_MIGRATION]: "staging",
+  [ACTION_TYPES.REPOSITORY_PUSH]: "staging",
+  [ACTION_TYPES.PROMOTION_OPEN_PR]: "staging",
+  // Repository housekeeping acts on the canonical branch, exactly as its policy says.
+  [ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST]: "staging",
+  [ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH]: "staging",
+  // Local engineering surface. These never reach a deployed environment at all.
+  [ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN]: "development_certification",
+  [ACTION_TYPES.VACILANDO_RETIRE_WORKTREE]: "development_certification",
+  [ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING]: "development_certification",
+  [ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION]: "development_certification",
+  // "host" is the name routine_toolkit_convergence_v1 already uses, and it is the
+  // honest one: this changes what THIS machine runs, and nothing deployed.
+  [ACTION_TYPES.HOST_INSTALL_TOOLKIT]: "host",
+});
+
+export function defaultTargetForAction(actionKey) {
+  return DEFAULT_TARGET_BY_ACTION[actionKey] || DEFAULT_TARGET;
+}
+
 function validateRequestShape(input, { root } = {}) {
   const actionKey = String(input.action_key || input.actionKey || "").trim();
   const laneId = String(input.lane_id || input.laneId || "").trim();
@@ -1800,18 +1923,62 @@ function validateRequestShape(input, { root } = {}) {
   const reason = bound(input.reason_worker_cannot_execute || input.reasonWorkerCannotExecute, 1000);
   if (!reason) return { ok: false, error: "missing_reason_worker_cannot_execute" };
   const purpose = bound(input.purpose, 1000) || "Governed capability required";
-  const defaultTarget = actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
-    || actionKey === ACTION_TYPES.DATABASE_APPLY_MIGRATION
-    || actionKey === ACTION_TYPES.REPOSITORY_PUSH
-    || actionKey === ACTION_TYPES.PROMOTION_OPEN_PR
-    ? "staging"
-    : DEFAULT_TARGET;
+  const defaultTarget = defaultTargetForAction(actionKey);
   const target = String(input.target || defaultTarget).trim() || defaultTarget;
-  const artifactRefs = Array.isArray(input.artifact_refs || input.artifactRefs)
+  const declaredRefs = Array.isArray(input.artifact_refs || input.artifactRefs)
     ? (input.artifact_refs || input.artifactRefs).map(String).filter(Boolean)
     : (input.artifact ? [String(input.artifact)] : []);
   const inputs = sanitizeActionInputs(input.inputs || {}, actionKey);
   if (inputs.__rejected) return { ok: false, error: inputs.__rejected, failure_code: "policy_denied" };
+
+  /*
+   * NORMALISE THE ARTIFACT AT THE FILING BOUNDARY, ONCE.
+   *
+   * THE DEFECT THIS CLOSES, measured. A census was filed with
+   * `inputs.queryArtifactPath` naming a real artifact and `artifact_refs`
+   * empty. Execution resolves the query from `artifact_refs`, and
+   * `validateAgainstRegistry` overwrites whatever the caller put in `inputs`
+   * with `artifactPathFrom(artifactRefs)` — so the supplied path was discarded
+   * and the refusal read "queryArtifactPath required", naming the single field
+   * the filer HAD provided. Two semantically equivalent fields, one silently
+   * ignored.
+   *
+   * The fix belongs here rather than in the executor. Teaching execution to
+   * search alternate input fields would preserve the ambiguity and give the
+   * policy evaluator and the executor two places to disagree about which
+   * artifact is being run. Normalising once, before persistence, means the
+   * request that is stored already carries the reference execution consumes.
+   *
+   * THIS IS NOT A DEFAULT. It promotes a path the caller explicitly named and
+   * invents nothing when none was given — the distinction that matters, because
+   * an earlier fallback here silently substituted the Q15 authority census for
+   * requests that named no query at all, and a privileged read whose subject is
+   * guessed is not a governed action.
+   */
+  const artifactContract = artifactContractFor(getActionDefinition(actionKey));
+  let artifactRefs = declaredRefs;
+  let artifactNormalizedFrom = null;
+  if (artifactContract && !artifactRefs.length) {
+    for (const key of artifactContract.inputKeys) {
+      const supplied = inputs?.[key];
+      if (supplied && String(supplied).trim()) {
+        artifactRefs = [String(supplied).trim()];
+        artifactNormalizedFrom = key;
+        break;
+      }
+    }
+  }
+  if (artifactContract && !artifactRefs.length) {
+    // Refused HERE, at filing, rather than several layers later as an executor
+    // surprise — and the refusal names the canonical field instead of the one
+    // the caller is most likely to have already set.
+    return {
+      ok: false,
+      error: "missing_canonical_artifact_reference",
+      failure_code: "missing_canonical_artifact_reference",
+      detail: `${actionKey} executes from artifact_refs. Supply artifact_refs, or ${artifactContract.inputKeys.join(" / ")} in inputs, and it will be normalised into artifact_refs before the request is persisted.`,
+    };
+  }
   return {
     ok: true,
     actionKey,
@@ -1825,6 +1992,9 @@ function validateRequestShape(input, { root } = {}) {
     purpose,
     target,
     artifactRefs,
+    // Recorded so evidence can say the reference was promoted from an input
+    // rather than supplied canonically. Observability, never behaviour.
+    artifactNormalizedFrom,
     inputs,
     continuationPlan: input.continuation_plan || input.continuationPlan || defaultContinuationPlan(actionKey, inputs),
   };
@@ -1963,6 +2133,19 @@ function withMissionDelegation(rec, decision, { nowMs, evidence = null } = {}) {
   };
 }
 
+/**
+ * The operator-readable sentence behind each escalation `reason`, for the paths
+ * that never reach the director evaluator and therefore never carry one of its
+ * own. Keyed by the exact `reason` policyDecision returns, so a reason added
+ * without a sentence falls through to the generic line rather than to silence.
+ */
+const ESCALATION_REASON_TEXT = Object.freeze({
+  policy_default_requires_operator:
+    "No delegated policy authorised this action, so it escalates. Unknown is never allow.",
+  policy_denied_requires_operator:
+    "A delegated policy covers this action but at least one required gate did not pass.",
+});
+
 function policyDecision(rec, { nowMs } = {}) {
   // Same identity the mint and the execution boundary use — including the
   // environment, which this call used to leave out entirely while passing
@@ -2005,14 +2188,28 @@ function policyDecision(rec, { nowMs } = {}) {
       };
     }
   }
-  // Production / deployed-primary reads require an operator grant.
-  if (rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS && rec.target === DEFAULT_TARGET) {
-    return {
-      auto_execute: false,
-      operator_approval_required: true,
-      reason: "privileged_read_requires_operator",
-    };
-  }
+  // THE DEPLOYED-PRIMARY CENSUS IS NOW DECIDED BY GATES, NOT BY A SHORT-CIRCUIT.
+  //
+  // This used to return `privileged_read_requires_operator` right here, before
+  // the evaluator ran. It cost the operator 182 approvals in the 23 days to
+  // 2026-09-11 — 73 in the last week, the single largest source of interruption
+  // — and produced ZERO denials, because the thing the human was being asked to
+  // supply was a measurement: is this the allowlisted query, does it still match
+  // its hash, is it provably non-mutating, is the target exactly the one that
+  // will be read. Every one of those is now a gate on
+  // allowlisted_read_only_census_v1, measured by re-running the registry's own
+  // validator at decision time.
+  //
+  // THE REFUSAL DID NOT GO AWAY, IT GOT A REASON. A census that fails any gate
+  // still escalates, and now says which one. Anything that is not a census, or
+  // is a census in any other mode, or names any other target, never matches this
+  // policy at all and takes the unchanged path below.
+  //
+  // Deleting the short-circuit rather than keeping it as a fallback is
+  // deliberate: two authorities for one decision is how they drift, and the
+  // evaluator is strictly the better-informed of the two. If it throws, the
+  // catch below still lands on the operator.
+  //
   // DELEGATED GOVERNANCE. The Director may decide only what an explicit
   // policy covers, on evidence gathered from sources the worker does not
   // control. Anything unmatched, unmeasured or consequential falls through to
@@ -3180,6 +3377,7 @@ function applyExecuteResult(rec, out, { nowMs, root, actor } = {}) {
   rec.result = action.result || null;
   rec.result_ref = action.result?.evidencePath || action.id;
   rec.execution_ended_at = iso(nowMs);
+  stampDecisionTiming(rec, "execution_settled_at");
   rec.updated_at = iso(nowMs);
   rec.failure_code = null;
   rec.failure_reason = null;
@@ -3265,6 +3463,56 @@ function enqueuePromotionContinuation(rec, { nowMs, root } = {}) {
   }, { nowMs, root, processNow: true });
 }
 
+/**
+ * Has this execution outlived any possibility that someone is still running it?
+ *
+ * The window comes from the action's own `timeoutMs`, doubled, with a floor —
+ * `database.apply_promoted_migration` declares 600 s, so it gets 20 minutes
+ * before anyone is entitled to call it abandoned. Deriving it rather than
+ * choosing it means a future action with a longer timeout is covered the day it
+ * is registered, instead of being declared dead by a constant nobody revisited.
+ */
+function abandonedExecution(rec, nowMs = Date.now()) {
+  if (!rec?.execution_started_at) return false;
+  const started = Date.parse(rec.execution_started_at);
+  if (!Number.isFinite(started)) return false;
+  const declared = Number(getActionDefinition(rec.action_key)?.timeoutMs || 180_000);
+  const window = Math.max(10 * 60_000, declared * 2);
+  return (nowMs - started) > window;
+}
+
+/**
+ * AN EXECUTION THE GATEWAY DIED IN THE MIDDLE OF IS SETTLED, NEVER REPLAYED.
+ *
+ * A record that is `executing`, carries an async acceptance, and has an
+ * `execution_started_at` is one whose executor was running when the process
+ * holding it stopped — a Gateway restart, a toolkit convergence, a crash. The
+ * tempting recovery is to run it again. That is exactly wrong for the actions
+ * this matters most for: a migration that may have half-applied, a merge that
+ * may have landed, a push that may have completed. Nothing in the record can
+ * distinguish "never ran" from "ran and we did not see the result", and the
+ * registry says so itself — both migration actions declare maxAttempts 1.
+ *
+ * So the ambiguity is reported rather than resolved by guessing. The request
+ * fails with a named cause, the audit carries what was known, and a human reads
+ * the outcome and decides. That is a worse-looking recovery and a better one:
+ * the alternative silently applies a migration twice.
+ *
+ * The grant makes this belt-and-braces. It is single-use and was consumed at the
+ * execution boundary, so even a replay would be refused `authorization_required`
+ * — this turns that refusal into an honest explanation instead of a puzzle.
+ */
+function settleInterruptedAcceptedExecution(rec, { nowMs, root } = {}) {
+  return failRequest(
+    rec,
+    "execution_interrupted",
+    "Execution was in progress when the Gateway stopped. Whether the trusted host "
+    + "completed it cannot be determined from here, so it is not retried automatically. "
+    + "Check the action's own outcome before deciding to run it again.",
+    { nowMs, root },
+  );
+}
+
 export function processGovernedAction(requestId, {
   nowMs = Date.now(),
   root = runtimeRoot(),
@@ -3317,6 +3565,33 @@ export function processGovernedAction(requestId, {
     }
     attachRunWait(rec, { nowMs, root });
     return { ok: true, request: publicGovernedAction(rec), awaiting_operator: true };
+  }
+  // AN ACCEPTED ACTION IS EXECUTED HERE, AND NOWHERE ELSE RE-DECIDED.
+  //
+  // The decision was taken when the operator pressed. Falling through to the
+  // policy evaluation below would re-ask a question that already has an answer,
+  // and could escalate an action the operator has already authorised — so this
+  // returns before any of that, carrying only the work.
+  if (rec.status === "executing" && rec.async_execution) {
+    if (rec.execution_started_at) {
+      // Started and did not finish. Only reachable when the process holding it
+      // died mid-action, because nothing else leaves this shape behind.
+      return settleInterruptedAcceptedExecution(rec, { nowMs, root });
+    }
+    if (!getActionDefinition(rec.action_key)) {
+      // The registry is not currently carrying this action. Wait rather than
+      // fail: the convergence path exists precisely for this, and the record
+      // keeps its claim so the next tick looks again.
+      attachRunWait(rec, { nowMs, root });
+      return { ok: true, request: publicGovernedAction(rec), accepted: true, waiting: "action_unavailable" };
+    }
+    rec.async_execution = {
+      ...rec.async_execution,
+      attempts: Number(rec.async_execution.attempts || 0) + 1,
+      last_attempt_at: observedNow(),
+    };
+    saveRequest(rec, root);
+    return executeGovernedAction(rec.request_id, { nowMs, root, actor });
   }
   if (rec.status === "awaiting_control_plane_refresh") {
     if (!getActionDefinition(rec.action_key)) {
@@ -3551,6 +3826,35 @@ export function processGovernedAction(requestId, {
       rec.escalation_reason = policy.director_decision.escalation_reason || null;
     }
   }
+  // EVERY DECISION STATES ITS BASIS, IN BOTH DIRECTIONS.
+  //
+  // Two questions have to be answerable from the record alone: "why did
+  // Vacilando do this without asking me" and "why is it asking me". Only the
+  // first half was written down, and only on the paths that happened to run the
+  // director evaluator. MEASURED on the retained window of 2026-09-11: 53 of the
+  // 103 operator-facing requests carried no escalation reason at all — every
+  // census, and every request that escalated before the evaluator ran or after
+  // it threw. A prompt that cannot say why it exists is exactly the prompt
+  // nobody can remove, because there is nothing to argue with.
+  //
+  // These are derived from the decision already taken, never a second opinion:
+  // if the two disagreed, the text would be the lie and the decision the truth.
+  if (!rec.escalation_reason && policy.operator_approval_required) {
+    rec.escalation_reason = ESCALATION_REASON_TEXT[policy.reason]
+      || `${rec.action_key} requires an operator decision (${policy.reason || "unstated"}).`;
+  }
+  if (!policy.operator_approval_required) {
+    rec.authorization_basis = {
+      reason: policy.reason || null,
+      authorized_by: policy.authorized_by || policy.reason || null,
+      authorization_id: policy.authorization_id || null,
+      delegation_id: policy.delegation_id || null,
+      policy_id: policy.director_decision?.matched_policy || null,
+      policy_version: policy.director_decision?.policy_version || null,
+      environment: rec.target || null,
+      at: iso(nowMs),
+    };
+  }
   saveRequest(rec, root);
 
   if (policy.operator_approval_required) {
@@ -3721,6 +4025,10 @@ export function executeGovernedAction(requestId, {
 
   rec.status = "executing";
   rec.execution_started_at = rec.execution_started_at || iso(nowMs);
+  // `execution_started_at` above is the AUTHORIZATION stamp and stays on nowMs,
+  // because tests pin it and a grant window is reasoned about from it. This is
+  // the observed one, and the two differing is the whole point.
+  stampDecisionTiming(rec, "execution_started_at");
   rec.updated_at = iso(nowMs);
   saveRequest(rec, root);
   attachRunWait(rec, { nowMs, root });
@@ -3935,6 +4243,18 @@ export async function approveGovernedAction(requestId, {
   nowMs = Date.now(),
   root = runtimeRoot(),
   expectedFingerprint = null,
+  // When the operator actually pressed, as reported by the client. Observability
+  // only — nothing authorises on it, and a caller that omits it loses one stamp
+  // rather than one guarantee.
+  submittedAt = null,
+  // DEFAULTS TO THE OLD BEHAVIOUR ON PURPOSE. Every existing caller — the tick,
+  // the CLI, the certification fixtures, the conversation path — keeps waiting
+  // for the result it has always waited for. Only the HTTP route, which is the
+  // one with a browser on the end of it, asks for acceptance.
+  awaitExecution = true,
+  // Test seam. The durable owner is what must be proven to execute the work, so
+  // the tests turn the immediate kick off and drive the tick instead.
+  schedule = true,
 } = {}) {
   const rec = getGovernedAction(requestId, root);
   if (!rec) return { ok: false, error: "request_not_found" };
@@ -3947,12 +4267,103 @@ export async function approveGovernedAction(requestId, {
   if (rec.status === "complete") return { ok: true, request: publicGovernedAction(rec), already: true };
   const guard = refuseTerminalDecision(rec, "approval", root);
   if (!guard.ok) return guard.refusal;
+  // ONE CLICK IS ONE APPROVAL, HOWEVER MANY TIMES THE BUTTON IS PRESSED.
+  //
+  // `refuseTerminalDecision` only catches a request that has already REACHED a
+  // terminal state. The gap it leaves is the one the operator actually falls
+  // into: a request that is approved and still EXECUTING, or parked awaiting a
+  // control-plane refresh. A second press walked straight past both guards,
+  // minted a second single-use grant — which is what defeated single-use, since
+  // the replay was not reusing the old grant but buying a new one — recorded a
+  // second `operator_approved`, and re-entered executeGovernedAction, which has
+  // no re-entry guard of its own.
+  //
+  // MEASURED over the 23 days to 2026-09-11: 111 duplicate approval events
+  // across 20 requests, and 141 executions beyond the first across 48. The worst
+  // single request, gar_9084b7b5fbbc7c (vacilando.retire_worktree), was approved
+  // 30 times over roughly 45 minutes, at intervals from 1 second to 10 minutes.
+  // That operator was not changing their mind thirty times; they were pressing a
+  // button that never said it had heard them.
+  //
+  // Returning `already` rather than an error is the point: the second press must
+  // converge the caller onto the authoritative current state, not hand them a
+  // failure for a decision that did in fact take effect.
+  //
+  // `awaiting_operator` and `failed` are deliberately NOT short-circuited. An
+  // approved record does not return to awaiting_operator any more, so finding
+  // one that has is a genuine re-ask from a stranded shape; and the block below
+  // exists precisely to let a pre-execution failure be decided again.
+  const settled = guard.rec || rec;
+  if (settled.operator_approval?.decision === "approved"
+    && settled.status !== "awaiting_operator"
+    && settled.status !== "failed") {
+    appendAudit(settled, "duplicate_approval_ignored", {
+      nowMs,
+      detail: { first_approved_at: settled.operator_approval.at || null, status: settled.status },
+    }, root);
+    return {
+      ok: true,
+      request: publicGovernedAction(settled),
+      already: true,
+      duplicate: true,
+    };
+  }
+  // THE OPERATOR'S PRESS, TIMED FROM THE PRESS AND NOT FROM THE OUTCOME.
+  //
+  // Recorded before any minting or execution so that `accepted_at` means what it
+  // says: the moment the server took responsibility for this decision. See
+  // `decision_timing` on the record for why every other stamp is taken live.
+  rec.decision_timing = {
+    ...(rec.decision_timing || {}),
+    // The press itself, when the client could tell us. Falls back to acceptance
+    // rather than to nothing, so the series is never ragged — and the two being
+    // equal is itself readable as "the client did not report a press time".
+    submitted_at: submittedAt || rec.decision_timing?.submitted_at || observedNow(),
+    accepted_at: observedNow(),
+  };
   if (rec.status === "failed") {
     // Only reachable for a request that never executed — the guard above holds
     // everything that did.
     rec.status = "awaiting_director";
     rec.failure_code = null;
     rec.failure_reason = null;
+  }
+
+  /*
+   * INFRASTRUCTURE PREFLIGHT, BEFORE ANYTHING IS MINTED OR SPENT.
+   *
+   * The managed QA actions resolve slot, port, worktree and identity from the
+   * registries at execution time, so the lane must hold a Development Slot
+   * before the governed mutation begins. Acquiring one is infrastructure
+   * scheduling — the same judgement the promoted dev-server path already makes
+   * without asking — and `ensureLaneSlot` remains the sole allocator, with
+   * every safety rule it enforces left exactly where it is.
+   *
+   * Placed HERE, ahead of the grant mint and the approval record, for one
+   * reason: if no safe slot exists, nothing may have been spent. The request
+   * stays `awaiting_operator` with no grant, no consumed delegation and no
+   * recorded decision, so the operator can approve it again once capacity
+   * frees up. A refusal that burned the approval would make waiting — the
+   * correct outcome — indistinguishable from failing.
+   */
+  if (qaActionNeedsDevelopmentSlot(rec.action_key)) {
+    const { ensureQaDevelopmentSlot } = await import("./qa-slot-preflight.mjs");
+    const pre = await ensureQaDevelopmentSlot(rec.lane_id, { actionKey: rec.action_key, root });
+    if (!pre.ok) {
+      appendAudit(rec, "development_slot_unavailable", { nowMs, error: pre.error, detail: pre.detail }, root);
+      return {
+        ok: false,
+        error: pre.error,
+        detail: pre.detail,
+        slot_preflight: pre,
+        request: publicGovernedAction(rec),
+      };
+    }
+    if (pre.moved) {
+      rec.slot_preflight = { acquired: pre.acquired, ...pre.movement };
+      saveRequest(rec, root);
+      appendAudit(rec, "development_slot_acquired", { nowMs, ...rec.slot_preflight }, root);
+    }
   }
 
   // WHICH AUTHORIZATION THIS APPROVAL CREATES.
@@ -4071,6 +4482,9 @@ export async function approveGovernedAction(requestId, {
   };
   rec.operator_approval_required = false;
   rec.policy_decision = "operator_approved";
+  // The authority now exists and is durable — the grant is minted and the
+  // decision is about to be written. Everything after this is execution.
+  stampDecisionTiming(rec, "authorization_persisted_at");
   rec.updated_at = iso(nowMs);
   if (rec.decision_id) {
     try {
@@ -4092,6 +4506,63 @@ export async function approveGovernedAction(requestId, {
   }
   saveRequest(rec, root);
   appendAudit(rec, "operator_approved", { nowMs }, root);
+
+  // ACCEPTANCE AND EXECUTION ARE TWO EVENTS. THE BROWSER ONLY NEEDS THE FIRST.
+  //
+  // THE DEFECT. Everything above this line is the decision: the request is
+  // validated, the authorization is checked, the grant is minted and the
+  // approval is written to disk. Everything below it was the WORK — the
+  // trusted-host action, then the lane resume and its continuation message —
+  // and the HTTP response waited for all of it. `database.read_census` carries a
+  // 180 s timeout and `database.apply_promoted_migration` carries 600 s, so the
+  // browser could not distinguish "my approval was accepted" from "the action
+  // has finished", because one request lifetime carried both.
+  //
+  // MEASURED with an executor that blocks for 1200 ms the way execFileSync
+  // really does: 1230 ms to answer, against 3 ms once the answer is the
+  // acceptance. That difference is the whole mission.
+  //
+  // WHY THIS IS SAFE TO RETURN ON. Acceptance is durable BEFORE the answer is
+  // given: `saveRequest` above has already written the operator decision, the
+  // grant the executor consumes, and the execution ownership recorded below. If
+  // the process died on the next line, every one of those survives.
+  //
+  // AND WHY IT IS NOT FIRE-AND-FORGET. `async_execution` is a durable claim, not
+  // a Promise. A record carrying it with no `execution_started_at` is
+  // unambiguously "accepted, never started", which is a shape only this path can
+  // produce — that matters, because processGovernedAction deliberately refuses
+  // to resume an `awaiting_operator` record that merely LOOKS approved, and it
+  // is right to. `tickGovernedActions` owns this shape and the Gateway's
+  // recovery timer drives the tick, so the work survives client disconnect,
+  // route completion and Gateway restart. The immediate kick below is an
+  // optimisation on top of that owner, never a substitute for it.
+  if (awaitExecution === false) {
+    rec.async_execution = {
+      accepted_at: observedNow(),
+      accepted_by: actor,
+      attempts: 0,
+    };
+    // `executing` is the canonical status for "decided, now the machine's
+    // problem", and it is what executeGovernedAction sets anyway one moment
+    // later. Inventing an `accepted` status would add governance vocabulary for
+    // a state the projection already renders, and every consumer that reasons
+    // about pending work would have to learn it.
+    rec.status = "executing";
+    rec.updated_at = iso(nowMs);
+    saveRequest(rec, root);
+    appendAudit(rec, "accepted", {
+      nowMs,
+      detail: { accepted_at: rec.async_execution.accepted_at, execution: "deferred_to_owner" },
+    }, root);
+    const accepted = {
+      ok: true,
+      accepted: true,
+      request: publicGovernedAction(rec),
+    };
+    if (schedule !== false) scheduleAcceptedExecution(rec.request_id, { root, actor: "director" });
+    return accepted;
+  }
+
   const out = executeGovernedAction(rec.request_id, { nowMs, root, actor: "director" });
   if (out?.resumePromise) {
     const resume = await out.resumePromise;
@@ -4099,6 +4570,30 @@ export async function approveGovernedAction(requestId, {
     return { ...rest, resume };
   }
   return out;
+}
+
+/**
+ * Start an accepted action promptly, without the durable owner depending on it.
+ *
+ * The tick runs on the Gateway's recovery cadence, which is measured in tens of
+ * seconds — correct for recovery and far too slow to be the only thing that
+ * starts work the operator just authorised. This closes that gap.
+ *
+ * It is deliberately written so that losing it costs nothing: it runs on the
+ * next macrotask, it swallows everything, and the record it acts on is already
+ * durably claimed. If the process dies before it runs, if it throws, or if it is
+ * never scheduled at all (`schedule: false`, which the tests use), the tick
+ * finds exactly the same record in exactly the same shape and executes it. That
+ * is the difference between an optimisation and an unowned Promise.
+ */
+function scheduleAcceptedExecution(requestId, { root, actor = "director" } = {}) {
+  setTimeout(() => {
+    try {
+      const out = executeGovernedAction(requestId, { root, actor });
+      // The resume is part of the downstream work, not part of acceptance.
+      if (out?.resumePromise) Promise.resolve(out.resumePromise).catch(() => {});
+    } catch { /* the tick is the owner and will find it */ }
+  }, 0).unref?.();
 }
 
 export function denyGovernedAction(requestId, {
@@ -4218,6 +4713,30 @@ export function tickGovernedActions({
     // The whole point of the wait: look again. Without this line the status is
     // a nicer name for the same silence.
     || r.status === "awaiting_checks"
+    // ACCEPTED, NEVER STARTED — THE SHAPE THAT MAKES EARLY RETURN SAFE.
+    //
+    // This is the durable owner of everything `approveGovernedAction` answered
+    // "accepted" to. `async_execution` is written by exactly one path, so unlike
+    // an `awaiting_operator` record that merely looks approved, this shape is
+    // never ambiguous: the operator decided, the grant exists, and the executor
+    // has not run. `execution_started_at` is written by executeGovernedAction
+    // before it calls the executor, so its absence is the claim.
+    //
+    || (r.status === "executing" && Boolean(r.async_execution) && !r.execution_started_at)
+    // AND THE ORPHANS OF AN EXECUTION THAT DIED HALFWAY.
+    //
+    // A record that started executing and never settled is either running right
+    // now or was abandoned by a process that no longer exists, and from the
+    // store those look identical. Time is the only honest discriminator, so it
+    // is taken from the action's OWN declared timeout rather than a number
+    // chosen here — doubled, because a timeout is when the executor gives up,
+    // not when it is safe to conclude nobody is there.
+    //
+    // Picking it up does NOT mean re-running it. processGovernedAction settles
+    // it as `execution_interrupted`: the ambiguity is reported, never guessed.
+    // Leaving it out entirely was the alternative, and it produces a request
+    // stuck in `executing` for ever with a lane waiting behind it.
+    || (r.status === "executing" && Boolean(r.async_execution) && abandonedExecution(r, nowMs))
   );
   const out = [...recovered];
   const seen = new Set(recovered.map((r) => r?.request?.request_id).filter(Boolean));
@@ -4360,7 +4879,142 @@ function doNotRetryLine(actionKey) {
   return "Do not retry this action from this lane. It already executed; read the result and continue.";
 }
 
-export function continuationTextForGovernedAction(rec, action = null) {
+/**
+ * WHAT A LANE MAY DO ABOUT ITS RUN — READ OFF THE RUN, NEVER ASSUMED.
+ *
+ * THE DEFECT THIS CLOSES. Two notification builders below spoke about the
+ * Execution Run without ever looking at it. The success notice appended
+ * `vac run-status <run> complete` whenever the record carried a run id, and the
+ * failure notice asserted "The current Execution Run is still open" on every
+ * failure, unconditionally.
+ *
+ * MEASURED, on lane_db3431e755a8. Run erun_0ef763c4a6a8e491 went
+ * QUEUED -> EXECUTING (admission_delivered) -> FAILED
+ * (delivery_unacknowledged, origin governor) in 30 seconds, and the lane's
+ * `current_run_id` was left null. THREE notifications then arrived: one
+ * asserting the run was still open, and two instructing a completion report.
+ * Every attempt was refused `illegal_transition (FAILED -> COMPLETE)`, which is
+ * the state machine being RIGHT. The instruction was the thing that was wrong.
+ *
+ * An operator handed an impossible cleanup step cannot tell "I did this wrong"
+ * from "the system asked for something that cannot exist", and the second is
+ * corrosive: it teaches the reader to distrust the instructions that ARE
+ * actionable.
+ *
+ * So: FAILED -> COMPLETE stays illegal. Nothing here mutates a run, and nothing
+ * here invents a transition to make a sentence true. What changes is that the
+ * sentence is derived from two facts the store already holds — the run's state,
+ * and whether the lane still owns it as its current run.
+ */
+export function runClosureGuidance(rec, {
+  root = runtimeRoot(),
+  getRun = null,
+  laneRun = null,
+} = {}) {
+  const runId = rec?.run_id || null;
+  const laneId = rec?.lane_id || null;
+  const none = { run_id: runId, lane_id: laneId, state: null, lane_owns_run: false, may_report_complete: false, lines: [] };
+  if (!runId) return none;
+
+  const lookup = getRun || ((id) => getExecutionRun(id, root) || findExecutionRun(id));
+  let run = null;
+  try { run = lookup(runId); } catch { run = null; }
+  const state = run ? String(run.state || "").toUpperCase() : null;
+
+  const laneLookup = laneRun || ((id) => activeRunForLane(id, root));
+  let active = null;
+  try { active = laneId ? laneLookup(laneId) : null; } catch { active = null; }
+  const laneOwnsRun = Boolean(active && active.run_id === runId);
+  const laneFlag = laneId ? ` --lane ${laneId}` : "";
+
+  /*
+   * A run the canonical owner has never heard of. Naming a close command for it
+   * would be the run_not_found substitution one layer up, in prose.
+   */
+  if (!run) {
+    return {
+      ...none,
+      lines: [`Execution Run ${runId} is not in the canonical run store, so nothing can be filed against it. Do not report a state for it.`],
+    };
+  }
+
+  if (state === "COMPLETE") {
+    return {
+      ...none, state, lane_owns_run: laneOwnsRun,
+      lines: [`Execution Run ${runId} is already COMPLETE. It needs no closing report; do not report it again.`],
+    };
+  }
+
+  // WHY it ended, from the transition the governor actually wrote. "It failed"
+  // without a cause is what sends someone looking for their own mistake.
+  const last = Array.isArray(run.transitions) && run.transitions.length
+    ? run.transitions[run.transitions.length - 1]
+    : null;
+  const cause = last?.reason ? ` (${last.reason}${last.origin ? `, ${last.origin}` : ""})` : "";
+
+  /*
+   * TERMINAL FOR SCHEDULING IS NOT THE SAME AS TERMINAL FOR REPORTING, and
+   * conflating them strands exactly the lane this whole change exists to help.
+   *
+   * `TERMINAL_RUN_STATES` holds COMPLETE, FAILED **and ABANDONED**, but only
+   * COMPLETE and FAILED are irreversible. ABANDONED has a documented recovery:
+   * `reportExecutionRunState` treats a worker reporting on an abandoned run as
+   * proof the abandonment was wrong, hops it through RECOVERING, and lets it
+   * reach COMPLETE — "rather than answering illegal_transition and stranding a
+   * live sprint with no way to reach COMPLETE".
+   *
+   * MEASURED, on this lane. Run erun_05f2787e4a3cb02c was abandoned by the
+   * governor as `needs_input_without_operator_input` while its worker was
+   * mid-turn, and a `vac run-status … complete` filed against it SUCCEEDED via
+   * that recovery. A guidance that had called ABANDONED unreportable would have
+   * told the worker to abandon a turn it could still legitimately close — the
+   * same defect as the one above, pointing the other way.
+   *
+   * So the rule is keyed to irreversibility, never to the scheduling flag.
+   */
+  if (isIrreversibleRunState(state)) {
+    return {
+      ...none, state, lane_owns_run: laneOwnsRun,
+      lines: [
+        `Execution Run ${runId} already terminated as ${state}${cause}. ${state} to COMPLETE is not a legal transition — do not report this run complete and do not try to close it.`,
+        laneOwnsRun
+          ? `Nothing can be filed against it. Continue only when a new Execution Run is delivered to this lane.`
+          : `This lane no longer owns an open Execution Run, so it has nothing to close. Recovery is the operator's: a new Execution Run carries the work forward.`,
+      ],
+    };
+  }
+
+  if (state === "ABANDONED") {
+    return {
+      ...none, state, lane_owns_run: laneOwnsRun, may_report_complete: true,
+      lines: [
+        `Execution Run ${runId} was abandoned${cause}. Reporting on it is itself proof the abandonment was wrong: the report recovers the run rather than being refused.`,
+        `When this assignment is finished, report: vac run-status ${runId} complete --summary "..."${laneFlag}`,
+      ],
+    };
+  }
+
+  /*
+   * Non-terminal, and the lane's CURRENT run. Only here is a completion
+   * instruction the truth. A non-terminal run the lane no longer owns is
+   * somebody else's to report, and telling this lane to close it would hand it
+   * the same impossible step by a different route.
+   */
+  if (laneOwnsRun) {
+    return {
+      ...none, state, lane_owns_run: true, may_report_complete: true,
+      lines: [`When this assignment is finished, report: vac run-status ${runId} complete --summary "..."${laneFlag}`],
+    };
+  }
+  return {
+    ...none, state, lane_owns_run: false,
+    lines: active
+      ? [`Execution Run ${runId} is ${state}, but this lane's current run is ${active.run_id}. Report against the run the lane owns, not this one.`]
+      : [`Execution Run ${runId} is ${state} and is not this lane's current run, so do not report a state for it.`],
+  };
+}
+
+export function continuationTextForGovernedAction(rec, action = null, { root = runtimeRoot() } = {}) {
   const evidencePath = rec.result_ref || action?.result?.evidencePath || null;
   const envelope = governedResultEnvelope(rec.action_key, action?.result || rec.result || {});
   return redact([
@@ -4374,7 +5028,9 @@ export function continuationTextForGovernedAction(rec, action = null) {
     "Director executed this on the trusted host.",
     credentialIsolationLine(rec.action_key),
     doNotRetryLine(rec.action_key),
-    rec.run_id ? `When this assignment is finished, report: vac run-status ${rec.run_id} complete --summary "..."${rec.lane_id ? ` --lane ${rec.lane_id}` : ""}` : null,
+    // Derived from the run, never from the mere presence of a run id. A lane
+    // whose run already terminated is told that, not told to close it.
+    ...runClosureGuidance(rec, { root }).lines,
     "",
     envelope.ok ? "Bounded result summary:" : "RESULT ENVELOPE MISMATCH — the trusted-host result did not carry the shape this action produces. Report this rather than acting on it:",
     JSON.stringify(envelope.ok ? envelope.summary : envelope, null, 2),
@@ -4383,7 +5039,7 @@ export function continuationTextForGovernedAction(rec, action = null) {
   ].filter((line) => line != null).join("\n"));
 }
 
-export function continuationTextForFailedGovernedAction(rec) {
+export function continuationTextForFailedGovernedAction(rec, { root = runtimeRoot() } = {}) {
   return redact([
     "[VACILANDO GOVERNED ACTION FAILED]",
     `Request: ${rec.request_id}`,
@@ -4409,7 +5065,17 @@ export function continuationTextForFailedGovernedAction(rec) {
      */
     "This action did NOT complete, and nothing it would have changed has changed.",
     "Repository and database state remain whatever they were before this attempt — check them rather than inferring from this message.",
-    "The current Execution Run is still open. Wait for the next operator instruction in this lane, then continue the assignment.",
+    /*
+     * THIS LINE USED TO SAY "The current Execution Run is still open."
+     *
+     * Unconditionally, on every failed action — including one delivered to a
+     * lane whose run the governor had already failed and whose current_run_id
+     * was null. A notice that asserts a state it never read is the same class
+     * of defect as the merge claim above it, and it stranded the operator with
+     * a cleanup step the state machine correctly refuses.
+     */
+    ...runClosureGuidance(rec, { root }).lines,
+    "Wait for the next operator instruction in this lane, then continue the assignment.",
   ].filter((line) => line != null).join("\n"));
 }
 
@@ -4455,12 +5121,12 @@ export async function drainGovernedNotificationsForLane(laneId, {
     },
     buildText: async (rec) => {
       if (rec.notification_delivery?.kind === "governed_action_failed") {
-        return continuationTextForFailedGovernedAction(rec);
+        return continuationTextForFailedGovernedAction(rec, { root });
       }
       const action = rec.trusted_host_action_id
         ? await getTrustedHostAction(rec.trusted_host_action_id)
         : null;
-      return continuationTextForGovernedAction(rec, action);
+      return continuationTextForGovernedAction(rec, action, { root });
     },
   });
 }
@@ -4528,7 +5194,7 @@ export async function resumeLaneAfterFailedGovernedAction(requestId, {
   releaseRunAfterGovernedFailure(rec, { nowMs, root });
   const { sendLaneInstruction } = await import("./lanes.mjs");
   const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
-  const text = continuationTextForFailedGovernedAction(rec);
+  const text = continuationTextForFailedGovernedAction(rec, { root });
   const send = sendImpl || sendLaneInstruction;
   const start = startSessionImpl || startLaneAgentSession;
   let delivered = await send(rec.lane_id, text, {
@@ -4619,7 +5285,7 @@ export async function resumeLaneAfterGovernedAction(requestId, {
   const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
   const { getTrustedHostAction } = await import("./trusted-host-actions.mjs");
   const action = rec.trusted_host_action_id ? getTrustedHostAction(rec.trusted_host_action_id) : null;
-  const text = continuationTextForGovernedAction(rec, action);
+  const text = continuationTextForGovernedAction(rec, action, { root });
 
   if (rec.run_id) {
     const run = getExecutionRun(rec.run_id, root);
@@ -4631,6 +5297,15 @@ export async function resumeLaneAfterGovernedAction(requestId, {
         root,
         progress: `${rec.action_key} complete — resuming worker`,
       });
+      // THE LAST STAMP THE SERVER CAN HONESTLY TAKE.
+      //
+      // The run has left WAITING_RESOURCE and the completed action is patched
+      // onto it, so this is the moment the outcome becomes visible to anything
+      // reading the projection. It is not the moment a pixel changed in the
+      // operator's browser — the server cannot observe that, and inventing a
+      // stamp for it would be worse than admitting the series ends here.
+      stampDecisionTiming(rec, "projection_visible_at");
+      saveRequest(rec, root);
       patchRunFields(rec.run_id, { governed_action: publicGovernedAction(rec) }, { nowMs, root });
       patchRunResourceWait(rec.run_id, null, root);
     }

@@ -80,11 +80,27 @@ describe("Access Scopes is gone as a destination, and old links still land somew
 describe("the user detail is three tabs, and the merge did not weaken the role write", () => {
     const src = code(USERS_PAGE);
 
-    it("offers Overview, Role & Access, and Security — and no empty History", () => {
+    it("offers Overview, Role & Access, and Security — and history is a card, never a fourth tab", () => {
+        /*
+         * W-57 removed a History TAB that cost a click to discover a single sentence saying history
+         * was planned. The finding was about a navigable destination with nothing in it, not about
+         * history — and D2 gave this surface real events.
+         *
+         * So the tab list is still exactly three, and `tab === "history"` must never come back; what
+         * changed is that history now lives as a CARD in the workspace, beside the access it
+         * explains, fed by the canonical read model rather than by a promise.
+         */
         expect(src).toContain('type AccessUserTab = "overview" | "access" | "security"');
         expect(src).toContain('label: "Role & Access"');
         expect(src).not.toContain('tab === "history"');
-        expect(src).not.toContain('access-user-history');
+
+        if (src.includes("access-user-history")) {
+            expect(src).toContain("AccessHistoryList");
+            // A card, not a destination: it is not reached by selecting a tab.
+            expect(src).not.toMatch(/tab === "history"/);
+            // And it is filtered to the selected person rather than showing the organization feed.
+            expect(src).toMatch(/subjectUserId=\{selectedUserId\}/);
+        }
     });
 
     it("puts the role picker inside the Access tab rather than deleting it", () => {
@@ -101,13 +117,17 @@ describe("the user detail is three tabs, and the merge did not weaken the role w
         expect(accessTab).toContain('testId="access-user-access-locations"');
     });
 
-    it("keeps M2-17's acknowledgement in front of the replacement write", () => {
-        // `PATCH …/role` replaces every role row for the pair. Moving the control to another tab
-        // must not move it away from the confirmation that stops a silent multi-role deletion —
-        // and that boundary is D2/I-10's, which this tranche does not decide.
-        expect(src).toContain("rolesLostBySave");
-        expect(src).toContain("access-user-role-replace-confirm");
-        expect(src).toContain("confirmRoleReplace");
+    it("assigns and removes one role, so there is no silent multi-role deletion to acknowledge", () => {
+        /*
+         * This asserted that M2-17's acknowledgement travelled with the control when it moved tabs,
+         * because `PATCH …/role` replaced every role row and a confirmation was the only thing
+         * standing between an operator and a silent deletion. W-17 removed the deletion: the tab now
+         * adds one role and removes one role by name, and the acknowledgement it used to require
+         * would be guarding an operation this surface can no longer perform.
+         */
+        expect(src).toContain("mutateRole");
+        expect(src).toMatch(/data-testid=\{`access-user-role-remove-\$\{roleKey\}`\}/);
+        expect(src).not.toContain("confirmRoleReplace");
     });
 });
 

@@ -25,6 +25,7 @@ import {
     type CurrentWorkRequirementOwner,
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkRequirementOwner";
 import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
+import { executeCommandSurfaceAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCommandSurfaceAction";
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
 import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
 import CurrentWorkTourGroupedActions from "@/components/admin/focusPanel/cards/CurrentWorkTourGroupedActions";
@@ -307,7 +308,12 @@ export default function CurrentWorkCard({
                 icon: action.icon ?? null,
                 style: null,
                 display_style: "outline",
-                payload: {},
+                /*
+                 * Configured arguments, not an empty object. This was hardcoded `{}`, so an action
+                 * whose contract requires an input could be configured, resolved, rendered and
+                 * pressed — and would then refuse, because the one thing it needed never travelled.
+                 */
+                payload: action.workTemplateKey ? { template_key: action.workTemplateKey } : {},
                 workflow_id: null,
             });
         }
@@ -319,6 +325,40 @@ export default function CurrentWorkCard({
         (action: CurrentWorkActionVM) => warmCurrentWorkCapabilityOnIntent(action, context),
         [context],
     );
+
+    /**
+     * Run a command whose subject and inputs are already resolved.
+     *
+     * The subject is the one the Focus Panel is already showing — a child when the surface is
+     * child-grain — never the enclosing opportunity. That substitution is exactly what made this
+     * command unreachable through the drawer header, and re-introducing it here would put the work
+     * on the wrong record rather than merely failing.
+     *
+     * Executes through the registered-action route and nothing else; the server keeps eligibility.
+     */
+    const runCommandSurfaceAction = async (action: CurrentWorkActionVM) => {
+        const subject = context.truth?.row_subject as { subject_type?: string; subject_id?: string } | undefined;
+        const entityType = subject?.subject_type?.trim() || "";
+        const entityId = subject?.subject_id?.trim() || "";
+
+        const result = await executeCommandSurfaceAction({
+            actionKey: action.handlerKey ?? action.key,
+            entityType,
+            entityId,
+            // Bound by configuration, carried through the projection — never re-asked of the operator.
+            ...(action.workTemplateKey ? { payload: { template_key: action.workTemplateKey } } : {}),
+            surface: "focus_panel",
+        });
+
+        if (!result.ok) {
+            setHandoffNotice(result.error);
+            return;
+        }
+        // Canonical completion: the same path a capability panel takes when it finishes, so the
+        // projection refreshes and the surface returns to the full Focus Panel.
+        resetCompletion();
+        handleActionPanelComplete();
+    };
 
     const invokeAction = (action: CurrentWorkActionVM) => {
         const plan = planCurrentWorkActionExecution(action);
@@ -379,6 +419,10 @@ export default function CurrentWorkCard({
             case "header_delegate":
                 setHandoffNotice(null);
                 invokeHeaderDelegate(plan.action);
+                return;
+            case "command_surface":
+                setHandoffNotice(null);
+                void runCommandSurfaceAction(plan.action);
                 return;
             case "cancel_tour": {
                 setHandoffNotice(null);

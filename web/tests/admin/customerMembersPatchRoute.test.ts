@@ -99,6 +99,7 @@ function adminContext(org = orgId) {
         userId: "user-1",
         role: "admin",
         roleKeys: ["admin"],
+        permissionKeys: [],
         status: 200,
     } as Awaited<ReturnType<typeof getAdminContextCached>>);
 }

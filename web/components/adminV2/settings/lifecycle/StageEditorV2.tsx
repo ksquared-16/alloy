@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import BusinessProcessPublicationBar from "@/components/adminV2/settings/lifecycle/BusinessProcessPublicationBar";
 import StageFormRequirementsEditor from "@/components/adminV2/settings/lifecycle/StageFormRequirementsEditor";
+import StageWorkRequirementsEditor from "@/components/adminV2/settings/lifecycle/StageWorkRequirementsEditor";
+import StageStartableWorkEditor from "@/components/adminV2/settings/lifecycle/StageStartableWorkEditor";
 import StagePaperworkCard from "@/components/adminV2/settings/lifecycle/StagePaperworkCard";
 import StagePerChildPathsEditor from "@/components/adminV2/settings/lifecycle/StagePerChildPathsEditor";
 import LifecycleStageFieldRequirementsEditor, {
@@ -568,6 +570,19 @@ function StickyTopbar({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+/**
+ * A stable fingerprint of the stage's configured actions, for dirty comparison.
+ *
+ * Order-insensitive on purpose: ticking two work items and ticking them in the other order are the
+ * same configuration, and treating them as different would leave Save lit with nothing to save.
+ */
+function candidateActionsFingerprint(actions: readonly StageCandidateAction[]): string {
+    return actions
+        .map((a) => `${a.action_key}|${a.work_template_key ?? ""}|${a.recommendation}|${a.override_label ?? ""}`)
+        .sort()
+        .join("\n");
+}
+
 export default function StageEditorV2({
     departmentId,
     businessProcessKey,
@@ -719,6 +734,7 @@ export default function StageEditorV2({
         allowSkipping: stageRecord?.allow_skipping ?? false,
         operatorGuidance: stageRecord?.operator_guidance ?? "",
         subjectResolution: (stageRecord?.subject_resolution_strategy ?? "ask_operator") as StageSubjectResolutionStrategy,
+        candidateActions: candidateActionsFingerprint(stageRecord?.action_catalog_v1?.candidate_actions ?? []),
     }));
 
     const v2Dirty =
@@ -727,7 +743,14 @@ export default function StageEditorV2({
         description !== savedV2.description ||
         allowSkipping !== savedV2.allowSkipping ||
         operatorGuidance !== savedV2.operatorGuidance ||
-        subjectResolution !== savedV2.subjectResolution;
+        subjectResolution !== savedV2.subjectResolution ||
+        /*
+         * Candidate actions count as an edit. They were saved on every write but never compared, so
+         * changing only them left Save disabled — the section rendered, the checkbox moved, and the
+         * one control that could persist it stayed greyed out. A configuration surface that cannot
+         * be saved is worse than one that is missing: it looks finished.
+         */
+        candidateActionsFingerprint(candidateActions) !== savedV2.candidateActions;
 
     const isDirty = fieldDirty || operatingPlanDirty || v2Dirty;
 
@@ -752,7 +775,11 @@ export default function StageEditorV2({
         setOperatorGuidance(next.operatorGuidance);
         setSubjectResolution(next.subjectResolution);
         setCandidateActions(stageRecord?.action_catalog_v1?.candidate_actions ?? []);
-        setSavedV2(next);
+        // The committed baseline must move with the record, or a stage switch reads as an edit.
+        setSavedV2({
+            ...next,
+            candidateActions: candidateActionsFingerprint(stageRecord?.action_catalog_v1?.candidate_actions ?? []),
+        });
     }, [stageKey, stageRecord]);
 
     // Commit current field values as the new baseline when save transitions saving → saved.
@@ -767,6 +794,9 @@ export default function StageEditorV2({
                 allowSkipping,
                 operatorGuidance,
                 subjectResolution: subjectResolution ?? "ask_operator",
+                // Committed with the rest, so a successful save clears dirty immediately rather
+                // than leaving Save lit until the record propagates back.
+                candidateActions: candidateActionsFingerprint(candidateActions),
             });
         }
         prevSaveStateRef.current = saveState;
@@ -920,6 +950,14 @@ export default function StageEditorV2({
                         : null}
                     {stageKey.trim() ? (
                         <>
+                            {/* Which of this stage's own work an operator may begin. Generic: the
+                                rows are whatever templates the stage configures. */}
+                            <StageStartableWorkEditor
+                                workTemplates={stageRecord?.stage_operating_plan_v1?.work_templates ?? []}
+                                candidateActions={candidateActions}
+                                onChange={setCandidateActions}
+                                disabled={!stageKey.trim()}
+                            />
                             <LifecycleStageOperatingPlanEditor
                                 ref={operatingPlanRef}
                                 stageKey={stageKey}
@@ -1009,6 +1047,15 @@ export default function StageEditorV2({
                                 departmentId={departmentId}
                                 stageKey={stageKey}
                                 stageLabel={stageLabel}
+                                stageRecord={stageRecord ?? null}
+                                process={process ?? null}
+                                onSaved={onReloadConfiguration}
+                            />
+                            {/* Work is a requirement kind like any other, so it is authored here
+                                beside forms rather than on a surface of its own. */}
+                            <StageWorkRequirementsEditor
+                                departmentId={departmentId}
+                                stageKey={stageKey}
                                 stageRecord={stageRecord ?? null}
                                 process={process ?? null}
                                 onSaved={onReloadConfiguration}

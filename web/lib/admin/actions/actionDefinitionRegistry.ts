@@ -31,7 +31,19 @@ export type ActionRegistryEntry = {
 };
 
 /** Generic interaction hosts a capability may declare. Not business- or action-name specific. */
-export type CapabilityInteractionHost = "inline_form" | "communications_composer" | "header_delegate" | "form_delivery";
+export type CapabilityInteractionHost =
+    | "inline_form"
+    | "communications_composer"
+    | "header_delegate"
+    | "form_delivery"
+    /**
+     * Run the command here, against the subject already resolved.
+     *
+     * The other four each name a place the operator goes to SUPPLY something. This one is for the
+     * command that needs nothing more: the surface knows the subject and configuration bound the
+     * inputs, so the only remaining act is to run it through the registered-action runtime.
+     */
+    | "command_surface";
 
 export const ACTION_CATEGORY_LABELS: Record<ActionDefinitionCategory, string> = {
     record: "Record",
@@ -43,6 +55,41 @@ export const ACTION_CATEGORY_LABELS: Record<ActionDefinitionCategory, string> = 
 
 /** Operator-facing action library (Settings cards). Keys must exist in action_definitions after seed. */
 export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
+    {
+        /**
+         * Begin a piece of work the subject's CURRENT stage already configures.
+         *
+         * Registered here because this is the registry canonical action definitions are DERIVED
+         * from, and without an entry `canonicalActionDefinition` returns null — at which point
+         * `resolveCurrentWorkActionSurface` classifies the action `unsupported` and the surface
+         * drops it as a configuration error. That is what happened: `stage_work.start` was a
+         * production capability, a registered action, process-selected and configured against a
+         * stage, and it still could not render, because nothing had told this registry it exists.
+         *
+         * `header_delegate` is the interaction host because the operator supplies NOTHING: the work
+         * template comes from configuration and travels in the invocation payload. Declared as
+         * metadata here rather than inferred from the key, exactly as this field is meant to be
+         * used.
+         *
+         * Not settings-configurable: it is authored per stage, against that stage's own work, in
+         * the stage editor — not placed as a button from the layout library, where it would have no
+         * template to start.
+         */
+        key: "stage_work.start",
+        label: "Start stage work",
+        category: "record",
+        settingsConfigurable: false,
+        description:
+            "Start a piece of work this subject's current stage already configures. Starts the work only — it records no outcome and moves no stage.",
+        /*
+         * `command_surface`, not `header_delegate`. This is a CHILD-subject command, and the drawer
+         * header is opportunity-scoped: delegating there reached a host with no such command, and
+         * told the operator to "use drawer header actions" for an action the header does not carry.
+         * The Focus Panel already holds the child and configuration already bound the template, so
+         * there is nothing left to collect and nowhere else to go.
+         */
+        interactionHost: "command_surface",
+    },
     {
         key: "quick_message",
         label: "Message",

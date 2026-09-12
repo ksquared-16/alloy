@@ -55,6 +55,25 @@ export const CAPABILITY_AREAS: readonly CapabilityArea[] = Object.freeze([
     { key: "communications", label: "Communications", description: "Messages to families and contacts.", order: 40 },
     { key: "documents", label: "Documents", description: "Documents and forms on a record.", order: 50 },
     /*
+     * Forms is its OWN area, not a corner of Documents.
+     *
+     * The Documents area is about what is filed ON a record. Forms is the builder and the
+     * submissions that come back from it, and an area is the unit a preset applies to: granting
+     * someone Documents must not sweep along the authority to redesign the forms an organization
+     * sends to families. Health was separated from Families for exactly this reason.
+     */
+    { key: "forms", label: "Forms", description: "Form design, and the submissions people send back.", order: 52 },
+    /*
+     * Processing is its OWN area, and deliberately not a corner of Documents or Forms.
+     *
+     * It is the queue where a document that arrived becomes a record: classifying it, resolving who
+     * it is about, committing the records it proposes. Its authority overlaps both neighbours and
+     * belongs to neither — `documents.write` is held by ops in every organization and must not
+     * become a licence to delete a case, and `forms.author` legitimately covers the packet and
+     * form-draft authoring that Processing surfaces without covering the queue work itself.
+     */
+    { key: "processing", label: "Processing", description: "The queue where arriving documents become records.", order: 54 },
+    /*
      * Health is its OWN area, not a corner of Families or Documents.
      *
      * That is the D-H6 decision expressed in the operator's vocabulary: someone granting family
@@ -119,6 +138,8 @@ const GROUP_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
     financials: "financials",
     communications: "communications",
     documents: "documents",
+    forms: "forms",
+    processing: "processing",
     health: "health",
     reports: "reports",
     scheduling: "scheduling",

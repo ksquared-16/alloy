@@ -55,7 +55,14 @@ const M6 = "20260807170000_w12_seed_default_rbac_enumerated_grants.sql";
  * here are derived from the tree rather than restated: the tenth key fails this file, in the
  * repository, before a tenant is created without it.
  */
-const LIVE_SEED = "20260911140000_w13_portal_access_capability_admission.sql";
+/*
+ * The migration that currently DEFINES `seed_default_rbac`, not the one that first enumerated it.
+ *
+ * It moves whenever a program adds a capability, because a capability that is not in the seed is a
+ * capability a NEW organization never receives — the cliff `20260910183000` was written to end.
+ * Forms moved it here.
+ */
+const LIVE_SEED = "20260912114000_processing_capability_default_seed.sql";
 
 /**
  * The migration that owns the COMPLETENESS contract — the admin-is-the-whole-catalog rule, the nine
@@ -114,6 +121,27 @@ const OPS_WITHHELD = [
     "fin.subsidy",
     "health.view",
     "health.manage",
+    /*
+     * Forms design and broad submission handling. Not a judgement invented by the seed: before the
+     * Forms migration, `ops` could reach exactly one Forms write — confirming a linkage the system
+     * proposed — and could not set one by hand. Withholding these two is what preserves that.
+     * `forms.submissions.confirm` is deliberately NOT withheld, because ops already had it.
+     */
+    "forms.author",
+    "forms.submissions",
+    /*
+     * Archive, destructive document management and the test-data reset. Also not a judgement
+     * invented by the seed: `ops` was admitted by the Processing OPERATOR context and by nothing
+     * else in that cluster — archive was admin-only, so were both document operations, and so was
+     * the reset. Withholding these three is what preserves that.
+     *
+     * `processing.operate` is deliberately NOT withheld, because ops already had it. Folding any of
+     * the three into it would have handed ops an authority it has never held, which is the whole
+     * reason they are separate keys.
+     */
+    "processing.archive",
+    "processing.documents.manage",
+    "processing.dev_cleanup",
 ];
 
 const statements = discoverGrantStatements();

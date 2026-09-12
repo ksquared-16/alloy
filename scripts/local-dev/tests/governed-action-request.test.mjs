@@ -150,10 +150,20 @@ await test("worker requests governed action and lane waits on Director", () => {
 await test("automatic Director execution when authorization already exists", async () => {
   const run = executingRun();
   const mission = createMission({ slot: 1, title: "Access & Identity V2", objective: "Q15", status: "running" });
+  // ABSENCE IS NOT A WILDCARD, SO THE TEST MAY NOT RELY ON ONE EITHER.
+  //
+  // These four grants were written before `classifyStandingGrant` stopped
+  // treating a grant with no subject binding as matching every request of its
+  // action type. They have been failing ever since, asserting the autonomy the
+  // matcher now — correctly — refuses to give an unbound grant. Declaring the
+  // reuse breadth explicitly is exactly what that hardening asks an operator to
+  // do, so the test now grants the way the runtime expects to be granted, and
+  // the behaviour under test is once again the one named in the title.
   grantMissionAuthorization({
     missionId: mission.mission_id,
     actionType: ACTION_TYPES.DATABASE_READ_CENSUS,
     databaseTarget: "alloy_deployed_primary",
+    subjectScope: "any_within_mission",
     actor: "operator",
   });
   const sends = [];
@@ -214,8 +224,16 @@ await test("operator denial persists and does not bounce the lane to retry", () 
   assert.equal(denied.request.failure_code, "approval_denied");
   assert.equal(pendingGovernedActionForLane("alloy-identity", ROOT), null);
   const runs = listExecutionRunsForLane("alloy-identity", ROOT);
-  assert.equal(runs[0].state, "FAILED");
-  assert.match(runs[0].state_reason || "", /denied|production/i);
+  // A DENIAL IS A BLOCKER, NOT AN EXECUTION FAILURE — and the runtime says so.
+  //
+  // denyGovernedAction parks the run in NEEDS_INPUT with the blocker attached,
+  // deliberately, because the operator declining ONE way forward does not mean
+  // the work failed: the run can still report a checkpoint, be resumed, and
+  // complete. FAILED is reserved for genuine execution failure. This assertion
+  // was left behind by that change and has been failing since, demanding the
+  // exact behaviour the runtime documents as the defect it fixed.
+  assert.equal(runs[0].state, "NEEDS_INPUT");
+  assert.match(runs[0].state_reason || "", /denied|production|approved/i);
   const posture = deriveMissionPosture(mission.mission_id);
   assert.match(posture.label, /Blocked/i);
 });
@@ -226,6 +244,7 @@ await test("trusted-host failure is persisted without asking the lane to retry",
   grantMissionAuthorization({
     missionId: mission.mission_id,
     actionType: ACTION_TYPES.DATABASE_READ_CENSUS,
+    subjectScope: "any_within_mission",
     actor: "operator",
   });
   const sends = [];
@@ -262,6 +281,7 @@ await test("result routes back to the same lane", async () => {
   grantMissionAuthorization({
     missionId: mission.mission_id,
     actionType: ACTION_TYPES.DATABASE_READ_CENSUS,
+    subjectScope: "any_within_mission",
     actor: "operator",
   });
   const sends = [];
@@ -296,6 +316,7 @@ await test("exhausted Claude context resumes with a fresh session in the same la
   grantMissionAuthorization({
     missionId: mission.mission_id,
     actionType: ACTION_TYPES.DATABASE_READ_CENSUS,
+    subjectScope: "any_within_mission",
     actor: "operator",
   });
   const starts = [];

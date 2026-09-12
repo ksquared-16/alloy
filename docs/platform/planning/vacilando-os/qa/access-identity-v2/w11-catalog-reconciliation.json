@@ -68,30 +68,203 @@
     "consequence_for_prior_records": "W-10's execution record states 25 projected rows over 35 keys and 'the grid can represent all of them'. The projection is total, so the second clause holds; the numbers do not. Against the real catalog the same projection renders more rows over 57 keys. W-10's exit criterion is unaffected; its arithmetic is restated in §7."
   },
   "enforced": [
-    { "key": "ai.enrichment.use", "sites": ["web/lib/ai/aiEnrichmentPermissions.ts", "web/lib/bos/auth/index.ts", "web/lib/bos/bosCapabilityRegistry.ts"], "note": "conditional — only when AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true; otherwise the routes fall back to portal admin/ops" },
-    { "key": "communications.send", "sites": ["web/app/api/admin/communications/bindings/route.ts", "web/app/api/admin/communications/identities/route.ts", "web/app/api/admin/communications/send/route.ts", "web/lib/communications/canonicalOutboundEnqueue.ts", "web/lib/communications/communicationPermissions.ts", "web/lib/communications/purpose/purposeRegistry.ts"] },
-    { "key": "config_assist.apply", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalState.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts", "web/lib/bos/bosCapabilityRegistry.ts"] },
-    { "key": "config_assist.generate", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts", "web/lib/bos/bosCapabilityRegistry.ts"] },
-    { "key": "config_assist.review", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalState.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts", "web/lib/bos/bosCapabilityRegistry.ts"] },
-    { "key": "data_quality.view", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "gates config-assist proposals only — the same edit made through the normal configuration surface is not checked against it" },
-    { "key": "documents.read", "sites": ["web/lib/documents/assertDocumentAccess.ts"] },
-    { "key": "fields.editability.manage", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "proposal-only, as data_quality.view" },
-    { "key": "fields.manage", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "proposal-only" },
-    { "key": "fields.requirements.manage", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "proposal-only" },
-    { "key": "layouts.manage", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "proposal-only" },
-    { "key": "operational_expectations.author", "sites": ["web/lib/operationalExpectations/intake/authoringServerContext.ts"] },
-    { "key": "operational_expectations.ratify", "sites": ["web/lib/operationalExpectations/ratification/ratificationServerContext.ts"] },
-    { "key": "ops.messaging.write", "sites": ["web/lib/communications/communicationPermissions.ts"], "note": "the legacy alias for communications.send — the only key of the 22-key legacy seed vocabulary that anything consults" },
-    { "key": "option_sets.manage", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "proposal-only" },
-    { "key": "reports.read", "sites": ["web/lib/admin/canReadAnalytics.ts"] },
-    { "key": "reports.write", "sites": ["web/lib/admin/canReadAnalytics.ts"] },
-    { "key": "sections.manage", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "proposal-only" },
-    { "key": "settings.manage", "sites": ["web/app/api/admin/configuration/programs/route.ts"] },
-    { "key": "settings.read", "sites": ["web/app/api/admin/configuration/programs/route.ts"] },
-    { "key": "settings.users_roles", "sites": ["web/lib/admin/canManageUsersAndRoles.ts"] },
-    { "key": "settings.users_roles.read", "sites": ["web/lib/admin/canManageUsersAndRoles.ts"], "note": "W-13/AD-22 — acquired an enforcement site when `requirePortalOrUsersRolesManageAuth` stopped admitting on `portalEligible` and started reading the RBAC catalog read capability. Moved here from `deletion_candidates`: it was inert only because the gate above it was a role literal." },
-    { "key": "fin.read", "sites": ["web/lib/financials/financialsPermissions.ts"], "note": "assertFinancialsReadAllowed — the five Financials workspace read routes, and from 2026-09-10 the twelve financial record-data routes that had been on admission alone. Appended rather than sorted into place: this array's order records when each key was measured." },
-    { "key": "fin.write", "sites": ["web/lib/adminV2/actions/definitions/financialChargeActions.ts", "web/lib/adminV2/actions/definitions/financialPaymentActions.ts", "web/lib/adminV2/actions/definitions/financialReductionActions.ts", "web/lib/adminV2/actions/definitions/financialResponsibilityActions.ts", "web/lib/adminV2/actions/definitions/tuitionGenerationActions.ts", "web/lib/financials/financialsPermissions.ts"], "note": "The billing authority: creating and posting charges, recording payments and collecting cards, applying authored discounts, resolving responsibility, generating tuition, and the two GL-account mutations." }
+    {
+      "key": "ai.enrichment.use",
+      "sites": [
+        "web/lib/ai/aiEnrichmentPermissions.ts",
+        "web/lib/bos/auth/index.ts",
+        "web/lib/bos/bosCapabilityRegistry.ts"
+      ],
+      "note": "conditional — only when AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true; otherwise the routes fall back to portal admin/ops"
+    },
+    {
+      "key": "communications.send",
+      "sites": [
+        "web/app/api/admin/communications/bindings/route.ts",
+        "web/app/api/admin/communications/identities/route.ts",
+        "web/app/api/admin/communications/send/route.ts",
+        "web/lib/communications/canonicalOutboundEnqueue.ts",
+        "web/lib/communications/communicationPermissions.ts",
+        "web/lib/communications/purpose/purposeRegistry.ts"
+      ]
+    },
+    {
+      "key": "config_assist.apply",
+      "sites": [
+        "web/lib/agent/configLayoutAssist/configurationProposalAccess.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalState.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalV1.ts",
+        "web/lib/bos/bosCapabilityRegistry.ts"
+      ]
+    },
+    {
+      "key": "config_assist.generate",
+      "sites": [
+        "web/lib/agent/configLayoutAssist/configurationProposalAccess.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalV1.ts",
+        "web/lib/bos/bosCapabilityRegistry.ts"
+      ]
+    },
+    {
+      "key": "config_assist.review",
+      "sites": [
+        "web/lib/agent/configLayoutAssist/configurationProposalAccess.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalState.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalV1.ts",
+        "web/lib/bos/bosCapabilityRegistry.ts"
+      ]
+    },
+    {
+      "key": "crm.customers.read",
+      "sites": [
+        "web/app/api/admin/forms/crm-entity-search/route.ts"
+      ],
+      "note": "Recovered by the Forms authority cleanup (20260912020000). The CRM entity search under Forms was gated on the literal `admin` role; it reads persons, customers and customer_members, so it now enforces the CRM read capability that already existed and had never been enforced anywhere."
+    },
+    {
+      "key": "data_quality.view",
+      "sites": [
+        "web/lib/agent/configLayoutAssist/configurationProposalAccess.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"
+      ],
+      "note": "gates config-assist proposals only — the same edit made through the normal configuration surface is not checked against it"
+    },
+    {
+      "key": "documents.read",
+      "sites": [
+        "web/lib/documents/assertDocumentAccess.ts"
+      ]
+    },
+    {
+      "key": "fields.editability.manage",
+      "sites": [
+        "web/lib/agent/configLayoutAssist/configurationProposalAccess.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"
+      ],
+      "note": "proposal-only, as data_quality.view"
+    },
+    {
+      "key": "fields.manage",
+      "sites": [
+        "web/lib/agent/configLayoutAssist/configurationProposalAccess.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"
+      ],
+      "note": "proposal-only"
+    },
+    {
+      "key": "fields.requirements.manage",
+      "sites": [
+        "web/lib/agent/configLayoutAssist/configurationProposalAccess.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"
+      ],
+      "note": "proposal-only"
+    },
+    {
+      "key": "fin.read",
+      "sites": [
+        "web/lib/financials/financialsPermissions.ts"
+      ],
+      "note": "assertFinancialsReadAllowed — the five Financials workspace read routes, and from 2026-09-10 the twelve financial record-data routes that had been on admission alone. Appended rather than sorted into place: this array's order records when each key was measured."
+    },
+    {
+      "key": "fin.write",
+      "sites": [
+        "web/lib/adminV2/actions/definitions/financialChargeActions.ts",
+        "web/lib/adminV2/actions/definitions/financialPaymentActions.ts",
+        "web/lib/adminV2/actions/definitions/financialReductionActions.ts",
+        "web/lib/adminV2/actions/definitions/financialResponsibilityActions.ts",
+        "web/lib/adminV2/actions/definitions/tuitionGenerationActions.ts",
+        "web/lib/financials/financialsPermissions.ts"
+      ],
+      "note": "The billing authority: creating and posting charges, recording payments and collecting cards, applying authored discounts, resolving responsibility, generating tuition, and the two GL-account mutations."
+    },
+    {
+      "key": "layouts.manage",
+      "sites": [
+        "web/lib/agent/configLayoutAssist/configurationProposalAccess.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"
+      ],
+      "note": "proposal-only"
+    },
+    {
+      "key": "operational_expectations.author",
+      "sites": [
+        "web/lib/operationalExpectations/intake/authoringServerContext.ts"
+      ]
+    },
+    {
+      "key": "operational_expectations.ratify",
+      "sites": [
+        "web/lib/operationalExpectations/ratification/ratificationServerContext.ts"
+      ]
+    },
+    {
+      "key": "ops.messaging.write",
+      "sites": [
+        "web/lib/communications/communicationPermissions.ts"
+      ],
+      "note": "the legacy alias for communications.send — the only key of the 22-key legacy seed vocabulary that anything consults"
+    },
+    {
+      "key": "option_sets.manage",
+      "sites": [
+        "web/lib/agent/configLayoutAssist/configurationProposalAccess.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"
+      ],
+      "note": "proposal-only"
+    },
+    {
+      "key": "reports.read",
+      "sites": [
+        "web/lib/admin/canReadAnalytics.ts"
+      ]
+    },
+    {
+      "key": "reports.write",
+      "sites": [
+        "web/lib/admin/canReadAnalytics.ts"
+      ]
+    },
+    {
+      "key": "sections.manage",
+      "sites": [
+        "web/lib/agent/configLayoutAssist/configurationProposalAccess.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts",
+        "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"
+      ],
+      "note": "proposal-only"
+    },
+    {
+      "key": "settings.manage",
+      "sites": [
+        "web/app/api/admin/configuration/programs/route.ts"
+      ]
+    },
+    {
+      "key": "settings.read",
+      "sites": [
+        "web/app/api/admin/configuration/programs/route.ts"
+      ]
+    },
+    {
+      "key": "settings.users_roles",
+      "sites": [
+        "web/lib/admin/canManageUsersAndRoles.ts"
+      ]
+    },
+    {
+      "key": "settings.users_roles.read",
+      "sites": [
+        "web/lib/admin/canManageUsersAndRoles.ts"
+      ],
+      "note": "W-13/AD-22 — acquired an enforcement site when `requirePortalOrUsersRolesManageAuth` stopped admitting on `portalEligible` and started reading the RBAC catalog read capability. Moved here from `deletion_candidates`: it was inert only because the gate above it was a role literal."
+    }
   ],
   "deletion_candidates": [
     "admin.roles.read",
@@ -103,7 +276,6 @@
     "billing.read",
     "billing.write",
     "communications.read",
-    "crm.customers.read",
     "crm.customers.write",
     "crm.opportunities.read",
     "crm.opportunities.write",
@@ -133,25 +305,64 @@
       "count": 21,
       "seeded_by": "20260329165048_remote_schema.sql (seed_default_rbac), re-seeded by 20260729120000_…phase0….sql",
       "operator_meaning": "An operator has never been offered these as controls in a product surface, but since W-10 the grid projects the whole catalog, so they became visible controls that change nothing.",
-      "keys": ["admin.roles.read", "admin.roles.write", "admin.users.read", "admin.users.write", "ops.contacts.read", "ops.contacts.write", "ops.customers.read", "ops.customers.write", "ops.jobs.read", "ops.jobs.write", "ops.locations.read", "ops.locations.write", "ops.messaging.read", "ops.opportunities.read", "ops.opportunities.write", "ops.schedules.read", "ops.schedules.write", "ops.workflows.read", "ops.workflows.write"]
+      "keys": [
+        "admin.roles.read",
+        "admin.roles.write",
+        "admin.users.read",
+        "admin.users.write",
+        "ops.contacts.read",
+        "ops.contacts.write",
+        "ops.customers.read",
+        "ops.customers.write",
+        "ops.jobs.read",
+        "ops.jobs.write",
+        "ops.locations.read",
+        "ops.locations.write",
+        "ops.messaging.read",
+        "ops.opportunities.read",
+        "ops.opportunities.write",
+        "ops.schedules.read",
+        "ops.schedules.write",
+        "ops.workflows.read",
+        "ops.workflows.write"
+      ]
     },
     "grid_vocabulary": {
       "count": 10,
       "seeded_by": "20260505164000_permission_grid_keys.sql, re-seeded by 20260729120000_…phase0….sql",
       "operator_meaning": "These are the ones that will surprise. They have been operator-visible controls with real labels — 'Billing / payments', 'Customers / families', 'Scheduling' — since the grid shipped. An operator may have set one to None believing it removed access.",
       "w13_departure": "`settings.users_roles.read` left this group when W-13/AD-22 gave it an enforcement site. It is the one deletion candidate this initiative has RECOVERED rather than deleted, and the reason generalises: a key can be inert because nothing needs it, or inert because the gate that should have read it was reading a role literal instead. Only the first kind is a deletion candidate, and the two are indistinguishable until the literal is removed.",
-      "keys": ["billing.read", "billing.write", "communications.read", "crm.customers.read", "crm.customers.write", "crm.opportunities.read", "crm.opportunities.write", "documents.write", "scheduling.read", "scheduling.write"]
+      "keys": [
+        "billing.read",
+        "billing.write",
+        "communications.read",
+        "crm.customers.read",
+        "crm.customers.write",
+        "crm.opportunities.read",
+        "crm.opportunities.write",
+        "documents.write",
+        "scheduling.read",
+        "scheduling.write"
+      ]
     },
     "declared_per_feature_but_inert": {
       "count": 4,
       "operator_meaning": "Seeded alongside a feature whose enforcement was never wired. ai.* are marked 'Future: separate keys (documented only)' in their own helper; operational_expectations.authority.* are seeded and granted to every org's admin and named nowhere in product source.",
-      "keys": ["ai.provider.config.manage", "ai.telemetry.review", "operational_expectations.authority.assign", "operational_expectations.authority.manage"]
+      "keys": [
+        "ai.provider.config.manage",
+        "ai.telemetry.review",
+        "operational_expectations.authority.assign",
+        "operational_expectations.authority.manage"
+      ]
     }
   },
   "addition_candidates": [
     {
       "key": "communications.send.emergency",
-      "sites": ["web/lib/communications/eligibility/types.ts", "web/lib/communications/canonicalOutboundEnqueue.ts"],
+      "sites": [
+        "web/lib/communications/eligibility/types.ts",
+        "web/lib/communications/canonicalOutboundEnqueue.ts"
+      ],
       "declared_as": "EMERGENCY_SEND_PERMISSION_KEY",
       "what_it_gates": "the one branch that allows an emergency send to override an opted-out or suppressed recipient (evaluateEligibility: category === 'emergency' && emergencyPermitted !== true → refuse), and it is written into the enqueue record as the permission the send was made under",
       "why_the_row_alone_is_not_a_fix": "No production caller ever sets emergencyPermitted to true — every path passes `req.emergencyPermitted ?? false`, and the only `true` values in the tree are in tests. So the key is not merely ungrantable, it is unbindable: seeding a catalog row would make it grantable and still change nothing. Binding it to the resolved permission set is an enforcement-sweep item (W-15), not W-11's.",
@@ -159,9 +370,21 @@
     }
   ],
   "excluded_from_addition_candidates": [
-    { "literal": "ai.task_assist", "where": "web/app/api/admin/ai/task-assist/apply/route.ts", "why": "a `sourceCapability` provenance label, not a permission key" },
-    { "literal": "communications.family_send", "where": "web/app/api/admin/communications/family-send/route.ts", "why": "a `sourceCapability` provenance label, not a permission key" },
-    { "literal": "ops.work_overdue_count / ops.workflow_failure_rate / ops.needs_attention_count / ops.readiness_gap_count", "where": "web/lib/metrics/registry.ts", "why": "metric identifiers that share the ops.* prefix; no permission semantics" }
+    {
+      "literal": "ai.task_assist",
+      "where": "web/app/api/admin/ai/task-assist/apply/route.ts",
+      "why": "a `sourceCapability` provenance label, not a permission key"
+    },
+    {
+      "literal": "communications.family_send",
+      "where": "web/app/api/admin/communications/family-send/route.ts",
+      "why": "a `sourceCapability` provenance label, not a permission key"
+    },
+    {
+      "literal": "ops.work_overdue_count / ops.workflow_failure_rate / ops.needs_attention_count / ops.readiness_gap_count",
+      "where": "web/lib/metrics/registry.ts",
+      "why": "metric identifiers that share the ops.* prefix; no permission semantics"
+    }
   ],
   "residual_gap_after_w11": {
     "statement": "The plan's exit requires the residual gap to be a written number rather than an unknown. It is written here.",
@@ -180,9 +403,18 @@
     "the_ask": "Approve, amend, or reject the 36-key deletion list above — and separately, the sequencing question below.",
     "why_it_cannot_be_decided_by_a_worker": "11 of the 36 have been operator-visible controls with meaningful labels. Deleting them is correct if a control that changes nothing is worse than no control — which is this plan's stated position (05…§7 item 5, and the brief's first rejection condition) — but it removes settings an operator may believe are load-bearing.",
     "options": [
-      { "id": "delete_all_36", "description": "M5 deletes every unenforced key. Fully closes C4 in the deletion direction; the grid narrows to 22 rows' worth of keys; C13's workflows row does not return." },
-      { "id": "delete_25_defer_11", "description": "Delete the 21 legacy + 4 inert-declared keys, and defer the 11 grid-vocabulary keys to a wave where their features are either enforced or withdrawn. Lower operator surprise; leaves the visible half of the theatre standing." },
-      { "id": "deactivate_not_delete", "description": "Set is_active = false rather than DELETE. Reversible, avoids the FK problem entirely, and keeps grant rows intact — but leaves the rows in the table, so 'one vocabulary' becomes 'one vocabulary plus a graveyard', and W-50's build check would need an is_active predicate." }
+      {
+        "id": "delete_all_36",
+        "description": "M5 deletes every unenforced key. Fully closes C4 in the deletion direction; the grid narrows to 22 rows' worth of keys; C13's workflows row does not return."
+      },
+      {
+        "id": "delete_25_defer_11",
+        "description": "Delete the 21 legacy + 4 inert-declared keys, and defer the 11 grid-vocabulary keys to a wave where their features are either enforced or withdrawn. Lower operator surprise; leaves the visible half of the theatre standing."
+      },
+      {
+        "id": "deactivate_not_delete",
+        "description": "Set is_active = false rather than DELETE. Reversible, avoids the FK problem entirely, and keeps grant rows intact — but leaves the rows in the table, so 'one vocabulary' becomes 'one vocabulary plus a graveyard', and W-50's build check would need an is_active predicate."
+      }
     ]
   },
   "m5_preconditions_established_by_this_pass": [

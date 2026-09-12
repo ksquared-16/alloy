@@ -71,6 +71,19 @@ const APPROVED_ADDITIONS: Record<string, string> = {
     "attendance.record": "20260909230000 — recording child attendance",
     "portal.access":
         "20260911140000 — W-13, entering the operator portal at all; the capability that replaced the PORTAL_ROLES role literal",
+    "forms.author": "20260912020000 — designing forms, the authority that replaced the literal `admin` gate on 16 Forms writes",
+    "forms.submissions":
+        "20260912020000 — handling submissions that change records or reach people: sending, submitting on behalf, linking by hand, generating a document",
+    "forms.submissions.confirm":
+        "20260912020000 — confirming a linkage the system proposed, metadata only; kept separate because `ops` could already do exactly this and nothing broader",
+    "processing.operate":
+        "20260912113000 — working a Processing case: classifying it, resolving identity, recording decisions, committing proposed records. Replaced the shared `ctx.role === admin || ops` in operatorRouteContext, AND gave authority to six mutations that previously required only portal admission",
+    "processing.archive":
+        "20260912113000 — taking a case out of the queue; its own key so that granting `ops` processing.operate does not also hand it an archive it never had",
+    "processing.documents.manage":
+        "20260912113000 — renaming a source document, and deleting one with the case it opened and the stored file; deliberately NOT `documents.write`, which `ops` holds in every organization",
+    "processing.dev_cleanup":
+        "20260912113000 — the Processing test-data reset; necessary and not sufficient, because the route and the planner both refuse in production whoever holds it",
 };
 
 describe("W-11 — the catalog is discovered completely", () => {
@@ -161,8 +174,10 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         );
         // 21 until W-13/AD-22 gave `settings.users_roles.read` an enforcement site; 22 until the
         // Financials workspace and the financial action package gave `fin.read` and `fin.write`
-        // theirs, which the artifact records as `financials_restatement`.
-        expect(enforced.length).toBe(24 + added.length);
+        // theirs, which the artifact records as `financials_restatement`; 24 until the Forms
+        // authority cleanup gave `crm.customers.read` its first enforcement site anywhere — the CRM
+        // entity search under Forms, which had been gated on the literal `admin` role.
+        expect(enforced.length).toBe(25 + added.length);
         /*
          * A health key that is SEEDED but not ENFORCED would be the D-H6 failure mode: the catalogue
          * would advertise a boundary the product does not apply. Both keys must have call sites.
@@ -174,10 +189,12 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         const unenforced = [...catalog.keys()].filter((k) => (scan.sitesByKey.get(k) ?? []).length === 0);
         expect(unenforced.sort()).toEqual([...artifact.deletion_candidates].sort());
         // 36 until W-13/AD-22 recovered `settings.users_roles.read`; 35 until `fin.read` and
-        // `fin.write` were recovered the same way. Every movement this initiative has recorded has
-        // been OUT of the deletion list, which is the direction that means the product grew a real
-        // gate rather than lost one.
-        expect(unenforced.length).toBe(33);
+        // `fin.write` were recovered the same way; 33 until the Forms authority cleanup recovered
+        // `crm.customers.read`, which the catalog had held and nothing had ever enforced — the CRM
+        // entity search under Forms was gated on the literal `admin` role instead. Every movement
+        // this initiative has recorded has been OUT of the deletion list, which is the direction that
+        // means the product grew a real gate rather than lost one.
+        expect(unenforced.length).toBe(32);
     });
 
     it("C13 resolves against the measurement: nothing enforces a workflows key", () => {

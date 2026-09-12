@@ -16,6 +16,8 @@ export type CurrentWorkActionSurface =
     | "form_delivery"
     | "process_transition"
     | "subject_selector"
+    /** Run it here: subject already resolved, inputs already bound by configuration. */
+    | "command_surface"
     | "unsupported";
 
 function actionRegistryKey(action: Pick<CurrentWorkActionVM, "key" | "handlerKey" | "actionRef" | "resolved">): string {

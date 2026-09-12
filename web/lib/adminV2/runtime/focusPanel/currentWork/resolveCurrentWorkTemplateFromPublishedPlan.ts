@@ -272,13 +272,18 @@ function actionsFromCatalog(actionCatalog: StageActionCatalogV1 | null): {
         if (!key || seen.has(key)) continue;
         seen.add(key);
 
+        // Carried, not dropped: an action configured to operate on one of this stage's work
+        // templates needs that key at invoke time, and this is the only place it can travel.
+        const workTemplateKey = candidate.work_template_key?.trim();
+        const ref = { action_ref: key, ...(workTemplateKey ? { work_template_key: workTemplateKey } : {}) };
+
         const bucket = catalogActionBucket(key, candidate.recommendation);
         if (bucket === "communication") {
             communication_actions.push({ action_ref: key });
         } else if (bucket === "alternate_path") {
-            alternate_paths.push({ action_ref: key });
+            alternate_paths.push(ref);
         } else if (bucket === "supporting") {
-            supporting.push({ action_ref: key });
+            supporting.push(ref);
         }
     }
 
@@ -393,6 +398,39 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
 
     if (catalogActions.communication_actions.length) {
         templateConfig.communication_actions = catalogActions.communication_actions;
+    }
+
+    /*
+     * The STAGE's own configured actions. Computed here all along and never carried, so a stage
+     * action could be authored, validated, persisted and published and still never reach an
+     * operator. They compose with the work template's actions rather than replacing or being
+     * replaced — see `resolvedHelpfulActionRefs`.
+     */
+    if (catalogActions.supporting.length) {
+        /*
+         * An action bound to a work template is LABELLED by that work.
+         *
+         * The capability's own label is "Start stage work", which is the right name for the generic
+         * thing it does and the wrong name on a button. A stage may configure several startable
+         * templates, and they would all render identically — an operator would face two or three
+         * identical controls with no way to tell which starts the offer and which starts the packet.
+         *
+         * Taken from the stage's own plan rather than authored again, so a renamed work template
+         * renames its control and the two can never disagree. An explicit override still wins.
+         */
+        const workLabelByKey = new Map(
+            (operatingPlan?.work_templates ?? []).map((t) => [t.template_key, (t.label ?? "").trim()]),
+        );
+        templateConfig.stage_actions = catalogActions.supporting.map((row) => {
+            const boundKey = row.work_template_key?.trim();
+            const boundLabel = boundKey ? workLabelByKey.get(boundKey) : undefined;
+            const label = row.override_label?.trim() || boundLabel || undefined;
+            return {
+                action_ref: row.action_ref,
+                ...(label ? { override_label: label } : {}),
+                ...(boundKey ? { work_template_key: boundKey } : {}),
+            };
+        });
     }
 
     return {

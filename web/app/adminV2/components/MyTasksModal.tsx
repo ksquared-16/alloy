@@ -9,7 +9,15 @@ import { useCallback, useEffect, useState } from "react";
 import AdminV2WorkspaceBosModalShell from "@/app/adminV2/components/AdminV2WorkspaceBosModalShell";
 import MyTasksPanel from "@/app/adminV2/components/MyTasksPanel";
 import WorkItemsOverviewLanding from "@/app/adminV2/tasks/WorkItemsOverviewLanding";
-import WorkItemsShell, { type WorkItemsWorkView } from "@/app/adminV2/tasks/WorkItemsShell";
+import WorkItemsRecurringStudio from "@/app/adminV2/tasks/WorkItemsRecurringStudio";
+import WorkItemsShell from "@/app/adminV2/tasks/WorkItemsShell";
+import {
+    defaultWorkItemsView,
+    isWorkItemsWorkView,
+    modeForWorkItemsView,
+    type WorkItemsMode,
+    type WorkItemsView,
+} from "@/app/adminV2/tasks/workItemsSections";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { prefetchCommandCenterConversations } from "@/lib/communications/v2/commandCenterPrefetchCache";
 import type { WorkItemSourceKey, WorkItemViewKey } from "@/lib/workItems/workItemQueueScope";
@@ -43,9 +51,8 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
             isValidWorkItemsPosition,
         ),
     )[0];
-    const [workView, setWorkView] = useState<WorkItemsWorkView>(
-        opened.workView as WorkItemsWorkView,
-    );
+    const [workView, setWorkView] = useState<WorkItemsView>(opened.workView as WorkItemsView);
+    const mode: WorkItemsMode = modeForWorkItemsView(workView);
     const [newTaskNonce, setNewTaskNonce] = useState(0);
     const [navFilter, setNavFilter] = useState<OperationalTaskWorkspaceFilter | null>(null);
     const [navSelectedTaskId, setNavSelectedTaskId] = useState<string | null>(null);
@@ -82,9 +89,14 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
         setWorkView("queue");
     }, []);
 
-    const handleWorkViewChange = useCallback((view: WorkItemsWorkView) => {
+    const handleWorkViewChange = useCallback((view: WorkItemsView) => {
         if (view === "queue") setNavFilter("open");
         setWorkView(view);
+    }, []);
+
+    /** Switching mode lands on that mode's default section rather than an invalid pairing. */
+    const handleModeChange = useCallback((next: WorkItemsMode) => {
+        setWorkView(defaultWorkItemsView(next));
     }, []);
 
     const openTask = useCallback((
@@ -133,12 +145,16 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
         >
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <WorkItemsShell
+                    mode={mode}
+                    onModeChange={handleModeChange}
                     workView={workView}
                     onWorkViewChange={handleWorkViewChange}
                     onClose={handleClose}
                     onNewTask={requestNewTask}
                 >
-                    {workView === "overview" ? (
+                    {workView === "recurring" ? (
+                        <WorkItemsRecurringStudio />
+                    ) : workView === "overview" ? (
                         <WorkItemsOverviewLanding
                             onOpenQueue={openQueue}
                             onOpenTask={openTask}
