@@ -77,6 +77,15 @@ export type CurrentWorkChecklistItemVM = {
     description?: string | null;
     /** When navigable via Focus handoff (legacy stage-work rows). */
     handoffItemId?: string | null;
+    /**
+     * PRIMARY or SECONDARY, for work rows — the runtime's own `role`, carried rather than inferred.
+     *
+     * The stage work runtime has always published `primary` separately from `additional`, and this
+     * surface flattened the two into one undifferentiated list. Secondary work was therefore visible
+     * but indistinguishable, and "Record outcome" could act on whichever item happened to be open
+     * first. Absent on requirement rows, which have no such role.
+     */
+    workRole?: "primary" | "secondary";
 };
 
 export type CurrentWorkSurfaceProgress = {
