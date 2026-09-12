@@ -17,6 +17,7 @@
  */
 
 import { CHECKPOINT_REQUIREMENTS, PHASE } from "./host-maintenance.mjs";
+import { DISPOSITION, DURABLE_DISPOSITIONS } from "./lane-resume.mjs";
 
 export const ACTIVATION_SCHEMA = "vacilando.maintenance_activation.v1";
 
@@ -42,10 +43,30 @@ export const CHECKPOINT_COLLECTORS = Object.freeze([
       if (!Array.isArray(lanes)) return unmeasured("no lane inventory was supplied");
       const active = lanes.filter((l) => l?.active === true);
       if (!active.length) return pass("no active lane has work to resume", { active: 0 });
-      const missing = active.filter((l) => !l?.restart_context?.next_action).map((l) => l.lane_id);
-      return missing.length
-        ? fail(`${missing.length} active lane(s) have no durable next action`, { lanes: missing.slice(0, 8) })
-        : pass(`${active.length} active lane(s) carry a durable next action`, { active: active.length });
+      /*
+       * A RECORDED DECISION SATISFIES THIS, INCLUDING A DECISION TO HOLD.
+       *
+       * What maintenance needs is not that every lane has work — it is that
+       * nobody has to reconstruct what a lane was doing. A lane explicitly HELD
+       * with its reason is fully resumable: it comes back held, loses nothing,
+       * and says what it is waiting for. Silence is the failure, because silence
+       * reads as "no work here".
+       *
+       * The distinction is kept strict in the other direction: a held lane is
+       * NOT counted as actionable, and `sessionDispositionFor` refuses to start
+       * it. An honest hold must never look like work.
+       */
+      const durable = active.filter((l) => l?.restart_context?.next_action
+        || DURABLE_DISPOSITIONS.includes(l?.restart_context?.disposition));
+      const missing = active.filter((l) => !durable.includes(l)).map((l) => l.lane_id);
+      if (missing.length) {
+        return fail(`${missing.length} active lane(s) have no durable resume disposition`, { lanes: missing.slice(0, 8) });
+      }
+      const held = active.filter((l) => l?.restart_context?.disposition === DISPOSITION.HELD_NEEDS_OPERATOR).length;
+      return pass(
+        `${active.length} active lane(s) have a durable resume disposition${held ? ` (${held} explicitly held)` : ""}`,
+        { active: active.length, held },
+      );
     },
   }),
   Object.freeze({

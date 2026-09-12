@@ -39,20 +39,59 @@ function governedActions() {
   return Array.isArray(raw) ? raw : (raw?.requests || []);
 }
 
-/** Lanes, from the durable registry the lane owner already writes. */
-function lanes() {
-  const p = join(ROOT, "vacilando", "lanes", "lanes.json");
-  const j = readJson(p, null);
+/**
+ * Lanes, with a resume disposition derived from canonical evidence.
+ *
+ * The lane record itself carries no `restart_context` — nothing writes one yet —
+ * so reading only the registry made every active lane look like a lane nobody
+ * had decided anything about. The disposition is DERIVED here, read-only, from
+ * the same owners `vac lane-resume` uses, so the checkpoint reflects what the
+ * fleet actually knows rather than what one store happens to persist.
+ *
+ * A lane with no derivable next action becomes HELD, which the collector accepts
+ * as a recorded decision. A lane with no evidence at all stays UNRESOLVED and
+ * still blocks.
+ */
+async function lanes() {
+  const j = readJson(join(ROOT, "vacilando", "lanes", "lanes.json"), null);
   const raw = j?.lanes;
   const list = Array.isArray(raw) ? raw : (raw && typeof raw === "object" ? Object.values(raw) : null);
   if (!list) return null;
-  return list.map((l) => ({
-    lane_id: l.lane_id ?? null,
-    active: String(l.status || l.state || "").toUpperCase() === "ACTIVE",
-    blocked_on: l.blocked_on ?? null,
-    restart_context: l.restart_context || l.next_step || null,
-    blocker_recorded: Boolean(l.blockers?.length),
-  }));
+
+  let derive = null;
+  try { ({ deriveResumeDisposition: derive } = await import("./lib/vacilando/lane-resume.mjs")); } catch { /* absent stays absent */ }
+
+  const runStore = readJson(join(ROOT, "vacilando", "execution-runs", "runs.json"), {});
+  const handoffs = Object.values(readJson(join(ROOT, "vacilando", "execution-runs", "agent-handoffs.json"), {})?.handoffs || {});
+  const memory = readJson(join(ROOT, "vacilando", "lane-memory", "lanes.json"), {});
+  const TERMINAL = ["COMPLETE", "FAILED", "ABANDONED", "CANCELLED"];
+
+  return list.map((l) => {
+    const active = String(l.status || l.state || "").toUpperCase() === "ACTIVE";
+    let restart = l.restart_context || l.next_step || null;
+    if (!restart && derive && active) {
+      const laneRuns = Object.values(runStore?.lanes?.[l.lane_id]?.runs || {});
+      laneRuns.sort((a, b) => Date.parse(b.updated_at || b.created_at || 0) - Date.parse(a.updated_at || a.created_at || 0));
+      const mem = (memory?.lanes || memory)?.[l.lane_id] || null;
+      const d = derive({
+        laneId: l.lane_id,
+        openRun: laneRuns.find((r) => !TERMINAL.includes(String(r.state || "").toUpperCase())) || null,
+        latestRun: laneRuns[0] || null,
+        handoff: handoffs.filter((h) => h.lane_id === l.lane_id)
+          .sort((a, b) => Date.parse(b.created_at || 0) - Date.parse(a.created_at || 0))[0] || null,
+        recordedNextStep: mem?.next_step?.description ?? mem?.next_step ?? null,
+        blockedOn: mem?.blockers?.[0]?.description ?? l.blocked_on ?? null,
+      });
+      restart = { next_action: d.next_action, disposition: d.disposition, blocker: d.blocker };
+    }
+    return {
+      lane_id: l.lane_id ?? null,
+      active,
+      blocked_on: l.blocked_on ?? restart?.blocker ?? null,
+      restart_context: restart,
+      blocker_recorded: Boolean(l.blockers?.length) || Boolean(restart?.blocker),
+    };
+  });
 }
 
 /**
@@ -134,7 +173,7 @@ if (argv.includes("--preflight")) {
    * absent observation is still UNMEASURED, which still blocks.
    */
   const observations = {
-    lanes: lanes(),
+    lanes: await lanes(),
     runs: allRuns,
     governedActions: actions,
     worktrees: await worktrees(),
