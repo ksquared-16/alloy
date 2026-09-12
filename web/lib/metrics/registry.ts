@@ -1,6 +1,157 @@
-import type { MetricDefinition, OipMetricKey, MetricSourceMetadata } from "@/lib/metrics/types";
+import type {
+    MetricDefinition,
+    MetricSnapshotPolicy,
+    MetricSourceMetadata,
+    OipMetricKey,
+} from "@/lib/metrics/types";
 
 const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
+    "attendance.correction_rate": {
+        key: "attendance.correction_rate",
+        label: "Attendance correction rate",
+        description: "Share of authored attendance facts that were corrected or reversed in the window. TRUTH QUALITY: how often the record had to be put right. This is the one historical Attendance metric that counts raw event volume, because corrections are its subject rather than its noise.",
+        pack: "attendance",
+        computationKind: "event_window",
+        format: "percent",
+        defaultWindow: "rolling_30d",
+        sources: ["child_attendance_events"],
+    },
+    "attendance.unmapped_event_count": {
+        key: "attendance.unmapped_event_count",
+        label: "Unusable integration events",
+        description: "Inbound integration events that could not be used - unmapped, unattributed, conflicted or rejected. INTEGRATION HEALTH: a provider inbox row says a system sent something, never that a child was present, so this number moves without any Attendance count changing. The inbox carries no site linkage, so it is org-wide only.",
+        pack: "attendance",
+        computationKind: "event_window",
+        format: "count",
+        defaultWindow: "rolling_30d",
+        sources: ["attendance_integration_events"],
+        orgScopeOnly: true,
+    },
+    "attendance.consequence_review_count": {
+        key: "attendance.consequence_review_count",
+        label: "Attendance consequences awaiting a decision",
+        description: "Attendance-sourced consumption events still awaiting a billing decision. CONSEQUENCE HEALTH: a count of state, never an amount. Thread 7 owns what a consequence is worth and the Financials pack owns every monetary measurement.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["consumption_events"],
+        snapshotPolicy: "live_only",
+    },
+    "attendance.occupancy_count": {
+        key: "attendance.occupancy_count",
+        label: "Children on site now",
+        description:
+            "How many children are physically present across the readable sites at this instant. " +
+            "Authoritative source: occupancyAt, the certified point-in-time whereabouts fold. " +
+            "NOT a daily summary - summarizeAttendanceByDay returns the SET of rooms a child " +
+            "appeared in, so a child who moved twice would be counted three times. Movement " +
+            "changes this value and never changes placement. A per-location breakdown rides in " +
+            "meta because the platform dimension vocabulary has no location member yet.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["child_attendance_events", "locations"],
+        snapshotSemantics: true,
+        snapshotPolicy: "live_only",
+    },
+    "attendance.expected_count": {
+        key: "attendance.expected_count",
+        label: "Expected today",
+        description:
+            "How many children are expected at the site today, after known operational intent is applied. " +
+            "Authoritative source: buildCombinedRoster, which applies interpretServiceDay and " +
+            "applyObservedPresence - the Thread 3/4 owners. This metric counts their answer and " +
+            "does not classify service-day state itself.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["child_attendance_events", "operational_expectations", "child_enrollment_agreements"],
+        snapshotSemantics: true,
+        snapshotPolicy: "live_only",
+    },
+    "attendance.here_now_count": {
+        key: "attendance.here_now_count",
+        label: "Here now",
+        description:
+            "How many children are physically in the building right now, including any who attended despite a plan. " +
+            "Authoritative source: buildCombinedRoster, which applies interpretServiceDay and " +
+            "applyObservedPresence - the Thread 3/4 owners. This metric counts their answer and " +
+            "does not classify service-day state itself.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["child_attendance_events", "operational_expectations", "child_enrollment_agreements"],
+        snapshotSemantics: true,
+        snapshotPolicy: "live_only",
+    },
+    "attendance.not_arrived_count": {
+        key: "attendance.not_arrived_count",
+        label: "Not arrived (unexplained)",
+        description:
+            "How many expected children have not arrived and have no explanation. Known-away, closed and attended-despite-plan children are explained and excluded. " +
+            "Authoritative source: buildCombinedRoster, which applies interpretServiceDay and " +
+            "applyObservedPresence - the Thread 3/4 owners. This metric counts their answer and " +
+            "does not classify service-day state itself.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["child_attendance_events", "operational_expectations", "child_enrollment_agreements"],
+        snapshotSemantics: true,
+        snapshotPolicy: "live_only",
+    },
+    "attendance.checked_out_count": {
+        key: "attendance.checked_out_count",
+        label: "Checked out",
+        description:
+            "How many children have been collected and are no longer on site today. " +
+            "Authoritative source: buildCombinedRoster, which applies interpretServiceDay and " +
+            "applyObservedPresence - the Thread 3/4 owners. This metric counts their answer and " +
+            "does not classify service-day state itself.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["child_attendance_events", "operational_expectations", "child_enrollment_agreements"],
+        snapshotSemantics: true,
+        snapshotPolicy: "live_only",
+    },
+    "attendance.known_away_count": {
+        key: "attendance.known_away_count",
+        label: "Known away",
+        description:
+            "How many children are away today for a recorded reason - sickness, holiday, or any authored absence. " +
+            "Authoritative source: buildCombinedRoster, which applies interpretServiceDay and " +
+            "applyObservedPresence - the Thread 3/4 owners. This metric counts their answer and " +
+            "does not classify service-day state itself.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["child_attendance_events", "operational_expectations", "child_enrollment_agreements"],
+        snapshotSemantics: true,
+        snapshotPolicy: "live_only",
+    },
+    "attendance.unknown_state_count": {
+        key: "attendance.unknown_state_count",
+        label: "Unresolved service day",
+        description:
+            "How many children whose service day could not be resolved. A data-integrity signal, not a missing child. " +
+            "Authoritative source: buildCombinedRoster, which applies interpretServiceDay and " +
+            "applyObservedPresence - the Thread 3/4 owners. This metric counts their answer and " +
+            "does not classify service-day state itself.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["child_attendance_events", "operational_expectations", "child_enrollment_agreements"],
+        snapshotSemantics: true,
+        snapshotPolicy: "live_only",
+    },
     "enrollment.time_to_schedule_tour": {
         key: "enrollment.time_to_schedule_tour",
         label: "Time to schedule tour",
@@ -494,6 +645,28 @@ export function listMetricDefinitionsByPack(pack: string): readonly MetricDefini
 }
 
 const DEFINITIONS_LIST = Object.values(DEFINITIONS);
+
+/**
+ * May a stored snapshot stand in for this metric?
+ *
+ * One reader for the whole platform, so the engine and the writer cannot drift
+ * into disagreeing about which metrics are current-state.
+ */
+export function metricSnapshotPolicy(key: OipMetricKey): MetricSnapshotPolicy {
+    return getMetricDefinition(key).snapshotPolicy ?? "eligible";
+}
+
+/** True when a stored historical value must never substitute for this metric. */
+export function isLiveOnlyMetric(key: OipMetricKey): boolean {
+    return metricSnapshotPolicy(key) === "live_only";
+}
+
+/** Every live-only metric, for the lock test that makes the set deliberate. */
+export function listLiveOnlyMetricKeys(): OipMetricKey[] {
+    return listMetricDefinitions()
+        .filter((d) => (d.snapshotPolicy ?? "eligible") === "live_only")
+        .map((d) => d.key);
+}
 
 export function getMetricSourceMetadata(key: OipMetricKey): MetricSourceMetadata {
     const d = DEFINITIONS[key];

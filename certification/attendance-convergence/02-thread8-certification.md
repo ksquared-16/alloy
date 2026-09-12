@@ -256,3 +256,81 @@ DIFFERENT debt from the one Slice A closed: consumers that query
 `location_type === 'unit'` directly. Slice A fixed the ancestry bug in several of
 those files without converging their direct queries, so the ledger stays accurate
 and is deliberately not shortened.
+
+---
+
+## PROMOTION RECORD — COMPLETE_PROMOTED
+
+| | |
+|---|---|
+| Pull request | **#848** — Attendance Thread 8 — Workspace, Focus Panel and configuration convergence |
+| Certified candidate | `8dec65051aa49a97a60c1bb41651c1fa96054da7` |
+| Merge commit | **`ec434db6a9f4cf61594e829f00ada0dde32687c0`** |
+| Merged at | 2026-09-12T13:18:07Z, via governed action `gar_4d755ba57c898a` |
+| Final `origin/staging` | `ec434db6a9f4cf61594e829f00ada0dde32687c0` |
+
+All sixteen Thread 8 commits are ancestors of promoted staging. The promoted tree
+differs from the certified candidate in exactly three files
+(`actionDefinitionRegistry.ts`, `web/package.json`, and one adminV2 test), all
+from PR #868 which merged immediately before this one, and none in the Thread 8
+certified set.
+
+### Promoted-tree verification, run against `ec434db6a`
+
+| Check | Result |
+|---|---|
+| `typecheck` | **rc=0** |
+| `typecheck:tests` | **rc=0** |
+| Prebuild guards (all four) | **rc=0**, 4/4 scripts; route-capability ceiling 655 against backlog 655 — exactly tight |
+| Focused Thread 8 convergence + Access | **1468 passed**, 2 failed |
+
+The 2 failures are the inherited catalog-lock pair. They remain inherited on the
+promoted tree: the named offenders are `20260909230000_attendance_capability.sql`
+(dated 2026-09-09, well before this thread) and a Financials `fin.read`
+migration. Thread 8's own migration writes **zero** deprecated catalog names.
+
+### Promotion took four attempts, and the first three are worth recording
+
+Three governed merges were denied before this one, and only the first denial was
+correct.
+
+1. `gar_2f0fb198b14ac1` — denied `hosted_migration_parity`. **Correct**: the
+   hosted primary was genuinely behind seven D2/Access migrations.
+2. `gar_5139b64570d21c` — denied identically **after** census
+   `gar_970336346cc9ca` proved the hosted head had caught up to `20260912010000`
+   with all seven present exactly once. Every other deterministic gate was true;
+   `failed_gates` was exactly `["hosted_migration_parity"]`. Reported as a
+   control-plane parity-evidence defect rather than worked around — no migration
+   was applied, no ledger repaired, no parity waived.
+3. The gate later cleared without Attendance changing anything about migrations
+   other than their version numbers.
+
+The capture-scope migration was renumbered **twice**, both times because staging
+advanced while this branch waited: `20260912000000` → `20260912020000` (W-17
+landed `20260912010000`), then → **`20260912040000`** (the Forms slice landed its
+own `20260912020000`, making it an outright collision between two different files
+at one version). Statements were byte-identical across both renumbers and the
+widened owner was re-validated against the cert schema in a rolled-back
+transaction each time.
+
+Note for anyone reading the earlier sections: they refer to `20260912000000`.
+The promoted version is `20260912040000`.
+
+### Targets, as promoted
+
+Targets 1–7 **DONE**. Targets 8 and 9 **PARTIAL** — both landed their canonical
+derivation, operator copy and automated coverage; neither is mounted into a
+screen. The financial context line is not in the Attendance card and the
+diagnostics have no panel. That operator mounting is deferred, named, and listed
+above under DEFERRED.
+
+### Browser certification — still deferred, and still not claimed
+
+Full operator-scenario browser certification was **not** performed, and this
+promotion does not claim it. The shared `alloy-cert` stack was held by another
+lane throughout, and the fixtures those scenarios need are destructive — running
+them would have wiped rows underneath that lane mid-run. Bounded mounted evidence
+was collected instead (three settings routes returning 307, both APIs returning
+401 with no data in the body, an unauthenticated POST refused 401, and a 404
+control proving the codes discriminate), and it is reported above as exactly
+that and nothing more.

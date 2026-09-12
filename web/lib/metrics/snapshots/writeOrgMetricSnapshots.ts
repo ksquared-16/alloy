@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
-import { getMetricDefinition, listMetricDefinitions } from "@/lib/metrics/registry";
+import { getMetricDefinition, isLiveOnlyMetric, listMetricDefinitions } from "@/lib/metrics/registry";
 import { resolveMetrics } from "@/lib/metrics/metricEngine";
 import { writeMetricSnapshot } from "@/lib/metrics/snapshots/writeMetricSnapshot";
 import type { MetricSnapshotScopeType } from "@/lib/metrics/snapshots/types";
@@ -59,7 +59,15 @@ export async function writeOrgMetricSnapshots(params: {
     orgMetadata?: unknown;
 }): Promise<WriteOrgMetricSnapshotsResult> {
     const windows = params.windows ?? DEFAULT_WINDOWS;
-    const metricKeys = params.metricKeys ?? listMetricDefinitions().map((d) => d.key);
+    /*
+     * Live-only metrics are excluded HERE, after the caller's own list, not only
+     * from the default. A caller naming keys explicitly — a backfill script, a
+     * test, a future scheduler — must not be able to persist a current-state
+     * value, because the row it writes is indistinguishable afterwards from a
+     * legitimate historical one and would then be servable as "now".
+     */
+    const requestedKeys = params.metricKeys ?? listMetricDefinitions().map((d) => d.key);
+    const metricKeys = requestedKeys.filter((key) => !isLiveOnlyMetric(key));
     const computedAtIso = (params.computedAt ?? new Date()).toISOString();
     const includeSiteScopes = params.includeSiteScopes !== false;
 

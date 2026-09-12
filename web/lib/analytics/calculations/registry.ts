@@ -12,7 +12,7 @@
 import { getMetricDefinition } from "@/lib/metrics/registry";
 import type { OipMetricKey } from "@/lib/metrics/types";
 import {
-    PACK_TO_BUSINESS_PROCESS,
+    businessProcessForMetricPack,
     type OperationalCalculation,
     type OperationalCalculationGovernance,
 } from "@/lib/analytics/calculations/types";
@@ -30,7 +30,7 @@ function defineCalculation(
         ...governance,
         key,
         label: def.label,
-        businessProcess: PACK_TO_BUSINESS_PROCESS[def.pack],
+        businessProcess: businessProcessForMetricPack(def.pack),
         format: def.format,
         snapshotStrategy: def.computationKind,
         bounded: def.snapshotSemantics ?? false,
@@ -40,6 +40,211 @@ function defineCalculation(
 }
 
 const CALCULATIONS: Record<OipMetricKey, OperationalCalculation> = {
+    "attendance.correction_rate": defineCalculation("attendance.correction_rate", {
+        questionAnswered: "How often do we have to correct what we recorded?",
+        grains: ["org", "site"],
+        aggregation: "rate",
+        dependencies: [],
+        logicOwner: "Attendance / operational health resolvers",
+        refreshStrategy: "snapshot",
+        consumers: ["analytics"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Health questions are proven separate: provider inbox rows move integration health " +
+            "without moving any Attendance count, and consequence state is counted without any " +
+            "monetary value being read.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.unmapped_event_count": defineCalculation("attendance.unmapped_event_count", {
+        questionAnswered: "What did another system send that we could not use?",
+        grains: ["org"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / operational health resolvers",
+        refreshStrategy: "snapshot",
+        consumers: ["analytics"],
+        accessScope: "org",
+        version: 1,
+        testingStrategy:
+            "Health questions are proven separate: provider inbox rows move integration health " +
+            "without moving any Attendance count, and consequence state is counted without any " +
+            "monetary value being read.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.consequence_review_count": defineCalculation("attendance.consequence_review_count", {
+        questionAnswered: "What followed from attendance and is still waiting on a person?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / operational health resolvers",
+        refreshStrategy: "live",
+        consumers: ["analytics"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Health questions are proven separate: provider inbox rows move integration health " +
+            "without moving any Attendance count, and consequence state is counted without any " +
+            "monetary value being read.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.occupancy_count": defineCalculation("attendance.occupancy_count", {
+        questionAnswered: "How many children are physically on site right now, and where are they?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / occupancyAt point-in-time whereabouts fold",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Occupancy is asserted through occupancyAt against movement fixtures: a child who moves " +
+            "changes location without changing the total, and placement is never consulted.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.expected_count": defineCalculation("attendance.expected_count", {
+        questionAnswered: "How many children are expected at this site today?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / serviceDayExpectations via buildCombinedRoster",
+        /*
+         * LIVE, and it cannot be otherwise. The registry marks these
+         * `snapshotPolicy: "live_only"`, so the generic writer never persists them
+         * and the engine never reads a stored value for them. Declaring a snapshot
+         * cadence here would describe a refresh that does not exist.
+         */
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Counts are asserted against buildCombinedRoster output, not hand-computed: known-away, " +
+            "closure, attended-despite-plan and movement fixtures prove the resolver consumes the " +
+            "Thread 3/4 interpretation rather than reproducing it.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.here_now_count": defineCalculation("attendance.here_now_count", {
+        questionAnswered: "How many children are physically in the building right now?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / serviceDayExpectations via buildCombinedRoster",
+        /*
+         * LIVE, and it cannot be otherwise. The registry marks these
+         * `snapshotPolicy: "live_only"`, so the generic writer never persists them
+         * and the engine never reads a stored value for them. Declaring a snapshot
+         * cadence here would describe a refresh that does not exist.
+         */
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Counts are asserted against buildCombinedRoster output, not hand-computed: known-away, " +
+            "closure, attended-despite-plan and movement fixtures prove the resolver consumes the " +
+            "Thread 3/4 interpretation rather than reproducing it.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.not_arrived_count": defineCalculation("attendance.not_arrived_count", {
+        questionAnswered: "How many expected children have not arrived and nobody has explained why?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / serviceDayExpectations via buildCombinedRoster",
+        /*
+         * LIVE, and it cannot be otherwise. The registry marks these
+         * `snapshotPolicy: "live_only"`, so the generic writer never persists them
+         * and the engine never reads a stored value for them. Declaring a snapshot
+         * cadence here would describe a refresh that does not exist.
+         */
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Counts are asserted against buildCombinedRoster output, not hand-computed: known-away, " +
+            "closure, attended-despite-plan and movement fixtures prove the resolver consumes the " +
+            "Thread 3/4 interpretation rather than reproducing it.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.checked_out_count": defineCalculation("attendance.checked_out_count", {
+        questionAnswered: "How many children have already been collected today?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / serviceDayExpectations via buildCombinedRoster",
+        /*
+         * LIVE, and it cannot be otherwise. The registry marks these
+         * `snapshotPolicy: "live_only"`, so the generic writer never persists them
+         * and the engine never reads a stored value for them. Declaring a snapshot
+         * cadence here would describe a refresh that does not exist.
+         */
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Counts are asserted against buildCombinedRoster output, not hand-computed: known-away, " +
+            "closure, attended-despite-plan and movement fixtures prove the resolver consumes the " +
+            "Thread 3/4 interpretation rather than reproducing it.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.known_away_count": defineCalculation("attendance.known_away_count", {
+        questionAnswered: "How many children are away today for a reason somebody recorded?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / serviceDayExpectations via buildCombinedRoster",
+        /*
+         * LIVE, and it cannot be otherwise. The registry marks these
+         * `snapshotPolicy: "live_only"`, so the generic writer never persists them
+         * and the engine never reads a stored value for them. Declaring a snapshot
+         * cadence here would describe a refresh that does not exist.
+         */
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Counts are asserted against buildCombinedRoster output, not hand-computed: known-away, " +
+            "closure, attended-despite-plan and movement fixtures prove the resolver consumes the " +
+            "Thread 3/4 interpretation rather than reproducing it.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.unknown_state_count": defineCalculation("attendance.unknown_state_count", {
+        questionAnswered: "For how many children can we not resolve what today was supposed to be?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / serviceDayExpectations via buildCombinedRoster",
+        /*
+         * LIVE, and it cannot be otherwise. The registry marks these
+         * `snapshotPolicy: "live_only"`, so the generic writer never persists them
+         * and the engine never reads a stored value for them. Declaring a snapshot
+         * cadence here would describe a refresh that does not exist.
+         */
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Counts are asserted against buildCombinedRoster output, not hand-computed: known-away, " +
+            "closure, attended-despite-plan and movement fixtures prove the resolver consumes the " +
+            "Thread 3/4 interpretation rather than reproducing it.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
     "enrollment.time_to_schedule_tour": defineCalculation("enrollment.time_to_schedule_tour", {
         questionAnswered: "How long does it take to get a new family onto a confirmed tour?",
         grains: ["org", "site"],

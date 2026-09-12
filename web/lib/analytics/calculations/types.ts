@@ -97,7 +97,12 @@ export type OperationalCalculation = OperationalCalculationGovernance & {
     /** Stable identifier — equals the wrapped OipMetricKey. */
     key: OipMetricKey;
     label: string;
-    businessProcess: OperationalCalculationBusinessProcess;
+    /**
+     * The Business Process that owns this calculation, or `null` when its
+     * measurement domain is not one. Attendance is the first such pack: it
+     * measures operational fact authoring on a roster, which no process owns.
+     */
+    businessProcess: OperationalCalculationBusinessProcess | null;
     /** Mirrored from OIP `MetricDefinition.format`. */
     format: MetricFormat;
     /** Mirrored from OIP `MetricDefinition.computationKind`. */
@@ -111,21 +116,47 @@ export type OperationalCalculation = OperationalCalculationGovernance & {
 };
 
 /**
- * Maps an OIP pack to its owning business process. Identity for most packs.
+ * Maps an OIP pack to its owning business process, WHERE ONE EXISTS.
  *
  * `trust` is deliberately NOT identity. Trust is platform infrastructure every
  * capability consumes, not a business process an organization runs \u2014 inventing a
  * "trust" business process would file reasoning governance alongside enrollment
  * and billing, which is a category error. It maps onto operational health, where
  * platform reliability already lives.
+ *
+ * ---- WHY THIS IS PARTIAL ----
+ *
+ * It used to be an exhaustive `Record`, which quietly asserted that every
+ * measurement domain IS a business process. Activating the Attendance pack
+ * disproved that: Attendance is operational fact authoring on a roster, not a
+ * process an organization runs, and the exhaustive type would have forced one of
+ * two errors -- invent a Business Process to satisfy a compiler, or file
+ * Attendance under `capacity` (how many a room holds, not who is in it) or
+ * `operational_health` (platform reliability). Both are ownership errors.
+ *
+ * So the coupling is relaxed rather than the taxonomy bent. A pack with no entry
+ * has no Business Process owner, and that is a legitimate, expressible state.
  */
-export const PACK_TO_BUSINESS_PROCESS: Record<MetricPackKey, OperationalCalculationBusinessProcess> = {
+export const PACK_TO_BUSINESS_PROCESS: Partial<
+    Record<MetricPackKey, OperationalCalculationBusinessProcess>
+> = {
     enrollment: "enrollment",
     communications: "communications",
     forms: "forms",
     operational_health: "operational_health",
     capacity: "capacity",
     trust: "operational_health",
+    /*
+     * `attendance` is deliberately ABSENT rather than mapped. It is a first-class
+     * measurement domain with no Business Process owner -- see the note above.
+     */
     /* Identity: the Financials pack IS the financial business process an organization runs. */
     financials: "financial",
 };
+
+/** The Business Process that owns a pack, or null when the pack is not one. */
+export function businessProcessForMetricPack(
+    pack: MetricPackKey,
+): OperationalCalculationBusinessProcess | null {
+    return PACK_TO_BUSINESS_PROCESS[pack] ?? null;
+}
