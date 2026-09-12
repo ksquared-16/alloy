@@ -3067,6 +3067,31 @@ export function createVacilandoServer() {
     reconcileGovernor({ reason: "periodic", depth: "targeted" }).catch(() => {});
   }, 30000);
   recoverTargetedTimer.unref?.();
+
+  /*
+   * THE OWNER OF ACCEPTED GOVERNED ACTIONS HAS TO ACTUALLY RUN.
+   *
+   * `tickGovernedActions` is the durable owner of every action the approval
+   * route answered "accepted" to, and of every request parked awaiting checks or
+   * a control-plane refresh. It was invoked at boot warm and from two
+   * request-driven paths, and NOWHERE ON A SCHEDULE — so a parked request waited
+   * for somebody to happen to touch a related endpoint. That was survivable
+   * while the approval route executed inline, because nothing depended on the
+   * tick to make progress. It is not survivable now: returning 202 without a
+   * running owner is how accepted work becomes lost work.
+   *
+   * Deliberately on the same 30 s recovery cadence as the governor rather than a
+   * new one. The immediate kick in scheduleAcceptedExecution is what makes an
+   * approval start promptly; this is what makes it start AT ALL after a restart,
+   * a thrown scheduler, or a process that died between acceptance and execution.
+   * `unref` so it never holds the process open.
+   */
+  const governedTickTimer = setInterval(() => {
+    import("./vacilando/governed-action-request.mjs")
+      .then(({ tickGovernedActions }) => tickGovernedActions())
+      .catch(() => {});
+  }, 30000);
+  governedTickTimer.unref?.();
   return {
     server,
     clients,
@@ -3082,6 +3107,7 @@ export function createVacilandoServer() {
       clearInterval(exclusiveTimer);
       clearInterval(recoverCheapTimer);
       clearInterval(recoverTargetedTimer);
+      clearInterval(governedTickTimer);
       stopAllOutputWatches();
       server.close();
       releaseControlPlaneOwnership();

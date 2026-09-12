@@ -223,8 +223,23 @@ await test("11 — a stale decision is REFUSED server-side, and returns the curr
 
 await test("12 — both approve AND deny enforce it", async () => {
   const src = readFileSync(new URL("../lib/vacilando/governed-action-request.mjs", import.meta.url), "utf8");
-  const approve = src.slice(src.indexOf("export async function approveGovernedAction"), src.indexOf("export async function approveGovernedAction") + 1200);
-  const deny = src.slice(src.indexOf("export function denyGovernedAction"), src.indexOf("export function denyGovernedAction") + 1200);
+  // SLICE TO THE FUNCTION, NOT TO A BYTE COUNT.
+  //
+  // This took the first 1200 characters after each declaration, which made the
+  // assertion a hostage to the length of the comments above the guard. Adding
+  // two documented options to approveGovernedAction pushed `rejectStaleDecision`
+  // out of the window and failed a test whose subject — that a stale decision is
+  // refused — had not changed at all. A test that breaks when the prose grows is
+  // measuring the prose.
+  const fnBody = (needle) => {
+    const start = src.indexOf(needle);
+    if (start < 0) return "";
+    const next = src.indexOf("\nexport ", start + needle.length);
+    return src.slice(start, next < 0 ? src.length : next);
+  };
+  const approve = fnBody("export async function approveGovernedAction");
+  const deny = fnBody("export function denyGovernedAction");
+  assert.ok(approve && deny, "both decision entry points must still exist");
   assert.match(approve, /rejectStaleDecision\(rec, expectedFingerprint\)/);
   assert.match(deny, /rejectStaleDecision\(rec, expectedFingerprint\)/, "denying content the operator never read is still a wrong decision");
 });

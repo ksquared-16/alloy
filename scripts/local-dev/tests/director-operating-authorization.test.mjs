@@ -148,12 +148,55 @@ test("the authorization is inherited, not copied per lane", () => {
   assert.match(a.inherited_by, /every lane/);
 });
 
-test("production never appears in the authorized envelope", () => {
+test("production appears in the envelope only where an exemption enumerates it", () => {
+  // THE INVARIANT MOVED, IT DID NOT WEAKEN.
+  //
+  // This asserted that NO authorized class may name an operator-only
+  // environment. A read-only census against the deployed primary is now
+  // delegated — 182 approvals in 23 days, zero denials, and what the human was
+  // supplying was a measurement — so the flat rule is no longer the one the
+  // system keeps, and a test asserting it would only have been deleted.
+  //
+  // What replaces it is stricter about the thing that matters: a class may name
+  // an operator-only environment ONLY if that exact (action, environment) pair
+  // is enumerated as a read exemption. An unlisted pair still fails here, which
+  // is the property the original test was protecting.
   const doc = OA.buildOperatingAuthorization();
+  const exempt = new Set(
+    (doc.environments.operator_only_read_exemptions || [])
+      .map((x) => `${String(x.action_key).toLowerCase()}@${String(x.environment).toLowerCase()}`),
+  );
   for (const cls of doc.authorized_action_classes) {
     for (const env of cls.environments) {
-      assert.equal(doc.environments.operator_only.includes(env), false,
-        `${cls.action_key} claims an operator-only environment`);
+      if (!doc.environments.operator_only.includes(env)) continue;
+      assert.ok(
+        exempt.has(`${String(cls.action_key).toLowerCase()}@${String(env).toLowerCase()}`),
+        `${cls.action_key} claims the operator-only environment ${env} without an enumerated exemption`,
+      );
+    }
+  }
+});
+
+test("every operator-only environment exemption is a read, and never an operator-owned class", () => {
+  // The exemption list is the one place a production write could be smuggled
+  // in, so it is asserted directly rather than only through its consumers: an
+  // exempted class must not be operator-owned, and the policy that covers it in
+  // that environment must actually prove the read.
+  const doc = OA.buildOperatingAuthorization();
+  for (const x of doc.environments.operator_only_read_exemptions || []) {
+    assert.equal(
+      doc.operator_owned_action_keys.includes(x.action_key), false,
+      `${x.action_key} is operator-owned and must never be exempted`,
+    );
+    const covering = doc.authorized_action_classes.filter(
+      (c) => c.action_key === x.action_key && c.environments.includes(x.environment),
+    );
+    assert.ok(covering.length, `${x.action_key} is exempted in ${x.environment} with no enabled policy there`);
+    for (const c of covering) {
+      assert.ok(
+        c.gates.includes("census_sql_proven_read_only") || c.gates.includes("census_is_read_only_mode"),
+        `${c.policy_id} runs in an operator-only environment without proving the operation is a read`,
+      );
     }
   }
 });

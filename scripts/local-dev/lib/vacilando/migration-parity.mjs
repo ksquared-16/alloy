@@ -261,3 +261,263 @@ export function provenHostedHeadFromCensusRecords(requests = [], { artifactPath 
   }
   return best;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE LIFECYCLE BOUNDARY, AND THE CYCLE THAT CAME FROM LOSING IT
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Everything above is correct about WHAT to compare and was wrong about WHICH
+ * REVISION supplies the requirement. `requiredVersionsFromFilenames` is even
+ * documented as "identities from migration filenames in the PROMOTED tree", and
+ * `migrationMergeGate` asks "may this PROMOTED revision become effective" — but
+ * its only production caller measured the CANDIDATE head. The gate therefore
+ * required a candidate's own unmerged migration to already exist on the deployed
+ * primary before that candidate could merge.
+ *
+ * That is not a strict gate. It is an UNSATISFIABLE one, and the system already
+ * knew: `trusted-host-production-migrate.mjs` documents the same cycle at length
+ * and answers it with a pre-merge escape hatch in which a REFUSAL becomes the
+ * authority to deploy unpromoted schema to the production primary. A denial that
+ * authorises a deployment is a strong signal that the denial was wrong.
+ *
+ * MEASURED on the running toolkit, 2026-09-12, against the live evidence store:
+ *
+ *   promoted staging  413 identities, head 20260912010000
+ *   hosted primary    413 identities, head 20260912010000   (census gar_9703363)
+ *   PR #848 candidate 414 identities, head 20260912020000
+ *
+ *   promoted_staging − hosted = {}            ← nothing is owed
+ *   candidate − hosted = {20260912020000}     ← and cannot be owed yet
+ *
+ *   gate measured against the candidate head → blocked, "hosted head
+ *     20260912010000 is behind the required head 20260912020000"
+ *   gate measured against promoted staging   → ok, promote
+ *
+ * THE LAW. Only what is ALREADY PROMOTED can be owed to the deployed primary.
+ * A candidate-only migration is an obligation that begins at merge, and asking
+ * for it earlier asks the candidate to have already happened.
+ *
+ * STRICTNESS IS UNCHANGED WHERE IT WAS REAL. Promoted staging ahead of hosted
+ * still blocks — that was the first Attendance denial, and it was legitimate.
+ * What changes is only the set the requirement is drawn from.
+ */
+
+/** A promotion gate's lifecycle phase. Naming it is what stops the confusion. */
+export const LIFECYCLE = Object.freeze({
+  PROMOTED_STAGING: "promoted_staging",
+  CANDIDATE: "candidate",
+  POST_MERGE: "post_merge",
+  DEPLOYED_PRIMARY: "deployed_primary",
+});
+
+/** Why a parity verdict came out the way it did. `stale` is not `behind`. */
+export const PARITY_STATUS = Object.freeze({
+  OK: "ok",
+  BLOCKED: "blocked",
+  UNKNOWN: "unknown",
+  STALE: "stale",
+});
+
+/**
+ * Everything a hosted census established, not merely its head.
+ *
+ * `provenHostedHeadFromCensusRecords` kept only the head, so a denial could say
+ * "behind" but never WHICH identities were missing. The Director received
+ * `hosted_migration_behind` and no way to act on it. This returns the identity
+ * set as well, so the gate can name the difference.
+ */
+export function hostedMigrationEvidence(requests = [], { artifactPath = "hosted-migration-identity-census.sql" } = {}) {
+  let best = null;
+  for (const r of requests) {
+    if (r?.action_key !== "database.read_census") continue;
+    if (r?.status !== "complete") continue;
+    const inputs = r.inputs || {};
+    const path = inputs.queryArtifactPath || inputs.query_artifact_path || "";
+    if (artifactPath && !String(path).includes(artifactPath)) continue;
+    const census = r?.result?.census;
+    const head = measuredHeadFromCensus(census);
+    if (!head) continue;
+    const atMs = Date.parse(r.execution_ended_at || r.updated_at || r.created_at || "");
+    const identities = measuredVersionsFromCensus(census);
+    const totalRows = census?.questions?.ledger_total?.rows;
+    if (!best || (Number.isFinite(atMs) && atMs > best.atMs)) {
+      best = {
+        head,
+        identities,
+        // The census reads a WINDOW of the ledger, not all of it: 75 identities
+        // returned against a total of 413. Comparing a windowed measurement to a
+        // whole tree would report every pre-window migration as missing, so the
+        // window floor travels with the evidence and bounds the comparison.
+        window: Array.isArray(identities) && identities.length ? identities[0] : null,
+        total: Array.isArray(totalRows) && totalRows.length ? Number(totalRows[0]) : null,
+        atMs: Number.isFinite(atMs) ? atMs : 0,
+        target: inputs.databaseTarget || inputs.target || null,
+        request_id: r.request_id || null,
+      };
+    }
+  }
+  return best;
+}
+
+/** Governed actions that can change what the hosted ledger contains. */
+const HOSTED_MUTATING_ACTIONS = Object.freeze([
+  "database.apply_promoted_migration",
+  "database.repair_migration_ledger",
+  "database.apply_migration",
+]);
+
+/**
+ * IS THIS EVIDENCE STILL A DESCRIPTION OF THE DATABASE?
+ *
+ * An age limit alone cannot answer that. The hosted ledger was repaired twice
+ * inside one hour on 2026-09-11 — 405→412 for D2, then 412→413 for W-17 — and a
+ * census taken ten minutes before either repair was both WELL INSIDE the 24h
+ * window and wrong. Under the age rule it would have been served as current and
+ * a candidate denied "hosted is behind" on the strength of it.
+ *
+ * So staleness is not only time: evidence recorded BEFORE a completed hosted
+ * mutation has been overtaken by a known event. Both are read from records
+ * governance already writes, so this invents no new source of truth — it reads
+ * the one that already says the database changed.
+ *
+ * A stale verdict BLOCKS, exactly as UNKNOWN does. What it must never do is
+ * claim hosted is behind, because that is a statement about the database made
+ * from a document that no longer describes it.
+ */
+export function hostedEvidenceFreshness(evidence, {
+  requests = [],
+  nowMs = Date.now(),
+  maxAgeMs = PROVEN_HEAD_MAX_AGE_MS,
+} = {}) {
+  if (!evidence) {
+    return { fresh: false, reason: "no_evidence", detail: "no completed hosted migration census has been recorded" };
+  }
+  const ageMs = Number.isFinite(evidence.atMs) && evidence.atMs > 0 ? nowMs - evidence.atMs : null;
+  if (ageMs === null) {
+    return { fresh: false, reason: "evidence_undated", detail: "the census record carries no usable timestamp", age_ms: null };
+  }
+  if (ageMs > maxAgeMs) {
+    return {
+      fresh: false,
+      reason: "evidence_expired",
+      detail: `the hosted census is ${Math.round(ageMs / 3600000)}h old and must be re-measured`,
+      age_ms: ageMs,
+    };
+  }
+  for (const r of requests) {
+    if (!HOSTED_MUTATING_ACTIONS.includes(r?.action_key)) continue;
+    if (r?.status !== "complete") continue;
+    const at = Date.parse(r.execution_ended_at || r.updated_at || r.created_at || "");
+    if (!Number.isFinite(at) || at <= evidence.atMs) continue;
+    return {
+      fresh: false,
+      reason: "superseded_by_hosted_mutation",
+      detail: `${r.action_key} completed after this census; the hosted ledger must be re-measured`,
+      age_ms: ageMs,
+      superseded_by: r.request_id || r.action_key,
+    };
+  }
+  return { fresh: true, reason: "current", age_ms: ageMs };
+}
+
+/**
+ * THE PRE-MERGE PARITY GATE, with its lifecycle boundary declared.
+ *
+ * expected  = migrations on CURRENT PROMOTED STAGING   (obligations that exist now)
+ * candidate = migrations on the candidate head          (obligations that begin at merge)
+ * actual    = the hosted ledger, as a census measured it
+ *
+ * require expected ⊆ actual. Candidate-only identities are reported, never
+ * required. Hosted identities absent from promoted staging are reported and do
+ * NOT block: nothing a candidate can do removes a row from a ledger, so blocking
+ * on them would be a second impossible precondition wearing the opposite coat.
+ */
+export function promotionParityGate({
+  expected = null,
+  candidate = null,
+  evidence = null,
+  freshness = null,
+  expectedRevision = null,
+  nowMs = Date.now(),
+} = {}) {
+  const base = {
+    gate: "hosted_migration_parity",
+    expected_revision: expectedRevision,
+    expected_revision_kind: LIFECYCLE.PROMOTED_STAGING,
+    expected_migration_head: Array.isArray(expected) && expected.length ? expected[expected.length - 1] : null,
+    expected_migration_count: Array.isArray(expected) ? expected.length : null,
+    hosted_migration_head: evidence?.head ?? null,
+    hosted_migration_count: evidence?.total ?? null,
+    hosted_target: evidence?.target ?? null,
+    evidence_id: evidence?.request_id ?? null,
+    evidence_timestamp: evidence?.atMs ? new Date(evidence.atMs).toISOString() : null,
+    evidence_age_ms: freshness?.age_ms ?? null,
+    missing_on_hosted: [],
+    unexpected_on_hosted: [],
+    candidate_only_migrations: [],
+  };
+
+  // "I could not read the promoted tree" is not "the promoted tree is empty".
+  if (!Array.isArray(expected)) {
+    return { ...base, status: PARITY_STATUS.UNKNOWN, promote: false, measured: false,
+      reason: "the promoted revision's migration set could not be read" };
+  }
+  if (Array.isArray(candidate) && Array.isArray(expected)) {
+    const promoted = new Set(expected);
+    base.candidate_only_migrations = candidate.filter((v) => !promoted.has(v));
+  }
+  if (!expected.length) {
+    return { ...base, status: PARITY_STATUS.OK, promote: true, measured: true,
+      reason: "promoted staging contains no migrations, so nothing is owed to the deployed primary" };
+  }
+
+  const fresh = freshness || { fresh: false, reason: "no_freshness_measured" };
+  if (!fresh.fresh) {
+    // STALE AND UNKNOWN BOTH BLOCK AND ARE REPORTED APART. Collapsing them is
+    // how "we could not check" becomes "the database is behind" — a claim about
+    // a system made from a document that stopped describing it.
+    const stale = fresh.reason === "evidence_expired" || fresh.reason === "superseded_by_hosted_mutation";
+    return {
+      ...base,
+      status: stale ? PARITY_STATUS.STALE : PARITY_STATUS.UNKNOWN,
+      promote: false,
+      measured: false,
+      reason: fresh.detail || "hosted migration evidence is not current",
+      freshness: fresh.reason,
+      remedy: "re-run the hosted migration identity census",
+    };
+  }
+
+  const identities = evidence?.identities;
+  if (!Array.isArray(identities)) {
+    return { ...base, status: PARITY_STATUS.UNKNOWN, promote: false, measured: false,
+      reason: "the hosted census did not return readable migration identities" };
+  }
+
+  const window = evidence.window;
+  const inWindow = (v) => !window || v >= window;
+  const got = new Set(identities);
+  const expectedInWindow = expected.filter(inWindow);
+  base.missing_on_hosted = expectedInWindow.filter((v) => !got.has(v));
+  base.unexpected_on_hosted = identities.filter((v) => !expected.includes(v));
+
+  if (base.missing_on_hosted.length) {
+    return {
+      ...base,
+      status: PARITY_STATUS.BLOCKED,
+      promote: false,
+      measured: true,
+      reason: `the deployed primary is missing ${base.missing_on_hosted.length} migration(s) already promoted on staging: ${base.missing_on_hosted.join(", ")}`,
+      remedy: "apply the already-promoted migrations to the deployed primary, then re-measure",
+    };
+  }
+  return {
+    ...base,
+    status: PARITY_STATUS.OK,
+    promote: true,
+    measured: true,
+    reason: base.candidate_only_migrations.length
+      ? `every migration promoted on staging is present on the deployed primary; ${base.candidate_only_migrations.length} candidate-only migration(s) become due after merge`
+      : `every migration promoted on staging (${expectedInWindow.length} in the measured window) is present on the deployed primary`,
+  };
+}

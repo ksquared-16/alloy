@@ -53,6 +53,9 @@ export const STALE_CYCLE_MS = 3 * CADENCE_MS;
  */
 export const HYGIENE_CADENCE_MS = 6 * 60 * 60_000;
 
+/** Weekly. The slot itself (Sunday 03:00 local) is the maintenance policy's; this is only "has a week passed". */
+export const MAINTENANCE_CADENCE_MS = 7 * 24 * 60 * 60_000;
+
 /**
  * Anti-thrash. A resource acted on may not be acted on again until its cooldown
  * expires, whatever the next observation says. Without it, a dev server stopped
@@ -105,6 +108,35 @@ export function hygieneDue({ root, nowMs = Date.now(), cadenceMs = HYGIENE_CADEN
   const at = readState(root).hygiene_last_ms ?? null;
   if (at == null) return { due: true, last_ms: null, reason: "hygiene has never run in this root" };
   return { due: (nowMs - at) >= cadenceMs, last_ms: at, reason: null };
+}
+
+/**
+ * IS WEEKLY HOST MAINTENANCE DUE?
+ *
+ * The same shape as `hygieneDue`, reading the same steward state, so the cycle
+ * that already runs every five minutes asks this the way it asks everything
+ * else. DevOps 7 deliberately added no scheduler of its own: a second timer
+ * would be a second thing to supervise, to recover after a restart, and to
+ * explain the day it disagrees with this one.
+ *
+ * It only reports. Whether maintenance may actually proceed is the maintenance
+ * orchestrator's question, and it is a much harder one — a due maintenance with
+ * a migration in flight is due and must still wait.
+ */
+export function maintenanceCadenceDue({ root, nowMs = Date.now(), periodMs = MAINTENANCE_CADENCE_MS } = {}) {
+  const at = readState(root).maintenance_last_attempt_ms ?? null;
+  if (at == null) return { due: true, last_ms: null, reason: "weekly maintenance has never run in this root" };
+  return { due: (nowMs - at) >= periodMs, last_ms: at, reason: null };
+}
+
+/** Record that a maintenance attempt happened — attempt, not success. A deferred
+ * cycle has consumed its period and must not spin for a week. */
+export function recordMaintenanceAttempt({ root, nowMs = Date.now(), outcome = null } = {}) {
+  const state = readState(root);
+  state.maintenance_last_attempt_ms = nowMs;
+  if (outcome) state.maintenance_last_outcome = String(outcome).slice(0, 80);
+  writeState(root, state);
+  return state;
 }
 
 /**
@@ -200,9 +232,20 @@ function readState(root) {
       cycles: j.cycles || [], cooldowns: j.cooldowns || {}, running: j.running || null,
       hygiene_last_ms: j.hygiene_last_ms ?? null, hygiene_last: j.hygiene_last ?? null,
       last_stage_outcome: j.last_stage_outcome ?? null,
+      // Enumerated deliberately, like every field above it: this projection
+      // DROPS anything it does not name, so a key written but not listed here is
+      // persisted and then silently discarded on the way back in. Caught exactly
+      // that way while wiring the weekly cadence — the write succeeded and the
+      // read returned null for ever.
+      maintenance_last_attempt_ms: j.maintenance_last_attempt_ms ?? null,
+      maintenance_last_outcome: j.maintenance_last_outcome ?? null,
     };
   } catch {
-    return { schema_version: STEWARD_CYCLE_SCHEMA, cycles: [], cooldowns: {}, running: null, hygiene_last_ms: null, hygiene_last: null, last_stage_outcome: null };
+    return {
+      schema_version: STEWARD_CYCLE_SCHEMA, cycles: [], cooldowns: {}, running: null,
+      hygiene_last_ms: null, hygiene_last: null, last_stage_outcome: null,
+      maintenance_last_attempt_ms: null, maintenance_last_outcome: null,
+    };
   }
 }
 
