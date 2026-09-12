@@ -337,14 +337,15 @@ export default function CurrentWorkCard({
      * Executes through the registered-action route and nothing else; the server keeps eligibility.
      */
     const runCommandSurfaceAction = async (action: CurrentWorkActionVM) => {
-        const subject = context.truth?.row_subject as { subject_type?: string; subject_id?: string } | undefined;
-        const entityType = subject?.subject_type?.trim() || "";
-        const entityId = subject?.subject_id?.trim() || "";
+        // The durable child from the one carrier that names it. Absent means absent: the carrier's
+        // rule is that a wrong child is worse than no child, so there is no fallback and the host
+        // refuses rather than acting on whoever happens to be first.
+        const childId = context.participantScope?.customerMemberId?.trim() ?? "";
 
         const result = await executeCommandSurfaceAction({
             actionKey: action.handlerKey ?? action.key,
-            entityType,
-            entityId,
+            entityType: "child",
+            entityId: childId,
             // Bound by configuration, carried through the projection — never re-asked of the operator.
             ...(action.workTemplateKey ? { payload: { template_key: action.workTemplateKey } } : {}),
             surface: "focus_panel",

@@ -1,0 +1,103 @@
+{
+  "trusted_host_action_id": "tha_3c66aa36155120",
+  "query_hash": "5060c99bbb05948c72f398c57520fd1285b3afaa30d1e512e3782f7c80f9c12a",
+  "results": {
+    "case": {
+      "stage_key": "waitlist",
+      "status_key": "new"
+    },
+    "instances_on_case": [
+      {
+        "process_key": "enrollment",
+        "subject_type": "child",
+        "stage_key": "waitlist",
+        "state": "waitlisted",
+        "rows": 2
+      },
+      {
+        "process_key": "enrollment",
+        "subject_type": "child",
+        "stage_key": null,
+        "state": null,
+        "rows": 15
+      }
+    ],
+    "instances_tenant": [
+      {
+        "process_key": "enrollment",
+        "stage_key": "enrolling",
+        "state": null,
+        "rows": 2
+      },
+      {
+        "process_key": "enrollment",
+        "stage_key": null,
+        "state": null,
+        "rows": 270
+      },
+      {
+        "process_key": "enrollment",
+        "stage_key": "enrolled",
+        "state": "enrolled",
+        "rows": 51
+      },
+      {
+        "process_key": "enrollment",
+        "stage_key": "enrolling",
+        "state": "enrolling",
+        "rows": 1
+      },
+      {
+        "process_key": "enrollment",
+        "stage_key": "enrolled",
+        "state": "not_enrolling",
+        "rows": 6
+      },
+      {
+        "process_key": "enrollment",
+        "stage_key": null,
+        "state": "enrolled",
+        "rows": 2
+      },
+      {
+        "process_key": "enrollment",
+        "stage_key": "waitlist",
+        "state": null,
+        "rows": 5
+      },
+      {
+        "process_key": "enrollment",
+        "stage_key": "waitlist",
+        "state": "waitlisted",
+        "rows": 3
+      }
+    ],
+    "case_stages_tenant": [
+      {
+        "stage_key": "waitlist",
+        "status_key": "new",
+        "cases": 1
+      },
+      {
+        "stage_key": "lead",
+        "status_key": "new",
+        "cases": 1
+      },
+      {
+        "stage_key": "lead",
+        "status_key": "open",
+        "cases": 1
+      },
+      {
+        "stage_key": "lead",
+        "status_key": "new_inquiry",
+        "cases": 1
+      }
+    ],
+    "totals": {
+      "process_instances": 340,
+      "opportunities": 4,
+      "ocm_rows": 5
+    }
+  }
+}
