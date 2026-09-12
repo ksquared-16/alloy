@@ -6,6 +6,38 @@ import type {
 } from "@/lib/metrics/types";
 
 const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
+    "attendance.correction_rate": {
+        key: "attendance.correction_rate",
+        label: "Attendance correction rate",
+        description: "Share of authored attendance facts that were corrected or reversed in the window. TRUTH QUALITY: how often the record had to be put right. This is the one historical Attendance metric that counts raw event volume, because corrections are its subject rather than its noise.",
+        pack: "attendance",
+        computationKind: "event_window",
+        format: "percent",
+        defaultWindow: "rolling_30d",
+        sources: ["child_attendance_events"],
+    },
+    "attendance.unmapped_event_count": {
+        key: "attendance.unmapped_event_count",
+        label: "Unusable integration events",
+        description: "Inbound integration events that could not be used - unmapped, unattributed, conflicted or rejected. INTEGRATION HEALTH: a provider inbox row says a system sent something, never that a child was present, so this number moves without any Attendance count changing. The inbox carries no site linkage, so it is org-wide only.",
+        pack: "attendance",
+        computationKind: "event_window",
+        format: "count",
+        defaultWindow: "rolling_30d",
+        sources: ["attendance_integration_events"],
+        orgScopeOnly: true,
+    },
+    "attendance.consequence_review_count": {
+        key: "attendance.consequence_review_count",
+        label: "Attendance consequences awaiting a decision",
+        description: "Attendance-sourced consumption events still awaiting a billing decision. CONSEQUENCE HEALTH: a count of state, never an amount. Thread 7 owns what a consequence is worth and the Financials pack owns every monetary measurement.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["consumption_events"],
+        snapshotPolicy: "live_only",
+    },
     "attendance.occupancy_count": {
         key: "attendance.occupancy_count",
         label: "Children on site now",

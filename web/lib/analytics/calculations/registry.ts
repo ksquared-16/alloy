@@ -40,6 +40,57 @@ function defineCalculation(
 }
 
 const CALCULATIONS: Record<OipMetricKey, OperationalCalculation> = {
+    "attendance.correction_rate": defineCalculation("attendance.correction_rate", {
+        questionAnswered: "How often do we have to correct what we recorded?",
+        grains: ["org", "site"],
+        aggregation: "rate",
+        dependencies: [],
+        logicOwner: "Attendance / operational health resolvers",
+        refreshStrategy: "snapshot",
+        consumers: ["analytics"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Health questions are proven separate: provider inbox rows move integration health " +
+            "without moving any Attendance count, and consequence state is counted without any " +
+            "monetary value being read.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.unmapped_event_count": defineCalculation("attendance.unmapped_event_count", {
+        questionAnswered: "What did another system send that we could not use?",
+        grains: ["org"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / operational health resolvers",
+        refreshStrategy: "snapshot",
+        consumers: ["analytics"],
+        accessScope: "org",
+        version: 1,
+        testingStrategy:
+            "Health questions are proven separate: provider inbox rows move integration health " +
+            "without moving any Attendance count, and consequence state is counted without any " +
+            "monetary value being read.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "attendance.consequence_review_count": defineCalculation("attendance.consequence_review_count", {
+        questionAnswered: "What followed from attendance and is still waiting on a person?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / operational health resolvers",
+        refreshStrategy: "live",
+        consumers: ["analytics"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Health questions are proven separate: provider inbox rows move integration health " +
+            "without moving any Attendance count, and consequence state is counted without any " +
+            "monetary value being read.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
     "attendance.occupancy_count": defineCalculation("attendance.occupancy_count", {
         questionAnswered: "How many children are physically on site right now, and where are they?",
         grains: ["org", "site"],

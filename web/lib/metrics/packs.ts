@@ -88,6 +88,9 @@ const PACKS: readonly MetricPackDefinition[] = [
         metricKeys: [
             "attendance.expected_count",
             "attendance.occupancy_count",
+            "attendance.correction_rate",
+            "attendance.unmapped_event_count",
+            "attendance.consequence_review_count",
             "attendance.here_now_count",
             "attendance.not_arrived_count",
             "attendance.checked_out_count",

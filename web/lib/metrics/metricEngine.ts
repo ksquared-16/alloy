@@ -49,6 +49,11 @@ import {
 } from "@/lib/metrics/resolvers/financialsMetrics";
 import { resolveAttendanceOccupancyCount } from "@/lib/metrics/resolvers/attendanceOccupancyMetrics";
 import {
+    resolveAttendanceConsequenceReviewCount,
+    resolveAttendanceCorrectionRate,
+    resolveAttendanceUnmappedEventCount,
+} from "@/lib/metrics/resolvers/attendanceHealthMetrics";
+import {
     resolveAttendanceCheckedOutCount,
     resolveAttendanceExpectedCount,
     resolveAttendanceHereNowCount,
@@ -71,6 +76,12 @@ import {
 
 async function resolveLiveMetric(ctx: MetricResolveContext, key: OipMetricKey): Promise<ResolvedMetricValue> {
     switch (key) {
+        case "attendance.correction_rate":
+            return resolveAttendanceCorrectionRate(ctx);
+        case "attendance.unmapped_event_count":
+            return resolveAttendanceUnmappedEventCount(ctx);
+        case "attendance.consequence_review_count":
+            return resolveAttendanceConsequenceReviewCount(ctx);
         case "attendance.occupancy_count":
             return resolveAttendanceOccupancyCount(ctx);
         case "attendance.expected_count":
