@@ -310,6 +310,28 @@ names** — so **M5 does not make tier A green**; that is W-15's 700-handler swe
 without the catalog half, and the 57-key seed literal M5 must edit is now **frozen byte-for-byte** by
 `grantSeedEnumeration`. Instrument proven red by a **fifth** seeding syntax with no parser edit (4 red,
 removed, green after); `vac run typecheck:tests` **rc=0**, discharging the debt the first issuance carried (§7)
+· **W-11 THIRD ISSUANCE 2026-09-12** (mission `msn_a0e8a6206c63198fab`, assignment `asg_5e2d94184a9eb1`) —
+**the first W-11 pass to find the record exact.** Every second-issuance figure re-derived unchanged at HEAD
+(catalog **67**, **34 enforced / 33 unenforced**, tier A 11 capabilities over 56 handlers, `tests/access`
+**901/8/0**). What moved is the base: at the merged tree with `origin/staging` the catalog is **70**, enforced
+**38**, the deletion list **32**, residual **39 / 38** — and **a fourth key has left the deletion list while
+none has ever joined**, `crm.customers.read`, recovered exactly as the other three were, by a role literal
+being replaced with a capability the catalog already held. **The finding is about the exit artifact's shape,
+not its numbers.** `catalogVocabularyReconciliation` reads five fields of `w11-catalog-reconciliation.json`;
+the merge conflict W-10 handed forward, and all of the file's current drift, sit outside those five — so
+**the resolution that destroys the operator's OD-3 decision text is the one the suite calls green (129/0)**,
+and §3's earlier instruction to resolve toward `origin/staging` is amended above. On staging's copy alone,
+`enforced_count` reads 24 over a 25-key array, `deletion_candidate_count` 33 over 32, and the vocabulary
+buckets still hold `crm.customers.read`. **Four self-comparing assertions are requested of the Director**
+(`DR-12`) to lock the file against itself. W-50's list is correct and its `reviewed` date does not record the
+day it was changed. **Tier A's 56 red is unchanged and its reason is not** — all three Forms keys are
+declared, so catalog growth exactly cancelled new declarations; composition moved to 32 + **24**, the 24th
+being `forms/crm-entity-search`, a route that enforces `crm.customers.read` and declares nothing. **P2 third
+restatement:** the frozen 57-key literal moved again, to `20260912030000`, and the freeze now has three
+migration copies. **The grant half of C4 has converged**, confirming W-12's second issuance from the other
+instrument — the seed's admin enumeration is **70 = the whole discovered catalog, 0 ungranted**, `ops` 59.
+Instrument proven red by a **sixth** seeding syntax (`unnest` arrays, no `VALUES` tuple) with no parser edit;
+`typecheck:tests` **rc=0**; probe worktrees removed (§7)
 · **W-4 fifth issuance 2026-09-04** (mission `msn_0e24196324d1441ac2`, assignment `asg_a7d97e07ef0c59`) —
 **nothing could be executed**: no `node_modules`, no resolvable `typescript`, so the AST walk had no parser
 and **no count is claimed for this date**; the 2026-08-07 column is still the last measured one. The finding
@@ -472,9 +494,13 @@ still surfaces, the control does not, and that distinction is locked rather than
 fourth time on 2026-09-12 at both bases — green at both, nothing repaired, and at the merged tree the exit
 clause is met by another track's Forms migrations: three new catalog keys, three new enforced rows, no edit to
 any file W-10 owns.** Its one open item is not in the grid but at the merge seam — `w11-catalog-reconciliation.json`
-conflicts with `origin/staging` and is read by a lock as its expected value, so **resolve that conflict toward
-`origin/staging` or re-derive it after merging; resolving it toward this branch reddens two W-10-dependent
-suites without the projection having changed** (§7). **W-11 (§7) is measured, not applied** — its
+conflicts with `origin/staging` and is read by a lock as its expected value, so resolving it toward this branch
+reddens two W-10-dependent suites without the projection having changed (§7). **AMENDED 2026-09-12 by W-11's
+third issuance: take only the second half of that instruction — re-derive after merging.** Resolving *toward*
+`origin/staging` is green (129/0) and wrong: staging's copy is this branch's file without W-11's second-issuance
+repair, so taking it wholesale silently restores a residual figure of *"catalog 23, enforced 22"* against a
+merged-base truth of **39 / 38**. The conflict sits in the one region of that file no lock reads, so **no suite
+can tell a correct resolution from a destructive one** (§7). **W-11 (§7) is measured, not applied** — its
 exit artifact is delivered and its instrument is green, but the operator review and M5 are open, and its
 correction to the catalog's width applies to every count in §3, §7 and §13 that predates it. **Re-derived a
 second time on 2026-09-11: the method held and every count had drifted** — the catalog is **67 keys**, the
@@ -6911,6 +6937,213 @@ effort. The record is repaired: counts restated in §3, §7 and the exit artifac
 rather than deferred; P2 restated now that M6 has landed and frozen the literal M5 must edit. Instrument
 `live` and proven red by a fifth syntax, RL-3's subject green, no `RL-` number minted, no migration authored,
 typecheck `rc=0`, tier C and D `unrun`, nothing pushed.**
+
+#### W-11 third issuance — **2026-09-12**, mission `msn_a0e8a6206c63198fab`, assignment `asg_5e2d94184a9eb1`: the record is exact at HEAD, and W-11's own exit artifact is the only merge conflict in the tree
+
+**This is the first W-11 issuance to arrive and find nothing wrong with the record.** Re-derived at
+this commit, every figure the second issuance wrote is still exact: catalog **67**, enforced **34**,
+deletion list **33**, one uncatalogued key, and tier A at **11** declared capabilities over **56**
+declared handlers with **23** enforced-but-undeclared. `web/tests/access` (excluding `live/`) is
+**901 passed / 8 skipped / 0 failed across 55 files** — the same number that record states, verified
+rather than carried. The second issuance repaired the record and the repair held.
+
+**What is wrong is the base.** `origin/staging` is **14 commits** ahead of this branch. Forms
+authority became a capability there (`20260912020000`, `20260912030000`), and that work edited
+W-11's instrument, W-50's list, and **W-11's own exit artifact**. Merging the two trees produces
+**exactly one conflicted path in the entire repository**, and it is
+`w11-catalog-reconciliation.json`.
+
+**Re-derived at the merged base — this branch merged with `origin/staging` in a disposable
+worktree, 415 migrations and 6,873 scanned product files on. W-10's fourth issuance measured the
+same merged tree hours earlier and reached 70 keys independently; the catalog row below is
+corroboration, not a second opinion:**
+
+| | HEAD (2026-09-11) | **merged base (2026-09-12)** | |
+|---|:--:|:--:|---|
+| Catalog keys | 67 | **70** | +3 — `forms.author`, `forms.submissions`, `forms.submissions.confirm`, all three in `APPROVED_ADDITIONS` |
+| Enforced | 34 | **38** | +4: the 3 Forms keys, plus `crm.customers.read` recovered from the deletion list |
+| **Unenforced — the deletion list** | 33 | **32** | 19 legacy · 9 grid-vocabulary · 4 declared-but-inert |
+| Enforced with no catalog row | 1 | **1** | `communications.send.emergency`, unchanged and still unbindable |
+| Residual if M5 deletes all and the 1 addition seeds | 35 / 34 | **39 / 38** | enforced by nothing **0**, grantable-but-unbindable **1** |
+
+**A fourth key has left the deletion list and still none has ever joined it.**
+`crm.customers.read` was catalogued from the beginning and enforced nowhere; the Forms cleanup
+pointed `forms/crm-entity-search` at it instead of the literal `admin` role, and it became a real
+gate. That is the fourth recovery — `settings.users_roles.read`, `fin.read`, `fin.write`, now
+`crm.customers.read` — and **all four happened the same way: a role literal was replaced by a
+capability the catalog already held.** OD-3's review must run after the literal sweep, not before.
+The evidence for that was one key deep at W-13, three at the second issuance, and is now four.
+
+**The conflict is W-10's finding, handed here. This issuance supplies the mechanism — and corrects
+the resolution it implies.** W-10's fourth issuance (§6) found the same single conflicted path and
+recorded both resolutions against its ten dependent suites: `--ours` **127 / 2**, `origin/staging`'s
+copy **129 / 0**, the two reds being W-11's enforced-set and deletion-list clauses on
+`crm.customers.read`. That reproduces here exactly, on this suite's own subset — **2 red** under
+ours, **22 passed / 0 failed** under theirs. W-10 handed the hazard forward *"in W-11's artifact
+rather than W-10's"*, which is this section.
+
+**The green resolution is the wrong one.** Read from the lock outward, that table says take
+staging's copy: it is the one that passes. But staging's copy is this branch's file *without the
+second issuance's repair* — taking it wholesale silently discards the `STALE_DO_NOT_READ` marker,
+`wave3_reissue_restatement`, `COUNT_RESTATED_2026_09_11`, and the `21 → 19` legacy-count correction,
+and restores *"catalog 23, enforced 22"* as an unmarked residual figure an operator would read as
+current. **129 / 0 is what a silently wrong resolution looks like**, and no suite distinguishes it
+from a right one.
+
+**The mechanism is that the conflict is in the half of the artifact no lock reads.**
+`catalogVocabularyReconciliation` consumes exactly five fields: `catalog_width`, `enforced[]`,
+`deletion_candidates[]`, `addition_candidates[]` and `discovery.keys_missed_by_pinned_parser`. Git
+auto-merged all five — the conflict is confined to `operator_decision_required.options`, the three
+choices an operator picks between when executing OD-3. So the asymmetry is structural, not luck:
+
+| Resolution | Result | What it does |
+|---|---|---|
+| **Take ours wholesale** | **2 red** — enforced set 25 against the artifact's 24, deletion list 32 against 33 | Reverts staging's `crm.customers.read` movement. **Loud, and therefore safe.** |
+| **Take theirs wholesale** | **22 passed / 0 failed** | Discards the second issuance's entire repair. **Silent, and therefore wrong.** |
+| **Neither — the correct resolution** | — | Staging's arrays (they carry `crm.customers.read`) **with** this branch's restatement blocks, and every count restated to the merged base: **70 / 38 / 32**, residual **39 / 38** |
+
+**Everything an operator reads on OD-3 is outside the locked set**, so the resolution that destroys
+the operator's decision text is the one the instrument calls green.
+
+**The unlocked half has already drifted on `origin/staging`, independently of the conflict.**
+Measured on staging's own copy:
+
+- `enforced_count` says **24**; the `enforced` array it summarizes holds **25**.
+- `deletion_candidate_count` says **33**; `deletion_candidates` holds **32**.
+- `deletion_candidates_by_vocabulary` still lists `crm.customers.read` under `grid_vocabulary`, so
+  the three buckets enumerate **33** keys for a 32-key list.
+- `legacy_ops_fin_admin_seed_set.count` is still **21** over its own 19-key array — the second
+  issuance's repair exists only on this branch, and wins that hunk cleanly on merge.
+
+And the second issuance's own restatements go one key stale at the merged base: the
+`wave3_reissue_restatement` block reads 67 / 34 / 33 against **70 / 38 / 32**, and
+`COUNT_RESTATED_2026_09_11` tells the operator *"the live list is 33"* when it is **32**.
+
+**Three independent editors — W-13, Financials, Forms — have now each updated the locked half of
+this artifact and left the unlocked half behind.** That is no longer drift to be restated each
+issuance; it is a structural property of a file with a locked half and an unlocked half, and it is
+the same failure the second issuance named in prose while remaining subject to it.
+
+**The remedy is four assertions, and it is requested rather than taken.** Added to
+`catalogVocabularyReconciliation`, these would move the operator's decision text from unlocked prose
+into a locked derivation:
+
+1. `enforced_count === enforced.length`
+2. `deletion_candidate_count === deletion_candidates.length`
+3. the union of `deletion_candidates_by_vocabulary[*].keys` equals `deletion_candidates`, both
+   directions
+4. each bucket's `count` equals its own `keys.length`
+
+None is a new measurement — all four compare the file to itself, which is why none of them can go
+stale. The instrument is W-11's and the change is small, but it widens a suite's subject, and
+`03…§33.1`/`DR-12` reserves that to the Director on the same principle that left W-11 without an
+`RL-` number. **Requested, not appended.**
+
+**W-50's list is correct and its provenance is not.** `web/lib/admin/unenforcedPermissionKeys.json`
+holds exactly the 32 deletion candidates at the merged base, set-equal to a fresh derivation in both
+directions. But its `reviewed` field still reads **2026-09-10** and its `most_recent_change` still
+describes the Financials recovery — **the file was edited on 2026-09-12 and does not record that it
+was.** This is the file whose staleness made Financials ungrantable from the role editor while the
+server enforced it, so its review metadata is not decoration.
+
+**Tier A's red count did not move and its reason did.** `catalog ⊆ declared` is **56 red at both
+bases**, which looks like nothing happened. At HEAD that is 67 catalog less 11 declared
+capabilities; at the merged base it is 70 less 14. **All three Forms keys are declared, so the
+catalog grew by exactly the number of new declarations and the difference stood still.** The
+composition moved: 33 deletion-list + 23 enforced becomes **32 + 24**. `declared ⊆ catalog` remains
+green, now over 14 capabilities across **79** declared handlers, and the pending backlog fell
+**700 → 677** against a ratchet tightened **679 → 656**.
+
+**The 24th is a route that enforces a capability and declares none.**
+`app/api/admin/forms/crm-entity-search/route.ts` `GET` — the handler that recovered
+`crm.customers.read` from the deletion list — is still `pending` in the declared table. It is
+enforced and undeclared in the same commit that made it enforced. Handed to W-15; it is one row.
+
+**P2 restated a third time: the frozen literal has moved again, and the freeze now has three
+copies.** `20260912030000` does `CREATE OR REPLACE FUNCTION seed_default_rbac` and states in its own
+header that the three Forms keys *"do NOT join the catalog literal inside the function"* because
+*"widening it would quietly rewrite history."* So the 57-key literal M5 must edit now lives in
+`20260912030000_forms_capability_default_seed.sql:44`, is still exactly 57, still
+`on conflict (key) do nothing` — and `grantSeedEnumeration.test.ts:282` still asserts
+`catalog.length === 57` byte-for-byte. **Each capability wave copies the function forward and
+re-freezes the literal**: M6 (`20260807170000`), W-13 (`20260911140000`), now Forms. The finding
+holds verbatim and the cost of M5's lock amendment rises with every wave, with nothing in the
+sequence retiring it.
+
+**The grant half of C4 has converged, confirming W-12's second issuance from W-11's side.** That
+record states `admin` ≡ the catalog at both bases, *"67 and 70, `ops` 58 and 59"*. Measured here
+against W-11's own discovery rather than W-12's: the seed's admin enumeration is **70 keys — exactly
+the discovered catalog, with zero keys ungranted**; `ops` is **59**; the frozen catalog literal is
+**57**. Two instruments, one number. The vocabulary the seed *grants* and the vocabulary the tree
+*defines* are now the same set — C4 reached in the grant direction by W-12's enumeration plus each
+wave's completeness repair, while the catalog direction, the 32 inert keys, is entirely open on
+OD-3. **The one thing W-11 adds is a negative:** the Forms migration's prose figure of *"a 66-key
+catalog"* is a pre-Forms grant count and not a live gap — asserted directly, **no catalog key is
+missing from the admin enumeration**, so the 70/66 difference is not a fifth vocabulary.
+
+**A method correction, because the merged-base technique is now used across this programme.**
+Measuring a probe worktree with `vitest --root <probe> --config <main>` borrows the main config's
+`resolve.alias`, where `"@"` is `path.resolve(__dirname, "./")` — **the main worktree**. Any suite
+importing `@/lib/…` therefore reads *this branch's* source against the *probe's* data. It produced a
+confident false red here: `capabilityTaxonomy` reported `forms.author (group forms) has no area`,
+which is what it must report when the probe's catalog meets HEAD's taxonomy. Re-run with the probe's
+own config, staging is **13 passed / 0 failed** and the area is mapped. **The probe must use the
+probe's config**; node_modules still resolves by walking up. W-11's own measurements are unaffected —
+`permissionCatalogDiscovery` is `fs` off `REPO_ROOT` with relative imports and no alias — but the
+suite-family runs were re-taken under the corrected method before being recorded below. This is the
+same class of defect W-10's fourth issuance named one axis over — a lock resolving from `cwd`
+silently stops running when the runner changes; **a lock resolving through a borrowed alias silently
+measures the wrong tree.** Both are green-looking.
+
+**Probe hygiene, since this document's own rule has been broken twice by other lanes.** All
+measurement ran in two disposable worktrees under `web/`, both removed, and every temporary harness
+was deleted before the figures below were taken. The whole-directory `tests/access` run at HEAD
+returned **55 files**, the expected count, so it swept up no other lane's probe. `git status` is
+clean and `git worktree list` carries neither probe.
+
+**Proven red by a sixth syntax, and the fixture is gone.** The 2026-08-07 pass planted a fourth
+seeding syntax, the second issuance a fifth. This pass planted a **sixth with no `VALUES` tuple at
+all** — `INSERT … SELECT * FROM unnest(ARRAY[…], ARRAY[…], …)`, parallel arrays, a shape no migration
+in the tree uses and that no tuple-shaped parser can reach in any column order. Region-based
+discovery found it **with no parser edit**, taking the suite to **4 red**: width 71 against 70, the
+unexplained-key clause naming `w11.probe.sixth`, the seeding-syntax set equality at 58 against 57,
+and the deletion list at 33 against 32. Fixture removed; suite green at 11 again.
+
+**Evidence.**
+
+| Item | Result |
+|---|---|
+| `catalogVocabularyReconciliation` — HEAD | **11 passed / 0 failed** |
+| `catalogVocabularyReconciliation` — merged base | **11 passed / 0 failed** |
+| `catalogVocabularyReconciliation` + `permissionGrid` + `permissionEnforcementTruth` + `grantSeedEnumeration` + `routeCapabilityDeclaration` + `catalogConsolidationLock` | **124 passed / 0 failed** at HEAD **and** at the merged base |
+| `web/tests/access` whole (excl. `live/`) — HEAD | **901 passed / 8 skipped / 0 failed** across 55 files — matches the second issuance exactly |
+| `web/tests/access` whole (excl. `live/`) — merged base | **902 passed / 8 skipped / 0 failed** across 55 files |
+| Merge conflict resolution | Ours-wholesale **2 red**; theirs-wholesale **22 passed** while discarding the second issuance's repair. Both executed, not argued |
+| Red before / green after | **4 red** on a sixth-syntax `unnest` seed, green once removed |
+| Non-vacuity | **6,873** files walked (>1000 asserted); catalog width pinned to a number a second method produced |
+| Seed-grant convergence | admin enumeration **70** = discovered catalog **70**, **0** keys ungranted; `ops` 59; frozen literal 57 |
+| Tier A (the plan's) | **Half green, half unbuilt, unchanged.** `declared ⊆ catalog` green over 14 capabilities / 79 handlers; `catalog ⊆ declared` unimplemented and 56 red at both bases, 24 of them enforced keys |
+| `vac run typecheck:tests` | **rc=0** at `5c71b8699290`, via the broker. No TypeScript changed this pass |
+| Tier C | **Not run.** Nothing applied; no round-trip to exercise |
+| Tier D | **Not run.** No browser verification |
+
+**Exit criteria — unchanged in substance, and the one `met` clause is at risk for the third
+consecutive issuance.**
+
+| Clause | Status |
+|---|---|
+| Enumerated deletion list reviewed | **not met, unchanged.** OD-3 is open. The list is **33** on this branch and **32** at the merged base |
+| Catalog and enforced set reconciled | **not met, unchanged.** Measured in both directions, not applied. No migration authored |
+| The residual gap is a written number, not an unknown | **met on this branch** — catalog 35, enforced 34, nothing unenforced, 1 unbindable. **It goes false on merge** unless restated to 39 / 38. This clause has now been the casualty of every base movement W-11 has seen |
+
+**Status: exit `partially met`, unchanged in substance — both open clauses still turn on OD-3, not
+on effort. What this issuance adds is not a repair to the record but a finding about the artifact's
+shape: W-11's exit artifact is half locked and half prose, the merge conflict and all current drift
+are in the prose half, and the resolution that destroys the operator's decision text is the one the
+instrument calls green. Four self-comparing assertions are requested of the Director to close that.
+Instrument `live` at both bases and proven red by a sixth syntax, no `RL-` number minted, no
+migration authored, typecheck `rc=0`, tier C and D `unrun`, probe worktrees removed, nothing
+pushed.**
 
 ### W-12 — Seeds enumerate their grants *(S · I-15 · closes G5)*
 
