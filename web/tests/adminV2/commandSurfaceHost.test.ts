@@ -167,10 +167,10 @@ describe("command_surface — what it must not become", () => {
         expect(host()).toContain("must never be the thing that");
     });
 
-    it("the card runs it against the surface's own subject, not the opportunity", () => {
+    it("the card runs it against the durable child, not the opportunity", () => {
         const card = read("components/admin/focusPanel/cards/CurrentWorkCard.tsx");
         expect(card).toContain("runCommandSurfaceAction");
-        expect(card).toContain("context.truth?.row_subject");
+        expect(card).toContain("context.participantScope?.customerMemberId");
         expect(card).toContain("action.workTemplateKey ? { payload: { template_key: action.workTemplateKey } }");
     });
 
@@ -203,8 +203,8 @@ describe("command_surface — the Process Card path", () => {
         expect(src).toContain("default:");
     });
 
-    it("runs against the card's own subject, never the enclosing case", () => {
-        expect(card()).toContain("context.truth?.row_subject");
+    it("runs against the durable child from the participant carrier, never the enclosing case", () => {
+        expect(card()).toContain("context.participantScope?.customerMemberId");
     });
 
     it("carries the configured template through to the payload", () => {
@@ -217,5 +217,37 @@ describe("command_surface — the Process Card path", () => {
         expect(src).toContain("dispatchOpportunityDrawerScopedUpdate");
         // A refusal must not redraw and imply something happened.
         expect(src).toContain("if (result.ok && drawerOpportunityId)");
+    });
+});
+
+/**
+ * ABSENT MEANS ABSENT.
+ *
+ * `participantScope` is the one carrier that names the child, and its own rule is that a wrong child
+ * is worse than no child — the operator cannot see that a command acted on someone else. So neither
+ * caller may fall back to "the first child" or to the enclosing case, and the host refuses when the
+ * carrier is empty.
+ */
+describe("command_surface — the subject is never guessed", () => {
+    it("neither caller falls back to a row subject or the case", () => {
+        for (const rel of [
+            "components/admin/focusPanel/cards/BusinessProcessCard.tsx",
+            "components/admin/focusPanel/cards/CurrentWorkCard.tsx",
+        ]) {
+            const src = read(rel);
+            expect(src, `${rel} must read the participant carrier`).toContain(
+                "context.participantScope?.customerMemberId",
+            );
+            expect(src, `${rel} must not fall back to a row subject`).not.toContain(
+                "row_subject as",
+            );
+        }
+    });
+
+    it("an empty carrier refuses before the route", async () => {
+        const f = recordingFetch();
+        const out = await executeCommandSurfaceAction({ actionKey: KEY, entityType: "child", entityId: "" }, f);
+        expect(out.ok).toBe(false);
+        expect(f).not.toHaveBeenCalled();
     });
 });

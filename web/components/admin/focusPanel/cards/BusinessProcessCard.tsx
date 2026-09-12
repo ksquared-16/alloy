@@ -216,13 +216,24 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
                      * opportunity would run the command against the wrong record, which is worse
                      * than not running it, so an unresolved subject refuses inside the host.
                      */
-                    const subject = context.truth?.row_subject as
-                        | { subject_type?: string; subject_id?: string }
-                        | undefined;
+                    /*
+                     * THE CHILD, FROM THE ONE CARRIER THAT NAMES IT.
+                     *
+                     * `participantScope.customerMemberId` is the durable child the operator is
+                     * currently concerned with, and it is the identity `stage_work.start` resolves
+                     * a track from. Read from that carrier rather than re-derived here, because
+                     * every card that re-resolves a child from whatever it can reach drifts from
+                     * the others.
+                     *
+                     * ABSENT MEANS ABSENT. The carrier's own rule is that a wrong child is worse
+                     * than no child, since the operator cannot see that the command acted on
+                     * someone else — so there is deliberately no fallback, and the host refuses.
+                     */
+                    const childId = context.participantScope?.customerMemberId?.trim() ?? "";
                     void executeCommandSurfaceAction({
                         actionKey: plan.action.handlerKey ?? plan.action.key,
-                        entityType: subject?.subject_type ?? "",
-                        entityId: subject?.subject_id ?? "",
+                        entityType: "child",
+                        entityId: childId,
                         ...(plan.action.workTemplateKey
                             ? { payload: { template_key: plan.action.workTemplateKey } }
                             : {}),
