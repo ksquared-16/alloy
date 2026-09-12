@@ -290,6 +290,22 @@ had matched nothing since 2026-08-10. Subject 6 → **8**, plus a new lock requi
 in the SQL corpus. **The repairs are reasoned red, not observed** — no suite ran. A third finding is registered
 and deliberately unfixed by the first lane: `canManageUsersAndRoles.ts` is a wholly new primitive module under
 **twelve** routes that no list names (§5)
+· **W-1…W-3 issued an eleventh time — 2026-09-11** (mission `msn_a0e8a6206c63198fab`, assignment
+`asg_93ecbd2b8f191a`) — **the repair the eighth named, the ninth inherited and the tenth declined is now
+made**, and the finding is *why it survived three dispatches*: the tenth's reason for deferring bundled two
+separable claims and **only one was true**. Classifying `canManageUsersAndRoles.ts` **cannot** move the
+class-wide subject (it is computed from `RAW_RESOLUTIONS` alone, and nothing added is a raw resolution —
+re-derived after the change at **still exactly 103**); making `resolvesRawAccessContext` *transitive* would,
+and that half stays open as the whole remaining residue. The module joins `ACCESS_PRIMITIVE_MODULES`, its four
+callables join `CAPABILITY_GATES` and its two key constants `REVIEWED_NON_GATES`; export ratchet **21 → 27**.
+**Inert and measured**: the twelve routes reaching it call no raw resolution directly, so no verdict moves.
+**The blocker also moved and is a different fault** — the broker now returns **`rc=144 compute_capacity`
+(`held 0/9`)**, an unslotted lane refused heavy validation, *not* the `class=config` the tenth recorded; a pass
+diagnosing "install the dependencies" would repair the wrong thing. All four ratchets re-derived exact by
+independent scan (family **27**, class-wide **103** of **619**, aliases **3**, exports **21** pre-change), and
+comment-stripping proved a **no-op on zero route files**. **W-3 re-derived for the first time since the
+eighth** — neither tenth lane did it — and confirmed structurally closed, RL-2 *replaced* by RL-3 as its QA
+note required. No suite ran; the 27 is the one figure owed a confirmation (§5)
 · **W-4 seventh issuance 2026-09-11** (mission `msn_beb2e9e462cdce6513`, assignment `asg_679256764c32b1`) —
 **could not execute**, for the same reason both Wave 1 lanes could not on this base: no `node_modules`, so the
 AST walk has no parser. Unlike the fifth issuance the failure is **demonstrated** — the broker *admitted* the
@@ -2537,6 +2553,100 @@ here because that is the only place a reader will find it.
 **Not verified this run.** No live database query, no browser evidence — W-1…W-3 are not lockout-class, so
 §10.4 requires neither. Nothing was pushed.
 
+#### Wave 1, eleventh issuance — **2026-09-11**, assignment `asg_93ecbd2b8f191a`: the deferred repair lands, because the reason for deferring it was two questions in one coat
+
+The eleventh issuance of W-1…W-3. §4's rule holds an eleventh time: **re-execute rather than re-assert.** This
+run closes the item the eighth issuance named, the ninth inherited, and the tenth registered-and-declined — and
+the finding is **why it survived three dispatches**: the reason given for deferring it was a single sentence
+containing two separable claims, only one of which was true.
+
+**The blocker moved, and the new one is a different fault.** The tenth issuance recorded that it could execute
+nothing because *"the worktree has no `node_modules` and `npm ci` is refused by the session gate, so the broker
+returns `rc=1 class=config`."* Re-checked from source rather than inherited: `node_modules` is still absent and
+`vitest/config` is still unresolvable, **but the broker no longer answers `class=config`** — `vac run
+typecheck:tests` now returns **`rc=144`, `blocked by compute_capacity (held 0/9)`**. Nobody holds the lease;
+this is an **unslotted lane** being refused heavy validation, which is a capacity gate, not a config fault. The
+practical result is the same — no suite ran — but a future pass diagnosing *"install the dependencies"* would
+be repairing the wrong thing. **Both** routes are now closed, and for two unrelated reasons.
+
+**So this run measured instead of arguing.** The four RL-1 locks are pure `fs`+regex static analysis, so they
+can be *derived* without a test runner even though they cannot be *executed*. Every figure below is a scan over
+the live tree, not a re-reading of the previous record:
+
+| Ratchet | Floor | Live | Verdict |
+|---|---|---|---|
+| Analytics family route files | 27 | **27** | exact |
+| Class-wide G2 subject | 103 | **103** of **619** `app/api` route files | exact |
+| Aliases of a listed symbol | 3 | **3** | exact |
+| Classified exports of the module list | 21 | **21** over six modules | exact, before this run's change |
+
+**The derivation is tight, and this run proved the clause the sixth issuance could only argue.** That run
+reasoned its count was a *safe lower bound* because comment-stripping could only move the number up. Measured
+here directly: **zero route files in `web/app/api` mention a raw primitive in call form inside a comment**, so
+`codeOnly` is a genuine no-op on this corpus and the ripgrep count and the suite's count are the same number —
+confirmed rather than assumed for the second time, on a corpus 16 routes larger than the tenth issuance's.
+All 27 family routes reference a sufficient or capability gate, so `FAMILY_GATE_EXCEPTIONS` stays empty.
+
+**The finding — the tenth issuance's stated reason for deferring does not survive reading.** It declined to
+classify `lib/admin/canManageUsersAndRoles.ts` because doing so *"would move the class-wide subject well past
+103 and must be measured before it is asserted."* That sentence bundles two changes that share nothing:
+
+1. **Classifying the exports cannot move the subject at all.** The subject is
+   `routeFilesUnder([API_ROOT]).filter(resolvesRawAccessContext)`, and `resolvesRawAccessContext` reads
+   `RAW_RESOLUTIONS` alone — `CAPABILITY_GATES` is not an input to it. Nothing added is a raw resolution.
+   Re-derived after the change: **still exactly 103**.
+2. **Making `resolvesRawAccessContext` transitive would move it, a long way.** That is a real measurement
+   debt and it stays open — it changes what the lock's *subject means*, and it is the question
+   `reachesAuthorityWrite` (W-2's discovery) already answers the other way. Two locks in one wave still
+   disagree about whether reach counts; **that disagreement is the residue now, and it is the whole residue.**
+
+Only the second justified waiting. Separating them is what let the safe half land, and the cost of not
+separating them was three dispatches carrying a live gap in the register.
+
+**The repair.** `lib/admin/canManageUsersAndRoles.ts` joins `ACCESS_PRIMITIVE_MODULES` — verified by scan to
+be the **only** `web/lib` module defining any of the four symbols, so the derived module list discovers it
+rather than reporting it undeclared. Its four callables join `CAPABILITY_GATES`
+(`requireUsersRolesManageAuth`, `requirePortalOrUsersRolesManageAuth`, `canManageUsersAndRoles`,
+`canReadUsersAndRolesCatalog`) and its two permission-key constants join `REVIEWED_NON_GATES` with reasons, on
+the exact precedent of `ANALYTICS_READ_PERMISSION`. The export ratchet moves **21 → 27**.
+
+`requirePortalOrUsersRolesManageAuth` is classified as a **capability** gate despite its name: W-13 removed its
+portal leg, and the body now destructures `portalEligible` *away* before deciding
+(`canManageUsersAndRoles.ts:96-97`), so admission cannot satisfy it. The name is the last trace of the fifth
+authority layer, not evidence of one — recorded because the name alone would have put it in the wrong list.
+
+**Inert on today's corpus, and measured rather than asserted.** The four symbols are referenced by **13 files
+under `web/app`, twelve of them route files** — the six `users`/`users/[userId]/*`, the four `rbac/*`,
+`settings/users-roles/members` and `access/history`, exactly the twelve the tenth issuance named. **Not one of
+the twelve calls a raw resolution directly**, so not one is in the class-wide subject and no route's verdict
+changes; none sits in the three analytics dirs, so the family lock is untouched too. The permissive direction
+is safe here for the reason the seventh and eighth issuances required: it changes nothing today, and it lands
+together with the restrictive step that makes the module's *next* export fail a test instead of waiting for a
+human to read it. **Eighth instance of this workstream's escape class, closed rather than re-registered.**
+
+**W-2 — re-derived at source, and the tenth issuance's repairs are committed and intact.** `AUTHORITY_RPCS`
+carries all six names including W-17's `assign_member_role_audited` / `remove_member_role_audited`, and
+`AUTHORITY_TABLES` is the three **real** tables — the phantom `membership_access_profiles`, which was a
+migration filename and had matched nothing since 2026-08-10, is gone, and the table-existence lock that makes
+its recurrence fail is present. The exit criterion remains **met**, unchanged since the sixth issuance.
+
+**W-3 — re-derived, and this is the first issuance since the eighth to do it.** Neither tenth-issuance lane
+re-derived W-3; both said so. Confirmed structurally closed: `PERMISSION_GRID_ROWS` no longer exists,
+`buildPermissionGridRows` derives every row from `permission_definitions`, and `permissionGrid.test.ts`
+**replaces RL-2 with RL-3** explicitly rather than deleting it — the *"must be replaced, not deleted"* clause
+of W-3's own QA note, satisfied. A row naming an unseeded key is now unrepresentable rather than merely
+untested, which is a stronger form of the exit criterion than the one W-3 was given.
+
+**Honest limit, stated plainly.** **No suite ran, and no ratchet in this file was read back from its own
+predicate this time.** The four floors above are independent scans; the 21 → 27 move is the one figure obtained
+by arithmetic — six enumerated exports added to a live 21 that was itself confirmed by scan. That is stronger
+than the tenth issuance's *"reasoned red, not observed"* and weaker than a red-then-green run, and it is
+recorded as the latter rather than the former. **A run that can execute owes this file exactly one thing: a
+confirmation of 27.**
+
+**Not verified this run.** No live database query, no browser evidence — W-1…W-3 are not lockout-class, so
+§10.4 requires neither. Nothing was pushed.
+
 ### W-4 — Service-client principal check *(M · I-3 · addresses G6)*
 
 517 of 539 route files hold a service-role client. I-3 requires every one to resolve and gate a principal
@@ -3492,6 +3602,75 @@ routes, **23** exceptions, **12** advisory. Six measures, two instruments, no di
 **independent replication** any W-4 leg has had — and it replicates exactly the facts a parser is *not* needed
 for, which is precisely the boundary this record draws. It corroborates nothing about the unresolved count,
 because neither lane could run the walk.
+
+##### Addendum from the second lane (`asg_df687673050eb5`): W-4's *terminal predicate* was widened, and W-4's record never knew
+
+The replication above is not the second lane's only result. Working the same brief, it found one thing this
+record does not contain — and **that no W-4 leg contains**. `NON_HUMAN_PRINCIPAL_RESOLVERS`, `resolveKioskDevice`,
+`kiosk` and *non-human terminal* appear **zero times** in this document across all seven issuances.
+
+On **2026-09-09**, commit `15d9e63a1` (*"wire the kiosk through the canonical Attendance path, and teach two
+checks about a non-human sender"*) **changed `checkServiceClientPrincipal.mjs` itself**, outside any W-4
+assignment. Every prior leg's concurrency finding has been about the *register* moving unwitnessed. This is the
+first time **the check's own enforced predicate** moved unwitnessed.
+
+| What changed | Before | After |
+|---|---|---|
+| Terminal base case | `.auth.getUser()` / `getClaims()` / `getSession()` only | **plus** any identifier in `NON_HUMAN_PRINCIPAL_RESOLVERS` — currently `{ resolveKioskDevice }` |
+| Report shape | `resolvesPrincipal` | `resolvesPrincipal` **+** `resolvesSessionPrincipal`, so W-40's cross-check still compares the shared `x.auth.*` base case |
+| Register | — | **untouched.** No history entry, no `reviewed_by` mention, ceilings unmoved at 23/12 |
+
+**The widening is materially right, and this record says so plainly.** `resolveKioskDevice` selects by
+`credential_hash` — the sender's own secret — and refuses any row whose `status !== "active"`
+(`kioskDeviceAuthority.ts:100,111`), so it authenticates a stored credential and fails closed. A trusted device
+holds no Alloy session and never will; recording *"resolves no principal"* about a route that authenticates its
+sender on every request would have put a false statement into a security ledger, which is the failure this
+workstream exists to prevent. Splitting the two meanings to keep the W-40 drift detector honest is careful work.
+**The defect is not the widening. It is that the widening is unbounded and unrecorded.**
+
+Verified at this base, parser-free: both `app/api/public/kiosk/{identify,attendance}/route.ts` **hold a
+service-role client directly** and are **absent from all three lists**. They are green *only* through the new
+terminal. Remove it and they are two unlisted violations, pushing the unresolved union to **25 against a ceiling
+of 23** — red twice over.
+
+**Why this outranks the sixth issuance's finding.** That leg bounded its escape carefully and correctly: because
+`max_subject_unresolved` counts the *union* of unresolved routes, *"no new ungated route can enter through this
+gap"* — a **relabelling** escape. This mechanism sits **upstream of that count**. It does not move a route
+between lists; it changes *who is counted as unresolved at all*. A route reaching a newly-named resolver never
+enters the union, so the ceiling never binds, no list grows, and `prebuild` stays green. **This is an admission
+escape — the first one W-4 has had.**
+
+Three controls that bound every other part of this instrument are absent here:
+
+| Control | Exists for the three lists | Exists for the terminal set |
+|---|---|---|
+| A numeric ceiling in the register | yes — `max_subject_unresolved`, `max_transitive_only_unresolved` | **no** |
+| Contents pinned by the lock | yes | **no** — the new tests pin the two *routes* and the ceiling `23`, never the set's membership |
+| A dated entry in `ratchet.history` | yes, eleven of them | **no** |
+
+**And the lock is still not a backstop.** The sixth issuance established that **no CI workflow runs
+`tests/access`**. The kiosk commit added 33 lines of lock asserting the new behaviour — placing a **third**
+discipline into a file nothing in CI executes. The pattern is now legible across three legs: each repair states
+its invariant in the lock, and the lock runs only when a W-4 assignment happens to run it.
+
+**The fix, stated so it needs no re-derivation.** Add `max_non_human_terminals` to the register's `ratchet`,
+seeded at **1**; have the check compare `NON_HUMAN_PRINCIPAL_RESOLVERS.size` against it and exit non-zero on a
+mismatch in **either** direction, exactly as the list ceilings already do; pin the set's contents in the lock;
+and add the missing `2026-09-09` history entry naming `resolveKioskDevice` and its review. At the current single
+member this costs the check nothing and makes the next widening a `prebuild`-visible act. It composes with the
+sixth issuance's still-unapplied `max_baseline` — **neither is applied at this base**, confirmed by grep: the
+string `max_baseline` appears in neither the register nor the check, and the baseline short-circuit survives at
+`checkServiceClientPrincipal.mjs:539` (it was `:485` when the sixth issuance cited it — the line moved because
+this same kiosk commit grew the file by 62 lines, which is its own small argument for citing symbols rather than
+line numbers).
+
+**Not verified by this addendum.** No walk, for the same missing-parser reason that governs the whole seventh
+issuance — so the claim *"both kiosk routes are green only through the new terminal"* rests on the committed
+lock's own assertion that `resolvesSessionPrincipal` is `false` for both, plus the grep-verified facts that they
+hold a client directly and are unlisted. It was **not** re-derived from the AST. The 33 added lock lines were
+**not executed**. Whether the *other* check taught about a non-human sender
+(`checkUnauthenticatedSideEffects.mjs`, W-40) carries the same unbounded-set shape was **not examined**, and is
+the obvious next question.
 
 ---
 
@@ -5571,7 +5750,7 @@ contributor deleting one has to do it on purpose.
 | **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 | proposed |
 | **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 | proposed |
 | **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 | proposed |
-| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. Re-verified 2026-08-04: green across a 20-route expansion; ceiling ratcheted 26 → 17. **Re-executed 2026-08-06: found RED** — the advisory ratchet had been breached 3 → 10 by an allow-list-only commit that `prebuild` could not see. Ceilings moved into the register and enforced by the check, over *and* under; unresolved re-tightened 17 → 15; **18 tests**. **Re-executed 2026-08-07: green**, 18 tests, every measure unmoved, ceilings at the live floor in both directions — the first run to exercise the register-side ratchet, and the run that narrowed the coverage escape to *helpers that construct or return the client* rather than helper extraction generally. **2026-09-04 fifth issuance: NOT RUN** — no `node_modules` and no resolvable `typescript`, so the AST walk had no parser; **no count is claimed for that date and 2026-08-07 remains the last measured column**. The register nonetheless moved **seven times** in the interval (unresolved 15 → **22**, advisory 10 → **12**), **twice because this check went red on staging and stopped a build** (PR #416, PR #555) — the first evidence that it bites in CI and not only locally. Static checks that need no parser all hold: ceilings **22/12** equal the list lengths, `baseline` empty, all **34** listed routes exist, and every exception imports a client directly while every advisory entry imports none. Citation drift recurred — `enrollment-upload` drifted on five of five cited lines and names a renamed function, eight days after its entry claimed line-by-line review. **2026-09-06 sixth issuance: RE-EXECUTED and GREEN**, 18 tests, and the four-week measurement gap is closed — **603 routes, 570 direct holders, 548 resolving, 22 unresolved, 12 advisory**, ceilings at the live floor in both directions. The fifth issuance's *blind* reading of the register is confirmed **exact by the walk**, and the regenerated evidence reproduces all seven ratchet moves route by route with nothing else moved. **The CLI is shown red for the first time since 2026-08-06** — five states, real non-zero exit codes, produced without mutating the tracked register by running a byte-identical copy of the check from a scratch dir inside `web/`, so it reads a substituted allow-list while walking the real tree. **New finding: the 2026-08-06 repair was half-applied.** The ceilings were moved into the register; the *freeze* clauses were not. Baseline growth, the per-entry reason requirement and exceptions/baseline disjointness are asserted only in the vitest lock, and **no CI workflow runs `tests/access`** — so all 22 reviewed exceptions can be relabelled as unreasoned frozen backlog with `prebuild` **green**, demonstrated. Bounded: `max_subject_unresolved` counts the union, so no *new* unresolved route can enter — a relabelling escape, not an admission one. Fix handed forward: a `max_baseline` ceiling seeded at 0. **Citation drift measured rather than assumed** — only **5 of 21** line references are in a checkable form and **3 of those 5 are drifted**, including a **new** one (`guardTourActionRoute` cited `:39`, actually `:45`); the other **16 name a line with no symbol bound to it**, which is why the defect recurs and why human re-reading was never a sufficient control. `enrollment-upload` remains wrong on all five lines, ten days and two assignments after it was reported. **2026-09-11 seventh issuance: NOT RUN** — the promotion worktree has no `node_modules`, so the AST walk had no parser; the failure is **demonstrated** rather than inferred (broker admitted the job, script died at its first import with `ERR_MODULE_NOT_FOUND: typescript`), and `npm install` was refused by the session gate. **No count is claimed; 2026-09-06 remains the last measured column.** Static checks all hold — ceilings **23/12** equal the list lengths, `baseline` empty, all **35** listed routes exist, every exception imports a client directly and no advisory entry does — on a corpus grown **603 → 619** route files. **The committed evidence artifact is stale by a full issuance**: it is still the 2026-08-06 file (ratchet 15/10) although the sixth issuance's record, committed at this base, states it was regenerated to 22/12 — the record travelled to `staging` and its evidence did not, and only a run with a parser can repair it, because regeneration *is* the check. **Citation drift re-measured on a widened sample: 14 symbol-bearing citations, 2 correct, 12 drifted, 2 substantive** — `enrollment-upload` cites `uploadDestinationForField`, which no longer exists (renamed `resolveParticipantUploadDestination`) and whose per-artifact refusal the code deliberately widened to every artifact the session realized; and `tour-booking/[token]/resolve` still says "all seven action kinds" where `REQUIRED_ACTIONS` now lists **eight**, so a 2026-08-06 correction for citation drift has itself drifted. Drift is structural, not neglect: the `stripe/webhook` entry declared 2026-09-09 is already wrong on **all three** citations after three commits in two days. Every asserted authorization property was re-verified and **all five audited entries still hold** — the models are sound, the citations are not |
+| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. Re-verified 2026-08-04: green across a 20-route expansion; ceiling ratcheted 26 → 17. **Re-executed 2026-08-06: found RED** — the advisory ratchet had been breached 3 → 10 by an allow-list-only commit that `prebuild` could not see. Ceilings moved into the register and enforced by the check, over *and* under; unresolved re-tightened 17 → 15; **18 tests**. **Re-executed 2026-08-07: green**, 18 tests, every measure unmoved, ceilings at the live floor in both directions — the first run to exercise the register-side ratchet, and the run that narrowed the coverage escape to *helpers that construct or return the client* rather than helper extraction generally. **2026-09-04 fifth issuance: NOT RUN** — no `node_modules` and no resolvable `typescript`, so the AST walk had no parser; **no count is claimed for that date and 2026-08-07 remains the last measured column**. The register nonetheless moved **seven times** in the interval (unresolved 15 → **22**, advisory 10 → **12**), **twice because this check went red on staging and stopped a build** (PR #416, PR #555) — the first evidence that it bites in CI and not only locally. Static checks that need no parser all hold: ceilings **22/12** equal the list lengths, `baseline` empty, all **34** listed routes exist, and every exception imports a client directly while every advisory entry imports none. Citation drift recurred — `enrollment-upload` drifted on five of five cited lines and names a renamed function, eight days after its entry claimed line-by-line review. **2026-09-06 sixth issuance: RE-EXECUTED and GREEN**, 18 tests, and the four-week measurement gap is closed — **603 routes, 570 direct holders, 548 resolving, 22 unresolved, 12 advisory**, ceilings at the live floor in both directions. The fifth issuance's *blind* reading of the register is confirmed **exact by the walk**, and the regenerated evidence reproduces all seven ratchet moves route by route with nothing else moved. **The CLI is shown red for the first time since 2026-08-06** — five states, real non-zero exit codes, produced without mutating the tracked register by running a byte-identical copy of the check from a scratch dir inside `web/`, so it reads a substituted allow-list while walking the real tree. **New finding: the 2026-08-06 repair was half-applied.** The ceilings were moved into the register; the *freeze* clauses were not. Baseline growth, the per-entry reason requirement and exceptions/baseline disjointness are asserted only in the vitest lock, and **no CI workflow runs `tests/access`** — so all 22 reviewed exceptions can be relabelled as unreasoned frozen backlog with `prebuild` **green**, demonstrated. Bounded: `max_subject_unresolved` counts the union, so no *new* unresolved route can enter — a relabelling escape, not an admission one. Fix handed forward: a `max_baseline` ceiling seeded at 0. **Citation drift measured rather than assumed** — only **5 of 21** line references are in a checkable form and **3 of those 5 are drifted**, including a **new** one (`guardTourActionRoute` cited `:39`, actually `:45`); the other **16 name a line with no symbol bound to it**, which is why the defect recurs and why human re-reading was never a sufficient control. `enrollment-upload` remains wrong on all five lines, ten days and two assignments after it was reported. **2026-09-11 seventh issuance: NOT RUN** — the promotion worktree has no `node_modules`, so the AST walk had no parser; the failure is **demonstrated** rather than inferred (broker admitted the job, script died at its first import with `ERR_MODULE_NOT_FOUND: typescript`), and `npm install` was refused by the session gate. **No count is claimed; 2026-09-06 remains the last measured column.** Static checks all hold — ceilings **23/12** equal the list lengths, `baseline` empty, all **35** listed routes exist, every exception imports a client directly and no advisory entry does — on a corpus grown **603 → 619** route files. **The committed evidence artifact is stale by a full issuance**: it is still the 2026-08-06 file (ratchet 15/10) although the sixth issuance's record, committed at this base, states it was regenerated to 22/12 — the record travelled to `staging` and its evidence did not, and only a run with a parser can repair it, because regeneration *is* the check. **Citation drift re-measured on a widened sample: 14 symbol-bearing citations, 2 correct, 12 drifted, 2 substantive** — `enrollment-upload` cites `uploadDestinationForField`, which no longer exists (renamed `resolveParticipantUploadDestination`) and whose per-artifact refusal the code deliberately widened to every artifact the session realized; and `tour-booking/[token]/resolve` still says "all seven action kinds" where `REQUIRED_ACTIONS` now lists **eight**, so a 2026-08-06 correction for citation drift has itself drifted. Drift is structural, not neglect: the `stripe/webhook` entry declared 2026-09-09 is already wrong on **all three** citations after three commits in two days. Every asserted authorization property was re-verified and **all five audited entries still hold** — the models are sound, the citations are not. **Second-lane addendum (`asg_df687673050eb5`): the enforced predicate itself was widened on 2026-09-09 and this register never recorded it.** Commit `15d9e63a1` gave the check a **second terminal** — `NON_HUMAN_PRINCIPAL_RESOLVERS`, currently `{ resolveKioskDevice }` — so that two kiosk routes which hold a service-role client **directly** and appear in **no list** read as resolving. The widening is **materially correct** (the resolver authenticates a stored `credential_hash` and refuses any non-`active` row, and calling a device-authenticated route "unresolved" would have made this ledger lie) and it preserved W-40's cross-check by reporting `resolvesPrincipal` and `resolvesSessionPrincipal` separately — **but it is bounded by nothing**: no register ceiling, no `ratchet.history` entry, and the 33 added lock lines pin the two *routes* and the ceiling `23`, never the **set's membership**. This **outranks the 2026-09-06 finding**, which was explicitly bounded as a *relabelling* escape because `max_subject_unresolved` counts the union; this mechanism sits **upstream of that count** and changes who is counted as unresolved at all, so a route reaching a newly-named resolver never enters the union and no ceiling binds — **the first admission escape W-4 has had**. It also places a **third** discipline in a lock **no CI workflow runs**. Fix handed forward alongside the still-unapplied `max_baseline` (neither exists at this base): a `max_non_human_terminals` ceiling seeded at **1**, enforced in both directions, the set pinned in the lock, and the missing 2026-09-09 history entry. Removing the terminal would make the two kiosk routes unlisted violations and push the union to **25 against a ceiling of 23** |
 
 **W-11 has no lock in either register, and did not mint one.** `RL-35` — *every catalog key resolves to ≥1
 enforcement site* — is `W-50`'s, and is red today by 36 keys, so it cannot be claimed here. The product-source

@@ -543,6 +543,19 @@ const CAPABILITY_GATES = [
     "canReadProgramPublication",
     "canManageProgramPublication",
     "canReadAnalytics",
+    // Listed 2026-09-11 (eleventh issuance), closing the residue the eighth issuance named and the
+    // tenth registered. All four are exports of `lib/admin/canManageUsersAndRoles.ts` and all four
+    // authorize on a capability alone — `settings.users_roles`, or the weaker
+    // `settings.users_roles.read` for the catalog read (`canManageUsersAndRoles.ts:34-35,72-79`).
+    //
+    // `requirePortalOrUsersRolesManageAuth` is named for a portal leg it no longer has: W-13 removed
+    // it, and the body now *destructures `portalEligible` away* before deciding (`:96-97`), so
+    // admission cannot satisfy it. It belongs here and not in `SUFFICIENT_GATES` for that reason —
+    // the name is the last trace of the fifth authority layer, not evidence of one.
+    "requireUsersRolesManageAuth",
+    "requirePortalOrUsersRolesManageAuth",
+    "canManageUsersAndRoles",
+    "canReadUsersAndRolesCatalog",
 ] as const;
 
 /** Reviewed exceptions. Empty by design — an entry here is a security decision (W-4's ratchet). */
@@ -712,15 +725,35 @@ describe("W-1 — routes already portal-gated stay gated (RL-1 regression lock)"
  * established that, a human reading did**, which is the labour these locks exist to retire and the exact shape
  * `getAdminAuthCached` escaped through for months. Eighth instance of this workstream's escape class.
  *
- * **Why it is registered and not fixed.** Classifying the four exports would pull this module into the
- * derivation, and the larger question it exposes — whether `resolvesRawAccessContext` should become transitive
- * — would move the class-wide subject well past 103 and must be *measured* before it is asserted. The tenth
- * issuance could execute nothing: its worktree has no `node_modules` and `npm ci` is refused by its session
- * gate, so `vac run test` and `vac run typecheck:tests` both return `class=config`, *"the command never ran."*
- * This document's rule is that a negative fixture is finished when it is removed and green, and the sixth
- * issuance set the precedent for exactly this position by deferring its repair to *"a run that can prove it
- * red."* **The next runner that can execute owns this.** Changing the lists here without proving them red
- * would be the one move this workstream has never made.
+ * **CLASSIFIED 2026-09-11 (eleventh issuance) — and the tenth's stated reason for deferring was two
+ * questions wearing one coat.** The tenth wrote that classifying the exports *"would move the class-wide
+ * subject well past 103 and must be measured."* Those are separable, and only the second is true:
+ *
+ *   1. **Classifying the exports cannot move the subject at all.** The subject is
+ *      `routeFilesUnder([API_ROOT]).filter(resolvesRawAccessContext)`, and `resolvesRawAccessContext` reads
+ *      `RAW_RESOLUTIONS` alone. `CAPABILITY_GATES` is not an input to it. Nothing added here is a raw
+ *      resolution, so the subject is arithmetically untouched — and it was re-derived at **exactly 103 of
+ *      619** route files after the change, unmoved.
+ *   2. **Making `resolvesRawAccessContext` transitive would move it, a long way** — that is the real
+ *      measurement debt, and it is left open deliberately. It is a change to what this lock's subject *means*,
+ *      not to its lists, and it is the question `reachesAuthorityWrite` already answers the other way.
+ *
+ * Splitting them is what let the safe half land. The classification is **inert on today's corpus** — the same
+ * standard the seventh and eighth issuances used for the permissive direction, and here it is measured rather
+ * than argued: the four symbols are referenced by **13 files in `web/app`, 12 of them route files**, and
+ * **not one of those 12 calls a raw resolution directly**, so not one is in the subject and no route's verdict
+ * changes. The family lock is untouched too — all 12 live under `users`/`rbac`/`settings`/`access`, none in
+ * the three analytics dirs.
+ *
+ * **What it buys, given that it changes no verdict:** the module is now inside the classification lock, so the
+ * *next* unclassified export beside these gates fails a test instead of waiting for a human to read it. That
+ * is the escape class itself — eighth instance — closed rather than re-registered.
+ *
+ * **Honest limit.** This run could not execute either: `vac run typecheck:tests` returns **rc=144
+ * `compute_capacity`** (an unslotted lane, not a config fault) and a direct `vitest` cannot resolve
+ * `vitest/config` with no `node_modules`. So this is proven by *independent static derivation* — the sixth
+ * issuance's method, run over the same file set with the same helpers — and not by a red-then-green suite.
+ * The export ratchet below (21 → 27) is the one figure that required arithmetic rather than a scan.
  */
 const ACCESS_PRIMITIVE_MODULES = [
     "lib/admin/getAdminContext.ts",
@@ -729,6 +762,10 @@ const ACCESS_PRIMITIVE_MODULES = [
     "lib/admin/adminRouteGate.ts",
     "lib/admin/canReadAnalytics.ts",
     "lib/metrics/platform/adminApiHelpers.ts",
+    // Added 2026-09-11 (eleventh issuance). It is the only `web/lib` module defining any of the four
+    // symbols added to `CAPABILITY_GATES` above — verified by scan, not assumed — so the derived
+    // module list below discovers it here rather than reporting it undeclared.
+    "lib/admin/canManageUsersAndRoles.ts",
 ] as const;
 
 /** `export const A = B;` — a re-export of an existing symbol under a second name. */
@@ -878,6 +915,23 @@ const REVIEWED_NON_GATES: { symbol: string; reason: string }[] = [
             "Standard-envelope 400 validation-error renderer (`adminApiHelpers.ts:40-44`). Same " +
             "classification as `zodErrorResponse`: it reports bad input, never who the caller is.",
     },
+    // Registered 2026-09-11 (eleventh issuance), when `canManageUsersAndRoles.ts` entered the
+    // module list. Both are permission-key string constants, the same classification as the two
+    // `ANALYTICS_*_PERMISSION` keys above and for the same reason.
+    {
+        symbol: "SETTINGS_USERS_ROLES_PERMISSION",
+        reason:
+            "A permission-key string constant, `\"settings.users_roles\"` " +
+            "(`canManageUsersAndRoles.ts:9`). It is the capability the gates above compare against, " +
+            "not a callable that decides anything.",
+    },
+    {
+        symbol: "SETTINGS_USERS_ROLES_READ_PERMISSION",
+        reason:
+            "A permission-key string constant, `\"settings.users_roles.read\"` " +
+            "(`canManageUsersAndRoles.ts:15`) — the weaker key admitting the catalog read only. " +
+            "Same classification as the managing key above; neither is callable.",
+    },
 ];
 
 /** Runtime (value) exports only — `export type` and `export interface` are erased at compile time. */
@@ -922,11 +976,20 @@ describe("W-1 — every export of an access-primitive module is classified (RL-1
         // from this predicate itself via a temporary impossible floor, not from a second
         // replication — the seventh issuance's method, because a replication is a second chance to
         // make the first one's mistake.
-        expect(all.length).toBeGreaterThanOrEqual(21);
+        //
+        // **27 over seven modules from 2026-09-11 (eleventh issuance)**, when
+        // `canManageUsersAndRoles.ts` was added and its six runtime exports classified — four
+        // capability gates and the two permission-key constants. This run could not execute the
+        // suite (see the module list above), so 21 → 27 is the one figure here derived by
+        // enumerating the new module's exports rather than read back from this predicate: six
+        // added to a live 21 that was itself confirmed exact by scan. A run that can execute owes
+        // this number a confirmation, and it is the only ratchet in this file carrying that debt.
+        expect(all.length).toBeGreaterThanOrEqual(27);
         expect(all).toContain("requireAdminOrOps"); // gate
         expect(all).toContain("loadAdminAccessBundleCached"); // raw resolution
         expect(all).toContain("adminContextFailureResponse"); // reviewed non-gate
         expect(all).toContain("logAdminAudit"); // reviewed non-gate, via `export { X } from`
+        expect(all).toContain("requireUsersRolesManageAuth"); // capability gate
     });
 
     it("emits no runtime symbol for a type-only export", () => {
