@@ -887,7 +887,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                     );
                 }
 
-                config = adoptProcessTracks(config, pid, template, evaluation.assignments);
+                config = adoptProcessTracks(config, pid, evaluation.tracks, evaluation.assignments);
                 trackAdoption = report;
                 break;
             }

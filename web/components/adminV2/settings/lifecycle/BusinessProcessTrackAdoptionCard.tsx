@@ -50,6 +50,7 @@ type AdoptionReport = {
             }[];
         };
         stage_routing_changes: { stage_key: string; label: string; grain: string; track_key: string }[];
+        omitted_outcomes: { outcome_key: string; label: string; missing_stage_key: string }[];
     };
     observed_instances: { stage_keys: string[]; instance_count: number };
 };
@@ -213,6 +214,20 @@ export default function BusinessProcessTrackAdoptionCard({
                                     </div>
                                 ))}
                             </div>
+                            {report.preview.omitted_outcomes?.length ?
+                                <div data-testid="business-process-track-adoption-omitted">
+                                    <p className="text-xs text-alloy-midnight/70">
+                                        Not included, because this process has no such stage:
+                                    </p>
+                                    <ul className="mt-1 list-disc pl-5 text-xs text-alloy-midnight/55">
+                                        {report.preview.omitted_outcomes.map((o) => (
+                                            <li key={o.outcome_key}>
+                                                {o.label} — would move to “{o.missing_stage_key}”
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            :   null}
                             {report.preview.after.split_points.map((split) => (
                                 <p
                                     key={`${split.from_stage_label}-${split.into_track_key}`}

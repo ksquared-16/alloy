@@ -24,7 +24,9 @@ import {
     ADOPT_INSTANCE_STAGE_UNCONFIGURED,
     ADOPT_MEMBERSHIP_GRAIN_CONFLICT,
     ADOPT_MEMBERSHIP_STAGE_MISMATCH,
+    ADOPT_SPLIT_RULE_UNREACHABLE,
     ADOPT_SPLIT_STAGE_UNKNOWN,
+    ADOPT_SPLIT_TARGET_WRONG_TRACK,
     ADOPT_STAGE_GRAIN_MISSING,
     ADOPT_STAGE_GRAIN_UNMAPPABLE,
     adoptProcessTracks,
@@ -155,7 +157,7 @@ describe("track adoption — the capability", () => {
     it("2. adoption uses the canonical template tracks, not an invented model", () => {
         const process = processOf(TENANT_STAGES);
         const result = evaluateProcessTrackAdoption({ process, template: ENROLLMENT_TEMPLATE });
-        const next = adoptProcessTracks(configOf(process), process.id, ENROLLMENT_TEMPLATE, result.assignments);
+        const next = adoptProcessTracks(configOf(process), process.id, result.tracks, result.assignments);
 
         expect(next.processes[0]!.tracks_v1).toEqual(ENROLLMENT_DEFAULT_TRACKS);
     });
@@ -246,7 +248,7 @@ describe("track adoption — the capability", () => {
         const result = evaluateProcessTrackAdoption({ process, template: ENROLLMENT_TEMPLATE });
         expect(result.ok).toBe(true);
 
-        const next = adoptProcessTracks(configOf(process), process.id, ENROLLMENT_TEMPLATE, result.assignments);
+        const next = adoptProcessTracks(configOf(process), process.id, result.tracks, result.assignments);
         const adopted = next.processes[0]!;
 
         expect(adopted.stages.map((s) => [s.key, s.track_key])).toEqual([
@@ -264,7 +266,7 @@ describe("track adoption — the capability", () => {
     it("5b. adoption changes nothing else about a stage", () => {
         const process = processOf(TENANT_STAGES);
         const result = evaluateProcessTrackAdoption({ process, template: ENROLLMENT_TEMPLATE });
-        const next = adoptProcessTracks(configOf(process), process.id, ENROLLMENT_TEMPLATE, result.assignments);
+        const next = adoptProcessTracks(configOf(process), process.id, result.tracks, result.assignments);
 
         for (const before of process.stages) {
             const after = next.processes[0]!.stages.find((s) => s.id === before.id)!;
@@ -279,7 +281,7 @@ describe("track adoption — the capability", () => {
     it("6. a roundtrip through JSON preserves the adopted tracks exactly", () => {
         const process = processOf(TENANT_STAGES);
         const result = evaluateProcessTrackAdoption({ process, template: ENROLLMENT_TEMPLATE });
-        const next = adoptProcessTracks(configOf(process), process.id, ENROLLMENT_TEMPLATE, result.assignments);
+        const next = adoptProcessTracks(configOf(process), process.id, result.tracks, result.assignments);
 
         const reloaded = JSON.parse(JSON.stringify(next)) as LifecycleBuilderV1;
         expect(reloaded.processes[0]!.tracks_v1).toEqual(ENROLLMENT_DEFAULT_TRACKS);
@@ -291,7 +293,7 @@ describe("track adoption — the capability", () => {
     it("11. adoption is idempotent — a repeated apply returns the very same config", () => {
         const process = processOf(TENANT_STAGES);
         const first = evaluateProcessTrackAdoption({ process, template: ENROLLMENT_TEMPLATE });
-        const once = adoptProcessTracks(configOf(process), process.id, ENROLLMENT_TEMPLATE, first.assignments);
+        const once = adoptProcessTracks(configOf(process), process.id, first.tracks, first.assignments);
 
         const second = evaluateProcessTrackAdoption({
             process: once.processes[0]!,
@@ -300,7 +302,7 @@ describe("track adoption — the capability", () => {
         expect(second.already_adopted).toBe(true);
         expect(second.ok).toBe(true);
 
-        const twice = adoptProcessTracks(once, process.id, ENROLLMENT_TEMPLATE, second.assignments);
+        const twice = adoptProcessTracks(once, process.id, second.tracks, second.assignments);
         // Reference equality: no new object, so no diff, no new revision content, no duplicate tracks.
         expect(twice).toBe(once);
         expect(twice.processes[0]!.tracks_v1!.tracks).toHaveLength(2);
@@ -327,6 +329,129 @@ describe("track adoption — the capability", () => {
             observedInstanceStageKeys: ["lead", "waitlist", "enrolling", "enrolled"],
         });
         expect(result.ok).toBe(true);
+    });
+
+    /* ------------------------------------------------------------ fitting to the inventory */
+
+    it("adopts a process with no terminal stages, omitting the outcomes it cannot express", () => {
+        /*
+         * THE STAGING TENANT'S ACTUAL SHAPE, and the case that proved the first implementation
+         * wrong. Its Enrollment process has six stages and neither `closed` nor `closed_withdrawn`.
+         *
+         * The platform explicitly does not require them: a family case ends through
+         * `opportunities.status_key`, a child's participation through `process_instances.state`,
+         * and representing either as a stage is the tenant's choice. Refusing adoption over a
+         * missing optional terminal stage made the capability unusable for exactly the processes it
+         * exists to upgrade.
+         */
+        const process = processOf(
+            TENANT_STAGES.filter((s) => s.key !== "closed" && s.key !== "closed_withdrawn"),
+        );
+        const result = evaluateProcessTrackAdoption({ process, template: ENROLLMENT_TEMPLATE });
+
+        expect(result.ok, result.blockers.map((b) => b.message).join(" ")).toBe(true);
+        expect(result.preview.omitted_outcomes).toEqual([
+            expect.objectContaining({ outcome_key: "closed_withdrawn", missing_stage_key: "closed_withdrawn" }),
+        ]);
+    });
+
+    it("persists the FITTED model, not the raw template", () => {
+        const process = processOf(
+            TENANT_STAGES.filter((s) => s.key !== "closed" && s.key !== "closed_withdrawn"),
+        );
+        const result = evaluateProcessTrackAdoption({ process, template: ENROLLMENT_TEMPLATE });
+        const next = adoptProcessTracks(configOf(process), process.id, result.tracks, result.assignments);
+
+        const stored = next.processes[0]!.tracks_v1!;
+        const outcomes = stored.split_rules[0]!.per_subject_outcomes.map((o) => o.outcome_key);
+        // Storing an outcome pointing at a stage the process does not have would persist a split
+        // the runtime could never execute.
+        expect(outcomes).not.toContain("closed_withdrawn");
+        expect(outcomes).toEqual(["waitlist", "enrolling", "no_action"]);
+        expect(stored).not.toEqual(ENROLLMENT_DEFAULT_TRACKS);
+        // The TRACKS themselves are untouched — only unreachable destinations were dropped.
+        expect(stored.tracks).toEqual(ENROLLMENT_DEFAULT_TRACKS.tracks);
+    });
+
+    it("stays idempotent once fitted", () => {
+        const process = processOf(
+            TENANT_STAGES.filter((s) => s.key !== "closed" && s.key !== "closed_withdrawn"),
+        );
+        const first = evaluateProcessTrackAdoption({ process, template: ENROLLMENT_TEMPLATE });
+        const once = adoptProcessTracks(configOf(process), process.id, first.tracks, first.assignments);
+
+        const second = evaluateProcessTrackAdoption({
+            process: once.processes[0]!,
+            template: ENROLLMENT_TEMPLATE,
+        });
+        expect(second.already_adopted).toBe(true);
+        expect(adoptProcessTracks(once, process.id, second.tracks, second.assignments)).toBe(once);
+    });
+
+    it("a non-moving outcome is kept — it references nothing to be missing", () => {
+        const process = processOf(
+            TENANT_STAGES.filter((s) => s.key !== "closed" && s.key !== "closed_withdrawn"),
+        );
+        const result = evaluateProcessTrackAdoption({ process, template: ENROLLMENT_TEMPLATE });
+        const noAction = result.tracks.split_rules[0]!.per_subject_outcomes.find(
+            (o) => o.outcome_key === "no_action",
+        );
+        expect(noAction?.target_stage_key).toBeNull();
+    });
+
+    it("refuses when NOTHING could cross into the other track", () => {
+        // Fitting has a floor. A split whose every moving destination is absent would be stored as
+        // a rule that can never move anything, which is worse than refusing.
+        const process = processOf(
+            TENANT_STAGES.filter((s) => !["waitlist", "enrolling", "enrolled", "closed_withdrawn", "closed"].includes(s.key)),
+        );
+        const result = evaluateProcessTrackAdoption({ process, template: ENROLLMENT_TEMPLATE });
+
+        expect(result.ok).toBe(false);
+        expect(result.blockers.map((b) => b.code)).toContain(ADOPT_SPLIT_RULE_UNREACHABLE);
+    });
+
+    it("a target stage that EXISTS but sits in the wrong track is still refused", () => {
+        /*
+         * A CONTRADICTION, not an absence. Fitting drops what a process cannot express; it must
+         * never quietly resolve a disagreement about where an existing stage belongs.
+         *
+         * Driven by a grain-assigning descriptor, because a descriptor that names the stage
+         * explicitly would settle the question by fiat and there would be nothing to contradict.
+         */
+        const grainDriven: ProcessTrackAdoptionTemplate = {
+            process_key: "enrollment",
+            tracks: {
+                version: 1,
+                tracks: [
+                    { key: "a_track", label: "A", subject: "case", sort_order: 0 },
+                    { key: "b_track", label: "B", subject: "child", sort_order: 1 },
+                ],
+                split_rules: [
+                    {
+                        version: 1,
+                        from_track_key: "a_track",
+                        from_stage_key: "decision",
+                        into_track_key: "b_track",
+                        // `tour` is family-grain, so grain puts it in a_track — but the rule claims
+                        // it as a destination inside b_track.
+                        per_subject_outcomes: [
+                            { outcome_key: "to_tour", label: "Back to Tour", target_stage_key: "tour" },
+                        ],
+                    },
+                ],
+            },
+            track_key_by_stage_key: {},
+            track_key_by_grain: { family: "a_track", child: "b_track" },
+        };
+
+        const result = evaluateProcessTrackAdoption({
+            process: processOf(TENANT_STAGES),
+            template: grainDriven,
+        });
+
+        expect(result.ok).toBe(false);
+        expect(result.blockers.map((b) => b.code)).toContain(ADOPT_SPLIT_TARGET_WRONG_TRACK);
     });
 
     it("refuses when the canonical split point is not a stage this process has", () => {

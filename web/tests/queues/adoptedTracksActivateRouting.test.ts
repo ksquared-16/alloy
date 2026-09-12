@@ -75,7 +75,7 @@ function adopt(config: LifecycleBuilderV1): LifecycleBuilderV1 {
     const process = config.processes[0]!;
     const evaluation = evaluateProcessTrackAdoption({ process, template: TEMPLATE });
     expect(evaluation.ok, evaluation.blockers.map((b) => b.message).join(" ")).toBe(true);
-    return adoptProcessTracks(config, process.id, TEMPLATE, evaluation.assignments);
+    return adoptProcessTracks(config, process.id, evaluation.tracks, evaluation.assignments);
 }
 
 /**

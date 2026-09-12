@@ -22,7 +22,11 @@
  * all-or-nothing: a partially adopted process is one whose routing has already flipped.
  */
 
-import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
+import type {
+    ProcessSplitOutcomeV1,
+    ProcessSplitRuleV1,
+    ProcessTracksV1,
+} from "@/lib/businessProcesses/processConfigTypes";
 import type {
     LifecycleBuilderProcessRecord,
     LifecycleBuilderStageRecord,
@@ -38,7 +42,7 @@ export const ADOPT_MEMBERSHIP_GRAIN_CONFLICT = "membership_grain_conflict" as co
 export const ADOPT_MEMBERSHIP_STAGE_MISMATCH = "membership_stage_mismatch" as const;
 export const ADOPT_SPLIT_TRACK_UNKNOWN = "split_rule_track_unknown" as const;
 export const ADOPT_SPLIT_STAGE_UNKNOWN = "split_rule_stage_unknown" as const;
-export const ADOPT_SPLIT_TARGET_UNKNOWN = "split_outcome_target_unknown" as const;
+export const ADOPT_SPLIT_RULE_UNREACHABLE = "split_rule_unreachable" as const;
 export const ADOPT_SPLIT_TARGET_WRONG_TRACK = "split_outcome_target_wrong_track" as const;
 export const ADOPT_INSTANCE_STAGE_UNCONFIGURED = "instance_stage_unconfigured" as const;
 export const ADOPT_TEMPLATE_TRACKS_INVALID = "template_tracks_invalid" as const;
@@ -50,7 +54,7 @@ export type TrackAdoptionBlockerCode =
     | typeof ADOPT_MEMBERSHIP_STAGE_MISMATCH
     | typeof ADOPT_SPLIT_TRACK_UNKNOWN
     | typeof ADOPT_SPLIT_STAGE_UNKNOWN
-    | typeof ADOPT_SPLIT_TARGET_UNKNOWN
+    | typeof ADOPT_SPLIT_RULE_UNREACHABLE
     | typeof ADOPT_SPLIT_TARGET_WRONG_TRACK
     | typeof ADOPT_INSTANCE_STAGE_UNCONFIGURED
     | typeof ADOPT_TEMPLATE_TRACKS_INVALID;
@@ -83,6 +87,13 @@ export type TrackAdoptionPreviewTrack = {
     stage_labels: string[];
 };
 
+export type TrackAdoptionOmittedOutcome = {
+    from_stage_key: string;
+    outcome_key: string;
+    label: string;
+    missing_stage_key: string;
+};
+
 export type TrackAdoptionPreview = {
     before: {
         tracks_configured: boolean;
@@ -102,6 +113,14 @@ export type TrackAdoptionPreview = {
             outcome_labels: string[];
         }[];
     };
+    /**
+     * Canonical split outcomes this process cannot express, and why.
+     *
+     * Reported rather than silently dropped. An operator is entitled to know that the model they
+     * adopted is the canonical one MINUS these, so they can add the stage later if they want the
+     * outcome back.
+     */
+    omitted_outcomes: TrackAdoptionOmittedOutcome[];
     /** One row per stage whose lane routing the adoption changes. */
     stage_routing_changes: {
         stage_key: string;
@@ -116,6 +135,17 @@ export type TrackAdoptionPreview = {
 
 export type TrackAdoptionEvaluation = {
     ok: boolean;
+    /**
+     * The track model to persist: canonical, FITTED to this process's stage inventory.
+     *
+     * Not the raw template. The template's split rule names terminal outcomes like
+     * `closed_withdrawn`, and the platform explicitly does not require a process to have such a
+     * stage — a family case ends through `opportunities.status_key` and a child's participation
+     * through `process_instances.state`, so representing either as a stage is a tenant's choice.
+     * Persisting an outcome that points at a stage the process does not have would store a split
+     * the runtime could never execute.
+     */
+    tracks: ProcessTracksV1;
     /** True when the process already holds exactly this track model and every stage assignment. */
     already_adopted: boolean;
     blockers: TrackAdoptionBlocker[];
@@ -245,6 +275,9 @@ export function evaluateProcessTrackAdoption(params: EvaluateParams): TrackAdopt
 
     const trackKeyByStageKey = new Map(assignments.map((a) => [a.stage_key, a.track_key]));
 
+    const omittedOutcomes: TrackAdoptionOmittedOutcome[] = [];
+    const fittedRules: ProcessSplitRuleV1[] = [];
+
     for (const rule of tracks.split_rules) {
         if (!trackByKey.has(rule.from_track_key)) {
             blockers.push({
@@ -261,34 +294,73 @@ export function evaluateProcessTrackAdoption(params: EvaluateParams): TrackAdopt
             });
         }
         if (!stageByKey.has(rule.from_stage_key)) {
+            // The split POINT is different from a split DESTINATION: without it there is nowhere
+            // for the crossing to happen at all, and no amount of fitting can supply one.
             blockers.push({
                 code: ADOPT_SPLIT_STAGE_UNKNOWN,
                 stage_key: rule.from_stage_key,
                 message: `The canonical split happens at stage "${rule.from_stage_key}", which this process does not have. Add or rename that stage before adopting tracks, or the split point has nowhere to live.`,
             });
         }
+
+        const keptOutcomes: ProcessSplitOutcomeV1[] = [];
         for (const outcome of rule.per_subject_outcomes) {
             // A null target is "no movement" and is deliberately not a reference.
-            if (outcome.target_stage_key == null) continue;
+            if (outcome.target_stage_key == null) {
+                keptOutcomes.push(outcome);
+                continue;
+            }
             if (!allStageKeys.has(outcome.target_stage_key)) {
-                blockers.push({
-                    code: ADOPT_SPLIT_TARGET_UNKNOWN,
-                    stage_key: outcome.target_stage_key,
-                    message: `The split outcome "${outcome.label}" sends subjects to stage "${outcome.target_stage_key}", which this process does not have.`,
+                /*
+                 * FITTED, NOT REFUSED. The canonical model names terminal outcomes such as
+                 * `closed_withdrawn`, and the platform explicitly does NOT require a process to
+                 * have such a stage — a family case ends through `opportunities.status_key`, a
+                 * child's participation through `process_instances.state`, and representing either
+                 * as a stage is the tenant's choice. Refusing here would have made adoption
+                 * impossible for precisely the processes it exists to upgrade.
+                 */
+                omittedOutcomes.push({
+                    from_stage_key: rule.from_stage_key,
+                    outcome_key: outcome.outcome_key,
+                    label: outcome.label,
+                    missing_stage_key: outcome.target_stage_key,
                 });
                 continue;
             }
             const targetTrack = trackKeyByStageKey.get(outcome.target_stage_key);
             if (targetTrack && targetTrack !== rule.into_track_key) {
+                // A CONTRADICTION, not an absence: the stage exists and the grain puts it
+                // somewhere the split says it is not. Fitting cannot resolve a disagreement.
                 blockers.push({
                     code: ADOPT_SPLIT_TARGET_WRONG_TRACK,
                     stage_key: outcome.target_stage_key,
                     track_key: targetTrack,
                     message: `The split outcome "${outcome.label}" moves into track "${rule.into_track_key}" but targets stage "${outcome.target_stage_key}", which this process's grain puts in track "${targetTrack}".`,
                 });
+                continue;
             }
+            keptOutcomes.push(outcome);
         }
+
+        // A rule whose every MOVING outcome was omitted can never cross a subject into the other
+        // track, so adopting it would store a split that does nothing. That is worth refusing.
+        if (!keptOutcomes.some((o) => o.target_stage_key != null)) {
+            blockers.push({
+                code: ADOPT_SPLIT_RULE_UNREACHABLE,
+                stage_key: rule.from_stage_key,
+                track_key: rule.into_track_key,
+                message: `None of the canonical outcomes at stage "${rule.from_stage_key}" can reach a stage this process has, so nothing would ever move into "${rule.into_track_key}". Add at least one of its destination stages before adopting tracks.`,
+            });
+        }
+
+        fittedRules.push({ ...rule, per_subject_outcomes: keptOutcomes });
     }
+
+    const fittedTracks: ProcessTracksV1 = {
+        version: 1,
+        tracks: tracks.tracks.map((t) => ({ ...t })),
+        split_rules: fittedRules,
+    };
 
     /* ---------------------------------------------------------------- live instance safety */
 
@@ -329,7 +401,7 @@ export function evaluateProcessTrackAdoption(params: EvaluateParams): TrackAdopt
             track_count: tracks.tracks.length,
             routing: "builder",
             tracks: previewTracks,
-            split_points: tracks.split_rules.map((rule) => ({
+            split_points: fittedTracks.split_rules.map((rule) => ({
                 from_track_key: rule.from_track_key,
                 from_stage_key: rule.from_stage_key,
                 from_stage_label: stageByKey.get(rule.from_stage_key)?.label ?? rule.from_stage_key,
@@ -337,6 +409,7 @@ export function evaluateProcessTrackAdoption(params: EvaluateParams): TrackAdopt
                 outcome_labels: rule.per_subject_outcomes.map((o) => o.label),
             })),
         },
+        omitted_outcomes: omittedOutcomes,
         stage_routing_changes: beforeConfigured ? [] : (
             assignments.map((a) => ({
                 stage_key: a.stage_key,
@@ -351,9 +424,16 @@ export function evaluateProcessTrackAdoption(params: EvaluateParams): TrackAdopt
     };
 
     const alreadyAdopted =
-        tracksAreIdentical(process.tracks_v1, tracks) && assignments.every((a) => a.unchanged);
+        tracksAreIdentical(process.tracks_v1, fittedTracks) && assignments.every((a) => a.unchanged);
 
-    return { ok: blockers.length === 0, already_adopted: alreadyAdopted, blockers, assignments, preview };
+    return {
+        ok: blockers.length === 0,
+        tracks: fittedTracks,
+        already_adopted: alreadyAdopted,
+        blockers,
+        assignments,
+        preview,
+    };
 }
 
 /**
@@ -367,13 +447,16 @@ export function evaluateProcessTrackAdoption(params: EvaluateParams): TrackAdopt
  * Idempotent by identity: adopting a model the process already holds returns the SAME config object,
  * so a repeated apply produces no diff, no new revision content and no duplicated tracks.
  *
+ * Takes the FITTED model from {@link evaluateProcessTrackAdoption}, never the raw template: the
+ * evaluator is what knows which canonical outcomes this process's stage inventory can express.
+ *
  * This does NOT validate. Callers run {@link evaluateProcessTrackAdoption} first and refuse on
  * blockers; separating them is what lets the preview be computed without any possibility of a write.
  */
 export function adoptProcessTracks(
     config: LifecycleBuilderV1,
     processId: string,
-    template: ProcessTrackAdoptionTemplate,
+    tracks: ProcessTracksV1,
     assignments: readonly TrackAdoptionAssignment[],
 ): LifecycleBuilderV1 {
     const process = config.processes.find((p) => p.id === processId);
@@ -381,7 +464,7 @@ export function adoptProcessTracks(
 
     const trackKeyByStageId = new Map(assignments.map((a) => [a.stage_id, a.track_key]));
     const nothingToDo =
-        tracksAreIdentical(process.tracks_v1, template.tracks) &&
+        tracksAreIdentical(process.tracks_v1, tracks) &&
         process.stages.every((s) => !trackKeyByStageId.has(s.id) || s.track_key === trackKeyByStageId.get(s.id));
     if (nothingToDo) return config;
 
@@ -391,7 +474,7 @@ export function adoptProcessTracks(
             if (p.id !== processId) return p;
             return {
                 ...p,
-                tracks_v1: structuredClone(template.tracks),
+                tracks_v1: structuredClone(tracks),
                 stages: p.stages.map((s) => {
                     const trackKey = trackKeyByStageId.get(s.id);
                     return trackKey ? { ...s, track_key: trackKey } : s;
