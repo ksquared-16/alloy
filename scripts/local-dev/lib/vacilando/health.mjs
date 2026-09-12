@@ -44,6 +44,8 @@ export const CHECKS = Object.freeze([
   "lanes.consistency",
   "lane.bootstrap",
   "lane.freshness",
+  "worktrees.lifecycle",
+  "slots.ownership",
   "ports.registry",
   "worktrees.registry",
   "toolkit.retention",
@@ -873,6 +875,84 @@ export function checkLaneFreshness({ inventory = null }) {
   });
 }
 
+/**
+ * How much of the worktree fleet is still earning its place on disk?
+ *
+ * Reports the DERIVED lifecycle classification, which is a function of the
+ * existing retirement evaluation — so this and an actual reclamation are reading
+ * one truth, and a preview cannot drift from what a removal would do.
+ *
+ * SEVERITY IS ABOUT RISK, NOT TIDINESS. Reclaimable worktrees are `healthy`:
+ * they are the system working, correctly identified and waiting for the steward.
+ * Accumulation only becomes a `watch` when there is a lot of it, because a
+ * number nobody can act on is not a fault. `BLOCKED_UNDURABLE` is the one that
+ * earns a `problem` — commits that exist in exactly one place, on a laptop,
+ * which is a real risk of losing work rather than a housekeeping preference.
+ */
+export function checkWorktreeLifecycle({ inventory = null }) {
+  if (!inventory) return incompleteFinding("worktrees.lifecycle", "no worktree inventory available");
+  const rows = Array.isArray(inventory.rows) ? inventory.rows : [];
+  const undurable = rows.filter((r) => r.state === "BLOCKED_UNDURABLE");
+  const reclaimable = rows.filter((r) => r.reclaimable);
+  const sev = undurable.length ? "problem" : (reclaimable.length >= 10 ? "watch" : "healthy");
+  return finding({
+    check: "worktrees.lifecycle",
+    severity: sev,
+    owner_resource: "vacilando.worktree",
+    measurements: {
+      worktrees: rows.length,
+      ...inventory.by_state,
+      reclaimable: reclaimable.length,
+      reclaimable_disk_mb: inventory.reclaimable_disk_mb ?? null,
+      reclaimable_disk_unknown: inventory.reclaimable_disk_unknown ?? null,
+    },
+    evidence: [
+      ...undurable.map((r) => `${r.name}: ${r.branch || "?"} exists only here — ${r.reason}`),
+      ...reclaimable.slice(0, 8).map((r) => `${r.name}: ${r.state}${r.disk_mb != null ? ` (${r.disk_mb} MB)` : ""}`),
+    ],
+    explanation: undurable.length
+      ? "Some worktrees hold commits that exist nowhere else. They are correctly refused for removal, and the work is one disk away from gone."
+      : reclaimable.length
+        ? `${reclaimable.length} worktree(s) have passed every safety gate and are outside their retention window.`
+        : "No worktree is currently reclaimable.",
+    suggested_action: undurable.length
+      ? "Push or land the unique branches; until then these checkouts are the only copy."
+      : null,
+  });
+}
+
+/**
+ * ONE MANAGED SLOT, AT MOST ONE CURRENT LANE OWNER.
+ *
+ * A duplicate claim is always a `problem`. It is not a preference: the symptom
+ * is a lane that cannot resolve its own bootstrap, reported as a fact about the
+ * lane rather than about the duplicate, which is why slot 8 went unnoticed until
+ * a freshness sweep tripped over it.
+ */
+export function checkSlotOwnership({ conflicts = null }) {
+  if (!conflicts) return incompleteFinding("slots.ownership", "slot ownership not measured");
+  const list = Array.isArray(conflicts.conflicts) ? conflicts.conflicts : [];
+  return finding({
+    check: "slots.ownership",
+    severity: list.length ? "problem" : "healthy",
+    owner_resource: "vacilando.development_slot",
+    measurements: {
+      slots_claimed: conflicts.slots_claimed ?? null,
+      conflicts: list.length,
+      repairable: list.filter((c) => c.repairable).length,
+    },
+    evidence: list.map((c) =>
+      `slot ${c.slot}: claimed by ${c.claimants.map((x) => x.name || x.lane_id).join(" and ")}`
+      + (c.registry_holder ? ` — the registry gives it to ${c.registry_holder}` : " — the registry gives it to nobody")),
+    explanation: list.length
+      ? "A managed Development Slot has more than one lane record claiming it. The registry is the authority; the other claims are stale caches."
+      : "Every managed slot has at most one lane owner.",
+    suggested_action: list.some((c) => c.repairable)
+      ? "reconcileLaneSlotBinding can clear the stale claim; the slot itself is not reassigned."
+      : (list.length ? "The registry backs none of the claims — this needs an operator decision, not a repair." : null),
+  });
+}
+
 export function checkPortsRegistry({ ports = [] }) {
   // S7 verdicts. `foreign_owner` is a problem because the registry is wrong
   // about WHO owns a live port; `ambiguous` is a watch because we refused to
@@ -1158,6 +1238,8 @@ export function composeReport({
   safe("subprocess.ancestry", () => checkSubprocessAncestry({ attribution: probeResults.attribution }));
   safe("lane.bootstrap", () => checkLaneBootstrap({ inventory: probeResults.laneBootstrap }));
   safe("lane.freshness", () => checkLaneFreshness({ inventory: probeResults.laneFreshness }));
+  safe("worktrees.lifecycle", () => checkWorktreeLifecycle({ inventory: probeResults.worktreeLifecycle }));
+  safe("slots.ownership", () => checkSlotOwnership({ conflicts: probeResults.slotOwnership }));
   safe("lanes.consistency", () => checkLanesConsistency({ lanes: probeResults.lanes || [], seats: probeResults.seats || [] }));
   safe("ports.registry", () => checkPortsRegistry({ ports: probeResults.ports || [] }));
   safe("worktrees.registry", () => checkWorktreesRegistry({ ...(probeResults.worktrees || {}), states: probeResults.reconciliation || null }));

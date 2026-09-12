@@ -128,6 +128,54 @@ const repositories = await safely(async () => {
 
 // ── S1 is the canonical attribution source. Health never re-derives ancestry. ─
 const processes = psText ? parseProcessTable(psText) : [];
+
+/*
+ * Worktree lifecycle and slot ownership, both READS.
+ *
+ * The evaluations come from the EXISTING retirement observer, and disk from the
+ * EXISTING cached sizes — `peek`, never `collect`, so a health report can never
+ * become the reason a fleet-wide `du` runs. An absent size reads as unknown.
+ */
+const worktreeLifecycle = await safely(async () => {
+  const { observeReconciliation } = await import("./lib/vacilando/reconciliation-observe.mjs");
+  const { observeRetirementCandidates } = await import("./lib/vacilando/worktree-retirement-observe.mjs");
+  const { inventoryWorktreeLifecycle } = await import("./lib/vacilando/worktree-lifecycle.mjs");
+  const { peekWorktreeDiskCache } = await import("./lib/vacilando/resources.mjs");
+  const { execFileSync } = await import("node:child_process");
+  const wtRoot = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const worktreeParent = join(homedir(), "Code", "alloy-worktrees");
+  // The same inputs `vac worktree-retire` assembles, so the health projection and
+  // the retirement preview cannot disagree about which worktrees exist.
+  let gitWorktrees = null;
+  try {
+    gitWorktrees = execFileSync("git", ["worktree", "list", "--porcelain"], {
+      cwd: join(homedir(), "Alloy"), encoding: "utf8", timeout: 15000, stdio: ["ignore", "pipe", "ignore"],
+    }).split("\n").filter((l) => l.startsWith("worktree ")).map((l) => l.replace("worktree ", ""));
+  } catch { /* absent git worktree list is reported as an incomplete check */ }
+  const s7 = observeReconciliation({ root: wtRoot, processes, worktreeParent, gitWorktrees });
+  const evaluations = observeRetirementCandidates({
+    root: wtRoot, s7Worktrees: s7?.worktrees || [], processes, worktreeParent,
+    // Same as `vac worktree-retire`. Without it `not_self_retirement` is
+    // UNMEASURED, and an unmeasured gate blocks — so every worktree would read
+    // as blocked for a reason that is an input gap rather than a fact about it.
+    requestingWorktree: process.env.ALLOY_WORKTREE || process.cwd(),
+  });
+  return inventoryWorktreeLifecycle({ evaluations, diskSizes: peekWorktreeDiskCache().sizes || {} });
+}, null);
+
+const slotOwnership = await safely(async () => {
+  const { detectSlotOwnershipConflicts } = await import("./lib/vacilando/worktree-lifecycle.mjs");
+  // The REGISTRY is the slot authority; a lane's binding.slot is its cache.
+  const { listRegisteredWorktrees } = await import("./lib/vacilando/worktree-registration.mjs");
+  const registrySlots = {};
+  const regRoot = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  for (const r of listRegisteredWorktrees({ root: regRoot }) || []) {
+    const slot = Number(r?.slot);
+    if (Number.isInteger(slot) && r?.name) registrySlots[slot] = r.name;
+  }
+  return detectSlotOwnershipConflicts({ lanes: lanesRaw, registrySlots });
+}, null);
+
 const attribution = psText
   ? attributionReport({
     seats, processes, lanes: lanesRaw, repositories, runFor,
@@ -366,7 +414,7 @@ const report = composeReport({
   hw, thresholds, only, startedAt,
   endedAt: new Date().toISOString(),
   probeResults: {
-    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness,
+    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, worktreeLifecycle, slotOwnership,
     run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, configured_max: configuredMax,
     validation_routing: validationRouting, validation_bypasses: validationBypasses,

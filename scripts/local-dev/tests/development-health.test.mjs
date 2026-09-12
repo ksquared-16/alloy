@@ -92,6 +92,21 @@ const HEALTHY_PROBES = {
     stale: 0,
     rows: [{ lane_id: "lane_a", name: "A", state: "CURRENT", behind: 0 }],
   },
+  // Third time this fixture has had to grow, and for the same reason each time:
+  // a composition that claims every check passes has to supply every check, or
+  // the newest one reports INCOMPLETE — right for a check with no data, and a
+  // `watch`.
+  worktreeLifecycle: {
+    policy: { park_hours: 24, promotion_park_hours: 2 },
+    worktrees: 1,
+    by_state: { ACTIVE: 1 },
+    reclaimable: 0,
+    reclaimable_disk_mb: 0,
+    reclaimable_disk_unknown: 0,
+    blocked: 0,
+    rows: [{ name: "wt-a", state: "ACTIVE", reclaimable: false, disk_mb: 0 }],
+  },
+  slotOwnership: { slots_claimed: 1, conflicts: [] },
   runs: [{ run_id: "r1", state: "EXECUTING", state_reason: "instruction_delivered", terminal: false, age_ms: 1000 }],
   run_bounds: { instruction_delivered: 3600000 },
   attribution: { seat_count: 1, attributed_count: 1, records: [{ pid: 2, attribution_status: "ancestry", execution_location: "inside_worktree" }] },
