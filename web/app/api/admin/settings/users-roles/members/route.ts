@@ -40,6 +40,7 @@ export type UsersRolesMemberRow = {
     primary_role: string;
     department_scope: MemberScopeProjection["department_scope"];
     site_scope: MemberScopeProjection["site_scope"];
+    attendance_capture_scope: MemberScopeProjection["attendance_capture_scope"];
     has_access_profile: boolean;
     effective_department_scope: MemberScopeProjection["effective_department_scope"];
     effective_site_scope: MemberScopeProjection["effective_site_scope"];
@@ -77,7 +78,10 @@ export async function GET() {
     // The row itself, not a normalized copy of it — `projectMemberScope` distinguishes an absent
     // row from a present one, and a `Map` that only ever holds normalized values cannot express
     // "absent" to it.
-    const profileByUser = new Map<string, { department_scope?: unknown; site_scope?: unknown }>();
+    const profileByUser = new Map<
+        string,
+        { department_scope?: unknown; site_scope?: unknown; attendance_capture_scope?: unknown }
+    >();
     const deptByUser = new Map<string, string[]>();
     const siteByUser = new Map<string, string[]>();
 
@@ -96,16 +100,22 @@ export async function GET() {
      */
     const { data: profiles, error: profErr } = await supabase
         .from("user_access_profiles")
-        .select("user_id, department_scope, site_scope")
+        .select("user_id, department_scope, site_scope, attendance_capture_scope")
         .eq("org_id", orgId);
     if (profErr) {
         return NextResponse.json({ error: profErr.message }, { status: 500 });
     }
     for (const p of profiles ?? []) {
-        const row = p as { user_id: string; department_scope?: string | null; site_scope?: string | null };
+        const row = p as {
+            user_id: string;
+            department_scope?: string | null;
+            site_scope?: string | null;
+            attendance_capture_scope?: string | null;
+        };
         profileByUser.set(row.user_id, {
             department_scope: row.department_scope,
             site_scope: row.site_scope,
+            attendance_capture_scope: row.attendance_capture_scope,
         });
     }
 
@@ -200,6 +210,7 @@ export async function GET() {
             primary_role: primary,
             department_scope: scope.department_scope,
             site_scope: scope.site_scope,
+            attendance_capture_scope: scope.attendance_capture_scope,
             has_access_profile: scope.has_access_profile,
             effective_department_scope: scope.effective_department_scope,
             effective_site_scope: scope.effective_site_scope,

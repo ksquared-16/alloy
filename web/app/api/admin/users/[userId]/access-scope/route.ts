@@ -6,6 +6,7 @@ import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
 import {
     resolveAdminAccessDimensionsForOrgMember,
+    type AttendanceCaptureScopeMode,
     type DepartmentScopeMode,
     type SiteScopeMode,
 } from "@/lib/admin/resolveAdminAccessCore";
@@ -21,6 +22,19 @@ function normalizeSiteScope(raw: unknown): SiteScopeMode | null {
     const s = typeof raw === "string" ? raw.trim().toLowerCase() : "";
     if (s === "all" || s === "") return "all";
     if (s === "restricted") return "restricted";
+    return null;
+}
+
+/**
+ * Attendance capture scope. Absent means "unchanged" rather than "site": this
+ * field was writable by nothing for its whole life, so a caller that predates it
+ * must not silently narrow a teacher who was set to `assigned` out of band.
+ */
+function normalizeCaptureScope(raw: unknown): AttendanceCaptureScopeMode | null | "unchanged" {
+    if (raw === undefined || raw === null) return "unchanged";
+    const s = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+    if (s === "site") return "site";
+    if (s === "assigned") return "assigned";
     return null;
 }
 
@@ -97,6 +111,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
         return NextResponse.json({ error: "department_scope and site_scope must be all or restricted" }, { status: 400 });
     }
 
+    const attendance_capture_scope = normalizeCaptureScope(body.attendance_capture_scope);
+    if (attendance_capture_scope == null) {
+        return NextResponse.json(
+            { error: "attendance_capture_scope must be site or assigned" },
+            { status: 400 }
+        );
+    }
+
     const department_ids = uniqStrings(body.department_ids);
     const site_location_ids = uniqStrings(body.site_location_ids);
 
@@ -171,6 +193,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
         p_actor_user_id: audit.actorUserId,
         p_origin: audit.origin,
         p_correlation_id: audit.correlationId,
+        // Capture scope is ACCESS: it decides whose attendance a person may
+        // record, so it travels through the audited owner with the rest rather
+        // than being written beside it. `null` means unchanged — the owner keeps
+        // the stored value, and a caller written before this field existed cannot
+        // narrow a teacher out of band.
+        p_attendance_capture_scope:
+            attendance_capture_scope === "unchanged" ? null : attendance_capture_scope,
     });
     if (scopeErr) return NextResponse.json({ error: scopeErr.message }, { status: 500 });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import { SETTINGS_PAGE_SHELL_CLASS } from "@/lib/adminV2/settingsPageLayout";
@@ -92,10 +93,11 @@ export default function LocationsHierarchySettingsClient() {
 
     const selectedSiteRoomRows = useMemo(() => {
         if (!selectedSiteId) return [];
-        return rows.filter(
-            (r) =>
-                String(r.location_type ?? "").trim() === "unit" &&
-                r.parent_location_id === selectedSiteId
+        // By ancestry: a group nested inside a physical space is still a room OF
+        // this site, and the old direct-parent test hid it.
+        return rowsBelongingToSite(
+            rows.filter((r) => String(r.location_type ?? "").trim() === "unit"),
+            selectedSiteId
         );
     }, [rows, selectedSiteId]);
 

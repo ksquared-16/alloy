@@ -15,6 +15,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { placeableRooms, resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
 import {
     buildScheduleExpectations,
     type ExpectationWarning,
@@ -201,14 +202,30 @@ async function loadCandidateRoomConfigs(
     orgId: string,
     siteLocationId: string,
 ): Promise<CandidateRoomConfig[]> {
-    const { data, error } = await supabase
-        .from("locations")
-        .select("id, label, status_key, metadata")
-        .eq("org_id", orgId)
-        .eq("parent_location_id", siteLocationId)
-        .eq("location_type", "unit");
-    if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
-    return ((data ?? []) as { id: string; label: string | null; status_key: string | null; metadata: Record<string, unknown> | null }[]).map(
+    // Two corrections in one read, both from the canonical Room provider.
+    //
+    // ANCESTRY: `parent_location_id = site` dropped every group nested inside a
+    // physical space, so a campus with rooms-within-rooms offered a placement list
+    // missing its actual classrooms.
+    //
+    // PLACEABILITY: placement is committed group membership, so only an
+    // `operational_group` may be a candidate. A physical space is the licensed
+    // shell, not a cohort, and a shared space is somewhere a child may BE without
+    // that changing which group they belong to — offering either as a placement
+    // target is how a playground becomes a roster owner. Legacy rooms are
+    // unaffected: a unit with no stored role reads as `operational_group`.
+    let rooms;
+    try {
+        rooms = placeableRooms(
+            await resolveRoomsForLocation(supabase, orgId, siteLocationId, { includeInactive: true })
+        );
+    } catch (err) {
+        throw new OperationalEnrollmentServiceError(
+            "db_error",
+            err instanceof Error ? err.message : "failed to resolve rooms for site"
+        );
+    }
+    return rooms.map(
         (r) => {
             const meta = r.metadata ?? {};
             const unit = typeof meta.age_range_unit === "string" ? meta.age_range_unit : null;
@@ -216,9 +233,9 @@ async function loadCandidateRoomConfigs(
             const to = ageBoundToMonths(numOrNull(meta.age_range_to), unit);
             const ageBand: RoomAgeBandMonths | null = from == null && to == null ? null : { minMonths: from, maxMonths: to };
             // Fail-open: a room is active unless an explicit non-active status says otherwise.
-            const status = (r.status_key ?? "").trim().toLowerCase();
+            const status = (r.statusKey ?? "").trim().toLowerCase();
             const active = status === "" || status === "active" || status === "open";
-            return { id: r.id, name: r.label != null ? String(r.label).trim() || null : null, active, ageBand };
+            return { id: r.id, name: r.name != null ? String(r.name).trim() || null : null, active, ageBand };
         },
     );
 }
