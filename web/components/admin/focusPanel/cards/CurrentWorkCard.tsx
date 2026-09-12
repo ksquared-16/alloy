@@ -759,6 +759,23 @@ function SummaryBody({
     // buttons — a dominant command (or outcome when outcome-led), configured helpful actions, and
     // Record outcome as a subordinate button when a command leads.
     const { dominant, helpful, subordinateOutcome, dominantIsOutcome } = resolveCurrentWorkActionButtons(surface);
+
+    /*
+     * THE STAGE'S OTHER OPEN WORK, ON THE CARD THE OPERATOR IS LOOKING AT.
+     *
+     * `Record outcome` acts on the PRIMARY work — correctly, and deliberately so. The consequence
+     * was that a second open work item had no way to be resolved from here at all: on staging an
+     * offer work was started, was live in the runtime, and its outcomes (Spot offered, No
+     * response, Candidate paused) were reachable from nowhere, because the only surface that listed
+     * secondary work was the expanded workspace.
+     *
+     * Same derivation as that section, so the two cannot disagree about what counts as secondary,
+     * and the same handler, so selecting a row opens its own work and outcome context rather than
+     * needing a second navigation path.
+     */
+    const secondaryWork = (surface.checklist ?? []).filter(
+        (item) => item.kind === "stage_work" && item.workRole === "secondary" && item.status !== "complete",
+    );
     const card = buildWhatsNextCardPresentation({
         surface,
         context,
@@ -855,6 +872,25 @@ function SummaryBody({
                             >
                                 Record outcome
                             </button>
+                        :   null}
+                        {secondaryWork.length > 0 ?
+                            <div data-work-section="also-in-progress" data-work-secondary-summary="true">
+                                <p className="alloy-os-currentwork__context-label">Also in progress</p>
+                                <ul className="alloy-os-currentwork__recent-activity-list">
+                                    {secondaryWork.map((item) => (
+                                        <li key={item.key}>
+                                            <button
+                                                type="button"
+                                                className="alloy-os-currentwork__record-outcome-link"
+                                                data-work-secondary-item={item.key}
+                                                onClick={() => onChecklistItem(item)}
+                                            >
+                                                {item.label}
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
                         :   null}
                     </div>
                 :   null}
