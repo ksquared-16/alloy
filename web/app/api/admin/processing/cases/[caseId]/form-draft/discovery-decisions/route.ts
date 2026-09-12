@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { dbLoadDiscoveryDecisions, dbStoreDiscoveryDecisions } from "@/lib/pos/discovery/discoveryDecisionsDb";
 import { reconcileDiscovery, type DiscoveryDecisionRecord } from "@/lib/pos/discovery/reconciliation";
@@ -87,6 +88,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cas
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireProcessingCapability(ctx, PROCESSING_OPERATE);
+    if (denied) return denied;
     const { caseId: raw } = await params;
     const caseId = parseUuidParam(raw, "caseId");
     if (caseId instanceof NextResponse) return caseId;
