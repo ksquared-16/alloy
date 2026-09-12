@@ -22,10 +22,12 @@
 -- Additive and idempotent. The narrow form is dropped in the same statement
 -- block so PostgREST never sees two candidates it cannot disambiguate.
 --
--- Renumbered 20260912000000 -> 20260912020000 during promotion reconciliation.
--- W-17 merged 20260912010000 into staging while this was unmerged, and `db push`
--- refuses a migration that sorts at or below the staging head. Only the version
--- changed; the statements are untouched.
+-- Renumbered twice during promotion reconciliation, as staging kept advancing
+-- while this stayed unmerged: 20260912000000 -> 20260912020000 (W-17 landed
+-- 20260912010000), then -> 20260912040000 (the Forms capability slice landed
+-- 20260912020000 and 20260912030000, so the second number became an outright
+-- collision with a different file). `db push` refuses a migration sorting at or
+-- below the staging head. Only the version changed; the statements are untouched.
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.replace_member_access_scope_audited(

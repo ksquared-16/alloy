@@ -7,6 +7,7 @@ import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdmi
 import { resolveOutcomeConfigLabelCatalog } from "@/lib/forms/resolveOutcomeConfigLabelCatalog";
 import { resolveOutcomeConfigPickerOptions } from "@/lib/forms/resolveOutcomeConfigPickerOptions";
 import { resolveShareByLocationSitePickerOptions } from "@/lib/forms/shareByLocationPresentation";
+import { FORMS_AUTHOR, hasFormsCapability } from "@/lib/access/formsAuthority";
 
 /** GET — display labels + optional routing pickers for outcome editor (IC-1b / IC-1c). */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
@@ -48,8 +49,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             formMetadata: formRow.metadata ?? {},
             links: linkRows,
         });
+        /*
+         * STILL SHAPING, NOT A GATE. This branch adds outcome-configuration picker options — design
+         * material — so the authority that owns it is `forms.author`. It was `ctx.role === "admin"`,
+         * and the repair swaps WHICH question is asked without changing WHAT happens when the answer
+         * is no: the request still succeeds and still returns the catalog, just without the pickers.
+         * Turning it into a 403 would have been a silent regression wearing a cleanup's clothes.
+         */
         const pickerOptions =
-            includePickers && ctx.role === "admin" ?
+            includePickers && hasFormsCapability(ctx, FORMS_AUTHOR) ?
                 await resolveOutcomeConfigPickerOptions(supabase, ctx.orgId)
             :   null;
         const shareByLocationSites =

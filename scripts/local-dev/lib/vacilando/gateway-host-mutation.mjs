@@ -21,7 +21,9 @@
 import {
   activeRequestForRunResource,
   ensureResourceRequest,
+  processOwnerHealth,
   readResourceRequestStore,
+  reclaimDeadProcessOwners,
   releaseResourceRequest,
 } from "./execution-resource.mjs";
 import { realpathSync } from "node:fs";
@@ -42,17 +44,33 @@ export const GATEWAY_HOST_MUTATION_RESOURCE = "gateway_host_mutation";
  * rather than inferred from a failure.
  */
 export function gatewayHostMutationHolder(root = runtimeRoot()) {
+  /*
+   * A DEAD OWNER IS NOT A HOLDER, AND THIS IS WHERE THAT IS DECIDED.
+   *
+   * Liveness is derived at the moment somebody is about to be refused, not
+   * stored and trusted. That gives the reclaim a definite owner — every reader
+   * this claim could block runs it first — without introducing a timer, a
+   * sweeper or a lease TTL. A request whose owning process has gone is released
+   * through the ordinary governor path here, so the very next line sees a free
+   * host rather than a claim nobody can clear.
+   */
+  reclaimDeadProcessOwners({ resourceKey: GATEWAY_HOST_MUTATION_RESOURCE, root });
   const store = readResourceRequestStore(root);
   const held = (store.requests || []).find(
     (r) => r.resource_key === GATEWAY_HOST_MUTATION_RESOURCE && r.state === "GRANTED",
   );
   if (!held) return null;
+  const owner = processOwnerHealth(held);
   return {
     request_id: held.request_id,
     run_id: held.run_id,
     lane_id: held.lane_id,
     granted_at: held.granted_at,
     reason: held.reason || null,
+    // Present so recovery can tell a live observer from a run that merely
+    // requested one, without reaching into the resource store itself.
+    owner: owner.owned ? { ...owner.owner, health: owner.health } : null,
+    survived_run: held.survived_run || null,
   };
 }
 
@@ -68,6 +86,12 @@ export function acquireGatewayHostMutation({
   laneId,
   reason = null,
   origin = "agent",
+  /**
+   * The process whose lifetime this claim follows, when it is not the run's.
+   * `{ pid, started_at, kind, label, evidence }`. Absent keeps the original
+   * run-scoped behaviour, so nothing that does not ask for this changes.
+   */
+  processOwner = null,
   nowMs = Date.now(),
   root = runtimeRoot(),
 } = {}) {
@@ -77,6 +101,7 @@ export function acquireGatewayHostMutation({
     resourceKey: GATEWAY_HOST_MUTATION_RESOURCE,
     reason,
     origin,
+    processOwner,
     nowMs,
     root,
   });

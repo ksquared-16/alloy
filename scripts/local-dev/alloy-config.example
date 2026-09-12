@@ -66,6 +66,35 @@ ALLOY_SLOT_3_QA_IDENTITY="qa-slot3-performance@example.com"
 ALLOY_SLOT_4_QA_IDENTITY="qa-slot4-ui@example.com"
 ALLOY_SLOT_5_QA_IDENTITY="qa-slot5-refactor@example.com"
 ALLOY_SLOT_6_QA_IDENTITY="qa-slot6-experimental@example.com"
+#
+# THE LIST MUST COVER EVERY MANAGED SLOT, NOT THE FIRST SIX.
+#
+# This stopped at 6 because ALLOY_MAX_AGENTS was 6 when it was written. The host
+# now runs 12 managed slots, and the gap was filled one slot at a time in the
+# INSTALLED config whenever a lane happened to land somewhere undeclared — so 8
+# and 12 acquired identities while 7 and 9-11 did not.
+#
+# That is not a cosmetic gap. `qaIdentityForSlot` is what browser auth, mounted
+# certification and the governed QA session actions all resolve through, so a
+# lane on slot 9 could not run mounted certification while the same lane on slot
+# 3 could. Which slot the scheduler picked silently decided what the lane was
+# capable of, which is exactly the uniform-baseline invariant inverted.
+#
+# CAPABILITY IS UNIFORM; ACTIVATION IS ON DEMAND. Declaring an identity here
+# creates no account and mints no session — the account is created by the
+# governed `environment.provision_qa_identity` action, and the session by
+# `environment.restore_qa_session`, each with its own operator decision. What
+# this fixes is that the slot can now ASK.
+#
+# Keep this list in step with ALLOY_MAX_AGENTS. A managed slot with no identity
+# is reported by the `lane.bootstrap` health check rather than discovered by a
+# lane that cannot certify.
+ALLOY_SLOT_7_QA_IDENTITY="qa-slot7-integration@example.com"
+ALLOY_SLOT_8_QA_IDENTITY="qa-slot8-product@example.com"
+ALLOY_SLOT_9_QA_IDENTITY="qa-slot9-interface@example.com"
+ALLOY_SLOT_10_QA_IDENTITY="qa-slot10-identity@example.com"
+ALLOY_SLOT_11_QA_IDENTITY="qa-slot11-attendance@example.com"
+ALLOY_SLOT_12_QA_IDENTITY="qa-slot12-work-items@example.com"
 
 # Safe env bootstrap (alloy-agent-prepare) — agent-visible sanitized file only.
 ALLOY_ENV_SOURCE="$ALLOY_REPO/web/.env.local"
@@ -80,6 +109,28 @@ ALLOY_BLOCK_REMOTE_SUPABASE="0"
 ALLOY_SERVER_ENV_SOURCE="$ALLOY_REPO/web/.env.local"
 # Optional extra required server variable names (space-separated). Built-in minimum: SUPABASE_SERVICE_ROLE_KEY.
 ALLOY_SERVER_ENV_REQUIRED=""
+
+# Per-slot QA session env source — WHERE THIS SLOT AUTHENTICATES.
+#
+# ALLOY_SERVER_ENV_SOURCE above is one value for the whole host, and it is read by
+# the trusted host for migrations, raw SQL and production applies as well as by the
+# QA session mint. That is right for a host whose slots all run against the same
+# project, and wrong the moment one does not.
+#
+# A slot retargeted at the local alloy-cert stack serves the certification project,
+# so its QA session must be minted from the certification source too. Otherwise the
+# mint produces a cookie for the hosted project, the slot's own server rejects it,
+# and the symptom looks like a product authentication defect while being an
+# infrastructure mismatch. Set this on exactly the slots that are retargeted; a slot
+# that declares nothing keeps ALLOY_SERVER_ENV_SOURCE and is wholly unaffected.
+#
+# DECLARED-BUT-MISSING REFUSES. The mint does not fall back to the host default,
+# because falling back is how this defect comes back invisibly.
+#
+# Same reasoning as ALLOY_CERT_DATABASE_URL, which exists because reading the
+# deployed credential for a certification request was the defect PR 821 closed.
+#
+#   ALLOY_SLOT_8_QA_ENV_SOURCE="$ALLOY_WORKTREE_ROOT/documentation-api/web/.env.certification.local"
 
 # Auth routes (discovered: Supabase email/password at /login).
 ALLOY_AGENT_LOGIN_ROUTE="/login"

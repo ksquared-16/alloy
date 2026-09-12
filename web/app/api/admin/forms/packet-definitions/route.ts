@@ -4,6 +4,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { dbListPacketDefinitionKeys } from "@/lib/admin/forms/formsAdminDb";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
 import { allocateUniqueKey, slugKeyFromDisplayName } from "@/lib/forms/adminGeneratedKeys";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 const KEY_RE = /^[a-z][a-z0-9_]{1,62}$/;
 
@@ -26,7 +27,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
 
     let body: Record<string, unknown>;
     try {

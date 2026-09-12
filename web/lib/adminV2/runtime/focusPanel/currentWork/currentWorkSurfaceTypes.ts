@@ -43,6 +43,14 @@ export type CurrentWorkActionVM = {
     actionRef?: string | null;
     disabled?: boolean;
     disabledReason?: string | null;
+    /**
+     * The stage work this action operates on, when configuration named one.
+     *
+     * Travels into the invocation payload as `template_key`. `stage_work.start` is the reason it
+     * exists: the action takes the template as an INPUT so it need not hardcode one, which left it
+     * requiring an argument that no configuration could supply and no operator could reach.
+     */
+    workTemplateKey?: string;
     /** Resolved registry action for client invoke — when available. */
     resolved?: ResolvedActionForClient | null;
     /** Resolved execution state (Slice F) — every visible enabled action is provably executable. */
@@ -77,6 +85,15 @@ export type CurrentWorkChecklistItemVM = {
     description?: string | null;
     /** When navigable via Focus handoff (legacy stage-work rows). */
     handoffItemId?: string | null;
+    /**
+     * PRIMARY or SECONDARY, for work rows — the runtime's own `role`, carried rather than inferred.
+     *
+     * The stage work runtime has always published `primary` separately from `additional`, and this
+     * surface flattened the two into one undifferentiated list. Secondary work was therefore visible
+     * but indistinguishable, and "Record outcome" could act on whichever item happened to be open
+     * first. Absent on requirement rows, which have no such role.
+     */
+    workRole?: "primary" | "secondary";
 };
 
 export type CurrentWorkSurfaceProgress = {

@@ -272,13 +272,18 @@ function actionsFromCatalog(actionCatalog: StageActionCatalogV1 | null): {
         if (!key || seen.has(key)) continue;
         seen.add(key);
 
+        // Carried, not dropped: an action configured to operate on one of this stage's work
+        // templates needs that key at invoke time, and this is the only place it can travel.
+        const workTemplateKey = candidate.work_template_key?.trim();
+        const ref = { action_ref: key, ...(workTemplateKey ? { work_template_key: workTemplateKey } : {}) };
+
         const bucket = catalogActionBucket(key, candidate.recommendation);
         if (bucket === "communication") {
             communication_actions.push({ action_ref: key });
         } else if (bucket === "alternate_path") {
-            alternate_paths.push({ action_ref: key });
+            alternate_paths.push(ref);
         } else if (bucket === "supporting") {
-            supporting.push({ action_ref: key });
+            supporting.push(ref);
         }
     }
 
@@ -393,6 +398,20 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
 
     if (catalogActions.communication_actions.length) {
         templateConfig.communication_actions = catalogActions.communication_actions;
+    }
+
+    /*
+     * The STAGE's own configured actions. Computed here all along and never carried, so a stage
+     * action could be authored, validated, persisted and published and still never reach an
+     * operator. They compose with the work template's actions rather than replacing or being
+     * replaced — see `resolvedHelpfulActionRefs`.
+     */
+    if (catalogActions.supporting.length) {
+        templateConfig.stage_actions = catalogActions.supporting.map((row) => ({
+            action_ref: row.action_ref,
+            ...(row.override_label?.trim() ? { override_label: row.override_label.trim() } : {}),
+            ...(row.work_template_key?.trim() ? { work_template_key: row.work_template_key.trim() } : {}),
+        }));
     }
 
     return {

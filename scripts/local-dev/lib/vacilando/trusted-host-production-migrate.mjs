@@ -641,3 +641,212 @@ export function describeMissingMigrations(parity = null) {
     action_required: PRODUCTION_APPLY_ACTION_KEY,
   };
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * MIGRATION EXECUTION OUTCOME — telling "never ran" from "ran, bookkeeping
+ * incomplete" from "nobody knows".
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * THE DEFECT, TWICE MEASURED. `executeProductionMigrationApply` re-reads the
+ * hosted ledger after a successful apply and, when the versions are absent,
+ * returns `post_apply_verification_failed`. It computes the rich outcome above
+ * — `attention_ledger_identity_absent`, correctly marked `stuck` — and then
+ * discards it behind a generic failure code, which is the value a retry
+ * decision actually reads.
+ *
+ *   D2  gar_792710a5f553ee   schema landed, action said post_apply_verification_failed;
+ *                            repair gar_db1d3588e3fac9 moved the ledger 405 → 412;
+ *                            census gar_eefbd899c30b21 then confirmed parity.
+ *   W-17                     same shape; repair gar_62ef5ea2e363fa moved it 412 → 413.
+ *
+ * Worse, that one code covers two OPPOSITE facts: "the ledger could not be
+ * re-read at all" (nobody knows whether the schema is there) and "the ledger was
+ * read cleanly and does not contain the versions" (the schema is there and the
+ * bookkeeping is not). The first is unknown; the second is a known partial
+ * success. A retry is catastrophic for the second and merely wasteful for the
+ * first, so they cannot share a name.
+ *
+ * WHAT THIS ADDS is a phase vocabulary and a retry law over the outcome model
+ * that already exists. It introduces no second migration authority: the states
+ * below are the strings `evaluateProductionApplyOutcome` already returns, and
+ * the resolver maps them to what a recovery pass is allowed to do.
+ */
+
+/** How far execution provably got. Derived from evidence, never stored as a machine. */
+export const MIGRATION_PHASE = Object.freeze({
+  NOT_STARTED: "NOT_STARTED",
+  APPLY_STARTED: "APPLY_STARTED",
+  APPLY_CONFIRMED: "APPLY_CONFIRMED",
+  LEDGER_RECORDED: "LEDGER_RECORDED",
+  VERIFIED: "VERIFIED",
+});
+
+/** What a caller is allowed to conclude, and the only four things it may do next. */
+export const MIGRATION_OUTCOME = Object.freeze({
+  FAILED_BEFORE_APPLY: "FAILED_BEFORE_APPLY",
+  PARTIAL_APPLY_CONFIRMED_LEDGER_INCOMPLETE: "PARTIAL_APPLY_CONFIRMED_LEDGER_INCOMPLETE",
+  OUTCOME_UNKNOWN_AFTER_START: "OUTCOME_UNKNOWN_AFTER_START",
+  VERIFIED_SUCCESS: "VERIFIED_SUCCESS",
+});
+
+export const RECOVERY_ACTION = Object.freeze({
+  RETRY_APPLY: "retry_apply",
+  REPAIR_LEDGER: "repair_ledger",
+  VERIFY_FIRST: "verify_first",
+  NONE: "none",
+});
+
+/**
+ * THE RETRY LAW, in one place, with exactly one branch that permits re-applying.
+ *
+ * A generic retry must never turn "schema applied once plus a ledger failure"
+ * into "schema applied twice". So `retry_apply` is reachable only from
+ * FAILED_BEFORE_APPLY — a state that requires positive proof the database was
+ * never touched — and every other outcome routes to verification or to the
+ * canonical ledger repair.
+ */
+const OUTCOME_LAW = Object.freeze({
+  [MIGRATION_OUTCOME.FAILED_BEFORE_APPLY]: { retry_apply: true, action: RECOVERY_ACTION.RETRY_APPLY, terminal: false },
+  [MIGRATION_OUTCOME.PARTIAL_APPLY_CONFIRMED_LEDGER_INCOMPLETE]: { retry_apply: false, action: RECOVERY_ACTION.REPAIR_LEDGER, terminal: false },
+  [MIGRATION_OUTCOME.OUTCOME_UNKNOWN_AFTER_START]: { retry_apply: false, action: RECOVERY_ACTION.VERIFY_FIRST, terminal: false },
+  [MIGRATION_OUTCOME.VERIFIED_SUCCESS]: { retry_apply: false, action: RECOVERY_ACTION.NONE, terminal: true },
+});
+
+/**
+ * Map the canonical outcome state, plus whatever fresh evidence exists, onto the
+ * phase reached and the single next action.
+ *
+ * TWO INDEPENDENT QUESTIONS, NEVER INFERRED FROM EACH OTHER: did the schema
+ * effect land, and is the identity in the ledger? D2 is precisely the case where
+ * the answers differ, so a resolver that derived one from the other could not
+ * have represented the incident it exists for.
+ *
+ * `schemaApplied` and `ledgerPresent` are tri-state on purpose. `null` means
+ * nobody has measured it, and an unmeasured schema after a started apply is
+ * UNKNOWN — never an optimistic retry.
+ */
+export function resolveMigrationOutcome({
+  state = null,
+  schemaApplied = null,
+  ledgerPresent = null,
+  applyStarted = null,
+  versions = [],
+  evidenceId = null,
+  failureClassification = null,
+} = {}) {
+  const started = applyStarted === true
+    || ["blocked_recensus_required", "blocked_recensus_failed", "blocked_parity_unknown",
+      "attention_ledger_identity_absent", "blocked_further_migrations_required", "promotion_released"].includes(state);
+
+  const decide = (outcome, phase, reason, extra = {}) => {
+    const law = OUTCOME_LAW[outcome];
+    return {
+      outcome, phase,
+      retry_apply_allowed: law.retry_apply,
+      recommended_action: law.action,
+      terminal: law.terminal,
+      versions: versions.map(String),
+      schema_applied: schemaApplied,
+      ledger_present: ledgerPresent,
+      evidence_id: evidenceId,
+      reason,
+      ...extra,
+    };
+  };
+
+  // FRESH EVIDENCE WINS over the state recorded at execution time. This is what
+  // lets an outcome recorded as unknown become a partial success once a census
+  // proves the schema landed — the D2 path, where the truth arrived after the
+  // action had already reported.
+  if (schemaApplied === true && ledgerPresent === false) {
+    return decide(
+      MIGRATION_OUTCOME.PARTIAL_APPLY_CONFIRMED_LEDGER_INCOMPLETE,
+      MIGRATION_PHASE.APPLY_CONFIRMED,
+      "the schema effect is proven present and the migration identity is not in the ledger; re-applying would apply it a second time",
+    );
+  }
+  if (schemaApplied === true && ledgerPresent === true) {
+    return decide(MIGRATION_OUTCOME.VERIFIED_SUCCESS, MIGRATION_PHASE.VERIFIED,
+      "schema and ledger both proven; nothing to do");
+  }
+  if (schemaApplied === false && started !== true) {
+    return decide(MIGRATION_OUTCOME.FAILED_BEFORE_APPLY, MIGRATION_PHASE.NOT_STARTED,
+      "the database was proven untouched, so a retry cannot make anything worse");
+  }
+
+  switch (state) {
+    case "blocked_apply_not_run":
+      return decide(MIGRATION_OUTCOME.FAILED_BEFORE_APPLY, MIGRATION_PHASE.NOT_STARTED, "the apply never ran");
+    case "blocked_apply_failed": {
+      // The apply owner already separates a proven no-effect failure from one
+      // that may have half-run. Only the first is retryable, and that decision
+      // stays where it is rather than being re-derived here.
+      const noEffect = failureClassification === "no_effect";
+      return noEffect
+        ? decide(MIGRATION_OUTCOME.FAILED_BEFORE_APPLY, MIGRATION_PHASE.NOT_STARTED, "the apply failed with no effect on the database")
+        : decide(MIGRATION_OUTCOME.OUTCOME_UNKNOWN_AFTER_START, MIGRATION_PHASE.APPLY_STARTED,
+          "the apply failed and may have partially executed; it must be measured before anything is re-applied");
+    }
+    case "promotion_released":
+      return decide(MIGRATION_OUTCOME.VERIFIED_SUCCESS, MIGRATION_PHASE.VERIFIED, "parity re-measured PASS");
+    case "attention_ledger_identity_absent":
+      // The exact D2 and W-17 shape: the executor applied, the ledger re-read
+      // cleanly, and the identity is not there.
+      return decide(
+        MIGRATION_OUTCOME.PARTIAL_APPLY_CONFIRMED_LEDGER_INCOMPLETE,
+        MIGRATION_PHASE.APPLY_CONFIRMED,
+        "the apply reported success and the ledger does not report the identity; this is bookkeeping, not an unapplied migration",
+      );
+    case "blocked_recensus_required":
+    case "blocked_recensus_failed":
+    case "blocked_parity_unknown":
+      return decide(MIGRATION_OUTCOME.OUTCOME_UNKNOWN_AFTER_START, MIGRATION_PHASE.APPLY_STARTED,
+        "the apply ran and the result has not been measured; measure before deciding anything");
+    case "blocked_further_migrations_required":
+      return decide(MIGRATION_OUTCOME.VERIFIED_SUCCESS, MIGRATION_PHASE.VERIFIED,
+        "the requested versions landed; the database is behind on others, which is a separate promotion question");
+    default:
+      break;
+  }
+
+  // Anything unrecognised, after a start, is unknown. Never optimistic.
+  return started
+    ? decide(MIGRATION_OUTCOME.OUTCOME_UNKNOWN_AFTER_START, MIGRATION_PHASE.APPLY_STARTED,
+      `unrecognised outcome state ${String(state)} after the apply began`)
+    : decide(MIGRATION_OUTCOME.OUTCOME_UNKNOWN_AFTER_START, MIGRATION_PHASE.NOT_STARTED,
+      `unrecognised outcome state ${String(state)} and no proof the database was untouched`);
+}
+
+/**
+ * The seam DevOps 10's failover asks for: given a migration action record and
+ * whatever fresh evidence exists, what may recovery do?
+ *
+ * Returns the same shape as `resolveMigrationOutcome` so recovery has one
+ * vocabulary, and refuses to answer optimistically when no evidence is offered —
+ * which is the general DevOps 10 law (`STARTED_UNKNOWN` is never replayed)
+ * expressed in this domain's own terms.
+ */
+export function migrationRecoveryDisposition(actionRecord = {}, { schemaApplied = null, ledgerPresent = null, evidenceId = null } = {}) {
+  const outcome = actionRecord?.result?.outcome || actionRecord?.outcome || null;
+  const resolved = resolveMigrationOutcome({
+    state: outcome?.state ?? null,
+    applyStarted: actionRecord?.result?.migration_attempted ?? actionRecord?.migration_attempted ?? null,
+    versions: outcome?.evidence?.requested || actionRecord?.inputs?.migrations?.map?.((m) => m.version) || [],
+    failureClassification: outcome?.failure?.classification ?? null,
+    schemaApplied, ledgerPresent, evidenceId,
+  });
+  return {
+    ...resolved,
+    action_key: actionRecord?.action_key ?? null,
+    request_id: actionRecord?.request_id ?? null,
+    // Named so a caller cannot mistake this for permission to run the apply again.
+    owner: resolved.recommended_action === RECOVERY_ACTION.REPAIR_LEDGER
+      ? REPAIR_LEDGER_ACTION_KEY_HINT
+      : resolved.recommended_action === RECOVERY_ACTION.VERIFY_FIRST
+        ? "database.read_census"
+        : null,
+  };
+}
+
+/** Named here rather than imported, to avoid a cycle with the repair module. */
+const REPAIR_LEDGER_ACTION_KEY_HINT = "database.repair_migration_ledger";

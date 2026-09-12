@@ -509,15 +509,26 @@ test("X12 — a successful apply is verified by re-reading hosted state", () => 
   assert.equal(out.outcome.promotion_released, true);
 });
 
-test("X12b — an executor that says ok while the ledger disagrees is not a pass", () => {
+test("X12b — an executor that says ok while the ledger disagrees is not a pass, and says why", () => {
   // The apply reports success; the ledger still does not carry the identity.
+  //
+  // THIS AND X12c USED TO ASSERT THE SAME CODE, which was the defect. They are
+  // opposite facts: here the ledger was read cleanly and lacks the version, so
+  // the schema IS there and the bookkeeping is not; there the ledger could not
+  // be read at all, so nobody knows. Retrying this one applies a migration
+  // twice — D2 and W-17 are both this shape.
   const { out } = run({ readHostedVersions: () => hostedBefore() });
   assert.equal(out.ok, false);
-  assert.equal(out.code, EX.PRODUCTION_APPLY_FAILURES.VERIFICATION_FAILED);
   assert.equal(out.verified, false);
+  assert.equal(out.code, EX.PRODUCTION_APPLY_FAILURES.APPLIED_LEDGER_INCOMPLETE);
+  assert.notEqual(out.code, EX.PRODUCTION_APPLY_FAILURES.VERIFICATION_FAILED);
+  assert.equal(out.schema_applied, true);
+  assert.equal(out.ledger_present, false);
+  assert.equal(out.retry_apply_allowed, false, "re-applying would apply the migration a second time");
+  assert.equal(out.recommended_action, "repair_ledger");
 });
 
-test("X12c — a post-apply read that fails is a verification failure, not a success", () => {
+test("X12c — a post-apply read that FAILS is unknown, and keeps the verification code", () => {
   let n = 0;
   const { out } = run({
     readHostedVersions: () => { n += 1; return n === 1 ? hostedBefore() : { ok: false, detail: "connection lost" }; },
@@ -525,6 +536,9 @@ test("X12c — a post-apply read that fails is a verification failure, not a suc
   assert.equal(out.ok, false);
   assert.equal(out.code, EX.PRODUCTION_APPLY_FAILURES.VERIFICATION_FAILED);
   assert.equal(out.migration_attempted, true);
+  // Unknown, not applied: the schema state was never established either way.
+  assert.equal(out.schema_applied, null);
+  assert.equal(out.retry_apply_allowed, false, "unknown must not be replayed either");
 });
 
 // ── X13 — APPROVAL PRESENTATION ─────────────────────────────────────────────

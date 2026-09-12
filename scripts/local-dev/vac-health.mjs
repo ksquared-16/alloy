@@ -85,6 +85,84 @@ const lanesRaw = await safely(async () => {
   return listDurableLanes();
 }, []);
 
+// The bootstrap inventory is a READ. It resolves each lane's baseline from the
+// owners that already hold it and acquires nothing — no slot, no server, no
+// browser, no provider — so asking "are my lanes consistent?" costs none of the
+// resources it is asking about. `safely` keeps a failure here from taking the
+// rest of the report down; the check reports INCOMPLETE instead.
+// Freshness, like bootstrap, is a READ. It runs git plumbing against each
+// lane's worktree and acquires no slot, server, browser or provider.
+// Knowledge coverage, a READ over the existing lane-memory store.
+// Resilience posture, composed from what is registered. On a single-host
+// installation this correctly reports that no standby exists.
+const resilience = await safely(async () => {
+  const { resilienceProjection, hostIdentity, ROLE } = await import("./lib/vacilando/control-plane-resilience.mjs");
+  const { currentRuntimeGeneration } = await import("./lib/vacilando/control-plane-health.mjs");
+  const r = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const { existsSync: ex, readFileSync: rf } = await import("node:fs");
+  const leasePath = join(r, "vacilando", "resilience", "lease.json");
+  const snapPath = join(r, "vacilando", "resilience", "snapshot.json");
+  return resilienceProjection({
+    primary: hostIdentity({ hostId: os.hostname(), role: ROLE.PRIMARY, runtimeGeneration: currentRuntimeGeneration() }),
+    standby: null,
+    lease: ex(leasePath) ? JSON.parse(rf(leasePath, "utf8")) : null,
+    snapshot: ex(snapPath) ? JSON.parse(rf(snapPath, "utf8")) : null,
+  });
+}, null);
+
+// Toolchain activation state, a pure READ of one small record. Absent on a host
+// that has never activated anything through the canary path, which is healthy.
+const activationState = await safely(async () => {
+  const { readFileSync: rf, existsSync: ex } = await import("node:fs");
+  const r = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const p = join(r, "vacilando", "toolchain-canary", "activation.json");
+  return ex(p) ? JSON.parse(rf(p, "utf8")) : null;
+}, null);
+
+// The agent configuration audit, read-only. It calls the SAME collector
+// `vac config-audit` uses, so the health verdict and the CLI cannot disagree.
+const configAudit = await safely(async () => {
+  const { collectConfigurationAudit } = await import("./vac-config-audit.mjs");
+  return collectConfigurationAudit().audit;
+}, null);
+
+// Maintenance state, a pure READ of one small record plus the steward's own
+// cadence field. No window exists on a host that has never run maintenance, and
+// that is reported as healthy rather than missing.
+const maintenanceWindow = await safely(async () => {
+  const { readMaintenanceWindow } = await import("./lib/vacilando/host-maintenance.mjs");
+  const r = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  return readMaintenanceWindow({ root: r }) || { phase: "NORMAL" };
+}, null);
+
+const maintenanceCadence = await safely(async () => {
+  const { maintenanceCadenceDue } = await import("./lib/vacilando/host-steward-cycle.mjs");
+  const r = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  return maintenanceCadenceDue({ root: r });
+}, null);
+
+// The promotion gate contract, a pure READ over declarations. No network, no
+// GitHub, no database: it audits what the gates say about themselves.
+const promotionGates = await safely(async () => {
+  const { auditPromotionGates } = await import("./lib/vacilando/promotion-gate-contract.mjs");
+  return auditPromotionGates();
+}, null);
+
+const laneKnowledge = await safely(async () => {
+  const { inventoryLaneKnowledge } = await import("./lib/vacilando/lane-knowledge.mjs");
+  return inventoryLaneKnowledge({ lanes: lanesRaw });
+}, null);
+
+const laneFreshness = await safely(async () => {
+  const { inventoryLaneFreshness } = await import("./lib/vacilando/lane-freshness.mjs");
+  return inventoryLaneFreshness({ lanes: lanesRaw });
+}, null);
+
+const laneBootstrap = await safely(async () => {
+  const { inventoryLaneBootstrap } = await import("./lib/vacilando/lane-bootstrap.mjs");
+  return inventoryLaneBootstrap({ lanes: lanesRaw });
+}, null);
+
 const runFor = await safely(async () => {
   const { activeRunForLane } = await import("./lib/vacilando/execution-run.mjs");
   return (laneId) => activeRunForLane(laneId);
@@ -111,6 +189,54 @@ const repositories = await safely(async () => {
 
 // ── S1 is the canonical attribution source. Health never re-derives ancestry. ─
 const processes = psText ? parseProcessTable(psText) : [];
+
+/*
+ * Worktree lifecycle and slot ownership, both READS.
+ *
+ * The evaluations come from the EXISTING retirement observer, and disk from the
+ * EXISTING cached sizes — `peek`, never `collect`, so a health report can never
+ * become the reason a fleet-wide `du` runs. An absent size reads as unknown.
+ */
+const worktreeLifecycle = await safely(async () => {
+  const { observeReconciliation } = await import("./lib/vacilando/reconciliation-observe.mjs");
+  const { observeRetirementCandidates } = await import("./lib/vacilando/worktree-retirement-observe.mjs");
+  const { inventoryWorktreeLifecycle } = await import("./lib/vacilando/worktree-lifecycle.mjs");
+  const { peekWorktreeDiskCache } = await import("./lib/vacilando/resources.mjs");
+  const { execFileSync } = await import("node:child_process");
+  const wtRoot = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const worktreeParent = join(homedir(), "Code", "alloy-worktrees");
+  // The same inputs `vac worktree-retire` assembles, so the health projection and
+  // the retirement preview cannot disagree about which worktrees exist.
+  let gitWorktrees = null;
+  try {
+    gitWorktrees = execFileSync("git", ["worktree", "list", "--porcelain"], {
+      cwd: join(homedir(), "Alloy"), encoding: "utf8", timeout: 15000, stdio: ["ignore", "pipe", "ignore"],
+    }).split("\n").filter((l) => l.startsWith("worktree ")).map((l) => l.replace("worktree ", ""));
+  } catch { /* absent git worktree list is reported as an incomplete check */ }
+  const s7 = observeReconciliation({ root: wtRoot, processes, worktreeParent, gitWorktrees });
+  const evaluations = observeRetirementCandidates({
+    root: wtRoot, s7Worktrees: s7?.worktrees || [], processes, worktreeParent,
+    // Same as `vac worktree-retire`. Without it `not_self_retirement` is
+    // UNMEASURED, and an unmeasured gate blocks — so every worktree would read
+    // as blocked for a reason that is an input gap rather than a fact about it.
+    requestingWorktree: process.env.ALLOY_WORKTREE || process.cwd(),
+  });
+  return inventoryWorktreeLifecycle({ evaluations, diskSizes: peekWorktreeDiskCache().sizes || {} });
+}, null);
+
+const slotOwnership = await safely(async () => {
+  const { detectSlotOwnershipConflicts } = await import("./lib/vacilando/worktree-lifecycle.mjs");
+  // The REGISTRY is the slot authority; a lane's binding.slot is its cache.
+  const { listRegisteredWorktrees } = await import("./lib/vacilando/worktree-registration.mjs");
+  const registrySlots = {};
+  const regRoot = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  for (const r of listRegisteredWorktrees({ root: regRoot }) || []) {
+    const slot = Number(r?.slot);
+    if (Number.isInteger(slot) && r?.name) registrySlots[slot] = r.name;
+  }
+  return detectSlotOwnershipConflicts({ lanes: lanesRaw, registrySlots });
+}, null);
+
 const attribution = psText
   ? attributionReport({
     seats, processes, lanes: lanesRaw, repositories, runFor,
@@ -349,7 +475,7 @@ const report = composeReport({
   hw, thresholds, only, startedAt,
   endedAt: new Date().toISOString(),
   probeResults: {
-    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs,
+    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, laneKnowledge, worktreeLifecycle, slotOwnership, promotionGates, maintenanceWindow, maintenanceCadence, configAudit, activationState, resilience,
     run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, configured_max: configuredMax,
     validation_routing: validationRouting, validation_bypasses: validationBypasses,

@@ -125,6 +125,13 @@ concurrency:
 # bounding the rows and a sibling rendered twice. The suite walks all three pages and checks
 # duplicates and gaps together, because trimming the surplus would have turned one into the other.
 
+# Configured-action arguments added one: `configuredActionWorkTemplate` — a configured action may
+# name the stage work it operates on. `stage_work.start` takes the template as an INPUT so it needs
+# no per-template action, which left it requiring a `template_key` that no configuration could
+# carry: not the candidate action, not the plan's action ref, not the action view model, and the
+# invoke path hardcoded `payload: {}`. Each hop is asserted separately because the argument was lost
+# at a different hop than the one anybody suspected.
+
 jobs:
   run:
     name: Enrollment configuration certification
@@ -189,4 +196,5 @@ jobs:
             tests/queues/adoptedTracksActivateRouting.test.ts \
             tests/lifecycle/workRequirementEvaluation.test.ts \
             tests/lifecycle/workRequirementAuthoring.test.ts \
-            tests/queues/candidateGrainWaitlistPagination.test.ts
+            tests/queues/candidateGrainWaitlistPagination.test.ts \
+            tests/lifecycle/configuredActionWorkTemplate.test.ts
