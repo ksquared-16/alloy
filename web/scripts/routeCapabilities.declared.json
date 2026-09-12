@@ -143,11 +143,11 @@
     "policy": "OD-7: a non-capability gate converts to the canonical capability representing the operation it protects, and the conversion MUST NOT widen admission.",
     "reviewed": "2026-08-19",
     "access_owned": {
-      "total": 15,
-      "declared": 13,
+      "total": 17,
+      "declared": 15,
       "none": 1,
       "exceptions": 1,
-      "state": "EXHAUSTED. Every Access-owned handler is declared, reviewed `none`, or a recorded exception. OD-8 resolved the admin/users GET exception with deployed Q15 evidence, leaving ONE — send-password-reset POST, which is decision-gated for a reason other than OD-7."
+      "state": "EXHAUSTED. Every Access-owned handler is declared, reviewed `none`, or a recorded exception. OD-8 resolved the admin/users GET exception with deployed Q15 evidence, leaving ONE — send-password-reset POST, which is decision-gated for a reason other than OD-7. W-17 added the additive role-assignment pair — POST …/users/[userId]/roles and DELETE …/users/[userId]/roles/[roleKey] — both declared on settings.users_roles, the same gate the replacement route already used; adding a role is not a lesser authority than replacing the set."
     },
     "conversion_exceptions": [
       {
