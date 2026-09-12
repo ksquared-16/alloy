@@ -220,6 +220,22 @@ export default function CurrentWorkWorkspace({
     const transitions = surface.alternatePaths.filter(isCurrentWorkActionExecutable);
     const incomplete =
         surface.readiness.requirements?.items.filter((item) => item.status !== "complete") ?? [];
+    /*
+     * ALSO IN PROGRESS — the stage's other open work, kept out of Requirements.
+     *
+     * The runtime has always published `additional` alongside `primary`, and this surface flattened
+     * the two, so a second live work item was either invisible or sat among data requirements as
+     * though it were one. It is neither: it is work, it is open, and it has its own outcomes.
+     *
+     * Driven entirely by the runtime's `workRole` — no template key is named here, so any process
+     * that configures secondary work gets this with no code change.
+     */
+    // `?? []` is load-bearing, not defensive habit: the workspace is rendered from surfaces built by
+    // more than one producer, and not all of them populate `checklist`. Reading it unguarded took
+    // the entire Current Work workspace down with a TypeError for a section that had nothing to show.
+    const secondaryWork = (surface.checklist ?? []).filter(
+        (item) => item.kind === "stage_work" && item.workRole === "secondary" && item.status !== "complete",
+    );
     const primaryExecutable =
         surface.primaryAction
         && surface.primaryAction.handlerKey !== "expand_work"
@@ -430,6 +446,29 @@ export default function CurrentWorkWorkspace({
                                             <span className="alloy-os-currentwork-workspace__req-badge">
                                                 Required
                                             </span>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </section>
+                    :   null}
+
+                    {secondaryWork.length > 0 ?
+                        <section
+                            className="alloy-os-currentwork-workspace__section"
+                            data-work-section="also-in-progress"
+                        >
+                            <p className="alloy-os-currentwork-workspace__section-title">Also in progress</p>
+                            <ul className="alloy-os-currentwork-workspace__req-list">
+                                {secondaryWork.map((item) => (
+                                    <li key={item.key}>
+                                        <button
+                                            type="button"
+                                            className="alloy-os-currentwork-workspace__req-item"
+                                            data-work-secondary-item={item.key}
+                                            onClick={() => onChecklistItem(item)}
+                                        >
+                                            <span>{item.label}</span>
                                         </button>
                                     </li>
                                 ))}
