@@ -7,6 +7,10 @@ import CurrentWorkActionPanel from "@/components/admin/focusPanel/cards/CurrentW
 import CurrentWorkParticipantDecisionsPanel from "@/components/admin/focusPanel/cards/CurrentWorkParticipantDecisionsPanel";
 import { resolveParticipantDecisionScope } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveParticipantDecisionScope";
 import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import {
+    workIntentProjectionForStageWorkItem,
+    type StageWorkItemProjection,
+} from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import CurrentWorkActivityPreview, {
     CurrentWorkActivityKindIcon,
     type CurrentWorkActivityPreviewItem,
@@ -183,12 +187,55 @@ export default function CurrentWorkCard({
         setActivityPreviewOpen(false);
     }, []);
 
+    /*
+     * THE STAGE'S OTHER OPEN WORK, AND THE WORK THE OPERATOR HAS SELECTED.
+     *
+     * `pickPrimaryOpenItem` already says a secondary item "is reached only when the primary has
+     * nothing open — and then explicitly, through its own row". That row did not exist, so on a
+     * stage whose primary work is open, secondary work could be started and never resolved: the
+     * offer work on Waitlist was live in the runtime, deduped correctly on repeat invocation, and
+     * its outcomes were reachable from no surface at all.
+     *
+     * Selection is by TEMPLATE KEY against the runtime, re-resolved on every render, so a work item
+     * that closes underneath the operator falls back to the primary rather than leaving a stale
+     * projection selected. Null means "the stage's primary work", which is the unchanged default.
+     */
+    const stageWorkItems = useMemo<StageWorkItemProjection[]>(() => {
+        const runtime = surface.runtime;
+        if (!runtime) return [];
+        return [runtime.primary, ...runtime.additional].filter(
+            (item): item is StageWorkItemProjection => item != null,
+        );
+    }, [surface.runtime]);
+    const secondaryOpenWork = useMemo(
+        () =>
+            stageWorkItems.filter(
+                (item) => (item.role ?? "primary") === "secondary" && item.state === "open",
+            ),
+        [stageWorkItems],
+    );
+    const [selectedWorkKey, setSelectedWorkKey] = useState<string | null>(null);
+    const selectedWorkItem =
+        selectedWorkKey ?
+            stageWorkItems.find(
+                (item) => item.template_key === selectedWorkKey && item.state === "open",
+            ) ?? null
+        :   null;
+    /** The work every outcome control acts on — the selected item, else the stage's primary. */
+    const activeWorkItem = selectedWorkItem ?? vm.primaryWorkItem;
+    const activeProjection =
+        selectedWorkItem && surface.runtime ?
+            workIntentProjectionForStageWorkItem(surface.runtime, selectedWorkItem)
+        :   vm.primaryProjection;
+    const activeOutcomes = selectedWorkItem ? selectedWorkItem.outcomes : vm.completionOutcomes;
+
     const pendingOutcome =
-        vm.completionOutcomes.find((row) => row.outcome_key === pendingOutcomeKey) ?? null;
+        activeOutcomes.find((row) => row.outcome_key === pendingOutcomeKey) ?? null;
 
     const resetCompletion = useCallback(() => {
         setCompletionPhase("working");
         setPendingOutcomeKey(null);
+        setSelectedWorkKey(null);
         setCompletionSummary(null);
         clearError();
     }, [clearError]);
@@ -515,13 +562,13 @@ export default function CurrentWorkCard({
     };
 
     const handleConfirmOutcome = useCallback(() => {
-        if (!pendingOutcomeKey || !vm.primaryProjection || !vm.primaryWorkItem) return;
+        if (!pendingOutcomeKey || !activeProjection || !activeWorkItem) return;
         setCompletionPhase("processing");
-        void completeOutcome(vm.primaryProjection, pendingOutcomeKey).then(() => {
-            const effectLines = stageWorkOutcomeEffectLines(vm.primaryWorkItem!, pendingOutcomeKey);
+        void completeOutcome(activeProjection, pendingOutcomeKey).then(() => {
+            const effectLines = stageWorkOutcomeEffectLines(activeWorkItem, pendingOutcomeKey);
             setCompletionSummary(
                 buildOutcomeCompletionSummary({
-                    workItem: vm.primaryWorkItem!,
+                    workItem: activeWorkItem,
                     outcomeKey: pendingOutcomeKey,
                     effectLines,
                 }),
@@ -529,7 +576,7 @@ export default function CurrentWorkCard({
             setCompletionPhase("complete");
             setPendingOutcomeKey(null);
         });
-    }, [completeOutcome, pendingOutcomeKey, vm.primaryProjection, vm.primaryWorkItem]);
+    }, [completeOutcome, pendingOutcomeKey, activeProjection, activeWorkItem]);
 
     // #6: the status is expressed through the SHARED UniversalCard status-chip system (one canonical
     // chip aligned with the card title), never a bespoke pill nested inside the card's own status
@@ -590,8 +637,22 @@ export default function CurrentWorkCard({
             }}
             onCancelOutcome={() => {
                 setPendingOutcomeKey(null);
+                setSelectedWorkKey(null);
                 setCompletionPhase("working");
             }}
+            secondaryWork={secondaryOpenWork.map((item) => ({
+                key: item.template_key,
+                label: item.label,
+            }))}
+            selectedWorkKey={selectedWorkKey}
+            onSelectWork={(templateKey) => {
+                clearError();
+                setSelectedWorkKey(templateKey);
+                setPendingOutcomeKey(null);
+                setCompletionPhase("select_result");
+            }}
+            outcomes={activeOutcomes}
+            outcomeWorkLabel={selectedWorkItem?.label ?? null}
             onConfirmOutcome={handleConfirmOutcome}
             onClose={closeWorkspace}
             // R-014: return to the launcher list without collapsing the card. `closeActionPanel`
