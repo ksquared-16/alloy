@@ -223,31 +223,54 @@ describe("IA-7 tier A — no Access chapter states a role claim from the collaps
     });
 });
 
-describe("M2-17 tier A — the destructive replacement is guarded in front of the write", () => {
+describe("M2-17 / W-17 — the surface no longer replaces the set, and the route that still can still refuses", () => {
     const source = stripComments(fs.readFileSync(USERS_PAGE, "utf8"));
+    const replaceRoute = stripComments(
+        fs.readFileSync(path.join(__dirname, "..", "..", "app", "api", "admin", "users", "[userId]", "role", "route.ts"), "utf8"),
+    );
 
-    it("asks the projection rather than comparing to the collapsed value", () => {
-        expect(source).toContain("replacementIsNoOp(selected, editRole)");
-        expect(source).toContain("rolesDiscardedByReplacement(selected, editRole)");
-        // The old guard, which removed the benign no-op and left only the damaging submission.
-        expect(source).not.toContain("editRole === selected.primary_role");
+    /*
+     * WHY THIS LOCK CHANGED SHAPE RATHER THAN BEING DELETED.
+     *
+     * M2-17 guarded a destructive replacement on this surface: the picker collapsed a membership to
+     * one value, so saving discarded every other role, and the acknowledgement existed so that
+     * destruction could not happen unseen. W-17 removed the destruction instead of guarding it — the
+     * surface now adds one role and removes one role, and there is no set-replacement left here for
+     * an acknowledgement to stand in front of.
+     *
+     * A guard for an operation the surface cannot perform is not protection, it is residue. So the
+     * invariant is restated at full strength: this surface must not replace a role set at all, and
+     * the route that CAN still replace one must still refuse to do it unacknowledged.
+     */
+    it("the canonical surface adds and removes one role, and never replaces the set", () => {
+        expect(source).toContain("mutateRole");
+        expect(source).toMatch(/method:\s*"POST"/);
+        expect(source).toMatch(/method:\s*"DELETE"/);
+        /*
+         * The replacement CALL is gone, not merely disabled on a button. Scoped to the role
+         * endpoint: this surface still PATCHes `access-scope`, which is a different mutation with a
+         * different owner, and forbidding the verb outright would convict it of the wrong thing.
+         */
+        expect(source).not.toMatch(/users\/\$\{[^}]+\}\/role["`]/);
     });
 
-    it("guards saveRole itself, not only the button", () => {
-        // A disabled attribute is a presentation fact. The write must refuse on its own terms, so
-        // a stale render or a programmatic click cannot reach the destructive path.
-        const saveRoleBody = source.slice(source.indexOf("const saveRole ="), source.indexOf("const saveScope"));
-        expect(saveRoleBody.length).toBeGreaterThan(100);
-        expect(saveRoleBody).toContain("if (replacementIsNoOp(selected, editRole)) return;");
-        expect(saveRoleBody).toContain("!confirmRoleReplace) return;");
-        // The guards precede the request, not follow it.
-        expect(saveRoleBody.indexOf("!confirmRoleReplace) return;")).toBeLessThan(saveRoleBody.indexOf("method: \"PATCH\""));
+    it("keeps no acknowledgement machinery for an operation it can no longer perform", () => {
+        for (const residue of ["confirmRoleReplace", "rolesLostBySave", "replacementIsNoOp", "access-user-role-replace-confirm"]) {
+            expect(source, `${residue} guards a replacement this surface no longer makes`).not.toContain(residue);
+        }
     });
 
-    it("the acknowledgement cannot outlive the statement it was given for", () => {
-        // Reset on selection change and on target change; otherwise a confirmation collected for
-        // one principal authorizes a deletion on the next.
-        expect(source).toContain("setConfirmRoleReplace(false)");
-        expect(source.match(/setConfirmRoleReplace\(false\)/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+    it("still refuses an unacknowledged destructive replacement AT THE ROUTE", () => {
+        // The bulk route remains for callers that genuinely mean "set the whole set". W-54's refusal
+        // is what stops one of them discarding roles it never rendered, and it must precede the write.
+        expect(replaceRoute).toContain("replacementRemovalRefusal");
+        // Compared against the CALL, not the import: both names appear at the top of the file.
+        expect(replaceRoute.indexOf("replacementRemovalRefusal({")).toBeLessThan(
+            replaceRoute.indexOf("await replaceMembershipWithAccessProfile("),
+        );
+        // Non-vacuity: the predicate the route leans on still exists and still takes what was shown.
+        const predicate = stripComments(fs.readFileSync(path.join(__dirname, "..", "..", "lib", "access", "memberRoleAssignment.ts"), "utf8"));
+        expect(predicate).toContain("export function replacementRemovalRefusal");
+        expect(predicate).toContain("acknowledgedRoleKeys");
     });
 });

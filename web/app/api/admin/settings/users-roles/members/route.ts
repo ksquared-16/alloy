@@ -74,7 +74,6 @@ export async function GET() {
     }
 
     const byUser = groupSortedRoleKeysByUserId((roleRows ?? []) as { user_id: string; role: string }[]);
-    const userIds = [...byUser.keys()].sort();
 
     // The row itself, not a normalized copy of it — `projectMemberScope` distinguishes an absent
     // row from a present one, and a `Map` that only ever holds normalized values cannot express
@@ -86,28 +85,43 @@ export async function GET() {
     const deptByUser = new Map<string, string[]>();
     const siteByUser = new Map<string, string[]>();
 
+    /*
+     * W-17 — A MEMBERSHIP IS NOT ITS ROLES.
+     *
+     * This list was built from `user_roles` alone, so a member holding no role had no row to be
+     * found by and vanished from Users & Roles entirely. That was invisible while the only write
+     * path replaced the set — it always left exactly one role behind — and becomes reachable the
+     * moment removal is targeted. A person whose last role is removed keeps their membership, their
+     * access profile and their configured scope; they simply resolve to no capabilities. Dropping
+     * them from the directory would make "remove the final role" look like "remove the person",
+     * which is the one thing removal must not silently mean.
+     *
+     * So the roster is the UNION: everyone with a role row, plus everyone with an access profile.
+     */
+    const { data: profiles, error: profErr } = await supabase
+        .from("user_access_profiles")
+        .select("user_id, department_scope, site_scope, attendance_capture_scope")
+        .eq("org_id", orgId);
+    if (profErr) {
+        return NextResponse.json({ error: profErr.message }, { status: 500 });
+    }
+    for (const p of profiles ?? []) {
+        const row = p as {
+            user_id: string;
+            department_scope?: string | null;
+            site_scope?: string | null;
+            attendance_capture_scope?: string | null;
+        };
+        profileByUser.set(row.user_id, {
+            department_scope: row.department_scope,
+            site_scope: row.site_scope,
+            attendance_capture_scope: row.attendance_capture_scope,
+        });
+    }
+
+    const userIds = [...new Set([...byUser.keys(), ...profileByUser.keys()])].sort();
+
     if (userIds.length) {
-        const { data: profiles, error: profErr } = await supabase
-            .from("user_access_profiles")
-            .select("user_id, department_scope, site_scope, attendance_capture_scope")
-            .eq("org_id", orgId)
-            .in("user_id", userIds);
-        if (profErr) {
-            return NextResponse.json({ error: profErr.message }, { status: 500 });
-        }
-        for (const p of profiles ?? []) {
-            const row = p as {
-                user_id: string;
-                department_scope?: string | null;
-                site_scope?: string | null;
-                attendance_capture_scope?: string | null;
-            };
-            profileByUser.set(row.user_id, {
-                department_scope: row.department_scope,
-                site_scope: row.site_scope,
-                attendance_capture_scope: row.attendance_capture_scope,
-            });
-        }
 
         const { data: deptAccess, error: daErr } = await supabase
             .from("user_department_access")
