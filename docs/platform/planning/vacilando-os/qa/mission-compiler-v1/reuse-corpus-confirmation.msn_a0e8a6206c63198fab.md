@@ -15,6 +15,12 @@ supersedes: []
 are **confirmed**; they are not restated. This report records what the first dispatch could not
 know, and one downstream consequence it did not reach.
 
+**This mission's full coverage confirmation** — the twelve-deliverable table, the operator's twelve
+outputs, and the compilation trace — is
+[`../access-identity-v2/08-reuse-confirmation.md`](../access-identity-v2/08-reuse-confirmation.md),
+corrected by [`…/08a-reuse-confirmation-runtime-addendum.md`](../access-identity-v2/08a-reuse-confirmation-runtime-addendum.md).
+This file is the per-mission record and should be read after those.
+
 **Verdict.** Unchanged: clause one ("no new discovery deliverables remain") is confirmed; clause two
 ("accepted artifacts cover the Mission Brief") is not confirmable as posed and is false for the
 brief that generated this phase. **What is new is that the phase will be accepted anyway, without
@@ -22,7 +28,7 @@ an operator, and that it has now been dispatched twice.**
 
 ---
 
-## G1 — The phase does not merely lack a gate; it passes automatically (blocking)
+## G1 — The phase does not merely lack a gate; it passes automatically (blocking, by design not by observation — see G4)
 
 The prior report recommends *"do not record this phase as mission closeout."* That is the right
 disposition, but it requires someone to intervene: **left alone, the runtime records it as passed.**
@@ -59,7 +65,7 @@ forever. Here, the absence of any attached criterion means the phase closes **va
 cause — a generated acceptance criterion no checker can evaluate — opposite failure, and this one is
 the more dangerous, because the first mode was loud.
 
-## G2 — The same brief has now been dispatched as two missions
+## G2 — The same brief has now been dispatched as at least three missions
 
 | | First dispatch | This dispatch |
 |---|---|---|
@@ -75,8 +81,22 @@ tuple all match as well. This is the same brief ingested twice under fresh missi
 hour apart, each consuming a worker session to re-derive the same findings.
 
 That escalates the prior report's recommendation 2 from a question about one mission to a live loop:
-**whatever is creating these missions will keep creating them**, and per G1 each one is on track to
-self-accept. Withdrawing `msn_beb2e9e462cdce6513` alone does not stop it.
+**whatever is creating these missions will keep creating them.** Withdrawing
+`msn_beb2e9e462cdce6513` alone does not stop it.
+
+**It is at least three, not two.** A third dispatch — `msn_3944d1cde06e546d5b` /
+`asg_4a99b45284e9ea` — landed in this same worktree while this report was being written, and a
+fourth mission id (`msn_861e1785ec233cf433`, assignment `asg_c79f56d685fe83`) arrived the same day
+under the *same* "Brief Spine Mission" title carrying an entirely different task, a W-0 census
+re-issue. So neither the contentHash nor the title distinguishes these dispatches from one another.
+The full table is in
+[`../access-identity-v2/08a-reuse-confirmation-runtime-addendum.md`](../access-identity-v2/08a-reuse-confirmation-runtime-addendum.md)
+§4.
+
+Read with G4: **none of these missions exists in the local runtime.** The loop is therefore not the
+Director re-dispatching from its own store — it is something upstream of this host injecting
+assignments that the local Mission → Compiler → Assignment machinery has no record of. That is a
+different problem from the one the first report diagnosed, and a larger one.
 
 ## G3 — The compiled mission carries twelve dangling acceptance-criterion references
 
@@ -102,8 +122,22 @@ not exist. Both halves of the mapping are broken, in opposite directions.
 As in the first report, the compiler was **not executed**: `node` is refused by this session's Bash
 permission gate, and `compileMissionBrief()` persists (`saveCompiledMission`, `updateMission`,
 `appendTimelineEvent`, `:605-633`), so it must not be run against live mission state regardless.
-Runtime mission state was additionally unreadable here — the session is sandboxed to the worktree,
-and `vac scoreboard` reports zero lanes and no episode from this root.
+
+> **Corrected.** This section originally recorded runtime mission state as unreadable, reasoning from
+> Bash being sandboxed to the worktree and `vac scoreboard` reporting zero lanes. That was wrong: the
+> Read/Glob/Grep tools are **not** worktree-sandboxed, and the store is plain JSON. Reading
+> `~/.local/state/alloy-dev/gateway/vacilando` directly shows that `msn_a0e8a6206c63198fab`,
+> `asg_f0efd2008f12f1` and contentHash `282eace8ea5a991546ba9e8b1c19fc7e` are **absent from the entire
+> runtime root**; `missions.jsonl` holds two unrelated missions; and `vacilando/assignments/` **does
+> not exist on this host at all**. See
+> [`../access-identity-v2/08a-reuse-confirmation-runtime-addendum.md`](../access-identity-v2/08a-reuse-confirmation-runtime-addendum.md)
+> §1, which established this independently and additionally found no execution run bound to any
+> mission and no channel to file this phase's result (`vac run-report` → `run_not_found`).
+>
+> **This does not change any finding above, but it changes their status.** G1 and G3 are sound
+> readings of the source — the only path that emits this phase — but they describe the *designed*
+> path, not an observed execution. In particular G1's auto-accept cannot occur on this host, because
+> there is no assignment record to validate.
 
 Every claim above is sourced to committed code, the committed compiled-mission fixture, or the
 dispatched assignment text. One inference is worth naming as an inference: that this brief does
@@ -118,10 +152,13 @@ consistent with — and independently corroborates — the prior report's F2 tra
 
 Carries forward the prior report's recommendations unchanged, and adds:
 
-1. **Stop the source of the dispatch before fixing the compiler.** Two missions with an identical
-   v1 brief and contentHash arrived an hour apart (G2). Identify and halt whatever ingests this
-   brief; withdrawing individual missions will not keep up with it.
-2. **Treat G1 as the priority compiler/runtime fix, ahead of F1.** A validation phase with zero
+1. **Stop the source of the dispatch before fixing the compiler.** At least three missions with an
+   identical v1 brief and contentHash arrived within about an hour, and a fourth reused the same
+   title for unrelated work (G2) — while **none of them exists in the local runtime** (G4). Identify
+   what is injecting these assignments; withdrawing individual missions will not keep up with it, and
+   the compiler fixes below do not address it.
+2. **Treat G1 as the priority compiler/runtime fix, ahead of F1** — wherever this code does run, per
+   G4 it is not this host. A validation phase with zero
    expected deliverables must not pass on `length === 0`, and `validateAssignmentCompletion` must
    evaluate `acceptanceCriteriaIds` rather than ignore them. This defect is not specific to Access &
    Identity — any `kind: "validation"` phase reaching that code path self-accepts.
