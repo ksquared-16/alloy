@@ -27,6 +27,7 @@ import {
 import BusinessProcessPublicationBar from "@/components/adminV2/settings/lifecycle/BusinessProcessPublicationBar";
 import StageFormRequirementsEditor from "@/components/adminV2/settings/lifecycle/StageFormRequirementsEditor";
 import StageWorkRequirementsEditor from "@/components/adminV2/settings/lifecycle/StageWorkRequirementsEditor";
+import StageStartableWorkEditor from "@/components/adminV2/settings/lifecycle/StageStartableWorkEditor";
 import StagePaperworkCard from "@/components/adminV2/settings/lifecycle/StagePaperworkCard";
 import StagePerChildPathsEditor from "@/components/adminV2/settings/lifecycle/StagePerChildPathsEditor";
 import LifecycleStageFieldRequirementsEditor, {
@@ -921,6 +922,14 @@ export default function StageEditorV2({
                         : null}
                     {stageKey.trim() ? (
                         <>
+                            {/* Which of this stage's own work an operator may begin. Generic: the
+                                rows are whatever templates the stage configures. */}
+                            <StageStartableWorkEditor
+                                workTemplates={stageRecord?.stage_operating_plan_v1?.work_templates ?? []}
+                                candidateActions={candidateActions}
+                                onChange={setCandidateActions}
+                                disabled={!stageKey.trim()}
+                            />
                             <LifecycleStageOperatingPlanEditor
                                 ref={operatingPlanRef}
                                 stageKey={stageKey}
