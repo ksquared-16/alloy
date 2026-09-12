@@ -1,0 +1,48 @@
+{
+  "trusted_host_action_id": "tha_7aaee03796e8f3",
+  "query_hash": "cb117d5333d4d39c19d46d4dbfdf0fa332f436b1359e597c9e7da0a8643edde2",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-12T01:29:46.017Z",
+    "question_ids": [
+      "m010000",
+      "ledger_version",
+      "ledger_head",
+      "ledger_total"
+    ],
+    "questions": {
+      "m010000": {
+        "question_id": "m010000",
+        "row_count": null,
+        "rows": [
+          "assign_member_role_audited ~ present ~ present ~ true",
+          "remove_member_role_audited ~ present ~ present ~ true",
+          "assign_member_role_audited:one signature ~ yes ~ yes ~ true",
+          "remove_member_role_audited:one signature ~ yes ~ yes ~ true"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20260912010000 ~ ledgered ~ absent ~ false"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20260911260000
+        ]
+      },
+      "ledger_total": {
+        "question_id": "ledger_total",
+        "row_count": null,
+        "rows": [
+          412
+        ]
+      }
+    },
+    "row_count": 7
+  }
+}

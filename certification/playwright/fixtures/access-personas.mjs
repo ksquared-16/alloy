@@ -59,6 +59,42 @@ export const CUSTOM = {
     none: "mcert_front_desk",
     portalFinance: "mcert_portal_finance",
     portalOnly: "mcert_portal_only",
+
+    /*
+     * ── THE FORMS THREE-CAPABILITY MODEL, ONE ROLE PER CLAIM ──
+     *
+     * Forms authority used to be the word "admin" in twenty-two route handlers. It is now three
+     * capabilities, and the only way to show they are genuinely three — rather than one capability
+     * wearing three names — is to give a different person each one and watch the product answer
+     * differently for each.
+     *
+     * Every one of these also holds `portal.access`, because W-13 made admission its own
+     * capability: a role carrying every Forms key and no admission would be refused at the front
+     * door, and the refusal would look like a Forms defect. Admission is the precondition of the
+     * question, not part of it.
+     *
+     * `formsTitular` is the control. Its LABEL is "Forms Administrator" and it holds no Forms
+     * capability at all — so if any handler has quietly kept reading a job title, this is the
+     * persona that passes when it should not.
+     */
+    formsAuthor: "mcert_forms_author",
+    formsReader: "mcert_forms_reader",
+    formsConfirmer: "mcert_forms_confirmer",
+    formsOperator: "mcert_forms_operator",
+    formsBystander: "mcert_forms_bystander",
+    formsTitular: "mcert_forms_titular",
+    /*
+     * The CRM contrast. `crm-entity-search` lives under /api/admin/forms and used to be gated on
+     * the `admin` role, but what it returns is the CRM's data, so the authority that owns it is
+     * `crm.customers.read`. This role holds admission and that key and NO Forms capability, which
+     * is what makes the pair of probes specific: `formsOperator` holds all three Forms keys and is
+     * refused here, this one holds none of them and is admitted.
+     *
+     * It exists rather than reusing `none`, which deliberately has no `portal.access`: a persona
+     * missing admission is refused by W-13 before the CRM key is ever consulted, so a probe with
+     * that subject varies two things at once and proves neither.
+     */
+    formsCrm: "mcert_forms_crm",
 };
 
 export const P = {
@@ -70,6 +106,14 @@ export const P = {
     portalFin:   { id: "c0000000-0000-4000-8000-00000000d007", email: "cert.portalfin@northwind.invalid",  role: CUSTOM.portalFinance },
     portalOnly:  { id: "c0000000-0000-4000-8000-00000000d008", email: "cert.portalonly@northwind.invalid", role: CUSTOM.portalOnly },
     otherOrg:    { id: "c0000000-0000-4000-8000-00000000d006", email: "cert.otherorg@adapter.invalid",     role: "admin", org: OTHER_ORG },
+
+    formsAuthor:    { id: "c0000000-0000-4000-8000-00000000d009", email: "cert.formsauthor@northwind.invalid",    role: CUSTOM.formsAuthor },
+    formsReader:    { id: "c0000000-0000-4000-8000-00000000d010", email: "cert.formsreader@northwind.invalid",    role: CUSTOM.formsReader },
+    formsConfirmer: { id: "c0000000-0000-4000-8000-00000000d011", email: "cert.formsconfirm@northwind.invalid",   role: CUSTOM.formsConfirmer },
+    formsOperator:  { id: "c0000000-0000-4000-8000-00000000d012", email: "cert.formsoperator@northwind.invalid",  role: CUSTOM.formsOperator },
+    formsBystander: { id: "c0000000-0000-4000-8000-00000000d013", email: "cert.formsbystander@northwind.invalid", role: CUSTOM.formsBystander },
+    formsTitular:   { id: "c0000000-0000-4000-8000-00000000d014", email: "cert.formstitular@northwind.invalid",   role: CUSTOM.formsTitular },
+    formsCrm:       { id: "c0000000-0000-4000-8000-00000000d015", email: "cert.formscrm@northwind.invalid",       role: CUSTOM.formsCrm },
 };
 
 async function principal(p) {
@@ -101,6 +145,15 @@ export async function setup() {
          */
         { org_id: ORG, role_key: CUSTOM.portalFinance, role_label: "Portal + financials reader", description: "Enters the portal and reads the money. Moves none of it.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.portalOnly,    role_label: "Portal only",                description: "Enters the portal and sees no Financials.",                is_system: false, is_active: true },
+
+        { org_id: ORG, role_key: CUSTOM.formsAuthor,    role_label: "Forms designer",     description: "Designs forms. Never sees what people send back.",        is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.formsReader,    role_label: "Submission reader",  description: "Reads submissions. Cannot change a form.",                is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.formsConfirmer, role_label: "Linkage checker",    description: "Confirms a submission belongs to the record it claims.",   is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.formsOperator,  role_label: "Forms operator",     description: "All three Forms capabilities, and no admin role.",         is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.formsBystander, role_label: "Portal bystander",   description: "In the portal, holding no Forms capability.",              is_system: false, is_active: true },
+        /* The label is the trap. It holds nothing. */
+        { org_id: ORG, role_key: CUSTOM.formsTitular,   role_label: "Forms Administrator", description: "Named for Forms, granted none of it.",                    is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.formsCrm,       role_label: "Customer lookup",     description: "Searches customers. Holds no Forms capability.",          is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
 
@@ -109,6 +162,14 @@ export async function setup() {
         [CUSTOM.none, ["crm.customers.read"]],
         [CUSTOM.portalFinance, ["portal.access", "fin.read"]],
         [CUSTOM.portalOnly, ["portal.access"]],
+
+        [CUSTOM.formsAuthor, ["portal.access", "forms.author"]],
+        [CUSTOM.formsReader, ["portal.access", "forms.submissions"]],
+        [CUSTOM.formsConfirmer, ["portal.access", "forms.submissions.confirm"]],
+        [CUSTOM.formsOperator, ["portal.access", "forms.author", "forms.submissions", "forms.submissions.confirm"]],
+        [CUSTOM.formsBystander, ["portal.access"]],
+        [CUSTOM.formsTitular, ["portal.access"]],
+        [CUSTOM.formsCrm, ["portal.access", "crm.customers.read"]],
     ]) {
         const { error } = await sb.rpc("replace_role_permission_grants", {
             p_org_id: ORG,
