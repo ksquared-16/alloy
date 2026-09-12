@@ -1364,5 +1364,43 @@
       "target_registry_note": "alloy_deployed_primary remains a registered DATABASE target (trusted-host-database-target.mjs:54, mapping to TARGET_CLASS.STAGING) even though it is absent from the deployed BROWSER session registry (deployed-target-registry.mjs, which lists only alloy_staging_web). The two registries are separate and the census is unaffected by the browser-target refactor. Worth stating because 'alloy_deployed_primary is not a registered target' is true of one registry and false of the other."
     },
     "for_whoever_dispatches_a_tenth_re_issue": "The instruction is unchanged and now has a third half. (1) Check whether the census has already run — run_history and wave0-authority-census.results.json answer it in one read, with no authorization. (2) Do not treat a matching contentHash or a mission title as evidence of anything. (3) Do not use `vac governed-action --status` to decide whether a request exists; it reads a runtime root the Gateway does not write to and will tell you every request is absent. Re-run this census only immediately before a lockout-class switch or an M1 apply."
+  },
+  "tenth_re_issue_2026_09_11": {
+    "dispatch": {
+      "mission_id": "msn_beb2e9e462cdce6513",
+      "mission_title": "Brief Spine Mission",
+      "assignment_id": "asg_8181b118c825ad",
+      "content_hash": "282eace8ea5a991546ba9e8b1c19fc7e",
+      "objective_as_dispatched": "Run Wave 0 (W-0): five read-only SELECTs against the deployed database producing a JSON evidence file."
+    },
+    "decision": "NO RUN 5 WAS FILED. This is the TENTH dispatch of W-0. AC_W0 has been met since 2026-07-31; the census has executed four times, most recently run 4 at 2026-09-04T11:28:53Z.",
+    "what_distinguishes_this_pass": "The ninth re-issue's work was still UNCOMMITTED in the working tree when this pass opened — both scope files dirty, same contentHash, a different mission and assignment (msn_861e1785ec233cf433 / asg_c79f56d685fe83). Two lanes were dispatched the same brief within hours. This pass committed that work rather than rewriting it, and then re-verified its claims from source instead of inheriting them. Three did not survive verification.",
+    "trigger_check_reverified_from_source": {
+      "method": "Not inherited from the ninth pass. Each trigger was re-read from the tree in this session.",
+      "lockout_class_switch": "NOT ARMED — confirmed directly. ABSENT_PROFILE_ENFORCEMENT is still \"legacy-all\" at web/lib/admin/resolveAdminAccessCore.ts:88.",
+      "m1_apply": "NOT ARMED — confirmed via the 2026-09-06 ruling (asg_7b05887a569304) recorded at 03-implementation-qa-sequence.md, which voids the 2026-08-07 authorization on RULE 5 and drops the gate to unmet.",
+      "conclusion": "Neither trigger is armed, so residual_risks[0]'s re-run condition is unsatisfied. Filing would risk a further operator card for a census that has already run; dedupe is mission-scoped and msn_beb2e9e462cdce6513 has no prior census action, so nothing would collapse it."
+    },
+    "correction_1_the_status_finding_is_right_but_its_evidence_had_already_decayed": {
+      "what_the_ninth_pass_claimed": "That gar_7fc0905cf5be45 sits at line 6 of the gateway requests.json and that `vac governed-action --status` nevertheless denies it.",
+      "what_is_true_now": "gar_7fc0905cf5be45 is NO LONGER IN THE STORE AT ALL — zero occurrences. Line 6 now carries gar_0fb42b607a0a99. The cited id aged out within hours of being cited, in the same session day.",
+      "why_this_matters": "Re-running --status on that id still prints 'no such request', but that result is now AMBIGUOUS and proves nothing: the id is genuinely absent. An inheriting pass that reran the ninth pass's own experiment would have read a true negative as a reproduction of the bug.",
+      "the_finding_re_proved_on_live_ids": "The bug is real and was re-established against ids confirmed present in the store at the moment of testing: gar_0fb42b607a0a99 (line 6) and gar_c9040f19629f6f (near the tail). `vac governed-action --status` denies BOTH with 'no such request'.",
+      "mechanism_confirmed_verbatim": "vac-governed-action.mjs:106-107 calls listGovernedActions({}) with no root. runtimeRoot() (lib/vacilando/governed-action-request.mjs:182-185) resolves $ALLOY_RUNTIME_ROOT or $HOME/.local/state/alloy-dev; storePath() (:209-211) appends vacilando/governed-actions/requests.json. A glob of the whole tree finds EXACTLY ONE requests.json on this host, and it is under .../alloy-dev/gateway/... — the non-gateway path the reader resolves does not exist.",
+      "still_not_confirmed": "The env-override experiment (ALLOY_RUNTIME_ROOT pointed at the gateway root) remains permission-walled by the session Bash gate, exactly as the ninth pass found. It is not needed for the conclusion: two live ids plus a single-store glob settle it."
+    },
+    "correction_2_retention_is_faster_than_measured": {
+      "finding": "The ninth pass described roughly eight hours of history and treated that as the reason the 2026-09-04 cards are unreachable. The window is real, but the turnover is faster than it implies — an id that pass cited as present had already been evicted by the time this pass read the same file.",
+      "consequence_for_the_open_card_question": "Unchanged in answer, reinforced in reason. The absence of gar_3368b11eb1b1ce and gar_c834cb05ce8425 from requests.json is a RETENTION artifact and is NOT evidence that either card was declined or closed. Any future pass citing a specific gar_ id as store evidence should re-read it in the same session; a cited id is not a durable reference.",
+      "operator_action_unchanged": "Check whether dec_b1c5c947f5129e / gar_3368b11eb1b1ce is still pending and decline it if so. There is still no worker-side withdraw."
+    },
+    "correction_3_preflight_ok_disagrees_between_artifact_and_narrative": {
+      "finding": "The ninth pass states 'preflight.ok is false'. The ARTIFACT does not say that. w6-m1-preflight.json:22 still literally reads \"ok\": true, with status_of_migration 'awaiting_authorization' and a later apply_authorization block reading 'AUTHORIZED, NOT YET APPLIED'.",
+      "where_false_actually_lives": "Only in the plan narrative — 03-implementation-qa-sequence.md records the 2026-09-06 ruling and asserts preflight.ok is now false. The ruling is authoritative and the M1 gate IS unmet; but the JSON evidence file was never updated to match.",
+      "why_it_matters": "An operator or agent who checks the artifact rather than the prose gets the OPPOSITE answer about whether M1 is authorized — and the artifact is the thing that looks like evidence. This is a live trap for the next apply attempt, not a bookkeeping nit.",
+      "recommended_fix_not_taken_here": "w6-m1-preflight.json is outside this assignment's declared scope, so this pass did not edit it. It should carry the 2026-09-06 ruling — either ok:false or an explicit superseded_by pointer — and that is a one-line change someone with the file in scope should make."
+    },
+    "five_vs_six_selects": "The objective again says 'five read-only SELECTs'. Unchanged, and still not a divergence to escalate — see scope_note_five_vs_six_selects. Q1–Q5 were W-0's original five; Q6 was folded in from plan §6/W-8 and has been part of every executed run. The objective quotes plan §4's own stale prose line, which still reads 'Five read-only queries' above a six-row table.",
+    "for_whoever_dispatches_an_eleventh_re_issue": "Unchanged, with one addition. (1) Check whether the census has already run — run_history and wave0-authority-census.results.json answer it in one read, with no authorization. (2) Do not treat a matching contentHash or a mission title as evidence of anything. (3) Do not use `vac governed-action --status` to decide whether a request exists; it reads a runtime root the Gateway does not write to and denies every id. (4) NEW: do not inherit a prior pass's cited gar_ id as evidence — the store turns over in hours, and a stale id returns the same 'no such request' string for an entirely different reason. Re-run this census only immediately before a lockout-class switch or an M1 apply."
   }
 }

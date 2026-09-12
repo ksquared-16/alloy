@@ -91,6 +91,12 @@ write channel to apply it. **New, and it reaches past this programme: `vac gover
 root the Gateway does not write to, so it answers *"no such request"* for every request id — including ones that
 provably exist.** The store itself *is* worker-readable (the route the seventh and eighth passes declared closed),
 but it retains only ~8 hours, so the open-card question is blocked by **retention, not by the workspace boundary** (§4)
+· **W-0 re-issued a tenth time — 2026-09-11** (mission `msn_beb2e9e462cdce6513`, assignment `asg_8181b118c825ad`) —
+**no run 5; the ninth pass's work was found uncommitted and was committed here, then re-verified from source.** Two
+lanes held the same brief and hash within hours. **Three of its claims did not survive**: its cited `gar_` evidence id
+had already been evicted from the store (the bug is real, but was **re-proved on two live ids**), retention turns over
+faster than measured, and — **the one that can mislead an apply** — *`preflight.ok` is `false` only in this plan's
+prose, while `w6-m1-preflight.json:22` still reads `"ok": true`* (§4)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -1111,6 +1117,52 @@ already run — `run_history` and `wave0-authority-census.results.json` answer i
 (2) Do not treat a matching `contentHash`, or a mission title, as evidence of anything. (3) **Do not use `vac
 governed-action --status` to decide whether a request exists** — it will tell you every request is absent. Re-run
 this census only immediately before a lockout-class switch or an M1 apply.
+
+#### W-0 re-issued a tenth time — **2026-09-11**, assignment `asg_8181b118c825ad`: two lanes, one brief, three corrections
+
+Mission `msn_beb2e9e462cdce6513` v1, contentHash `282eace8ea5a991546ba9e8b1c19fc7e`, mission title **"Brief Spine
+Mission"** — *the same hash and title the ninth re-issue carried*. **No run 5 was filed. AC_W0 remains met** on run 4
+(2026-09-04T11:28:53Z).
+
+**The ninth pass's work was still uncommitted when this one opened.** Both scope files were dirty in the working
+tree, written by a *different* mission and assignment (`msn_861e1785ec233cf433` / `asg_c79f56d685fe83`) within hours.
+**Two lanes were dispatched the same brief.** This pass committed that work rather than rewriting it, then
+re-verified its claims from source. **Three did not survive.**
+
+**The triggers were re-read, not inherited.** `ABSENT_PROFILE_ENFORCEMENT` is still `"legacy-all"`
+(`resolveAdminAccessCore.ts:88`); M1's authorization is still VOID on RULE 5 per the 2026-09-06 ruling. Neither is
+armed, so `residual_risks[0]`'s re-run condition is unmet.
+
+**⚠ Correction 1 — the `--status` finding is right, but its evidence had already rotted.** The ninth pass cited
+`gar_7fc0905cf5be45` as sitting at line 6 of the gateway `requests.json`. **That id is no longer in the store at
+all**; line 6 now carries `gar_0fb42b607a0a99`. Re-running `--status` on the cited id still prints *"no such
+request"* — but that result is **ambiguous and proves nothing**, because the id is genuinely absent. A pass that
+dutifully reran its predecessor's experiment would have read a **true negative as a reproduction**. The bug is real
+and was **re-proved on ids confirmed present at the moment of testing** — `gar_0fb42b607a0a99` and
+`gar_c9040f19629f6f` are both denied. The mechanism holds verbatim: `vac-governed-action.mjs:106-107` passes no root,
+`runtimeRoot()` resolves `$HOME/.local/state/alloy-dev`, and a glob finds **exactly one** `requests.json` on this
+host — under `.../alloy-dev/`**`gateway`**`/...`. The env-override experiment remains permission-walled, and is not
+needed for the conclusion.
+
+**Correction 2 — retention is faster than measured.** The ~8-hour window is real, but an id the ninth pass cited as
+present had already been evicted before this pass read the same file. The open-card answer is unchanged and its
+reason reinforced: the absence of `gar_3368b11eb1b1ce` is a **retention artifact, not a declination**. **A cited
+`gar_` id is not a durable reference** — re-read it in-session or do not cite it.
+
+**⚠ Correction 3 — `preflight.ok` disagrees between artifact and narrative.** The ninth pass reports *"`preflight.ok`
+is false."* **The artifact does not say that.** `w6-m1-preflight.json:22` still literally reads `"ok": true`, with
+`status_of_migration: awaiting_authorization` and an `apply_authorization` block reading *"AUTHORIZED, NOT YET
+APPLIED."* The `false` lives **only in this plan's prose.** The 2026-09-06 ruling is authoritative and the M1 gate
+*is* unmet — but **anyone who checks the evidence file instead of the narrative gets the opposite answer about
+whether M1 is authorized**, and the JSON is the thing that looks like evidence. That is a live trap for the next
+apply attempt. `w6-m1-preflight.json` is outside this assignment's scope so this pass did not edit it; **it should
+carry `ok: false` or a `superseded_by` pointer, and that is one line for whoever holds it.**
+
+**For whoever dispatches an eleventh re-issue.** Unchanged, plus a fourth clause. (1) Check whether the census has
+already run. (2) Do not treat a matching `contentHash` or mission title as evidence. (3) Do not use `vac
+governed-action --status` to decide whether a request exists. (4) **Do not inherit a prior pass's cited `gar_` id as
+evidence** — the store turns over in hours, and a stale id returns the same *"no such request"* string for an
+entirely different reason. Re-run this census only immediately before a lockout-class switch or an M1 apply.
 
 ---
 
