@@ -93,6 +93,14 @@ export function normalizeRoleKey(raw: unknown): string {
  * Per plan §2 step 4 the switch commit must also DELETE this constant, the `legacy-all` branch
  * and the guard test asserting it; leaving it flipped-but-present is the dormant fallback W-20
  * exists to clean up.
+ *
+ * **The blast radius is not just this file — re-walk the consumers.** Six sites read this answer
+ * (enforcement, the preview below, `inviteLocationAccess`, `memberIdentityProjection`,
+ * `locationConcernCache`, `LocationOwnedConcernPanels`). Every one *derives* it, which is what
+ * makes the flip a one-line change — but the W-7 third dispatch (2026-09-11) found a consumer
+ * that derived the scope VALUES and hard-coded the SENTENCE explaining them, so the flip would
+ * have rendered "scope is not restricted" on the page an operator opens to diagnose the lockout.
+ * The set grows between dispatches: the plan's consumer table is an inventory, not an invariant.
  */
 export type AbsentProfileMode = "legacy-all" | "deny";
 

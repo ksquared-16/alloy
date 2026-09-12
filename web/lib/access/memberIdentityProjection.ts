@@ -73,9 +73,28 @@ export type MemberScopeProjection = {
     site_location_ids: string[];
 };
 
+/**
+ * Why configuration and enforcement disagree for a membership with no profile row.
+ *
+ * **Derived from `ABSENT_PROFILE_ENFORCEMENT`, not written beside it.** The values this sentence
+ * explains — `effective_department_scope` / `effective_site_scope` — have always been taken from
+ * the enforcing resolver, and the test below follows the constant without an edit. The sentence
+ * itself did not: it was pinned to `legacy-all` in prose. On the day `W-7` flips the constant, the
+ * fixed text would have told an operator *"scope is not restricted"* about a principal the
+ * resolver denies every row — in the amber note on the page they open to diagnose exactly that
+ * lockout (`AccessUsersConfigurationPage`, `access-user-access-no-profile`) — and
+ * `scopeStatementForMember` reads this reason *before* the scope values, so the wrong sentence
+ * would also suppress the correct `restricted` rendering. That is `W-7`'s own displayed-vs-actual
+ * divergence (`C11`), one artifact over from the preview path it already closed. Derived here so
+ * it follows the flip the way the values do. Locked in `memberIdentityProjection.test.ts` against
+ * both modes and against being un-derived.
+ */
 export const ABSENT_PROFILE_DIVERGENCE_REASON =
-    "No access profile exists for this membership. Alloy currently treats an absent profile as " +
-    "organization-wide (legacy behaviour); scope is not restricted until a profile is configured.";
+    ABSENT_PROFILE_ENFORCEMENT === "deny" ?
+        "No access profile exists for this membership. Alloy denies a membership with no profile " +
+        "every department and location; nothing is reachable until a profile is configured."
+    :   "No access profile exists for this membership. Alloy currently treats an absent profile as " +
+        "organization-wide (legacy behaviour); scope is not restricted until a profile is configured.";
 
 /**
  * @param profileRow - the `user_access_profiles` row, or `null`/`undefined` when none exists.

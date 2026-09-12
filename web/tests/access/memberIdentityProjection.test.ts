@@ -12,6 +12,8 @@
  * projection depends on disappear while the suite stayed green — the failure mode Trust 2.7 paid
  * for.
  */
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
     ABSENT_PROFILE_DIVERGENCE_REASON,
@@ -26,6 +28,10 @@ import {
 import { ABSENT_PROFILE_ENFORCEMENT } from "@/lib/admin/resolveAdminAccessCore";
 
 const NOW = Date.parse("2026-08-10T12:00:00.000Z");
+
+/** W-7: what each absent-profile answer's explanation is allowed to claim. Never both. */
+const SAYS_OPEN = /organization-wide|not restricted/;
+const SAYS_DENIED = /denies|nothing is reachable/;
 
 describe("projectMemberScope — absent is not org-wide (W-47, IA-R3)", () => {
     it("a membership with no access profile row reports `unset`, not `all`", () => {
@@ -65,6 +71,49 @@ describe("projectMemberScope — absent is not org-wide (W-47, IA-R3)", () => {
         const expected = ABSENT_PROFILE_ENFORCEMENT === "deny" ? "restricted" : "all";
         expect(absent.effective_site_scope).toBe(expected);
         expect(absent.effective_department_scope).toBe(expected);
+    });
+
+    it("the divergence REASON follows the same constant as the values it explains (W-7)", () => {
+        // The sentence and the scope it describes must not report two different platforms.
+        // `scopeStatementForMember` reads this reason *before* the scope values, so a sentence
+        // pinned to `legacy-all` would both mislead and suppress the correct `restricted`
+        // rendering on the very page an operator opens to diagnose an L1 lockout.
+        const denied = ABSENT_PROFILE_ENFORCEMENT === "deny";
+        expect(SAYS_OPEN.test(ABSENT_PROFILE_DIVERGENCE_REASON)).toBe(!denied);
+        expect(SAYS_DENIED.test(ABSENT_PROFILE_DIVERGENCE_REASON)).toBe(denied);
+    });
+
+    it("…and that check is not vacuous — the two texts are separable", () => {
+        const legacyText =
+            "Alloy currently treats an absent profile as organization-wide (legacy behaviour); "
+            + "scope is not restricted until a profile is configured.";
+        const denyText =
+            "Alloy denies a membership with no profile every department and location; "
+            + "nothing is reachable until a profile is configured.";
+
+        expect([SAYS_OPEN.test(legacyText), SAYS_DENIED.test(legacyText)]).toEqual([true, false]);
+        expect([SAYS_OPEN.test(denyText), SAYS_DENIED.test(denyText)]).toEqual([false, true]);
+    });
+
+    it("…and is DERIVED in source, so the flip cannot leave it behind", () => {
+        // The assertion above passes under `legacy-all` for a hard-coded legacy string too — it
+        // can only fire on the day of the flip, which is the day nobody is reading this file.
+        // This one fires now: the reason must be written in terms of the enforcement constant.
+        const source = fs.readFileSync(
+            path.join(__dirname, "..", "..", "lib", "access", "memberIdentityProjection.ts"),
+            "utf8",
+        );
+        const declaration = source.slice(source.indexOf("export const ABSENT_PROFILE_DIVERGENCE_REASON"));
+        const body = declaration.slice(0, declaration.indexOf(";"));
+        expect(body).toContain("ABSENT_PROFILE_ENFORCEMENT");
+
+        // Red-run, without mutating a file other lanes are reading: the same extraction over the
+        // hard-coded declaration this replaced does NOT contain the constant.
+        const hardCoded =
+            'export const ABSENT_PROFILE_DIVERGENCE_REASON =\n'
+            + '    "No access profile exists for this membership. Alloy currently treats an absent profile as "\n'
+            + '    + "organization-wide (legacy behaviour); scope is not restricted until a profile is configured.";';
+        expect(hardCoded.slice(0, hardCoded.indexOf(";"))).not.toContain("ABSENT_PROFILE_ENFORCEMENT");
     });
 
     it("allow-lists are reported only where the configuration makes them meaningful", () => {
