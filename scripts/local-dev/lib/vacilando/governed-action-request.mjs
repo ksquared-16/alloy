@@ -27,6 +27,7 @@ import { dirname, join } from "node:path";
 import {
   ACTION_TYPES,
   DEFAULT_TARGET,
+  artifactContractFor,
   classifyActionAvailability,
   getActionDefinition,
 } from "./trusted-host-action-registry.mjs";
@@ -1813,11 +1814,60 @@ function validateRequestShape(input, { root } = {}) {
     ? "staging"
     : DEFAULT_TARGET;
   const target = String(input.target || defaultTarget).trim() || defaultTarget;
-  const artifactRefs = Array.isArray(input.artifact_refs || input.artifactRefs)
+  const declaredRefs = Array.isArray(input.artifact_refs || input.artifactRefs)
     ? (input.artifact_refs || input.artifactRefs).map(String).filter(Boolean)
     : (input.artifact ? [String(input.artifact)] : []);
   const inputs = sanitizeActionInputs(input.inputs || {}, actionKey);
   if (inputs.__rejected) return { ok: false, error: inputs.__rejected, failure_code: "policy_denied" };
+
+  /*
+   * NORMALISE THE ARTIFACT AT THE FILING BOUNDARY, ONCE.
+   *
+   * THE DEFECT THIS CLOSES, measured. A census was filed with
+   * `inputs.queryArtifactPath` naming a real artifact and `artifact_refs`
+   * empty. Execution resolves the query from `artifact_refs`, and
+   * `validateAgainstRegistry` overwrites whatever the caller put in `inputs`
+   * with `artifactPathFrom(artifactRefs)` — so the supplied path was discarded
+   * and the refusal read "queryArtifactPath required", naming the single field
+   * the filer HAD provided. Two semantically equivalent fields, one silently
+   * ignored.
+   *
+   * The fix belongs here rather than in the executor. Teaching execution to
+   * search alternate input fields would preserve the ambiguity and give the
+   * policy evaluator and the executor two places to disagree about which
+   * artifact is being run. Normalising once, before persistence, means the
+   * request that is stored already carries the reference execution consumes.
+   *
+   * THIS IS NOT A DEFAULT. It promotes a path the caller explicitly named and
+   * invents nothing when none was given — the distinction that matters, because
+   * an earlier fallback here silently substituted the Q15 authority census for
+   * requests that named no query at all, and a privileged read whose subject is
+   * guessed is not a governed action.
+   */
+  const artifactContract = artifactContractFor(getActionDefinition(actionKey));
+  let artifactRefs = declaredRefs;
+  let artifactNormalizedFrom = null;
+  if (artifactContract && !artifactRefs.length) {
+    for (const key of artifactContract.inputKeys) {
+      const supplied = inputs?.[key];
+      if (supplied && String(supplied).trim()) {
+        artifactRefs = [String(supplied).trim()];
+        artifactNormalizedFrom = key;
+        break;
+      }
+    }
+  }
+  if (artifactContract && !artifactRefs.length) {
+    // Refused HERE, at filing, rather than several layers later as an executor
+    // surprise — and the refusal names the canonical field instead of the one
+    // the caller is most likely to have already set.
+    return {
+      ok: false,
+      error: "missing_canonical_artifact_reference",
+      failure_code: "missing_canonical_artifact_reference",
+      detail: `${actionKey} executes from artifact_refs. Supply artifact_refs, or ${artifactContract.inputKeys.join(" / ")} in inputs, and it will be normalised into artifact_refs before the request is persisted.`,
+    };
+  }
   return {
     ok: true,
     actionKey,
@@ -1831,6 +1881,9 @@ function validateRequestShape(input, { root } = {}) {
     purpose,
     target,
     artifactRefs,
+    // Recorded so evidence can say the reference was promoted from an input
+    // rather than supplied canonically. Observability, never behaviour.
+    artifactNormalizedFrom,
     inputs,
     continuationPlan: input.continuation_plan || input.continuationPlan || defaultContinuationPlan(actionKey, inputs),
   };
