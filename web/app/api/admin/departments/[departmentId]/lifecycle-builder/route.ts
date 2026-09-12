@@ -41,6 +41,7 @@ import { parseParticipantDecision } from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
     isAuthorableRequirementKind,
     parseStageRequirementsV1,
+    validateWorkRequirementReferences,
     REQUIREMENT_KIND_UNSUPPORTED_REASON_V1,
 } from "@/lib/lifecycle/stageRequirementsV1";
 import { loadBusinessProcessEditorState } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
@@ -420,6 +421,27 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                     return NextResponse.json(
                         { error: "One or more requirements are not readable — each needs a unique requirement_id, a known kind with its reference, and a level." },
                         { status: 400 }
+                    );
+                }
+                /*
+                 * A work requirement must name work THIS STAGE produces. The runtime reports state
+                 * for the template keys in the stage's own operating plan, so a requirement naming
+                 * anything else would wait forever on work that never appears here — an operator
+                 * meeting a stage they cannot leave, with a blocker pointing at no button.
+                 */
+                const stageRecord = targetProcess.stages.find((st) => st.key === stageKey);
+                const workRefusals = validateWorkRequirementReferences(
+                    parsed.requirements,
+                    (stageRecord?.stage_operating_plan_v1?.work_templates ?? []).map((t) => t.template_key),
+                );
+                if (workRefusals.length) {
+                    return NextResponse.json(
+                        {
+                            error: workRefusals.map((r) => r.detail).join(" "),
+                            code: "unknown_work_template",
+                            refusals: workRefusals,
+                        },
+                        { status: 422 },
                     );
                 }
                 for (const requirement of parsed.requirements) {

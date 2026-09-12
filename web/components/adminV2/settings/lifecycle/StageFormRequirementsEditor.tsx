@@ -19,6 +19,7 @@ import { ClipboardList, Flag, Loader2, Plus, X } from "lucide-react";
 import type { LifecycleBuilderProcessRecord, LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { PersistedRequirementLevel } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import type { RequirementEnforcement } from "@/lib/lifecycle/requirementTimingTypes";
+import { requirementsOfOtherKinds } from "@/lib/lifecycle/stageRequirementsV1";
 
 type FormOption = { id: string; name: string; key: string; has_published_version?: boolean };
 
@@ -148,10 +149,20 @@ export default function StageFormRequirementsEditor({
 
     const saveRequirements = useCallback(
         () => run(
-            { action: "set_stage_requirements", process_id: process?.id, stage_key: stageKey, requirements: rows },
+            {
+                action: "set_stage_requirements",
+                process_id: process?.id,
+                stage_key: stageKey,
+                /*
+                 * The action REPLACES the stage's whole section, so this editor must carry the
+                 * kinds it does not edit. Submitting only form rows would delete the stage's work
+                 * requirements every time a form was saved — silently, since nothing would error.
+                 */
+                requirements: [...rows, ...requirementsOfOtherKinds(stageRecord?.requirements_v1, "form")],
+            },
             rows.length ? `Saved ${rows.length} form requirement${rows.length === 1 ? "" : "s"}. Publish to make it live.` : "Saved — this stage now requires no forms. Publish to make it live.",
         ),
-        [run, process?.id, stageKey, rows],
+        [run, process?.id, stageKey, rows, stageRecord?.requirements_v1],
     );
 
     const setEntryPoint = useCallback(

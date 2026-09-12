@@ -110,6 +110,14 @@ concurrency:
 # once: a regression would not show up as one wrong lane, it would show up as every lane being
 # decided by something else.
 
+# Work-backed stage-exit requirements added two: `workRequirementEvaluation` (required work
+# blocks an exit only where configuration says that work is required for THAT transition — the
+# Lead -> Waitlist case is asserted by name, because it is the one a blanket "required work always
+# blocks" rule would break) and `workRequirementAuthoring` (the reference gate, and the reason
+# both requirement editors carry the kinds they do not edit: `set_stage_requirements` replaces the
+# whole section, so a kind-specific editor submitting only its own rows silently deletes the
+# others).
+
 jobs:
   run:
     name: Enrollment configuration certification
@@ -171,4 +179,6 @@ jobs:
             tests/lifecycle/startEnrollmentIdempotentReuse.test.ts \
             tests/lifecycle/processTrackAdoption.test.ts \
             tests/lifecycle/trackAdoptionSettingsAuthoring.test.ts \
-            tests/queues/adoptedTracksActivateRouting.test.ts
+            tests/queues/adoptedTracksActivateRouting.test.ts \
+            tests/lifecycle/workRequirementEvaluation.test.ts \
+            tests/lifecycle/workRequirementAuthoring.test.ts
