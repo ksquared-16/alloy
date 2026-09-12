@@ -4688,6 +4688,64 @@ as a precondition. W-6 stays a one-time backfill and is not re-scoped to chase t
 invariant belongs to W-5/M9. **Read this exit criterion as "the backlog was emptied once", never as "the
 population is closed".**
 
+#### The fifth dispatch — **2026-09-11**, assignment `asg_0a98843abea843` (`msn_861e1785ec233cf433`)
+
+**No migration was authored, and none was needed.** The objective reads as though W-6 were unstarted —
+*"Implement W-6 … one additive migration creating a profile row for every membership lacking one"*. It was
+implemented on 2026-08-07. `20260807140000_backfill_membership_access_profiles.sql` was read in full this pass
+and verified unchanged. **Four of W-6's five dispatches have now arrived at an already-authored migration**;
+only the third had authoring work to do. The gate has never been the code, and an objective that keeps asking
+for the code cannot move it.
+
+**The finding: the 2026-09-06 gate ruling was applied to one artifact and left standing in the other.** The
+eleventh W-0 re-issue spent a dispatch discovering that this section's prose claimed
+`w6-m1-preflight.json` *"now carries `preflight.ok: false`"* when it did not, and repaired that file; the
+twelfth verified the repair committed at `9745f7111`. **Neither looked in `wave0-authority-census.json`, which
+carries its own independent copy of the same gate state.** As of this pass its `w6_m1_preflight` block still
+read `preflight.ok: true`, with a `gate_position` saying *"NOW: … `operator_review`"* and a `status` saying
+*"the gate has NOW BEEN MOVED … reads `operator_review` rather than `unmet`"* — three mutually consistent
+fields, five days after the ruling voided them, in **the other scope file of W-6's own assignment**. All three
+are now corrected fail-closed, with the 2026-08-07 values preserved alongside rather than erased.
+
+**Why it survived, and the lesson that generalises past it.** The repair was scoped to a *filename* rather than
+to a *fact*. The ruling's prose names `w6-m1-preflight.json`, so that is the file the eleventh pass opened, and
+the twelfth then verified that specific repair and asked no broader question. The programme's standing rule —
+*"when the plan records a repair in the past tense, open the artifact and confirm it"* — is necessary and
+insufficient. The stronger form: **when you repair a duplicated fact, grep for the fact, not the file.** A gate
+value copied into two artifacts is two gates; repairing one produces a tree that is half-right and fully
+confident, which is *harder* to detect than a uniformly wrong one, because every single file a reader opens is
+internally consistent.
+
+**R2 is no longer blocked on the absence of a database — it is one approval from discharge.** Every prior
+dispatch recorded *"no local stack was running (`docker ps` empty)"*. That is no longer true: the sanctioned
+shared stack `alloy-cert` is up and `supabase_db_alloy-cert` runs **PostgreSQL 17.6**, the same version
+`target_identity_resolved` recorded for the deployed target. A rollback-only harness is now committed at
+[`w6-m1-parsecheck.sql`](w6-m1-parsecheck.sql) — `SET lock_timeout`/`statement_timeout`, `BEGIN`, the migration
+body, the Tier A anti-join, `ROLLBACK` — whose embedded body was verified **byte-identical to migration lines
+1–169 by `diff`**. It commits nothing. *(It was first written to the worktree root as a dotfile and was
+silently gitignored by `.gitignore:50` — `/*.sql` — which would have left this paragraph pointing at a file no
+later dispatch could see. It is not a migration and must not be moved into `supabase/migrations/`.)* What blocks it is the **session permission gate**: `docker exec … psql` returns *"requires
+approval"* in this worker, the same wall already recorded for `psql` elsewhere in this document. **This is a
+one-command operator approval, not engineering** — and discharging it would stop a syntax error from burning a
+second apply authorization. R2 stays **undischarged**: the harness has not been executed, and this section
+claims only that it is built and blocked, never that the migration parses.
+
+**A near-miss worth recording so it is not "discovered" as a regression.** `deployed-target-registry.mjs` does
+**not** contain `alloy_deployed_primary`, and reading that file alone suggests the target no longer resolves —
+i.e. that the twelfth pass's write-channel correction had been invalidated by a target refactor. **It is a
+different registry.** That module owns deployed *browser session* targets (base URL, cookie domain, QA
+identity) and holds only `alloy_staging_web`; **database** targets are owned by
+`trusted-host-database-target.mjs`, where `alloy_deployed_primary` is registered class `STAGING` at `:54`. Two
+registries, similar names, different subjects. The twelfth pass's correction was re-checked from source this
+pass and **holds**: `database.apply_migration` has a real execute branch at `trusted-host-actions.mjs:648-650`.
+
+**Third consecutive dispatch to find real prior work uncommitted.** `membershipProfileInvariant.integration.test.ts`
+carried 221 uncommitted lines — the test half of the W-5 fifth issuance whose docs half had already landed as
+`f754ed99f`, adding the SQL-layer lock W-5 never had. It was run green first (**4 passed / 8 skipped** — the
+SQL-layer block is not env-guarded and does execute) and committed byte-unchanged at `ca0478383`. Its mtime was
+seven hours old, so this was not a mid-edit collision. **Dispatches 3, 4 and 5 have each found work at risk;
+three instances is a dispatch-level defect, not three accidents.**
+
 ### W-7 — Absent scope denies *(M · I-19 · lockout class L1)*
 
 Flip `resolveAdminAccessCore.ts:152-161` from "missing profile ⇒ both scopes `all`" to deny, and delete the
@@ -5987,7 +6045,7 @@ Migrations introduced by this plan, against `supabase/migrations/` (289 files to
 
 | # | Workstream | Migration | Target | Preflight focus |
 |---|---|---|---|---|
-| M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**PREFLIGHT VOID 2026-09-06 — RE-AUTHORIZATION REQUIRED**) | shared | ~~**PREFLIGHT EXECUTED 2026-08-07** on census run 3 → `preflight.ok: true`~~ **VOIDED 2026-09-06 by `asg_7b05887a569304` (§6 W-6 ruling).** Census run 4 (2026-09-04) moved the population **2 → 5** on the `pairs_without_profile` grain (of **11** distinct pairs across **13** membership rows; **0 orphan profiles**, unchanged). RULE 5 (immediacy) fails: the 2026-08-07 authorization rests on a 28-day-old preflight and a written record saying *"2 rows"*. `preflight.ok` is now **`false`**, gate drops `operator_review` → **`unmet`**, `status` is **`preflight_void_reauthorization_required`**. **`abort_conditions[0]` FIRES** — growth attributed to the *class* (seed/QA tooling; four writers enumerated in §6) but not to the *instance*; **no product path can produce a fail-open pair**. The migration itself is **unchanged and correct** — it self-sizes in-transaction, so this is a stale *authorization*, not a stale migration. ~~**No worker-reachable write channel exists to apply it** (see §6).~~ **CORRECTED 2026-09-11 (twelfth W-0 re-issue): a channel does exist** — `database.apply_migration` is registered, dispatched, has an execute branch (`trusted-host-actions.mjs:648-650`) and accepts `environment: staging`. **M1 is un*authorized*, not un*appliable*; the gate is the VOID authorization plus `preflight.ok: false`, and it holds.** Evidence [`w6-m1-preflight.json`](w6-m1-preflight.json) |
+| M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**PREFLIGHT VOID 2026-09-06 — RE-AUTHORIZATION REQUIRED**) | shared | ~~**PREFLIGHT EXECUTED 2026-08-07** on census run 3 → `preflight.ok: true`~~ **VOIDED 2026-09-06 by `asg_7b05887a569304` (§6 W-6 ruling).** Census run 4 (2026-09-04) moved the population **2 → 5** on the `pairs_without_profile` grain (of **11** distinct pairs across **13** membership rows; **0 orphan profiles**, unchanged). RULE 5 (immediacy) fails: the 2026-08-07 authorization rests on a 28-day-old preflight and a written record saying *"2 rows"*. `preflight.ok` is now **`false`**, gate drops `operator_review` → **`unmet`**, `status` is **`preflight_void_reauthorization_required`**. **`abort_conditions[0]` FIRES** — growth attributed to the *class* (seed/QA tooling; four writers enumerated in §6) but not to the *instance*; **no product path can produce a fail-open pair**. The migration itself is **unchanged and correct** — it self-sizes in-transaction, so this is a stale *authorization*, not a stale migration. ~~**No worker-reachable write channel exists to apply it** (see §6).~~ **CORRECTED 2026-09-11 (twelfth W-0 re-issue): a channel does exist** — `database.apply_migration` is registered, dispatched, has an execute branch (`trusted-host-actions.mjs:648-650`) and accepts `environment: staging`. **M1 is un*authorized*, not un*appliable*; the gate is the VOID authorization plus `preflight.ok: false`, and it holds.** **Re-verified 2026-09-11 (fifth W-6 dispatch, `asg_0a98843abea843`) — the channel correction stands** (`trusted-host-database-target.mjs:54` registers `alloy_deployed_primary` class `STAGING`; the similarly-named `deployed-target-registry.mjs` is the *browser-session* registry and is not evidence about database targets). That pass also found the gate state **repaired in `w6-m1-preflight.json` but left stale in `wave0-authority-census.json`**, whose `w6_m1_preflight` block still read `preflight.ok: true` / `operator_review`; now corrected fail-closed. **R2 is now one operator approval from discharge** — a version-matched PostgreSQL 17.6 is running on the shared cert stack and a rollback-only harness is committed at [`w6-m1-parsecheck.sql`](w6-m1-parsecheck.sql). Evidence [`w6-m1-preflight.json`](w6-m1-preflight.json) |
 | M2 | W-5 | Atomic membership+profile RPC — **authored 2026-08-07**, `20260807090001_membership_profile_atomic_create.sql` (**not applied**) | shared | Function only; no data effect. `EXECUTE` revoked from `PUBLIC` before grant; `SECURITY INVOKER` |
 | ~~M3~~ | ~~W-9~~ | ~~Catalog consolidation — repoint grants to one FK~~ **DISCHARGED OUT-OF-TRACK 2026-07-30** by `20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql` (Access & Roles V2 Phase 0), live on the target as version `20260730000602`, vendored `555fa056a`. Its own §0 preflight ran the orphan-grant and unexpected-FK checks this row specifies, **fail-closed before any `DROP`**. W-9 authored no migration — see §7 | — | — |
 | ~~M4~~ | ~~W-9~~ | ~~Drop retired catalog tables (**separate, later**)~~ **STRUCK — there are no retired catalog *tables*.** Phase 0 recreated `permissions`/`permission_keys` as views; retiring those views is **`W-60`/`M20`** (wave 14, product-source copy §47), which audits the base-table grants *before* dropping. A W-9 owner authoring a drop here duplicates `W-60` and pre-empts its audit | — | — |
