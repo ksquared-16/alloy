@@ -32,7 +32,16 @@ const repoRoot = join(webRoot, "..");
 const apiRoot = join(webRoot, "app", "api");
 const migrationsDir = join(repoRoot, "supabase", "migrations");
 
-/** The six audited transaction owners. Each one is the ONLY way its mutation may happen. */
+/**
+ * The audited transaction owners. Each one is the ONLY way its mutation may happen.
+ *
+ * W-17 added the seventh and eighth. They are listed here rather than left out because the count
+ * below asserts the set EXACTLY: a producer with no caller fails, and a route reaching an owner this
+ * list does not name is not counted as an access route at all — which is how a new producer could
+ * otherwise arrive audited-looking and unverified. Adding them here is what subjects them to the
+ * same two structural proofs as the original six: the event is written inside the function that
+ * changes access, and the function refuses a change that names no actor.
+ */
 const AUDITED_OWNERS = [
     "replace_role_permission_grants",
     "save_role_definition_and_grants",
@@ -40,6 +49,8 @@ const AUDITED_OWNERS = [
     "replace_membership_with_access_profile",
     "remove_member_access_audited",
     "replace_member_access_scope_audited",
+    "assign_member_role_audited",
+    "remove_member_role_audited",
 ] as const;
 
 /** Tables whose contents ARE someone's access. A write here outside an owner is an unaudited path. */
@@ -146,10 +157,10 @@ describe("D2 — access mutation audit coverage", () => {
     it("finds the access mutation routes rather than trusting a list", () => {
         // NON-VACUITY. A scan that found nothing must fail, not pass quietly — this is the exact
         // failure three earlier discovery scans in this lane shipped green with.
-        expect(accessRoutes.length, "the scan lost the access mutation routes").toBeGreaterThanOrEqual(6);
+        expect(accessRoutes.length, "the scan lost the access mutation routes").toBeGreaterThanOrEqual(AUDITED_OWNERS.length);
     });
 
-    it("accounts for all six audited transaction owners", () => {
+    it("accounts for every audited transaction owner", () => {
         const reached = new Set(accessRoutes.flatMap((r) => r.owners));
         for (const owner of AUDITED_OWNERS) {
             expect([...reached], `no route reaches ${owner}; a producer has no caller`).toContain(owner);
