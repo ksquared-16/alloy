@@ -76,6 +76,14 @@ const APPROVED_ADDITIONS: Record<string, string> = {
         "20260912020000 — handling submissions that change records or reach people: sending, submitting on behalf, linking by hand, generating a document",
     "forms.submissions.confirm":
         "20260912020000 — confirming a linkage the system proposed, metadata only; kept separate because `ops` could already do exactly this and nothing broader",
+    "processing.operate":
+        "20260912040000 — working a Processing case: classifying it, resolving identity, recording decisions, committing proposed records. Replaced the shared `ctx.role === admin || ops` in operatorRouteContext, AND gave authority to six mutations that previously required only portal admission",
+    "processing.archive":
+        "20260912040000 — taking a case out of the queue; its own key so that granting `ops` processing.operate does not also hand it an archive it never had",
+    "processing.documents.manage":
+        "20260912040000 — renaming a source document, and deleting one with the case it opened and the stored file; deliberately NOT `documents.write`, which `ops` holds in every organization",
+    "processing.dev_cleanup":
+        "20260912040000 — the Processing test-data reset; necessary and not sufficient, because the route and the planner both refuse in production whoever holds it",
 };
 
 describe("W-11 — the catalog is discovered completely", () => {

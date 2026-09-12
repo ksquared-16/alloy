@@ -2,7 +2,7 @@
   "reviewed": "2026-09-10",
   "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
   "ratchet": {
-    "max_pending": 656,
+    "max_pending": 631,
     "$comment": "Lowered 693 -> 679 by the Access & Identity V2 Financials slice: twelve financial record-data handlers converted to fin.read and two GL-account mutations to fin.write, plus two entries overturned from a reasoned `none` (see their `supersedes`). The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack. Lowered 679 -> 656 by the Forms authority cleanup: 23 handlers that were already enforcing authorization moved from pending to declared. The enforcement did not become stricter - it stopped being invisible to this table. A ceiling left at 679 would let those 23 silently regress to undeclared."
   },
   "inherited": {
@@ -2815,10 +2815,16 @@
     },
     "app/api/admin/pos/documents/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Destructive: deletes the document, the Processing case it opened and the stored file. Deliberately NOT documents.write, which ops holds in every organization and which would therefore have handed ops this deletion."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Renames a source document. Deliberately NOT documents.write, which ops holds in every organization."
       }
     },
     "app/api/admin/pos/documents/route.ts": {
@@ -2828,27 +2834,42 @@
     },
     "app/api/admin/pos/packets/[packetDefinitionId]/projection/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/pos/packets/compose/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/pos/packets/from-template/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/pos/packets/preview/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/pos/packets/requirements/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/pos/packets/roster/route.ts": {
@@ -2863,7 +2884,10 @@
     },
     "app/api/admin/pos/packets/sessions/[sessionId]/participant-projection/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/pricing-dimension-values/[id]/route.ts": {
@@ -2960,27 +2984,42 @@
     },
     "app/api/admin/processing/cases/[caseId]/approve/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "resolveOperatorRoute",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work, bound through the shared operator context rather than an inline guard: resolveOperatorRoute is the ONE place these seven routes derive authority, and it now reads processing.operate where it read `ctx.role === \"admin\" || ctx.role === \"ops\"`. Declaring the inline helper here would have named a guard these routes do not call."
       }
     },
     "app/api/admin/processing/cases/[caseId]/archive/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.archive",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Takes a case out of the queue. Its own key so that granting ops processing.operate does not also hand it an archive it has never had."
       }
     },
     "app/api/admin/processing/cases/[caseId]/classification/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. TIGHTENING, not compatibility: this mutation was previously authorized by portal admission alone, so any member who could reach the admin shell could commit it."
       }
     },
     "app/api/admin/processing/cases/[caseId]/form-draft/apply-discovery/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. TIGHTENING, not compatibility: this mutation was previously authorized by portal admission alone, so any member who could reach the admin shell could commit it."
       }
     },
     "app/api/admin/processing/cases/[caseId]/form-draft/create/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/processing/cases/[caseId]/form-draft/discovery-decisions/route.ts": {
@@ -2988,47 +3027,74 @@
         "status": "pending"
       },
       "PUT": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. TIGHTENING, not compatibility: this mutation was previously authorized by portal admission alone, so any member who could reach the admin shell could commit it."
       }
     },
     "app/api/admin/processing/cases/[caseId]/form-draft/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. TIGHTENING, not compatibility: this mutation was previously authorized by portal admission alone, so any member who could reach the admin shell could commit it."
       }
     },
     "app/api/admin/processing/cases/[caseId]/form-draft/save/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/approve/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "resolveOperatorRoute",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work, bound through the shared operator context rather than an inline guard: resolveOperatorRoute is the ONE place these seven routes derive authority, and it now reads processing.operate where it read `ctx.role === \"admin\" || ctx.role === \"ops\"`. Declaring the inline helper here would have named a guard these routes do not call."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/correction/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "resolveOperatorRoute",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work, bound through the shared operator context rather than an inline guard: resolveOperatorRoute is the ONE place these seven routes derive authority, and it now reads processing.operate where it read `ctx.role === \"admin\" || ctx.role === \"ops\"`. Declaring the inline helper here would have named a guard these routes do not call."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/execute/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "resolveOperatorRoute",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work, bound through the shared operator context rather than an inline guard: resolveOperatorRoute is the ONE place these seven routes derive authority, and it now reads processing.operate where it read `ctx.role === \"admin\" || ctx.role === \"ops\"`. Declaring the inline helper here would have named a guard these routes do not call."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/plan/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "resolveOperatorRoute",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work, bound through the shared operator context rather than an inline guard: resolveOperatorRoute is the ONE place these seven routes derive authority, and it now reads processing.operate where it read `ctx.role === \"admin\" || ctx.role === \"ops\"`. Declaring the inline helper here would have named a guard these routes do not call."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/resolution/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "resolveOperatorRoute",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work, bound through the shared operator context rather than an inline guard: resolveOperatorRoute is the ONE place these seven routes derive authority, and it now reads processing.operate where it read `ctx.role === \"admin\" || ctx.role === \"ops\"`. Declaring the inline helper here would have named a guard these routes do not call."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/review/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "resolveOperatorRoute",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work, bound through the shared operator context rather than an inline guard: resolveOperatorRoute is the ONE place these seven routes derive authority, and it now reads processing.operate where it read `ctx.role === \"admin\" || ctx.role === \"ops\"`. Declaring the inline helper here would have named a guard these routes do not call."
       }
     },
     "app/api/admin/processing/cases/[caseId]/recommendation/route.ts": {
@@ -3038,12 +3104,18 @@
     },
     "app/api/admin/processing/cases/[caseId]/related-record-proposals/[proposalId]/commit/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. TIGHTENING, not compatibility: this mutation was previously authorized by portal admission alone, so any member who could reach the admin shell could commit it."
       }
     },
     "app/api/admin/processing/cases/[caseId]/related-record-proposals/[proposalId]/preview/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. TIGHTENING, not compatibility: this mutation was previously authorized by portal admission alone, so any member who could reach the admin shell could commit it."
       }
     },
     "app/api/admin/processing/cases/[caseId]/route.ts": {
@@ -3053,7 +3125,10 @@
     },
     "app/api/admin/processing/dev-cleanup/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.dev_cleanup",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Test-data reset. The capability is necessary and not sufficient: the route and the planner both refuse in production through assertProcessingDevCleanupAllowed, independently of any grant."
       }
     },
     "app/api/admin/processing/queue/route.ts": {

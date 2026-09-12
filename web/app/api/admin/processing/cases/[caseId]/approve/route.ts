@@ -5,9 +5,8 @@ import { dbCompleteProcessingCaseWithResult } from "@/lib/pos/processingCase/pro
 import { runMinimalDestinationHandoff } from "@/lib/pos/processingCase/approveHandoff";
 import {
     commitApprovedLeadForCase,
-    operatorErrorResponse,
-    resolveOperatorRoute,
 } from "@/lib/pos/processingIdentity/operator";
+import { operatorErrorResponse, resolveOperatorRoute } from "@/lib/pos/processingIdentity/operator/operatorRouteContext";
 import { persistIntakePersonAddressFieldValues } from "@/lib/pos/processingIdentity/operator/persistIntakePersonAddress";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 

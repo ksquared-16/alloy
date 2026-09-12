@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { parseStoredFormDraftPreview, dbStoreFormDraftPreview } from "@/lib/pos/processingCase/formDraft/formDraftPreviewDb";
 import { dbLoadDiscoveryDecisions } from "@/lib/pos/discovery/discoveryDecisionsDb";
@@ -23,6 +24,8 @@ const APPLICATION_METADATA_KEY = "configuration_discovery_application";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireProcessingCapability(ctx, PROCESSING_OPERATE);
+    if (denied) return denied;
     const { caseId: raw } = await params;
     const caseId = parseUuidParam(raw, "caseId");
     if (caseId instanceof NextResponse) return caseId;

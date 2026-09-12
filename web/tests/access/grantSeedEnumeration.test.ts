@@ -62,7 +62,7 @@ const M6 = "20260807170000_w12_seed_default_rbac_enumerated_grants.sql";
  * capability a NEW organization never receives — the cliff `20260910183000` was written to end.
  * Forms moved it here.
  */
-const LIVE_SEED = "20260912030000_forms_capability_default_seed.sql";
+const LIVE_SEED = "20260912050000_processing_capability_default_seed.sql";
 
 /**
  * The migration that owns the COMPLETENESS contract — the admin-is-the-whole-catalog rule, the nine
@@ -129,6 +129,19 @@ const OPS_WITHHELD = [
      */
     "forms.author",
     "forms.submissions",
+    /*
+     * Archive, destructive document management and the test-data reset. Also not a judgement
+     * invented by the seed: `ops` was admitted by the Processing OPERATOR context and by nothing
+     * else in that cluster — archive was admin-only, so were both document operations, and so was
+     * the reset. Withholding these three is what preserves that.
+     *
+     * `processing.operate` is deliberately NOT withheld, because ops already had it. Folding any of
+     * the three into it would have handed ops an authority it has never held, which is the whole
+     * reason they are separate keys.
+     */
+    "processing.archive",
+    "processing.documents.manage",
+    "processing.dev_cleanup",
 ];
 
 const statements = discoverGrantStatements();
