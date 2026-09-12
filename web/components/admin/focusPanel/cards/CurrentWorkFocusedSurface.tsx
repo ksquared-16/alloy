@@ -83,6 +83,25 @@ type Props = {
      * outcome mode) is the message that would otherwise have no corresponding control.
      */
     participantDecisions?: React.ReactNode;
+    /**
+     * THE STAGE'S OTHER OPEN WORK — the row a secondary item is reached through.
+     *
+     * `pickPrimaryOpenItem` deliberately keeps "Record outcome" pointed at the stage's PRIMARY work,
+     * so an operator resolving Review waitlist position can never record an Offer spot outcome by
+     * accident. The cost was that secondary work had no control of its own anywhere: started, live,
+     * and unresolvable. These rows are that control, and they are explicit — selecting one names the
+     * work being resolved instead of letting an unqualified button pick.
+     *
+     * Empty on every stage with one work template, which is most of them.
+     */
+    secondaryWork?: { key: string; label: string }[];
+    /** Template key of the work the operator selected, or null for the stage's primary work. */
+    selectedWorkKey?: string | null;
+    onSelectWork?: (templateKey: string) => void;
+    /** Outcomes of the ACTIVE work — the selected item's, else the primary's. */
+    outcomes?: StageCompletionOutcomeV1[];
+    /** Named only when resolving a secondary item, so the operator sees which work they are in. */
+    outcomeWorkLabel?: string | null;
 };
 
 export default function CurrentWorkFocusedSurface({
@@ -106,12 +125,20 @@ export default function CurrentWorkFocusedSurface({
     actionPanel,
     panelTitle,
     participantDecisions,
+    secondaryWork = [],
+    selectedWorkKey = null,
+    onSelectWork,
+    outcomes: outcomesOverride,
+    outcomeWorkLabel = null,
 }: Props) {
     // Record-outcome is a dedicated decision MODE, not a section shown next to the commands.
     // Opening via "Record outcome" from the summary (select_result) enters outcome mode directly.
     const [outcomeModeClicked, setOutcomeModeClicked] = useState(false);
     const inOutcomeMode =
-        outcomeModeClicked || completionPhase === "select_result" || completionPhase === "confirm";
+        outcomeModeClicked
+        || selectedWorkKey != null
+        || completionPhase === "select_result"
+        || completionPhase === "confirm";
 
     const reason = surface.readiness.reasonLabel?.trim() || surface.description?.trim() || null;
 
@@ -120,7 +147,19 @@ export default function CurrentWorkFocusedSurface({
     const { dominant, helpful, subordinateOutcome, recordOutcome, dominantIsOutcome } =
         resolveCurrentWorkActionButtons(surface);
     const transitions = surface.alternatePaths.filter(isCurrentWorkActionExecutable);
-    const outcomes = surface.showOutcomeCompletion ? surface.completionOutcomes : [];
+    /*
+     * A SELECTED SECONDARY ITEM CARRIES ITS OWN OUTCOMES, AND ITS OWN PERMISSION TO SHOW THEM.
+     *
+     * `showOutcomeCompletion` answers for the stage's PRIMARY work — it is computed from the
+     * primary completion state — so gating the selected item's list on it would hide the very
+     * outcomes the operator navigated to. A work item the runtime published as open with outcomes
+     * attached is resolvable on its own terms.
+     */
+    const outcomes =
+        selectedWorkKey ?
+            (outcomesOverride ?? [])
+        : surface.showOutcomeCompletion ? (outcomesOverride ?? surface.completionOutcomes)
+        :   [];
     const outcomeEffect = (key: string): string[] =>
         surface.resolutions.find((r) => r.kind === "outcome" && r.key === key)?.effect ?? [];
 
@@ -133,7 +172,9 @@ export default function CurrentWorkFocusedSurface({
      * whole fix — no new logic, no new state.
      */
     const outcomeBlockReason =
-        !surface.showOutcomeCompletion ? surface.outcomeCompletionBlockReason?.trim() || null : null;
+        selectedWorkKey ? null
+        : !surface.showOutcomeCompletion ? surface.outcomeCompletionBlockReason?.trim() || null
+        :   null;
     const activity = activityItems.slice(0, 3);
 
     const processing = completionPhase === "processing";
@@ -218,7 +259,9 @@ export default function CurrentWorkFocusedSurface({
                     >
                         ← Back to actions
                     </button>
-                    <p className="alloy-os-currentwork__focused-section-title">What happened?</p>
+                    <p className="alloy-os-currentwork__focused-section-title" data-work-outcome-subject={outcomeWorkLabel ?? undefined}>
+                        {outcomeWorkLabel ? `What happened with ${outcomeWorkLabel}?` : "What happened?"}
+                    </p>
                     {outcomeBlockReason ?
                         <p className="alloy-os-currentwork__outcome-blocked" data-work-outcome-blocked="true" role="status">
                             {outcomeBlockReason}
@@ -305,6 +348,37 @@ export default function CurrentWorkFocusedSurface({
                                     <CurrentWorkActionButtonContent action={subordinateOutcome} />
                                 </button>
                             :   null}
+                        </div>
+                    :   null}
+
+                    {/*
+                        OUTSIDE the action-stack gate, deliberately.
+                        The summary card learned this the expensive way: its identical section was
+                        nested inside `helpful.length > 0 || subordinateOutcome`, so on a stage whose
+                        commands are projected elsewhere the stack never rendered and the rows went
+                        with it. Other open work exists independently of whether this stage happens
+                        to project helpful commands, and it is listed on that basis.
+                    */}
+                    {secondaryWork.length > 0 ?
+                        <div
+                            className="alloy-os-currentwork__focused-secondary-work"
+                            data-work-section="also-in-progress"
+                        >
+                            <p className="alloy-os-currentwork__focused-section-title">Also in progress</p>
+                            <ul className="alloy-os-currentwork__outcome-list">
+                                {secondaryWork.map((item) => (
+                                    <li key={item.key}>
+                                        <button
+                                            type="button"
+                                            className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
+                                            data-work-secondary-item={item.key}
+                                            onClick={() => onSelectWork?.(item.key)}
+                                        >
+                                            {item.label}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
                     :   null}
 
