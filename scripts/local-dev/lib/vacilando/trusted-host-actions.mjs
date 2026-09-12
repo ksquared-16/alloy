@@ -16,6 +16,8 @@ import {
 } from "node:fs";
 import { join, dirname } from "node:path";
 import { spawnSync } from "node:child_process";
+
+import { runRegisteredReconciliation } from "./trusted-host-reconciliation.mjs";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import {
@@ -692,6 +694,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION) {
     return executeLaneDispatchTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION) {
+    return executeRegisteredReconciliationTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
@@ -2151,6 +2156,49 @@ export function executeDeleteRemoteBranchTrustedHostAction(action, { actor = "di
   }, { nowMs });
 }
 
+
+/**
+ * Execute a REGISTERED reconciliation against a permitted environment.
+ *
+ * Distinct from `executeApplyReconciliationPlanTrustedHostAction` in every way that matters: that
+ * one applies Vacilando metadata from a plan it recomputes, this one runs a product data repair
+ * through the script that owns it. Sharing either would put product lifecycle writes inside a
+ * governance capability, or governance corrections inside a QA runner.
+ *
+ * The request cannot describe a command. The key, the environment and the boolean are all this
+ * accepts; the runner and its environment come from the frozen registry, re-resolved here so an
+ * edited action record cannot change what runs.
+ */
+export function executeRegisteredReconciliationTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const out = runRegisteredReconciliation(action.inputs ?? {}, {
+    repoRoot: findRepoRoot(),
+    trustedEnv: {
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+    },
+  });
+  if (!out.ok) {
+    return failTrustedAction(action, out.error || "reconciliation_failed", out.detail || "reconciliation refused", { nowMs });
+  }
+  return completeTrustedAction(action, {
+    reconciliation_key: out.reconciliation_key,
+    target_environment: out.target_environment,
+    dry_run: out.dry_run,
+    exit_code: out.exit_code,
+    counts: out.counts,
+    stdout_tail: out.stdout_tail,
+  }, { nowMs });
+}
 
 export function executeApplyReconciliationPlanTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
   const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
