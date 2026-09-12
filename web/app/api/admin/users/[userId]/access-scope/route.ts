@@ -193,32 +193,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
         p_actor_user_id: audit.actorUserId,
         p_origin: audit.origin,
         p_correlation_id: audit.correlationId,
+        // Capture scope is ACCESS: it decides whose attendance a person may
+        // record, so it travels through the audited owner with the rest rather
+        // than being written beside it. `null` means unchanged — the owner keeps
+        // the stored value, and a caller written before this field existed cannot
+        // narrow a teacher out of band.
+        p_attendance_capture_scope:
+            attendance_capture_scope === "unchanged" ? null : attendance_capture_scope,
     });
     if (scopeErr) return NextResponse.json({ error: scopeErr.message }, { status: 500 });
-
-    /*
-     * Attendance capture scope is written SEPARATELY, and deliberately after.
-     *
-     * `replace_member_access_scope_audited` owns department/site scope and both
-     * allow-lists in one transaction, and it takes no capture-scope parameter.
-     * Extending its signature would mean a forward migration to a promoted
-     * function for one column; writing the column here does not.
-     *
-     * The ordering makes the failure mode safe. The RPC upserts the profile row,
-     * so this always finds one. If the RPC succeeds and this does not, department
-     * and site scope are correct and capture scope is simply UNCHANGED — never
-     * widened, and never left pointing at an allow-list that does not exist.
-     * Absent in the request means unchanged, so a caller written before this
-     * field existed cannot narrow a teacher out of band.
-     */
-    if (attendance_capture_scope !== "unchanged") {
-        const { error: captureErr } = await supabase
-            .from("user_access_profiles")
-            .update({ attendance_capture_scope })
-            .eq("user_id", uid)
-            .eq("org_id", access.orgId);
-        if (captureErr) return NextResponse.json({ error: captureErr.message }, { status: 500 });
-    }
 
     /*
      * W-13 wired four access routes to invalidate the shell cache and MISSED THIS ONE. The cached
