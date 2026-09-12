@@ -18,7 +18,8 @@ import { isManagedSlot } from "./managed-slots.mjs";
 // The stamp only, from the dependency-free leaf. Importing it from the resolver
 // instead would make the registry and the resolver import each other, and that
 // cycle survives today only by accident of hoisting order.
-import { laneBootstrapStamp } from "./lane-bootstrap-contract.mjs";
+import { LANE_BOOTSTRAP_CONTRACT_VERSION, laneBootstrapStamp } from "./lane-bootstrap-contract.mjs";
+import { instructionBaselineVersion } from "./agent-configuration.mjs";
 
 export const DEVELOPMENT_LANE_SCHEMA = "vacilando.development_lane.v1";
 export const DURABLE_LANE_ID_RE = /^lane_[a-f0-9]{12}$/;
@@ -335,6 +336,152 @@ export function isRuntimeAdoptionBlocked(binding = {}) {
   return false;
 }
 
+/* ── the instruction baseline pointer ────────────────────────────────────── */
+
+/**
+ * WHICH CANONICAL INSTRUCTION THIS LANE LAST RESOLVED.
+ *
+ * THE GAP THIS CLOSES. DevOps 8 shipped the hash (`instructionBaselineVersion`),
+ * the drift detector (`detectInstructionDrift`, which reads
+ * `lane.instruction_baseline.baseline_version`) and the health surface that
+ * reports it — and no writer anywhere. Every lane therefore read UNRECORDED for
+ * ever, which is indistinguishable from "we have never looked" and is precisely
+ * the silence drift detection exists to break. Measured 2026-09-12: 13 active
+ * lanes, 13 UNRECORDED, 0 DRIFTED, while all thirteen worktrees carried a
+ * byte-identical CLAUDE.md. The fleet was in perfect agreement and the system
+ * could not say so.
+ *
+ * A POINTER, NEVER THE TEXT. What is persisted is a content-derived hash, the
+ * byte length and where it was read — enough to answer "did the instruction
+ * change since this lane resolved it?" and nothing more. Copying the instruction
+ * onto every lane would create N configurations that drift apart, which is the
+ * failure the single canonical CLAUDE.md exists to prevent.
+ *
+ * ABSENT IS NOT ZERO. A lane whose worktree or CLAUDE.md cannot be read gets
+ * `null` and stays UNRECORDED. A stamp that guessed would be worse than no
+ * stamp, because the drift detector would then compare a measurement against a
+ * fiction and report agreement.
+ */
+export function instructionBaselineStampFor(worktreePath, nowMs = Date.now()) {
+  if (!worktreePath) return null;
+  const path = join(worktreePath, "CLAUDE.md");
+  let text = null;
+  try { text = existsSync(path) ? readFileSync(path, "utf8") : null; } catch { text = null; }
+  if (!text) return null;
+  return {
+    baseline_version: instructionBaselineVersion(text),
+    source: "repository_claude_md",
+    path,
+    bytes: text.length,
+    measured_at: iso(nowMs),
+  };
+}
+
+export const BASELINE_RECORD = Object.freeze({
+  UNMEASURED: "UNMEASURED",
+  RECORDED: "RECORDED",
+  UNCHANGED: "UNCHANGED",
+  UPDATED: "UPDATED",
+});
+
+/**
+ * Record — or revalidate — one lane's instruction baseline pointer.
+ *
+ * This is the ONE canonical writer of the field. New lanes get it at creation
+ * (below); a resumed or existing lane gets it here, by measuring its own
+ * worktree rather than being told what to write. There is no parameter for the
+ * value on purpose: a caller that could supply the hash could also supply the
+ * wrong one, and the whole point of a content-derived version is that nobody
+ * types it.
+ *
+ * It touches `instruction_baseline` and `updated_at`. It does not touch mission,
+ * progress, decisions, blockers or any durable history — a changed prompt
+ * version does not invalidate a recorded decision, and DevOps 8 says so
+ * explicitly.
+ */
+export function recordLaneInstructionBaseline(laneId, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  const worktreePath = rec.binding?.worktree_path || null;
+  const stamp = instructionBaselineStampFor(worktreePath, nowMs);
+  if (!stamp) {
+    return {
+      ok: true,
+      state: BASELINE_RECORD.UNMEASURED,
+      lane_id: rec.lane_id,
+      written: false,
+      reason: worktreePath
+        ? `no readable CLAUDE.md under ${worktreePath}`
+        : "the lane has no bound worktree to measure",
+    };
+  }
+  const previous = rec.instruction_baseline?.baseline_version ?? null;
+  if (previous === stamp.baseline_version) {
+    // Nothing to write. Re-stamping an unchanged pointer would churn
+    // `updated_at` on every lane on every sweep and make a quiet fleet look busy.
+    return { ok: true, state: BASELINE_RECORD.UNCHANGED, lane_id: rec.lane_id, written: false, baseline_version: previous };
+  }
+  rec.instruction_baseline = previous
+    ? { ...stamp, previous_version: previous }
+    : stamp;
+  rec.updated_at = iso(nowMs);
+  const store = readDevelopmentLaneStore(root);
+  store.lanes[rec.lane_id] = rec;
+  writeStore(store, root);
+  return {
+    ok: true,
+    state: previous ? BASELINE_RECORD.UPDATED : BASELINE_RECORD.RECORDED,
+    lane_id: rec.lane_id,
+    written: true,
+    baseline_version: stamp.baseline_version,
+    previous_version: previous,
+  };
+}
+
+/**
+ * Stamp the bootstrap contract version onto a lane that has PROVEN it satisfies
+ * the contract.
+ *
+ * THE PROOF IS THE ARGUMENT, NOT A FLAG. This takes the resolver's own result
+ * object and checks it: same lane, current contract version, and an empty
+ * `unresolved` list. A boolean parameter would let a caller assert compliance it
+ * never measured, and stamping a lane that does not meet the contract is worse
+ * than leaving it stale — it converts a visible gap into a false claim, and the
+ * health check that would have caught it goes green.
+ *
+ * `lane-bootstrap` owns the revalidation; this owns the write.
+ */
+export function stampLaneBootstrapContract(laneId, { revalidation = null, nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  if (!revalidation || revalidation.ok !== true) {
+    return { ok: false, error: "revalidation_missing", detail: "a bootstrap stamp requires the resolver's own result" };
+  }
+  if (revalidation.lane_id !== rec.lane_id) {
+    return { ok: false, error: "revalidation_lane_mismatch", detail: `proof is for ${revalidation.lane_id}` };
+  }
+  if (revalidation.contract_version !== LANE_BOOTSTRAP_CONTRACT_VERSION) {
+    return { ok: false, error: "revalidation_contract_mismatch", detail: `proof names ${revalidation.contract_version}` };
+  }
+  if (!Array.isArray(revalidation.unresolved) || revalidation.unresolved.length > 0) {
+    return {
+      ok: false,
+      error: "lane_does_not_satisfy_contract",
+      unresolved: revalidation.unresolved || null,
+      detail: "the lane has unresolved baseline gaps; stamping would record a compliance it does not have",
+    };
+  }
+  if (rec.bootstrap?.contract_version === LANE_BOOTSTRAP_CONTRACT_VERSION) {
+    return { ok: true, state: "UNCHANGED", lane_id: rec.lane_id, written: false };
+  }
+  rec.bootstrap = { ...laneBootstrapStamp(nowMs), revalidated: true };
+  rec.updated_at = iso(nowMs);
+  const store = readDevelopmentLaneStore(root);
+  store.lanes[rec.lane_id] = rec;
+  writeStore(store, root);
+  return { ok: true, state: "STAMPED", lane_id: rec.lane_id, written: true, contract_version: LANE_BOOTSTRAP_CONTRACT_VERSION };
+}
+
 export function createDurableLane({
   name,
   description = null,
@@ -420,6 +567,16 @@ export function createDurableLane({
      * do about it.
      */
     bootstrap: laneBootstrapStamp(nowMs),
+    /*
+     * WHICH CANONICAL INSTRUCTION THIS LANE WAS CREATED UNDER.
+     *
+     * Same reasoning as `bootstrap` above, for the other half of the baseline: a
+     * lane can derive everything else fresh on every read, but "which
+     * instruction was in force when this lane resolved it" is only knowable if
+     * it was recorded at the time. Null when the worktree carries no readable
+     * CLAUDE.md — unmeasured, never assumed.
+     */
+    instruction_baseline: instructionBaselineStampFor(binding?.worktree_path || null, nowMs),
   };
   const store = readDevelopmentLaneStore(root);
   store.lanes[rec.lane_id] = rec;
@@ -448,6 +605,24 @@ export function bindDurableLane(laneId, binding, { nowMs = Date.now(), root = ru
     return { ok: false, error: "already_connected", lane: existing };
   }
   rec.binding = normalizeBinding(binding, { root, previous: rec.binding });
+  /*
+   * BINDING IS WHEN A LANE LEARNS WHICH INSTRUCTION IT READS.
+   *
+   * A lane's canonical instruction comes from its worktree, so the moment the
+   * worktree is (re)bound is the moment the baseline is knowable — and it is the
+   * resumed-lane seam DevOps 8 names. Measured here rather than carried over:
+   * rebinding to a different worktree can legitimately change the baseline, and
+   * keeping the old pointer would report agreement with a file this lane no
+   * longer reads.
+   *
+   * Unmeasurable stays unrecorded. A binding with no readable CLAUDE.md leaves
+   * whatever was there alone rather than erasing a good pointer with a null.
+   */
+  const stamp = instructionBaselineStampFor(rec.binding?.worktree_path || null, nowMs);
+  if (stamp && stamp.baseline_version !== (rec.instruction_baseline?.baseline_version ?? null)) {
+    const previous = rec.instruction_baseline?.baseline_version ?? null;
+    rec.instruction_baseline = previous ? { ...stamp, previous_version: previous } : stamp;
+  }
   rec.updated_at = iso(nowMs);
   const store = readDevelopmentLaneStore(root);
   store.lanes[rec.lane_id] = rec;

@@ -5,6 +5,7 @@
  * finding rather than an impression.
  *
  *   node vacilando-host-soak.mjs --run [--interval 60] [--hours 24] [--out PATH]
+ *                                 [--own-resource --owner-run <erun> [--owner-lane <lane>]]
  *   node vacilando-host-soak.mjs --report [--out PATH]
  *
  * Acceptance 12 asks for bounded Gateway RSS, idle CPU, owned process count,
@@ -165,12 +166,83 @@ const flag = (name, dflt) => {
 };
 const out = flag("out", DEFAULT_OUT);
 
+/**
+ * THE SOAK OWNS ITS OWN PROTECTION.
+ *
+ * An authoritative soak measures ONE build. If the build can be replaced while
+ * it samples, the samples describe a host that no longer exists — which is
+ * exactly what invalidated the first 24-hour attempt. So the soak takes
+ * `gateway_host_mutation` itself, as the process, and the governor's ordinary
+ * refusal does the rest.
+ *
+ * WHY THE PROCESS AND NOT THE RUN THAT STARTED IT. The claim previously belonged
+ * to whichever Execution Run requested it, and `cleanupRunResources` released it
+ * the instant that run completed — hours before the soak finished. The run
+ * stays the requester and the audit origin; this attaches the soak's own pid and
+ * start time, so the claim lasts exactly as long as the measurement does.
+ *
+ * RELEASED ON EVERY ORDINARY EXIT, and reclaimed by liveness on every
+ * extraordinary one: a killed soak leaves a claim whose pid is gone, and the
+ * first reader that would be blocked by it releases it. There is no path that
+ * leaves the host protected by something that is not running.
+ */
+async function ownHostMutation() {
+  const runId = flag("owner-run", process.env.VACILANDO_RUN_ID || null);
+  if (!runId) {
+    process.stderr.write("host-soak: --own-resource needs --owner-run <erun_...>\n");
+    process.exit(2);
+  }
+  const laneId = flag("owner-lane", null);
+  const mod = await import("./lib/vacilando/gateway-host-mutation.mjs");
+  const { execFileSync } = await import("node:child_process");
+  let startedAt = null;
+  try {
+    startedAt = execFileSync("ps", ["-o", "lstart=", "-p", String(process.pid)], {
+      encoding: "utf8", timeout: 10_000, stdio: ["ignore", "pipe", "ignore"],
+    }).trim() || null;
+  } catch { /* unverified is handled by the governor, never guessed at here */ }
+
+  const res = mod.acquireGatewayHostMutation({
+    runId,
+    laneId,
+    reason: `host lifecycle soak (pid ${process.pid}) observing ${out}`,
+    origin: "agent",
+    processOwner: {
+      pid: process.pid,
+      started_at: startedAt,
+      kind: "host_soak",
+      label: "Host Lifecycle criterion-12 soak",
+      evidence: out,
+    },
+    root: GATEWAY_ROOT,
+  });
+  if (!res.ok || !res.granted) {
+    const holder = res.holder ? `${res.holder.run_id} (${res.holder.lane_id})` : "another run";
+    process.stderr.write(`host-soak: refusing to start unprotected — gateway_host_mutation is held by ${holder}\n`);
+    process.exit(3);
+  }
+  process.stderr.write(`host-soak: holding gateway_host_mutation ${res.request.request_id} as pid ${process.pid}\n`);
+
+  const release = () => {
+    try { mod.releaseGatewayHostMutation({ runId, requestId: res.request.request_id, origin: "agent", root: GATEWAY_ROOT }); } catch { /* exiting anyway */ }
+  };
+  // A completed observation window is a terminal soak, and a terminal soak must
+  // not keep the host. Signals are covered too, so an operator stopping the soak
+  // frees the host immediately rather than waiting for a reader to notice.
+  process.on("exit", release);
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    process.on(sig, () => { release(); process.exit(0); });
+  }
+  return res.request.request_id;
+}
+
 if (args.includes("--report")) {
   report(out);
 } else if (args.includes("--run")) {
   const intervalMs = Number(flag("interval", "60")) * 1000;
   const hours = Number(flag("hours", "24"));
   const until = Date.now() + hours * 3_600_000;
+  if (args.includes("--own-resource")) await ownHostMutation();
   const tick = async () => {
     try { appendFileSync(out, `${JSON.stringify(await sample())}\n`, "utf8"); } catch { /* a probe must never be the thing that fails */ }
     if (Date.now() >= until) process.exit(0);

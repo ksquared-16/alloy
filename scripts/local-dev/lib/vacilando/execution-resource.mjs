@@ -12,6 +12,7 @@
  * Execution Run stores a projection on resource_wait. This module is not
  * the mission resource-claims store and does not rewrite alloy-compute.
  */
+import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -177,8 +178,8 @@ const REGISTRY = Object.freeze([
     queueable: true,
     governor_mutable: true,
     wired: true,
-    stale_source: "owner run terminal or released by cleanupRunResources",
-    release_authority: "releaseResourceRequest / run termination",
+    stale_source: "owner run terminal, or process_owner pid gone, or released by cleanupRunResources",
+    release_authority: "releaseResourceRequest / run termination / reclaimDeadProcessOwners",
     phase2_mutability: "request/queue/grant through the ordinary governor; no separate lock",
     resume_state: "EXECUTING",
     notes:
@@ -187,7 +188,10 @@ const REGISTRY = Object.freeze([
       + "deployment/rebinding, and Tailscale Serve where Vacilando governs it. "
       + "Distinct from control_plane, which is process ownership of one runtime "
       + "root, not the right to change the host's installation. Two lanes each "
-      + "ran the installer and silently undid each other; this is that invariant.",
+      + "ran the installer and silently undid each other; this is that invariant. "
+      + "A claim may name a `process_owner`, in which case its lifetime is that "
+      + "process rather than the requesting run — how a 24-hour soak protects the "
+      + "exact build it is measuring without an immortal lock.",
   },
 ]);
 
@@ -304,6 +308,141 @@ function pidAlive(pid) {
   const n = Number(pid);
   if (!Number.isInteger(n) || n <= 0) return false;
   try { process.kill(n, 0); return true; } catch { return false; }
+}
+
+/* ── process-lifetime ownership ─────────────────────────────────────────── */
+
+/**
+ * A RESOURCE WHOSE LIFETIME IS A PROCESS, NOT A RUN.
+ *
+ * THE DEFECT THIS CLOSES, measured on 2026-09-12. A 24-hour host soak acquired
+ * `gateway_host_mutation` so that no competing install could replace the build
+ * it was measuring. The grant was correct and the refusal was correct — and
+ * `cleanupRunResources` released it the moment the convergence run that had
+ * requested it filed its completion. The soak kept sampling for another day
+ * with nothing protecting it, and every reader would have said the host was
+ * free. Protection that expires when the requester finishes is not protection
+ * for anything that outlives the requester.
+ *
+ * The fix is deliberately NOT a second lock, a lease file or a scheduler. It is
+ * one optional field on the request the governor already keeps: which process is
+ * the real owner. The run remains the requester and the auditable origin; the
+ * process becomes the lifetime.
+ *
+ * WHY A PID AND A START TIME, NOT A PID. Pids are reused. A recorded start time
+ * turns "a process with that number exists" into "THAT process still exists",
+ * which is the difference between a live owner and a stranger who inherited the
+ * number. When the start time cannot be read the owner is reported as
+ * `unverified` rather than live — see `processOwnerHealth`.
+ */
+export function normalizeProcessOwner(owner, nowMs = Date.now()) {
+  if (!owner) return null;
+  const pid = Number(owner.pid);
+  if (!Number.isInteger(pid) || pid <= 0) return null;
+  return {
+    pid,
+    // Seconds since epoch, as `ps -o lstart=` cannot be compared portably.
+    started_at: owner.started_at ? String(owner.started_at) : null,
+    kind: owner.kind ? String(owner.kind).slice(0, 40) : null,
+    label: owner.label ? String(owner.label).slice(0, 120) : null,
+    /** Where the owner's own evidence lives, so a reader can check it directly. */
+    evidence: owner.evidence ? String(owner.evidence).slice(0, 300) : null,
+    attached_at: iso(nowMs),
+  };
+}
+
+/** The real start time of a live pid, or null when it cannot be read. */
+function processStartedAt(pid) {
+  try {
+    const out = execFileSync("ps", ["-o", "lstart=", "-p", String(pid)], {
+      encoding: "utf8", timeout: 10_000, stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return out || null;
+  } catch {
+    return null;
+  }
+}
+
+export const OWNER_HEALTH = Object.freeze({
+  NONE: "none",
+  LIVE: "live",
+  /** The pid is alive but its identity could not be confirmed. Treated as live. */
+  UNVERIFIED: "unverified",
+  /** The pid is gone, or a different process now holds the number. */
+  STALE: "stale_owner",
+});
+
+/**
+ * Is this request's process owner still the process that took it?
+ *
+ * UNVERIFIED IS NOT STALE. A pid that answers signal 0 but whose start time
+ * cannot be read is reported as unverified and still holds — refusing to
+ * confirm is not evidence of death, and releasing a live soak's protection
+ * because `ps` was unavailable would be the failure this guards against, in a
+ * new costume.
+ */
+export function processOwnerHealth(rec) {
+  const owner = rec?.process_owner || null;
+  if (!owner) return { owned: false, health: OWNER_HEALTH.NONE, alive: null, owner: null };
+  if (!pidAlive(owner.pid)) {
+    return { owned: true, health: OWNER_HEALTH.STALE, alive: false, owner, reason: `pid ${owner.pid} is not running` };
+  }
+  if (!owner.started_at) {
+    return { owned: true, health: OWNER_HEALTH.UNVERIFIED, alive: true, owner, reason: "no recorded start time to compare" };
+  }
+  const now = processStartedAt(owner.pid);
+  if (!now) {
+    return { owned: true, health: OWNER_HEALTH.UNVERIFIED, alive: true, owner, reason: "the live start time could not be read" };
+  }
+  if (now !== owner.started_at) {
+    return {
+      owned: true, health: OWNER_HEALTH.STALE, alive: true, owner,
+      reason: `pid ${owner.pid} was reused: started ${now}, not ${owner.started_at}`,
+    };
+  }
+  return { owned: true, health: OWNER_HEALTH.LIVE, alive: true, owner };
+}
+
+/** True when this request must outlive the run that asked for it. */
+export function processOwnerHolds(rec) {
+  const h = processOwnerHealth(rec);
+  return h.owned && (h.health === OWNER_HEALTH.LIVE || h.health === OWNER_HEALTH.UNVERIFIED);
+}
+
+/**
+ * Release every active request whose process owner has died.
+ *
+ * This is what stops a crashed observer from holding the host for ever. It is
+ * called from the read paths that would otherwise be blocked by such a request,
+ * so the check happens exactly when it matters and needs no timer of its own —
+ * the same reason the rest of this module derives liveness rather than storing
+ * it.
+ */
+export function reclaimDeadProcessOwners({
+  resourceKey = null,
+  origin = "system",
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  const store = readResourceRequestStore(root);
+  const stale = (store.requests || []).filter((r) => {
+    if (!ACTIVE_REQUEST.has(r.state)) return false;
+    if (resourceKey && r.resource_key !== resourceKey) return false;
+    const h = processOwnerHealth(r);
+    return h.owned && h.health === OWNER_HEALTH.STALE;
+  });
+  const out = [];
+  for (const rec of stale) {
+    const h = processOwnerHealth(rec);
+    out.push({
+      request_id: rec.request_id,
+      run_id: rec.run_id,
+      resource_key: rec.resource_key,
+      reason: h.reason || "process owner is gone",
+      released: releaseResourceRequest(rec.request_id, { origin, nowMs, root }),
+    });
+  }
+  return out;
 }
 
 export function readComputeHolders(authorityKey) {
@@ -639,6 +778,7 @@ export function ensureResourceRequest({
   resourceKey,
   reason = null,
   origin = "agent",
+  processOwner = null,
   nowMs = Date.now(),
   root = runtimeRoot(),
 } = {}) {
@@ -655,6 +795,17 @@ export function ensureResourceRequest({
   const existing = activeRequestForRunResource(run.run_id, def.key, root);
   if (existing) {
     if (existing.state === "QUEUED") tryGrantHead(def.key, root, nowMs);
+    // ATTACHING AN OWNER TO A REQUEST THAT ALREADY EXISTS IS THE NORMAL CASE.
+    // A long-running observer is requested first and spawned second, so the pid
+    // is not knowable at request time. Attaching is additive and never clears an
+    // owner already recorded — dropping one would silently return the request to
+    // run-lifetime, which is the defect this whole field exists to close.
+    const owner = normalizeProcessOwner(processOwner, nowMs);
+    if (owner) {
+      patchResourceRequest(existing.request_id, { process_owner: owner }, {
+        root, event: "resource_owner_attached",
+      });
+    }
     const latest = activeRequestForRunResource(run.run_id, def.key, root) || existing;
     syncRunProjection(latest, root);
     return { ok: true, request: latest, duplicate: true };
@@ -675,6 +826,7 @@ export function ensureResourceRequest({
     origin: origin || "agent",
     holder: null,
     ready_to_resume: false,
+    process_owner: normalizeProcessOwner(processOwner, nowMs),
   };
   const store = readResourceRequestStore(root);
   writeStore(putRequest(store, rec), root);
@@ -723,6 +875,16 @@ export function releaseResourceRequest(requestId, {
   return { ok: true, request: rec };
 }
 
+/**
+ * Release what a terminal run was holding — EXCEPT what it was holding on
+ * behalf of a process that is still running.
+ *
+ * A request with a live `process_owner` survives its requester deliberately.
+ * The run is the origin and the audit trail; the process is the lifetime. When
+ * the owner is dead the request is released here exactly as before, so a
+ * crashed owner never converts into an immortal claim, and a request with no
+ * owner keeps the original run-scoped behaviour untouched.
+ */
 export function cleanupRunResources(runId, {
   origin = "system",
   nowMs = Date.now(),
@@ -732,6 +894,16 @@ export function cleanupRunResources(runId, {
   const active = (store.requests || []).filter((r) => r.run_id === runId && ACTIVE_REQUEST.has(r.state));
   const out = [];
   for (const rec of active) {
+    if (processOwnerHolds(rec)) {
+      const h = processOwnerHealth(rec);
+      // Recorded rather than silent: a reader must be able to see that the
+      // resource is still held and know by what.
+      patchResourceRequest(rec.request_id, {
+        survived_run: { run_id: runId, at: iso(nowMs), owner_health: h.health },
+      }, { root, event: "resource_survived_run", extra: { owner_pid: h.owner?.pid ?? null } });
+      out.push({ ok: true, retained: true, request_id: rec.request_id, owner_health: h.health });
+      continue;
+    }
     out.push(releaseResourceRequest(rec.request_id, { origin, nowMs, root, expectedRunId: runId }));
   }
   return out;

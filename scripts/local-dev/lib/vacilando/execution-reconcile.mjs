@@ -268,7 +268,9 @@ export async function reconcileGovernor({
   }
 
   try {
-    const { reconcileStaleExecutionRuns, reconcileUndeliveredRuns } = await import("./execution-stale.mjs");
+    const {
+      reconcileStaleExecutionRuns, reconcileUndeliveredRuns, reconcileExpiredRunWaits,
+    } = await import("./execution-stale.mjs");
     const stale = reconcileStaleExecutionRuns({ root, nowMs });
     if (stale?.count > 0) {
       summary.repaired += stale.count;
@@ -278,6 +280,15 @@ export async function reconcileGovernor({
     if (undelivered?.count > 0) {
       summary.repaired += undelivered.count;
       summary.actions.push("undelivered_run");
+    }
+    // Rides the pass that already exists rather than adding a timer of its own.
+    // The two collectors above own EXECUTING runs and Cursor sends; this one
+    // owns every wait whose own declared bound has expired, which is the only
+    // reason `vac health` can call a run stale in the first place.
+    const expired = reconcileExpiredRunWaits({ root, nowMs });
+    if (expired?.collected > 0) {
+      summary.repaired += expired.collected;
+      summary.actions.push("expired_run_wait");
     }
   } catch { /* stale-run pass must not fail resource reconcile */ }
 

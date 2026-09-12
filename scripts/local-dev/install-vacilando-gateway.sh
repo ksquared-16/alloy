@@ -13,7 +13,11 @@ LABEL="com.alloy.vacilando-gateway"
 PLIST="${HOME_DIR}/Library/LaunchAgents/${LABEL}.plist"
 BIN_DIR="${HOME_DIR}/.local/bin"
 WRAPPER="${BIN_DIR}/alloy-vacilando-gateway"
-RUNTIME_ROOT="${VACILANDO_GATEWAY_ROOT:-${HOME_DIR}/.local/state/alloy-dev/gateway}"
+# ONE RUNTIME ROOT, RESOLVED ONCE. It is written into the plist, used for the
+# log directory, and exported below so the host-mutation guard reads the very
+# store this install is about to act on. An explicit ALLOY_RUNTIME_ROOT wins, so
+# a certification root stays a certification root end to end.
+RUNTIME_ROOT="${ALLOY_RUNTIME_ROOT:-${VACILANDO_GATEWAY_ROOT:-${HOME_DIR}/.local/state/alloy-dev/gateway}}"
 LOG_DIR="${RUNTIME_ROOT}/logs"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 HOST_JS="${HERE}/lib/vacilando-gateway-host.mjs"
@@ -48,6 +52,26 @@ fi
 # explicit operator override, never a default.
 # ---------------------------------------------------------------------------
 GUARD_JS="${HERE}/lib/vacilando/gateway-host-mutation.mjs"
+# THE GUARD MUST READ THE STORE THIS INSTALLER IS ABOUT TO WRITE ABOUT.
+#
+# THE DEFECT THIS FIXES, measured on 2026-09-12 with the resource genuinely held:
+# this script resolved RUNTIME_ROOT above and wrote it into the plist, but never
+# put it in the ENVIRONMENT. gateway-host-mutation.mjs then fell back to its own
+# default, `~/.local/state/alloy-dev` — the PARENT of the Gateway root — whose
+# vacilando/execution-runs/resource-requests.json does not exist. An absent file
+# reads as an empty store, an empty store has no holder, and the guard printed
+# "gateway host mutation: free" and exited 0 while another run held the host.
+#
+# It is not in any shell profile, so a hand-run installer got the wrong answer
+# every time; only a caller who happened to export it got the right one. The
+# governed executor was protected the whole while, because the Gateway's launchd
+# plist sets ALLOY_RUNTIME_ROOT — so the two entry points disagreed about who
+# owned the machine, which is the exact class of divergence this guard exists to
+# end.
+#
+# Exported, not passed as a flag: every module the guard imports resolves the
+# root the same way, so one export makes the whole process agree.
+export ALLOY_RUNTIME_ROOT="${RUNTIME_ROOT}"
 if [ "${VACILANDO_SKIP_HOST_MUTATION_GUARD:-0}" != "1" ] && [ -f "$GUARD_JS" ]; then
   if ! "$NODE_BIN" "$GUARD_JS" check ${VACILANDO_RUN_ID:+--run "$VACILANDO_RUN_ID"}; then
     echo "install-vacilando-gateway: refusing to mutate shared Gateway host state." >&2
