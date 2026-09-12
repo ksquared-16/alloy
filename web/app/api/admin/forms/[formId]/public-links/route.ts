@@ -26,6 +26,7 @@ import { mintExistingRecordFormLinkForAdmin } from "@/lib/forms/existingRecord/m
 import { parsePrefillFieldMapBody } from "@/lib/forms/prefill/prefillFieldMap";
 import { buildLocationSpecificLinkMetadata, readUuid } from "@/lib/forms/locationSpecificPublicLinkMetadata";
 import { resolvePublicAppOrigin } from "@/lib/publicAppUrl";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /**
  * The origin these public/embed links are built on.
@@ -80,7 +81,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+        if (denied) return denied;
 
     const { formId: rawFormId } = await params;
     const formId = parseUuidParam(rawFormId, "formId");

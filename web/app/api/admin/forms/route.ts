@@ -9,6 +9,7 @@ import {
 } from "@/lib/admin/forms/formsAdminDb";
 import { allocateUniqueKey, slugKeyFromDisplayName } from "@/lib/forms/adminGeneratedKeys";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /** GET /api/admin/forms — list form definitions for org. */
 export async function GET(request: NextRequest) {
@@ -45,7 +46,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+        if (denied) return denied;
 
     let body: Record<string, unknown>;
     try {

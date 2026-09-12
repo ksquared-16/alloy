@@ -3,12 +3,14 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { duplicateFormDefinitionForAdmin } from "@/lib/admin/forms/duplicateFormDefinitionForAdmin";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /** POST /api/admin/forms/[formId]/duplicate — copy form schema; no submissions or links. */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+        if (denied) return denied;
 
     const { formId: rawFormId } = await params;
     const formId = parseUuidParam(rawFormId, "formId");

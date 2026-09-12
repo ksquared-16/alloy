@@ -20,7 +20,7 @@
  * of which role carried them, and a seeded key with nothing granted gets nothing.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -36,6 +36,13 @@ const ACCESS_OWNED = [
     join(webRoot, "app", "api", "admin", "settings", "users-roles"),
     join(webRoot, "lib", "access"),
     join(webRoot, "components", "adminV2", "settings", "access"),
+    /*
+     * The Forms authorization surface, added when Forms migrated off role-title authority. Its 25
+     * gates were the single largest concentration in the product; this is what stops them coming
+     * back one route at a time.
+     */
+    join(webRoot, "app", "api", "admin", "forms"),
+    join(webRoot, "lib", "access", "formsAuthority.ts"),
 ];
 
 /**
@@ -86,7 +93,7 @@ const AUTHORITY_SHAPES: { name: string; re: RegExp }[] = [
          * noisy in exactly the routes that do the right thing.
          */
         name: 'role === "<key>" as a condition',
-        re: /\b(?:ctx|auth|access|context)?\.?role\s*={2,3}\s*["'](?!string["']|number["']|boolean["']|object["']|undefined["']|function["']|symbol["']|bigint["'])[a-z_]+["']/,
+        re: /\b(?:ctx|auth|access|context)?\.?role\s*(?:!==?|={2,3})\s*["'](?!string["']|number["']|boolean["']|object["']|undefined["']|function["']|symbol["']|bigint["'])[a-z_]+["']/,
     },
     { name: "role-key literal array membership", re: /\[\s*["'](?:admin|ops|owner|school_director|regional_lead)["'][^\]]*\]\s*\.\s*includes\s*\(/ },
     { name: "roleKeys.includes(<key>)", re: /roleKeys\s*\.\s*(?:includes|some)\s*\(\s*["'][a-z_]+["']/ },
@@ -94,6 +101,12 @@ const AUTHORITY_SHAPES: { name: string; re: RegExp }[] = [
 
 describe("W-17 — a seeded role key is not authority inside Access", () => {
     const scanned = ACCESS_OWNED.flatMap(filesUnder);
+
+    it("actually scanned the Forms authorization surface", () => {
+        // A lock that silently stopped traversing Forms would pass forever while the gates returned.
+        const forms = scanned.filter((f) => f.includes(`${sep}forms${sep}`) || f.endsWith("formsAuthority.ts"));
+        expect(forms.length, "the Forms authorization surface was not scanned").toBeGreaterThan(15);
+    });
 
     it("scans the Access-owned surface rather than nothing", () => {
         // NON-VACUITY. A lock that stopped finding files would pass forever.
@@ -121,6 +134,13 @@ describe("W-17 — a seeded role key is not authority inside Access", () => {
             'if (ctx.role === "school_director") return allow();',
             'if (!["admin", "ops"].includes(ctx.role)) return deny();',
             'if (access.roleKeys.includes("regional_lead")) return allow();',
+            /*
+             * The shape this lock originally MISSED. Every one of the 180 census sites was written
+             * `!==`, and the first version of this regex only matched `===` — so it would have
+             * passed over the entire defect it was written to catch.
+             */
+            'if (ctx.role !== "admin") return jsonError("Forbidden", 403);',
+            'if (ctx.role !== "admin" && ctx.role !== "ops") return jsonError("Forbidden", 403);',
         ];
         for (const line of convicted) {
             expect(AUTHORITY_SHAPES.some((s) => s.re.test(line)), `not caught: ${line}`).toBe(true);

@@ -7,12 +7,14 @@ import { jsonData, jsonError, jsonValidationErrors, parseUuidParam } from "@/lib
 import { persistFormSubmissionSignatures } from "@/lib/forms/signatures/persistFormSubmissionSignatures";
 import { emitFormSignedSafe, emitFormSubmittedSafe } from "@/lib/forms/workflow/formSubmissionEvents";
 import { maybeOpenProcessingCaseFromFormSubmissionSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromFormSubmissionSafe";
+import { FORMS_SUBMISSIONS, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /** POST /api/admin/forms/submissions/[submissionId]/submit — draft → submitted (admin only). */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ submissionId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_SUBMISSIONS);
+        if (denied) return denied;
 
     const { submissionId: raw } = await params;
     const submissionId = parseUuidParam(raw, "submissionId");

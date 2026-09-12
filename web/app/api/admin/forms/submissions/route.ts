@@ -4,6 +4,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { validateFormPayload } from "@/lib/forms/validateSubmission";
 import { dbGetVersion, dbInsertSubmission, dbListSubmissions } from "@/lib/admin/forms/formsAdminDb";
 import { jsonData, jsonError, jsonValidationErrors, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { FORMS_SUBMISSIONS, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 function readFilter(searchParams: URLSearchParams, key: string): string | undefined {
     const v = searchParams.get(key)?.trim();
@@ -89,7 +90,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_SUBMISSIONS);
+        if (denied) return denied;
 
     let body: Record<string, unknown>;
     try {

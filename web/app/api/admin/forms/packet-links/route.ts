@@ -4,6 +4,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
 import { mintPacketPublicLinkForAdmin } from "@/lib/forms/packets/mintPacketPublicLinkForAdmin";
 import { resolvePublicAppOrigin } from "@/lib/publicAppUrl";
+import { FORMS_SUBMISSIONS, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /**
  * The origin these public/embed links are built on.
@@ -23,7 +24,8 @@ function deriveEmbedBaseUrl(): string | null {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_SUBMISSIONS);
+        if (denied) return denied;
 
     let body: Record<string, unknown>;
     try {

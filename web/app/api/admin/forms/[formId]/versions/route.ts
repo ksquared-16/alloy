@@ -4,12 +4,14 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { validateFormSchema } from "@/lib/forms/schema";
 import { dbGetFormDefinition, dbGetVersion, dbInsertVersion, dbMaxVersionNumber } from "@/lib/admin/forms/formsAdminDb";
 import { catchSchemaValidation, jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /** POST /api/admin/forms/[formId]/versions — create draft version (admin only). */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+        if (denied) return denied;
 
     const { formId: rawId } = await params;
     const formId = parseUuidParam(rawId, "formId");

@@ -55,6 +55,15 @@ export const CAPABILITY_AREAS: readonly CapabilityArea[] = Object.freeze([
     { key: "communications", label: "Communications", description: "Messages to families and contacts.", order: 40 },
     { key: "documents", label: "Documents", description: "Documents and forms on a record.", order: 50 },
     /*
+     * Forms is its OWN area, not a corner of Documents.
+     *
+     * The Documents area is about what is filed ON a record. Forms is the builder and the
+     * submissions that come back from it, and an area is the unit a preset applies to: granting
+     * someone Documents must not sweep along the authority to redesign the forms an organization
+     * sends to families. Health was separated from Families for exactly this reason.
+     */
+    { key: "forms", label: "Forms", description: "Form design, and the submissions people send back.", order: 52 },
+    /*
      * Health is its OWN area, not a corner of Families or Documents.
      *
      * That is the D-H6 decision expressed in the operator's vocabulary: someone granting family
@@ -119,6 +128,7 @@ const GROUP_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
     financials: "financials",
     communications: "communications",
     documents: "documents",
+    forms: "forms",
     health: "health",
     reports: "reports",
     scheduling: "scheduling",

@@ -71,6 +71,11 @@ const APPROVED_ADDITIONS: Record<string, string> = {
     "attendance.record": "20260909230000 — recording child attendance",
     "portal.access":
         "20260911140000 — W-13, entering the operator portal at all; the capability that replaced the PORTAL_ROLES role literal",
+    "forms.author": "20260912020000 — designing forms, the authority that replaced the literal `admin` gate on 16 Forms writes",
+    "forms.submissions":
+        "20260912020000 — handling submissions that change records or reach people: sending, submitting on behalf, linking by hand, generating a document",
+    "forms.submissions.confirm":
+        "20260912020000 — confirming a linkage the system proposed, metadata only; kept separate because `ops` could already do exactly this and nothing broader",
 };
 
 describe("W-11 — the catalog is discovered completely", () => {

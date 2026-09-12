@@ -3,12 +3,14 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { dbGetSubmission, dbPatchSubmission } from "@/lib/admin/forms/formsAdminDb";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { FORMS_SUBMISSIONS_CONFIRM, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /** POST — operator confirms auto-linked CRM rows are correct (payload.meta only; no CRM mutation). */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ submissionId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin" && ctx.role !== "ops") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_SUBMISSIONS_CONFIRM);
+        if (denied) return denied;
 
     const { submissionId: raw } = await params;
     const submissionId = parseUuidParam(raw, "submissionId");
