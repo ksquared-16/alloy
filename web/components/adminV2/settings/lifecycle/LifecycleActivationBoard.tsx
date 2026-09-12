@@ -95,6 +95,7 @@ import {
     type LifecycleStatusDraftAction,
 } from "@/lib/lifecycle/lifecycleStatusDraftReducer";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import BusinessProcessTrackAdoptionCard from "@/components/adminV2/settings/lifecycle/BusinessProcessTrackAdoptionCard";
 import { defaultWorkUnitQueueNameForStageKey } from "@/lib/lifecycle/lifecycleRuntimeBinding";
 import { effectiveLifecycleStageStatusKeys } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import { derivePerspectiveLanesFromPipeline } from "@/lib/lifecycle/lifecycleStagePerspectiveLanes";
@@ -2195,6 +2196,16 @@ export default function LifecycleActivationBoard({
                                 />
                             :   null}
                         </div>
+                    :   null}
+
+                    {processSection === "overview" && processId && runtimeDepartmentId ?
+                        <BusinessProcessTrackAdoptionCard
+                            departmentId={runtimeDepartmentId}
+                            processId={processId}
+                            tracksConfigured={Boolean(processTracks?.tracks?.length)}
+                            canEdit={activationOwned}
+                            onAdopted={reloadConfiguration}
+                        />
                     :   null}
 
                     {processSection === "overview" ?

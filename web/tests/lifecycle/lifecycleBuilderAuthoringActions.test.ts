@@ -185,9 +185,19 @@ describe("set_stage_requirements", () => {
     });
 
     it("refuses an unauthorable kind through the guard the route uses", () => {
-        expect(isAuthorableRequirementKind("form")).toBe(true);
-        expect(isAuthorableRequirementKind("field")).toBe(true);
-        for (const kind of REQUIREMENT_KINDS_V1.filter((k) => k !== "form" && k !== "field")) {
+        /*
+         * `work` joined `field` and `form` because it met the same bar: the stage work runtime
+         * already reports `completed` per template key for a subject, so satisfaction has a
+         * canonical owner and nothing had to be invented to prove it. The remaining four still have
+         * no owner that could answer, and the loop keeps them refused.
+         */
+        const AUTHORABLE = ["form", "field", "work"] as const;
+        for (const kind of AUTHORABLE) {
+            expect(isAuthorableRequirementKind(kind), kind).toBe(true);
+        }
+        for (const kind of REQUIREMENT_KINDS_V1.filter(
+            (k) => !(AUTHORABLE as readonly string[]).includes(k),
+        )) {
             expect(isAuthorableRequirementKind(kind), kind).toBe(false);
         }
     });
