@@ -246,6 +246,10 @@ describe("Current Work operational surface", () => {
             "payment_plan",
             "send_email",
             "adjust_invoice",
+            // The BILLING stage's own configured action, which the work template's explicit list
+            // used to suppress. Stage and work scopes compose — and this fixture is the proof the
+            // rule is generic rather than an Enrollment accommodation.
+            "record_payment",
         ]);
         // Billing fixtures without process edges expose no Other Transitions from WT alternate_paths.
         expect(vm.surface.alternatePaths).toEqual([]);
