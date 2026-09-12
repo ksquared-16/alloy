@@ -400,6 +400,20 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
         templateConfig.communication_actions = catalogActions.communication_actions;
     }
 
+    /*
+     * The STAGE's own configured actions. Computed here all along and never carried, so a stage
+     * action could be authored, validated, persisted and published and still never reach an
+     * operator. They compose with the work template's actions rather than replacing or being
+     * replaced — see `resolvedHelpfulActionRefs`.
+     */
+    if (catalogActions.supporting.length) {
+        templateConfig.stage_actions = catalogActions.supporting.map((row) => ({
+            action_ref: row.action_ref,
+            ...(row.override_label?.trim() ? { override_label: row.override_label.trim() } : {}),
+            ...(row.work_template_key?.trim() ? { work_template_key: row.work_template_key.trim() } : {}),
+        }));
+    }
+
     return {
         templateConfig,
         actionRegistry,
