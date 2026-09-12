@@ -3865,12 +3865,41 @@ no parser with which to produce the evidence the contract asks for. **Two grants
 because either alone leaves the leg blocked:** scope covering those three files, and a worktree with
 `node_modules` (or permission to install `typescript` into it).
 
+##### Where this record landed, and why it is in another wave's commit
+
+This record was committed by **`f754ed99f`** — a **W-5** commit, authored by assignment `asg_aaebf2ad3ed891`
+running concurrently in this same worktree. That is not an accident and not a mistake by either lane; it is a
+structural property of the arrangement, and it is recorded here because §5 keeps finding the same class of
+defect in its own bookkeeping.
+
+Two lanes were issued **different missions** — W-4 (`msn_a0e8a6206c63198fab`) and W-5
+(`msn_861e1785ec233cf433`) — whose scopes name **the same file**. `git commit <path>` stages the whole
+working-tree version of that path, so **neither lane could commit only its own work**: whichever committed
+first was always going to carry the other's prose. The lanes detected the overlap, compared hunks, confirmed
+them disjoint (§4 status line, §5 W-4 record and §13 RL-15 row here; §6's W-5 record there), and the W-5 commit
+names this assignment's three hunks explicitly so blame stays honest. **The bytes are intact and verified in
+`HEAD`; the attribution lives in a commit message rather than in authorship.**
+
+The general point for the Director: *dispatching two concurrent assignments whose deliverable lists intersect
+makes single-lane attribution impossible*, however well the lanes cooperate. It also means a SHA reported by
+either lane is a commit containing both. This is the second commit-race §5 has had to record, after the W-0
+twelfth re-issue.
+
+**One unexplained artefact, recorded rather than resolved.** Throughout this session
+`web/tests/access/membershipProfileInvariant.integration.test.ts` carried **219 uncommitted lines** that
+**no live lane claims** — this assignment never opened the file, and the W-5 lane polled three other sessions
+and found no author, with `git log --all -S` locating the content in no commit on any branch. It is outside
+this assignment's scope and was **left untouched**. It is noted because it bears on the integrity of every
+measurement taken in this worktree: **a third writer was active in it and is unaccounted for**, which is the
+same hazard §5 recorded as *"a lane branch is not exclusive."*
+
 ##### Not verified by this leg
 
 No walk, no lock run, no count. Nothing is claimed about `resolvesPrincipal` for any route, including the 24
 upstream Forms routes of Finding 2 — their authority model changed and **was not examined**. Whether the
 `checkRouteCapabilities.mjs` ratchet (`max_pending`, `:1017`) carries a third instance of the loosening-set
-shape was **not** examined, and is this leg's handed-forward question.
+shape was **not** examined, and is this leg's handed-forward question. The unattributed writer above was
+**not** investigated beyond confirming it is not this lane's.
 
 ---
 
