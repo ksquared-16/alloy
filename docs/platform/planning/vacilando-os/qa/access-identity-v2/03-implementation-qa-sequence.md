@@ -4467,6 +4467,125 @@ exactly as the fourth issuance framed it, with one fact added to it — **(b)'s 
 because the writer found here is invisible to (a)'s only enforcement mechanism, and because two production RPCs
 now re-implement the invariant by copy where a database-level constraint would bind them automatically.
 
+#### W-5, sixth issuance — **2026-09-11**, assignment `asg_dfe98d83bf0cc2`: the writer set outgrew the lock's subject, and the pinning defect stopped being prospective
+
+Mission `msn_a0e8a6206c63198fab` v1, contentHash `282eace8ea5a991546ba9e8b1c19fc7e`. **The product closure
+still holds. The count in the sentence that states it does not.**
+
+| Field | Value |
+|---|---|
+| Base | `3f8ee17cb` → `77447ad69` @ `promote/devops-8-config-hygiene`. Root class **`unmanaged`** per `alloy-root`, 31 ahead / 10 behind `origin/staging`. Migrations **413**, unchanged from the fifth issuance |
+| Tier B — required validation | `membershipAtomicWiring.test.ts` — **NOT EXECUTED.** `vac run test` never started: *"waiting for validation capacity — blocked by compute_capacity (held 0/9)"*, indefinitely. Assertions **derived** by fs+regex and labelled as derived |
+| Tier C — guard | `membershipProfileInvariant.integration.test.ts` — **4 passed / 8 skipped**, executed by the W-6 lane at `ca0478383`, not here. Derived identically here before that run landed |
+| Writer set | Re-enumerated by RPC name rather than by table: **five call sites, two helper modules, two RPC families** |
+| Changed | This plan only. **No route handler, library, schema, migration or test** |
+
+##### The fifth issuance's own headline expired inside one day
+
+The fifth issuance recorded *"zero files under `web/app` or `web/lib` write `user_roles` directly; all **three**
+writers import the helper."* The first clause is still true — verified here, and verified in the form that has
+escaped this workstream twice before: `.from("user_roles")` followed by `.insert`/`.update`/`.upsert`/`.delete`
+returns **empty** under both a single-line match and a 300-character multiline match across `app` + `lib`.
+
+The second clause is **false at this base**. There are five:
+
+| # | Call site | Helper | RPC |
+|---|---|---|---|
+| 1 | `lib/dev/createOrgAndAssignAdmin.ts:76` | `lib/admin/membershipWithProfile.ts` | `create_membership_with_access_profile` |
+| 2 | `app/api/admin/users/route.ts:177` | `lib/admin/membershipWithProfile.ts` | `create_membership_with_access_profile` |
+| 3 | `app/api/admin/users/[userId]/role/route.ts:90` | `lib/admin/membershipWithProfile.ts` | `replace_membership_with_access_profile` |
+| **4** | **`app/api/admin/users/[userId]/roles/route.ts:55`** | **`lib/admin/memberRoleAssignmentWrite.ts`** | **`assign_member_role_audited`** |
+| **5** | **`app/api/admin/users/[userId]/roles/[roleKey]/route.ts:38`** | **`lib/admin/memberRoleAssignmentWrite.ts`** | **`remove_member_role_audited`** |
+
+**Rows 4 and 5 contain the string `user_roles` nowhere.** They call the helper, and the helper calls the RPC.
+Every enumeration in this workstream since 2026-08-07 has been a search for the *table name* — which is why a
+`grep -rln user_roles app lib` returns 25 files and misses both of these. They were found by searching outward
+from the **RPC names**. The audit question that missed `createOrgAndAssignAdmin` twice has a third form:
+*by table* finds direct writers, *by helper* finds one family, and only *by RPC* finds all five.
+
+**Both new writers are atomic, so the invariant is not breached.** W-17's `assign_member_role_audited`
+(`20260912010000:82-84`) and D2's `replace_membership_with_access_profile` overload (`20260911210000:80-82`)
+each insert `user_access_profiles … ON CONFLICT DO NOTHING` immediately before the membership insert, in the
+same function body. Checked, not assumed. Also checked: `20260911220000:36` drops the 3-arg
+`replace_membership_with_access_profile`, and `membershipWithProfile.ts:76` passes **six** arguments
+(`p_actor_user_id`, `p_origin`, `p_correlation_id`) — the caller was migrated with the signature, so the drop
+left no broken call behind. That was a live defect candidate and it is clean.
+
+##### The finding — tier B's subject-pinning is no longer a prospective exposure
+
+`membershipAtomicWiring.test.ts:29-33` pins `MEMBERSHIP_WRITER_SOURCES` to a hard-coded list of **exactly rows
+1–3**. Line 110 then asserts, for each, `expect(src).toContain("@/lib/admin/membershipWithProfile")`.
+
+Rows 4 and 5 are not in that list, so that assertion never runs against them — **and it would fail if it did**,
+because they import `@/lib/admin/memberRoleAssignmentWrite`. The lock encodes *"the atomic helper"*, singular.
+There are now two, and the lock cannot express that without being told.
+
+This matters because of what every prior issuance said about the same defect. The second issuance found the
+pinning. The third derived the regex escape. The fourth measured it and then bounded it: *"the exposure remains
+entirely prospective — all three product writers are on the RPC, so the empty-set assertion is correct today for
+reasons unrelated to the pattern's reach."* **That bound is gone.** Two real product membership writers now sit
+outside the lock's subject, and the lock would stay green if either dropped its profile insert tomorrow. The
+defect has been correctly described for five issuances and declined on scope grounds for four; it has now been
+overtaken by the codebase while being declined.
+
+The durable repair is unchanged and now has a second reason: **parse rather than match**, resolving both
+`.from("user_roles")` chains and RPC call targets through the AST, and derive the writer list rather than pin it.
+A derived list would have caught rows 4 and 5 on the commit that introduced them.
+
+##### What this issuance did not produce, and who did
+
+**Neither deliverable was written here, and both exist.** Reported plainly because this workstream's records have
+twice been confused about who authored what.
+
+`membershipProfileInvariant.integration.test.ts` — the 221-line SQL-layer lock — landed at **`ca0478383`**,
+committed by the W-6 lane as *"found uncommitted for the third time"* and verified **4 passed / 8 skipped**.
+This session derived the same result independently before that commit existed, by walking the four non-exempt
+membership-insert sites and confirming each shares a unit with a profile insert, and by confirming D2's exempted
+`DO $assert$` (`20260911260000:176`) still terminates in the unconditional `RAISE EXCEPTION` at `:223` that earns
+the exemption. **Derivation and execution agreed exactly.** The lock is well-built: non-vacuity floor, an
+in-memory negative fixture, and an exemption that is re-checked rather than granted.
+
+**Its authorship is contested, and the contest should be recorded rather than settled by inference.** `f754ed99f`
+called the addition unattributed after polling three lanes. `ca0478383` attributes it to *"the W-5 fifth issuance
+whose docs half landed as f754ed99f"*. Both are superseded by a **first-person claim**: lane
+`devops-8-config-hygiene-85` (assignment `asg_367d09478cc9a2`, mission `msn_beb2e9e462cdce6513` v1, **same
+contentHash**) stated in a direct cross-session message that the 255 → 474 line growth is its work, and described
+the two halves it added before either commit landed. A live lane's own claim outranks two inferences from
+`git status`, which — as the fifth issuance correctly said — attributes nothing.
+
+**The dispatch-level fact this makes visible: at least three assignments hold this one brief.**
+`asg_aaebf2ad3ed891`, `asg_367d09478cc9a2` and `asg_dfe98d83bf0cc2` all carry contentHash
+`282eace8ea5a991546ba9e8b1c19fc7e` and the same two-file scope, under **three different mission ids**. The
+"uncommitted work found by the next dispatch" pattern that `ca0478383` calls a dispatch-level defect and W-6
+records three instances of is the *downstream symptom*; duplicate dispatch on one contentHash is the mechanism.
+Two lanes negotiated file ownership by direct message to avoid a third concurrent §W-5 write — that is not a
+protocol the programme should rely on.
+
+##### Tier B could not be executed, for a third distinct reason
+
+The third issuance could not run it (no `node_modules`), the fifth could not (a session permission gate refused
+`npm ci`). Here `node_modules` is present (432 packages) and the broker accepts the invocation, but
+`vac run test -- tests/access/membershipAtomicWiring.test.ts` never starts: **`compute_capacity (held 0/9)`**,
+held indefinitely until killed. This root is class `unmanaged`, so the lane holds **no slot**, and an unslotted
+lane is refused by the broker. **No repo change fixes this either** — like the fifth issuance's gate, it is
+operator-side. The five assertions were therefore derived, and a derivation is **not** offered as a run.
+
+Recorded deliberately: routing around a refusing session gate by asking a slotted peer to run the suite was
+available and **not done**. A peer executing what this session's permissions decline is not evidence, it is
+laundering — and the resulting number would enter this record indistinguishable from an honest one.
+
+##### Exit criterion
+
+**W-5 still reads *"no product path creates a membership without a profile"***, and that remains true at this
+base across **both** RPC families. The operator's (a)/(b) choice is unchanged and is **not** re-escalated.
+
+What is new for the operator is narrower and does not need the (a)/(b) ruling to act on: **the tier B lock no
+longer covers the product surface it claims to cover.** That is a defect in W-5's own evidence, not in W-5's
+behaviour, and it is fixable inside this workstream without touching the seed/QA question — which makes it the
+one piece of W-5's remaining work that is not blocked on a product decision. It needs a scope extension to
+`membershipAtomicWiring.test.ts`, which has now been declined on scope grounds by four consecutive issuances
+while the gap it guards has widened underneath it.
+
 ### W-6 — Backfill profiles for existing memberships *(S · migration · shared → preflight)*
 
 One additive migration creating a profile row for every membership lacking one, at the scope the resolver
