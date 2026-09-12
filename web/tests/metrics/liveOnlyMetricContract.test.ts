@@ -1,12 +1,18 @@
 /**
  * The live-only metric contract — an OIP platform correctness guarantee.
  *
- * `resolveSingleMetric` serves the most recent stored snapshot under
- * `mode=snapshot` with NO staleness bound, and the generic writer persists every
- * registered metric. Together those two facts mean that merely REGISTERING a
- * current-state metric creates a path where an older stored number is returned
- * as the present one, stamped with the snapshot's own `computed_at`, and the
- * surface asking "how many children are here right now" cannot tell.
+ * `resolveSingleMetric` serves a stored snapshot under `mode=snapshot`, and the
+ * generic writer persists every registered metric. Together those two facts mean
+ * that merely REGISTERING a current-state metric creates a path where an older
+ * stored number is returned as the present one, stamped with the snapshot's own
+ * `computed_at`, and the surface asking "how many children are here right now"
+ * cannot tell.
+ *
+ * There IS a freshness bound — `readLatestMetricSnapshot` defaults to 24h — and
+ * it is the reason a policy was needed rather than a tighter number. Twenty-four
+ * hours suits a rolling 30-day metric and means nothing for a count that goes
+ * from zero to full and back within one day. No age is short enough to make a
+ * stored occupancy figure correct.
  *
  * `snapshotPolicy: "live_only"` closes that path. These tests are the proof, and
  * they are written from the failure inward: each one would pass trivially if the

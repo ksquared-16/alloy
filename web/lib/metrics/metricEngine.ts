@@ -227,11 +227,13 @@ export async function resolveSingleMetric(ctx: MetricResolveContext, key: OipMet
      * A live-only metric is never satisfied from storage, even when the caller
      * asked for snapshot resolution.
      *
-     * The snapshot read below returns the most recent row with NO staleness
-     * bound, and stamps it `resolveMode: "snapshot"` with the snapshot's own
-     * `computed_at`. For a windowed metric that is the point. For "how many
-     * children are here right now" it would answer with a count from some
-     * earlier hour, and the surface asking the question has no way to tell.
+     * The snapshot read below applies a freshness bound (24h by default) and
+     * stamps what it returns `resolveMode: "snapshot"` with the snapshot's own
+     * `computed_at`. For a windowed metric that is exactly right. For "how many
+     * children are here right now" it is meaningless: a count from 23 hours ago
+     * is inside the bound and is still the wrong answer, because attendance
+     * turns over completely within a day. No age is short enough, so the policy
+     * lives on the metric rather than on the clock.
      *
      * Refusing here rather than at the surface means every consumer — API, BOS
      * read, workspace card, a future one nobody has written — inherits the

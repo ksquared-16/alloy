@@ -64,11 +64,17 @@ if (ctx.mode === "snapshot") {
 return resolveLiveMetric(ctx, key);
 ```
 
-There is **no staleness bound**. `readLatestMetricSnapshot` returns the most
-recent row and the engine serves it, stamping `resolveMode: "snapshot"` and the
-snapshot's `computed_at` — but the caller asked for a metric, and a surface that
-renders it beside a label reading "Here now" would be showing yesterday's count
-as the present one. That is precisely what §8 forbids.
+**CORRECTED after implementation.** This section first said there was *no*
+staleness bound. That was wrong: `readLatestMetricSnapshot` applies
+`DEFAULT_MAX_AGE_MS = 24h`, so a snapshot older than a day is not served.
+
+The hazard is real anyway, and the correction sharpens why. Twenty-four hours is
+a sensible bound for a rolling 7- or 30-day metric, whose value moves slowly. It
+is meaningless for "how many children are here right now": attendance goes from
+zero to full and back inside one day, so a snapshot taken 23 hours ago is
+comfortably inside the bound and is still a completely wrong answer. A
+time-based freshness rule cannot express "never substitute" — only a policy on
+the metric can.
 
 The writer makes it worse by default. `writeOrgMetricSnapshots`:
 
@@ -86,7 +92,9 @@ capped scan, not exhaustive org truth", which is a statement about completeness,
 not about whether a stored value may stand in for now.
 
 **Required smallest extension:** a registry flag marking a metric as live-only,
-honoured in two places — `resolveSingleMetric` must not consult a snapshot for
+honoured in two places (a tighter `maxAgeMs` would not do — no age is short
+enough to make a stored occupancy count correct, and any value chosen would be an
+arbitrary guess about how fast a nursery fills) — `resolveSingleMetric` must not consult a snapshot for
 it, and the writer must not persist one. Both are single-condition changes inside
 existing functions. No parallel snapshot architecture, no Attendance-specific
 engine.
