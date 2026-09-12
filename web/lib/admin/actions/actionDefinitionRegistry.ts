@@ -44,6 +44,34 @@ export const ACTION_CATEGORY_LABELS: Record<ActionDefinitionCategory, string> = 
 /** Operator-facing action library (Settings cards). Keys must exist in action_definitions after seed. */
 export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
     {
+        /**
+         * Begin a piece of work the subject's CURRENT stage already configures.
+         *
+         * Registered here because this is the registry canonical action definitions are DERIVED
+         * from, and without an entry `canonicalActionDefinition` returns null — at which point
+         * `resolveCurrentWorkActionSurface` classifies the action `unsupported` and the surface
+         * drops it as a configuration error. That is what happened: `stage_work.start` was a
+         * production capability, a registered action, process-selected and configured against a
+         * stage, and it still could not render, because nothing had told this registry it exists.
+         *
+         * `header_delegate` is the interaction host because the operator supplies NOTHING: the work
+         * template comes from configuration and travels in the invocation payload. Declared as
+         * metadata here rather than inferred from the key, exactly as this field is meant to be
+         * used.
+         *
+         * Not settings-configurable: it is authored per stage, against that stage's own work, in
+         * the stage editor — not placed as a button from the layout library, where it would have no
+         * template to start.
+         */
+        key: "stage_work.start",
+        label: "Start stage work",
+        category: "record",
+        settingsConfigurable: false,
+        description:
+            "Start a piece of work this subject's current stage already configures. Starts the work only — it records no outcome and moves no stage.",
+        interactionHost: "header_delegate",
+    },
+    {
         key: "quick_message",
         label: "Message",
         category: "communication",
