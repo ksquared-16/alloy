@@ -163,3 +163,32 @@ describe("configured action → work template", () => {
         expect(read("components/adminV2/settings/lifecycle/StageEditorV2.tsx")).toContain("StageStartableWorkEditor");
     });
 });
+
+/**
+ * A CONFIGURATION SURFACE THAT CANNOT BE SAVED IS WORSE THAN ONE THAT IS MISSING.
+ *
+ * Candidate actions were written on every save but never compared against the committed baseline,
+ * so changing only them left `isDirty` false and Save disabled. The section rendered, the checkbox
+ * moved, and the one control that could persist it stayed greyed out — a surface that looks finished
+ * and silently does nothing. Found by driving the real editor on staging, not by reading the code.
+ */
+describe("the stage editor can save a configured action", () => {
+    const editor = () => read("components/adminV2/settings/lifecycle/StageEditorV2.tsx");
+
+    it("counts candidate actions as an edit", () => {
+        expect(editor()).toContain("candidateActionsFingerprint(candidateActions) !== savedV2.candidateActions");
+    });
+
+    it("moves the committed baseline with the record and with a successful save", () => {
+        const src = editor();
+        // Three places must agree, or Save is either dead or permanently lit: the initial baseline,
+        // the stage-switch reset, and the post-save commit.
+        expect(src.match(/candidateActions: candidateActionsFingerprint\(/g) ?? []).toHaveLength(3);
+    });
+
+    it("fingerprints order-insensitively", () => {
+        // Ticking two work items in the other order is the same configuration; treating it as
+        // different would leave Save lit with nothing to save.
+        expect(editor()).toContain(".sort()");
+    });
+});
