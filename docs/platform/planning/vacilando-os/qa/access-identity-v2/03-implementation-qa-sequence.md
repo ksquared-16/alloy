@@ -588,7 +588,7 @@ population rather than a no-op.
 | **Q3** | **0** `user_roles.role` values lack a `role_definitions` row. | No | **L3 population is empty. M8 is removed from the §11 register**; M9's FK applies directly. |
 | **Q4** | ~~**2** of **6**~~ → **5** of **11** `(user, org)` pairs lack an access profile (from **13** membership rows) — **run 4, 2026-09-04**. | **Yes** | **The only real remediation in the programme.** ~~M1 is sized at exactly **2** rows.~~ **M1 is not sized by this row at all — it self-sizes in-transaction**; re-derive, never cite (§6 W-6 ruling). W-7 cannot precede it, **and applying M1 is no longer sufficient to let W-7 proceed** — Q4 refills from seed/QA tooling, so W-7 now waits on an *invariant*, not a count. |
 | **Q5** | **0** admin/ops `(org, role)` pairs lack a definition; **0** are defined-but-inactive. | No | **L2 population is empty.** M7 grants `portal.access` per `role_definitions` and misses no org. |
-| **Q6** | **1** principal holds admin/ops *and* an explicit `department_scope = 'restricted'` profile. | **Yes** | **W-8 is a behaviour change for 1 named principal**, not a no-op. Identify and announce before deleting the bypass. |
+| **Q6** | **1** principal holds admin/ops *and* an explicit `department_scope = 'restricted'` profile — **still 1 at run 4, 2026-09-04**. | **Yes** | **W-8 is a behaviour change for 1 named principal**, not a no-op. ~~Identify and announce before deleting the bypass.~~ **The bypass was deleted and reached `origin/staging` on 2026-08-10 with this gate undischarged** — see §6 W-8 *"the gate was not held"*. The identification is now overdue, not pending. |
 
 **Four of six rules did not fire.** Three of the four lockout-class workstreams — L2 (W-13), L3 (W-16) and
 L4 (W-20) — have an **empty** remediation set. Only L1 has real work, and it is two rows. This is the
@@ -5273,14 +5273,103 @@ It also asks a question the count form could not. `allowed_department_count` dis
 W-8 they see *no departments at all*, because the bypass was the only thing showing them any. That is an
 L-class outcome, it was not named by the first issuance, and it changes what the announcement has to say.
 
-**Status: code `met`, promotion `held`** — re-verified independently on the third issuance (§15.6: both exit
-claims re-derived from the tree, lock suites **82 passed / 0 failed**). Both halves of the exit criterion hold in the tree — no role literal
+**Status: code `met`, announcement gate `BREACHED`** — re-verified independently on the third issuance
+(§15.6) and again on the fourth (§15.10). Both halves of the exit criterion hold in the tree — no role literal
 in `accessScope.ts`, and department scope enforced for every role — and the self-authority write the deletion
-would have armed is gone in the same change. What is *not* discharged is §4's announcement gate, which is a
-Director action, not a code change. **The deletion is local and unpushed, so it reaches no live principal
-until promotion; the gate binds promotion, not this commit.** Do not promote before `identity_sql` has been
-run and the affected principal told — and if `allowed_department_count` comes back `0`, treat it as a lockout
-and decide the remedy before the switch, not after.
+would have armed is gone in the same change.
+
+~~**The deletion is local and unpushed, so it reaches no live principal until promotion; the gate binds
+promotion, not this commit.** Do not promote before `identity_sql` has been run and the affected principal
+told — and if `allowed_department_count` comes back `0`, treat it as a lockout and decide the remedy before
+the switch, not after.~~
+
+#### The gate was not held *(fourth issuance, 2026-09-11)*
+
+**That paragraph was true when written and is false now, and the difference is not academic.** Verified at
+this base, not carried:
+
+| Claim | How checked | Result |
+|---|---|---|
+| The deletion is unpushed | `git merge-base --is-ancestor 242865b3b origin/staging` | **False.** It is an ancestor |
+| …and the bypass is really gone there | `git show origin/staging:web/lib/admin/accessScope.ts` | No `PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES`, no `portalAdminBypassesDepartmentScope`, no `effectiveDepartmentScopeDimensions` — only the historical comment at `:56` |
+| …and the refusal shipped with it | `git show origin/staging:web/lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess.ts` | `:160-163` returns `SELF_DEPARTMENT_PROVISIONING_MESSAGE`; no `user_department_access` insert survives |
+| When | `git log` on the first merge along the ancestry path | **`e26cb49db`, PR #396, 2026-08-10 09:03:32 -0700** — 26 minutes after `242865b3b` was authored |
+| Whether the affected principal is still there | `wave0-authority-census.json` run 4, **2026-09-04**, same `query_hash` `a3982ca5…`, same target fingerprint | `q6_restricted_admin_ops_pairs` **= 1, unchanged** |
+
+**The census target is the relevant database.** `alloy_deployed_primary` is a registered DATABASE target of
+class **STAGING** (`trusted-host-database-target.mjs:54`, re-confirmed in this file at §4). That is the
+database Q6 was measured against on every run, and it is the database the staging branch serves. The one
+principal Q6 counts is configured `department_scope='restricted'` *there*.
+
+**So the sequence the gate existed to prevent is the sequence that happened**: the bypass was deleted, the
+deletion merged as a **passenger of an unrelated PR** — `agent/cursor/6-vacilando-v3-4-conversational-director`,
+not an access branch — and the announcement was never made. As of this issuance the change has been on
+`origin/staging` for **32 days**. `promotion-certification-reconciliation-r2.json` `OD-2` already recorded
+this from its own side (*"DOWNGRADED — W-8 already shipped without it … now a live-incident check, not a
+preflight"*), and `OD-5` named the governance shape (*"an access tranche reached staging without its own
+promotion gate"*). **This plan kept saying `held` anyway.** Two artifacts, one gate, and the one an operator
+opens to decide whether W-8 is safe was the one that was wrong — the failure mode §6 W-6 is written about.
+
+**What is still unknown, and it is the part that matters.** `identity_sql` has **never been run**. It is a
+sibling field, deliberately outside `combined_query`, so run 4 did **not** answer it: the census carries the
+count and has never carried `allowed_department_count`. That column is the only thing that distinguishes
+
+- **narrowing** — the principal has `user_department_access` rows and now sees those departments only; from
+- **lockout** — the principal has **zero** rows, and since the bypass was the only thing showing them any
+  department, they now see **none**.
+
+Thirty-two days of a possible workspace lockout is not a preflight question. **Run `identity_sql` first, and
+treat a `0` as an open incident rather than a decision to be made.**
+
+#### The announcement, drafted *(fourth issuance — the half a worker can produce)*
+
+Four issuances have said *"the announcement is the Director's"* and stopped there. That is true of **sending**
+it and true of **identifying** the recipient; it is not true of **writing** it, and an unwritten announcement
+is one more reason for a fifth issuance to defer. Both branches are drafted below so that discharging the gate
+is one query and one send, not a drafting exercise.
+
+**Neither draft names anyone, and neither may be completed in this repository.** `identity_sql`'s own header
+forbids pasting its result back here — it returns a real name and email. Fill the recipient in outside the
+repo; record only that the announcement happened, never whom it named.
+
+**Branch A — `allowed_department_count > 0` (narrowing).** Send as notification.
+
+> **Subject: A change to which departments you see in Alloy**
+>
+> Your Alloy account is configured with department-restricted access. Until recently that setting had no
+> effect for administrators — anyone with an admin or ops role saw every department regardless of it. That was
+> a defect, and it has been fixed.
+>
+> You will now see only the departments you have been granted. If a department you need is missing, another
+> administrator can grant it to you — you will no longer be able to add it to your own access by creating a
+> department or by running *Repair workspace visibility*. That self-service path was removed in the same
+> change, because it let a restricted account widen its own access.
+>
+> This change has been live on the staging environment since 2026-08-10. If anything you expected to see has
+> been missing since then, this is why, and we are sorry we did not tell you sooner.
+
+**Branch B — `allowed_department_count = 0` (lockout).** Do **not** send as a routine notification; this is an
+incident notice, and the grant should be in place before or with it.
+
+> **Subject: Restoring your department access in Alloy**
+>
+> Your Alloy account is configured with department-restricted access but has no departments granted to it.
+> Until recently that combination still showed you every department, because an administrator-role bypass
+> overrode the restriction. That bypass was a defect and has been removed — which means your account has had
+> **no** department visibility since 2026-08-10 on the staging environment.
+>
+> This was our error, not a change to your permissions. We are granting you the departments you should have
+> had. Please tell us if anything is still missing.
+
+**The remedy for branch B is a grant, not a revert.** Re-adding the bypass would restore visibility for this
+principal by restoring it for **every** admin/ops principal, which is the fail-open W-8 exists to close, and
+would re-arm the `user_department_access` self-write with it. The correct fix is `user_department_access` rows
+for the affected `(user, org)` — an ordinary administrative action through the product, by someone other than
+the affected principal.
+
+**Registered as an operator action, not a worker one.** `OD-2` in
+`promotion-certification-reconciliation-r2.json` is the live register entry; this draft is its content. What
+remains Director-side is unchanged and small: run one read-only query, pick a branch, send it.
 
 ---
 
@@ -6633,7 +6722,12 @@ nothing to guess. The correct move on the first issuance was to establish that a
 
 ### 15.5 W-8 execution — bypass deleted, armed path closed with it (2026-08-07, assignment `asg_b94c9679108f0b`, second issuance)
 
-Changed (local only — **not pushed**):
+> **Superseded on its promotion status by §15.10.** This entry is accurate as a record of what the assignment
+> did. Its repeated *"local — not pushed"* is **no longer true of the tree**: the change was committed as
+> `242865b3b` on 2026-08-10 and merged to `origin/staging` the same morning via PR #396. Read every "not
+> pushed" below as "not pushed *by this assignment*".
+
+Changed (~~local only — **not pushed**~~ — **now on `origin/staging`**, see §15.10):
 
 | File | Role |
 |---|---|
@@ -6667,6 +6761,7 @@ gate. A floor that drifts down silently locks nothing, so the count, the date an
   named L1–L4, but the `allowed_department_count = 0` case in §6 W-8 is lockout-shaped, and nothing here
   rules it out — only `identity_sql` can, and only the Director can run it.
 - **The announcement gate is open.** Not discharged, not dischargeable by a worker; it binds **promotion**.
+  **It did not bind it.** The change promoted on 2026-08-10 with the gate still open — §15.10.
 - **A concurrent writer was active in this worktree** during the assignment: this document and
   `wave1-reissue-evidence.json` changed on disk mid-edit without this worker touching the latter. All edits
   here were made through exact-anchor replacements, so no concurrent content was clobbered, but this record
@@ -6714,9 +6809,15 @@ made the change; this issuance re-derived its two exit-criterion claims from the
 **Limits of this record — unchanged from §15.5 and worth restating rather than assuming inherited.** No live
 verification, no browser, no query against any tenant. Tier C and tier D remain absent. **The announcement
 gate at §4 is still open**: `identity_sql` exists but only the Director can run it, and if
-`allowed_department_count` returns `0` the affected principal is a lockout, not a narrowing. **Promotion
-remains held.** Nothing in this issuance changes that status — it re-proves the code half and answers a
+`allowed_department_count` returns `0` the affected principal is a lockout, not a narrowing. ~~**Promotion
+remains held.**~~ Nothing in this issuance changes that status — it re-proves the code half and answers a
 directive; it does not discharge a gate.
+
+> **Corrected by §15.10.** *"Promotion remains held"* was the last thing this workstream said about W-8's
+> promotion status, and it stopped being true **three days later**. The change merged to `origin/staging` on
+> 2026-08-10 via PR #396, with the announcement gate still open, and no issuance revisited the sentence for a
+> month. The gate was never *lifted* — it was simply not consulted, because the promotion did not come through
+> this workstream.
 
 **What this issuance deliberately did not do.** It did not touch `PORTAL_ROLES`, `canReadAnalytics.ts`,
 `canManageUsersAndRoles.ts` or `RB-40`'s exit clause, though the ledger above establishes that all four are
@@ -6856,3 +6957,85 @@ operator review W-11 opened), did not author the `EXECUTE` revocation that findi
 
 **Method:** static, source-grounded, test-backed. One migration, two test-tree files, one evidence artifact.
 Focused Vitest only. Nothing pushed.
+
+### 15.10 W-8 fourth issuance — the code was already shipped; the gate that was supposed to stop it had already been crossed (2026-09-11, assignment `asg_0c75402f744088`)
+
+Mission `msn_861e1785ec233cf433` v1, contentHash `282eace8ea5a991546ba9e8b1c19fc7e`. The objective read
+*"remove `portalAdminBypassesDepartmentScope` … announce impact for the one W-0 Q6 principal."*
+
+**The removal was done before this assignment started — three issuances ago — and is on `origin/staging`.**
+Re-implementing it was not available. What was available, and is the whole of this issuance, is that **the
+plan of record still said the opposite**, in the section an operator reads to decide whether W-8 is safe.
+
+| Field | Value |
+|---|---|
+| Base | `77447ad69` → `1fa4bdfb7` @ `promote/devops-8-config-hygiene` (advanced mid-pass by a concurrent lane, below). Root class **`unmanaged`** per `alloy-root`; 12 behind `origin/staging` |
+| Changed | **This plan only.** No file under `web/`, `supabase/` or `scripts/` — none needed changing |
+| Locks | **112 passed / 0 failed**, 5 files: `lifecycleAdminScopeAndPersistence` · `lifecycleWorkspaceDepartmentAccess` · `authorityLayerEnumeration` · `adminAccessScope` (**54**) and `analyticsRouteGates` (**58**) |
+| Finding | The announcement gate binding W-8's promotion was **crossed 32 days ago**, un-discharged |
+
+##### What was re-verified rather than carried
+
+Every prior W-8 record was written from `wt6-*` worktrees against an uncommitted tree. This issuance checked
+the **published** state:
+
+| Claim | Method | Result |
+|---|---|---|
+| Bypass absent in this tree | Grep over `web/` for all three symbols | Only doc-comments: `accessScope.ts:56`, `ensureLifecycleDepartmentWorkspaceAccess.ts:9`. Zero executable |
+| Bypass absent **on `origin/staging`** | `git show origin/staging:…` for `accessScope.ts`, `ensureLifecycleDepartmentWorkspaceAccess.ts`, `adminRouteGate.ts` | Same — and `SELF_DEPARTMENT_PROVISIONING_MESSAGE` is the return at `:163`, so the refusal shipped too. No `dimRaw` |
+| It is genuinely promoted | `git merge-base --is-ancestor 242865b3b origin/staging` | **True.** Not on `origin/main` |
+| When, and by what | First merge along the ancestry path | `e26cb49db` — **PR #396, 2026-08-10 09:03:32 -0700**, an unrelated Director-UX branch |
+| The affected principal is still affected | `wave0-authority-census.json` run 4, 2026-09-04, identical `query_hash` | `q6_restricted_admin_ops_pairs` **= 1** |
+| The lockout question is still unanswered | `identity_sql` is a sibling field, outside `combined_query` | Run 4 could not have answered it and did not. **Never executed** |
+
+##### Why this is the finding and not a footnote
+
+W-8's own §6 text set the gate: *"Do not promote before `identity_sql` has been run and the affected principal
+told."* It then reassured the reader that the gate had room to operate — *"the deletion is local and unpushed,
+so it reaches no live principal until promotion."* Both sentences sat in the plan, unchanged, for a month
+**after** the promotion happened. The gate did not fail because someone overrode it; it failed because the
+promotion arrived through a different branch, and nothing connected the two.
+
+`promotion-certification-reconciliation-r2.json` **already knew** — `OD-2` records W-8 as shipped without the
+query and reclassifies it as a live-incident check; `OD-5` records the tranche merging as a passenger. That
+artifact was right and this one was wrong, and a reader of this file had no way to find that out. **This is
+the two-artifact failure §6 W-6 is written about, with the roles reversed**: there, the gate was repaired in
+one artifact and left standing in the other. Here the *breach* was recorded in one artifact and the other kept
+publishing the reassurance. Repairing only the sentence §4 points at would have left the same shape, so §4's
+Q6 row, §6 W-8's status block, §15.5's header and §15.6's closing line are all corrected — four sites, one
+fact.
+
+##### What this issuance produced beyond the correction
+
+**The announcement is drafted** — both branches, in §6 W-8. Four issuances deferred it as *"the Director's"*,
+which is true of sending and of identifying the recipient but not of writing, and an unwritten announcement is
+itself a reason to defer again. Neither draft names anyone; `identity_sql`'s header forbids its result
+entering this repository, and that constraint is restated at the drafts rather than left to be rediscovered.
+
+**Limits of this record.**
+- **No live verification, and one inference stated as an inference.** That the code is on the `staging`
+  *branch* is proven by ancestry. Whether the staging **deployment** has rebuilt from it — and therefore
+  whether the affected principal has actually experienced the change — was **not** checked; no request was
+  issued, no browser opened, no query run against any tenant. The 32-day figure is branch age, not confirmed
+  user impact. It is the right figure to act on and the wrong figure to quote as harm.
+- **`identity_sql` was not run.** No worker-side channel to `database.read_census` was used and none was
+  invented. Filing its *result* is additionally forbidden by the query's own header.
+- **`vac run typecheck` was not run.** The root is `unmanaged`, so the broker refuses and the watchdog kills
+  raw `tsc`; no source file changed, so there is no typecheck subject. Focused Vitest only.
+- **A concurrent writer was active in this file** throughout: `asg_dfe98d83bf0cc2` (W-5 sixth issuance) held
+  **119 uncommitted lines** in §5 at start of pass, and **committed them itself mid-pass** as `1fa4bdfb7`,
+  moving `HEAD` under this assignment. All edits here are exact-anchor replacements in §4, §6 W-8, §15.5 and
+  §15.6, none of which that assignment touched, so nothing was clobbered in either direction and this commit
+  carries only its own hunks. Had W-5 not committed, the intent was to stage from `HEAD` + these edits alone
+  rather than sweep its work under this message — the precedent §15.8 set when W-11 declined to commit W-10's
+  pending file. Worth stating because it was **luck of timing**, not a mechanism: nothing in the workflow
+  prevents two lanes from committing each other's in-flight deliverables in this file, and this is the third
+  W-class issuance to record a concurrent writer in it.
+
+**What this assignment deliberately did not do.** It did not re-remove an already-removed bypass, did not
+touch `PORTAL_ROLES`, `canReadAnalytics.ts` or `canManageUsersAndRoles.ts` (W-13's, under `AD-22`/`AD-25`),
+did not enter Wave 3 catalog work, and did not send, address or complete the announcement. It did not revert
+W-8: the remedy for a lockout is a `user_department_access` grant, not restoring a platform-wide fail-open.
+
+**Method:** source-grounded and test-backed, against both this tree and `origin/staging`. Docs only; nothing
+pushed, no migration authored or applied, no shared-environment write.
