@@ -248,14 +248,18 @@ describe("W-54 Tier A — the canonical surface sends what it showed", () => {
         "utf8",
     );
 
-    it("the role save body carries expected_role_keys", () => {
-        const save = src.slice(src.indexOf("const saveRole"), src.indexOf("const saveAccess"));
-        expect(save).toContain("expected_role_keys");
-    });
-
-    it("it is derived from the SAME predicate the surface displayed, not re-derived", () => {
-        const save = src.slice(src.indexOf("const saveRole"), src.indexOf("const saveAccess"));
-        expect(save).toMatch(/expected_role_keys:\s*heldRoleKeys\(selected\)/);
+    /*
+     * W-54 asked this surface to SEND what it showed, because it submitted a replacement computed
+     * from a collapsed view and could therefore discard roles it had never rendered. W-17 removed
+     * the submission: the surface now adds one role and removes one role, so there is no set for a
+     * partial view to be wrong about. The obligation does not disappear — it belongs entirely to the
+     * route now, which the `bites` case below still holds to it.
+     */
+    it("the surface no longer submits a role-set replacement at all", () => {
+        expect(src).toContain("mutateRole");
+        expect(src).not.toMatch(/users\/\$\{[^}]+\}\/role["`]/);
+        // And therefore has no partial-view payload left to get wrong.
+        expect(src).not.toContain("expected_role_keys");
     });
 
     it("bites: dropping the field makes the route refuse a multi-role member", async () => {
