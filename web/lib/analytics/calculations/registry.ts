@@ -40,6 +40,22 @@ function defineCalculation(
 }
 
 const CALCULATIONS: Record<OipMetricKey, OperationalCalculation> = {
+    "attendance.occupancy_count": defineCalculation("attendance.occupancy_count", {
+        questionAnswered: "How many children are physically on site right now, and where are they?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Attendance / occupancyAt point-in-time whereabouts fold",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Occupancy is asserted through occupancyAt against movement fixtures: a child who moves " +
+            "changes location without changing the total, and placement is never consulted.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
     "attendance.expected_count": defineCalculation("attendance.expected_count", {
         questionAnswered: "How many children are expected at this site today?",
         grains: ["org", "site"],

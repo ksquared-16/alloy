@@ -47,6 +47,7 @@ import {
     resolveFinancialsUnappliedPaymentsAmount,
     resolveFinancialsUnresolvedSubsidyVarianceAmount,
 } from "@/lib/metrics/resolvers/financialsMetrics";
+import { resolveAttendanceOccupancyCount } from "@/lib/metrics/resolvers/attendanceOccupancyMetrics";
 import {
     resolveAttendanceCheckedOutCount,
     resolveAttendanceExpectedCount,
@@ -70,6 +71,8 @@ import {
 
 async function resolveLiveMetric(ctx: MetricResolveContext, key: OipMetricKey): Promise<ResolvedMetricValue> {
     switch (key) {
+        case "attendance.occupancy_count":
+            return resolveAttendanceOccupancyCount(ctx);
         case "attendance.expected_count":
             return resolveAttendanceExpectedCount(ctx);
         case "attendance.here_now_count":

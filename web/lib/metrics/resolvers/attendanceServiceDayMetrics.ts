@@ -33,8 +33,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MetricResolveContext, OipMetricKey, ResolvedMetricValue } from "@/lib/metrics/types";
 import { getMetricDefinition } from "@/lib/metrics/registry";
 import { formatMetricValue } from "@/lib/metrics/formatMetricValue";
-import { assertMetricSiteAccess } from "@/lib/metrics/resolveMetricSiteAccess";
-import { resolveMetricScopeFilter } from "@/lib/metrics/scopeFilter";
+import { resolveReadableSiteIds } from "@/lib/metrics/resolvers/attendanceMetricScope";
 import { buildCombinedRoster } from "@/lib/roster/buildCombinedRoster";
 import { resolveOperationalEnrollmentTodayYmd } from "@/lib/childcareOperational/operationalEnrollmentApi";
 
@@ -52,37 +51,6 @@ export type ServiceDayCounts = {
     /** Children on the roster carrying no service-day reading at all. */
     withoutServiceDay: number;
 };
-
-/** Sites this caller may read, narrowed by any explicit site filter. */
-async function resolveReadableSiteIds(ctx: MetricResolveContext): Promise<string[] | null> {
-    if (ctx.siteLocationId) {
-        const allowed = await assertMetricSiteAccess({
-            supabase: ctx.supabase,
-            orgId: ctx.orgId,
-            scope: ctx.scope,
-            siteId: ctx.siteLocationId,
-        });
-        // Out of scope is UNSUPPORTED, never "zero children". Answering a
-        // narrowed request with a number the caller may not see is the failure
-        // this returns null to avoid.
-        return allowed ? [ctx.siteLocationId] : null;
-    }
-
-    const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, null);
-    if (filter.impossible) return null;
-
-    const { data, error } = await ctx.supabase
-        .from("locations")
-        .select("id")
-        .eq("org_id", ctx.orgId)
-        .eq("location_type", "site")
-        .eq("is_active", true);
-    if (error) return null;
-
-    const siteIds = ((data ?? []) as { id: string }[]).map((r) => r.id);
-    const allowed = filter.constraints.locationIds;
-    return allowed?.length ? siteIds.filter((id) => allowed.includes(id)) : siteIds;
-}
 
 /**
  * One roster build per request, not one per metric.

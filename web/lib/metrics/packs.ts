@@ -87,6 +87,7 @@ const PACKS: readonly MetricPackDefinition[] = [
             "service-day interpretation the Attendance workspace uses.",
         metricKeys: [
             "attendance.expected_count",
+            "attendance.occupancy_count",
             "attendance.here_now_count",
             "attendance.not_arrived_count",
             "attendance.checked_out_count",

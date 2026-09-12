@@ -6,6 +6,24 @@ import type {
 } from "@/lib/metrics/types";
 
 const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
+    "attendance.occupancy_count": {
+        key: "attendance.occupancy_count",
+        label: "Children on site now",
+        description:
+            "How many children are physically present across the readable sites at this instant. " +
+            "Authoritative source: occupancyAt, the certified point-in-time whereabouts fold. " +
+            "NOT a daily summary - summarizeAttendanceByDay returns the SET of rooms a child " +
+            "appeared in, so a child who moved twice would be counted three times. Movement " +
+            "changes this value and never changes placement. A per-location breakdown rides in " +
+            "meta because the platform dimension vocabulary has no location member yet.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["child_attendance_events", "locations"],
+        snapshotSemantics: true,
+        snapshotPolicy: "live_only",
+    },
     "attendance.expected_count": {
         key: "attendance.expected_count",
         label: "Expected today",

@@ -3,6 +3,7 @@ import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 
 /** Operational Intelligence Platform metric keys (code-owned registry). */
 export type OipMetricKey =
+    | "attendance.occupancy_count"
     | "attendance.expected_count"
     | "attendance.here_now_count"
     | "attendance.not_arrived_count"
