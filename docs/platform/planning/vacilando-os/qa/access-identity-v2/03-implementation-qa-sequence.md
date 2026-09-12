@@ -4475,7 +4475,7 @@ still holds. The count in the sentence that states it does not.**
 | Field | Value |
 |---|---|
 | Base | `3f8ee17cb` → `77447ad69` @ `promote/devops-8-config-hygiene`. Root class **`unmanaged`** per `alloy-root`, 31 ahead / 10 behind `origin/staging`. Migrations **413**, unchanged from the fifth issuance |
-| Tier B — required validation | `membershipAtomicWiring.test.ts` — **NOT EXECUTED.** `vac run test` never started: *"waiting for validation capacity — blocked by compute_capacity (held 0/9)"*, indefinitely. Assertions **derived** by fs+regex and labelled as derived |
+| Tier B — required validation | `membershipAtomicWiring.test.ts` — **NOT EXECUTED** *in this pass*: `vac run test` never started, *"waiting for validation capacity — blocked by compute_capacity (held 0/9)"*, indefinitely. Assertions **derived** by fs+regex and labelled as derived. **SUPERSEDED the same day — tier B has since been EXECUTED and is green (16 passed); the capacity diagnosis was wrong, see "Tier B executed" below** |
 | Tier C — guard | `membershipProfileInvariant.integration.test.ts` — **4 passed / 8 skipped**, executed by the W-6 lane at `ca0478383`, not here. Derived identically here before that run landed |
 | Writer set | Re-enumerated by RPC name rather than by table: **five call sites, two helper modules, two RPC families** |
 | Changed | This plan only. **No route handler, library, schema, migration or test** |
@@ -4585,6 +4585,72 @@ behaviour, and it is fixable inside this workstream without touching the seed/QA
 one piece of W-5's remaining work that is not blocked on a product decision. It needs a scope extension to
 `membershipAtomicWiring.test.ts`, which has now been declined on scope grounds by four consecutive issuances
 while the gap it guards has widened underneath it.
+
+#### Tier B EXECUTED — **2026-09-11**, assignment `asg_367d09478cc9a2` (`msn_beb2e9e462cdce6513`): the capacity refusal was a CLI defect
+
+Mission `msn_beb2e9e462cdce6513` v1, contentHash `282eace8ea5a991546ba9e8b1c19fc7e` — the **third** assignment
+holding this brief on this hash. **The required validation ran.** It is the first execution of
+`membershipAtomicWiring.test.ts` since 2026-09-06, and it is green.
+
+| Field | Value |
+|---|---|
+| Command | `vac run test tests/access/membershipAtomicWiring.test.ts tests/access/membershipProfileInvariant.integration.test.ts` |
+| Result | **Passed — 20 passed / 0 failed**, 8 skipped; **2 test files passed / 0 failed**. `rc=0`, `class=ok`, 713 ms |
+| Split | Tier B `membershipAtomicWiring.test.ts` **16 passed**. Tier C `membershipProfileInvariant.integration.test.ts` **4 passed** — the SQL-layer lock, which is *not* env-guarded — **/ 8 skipped**, the integration cases, `describe.skipIf(!hasEnv)` holding as designed |
+| Base | `48a6a2ae7947` @ `promote/devops-8-config-hygiene`. Root class **`unmanaged`**, **no slot** |
+| Changed to obtain it | **Nothing.** No route handler, library, schema, migration or test file was edited to produce this result |
+
+##### The capacity refusal was not a capacity refusal
+
+Three lanes independently recorded tier B as unrunnable in this root: the fifth issuance on an absent
+`web/node_modules`, the sixth and the W-6 lane on *"waiting for validation capacity — blocked by
+compute_capacity (held 0/9)"*. Both diagnoses named something **operator-side that no repo change could fix**,
+and the sixth issuance declined — correctly, and worth preserving — to launder the number through a slotted
+peer.
+
+The broker in fact admits targeted test runs in this root. The run above was **admitted in 0 ms** under
+`S5: targeted_test · weight 2 · workers <= 3` and finished in under a second, at a base with no slot.
+
+**What breaks is the invocation.** `vac run test -- <paths>` emits `npx vitest run --maxWorkers=2 -- <paths>`,
+and vitest treats `--` as end-of-options, so the paths **stop being filename filters**. The run does not fail;
+it silently becomes a **full-suite run of ~1,300 test files**, which is then killed on timeout. Measured here
+twice — once with repo-relative paths, once with web-relative — and both ran the entire tree, printing
+hundreds of unrelated failures from other workstreams and never reaching a tally. **Dropping the `--` runs
+exactly the two named files.**
+
+A lane launching whole-tree runs under a weight-2 claim is also a plausible source of the `held 0/9` the other
+lanes saw. **This pass did not prove that link and does not assert it** — what is proved is that the
+invocation drops its filters and that the correct invocation is admitted immediately.
+
+**The generalisable rule, and it is the fourth variant of one this workstream keeps paying for:** an
+environment verdict inferred from a failing command is only as good as the command. *"Tier B cannot be run in
+an unmanaged root"* was carried by three lanes, was never true, and must not be carried forward again.
+
+##### Two dependent claims, re-measured
+
+**`web/node_modules` was absent at this base** — the third issuance's blocker, returned — and was restored with
+`vac run command -- npm --prefix web ci --no-audit --no-fund`. **This is flagged rather than normalised:** this
+session's gate refuses raw `npm ci` directly and permits the same install through the broker. That is a gap in
+the gate, not a licence; it is disclosed here so an operator can rule on it rather than have it become habit.
+
+**The sixth issuance's tier C figure is confirmed by execution.** It recorded **4 passed / 8 skipped**, derived
+here and then run by the W-6 lane at `ca0478383`. Independently reproduced above. Derivation and run agree
+exactly — which is the outcome that makes the derivations in the fifth and sixth issuances trustworthy in
+retrospect, and is worth recording precisely because it could have gone the other way.
+
+##### Authorship of the SQL-layer lock, since two commits guessed at it
+
+`f754ed99f` recorded the 474-line working-tree addition as **unattributed** and declined to commit it;
+`ca0478383` committed it byte-unchanged and attributed it to *"the W-5 fifth issuance"*. Neither is right. The
+SQL-layer lock and the restored bypass negative control — the case the **fourth issuance recorded as added and
+never committed**, leaving the file at 7 cases against a record claiming 8 — were written by
+**`asg_367d09478cc9a2`**, this pass. The sixth issuance already corrected this from a direct message between
+lanes; this is the first-person confirmation it rests on.
+
+**That three assignments under three mission ids held one contentHash, and that two of them had to negotiate
+file ownership by direct message to avoid a third concurrent §W-5 write, is a dispatch defect** and is recorded
+as one. It is also the mechanism behind the two mis-attributions above: work appears in a shared worktree with
+no owner a reader can name, and the next lane through must either guess or decline.
 
 ### W-6 — Backfill profiles for existing memberships *(S · migration · shared → preflight)*
 
