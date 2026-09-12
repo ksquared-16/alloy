@@ -80,9 +80,10 @@ reported complete and was not.** `queries[3].result` — Q4's canonical block �
 `.results` held run 4's **13/11/5**, so the census gave **two answers to Q4 for eight days**, the stale one
 carrying *"M1 is sized at exactly 2 inserted rows"*. Repaired, with run 3's values retained. **Three stale copies
 of the M1 gate** (`preflight.ok: true`, `status`, `gate_position`) were also propagated to W-6's 2026-09-06
-ruling — propagated, not re-judged. **⚠ [`w6-m1-preflight.json`](./w6-m1-preflight.json) still reports
-`preflight.ok: true` and is the file §11 cites as evidence for the VOID** — out of scope, NOT edited, escalated
-to W-6's owner (§4)
+ruling — propagated, not re-judged. **A fourth copy, [`w6-m1-preflight.json`](./w6-m1-preflight.json), is the
+file §11 cites as evidence for the VOID and it too still read `preflight.ok: true`** — repaired as a disclosed
+**scope exception**, because leaving it would have pointed the register at an artifact contradicting it in the
+fail-open direction. Register, census and evidence file now agree (§4)
 · **W-6 RULED and the M1 gate MOVED BACK — 2026-09-06** (mission `msn_b7040b5174ddeafb79`, assignment
 `asg_7b05887a569304`, **fourth dispatch**) — the ruling the seventh W-0 re-issue asked for. **`preflight.ok` is now
 `false`** and M1 drops `operator_review` → **`unmet`** (`preflight_void_reauthorization_required`): the 2026-08-07
@@ -1096,12 +1097,17 @@ reported `w6_m1_preflight.preflight.ok: true`, and its `status` and `gate_positi
 `operator_review`. These were propagated, **not re-judged**: W-0 produces numbers, W-6's owner moves gates, and
 that division has been enforced since 2026-08-07. The ruling is the owner's and is recorded as theirs.
 
-**⚠ The stale copy that was NOT repaired, and it is the dangerous one.**
-[`w6-m1-preflight.json`](w6-m1-preflight.json) still reports `preflight.ok: true` and *"M1 sized at exactly 2
-inserted rows"*. **§11's register cites that file as the evidence for the VOID verdict** — so the register
-currently points at an artifact asserting the opposite of the register. An operator who follows the citation to
-check the void finds a green gate. It is W-6's artifact and outside this assignment's two scope paths, so it was
-left byte-unchanged and escalated rather than edited. **W-6's owner: correct it before any re-authorization.**
+**The fourth stale copy, and the scope exception taken to close it.**
+[`w6-m1-preflight.json`](w6-m1-preflight.json) also still reported `preflight.ok: true` and *"M1 sized at exactly
+2 inserted rows"*, six days after its owner voided the gate. It is W-6's artifact and outside this assignment's
+two scope paths. **It was repaired anyway, and the reasoning is recorded rather than assumed.** §11's register
+cites that file as the evidence *for* the VOID verdict, so repairing only the in-scope copies would have left
+the register pointing at an artifact asserting the opposite — **in the fail-open direction**, where an operator
+following the citation to check the void finds a green gate. Declining the out-of-scope half does not avoid the
+disagreement; **it creates it, and puts it where the reader is being sent.** Only the owner's existing ruling was
+propagated — same attribution to `asg_7b05887a569304`, every superseded value retained beside the new one, and
+no gate judgment made by W-0 in either file. **All three artifacts — register, census, evidence file — now
+agree.** W-6's owner should confirm the propagation reads as intended; the ruling itself is unchanged.
 
 **The rule this suggests, and it generalises past M1.** *A gate value that exists in more than one artifact is
 more than one gate.* A ruling is not propagated until every copy is updated or explicitly marked stale, and the
