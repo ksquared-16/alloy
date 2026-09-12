@@ -120,6 +120,14 @@ const HEALTHY_PROBES = {
   maintenanceCadence: { due: false, last_ms: 1 },
   // Seventh. A clean audit is healthy; the check exists to surface instruction
   // drift, and a fixture claiming full health must supply a clean one.
+  // Eighth. A registered, fenced, fully-snapshotted standby is what full health
+  // looks like for resilience; anything less is a watch, so a fixture claiming
+  // health must supply it.
+  resilience: {
+    primary_host: "host_a", standby_host: "host_b", leadership_epoch: 3,
+    fencing_authority: "remote_ref_cas", replication_age_ms: 60000,
+    snapshot_complete: true, blocked_failover_reason: null,
+  },
   configAudit: {
     baseline_version: "ib_fixture", claude_version: "2.1.269", severity: "healthy",
     counts: { total: 0, problems: 0, conflicts: 0 }, findings: [],

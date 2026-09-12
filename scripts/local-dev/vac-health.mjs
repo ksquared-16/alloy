@@ -93,6 +93,23 @@ const lanesRaw = await safely(async () => {
 // Freshness, like bootstrap, is a READ. It runs git plumbing against each
 // lane's worktree and acquires no slot, server, browser or provider.
 // Knowledge coverage, a READ over the existing lane-memory store.
+// Resilience posture, composed from what is registered. On a single-host
+// installation this correctly reports that no standby exists.
+const resilience = await safely(async () => {
+  const { resilienceProjection, hostIdentity, ROLE } = await import("./lib/vacilando/control-plane-resilience.mjs");
+  const { currentRuntimeGeneration } = await import("./lib/vacilando/control-plane-health.mjs");
+  const r = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const { existsSync: ex, readFileSync: rf } = await import("node:fs");
+  const leasePath = join(r, "vacilando", "resilience", "lease.json");
+  const snapPath = join(r, "vacilando", "resilience", "snapshot.json");
+  return resilienceProjection({
+    primary: hostIdentity({ hostId: os.hostname(), role: ROLE.PRIMARY, runtimeGeneration: currentRuntimeGeneration() }),
+    standby: null,
+    lease: ex(leasePath) ? JSON.parse(rf(leasePath, "utf8")) : null,
+    snapshot: ex(snapPath) ? JSON.parse(rf(snapPath, "utf8")) : null,
+  });
+}, null);
+
 // Toolchain activation state, a pure READ of one small record. Absent on a host
 // that has never activated anything through the canary path, which is healthy.
 const activationState = await safely(async () => {
@@ -458,7 +475,7 @@ const report = composeReport({
   hw, thresholds, only, startedAt,
   endedAt: new Date().toISOString(),
   probeResults: {
-    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, laneKnowledge, worktreeLifecycle, slotOwnership, promotionGates, maintenanceWindow, maintenanceCadence, configAudit, activationState,
+    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, laneKnowledge, worktreeLifecycle, slotOwnership, promotionGates, maintenanceWindow, maintenanceCadence, configAudit, activationState, resilience,
     run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, configured_max: configuredMax,
     validation_routing: validationRouting, validation_bypasses: validationBypasses,

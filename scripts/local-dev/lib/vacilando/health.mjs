@@ -51,6 +51,7 @@ export const CHECKS = Object.freeze([
   "host.maintenance",
   "config.hygiene",
   "toolchain.activation",
+  "host.resilience",
   "ports.registry",
   "worktrees.registry",
   "toolkit.retention",
@@ -1043,6 +1044,49 @@ export function checkSlotOwnership({ conflicts = null }) {
  * activated through this path, and a check red from birth is a check nobody
  * reads.
  */
+
+/**
+ * CAN VACILANDO SURVIVE LOSING THIS MACHINE?
+ *
+ * The measurement that matters is not "are we highly available" but WHAT STOPS
+ * US — a boolean tells an operator nothing they can act on, whereas "no standby
+ * host is registered" or "the latest snapshot is missing lane_memory" is a task.
+ *
+ * SEVERITY IS CHOSEN SO THE CHECK SURVIVES BEING TRUE. There is one host today
+ * and no replication, which is the condition this subsystem exists to describe
+ * rather than a fault it should scream about: an unconfigured failover is a
+ * `watch`. The `problem` is reserved for the state that is genuinely dangerous —
+ * a snapshot that claims to exist and is incomplete, which is worse than no
+ * snapshot because somebody may be counting on it.
+ */
+export function checkHostResilience({ projection = null }) {
+  if (!projection) return incompleteFinding("host.resilience", "no resilience projection available");
+  const incompleteSnapshot = projection.snapshot_complete === false;
+  const noStandby = !projection.standby_host;
+  const sev = incompleteSnapshot ? "problem" : (noStandby || projection.blocked_failover_reason) ? "watch" : "healthy";
+  return finding({
+    check: "host.resilience",
+    severity: sev,
+    owner_resource: "vacilando.control_plane_resilience",
+    measurements: {
+      primary: projection.primary_host,
+      standby: projection.standby_host,
+      leadership_epoch: projection.leadership_epoch,
+      fencing_authority: projection.fencing_authority,
+      replication_age_ms: projection.replication_age_ms,
+      snapshot_complete: projection.snapshot_complete,
+    },
+    evidence: projection.blocked_failover_reason ? [projection.blocked_failover_reason] : [],
+    explanation: incompleteSnapshot
+      ? "A snapshot exists but does not contain every store required to reconstruct Vacilando. An incomplete snapshot is more dangerous than none, because a restore would appear to succeed."
+      : noStandby
+        ? "No standby host is registered. Losing this machine loses the unreconstructable control-plane state."
+        : projection.blocked_failover_reason
+          ? "A standby exists but failover is blocked."
+          : "A warm standby is registered, fenced by an external authority, with a complete recent snapshot.",
+  });
+}
+
 export function checkToolchainActivation({ state = null }) {
   if (!state) return finding({
     check: "toolchain.activation",
@@ -1488,6 +1532,7 @@ export function composeReport({
   safe("host.maintenance", () => checkHostMaintenance({ window: probeResults.maintenanceWindow, cadence: probeResults.maintenanceCadence }));
   safe("config.hygiene", () => checkConfigHygiene({ audit: probeResults.configAudit }));
   safe("toolchain.activation", () => checkToolchainActivation({ state: probeResults.activationState }));
+  safe("host.resilience", () => checkHostResilience({ projection: probeResults.resilience }));
   safe("lanes.consistency", () => checkLanesConsistency({ lanes: probeResults.lanes || [], seats: probeResults.seats || [] }));
   safe("ports.registry", () => checkPortsRegistry({ ports: probeResults.ports || [] }));
   safe("worktrees.registry", () => checkWorktreesRegistry({ ...(probeResults.worktrees || {}), states: probeResults.reconciliation || null }));
