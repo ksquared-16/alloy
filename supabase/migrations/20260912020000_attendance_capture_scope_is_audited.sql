@@ -21,6 +21,11 @@
 --
 -- Additive and idempotent. The narrow form is dropped in the same statement
 -- block so PostgREST never sees two candidates it cannot disambiguate.
+--
+-- Renumbered 20260912000000 -> 20260912020000 during promotion reconciliation.
+-- W-17 merged 20260912010000 into staging while this was unmerged, and `db push`
+-- refuses a migration that sorts at or below the staging head. Only the version
+-- changed; the statements are untouched.
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.replace_member_access_scope_audited(
