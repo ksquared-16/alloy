@@ -69,6 +69,18 @@ const HEALTHY_PROBES = {
   seats: [{ pid: 1, provider: "claude", lane_id: "lane_a", lane_name: "A" }],
   panes: [{ pid: 1 }],
   lanes: [{ lane_id: "lane_a", name: "A", run_state: "EXECUTING" }],
+  // The bootstrap inventory belongs in the HEALTHY fixture rather than being
+  // left out. Omitting it makes `lane.bootstrap` report INCOMPLETE — correct
+  // behaviour for a check with no data, and a `watch` — so this "fully healthy"
+  // composition would stop being fully healthy. A fixture that claims every
+  // check passes has to actually supply every check.
+  laneBootstrap: {
+    contract_version: "vacilando.lane_bootstrap.v1",
+    lanes: 1,
+    stale: 0,
+    unresolved: 0,
+    rows: [{ lane_id: "lane_a", name: "A", stale: false, unresolved: [], overlay: {} }],
+  },
   runs: [{ run_id: "r1", state: "EXECUTING", state_reason: "instruction_delivered", terminal: false, age_ms: 1000 }],
   run_bounds: { instruction_delivered: 3600000 },
   attribution: { seat_count: 1, attributed_count: 1, records: [{ pid: 2, attribution_status: "ancestry", execution_location: "inside_worktree" }] },

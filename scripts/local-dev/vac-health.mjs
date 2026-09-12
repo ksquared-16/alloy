@@ -85,6 +85,16 @@ const lanesRaw = await safely(async () => {
   return listDurableLanes();
 }, []);
 
+// The bootstrap inventory is a READ. It resolves each lane's baseline from the
+// owners that already hold it and acquires nothing — no slot, no server, no
+// browser, no provider — so asking "are my lanes consistent?" costs none of the
+// resources it is asking about. `safely` keeps a failure here from taking the
+// rest of the report down; the check reports INCOMPLETE instead.
+const laneBootstrap = await safely(async () => {
+  const { inventoryLaneBootstrap } = await import("./lib/vacilando/lane-bootstrap.mjs");
+  return inventoryLaneBootstrap({ lanes: lanesRaw });
+}, null);
+
 const runFor = await safely(async () => {
   const { activeRunForLane } = await import("./lib/vacilando/execution-run.mjs");
   return (laneId) => activeRunForLane(laneId);
@@ -349,7 +359,7 @@ const report = composeReport({
   hw, thresholds, only, startedAt,
   endedAt: new Date().toISOString(),
   probeResults: {
-    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs,
+    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap,
     run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, configured_max: configuredMax,
     validation_routing: validationRouting, validation_bypasses: validationBypasses,
