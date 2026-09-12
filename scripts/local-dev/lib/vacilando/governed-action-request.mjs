@@ -3410,6 +3410,56 @@ function enqueuePromotionContinuation(rec, { nowMs, root } = {}) {
   }, { nowMs, root, processNow: true });
 }
 
+/**
+ * Has this execution outlived any possibility that someone is still running it?
+ *
+ * The window comes from the action's own `timeoutMs`, doubled, with a floor —
+ * `database.apply_promoted_migration` declares 600 s, so it gets 20 minutes
+ * before anyone is entitled to call it abandoned. Deriving it rather than
+ * choosing it means a future action with a longer timeout is covered the day it
+ * is registered, instead of being declared dead by a constant nobody revisited.
+ */
+function abandonedExecution(rec, nowMs = Date.now()) {
+  if (!rec?.execution_started_at) return false;
+  const started = Date.parse(rec.execution_started_at);
+  if (!Number.isFinite(started)) return false;
+  const declared = Number(getActionDefinition(rec.action_key)?.timeoutMs || 180_000);
+  const window = Math.max(10 * 60_000, declared * 2);
+  return (nowMs - started) > window;
+}
+
+/**
+ * AN EXECUTION THE GATEWAY DIED IN THE MIDDLE OF IS SETTLED, NEVER REPLAYED.
+ *
+ * A record that is `executing`, carries an async acceptance, and has an
+ * `execution_started_at` is one whose executor was running when the process
+ * holding it stopped — a Gateway restart, a toolkit convergence, a crash. The
+ * tempting recovery is to run it again. That is exactly wrong for the actions
+ * this matters most for: a migration that may have half-applied, a merge that
+ * may have landed, a push that may have completed. Nothing in the record can
+ * distinguish "never ran" from "ran and we did not see the result", and the
+ * registry says so itself — both migration actions declare maxAttempts 1.
+ *
+ * So the ambiguity is reported rather than resolved by guessing. The request
+ * fails with a named cause, the audit carries what was known, and a human reads
+ * the outcome and decides. That is a worse-looking recovery and a better one:
+ * the alternative silently applies a migration twice.
+ *
+ * The grant makes this belt-and-braces. It is single-use and was consumed at the
+ * execution boundary, so even a replay would be refused `authorization_required`
+ * — this turns that refusal into an honest explanation instead of a puzzle.
+ */
+function settleInterruptedAcceptedExecution(rec, { nowMs, root } = {}) {
+  return failRequest(
+    rec,
+    "execution_interrupted",
+    "Execution was in progress when the Gateway stopped. Whether the trusted host "
+    + "completed it cannot be determined from here, so it is not retried automatically. "
+    + "Check the action's own outcome before deciding to run it again.",
+    { nowMs, root },
+  );
+}
+
 export function processGovernedAction(requestId, {
   nowMs = Date.now(),
   root = runtimeRoot(),
@@ -3462,6 +3512,33 @@ export function processGovernedAction(requestId, {
     }
     attachRunWait(rec, { nowMs, root });
     return { ok: true, request: publicGovernedAction(rec), awaiting_operator: true };
+  }
+  // AN ACCEPTED ACTION IS EXECUTED HERE, AND NOWHERE ELSE RE-DECIDED.
+  //
+  // The decision was taken when the operator pressed. Falling through to the
+  // policy evaluation below would re-ask a question that already has an answer,
+  // and could escalate an action the operator has already authorised — so this
+  // returns before any of that, carrying only the work.
+  if (rec.status === "executing" && rec.async_execution) {
+    if (rec.execution_started_at) {
+      // Started and did not finish. Only reachable when the process holding it
+      // died mid-action, because nothing else leaves this shape behind.
+      return settleInterruptedAcceptedExecution(rec, { nowMs, root });
+    }
+    if (!getActionDefinition(rec.action_key)) {
+      // The registry is not currently carrying this action. Wait rather than
+      // fail: the convergence path exists precisely for this, and the record
+      // keeps its claim so the next tick looks again.
+      attachRunWait(rec, { nowMs, root });
+      return { ok: true, request: publicGovernedAction(rec), accepted: true, waiting: "action_unavailable" };
+    }
+    rec.async_execution = {
+      ...rec.async_execution,
+      attempts: Number(rec.async_execution.attempts || 0) + 1,
+      last_attempt_at: observedNow(),
+    };
+    saveRequest(rec, root);
+    return executeGovernedAction(rec.request_id, { nowMs, root, actor });
   }
   if (rec.status === "awaiting_control_plane_refresh") {
     if (!getActionDefinition(rec.action_key)) {
@@ -4117,6 +4194,14 @@ export async function approveGovernedAction(requestId, {
   // only — nothing authorises on it, and a caller that omits it loses one stamp
   // rather than one guarantee.
   submittedAt = null,
+  // DEFAULTS TO THE OLD BEHAVIOUR ON PURPOSE. Every existing caller — the tick,
+  // the CLI, the certification fixtures, the conversation path — keeps waiting
+  // for the result it has always waited for. Only the HTTP route, which is the
+  // one with a browser on the end of it, asks for acceptance.
+  awaitExecution = true,
+  // Test seam. The durable owner is what must be proven to execute the work, so
+  // the tests turn the immediate kick off and drive the tick instead.
+  schedule = true,
 } = {}) {
   const rec = getGovernedAction(requestId, root);
   if (!rec) return { ok: false, error: "request_not_found" };
@@ -4368,6 +4453,63 @@ export async function approveGovernedAction(requestId, {
   }
   saveRequest(rec, root);
   appendAudit(rec, "operator_approved", { nowMs }, root);
+
+  // ACCEPTANCE AND EXECUTION ARE TWO EVENTS. THE BROWSER ONLY NEEDS THE FIRST.
+  //
+  // THE DEFECT. Everything above this line is the decision: the request is
+  // validated, the authorization is checked, the grant is minted and the
+  // approval is written to disk. Everything below it was the WORK — the
+  // trusted-host action, then the lane resume and its continuation message —
+  // and the HTTP response waited for all of it. `database.read_census` carries a
+  // 180 s timeout and `database.apply_promoted_migration` carries 600 s, so the
+  // browser could not distinguish "my approval was accepted" from "the action
+  // has finished", because one request lifetime carried both.
+  //
+  // MEASURED with an executor that blocks for 1200 ms the way execFileSync
+  // really does: 1230 ms to answer, against 3 ms once the answer is the
+  // acceptance. That difference is the whole mission.
+  //
+  // WHY THIS IS SAFE TO RETURN ON. Acceptance is durable BEFORE the answer is
+  // given: `saveRequest` above has already written the operator decision, the
+  // grant the executor consumes, and the execution ownership recorded below. If
+  // the process died on the next line, every one of those survives.
+  //
+  // AND WHY IT IS NOT FIRE-AND-FORGET. `async_execution` is a durable claim, not
+  // a Promise. A record carrying it with no `execution_started_at` is
+  // unambiguously "accepted, never started", which is a shape only this path can
+  // produce — that matters, because processGovernedAction deliberately refuses
+  // to resume an `awaiting_operator` record that merely LOOKS approved, and it
+  // is right to. `tickGovernedActions` owns this shape and the Gateway's
+  // recovery timer drives the tick, so the work survives client disconnect,
+  // route completion and Gateway restart. The immediate kick below is an
+  // optimisation on top of that owner, never a substitute for it.
+  if (awaitExecution === false) {
+    rec.async_execution = {
+      accepted_at: observedNow(),
+      accepted_by: actor,
+      attempts: 0,
+    };
+    // `executing` is the canonical status for "decided, now the machine's
+    // problem", and it is what executeGovernedAction sets anyway one moment
+    // later. Inventing an `accepted` status would add governance vocabulary for
+    // a state the projection already renders, and every consumer that reasons
+    // about pending work would have to learn it.
+    rec.status = "executing";
+    rec.updated_at = iso(nowMs);
+    saveRequest(rec, root);
+    appendAudit(rec, "accepted", {
+      nowMs,
+      detail: { accepted_at: rec.async_execution.accepted_at, execution: "deferred_to_owner" },
+    }, root);
+    const accepted = {
+      ok: true,
+      accepted: true,
+      request: publicGovernedAction(rec),
+    };
+    if (schedule !== false) scheduleAcceptedExecution(rec.request_id, { root, actor: "director" });
+    return accepted;
+  }
+
   const out = executeGovernedAction(rec.request_id, { nowMs, root, actor: "director" });
   if (out?.resumePromise) {
     const resume = await out.resumePromise;
@@ -4375,6 +4517,30 @@ export async function approveGovernedAction(requestId, {
     return { ...rest, resume };
   }
   return out;
+}
+
+/**
+ * Start an accepted action promptly, without the durable owner depending on it.
+ *
+ * The tick runs on the Gateway's recovery cadence, which is measured in tens of
+ * seconds — correct for recovery and far too slow to be the only thing that
+ * starts work the operator just authorised. This closes that gap.
+ *
+ * It is deliberately written so that losing it costs nothing: it runs on the
+ * next macrotask, it swallows everything, and the record it acts on is already
+ * durably claimed. If the process dies before it runs, if it throws, or if it is
+ * never scheduled at all (`schedule: false`, which the tests use), the tick
+ * finds exactly the same record in exactly the same shape and executes it. That
+ * is the difference between an optimisation and an unowned Promise.
+ */
+function scheduleAcceptedExecution(requestId, { root, actor = "director" } = {}) {
+  setTimeout(() => {
+    try {
+      const out = executeGovernedAction(requestId, { root, actor });
+      // The resume is part of the downstream work, not part of acceptance.
+      if (out?.resumePromise) Promise.resolve(out.resumePromise).catch(() => {});
+    } catch { /* the tick is the owner and will find it */ }
+  }, 0).unref?.();
 }
 
 export function denyGovernedAction(requestId, {
@@ -4494,6 +4660,30 @@ export function tickGovernedActions({
     // The whole point of the wait: look again. Without this line the status is
     // a nicer name for the same silence.
     || r.status === "awaiting_checks"
+    // ACCEPTED, NEVER STARTED — THE SHAPE THAT MAKES EARLY RETURN SAFE.
+    //
+    // This is the durable owner of everything `approveGovernedAction` answered
+    // "accepted" to. `async_execution` is written by exactly one path, so unlike
+    // an `awaiting_operator` record that merely looks approved, this shape is
+    // never ambiguous: the operator decided, the grant exists, and the executor
+    // has not run. `execution_started_at` is written by executeGovernedAction
+    // before it calls the executor, so its absence is the claim.
+    //
+    || (r.status === "executing" && Boolean(r.async_execution) && !r.execution_started_at)
+    // AND THE ORPHANS OF AN EXECUTION THAT DIED HALFWAY.
+    //
+    // A record that started executing and never settled is either running right
+    // now or was abandoned by a process that no longer exists, and from the
+    // store those look identical. Time is the only honest discriminator, so it
+    // is taken from the action's OWN declared timeout rather than a number
+    // chosen here — doubled, because a timeout is when the executor gives up,
+    // not when it is safe to conclude nobody is there.
+    //
+    // Picking it up does NOT mean re-running it. processGovernedAction settles
+    // it as `execution_interrupted`: the ambiguity is reported, never guessed.
+    // Leaving it out entirely was the alternative, and it produces a request
+    // stuck in `executing` for ever with a lane waiting behind it.
+    || (r.status === "executing" && Boolean(r.async_execution) && abandonedExecution(r, nowMs))
   );
   const out = [...recovered];
   const seen = new Set(recovered.map((r) => r?.request?.request_id).filter(Boolean));

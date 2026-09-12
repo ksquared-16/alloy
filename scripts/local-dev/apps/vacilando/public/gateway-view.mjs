@@ -1714,6 +1714,103 @@ export function laneAwaitingOperatorApproval(lane) {
  * decision costs one tap from wherever the operator already is.
  */
 /**
+ * A MESSAGE THAT HAS LEFT THE COMPOSER BUT NOT YET LEFT THE MACHINE.
+ *
+ * The composer is emptied the moment Send is pressed, which is the only way to
+ * stop an editable box full of the operator's words from saying "nothing
+ * happened" for the 30 seconds that p95 sends actually take. That is only
+ * defensible if the words are somewhere: this is that somewhere.
+ *
+ * Per-lane, so switching lanes mid-send cannot show one lane's pending message
+ * under another's. Lives in the view for the same reason the governed decision
+ * state does — it must survive every repaint and be reachable from the handler
+ * without threading a prop through five layers.
+ *
+ * It is NOT a queue and must never become one. The server owns delivery; this is
+ * one snapshot per lane, held from the press until the answer, and its whole job
+ * is to be either forgotten (accepted) or given back (refused).
+ */
+const pendingSends = new Map();
+
+export function beginPendingSend(laneId, text, { attachments = [] } = {}) {
+  if (!laneId) return null;
+  const rec = {
+    lane_id: laneId,
+    text: String(text ?? ""),
+    attachment_count: Array.isArray(attachments) ? attachments.length : 0,
+    state: "sending",
+    at: Date.now(),
+  };
+  pendingSends.set(laneId, rec);
+  return rec;
+}
+
+export function pendingSendFor(laneId) {
+  return (laneId && pendingSends.get(laneId)) || null;
+}
+
+/**
+ * Accepted. The server owns it now, the projection will show it, and the
+ * snapshot's job is done — holding it any longer would double-render the message
+ * next to the real one.
+ */
+export function settlePendingSend(laneId, result = {}) {
+  const rec = pendingSendFor(laneId);
+  if (!rec) return null;
+  pendingSends.delete(laneId);
+  return { ...rec, state: "accepted", status: result?.status || null };
+}
+
+/**
+ * Refused before acceptance. The text comes back.
+ *
+ * `composer_is_free` is the whole subtlety. If the operator started typing
+ * something else while the refusal was in flight, restoring would overwrite live
+ * work — a worse loss than the one being repaired. In that case the snapshot
+ * stays on the record, marked recoverable, and the view offers it instead.
+ */
+export function restorePendingSend(laneId, { currentDraft = "" } = {}) {
+  const rec = pendingSendFor(laneId);
+  if (!rec) return null;
+  const free = !String(currentDraft || "").trim();
+  if (free) {
+    pendingSends.delete(laneId);
+    return { ...rec, state: "restored", composer_is_free: true };
+  }
+  const held = { ...rec, state: "recoverable", composer_is_free: false };
+  pendingSends.set(laneId, held);
+  return held;
+}
+
+export function clearPendingSend(laneId) {
+  if (laneId) pendingSends.delete(laneId);
+}
+
+/**
+ * The pending message, rendered where the conversation is.
+ *
+ * Only ever drawn for a send that is in flight or one the operator still has to
+ * recover. An accepted send is deleted above, so this never competes with the
+ * canonical projection of the message it was standing in for.
+ */
+export function renderPendingSend(laneId) {
+  const rec = pendingSendFor(laneId);
+  if (!rec) return "";
+  const recoverable = rec.state === "recoverable";
+  const images = rec.attachment_count
+    ? ` · ${rec.attachment_count} image${rec.attachment_count === 1 ? "" : "s"}`
+    : "";
+  return `<article class="gw-pending-send" data-gw-pending-send data-state="${esc(rec.state)}" aria-live="polite">
+    <p class="gw-pending-send-h">${recoverable ? "Not sent" : "Sending…"}${esc(images)}</p>
+    <p class="gw-pending-send-body">${esc(rec.text)}</p>
+    ${recoverable
+      ? `<p class="gw-pending-send-recover">Your composer has newer text, so this was kept here instead of replacing it.
+         <button type="button" class="btn sm" data-gw-pending-send-recover data-lane-id="${esc(laneId)}">Put it back in the composer</button></p>`
+      : ""}
+  </article>`;
+}
+
+/**
  * THE STATE OF A DECISION THE OPERATOR HAS ALREADY MADE.
  *
  * THE DEFECT. The click handler disabled the pressed button directly on the DOM
@@ -6077,6 +6174,14 @@ export function renderGatewayShell({
           ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
           ${renderUnanswerableScreen(blockingScreen, { laneId })}
           ${tray}
+          ${/*
+            THE MESSAGE THAT LEFT THE COMPOSER HAS TO BE SOMEWHERE VISIBLE.
+            Drawn immediately above the composer it was just taken out of, so the
+            operator's eye lands on it in the place it disappeared from. It shows
+            only while a send is in flight or waiting to be recovered — an
+            accepted send is dropped, so this never duplicates the real message.
+          */ ""}
+          ${renderPendingSend(laneId)}
           ${renderComposer({
             ...(composer || {}),
             idleStart: cap.state === "IDLE",
