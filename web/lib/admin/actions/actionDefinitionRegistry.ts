@@ -31,7 +31,19 @@ export type ActionRegistryEntry = {
 };
 
 /** Generic interaction hosts a capability may declare. Not business- or action-name specific. */
-export type CapabilityInteractionHost = "inline_form" | "communications_composer" | "header_delegate" | "form_delivery";
+export type CapabilityInteractionHost =
+    | "inline_form"
+    | "communications_composer"
+    | "header_delegate"
+    | "form_delivery"
+    /**
+     * Run the command here, against the subject already resolved.
+     *
+     * The other four each name a place the operator goes to SUPPLY something. This one is for the
+     * command that needs nothing more: the surface knows the subject and configuration bound the
+     * inputs, so the only remaining act is to run it through the registered-action runtime.
+     */
+    | "command_surface";
 
 export const ACTION_CATEGORY_LABELS: Record<ActionDefinitionCategory, string> = {
     record: "Record",
@@ -69,7 +81,14 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         settingsConfigurable: false,
         description:
             "Start a piece of work this subject's current stage already configures. Starts the work only — it records no outcome and moves no stage.",
-        interactionHost: "header_delegate",
+        /*
+         * `command_surface`, not `header_delegate`. This is a CHILD-subject command, and the drawer
+         * header is opportunity-scoped: delegating there reached a host with no such command, and
+         * told the operator to "use drawer header actions" for an action the header does not carry.
+         * The Focus Panel already holds the child and configuration already bound the template, so
+         * there is nothing left to collect and nowhere else to go.
+         */
+        interactionHost: "command_surface",
     },
     {
         key: "quick_message",
