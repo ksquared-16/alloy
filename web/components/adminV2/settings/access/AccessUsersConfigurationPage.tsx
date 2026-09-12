@@ -43,6 +43,7 @@ import {
     type MemberAuthenticationProjection,
     type MemberLifecycleProjection,
     type ConfiguredScope,
+    type ConfiguredCaptureScope,
 } from "@/lib/access/memberIdentityProjection";
 import { UnknownValue } from "@/components/adminV2/settings/access/UnknownValue";
 import {
@@ -86,6 +87,7 @@ type MemberRow = {
     effective_divergence_reason: string | null;
     department_ids: string[];
     site_location_ids: string[];
+    attendance_capture_scope: ConfiguredCaptureScope;
     lifecycle: MemberLifecycleProjection;
     authentication: MemberAuthenticationProjection;
 };
@@ -224,6 +226,7 @@ export default function AccessUsersConfigurationPage({
      */
     const [deptScope, setDeptScope] = useState<ConfiguredScope>("all");
     const [siteScope, setSiteScope] = useState<ConfiguredScope>("all");
+    const [captureScope, setCaptureScope] = useState<ConfiguredCaptureScope>("unset");
     const [selDeptIds, setSelDeptIds] = useState<string[]>([]);
     const [selSiteIds, setSelSiteIds] = useState<string[]>([]);
     const [accessSaving, setAccessSaving] = useState(false);
@@ -410,6 +413,7 @@ export default function AccessUsersConfigurationPage({
             setEditRole("");
             setDeptScope("all");
             setSiteScope("all");
+            setCaptureScope("unset");
             setSelDeptIds([]);
             setSelSiteIds([]);
             return;
@@ -422,6 +426,7 @@ export default function AccessUsersConfigurationPage({
         setEditRole("");
         setDeptScope(selected.department_scope);
         setSiteScope(selected.site_scope);
+        setCaptureScope(selected.attendance_capture_scope);
         setSelDeptIds([...selected.department_ids]);
         setSelSiteIds([...selected.site_location_ids]);
         setConfirmRemove(false);
@@ -439,6 +444,10 @@ export default function AccessUsersConfigurationPage({
     const beginScopeConfiguration = () => {
         setDeptScope("restricted");
         setSiteScope("restricted");
+        // Deliberately NOT defaulted. `site` is the permissive answer and `assigned`
+        // is the one that can silently stop a teacher capturing anything, so this
+        // stays unchosen and the save below refuses until the operator picks.
+        setCaptureScope("unset");
         setSelDeptIds([]);
         setSelSiteIds([]);
     };
@@ -583,12 +592,16 @@ export default function AccessUsersConfigurationPage({
             if (deptScope === "unset" || siteScope === "unset") {
                 throw new Error("Choose a location and department scope before saving.");
             }
+            if (captureScope === "unset") {
+                throw new Error("Choose whose attendance this person can record before saving.");
+            }
             const res = await fetch(`/api/admin/users/${encodeURIComponent(selected.user_id)}/access-scope`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     department_scope: deptScope,
                     site_scope: siteScope,
+                    attendance_capture_scope: captureScope,
                     department_ids: deptScope === "restricted" ? selDeptIds : [],
                     site_location_ids: siteScope === "restricted" ? selSiteIds : [],
                 }),
@@ -1316,6 +1329,75 @@ export default function AccessUsersConfigurationPage({
                                                 />
                                             </ConfigWorkspaceCard>
                                             {/*
+                                              * Attendance capture authority. This is enforced today —
+                                              * `attendancePermissions.ts` reads it on every capture — but
+                                              * until now nothing could read it back to an operator or set
+                                              * it, so every membership sat on the column default and the
+                                              * `assigned` mode was unreachable. It belongs here rather
+                                              * than in an Attendance screen: it is an authority a person
+                                              * holds, and Access already owns those.
+                                              *
+                                              * Both options are stated in terms of children, not of
+                                              * scope modes, because the question an administrator is
+                                              * actually asking is "whose attendance can this teacher
+                                              * record".
+                                              */}
+                                            <ConfigWorkspaceCard
+                                                testId="access-user-attendance-capture"
+                                                title="Attendance capture"
+                                            >
+                                                <fieldset className="border-0 p-0 m-0">
+                                                    <legend className="text-sm font-medium text-alloy-midnight">
+                                                        Whose attendance can this person record?
+                                                    </legend>
+                                                    {captureScope === "unset" ?
+                                                        <p
+                                                            className="mt-1 text-[12px] text-alloy-midnight/55"
+                                                            data-testid="access-user-attendance-capture-unset"
+                                                        >
+                                                            Not configured yet — choose one to save.
+                                                        </p>
+                                                    :   null}
+                                                    <label className="mt-3 flex items-start gap-2 text-sm text-alloy-midnight">
+                                                        <input
+                                                            type="radio"
+                                                            name="attendance-capture-scope"
+                                                            className="mt-1"
+                                                            checked={captureScope === "site"}
+                                                            onChange={() => setCaptureScope("site")}
+                                                            data-testid="access-user-attendance-capture-site"
+                                                        />
+                                                        <span>
+                                                            Any child at the locations above
+                                                            <span className="block text-[12px] text-alloy-midnight/55">
+                                                                Suits a director or a floating staff member who
+                                                                covers wherever they are needed.
+                                                            </span>
+                                                        </span>
+                                                    </label>
+                                                    <label className="mt-2 flex items-start gap-2 text-sm text-alloy-midnight">
+                                                        <input
+                                                            type="radio"
+                                                            name="attendance-capture-scope"
+                                                            className="mt-1"
+                                                            checked={captureScope === "assigned"}
+                                                            onChange={() => setCaptureScope("assigned")}
+                                                            data-testid="access-user-attendance-capture-assigned"
+                                                        />
+                                                        <span>
+                                                            Only children in the rooms and groups they are
+                                                            assigned to
+                                                            <span className="block text-[12px] text-alloy-midnight/55">
+                                                                Suits a classroom teacher. A person with no
+                                                                current assignment can record nobody, so this
+                                                                depends on their assignments being kept up to
+                                                                date.
+                                                            </span>
+                                                        </span>
+                                                    </label>
+                                                </fieldset>
+                                            </ConfigWorkspaceCard>
+                                            {/*
                                               * Departments are an ADVANCED restriction, not a second
                                               * primary question. `OD-8`'s tranche keeps them out of the
                                               * V1 configuration experience — but "out of the experience"
@@ -1362,7 +1444,12 @@ export default function AccessUsersConfigurationPage({
                                                 </div>
                                             </details>
                                             <ConfigurationPrimaryButton
-                                                disabled={accessSaving || deptScope === "unset" || siteScope === "unset"}
+                                                disabled={
+                                                    accessSaving ||
+                                                    deptScope === "unset" ||
+                                                    siteScope === "unset" ||
+                                                    captureScope === "unset"
+                                                }
                                                 onClick={() => void saveAccess()}
                                                 data-testid="access-user-access-save"
                                             >

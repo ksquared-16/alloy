@@ -89,6 +89,61 @@ export async function rotateKioskDeviceCredential(
     return { ok: true, secret, record: { deviceId: (data as { id: string }).id } };
 }
 
+/**
+ * Register a new trusted device and return its secret ONCE.
+ *
+ * It lives here, beside rotation, so there is exactly one place that mints a
+ * kiosk credential. A registration path that grew its own generator and hash
+ * would be the second credential system this module exists to prevent, and it
+ * would drift the moment either side changed an alphabet or an algorithm.
+ *
+ * The secret is returned to the caller and never stored in readable form — only
+ * its hash and last four go to the row. There is no way to recover it later, and
+ * that is the property, not a limitation: an administration surface that could
+ * re-display a device secret would make every list view a credential leak.
+ */
+export async function registerKioskDevice(
+    supabase: SupabaseClient,
+    params: {
+        orgId: string;
+        siteLocationId: string;
+        label: string;
+        capabilities?: readonly string[];
+        createdBy?: string | null;
+    },
+): Promise<RotationOutcome<{ deviceId: string; producerKey: string }>> {
+    const label = params.label.trim();
+    if (!label) return { ok: false, code: "label_required" };
+    if (!params.siteLocationId) return { ok: false, code: "site_required" };
+
+    const secret = generateKioskDeviceCredential();
+    // Durable producer identity, independent of the secret: rotating a credential
+    // must never orphan the provenance of facts the device already authored.
+    const producerKey = `kiosk:${randomBytes(8).toString("hex")}`;
+
+    const { data, error } = await supabase
+        .from("attendance_kiosk_devices")
+        .insert({
+            org_id: params.orgId,
+            site_location_id: params.siteLocationId,
+            producer_key: producerKey,
+            label,
+            capabilities:
+                params.capabilities && params.capabilities.length > 0 ?
+                    [...params.capabilities]
+                :   ["attendance.record"],
+            credential_hash: hashKioskCredential(secret),
+            credential_last_four: secret.slice(-4),
+            status: "active",
+            created_by: params.createdBy ?? null,
+        })
+        .select("id")
+        .maybeSingle();
+
+    if (error || !data) return { ok: false, code: "registration_failed" };
+    return { ok: true, secret, record: { deviceId: (data as { id: string }).id, producerKey } };
+}
+
 /** Revoke a device. Its credential stops resolving because resolution refuses a non-active row. */
 export async function revokeKioskDevice(
     supabase: SupabaseClient,

@@ -52,6 +52,19 @@ export type ConfiguredScope = "all" | "restricted" | "unset";
 /** What the platform enforces for that configuration, today, per `ABSENT_PROFILE_ENFORCEMENT`. */
 export type EnforcedScope = "all" | "restricted";
 
+/**
+ * Which children a member may capture Attendance for. `site` is every child at a
+ * site they can reach; `assigned` narrows that to the rooms/groups they are
+ * actually assigned to.
+ *
+ * `unset` is carried for the same reason the scopes carry it: the column is
+ * `NOT NULL DEFAULT 'site'`, so a membership with no `user_access_profiles` row
+ * has no stored answer at all. Rendering that absence as "Site" would be the
+ * `?? "all"` this module exists to refuse — it would show a configured, permissive
+ * capture authority that nobody chose.
+ */
+export type ConfiguredCaptureScope = "site" | "assigned" | "unset";
+
 export type MemberScopeProjection = {
     /** What is stored. `unset` is a first-class answer, never coerced to `all`. */
     department_scope: ConfiguredScope;
@@ -71,6 +84,12 @@ export type MemberScopeProjection = {
     effective_divergence_reason: string | null;
     department_ids: string[];
     site_location_ids: string[];
+    /**
+     * Whose Attendance this member may record. Read from the profile row; `unset`
+     * when there is no row. Enforcement lives in `attendancePermissions.ts`, which
+     * reads the same field — this is a projection of it, not a second rule.
+     */
+    attendance_capture_scope: ConfiguredCaptureScope;
 };
 
 export const ABSENT_PROFILE_DIVERGENCE_REASON =
@@ -100,6 +119,13 @@ export function projectMemberScope(args: {
         : String((profileRow as { site_scope?: unknown }).site_scope ?? "").trim() === "restricted" ? "restricted"
         :   "all";
 
+    const attendance_capture_scope: ConfiguredCaptureScope =
+        !present ? "unset"
+        : String((profileRow as { attendance_capture_scope?: unknown }).attendance_capture_scope ?? "").trim() ===
+          "assigned" ?
+            "assigned"
+        :   "site";
+
     const enforced = resolveScopeAnswerFromProfile(profileRow, ABSENT_PROFILE_ENFORCEMENT);
 
     // Allow-lists are reported only where the configuration makes them meaningful. An `unset`
@@ -117,6 +143,7 @@ export function projectMemberScope(args: {
         effective_divergence_reason: present ? null : ABSENT_PROFILE_DIVERGENCE_REASON,
         department_ids,
         site_location_ids,
+        attendance_capture_scope,
     };
 }
 

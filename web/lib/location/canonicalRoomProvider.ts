@@ -67,6 +67,60 @@ export function toCanonicalRoom(
     };
 }
 
+/**
+ * The minimal raw shape an ancestry walk needs — a `locations` row as the
+ * Settings surfaces already hold it, in snake_case.
+ */
+export type LocationAncestryRow = {
+    id: string;
+    parent_location_id?: string | null;
+};
+
+/**
+ * Does `row` sit under `siteId`, at any allowed depth?
+ *
+ * Settings surfaces hold raw rows rather than `CanonicalLocation`s, and each one
+ * had grown its own `parent_location_id === site.id` test. That is correct only
+ * for a room hanging directly off the site: a group nested inside a physical
+ * space has the space as its parent, so every one of those filters silently hid
+ * the classrooms an operator was looking for. This is the one walk they share.
+ *
+ * The site row itself need not be present in `rows` — only its id is needed, so
+ * a caller holding just the room list can still resolve correctly. Depth is
+ * bounded and revisits are guarded, matching `resolveSiteIdsByLocation` and
+ * `public.location_site_id()`: an unresolvable chain answers false rather than
+ * guessing.
+ */
+export function rowBelongsToSite(
+    row: LocationAncestryRow,
+    siteId: string,
+    byId: ReadonlyMap<string, LocationAncestryRow>
+): boolean {
+    if (!siteId) return false;
+    let parentId = row.parent_location_id ?? null;
+    const seen = new Set<string>([row.id]);
+    let hops = 0;
+    while (parentId && hops < 8) {
+        if (parentId === siteId) return true;
+        if (seen.has(parentId)) return false; // cycle
+        seen.add(parentId);
+        const next = byId.get(parentId);
+        if (!next) return false;
+        parentId = next.parent_location_id ?? null;
+        hops += 1;
+    }
+    return false;
+}
+
+/** Every row in `rows` that belongs to `siteId` by ancestry. */
+export function rowsBelongingToSite<T extends LocationAncestryRow>(
+    rows: readonly T[],
+    siteId: string
+): T[] {
+    const byId = new Map<string, LocationAncestryRow>(rows.map((r) => [r.id, r]));
+    return rows.filter((r) => rowBelongsToSite(r, siteId, byId));
+}
+
 /** Rooms a child may be PLACED into — operational groups only. */
 export function placeableRooms(rooms: readonly CanonicalRoom[]): CanonicalRoom[] {
     return rooms.filter((r) => r.unitRole === "operational_group");
