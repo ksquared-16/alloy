@@ -21,6 +21,8 @@
  * travels in the invocation payload.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
@@ -56,11 +58,21 @@ describe("stage_work.start resolves as an executable control", () => {
     });
 
     it("declares its interaction host as metadata, not by name", () => {
-        expect(canonicalActionDefinition(KEY)!.interactionHost).toBe("header_delegate");
+        /*
+         * CONTRACT CHANGED DELIBERATELY. This first declared `header_delegate`, which made the
+         * action resolvable and therefore visible — the fix that closed the fifth layer. Driving it
+         * live then showed the host was wrong: the drawer header is opportunity-scoped and carries
+         * no child-subject command, so pressing the control produced "use drawer header actions"
+         * for an action the header does not have.
+         *
+         * `command_surface` is the host for a command whose subject and inputs are already
+         * resolved. Metadata either way; the value is what changed, not how it is declared.
+         */
+        expect(canonicalActionDefinition(KEY)!.interactionHost).toBe("command_surface");
     });
 
-    it("resolves to the header host, where a registry action is invoked", () => {
-        expect(resolveCurrentWorkActionSurface(configuredAction())).toBe("header_delegate");
+    it("resolves to the command surface, where a resolved command runs", () => {
+        expect(resolveCurrentWorkActionSurface(configuredAction())).toBe("command_surface");
     });
 
     it("is EXECUTABLE — the property that was false and made it invisible", () => {
@@ -88,5 +100,45 @@ describe("stage_work.start resolves as an executable control", () => {
     it("is not offered as a layout library button, where it would have no work to start", () => {
         // It is authored per stage against that stage's own work, not placed from the library.
         expect(canonicalActionDefinition(KEY)!.settingsConfigurable).toBe(false);
+    });
+});
+
+/**
+ * A BUTTON SAYS WHAT IT STARTS.
+ *
+ * The capability's own label is "Start stage work" — the right name for the generic thing it does,
+ * and the wrong name on a control. A stage may configure several startable templates, and they would
+ * all render identically: two or three buttons reading "Start stage work", with nothing to say which
+ * starts the offer and which starts the packet.
+ *
+ * The label is taken from the stage's own plan rather than authored a second time, so renaming a
+ * work template renames its control and the two cannot drift apart.
+ */
+describe("a configured start action is labelled by the work it starts", () => {
+    const src = () =>
+        readFileSync(
+            resolve(__dirname, "../..", "lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkTemplateFromPublishedPlan.ts"),
+            "utf8",
+        );
+
+    it("derives the label from the bound work template", () => {
+        expect(src()).toContain("workLabelByKey");
+        expect(src()).toContain("operatingPlan?.work_templates");
+    });
+
+    it("lets an explicit override win, and falls back to the capability label", () => {
+        // Precedence stated once: authored override, then the bound work's name, then nothing —
+        // at which point the capability's own generic label still applies downstream.
+        expect(src()).toContain("row.override_label?.trim() || boundLabel || undefined");
+    });
+
+    it("names no work key — the mapping is built from configuration", () => {
+        const code = src()
+            .split("\n")
+            .filter((l) => !l.trim().startsWith("*") && !l.trim().startsWith("//") && !l.includes("/*"))
+            .join("\n");
+        for (const forbidden of ["offer_spot", "review_waitlist_position"]) {
+            expect(code, `must not name "${forbidden}"`).not.toContain(forbidden);
+        }
     });
 });

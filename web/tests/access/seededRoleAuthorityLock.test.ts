@@ -43,6 +43,17 @@ const ACCESS_OWNED = [
      */
     join(webRoot, "app", "api", "admin", "forms"),
     join(webRoot, "lib", "access", "formsAuthority.ts"),
+    /*
+     * The POS + Processing authorization surface, added when Processing migrated off role-title
+     * authority. Twelve of its thirteen gates were ordinary route checks; the thirteenth was
+     * `actorAuthorized = ctx.role === "admin" || ctx.role === "ops"` inside a SHARED context that
+     * governs seven identity routes at once — invisible to any scan that only reads route files,
+     * which is exactly why `lib/pos/processingIdentity` is listed here by name.
+     */
+    join(webRoot, "app", "api", "admin", "pos"),
+    join(webRoot, "app", "api", "admin", "processing"),
+    join(webRoot, "lib", "pos", "processingIdentity"),
+    join(webRoot, "lib", "access", "processingAuthority.ts"),
 ];
 
 /**
@@ -88,12 +99,37 @@ function stripComments(src: string): string {
 const AUTHORITY_SHAPES: { name: string; re: RegExp }[] = [
     {
         /*
+         * THE CALLER'S role, compared to anything.
+         *
+         * `ctx.role` / `auth.role` / `access.role` / `context.role` is the admitted principal's
+         * compatibility projection. Any comparison against it is a decision about WHO SOMEONE IS,
+         * whatever key it names — including a key that is not in the seeded vocabulary.
+         *
          * Excludes the primitive type names, because `typeof body.role === "string"` is a parse of
          * untrusted input, not a decision about who someone is. Convicting it would make the lock
          * noisy in exactly the routes that do the right thing.
          */
-        name: 'role === "<key>" as a condition',
-        re: /\b(?:ctx|auth|access|context)?\.?role\s*(?:!==?|={2,3})\s*["'](?!string["']|number["']|boolean["']|object["']|undefined["']|function["']|symbol["']|bigint["'])[a-z_]+["']/,
+        name: "the caller's role as a condition",
+        re: /\b(?:ctx|auth|access|context)\.role\s*(?:!==?|={2,3})\s*["'](?!string["']|number["']|boolean["']|object["']|undefined["']|function["']|symbol["']|bigint["'])[a-z_]+["']/,
+    },
+    {
+        /*
+         * ANY `role` identifier compared to a SEEDED ROLE KEY.
+         *
+         * This is the classification half, and POS + Processing is why it exists. That tree is full
+         * of lines like `s.role === "lead"`, `child.role !== "child"`, `entry.role === "parent"` —
+         * fourteen of them — and not one is authorization. They describe what a SUBJECT is inside a
+         * household: who the lead is, which record is the child. The word is the same and the noun
+         * is not.
+         *
+         * A lock that convicted them would have to be switched off for the whole subtree, which is
+         * how the shared `operatorRouteContext` gate stayed invisible in the first place. So the
+         * discriminator is the KEY, not the identifier: `admin`, `ops`, `owner`, `school_director`
+         * and `regional_lead` are the platform's seeded role vocabulary, and comparing anything to
+         * one of them is a role-title decision no matter what it is called.
+         */
+        name: "seeded role key as a condition",
+        re: /\brole\s*(?:!==?|={2,3})\s*["'](?:admin|ops|owner|school_director|regional_lead)["']/,
     },
     { name: "role-key literal array membership", re: /\[\s*["'](?:admin|ops|owner|school_director|regional_lead)["'][^\]]*\]\s*\.\s*includes\s*\(/ },
     { name: "roleKeys.includes(<key>)", re: /roleKeys\s*\.\s*(?:includes|some)\s*\(\s*["'][a-z_]+["']/ },
@@ -106,6 +142,19 @@ describe("W-17 — a seeded role key is not authority inside Access", () => {
         // A lock that silently stopped traversing Forms would pass forever while the gates returned.
         const forms = scanned.filter((f) => f.includes(`${sep}forms${sep}`) || f.endsWith("formsAuthority.ts"));
         expect(forms.length, "the Forms authorization surface was not scanned").toBeGreaterThan(15);
+    });
+
+    it("actually scanned the POS + Processing authorization surface", () => {
+        // Same non-vacuity claim, made separately: these are different trees, and one of them going
+        // quiet must not be covered by the other still being noisy.
+        const routes = scanned.filter(
+            (f) => f.includes(`${sep}pos${sep}`) || f.includes(`${sep}processing${sep}`),
+        );
+        expect(routes.length, "the POS + Processing authorization surface was not scanned").toBeGreaterThan(25);
+
+        // And specifically the shared context, which is the one site a route-level scan cannot see.
+        const shared = scanned.filter((f) => f.endsWith("operatorRouteContext.ts"));
+        expect(shared.length, "operatorRouteContext was not scanned").toBe(1);
     });
 
     it("scans the Access-owned surface rather than nothing", () => {
@@ -141,12 +190,39 @@ describe("W-17 — a seeded role key is not authority inside Access", () => {
              */
             'if (ctx.role !== "admin") return jsonError("Forbidden", 403);',
             'if (ctx.role !== "admin" && ctx.role !== "ops") return jsonError("Forbidden", 403);',
+            /*
+             * The thirteenth site, in the exact words it was written in. It lived in a shared
+             * context rather than a route, governed seven identity routes from one line, and no
+             * route-level scan could see it.
+             */
+            'const actorAuthorized = ctx.role === "admin" || ctx.role === "ops";',
+            /*
+             * The caller's role compared to a key OUTSIDE the seeded vocabulary. Still authority:
+             * `ctx.role` is who the principal is, so inventing a new title does not make it legal.
+             */
+            'if (ctx.role === "processor") return allow();',
+            /*
+             * And a seeded key reached through some other identifier. The shape the classification
+             * half exists for: the discriminator is the KEY, so renaming the variable is no escape.
+             */
+            'if (membership.role === "regional_lead") return allow();',
         ];
         for (const line of convicted) {
             expect(AUTHORITY_SHAPES.some((s) => s.re.test(line)), `not caught: ${line}`).toBe(true);
         }
         // And the legitimate uses are NOT convicted.
         const innocent = [
+            /*
+             * The POS + Processing subject vocabulary. Fourteen real lines in
+             * `lib/pos/processingIdentity` look like these, and every one describes what a RECORD is
+             * in a household rather than who the caller is. If the lock ever convicts them again it
+             * will be switched off for that subtree, and the shared operator gate goes back to being
+             * invisible — which is the failure this whole slice exists to have found.
+             */
+            'const lead = subjects.find((s) => s.role === "lead");',
+            'if (child.role !== "child") continue;',
+            'if (role === "parent" || role === "household") {',
+            'const parents = subjects.filter((entry) => entry.role === "parent");',
             'const label = roleLabelFor("admin");',
             "INSERT INTO role_definitions (role_key) VALUES ('admin');",
             'expect(member.role_keys).toContain("admin");',

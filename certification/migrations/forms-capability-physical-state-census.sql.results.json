@@ -1,0 +1,65 @@
+{
+  "trusted_host_action_id": "tha_de79839fa88d3b",
+  "query_hash": "7c630f38dff1863ca8e8a572896d484980b485b25092750a8b08b7d535ed7ff0",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-12T03:04:15.830Z",
+    "question_ids": [
+      "m020000",
+      "m030000",
+      "ledger_version",
+      "ledger_head",
+      "ledger_total"
+    ],
+    "questions": {
+      "m020000": {
+        "question_id": "m020000",
+        "row_count": null,
+        "rows": [
+          "forms.author in catalog ~ present ~ present ~ true",
+          "forms.submissions in catalog ~ present ~ present ~ true",
+          "forms.submissions.confirm in catalog ~ present ~ present ~ true",
+          "all three carry the forms group ~ yes ~ yes ~ true",
+          "every admin role holds all three ~ yes ~ yes ~ true",
+          "ops holds neither author nor submissions ~ yes ~ yes ~ true"
+        ]
+      },
+      "m030000": {
+        "question_id": "m030000",
+        "row_count": null,
+        "rows": [
+          "seed_default_rbac exists ~ present ~ present ~ true",
+          "admin enumeration carries forms.author ~ yes ~ yes ~ true",
+          "admin enumeration carries forms.submissions ~ yes ~ yes ~ true",
+          "admin enumeration carries forms.submissions.confirm ~ yes ~ yes ~ true",
+          "ops enumeration carries forms.submissions.confirm ~ yes ~ yes ~ true",
+          "ops enumeration withholds forms.author ~ yes ~ yes ~ true",
+          "orgs_seed_default_rbac trigger present ~ present ~ present ~ true"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20260912020000 ~ ledgered ~ absent ~ false",
+          "20260912030000 ~ ledgered ~ absent ~ false"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20260912010000
+        ]
+      },
+      "ledger_total": {
+        "question_id": "ledger_total",
+        "row_count": null,
+        "rows": [
+          413
+        ]
+      }
+    },
+    "row_count": 17
+  }
+}

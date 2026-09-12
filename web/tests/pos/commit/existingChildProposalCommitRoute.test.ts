@@ -51,7 +51,19 @@ function supabaseCase(metadata: Record<string, unknown> = {}) {
 describe("existing child proposal commit routes", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, userId, role: "admin" });
+        mockGetAdminContextCached.mockResolvedValue({
+            ok: true,
+            orgId,
+            userId,
+            role: "admin",
+            /*
+             * Committing a related-record proposal now requires `processing.operate`. Before the
+             * POS + Processing cleanup this route was authorized by portal admission alone, so a
+             * mock carrying no capability described a caller the product would have admitted — and
+             * it would now describe one it refuses.
+             */
+            permissionKeys: ["processing.operate"],
+        });
         mockCreateAdminClient.mockReturnValue(supabaseCase());
     });
 

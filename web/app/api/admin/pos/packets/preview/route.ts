@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
 import { loadPacketPreview } from "@/lib/pos/packet/loadPacketPreview";
 import { isLaunchEntityType } from "@/lib/pos/packet/launchFromEntity";
@@ -19,7 +20,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
 
     let body: Record<string, unknown>;
     try {
