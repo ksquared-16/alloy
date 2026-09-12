@@ -4670,6 +4670,23 @@ and the sweep is now the load-bearing evidence: **exactly four writers can produ
 | `web/scripts/qa/employmentNegativeControls.sh:76` | QA control, profile-less **on purpose** | **no** |
 | `web/tests/processing/cert/processingIdentityCertFixtures.ts:115` | test fixture — the writer RULE 5 anticipated | **no** |
 
+> **⚠ "Exactly four" is FALSE as of 2026-09-11 — read it as "at least seven" (sixth dispatch, `asg_3363ac255c9f89`).** All
+> four rows above are still real and still present at the cited lines. But a tree-wide sweep cross-referencing
+> `user_roles` inserts against files that mention `user_access_profiles` finds **three more profile-less writers this
+> table does not name** — `web/tests/financials/live/schoolDirectorReadOnly.live.test.ts:116`,
+> `web/tests/access/live/newOrgBootstrapAndRevocation.live.test.ts:195` and
+> `web/tests/access/live/w17OrgScopedRoleMeaning.live.test.ts:81` — plus
+> `membershipProfileInvariant.integration.test.ts:281`, which violates the invariant *deliberately* as W-5's lock
+> subject and belongs in the same exempt category as the negative control. **The ruling's conclusion is unaffected and
+> is independently reinforced** (below, and by the W-5 sixth issuance at `1fa4bdfb7`): every addition is test tooling,
+> so the *class* attribution — non-product — is unchanged; only the quantifier was wrong. **The honest limit on what
+> this adds:** all three resolve their client from `CERT_SUPABASE_URL` / `.env.certification.local`, i.e. the **cert**
+> tenant, while census run 4 measured the **deployed** target. They widen the candidate set for the 2 → 5 growth and
+> are **not** evidence that they caused it; claiming otherwise would be the class-for-instance substitution this
+> ruling exists to refuse. All three clean up in `afterAll`, so they leave residue only on an **interrupted** run —
+> which `schoolDirectorReadOnly.live.test.ts:105` treats as a normal condition (*"A pre-existing user from an
+> interrupted run is fine"*). Full detail in `wave0-authority-census.json` → `w6_sixth_dispatch_2026_09_11.finding_2`.
+
 The sweep also **confirms W-5's product closure is complete**, which is the half worth stating plainly because it
 bounds the defect: `POST /api/admin/users` RPCs `create_membership_with_access_profile`
 (`web/lib/admin/membershipWithProfile.ts:46`), and the **fifth** writer — the dev create-org route
@@ -4878,6 +4895,86 @@ carried 221 uncommitted lines — the test half of the W-5 fifth issuance whose 
 SQL-layer block is not env-guarded and does execute) and committed byte-unchanged at `ca0478383`. Its mtime was
 seven hours old, so this was not a mid-edit collision. **Dispatches 3, 4 and 5 have each found work at risk;
 three instances is a dispatch-level defect, not three accidents.**
+
+#### The sixth dispatch — **2026-09-11**, assignment `asg_3363ac255c9f89` (`msn_a0e8a6206c63198fab`)
+
+**No migration was authored, and none was needed — for the fifth time.** The objective is byte-identical to the
+fifth's and still reads as though W-6 were unstarted. **Five of W-6's six dispatches have now arrived at an
+already-authored migration;** only the third ever had authoring work. This pass proved the migration unchanged
+from `git log -- <path>` — **one commit in its entire history, `7dc06920a`** — rather than re-reading 193 lines to
+agree they look familiar. That is the cheaper check and it is recorded here so a seventh pass spends two seconds
+on it.
+
+**The fifth dispatch left five instructions for a sixth. All five were followed, and they worked.** No migration
+authored; the gate understood as an authorization before any work began; Tier A not claimed; R2 attempted as the
+one piece of available value; working tree checked first — and **clean**, which breaks the dispatch-3/4/5 streak of
+finding others' work at risk. Recorded because hand-off notes that demonstrably save a session should be repeated,
+not because they were courteous.
+
+**Finding 1 — the gate fact has FOUR copies, and the two outside this assignment's scope are still stale.** The
+fifth dispatch's own lesson was *"when you repair a duplicated fact, grep for the fact, not the file"*. It was the
+right lesson and it was not carried out: that pass greped **within the folder its scope named**. Swept from the
+repository root, the M1 gate fact lives in four artifacts. The two in scope here are correctly fail-closed and were
+re-verified. The other two still tell the 2026-08-07 story:
+
+| Artifact | What it still says | Why it is wrong |
+|---|---|---|
+| [`promotion-certification-reconciliation.json`](promotion-certification-reconciliation.json) `:68` | `status: "authorized_awaiting_apply"` · `preflight: "ok:true … census run 3, 2 rows"` · `blocker: "no worker-reachable write channel to the target"` | **All three fields, three different ways.** Status voided 2026-09-06 · run 3 superseded by run 4 and 2 by 5 · the channel correction of 2026-09-11 |
+| same file `:88`, `:172` | *"cannot be executed by anyone in the current system"* · *"Creating a `database.apply_migration` action would be a new privileged-write host capability"* · *"M1 authorized and unappliable"* | That action **already exists**, with an execute branch at `trusted-host-actions.mjs:648-650` |
+| [`…/planning/access-identity-v2/03-implementation-qa-sequence.md`](../../access-identity-v2/03-implementation-qa-sequence.md) `:880`, `:897`, `:1481` | *"W-6 seeds **(done)**"* · *"W-6 has already written `all` for every backfilled membership"* · M1 sized at *"**= 2** at census time"* | W-6 has seeded **nothing**; it is unapplied. `(done)` is the exact phrase §6 W-7 identifies as *"the only thing here that was stale"* |
+
+**The second one is worse than any of its predecessors, and the reason is which copy readers are pointed at.**
+That file is the **product-source** copy — [`PRODUCT-SOURCE.md`](PRODUCT-SOURCE.md) designates it the accepted-deliverable
+copy of this plan, while designating *this* QA copy "runtime certification evidence", i.e. the audit trail rather
+than the reference. So the two disagree **in the direction that favours the false answer**: a reader asking "has
+W-6 seeded?" is told **yes** in two places in the copy they are sent to, and **no** at length only in the copy
+filed as evidence. W-7's flip is gated on exactly that question.
+
+**Neither was repaired here, deliberately.** Scope is exactly two paths and neither of these is one of them.
+Editing an accepted product-source deliverable and a certification reconciliation artifact on a worker's own
+initiative is a silent widening of a Wave 2 backfill assignment. **Escalated instead, cited to the line so the
+repair is transcription rather than discovery** — the standard the fifth pass set for the Tier A `NOTICE` capture.
+
+**The lesson, in its third form, because the second form was also insufficient.** *"Grep for the fact, not the
+file"* is still right — and a grep has a **root**, which is where the fifth pass lost it. The operative form:
+**grep from the repository root, and count the copies before repairing any of them.** A repair that does not begin
+by establishing how many copies exist cannot know whether it is finished, and **three consecutive passes have each
+believed they finished.** (Independent corroboration landed hours later from an unrelated lane: the W-8 fourth
+issuance at `48a6a2ae7` reports correcting its own stale reassurance *"at four sites, not one"*. Two workstreams
+reached the same rule in one day.)
+
+**Finding 2 — the ruling's writer enumeration says "exactly four" and that is now false.** Detail and the full
+honest limit sit in the callout under the ruling's table above, and in the census artifact's
+`w6_sixth_dispatch_2026_09_11.finding_2`. In short: the four named writers are all still real and still present;
+**at least three more profile-less writers exist that the table does not name**, all of them live test files; the
+ruling's **conclusion survives intact and is reinforced** — every addition is test tooling, so no product path can
+fail open; and the new writers are **cert**-targeted while run 4 measured the **deployed** target, so they widen the
+candidate set for the 2 → 5 growth **without** being evidence that they caused it. **The consequence lands on W-7,
+not on W-6.** W-6 remains a correctly-scoped one-time backfill that self-sizes. But the ruling's part 3 — that
+W-7's precondition must be an invariant rather than a count — gets **stronger**, because option (b) must now decide
+the disposition of **seven-plus** deliberate violators rather than four.
+
+**Why both findings have the same shape, which is the thing worth carrying forward.** Finding 1 is a fact copied
+into more artifacts than its repairer counted. Finding 2 is a writer set larger than its enumerator counted. The
+W-5 sixth issuance (`1fa4bdfb7`, hours earlier) is a third instance: *"the writer set outgrew the lock's subject."*
+**Three independent instances in one week of a claim that was true when written, quantified with a closed word —
+"exactly", "now carries", "all three" — and falsified by a tree that kept moving.** The defect is not
+carelessness; each claim was verified at the time. It is that **a closed quantifier over a mutable set is a
+claim with an expiry date and no expiry field.** Where this programme must state one, it should state the sweep
+that produced it and the date, so the next reader knows what to re-run rather than what to trust.
+
+**R2 — attempted, refused, and now twice-confirmed as a one-approval item.** The harness was re-verified undrifted
+rather than inherited: `diff` of [`w6-m1-parsecheck.sql`](w6-m1-parsecheck.sql) lines 43–211 against migration lines
+1–169 is **empty**. The stack is still up and still version-matched (`supabase_db_alloy-cert`, PostgreSQL
+**17.6.1.165**). Two invocations were refused *before execution* by the session permission layer — the full
+harness run and a bare `SELECT version()` probe — which locates the wall precisely: **it is the Bash approval
+gate, not the migration broker, not the stack, and nothing a repository edit can move.** The harness is built,
+committed, byte-verified and rolls back unconditionally; it has now been blocked twice for the same reason.
+
+**What this pass could not do, and why it is the same list as last time.** No run 5 — Director-side by design, and
+still the only thing that moves W-6. No apply — the authorization is VOID. No Tier A evidence — it requires the
+apply. **That criterion has now been dispatched to a worker six times and was unsatisfiable by a worker on all
+six.** It belongs in the operator's queue, not in a worker brief.
 
 ### W-7 — Absent scope denies *(M · I-19 · lockout class L1)*
 
@@ -6354,7 +6451,7 @@ Migrations introduced by this plan, against `supabase/migrations/` (289 files to
 
 | # | Workstream | Migration | Target | Preflight focus |
 |---|---|---|---|---|
-| M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**PREFLIGHT VOID 2026-09-06 — RE-AUTHORIZATION REQUIRED**) | shared | ~~**PREFLIGHT EXECUTED 2026-08-07** on census run 3 → `preflight.ok: true`~~ **VOIDED 2026-09-06 by `asg_7b05887a569304` (§6 W-6 ruling).** Census run 4 (2026-09-04) moved the population **2 → 5** on the `pairs_without_profile` grain (of **11** distinct pairs across **13** membership rows; **0 orphan profiles**, unchanged). RULE 5 (immediacy) fails: the 2026-08-07 authorization rests on a 28-day-old preflight and a written record saying *"2 rows"*. `preflight.ok` is now **`false`**, gate drops `operator_review` → **`unmet`**, `status` is **`preflight_void_reauthorization_required`**. **`abort_conditions[0]` FIRES** — growth attributed to the *class* (seed/QA tooling; four writers enumerated in §6) but not to the *instance*; **no product path can produce a fail-open pair**. The migration itself is **unchanged and correct** — it self-sizes in-transaction, so this is a stale *authorization*, not a stale migration. ~~**No worker-reachable write channel exists to apply it** (see §6).~~ **CORRECTED 2026-09-11 (twelfth W-0 re-issue): a channel does exist** — `database.apply_migration` is registered, dispatched, has an execute branch (`trusted-host-actions.mjs:648-650`) and accepts `environment: staging`. **M1 is un*authorized*, not un*appliable*; the gate is the VOID authorization plus `preflight.ok: false`, and it holds.** **Re-verified 2026-09-11 (fifth W-6 dispatch, `asg_0a98843abea843`) — the channel correction stands** (`trusted-host-database-target.mjs:54` registers `alloy_deployed_primary` class `STAGING`; the similarly-named `deployed-target-registry.mjs` is the *browser-session* registry and is not evidence about database targets). That pass also found the gate state **repaired in `w6-m1-preflight.json` but left stale in `wave0-authority-census.json`**, whose `w6_m1_preflight` block still read `preflight.ok: true` / `operator_review`; now corrected fail-closed. **R2 is now one operator approval from discharge** — a version-matched PostgreSQL 17.6 is running on the shared cert stack and a rollback-only harness is committed at [`w6-m1-parsecheck.sql`](w6-m1-parsecheck.sql). Evidence [`w6-m1-preflight.json`](w6-m1-preflight.json) |
+| M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**PREFLIGHT VOID 2026-09-06 — RE-AUTHORIZATION REQUIRED**) | shared | ~~**PREFLIGHT EXECUTED 2026-08-07** on census run 3 → `preflight.ok: true`~~ **VOIDED 2026-09-06 by `asg_7b05887a569304` (§6 W-6 ruling).** Census run 4 (2026-09-04) moved the population **2 → 5** on the `pairs_without_profile` grain (of **11** distinct pairs across **13** membership rows; **0 orphan profiles**, unchanged). RULE 5 (immediacy) fails: the 2026-08-07 authorization rests on a 28-day-old preflight and a written record saying *"2 rows"*. `preflight.ok` is now **`false`**, gate drops `operator_review` → **`unmet`**, `status` is **`preflight_void_reauthorization_required`**. **`abort_conditions[0]` FIRES** — growth attributed to the *class* (seed/QA tooling; ~~four writers~~ **at least seven** enumerated in §6 — *"exactly four"* corrected 2026-09-11 by the sixth dispatch, conclusion unaffected) but not to the *instance*; **no product path can produce a fail-open pair**. The migration itself is **unchanged and correct** — it self-sizes in-transaction, so this is a stale *authorization*, not a stale migration. ~~**No worker-reachable write channel exists to apply it** (see §6).~~ **CORRECTED 2026-09-11 (twelfth W-0 re-issue): a channel does exist** — `database.apply_migration` is registered, dispatched, has an execute branch (`trusted-host-actions.mjs:648-650`) and accepts `environment: staging`. **M1 is un*authorized*, not un*appliable*; the gate is the VOID authorization plus `preflight.ok: false`, and it holds.** **Re-verified 2026-09-11 (fifth W-6 dispatch, `asg_0a98843abea843`) — the channel correction stands** (`trusted-host-database-target.mjs:54` registers `alloy_deployed_primary` class `STAGING`; the similarly-named `deployed-target-registry.mjs` is the *browser-session* registry and is not evidence about database targets). That pass also found the gate state **repaired in `w6-m1-preflight.json` but left stale in `wave0-authority-census.json`**, whose `w6_m1_preflight` block still read `preflight.ok: true` / `operator_review`; now corrected fail-closed. **R2 is now one operator approval from discharge** — a version-matched PostgreSQL 17.6 is running on the shared cert stack and a rollback-only harness is committed at [`w6-m1-parsecheck.sql`](w6-m1-parsecheck.sql). **Sixth dispatch 2026-09-11 (`asg_3363ac255c9f89`): migration proved unchanged from git history (one commit, `7dc06920a`); harness re-verified undrifted (`diff` empty); both in-scope artifacts confirmed fail-closed; R2 attempted again and refused at the session Bash approval gate — twice-blocked, same wall.** **⚠ THE GATE FACT HAS TWO MORE COPIES, BOTH STILL STALE AND BOTH OUT OF THIS ASSIGNMENT'S SCOPE — `promotion-certification-reconciliation.json:68,88,172` and the product-source plan copy at `…/planning/access-identity-v2/03-implementation-qa-sequence.md:880,897,1481`, which still says W-6 *"seeds (done)"*. ESCALATED, cited to the line, not repaired here.** Evidence [`w6-m1-preflight.json`](w6-m1-preflight.json) |
 | M2 | W-5 | Atomic membership+profile RPC — **authored 2026-08-07**, `20260807090001_membership_profile_atomic_create.sql` (**not applied**) | shared | Function only; no data effect. `EXECUTE` revoked from `PUBLIC` before grant; `SECURITY INVOKER` |
 | ~~M3~~ | ~~W-9~~ | ~~Catalog consolidation — repoint grants to one FK~~ **DISCHARGED OUT-OF-TRACK 2026-07-30** by `20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql` (Access & Roles V2 Phase 0), live on the target as version `20260730000602`, vendored `555fa056a`. Its own §0 preflight ran the orphan-grant and unexpected-FK checks this row specifies, **fail-closed before any `DROP`**. W-9 authored no migration — see §7 | — | — |
 | ~~M4~~ | ~~W-9~~ | ~~Drop retired catalog tables (**separate, later**)~~ **STRUCK — there are no retired catalog *tables*.** Phase 0 recreated `permissions`/`permission_keys` as views; retiring those views is **`W-60`/`M20`** (wave 14, product-source copy §47), which audits the base-table grants *before* dropping. A W-9 owner authoring a drop here duplicates `W-60` and pre-empts its audit | — | — |
