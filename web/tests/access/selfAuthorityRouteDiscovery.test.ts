@@ -8,11 +8,18 @@
  *
  * RL-11's exit criterion is "a principal cannot alter its own membership through ANY
  * product path". The existing lock proves the ban on three routes named in an array.
- * Those three are, today, the complete set — which is precisely the failure mode: a
- * fixed list re-checks files that are already correct and cannot notice a fourth
+ * A fixed list re-checks files that are already correct and cannot notice a fourth
  * route arriving. RL-1, RL-3 and RL-4 each shipped green with a live escape for this
  * same reason, and the promotion reconciliation recorded RL-11 as the fourth
  * instance.
+ *
+ * **Those three stopped being the complete set, and discovery did not say so.** W-17
+ * shipped `users/[userId]/roles` and `users/[userId]/roles/[roleKey]`, both of which
+ * mutate membership authority and both of which apply the self guard. Neither entered
+ * the subject, because the RPCs they call were not in `AUTHORITY_RPCS` — so discovery
+ * was, for those two routes, exactly the fixed list it exists to replace. Corrected
+ * 2026-09-11; see `AUTHORITY_RPCS` and `AUTHORITY_TABLES` for what that cost and what
+ * now fails when it recurs.
  *
  * Discovery here is by ROUTE SHAPE and IMPORT CLOSURE, not by table name in the route
  * file. A text census over route files is what missed `createOrgAndAssignAdmin` twice:
@@ -118,8 +125,25 @@ function localImports(abs: string): string[] {
  * The three tables that carry `(principal, org)` authority. `user_department_access`
  * is included because W-8 closed a self-insert on it; a future route could reopen
  * that path without touching `user_roles` at all.
+ *
+ * **The third entry was a migration filename, not a table — corrected 2026-09-11 (Wave 1's
+ * tenth issuance).** It read `membership_access_profiles`, which appears **nowhere** in the
+ * SQL corpus: `grep -rl membership_access_profiles supabase` returns zero files. The name is
+ * a fragment of `20260807140000_backfill_membership_access_profiles.sql` (M1, the profile
+ * backfill), quoted by `resolveAdminAccessCore.ts:79` as a *filename* and transcribed here as
+ * a *table*. The live table is `user_access_profiles`.
+ *
+ * So the table half of this predicate has only ever policed **two** of the three tables it
+ * claims, and a route doing `.from("user_access_profiles").insert(…)` — a direct write to the
+ * row that decides a membership's scope mode — was invisible to discovery. **Latent, not
+ * live:** no module under `web/lib` or `web/app` writes that table today (only tests and seed
+ * scripts, which no route imports), so the corrected name adds no route to the subject. It is
+ * the same "one import away from live" shape RL-1 recorded for the `getAdminAccessContext`
+ * alias, and the same class as the eighth issuance's *"a typo in `SUFFICIENT_GATES` reads
+ * exactly like a gate no route calls"* — which is why the lock below now checks that every
+ * name here is a table the schema has heard of.
  */
-const AUTHORITY_TABLES = ["user_roles", "user_department_access", "membership_access_profiles"];
+const AUTHORITY_TABLES = ["user_roles", "user_department_access", "user_access_profiles"];
 
 const TABLE_WRITE = new RegExp(
     `from\\(\\s*["'\`](?:${AUTHORITY_TABLES.join("|")})["'\`]\\s*\\)\\s*(?:\\.\\s*\\w+\\([^)]*\\)\\s*)*?\\.\\s*(insert|upsert|update|delete)\\b`
@@ -137,13 +161,63 @@ const TABLE_WRITE = new RegExp(
  * carry `(principal, org)` authority, and creating an empty role definition grants nobody anything —
  * there is no self-escalation in it. Adding it would widen the predicate past the thing the file
  * says it is about, and the self-guard assertion would then demand a guard for a mutation with no
- * subject to guard.
+ * subject to guard. `replace_role_permission_grants` and `save_role_definition_and_grants` are out
+ * for the same reason at a different grain: they change what a *role* grants, not who holds it, so
+ * a principal widening its own role's grants is self-elevation this file does not cover. W-2's own
+ * record names that as W-18's ceiling; it is written here so the omission is a decision on record
+ * rather than a gap in a regex. Half of it has since been closed *below* this layer:
+ * `20260911260000_d2_no_self_inflicted_access_lockout.sql` refuses, inside
+ * `replace_role_permission_grants` itself, an edit that strips the actor's own last source of
+ * `settings.users_roles`. That is the narrowing direction only — widening your own role's grants is
+ * still open, and still W-18's.
+ *
+ * **W-17's two audited role RPCs were missing — added 2026-09-11 (Wave 1's tenth issuance).**
+ * `assign_member_role_audited` INSERTs `public.user_roles` and `remove_member_role_audited` DELETEs
+ * from it (`20260912010000_w17_additive_role_assignment.sql:87,172`), so both are
+ * `(principal, org)` authority writes by this constant's own definition. Two routes reach them —
+ * `users/[userId]/roles/route.ts` (POST) and `users/[userId]/roles/[roleKey]/route.ts` (DELETE) —
+ * and until this line both were **outside the discovered subject entirely**.
+ *
+ * **They were hidden twice over, and the second way is the one worth recording.** The names are
+ * never written at a `.rpc("…")` call site: `memberRoleAssignmentWrite.ts:37` passes them as a
+ * *variable* typed `"assign_member_role_audited" | "remove_member_role_audited"`. So a derivation
+ * that scanned the product for RPC string literals — the obvious durable repair, and the shape the
+ * eighth issuance used to derive `ACCESS_PRIMITIVE_MODULES` — would have missed them too. This is
+ * the **ninth** instance of this workstream's recurring escape class and the first where the
+ * escape is an *indirected name* rather than an unlisted entry.
+ *
+ * **The invariant itself held.** Both routes call `isSelfAuthorityMutation` before any write
+ * (`roles/route.ts:28`, `roles/[roleKey]/route.ts:34`), so no principal could alter its own
+ * membership through them. That was W-17's author's diligence, not this lock's doing — which is
+ * exactly the property the discovered subject exists to stop relying on.
  */
-const AUTHORITY_RPCS = /create_membership_with_access_profile|replace_membership_with_access_profile|remove_member_access_audited|replace_member_access_scope_audited/;
+const AUTHORITY_RPCS = /create_membership_with_access_profile|replace_membership_with_access_profile|remove_member_access_audited|replace_member_access_scope_audited|assign_member_role_audited|remove_member_role_audited/;
 
 function writesAuthorityDirectly(abs: string): boolean {
     const src = code(abs);
     return TABLE_WRITE.test(src) || AUTHORITY_RPCS.test(src);
+}
+
+/**
+ * Every `.sql` file in the schema corpus.
+ *
+ * Read only by the table-existence lock below. `TABLE_WRITE` is built by interpolation, so a name
+ * in `AUTHORITY_TABLES` that no table ever had produces a regex that compiles, runs, matches
+ * nothing, and reports a clean pass forever — indistinguishable from a table nobody writes. The
+ * schema is the only place that can tell those two apart.
+ */
+function sqlCorpusSources(): string[] {
+    const out: string[] = [];
+    const walk = (abs: string) => {
+        for (const entry of readdirSync(abs, { withFileTypes: true })) {
+            if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+            const child = join(abs, entry.name);
+            if (entry.isDirectory()) walk(child);
+            else if (entry.name.endsWith(".sql")) out.push(read(child));
+        }
+    };
+    walk(join(webRoot, "..", "supabase"));
+    return out;
 }
 
 /** Does this module, or anything it transitively imports, write authority? */
@@ -202,8 +276,13 @@ function targetsAPrincipal(abs: string): boolean {
  * This is the permissive half of the same comment blindness, and it is the dangerous half:
  * the form above credited any file containing the string, so a route carrying only
  * `// TODO: isSelfAuthorityMutation` would have been recorded as guarded and dropped out of
- * `unguarded` silently. All three real call sites use the call form (`role:33`, `remove:46`,
- * `access-scope:81`), so requiring it costs nothing today and closes the escape.
+ * `unguarded` silently. Every real call site uses the call form, so requiring it costs nothing
+ * today and closes the escape.
+ *
+ * **Five call sites as of 2026-09-11, not three** — `role:35`, `remove:48`, `access-scope:83`,
+ * and W-17's `roles:28` and `roles/[roleKey]:34`. The line citations are re-read each issuance
+ * rather than carried, because a stale line number in a lock's own commentary is how a reader
+ * concludes the lock has been re-checked when it has not.
  */
 function appliesSelfGuard(abs: string): boolean {
     return code(abs).includes("isSelfAuthorityMutation(");
@@ -276,13 +355,17 @@ describe("W-2 / RL-11 — the self-authority ban's subject is discovered", () =>
         ).toEqual([]);
     });
 
-    it("finds the three routes RL-11 already guards", () => {
+    it("finds the five routes RL-11 already guards", () => {
         // If discovery silently stops matching, the lock above passes for the wrong
         // reason. Anchor it on the known-true subject.
         const found = authorityMutatingRoutes();
         expect(found).toContain("app/api/admin/users/[userId]/role/route.ts");
         expect(found).toContain("app/api/admin/users/[userId]/access-scope/route.ts");
         expect(found).toContain("app/api/admin/users/[userId]/remove/route.ts");
+        // W-17's additive pair, anchored 2026-09-11. Both were guarded and neither was
+        // discovered, because `AUTHORITY_RPCS` did not name the RPCs they call.
+        expect(found).toContain("app/api/admin/users/[userId]/roles/route.ts");
+        expect(found).toContain("app/api/admin/users/[userId]/roles/[roleKey]/route.ts");
     });
 
     it("sees a helper-mediated writer that a table-name census misses", () => {
@@ -338,14 +421,47 @@ describe("W-2 / RL-11 — the self-authority ban's subject is discovered", () =>
         //
         // A new authority writer therefore fails HERE with a name as well as failing the lock
         // above with a remedy. Adding one is a decision, not a retune.
-        expect(authorityMutatingRoutes()).toEqual([
+        //
+        // **Six → eight, 2026-09-11 (tenth issuance).** W-17's `roles` pair joined the subject
+        // when `AUTHORITY_RPCS` learned the two audited role RPCs they call. That is the whole
+        // point of asserting the subject exactly: the pair had existed, guarded, for the entire
+        // eighth issuance, and a bound with slack in it would have absorbed them in silence.
+        //
+        // Sorted explicitly, also 2026-09-11. The order was previously whatever `readdirSync`
+        // returned, which happens to be lexical on this filesystem — a dependency nobody chose
+        // and which growth in the subject makes newly load-bearing. Sorting asserts the same set
+        // exactly; it removes only the filesystem's vote on how it is spelled.
+        expect([...authorityMutatingRoutes()].sort()).toEqual([
             "app/api/admin/dev/create-org/route.ts",
             "app/api/admin/lifecycle-catalog/delete/route.ts",
             "app/api/admin/users/[userId]/access-scope/route.ts",
             "app/api/admin/users/[userId]/remove/route.ts",
             "app/api/admin/users/[userId]/role/route.ts",
+            "app/api/admin/users/[userId]/roles/[roleKey]/route.ts",
+            "app/api/admin/users/[userId]/roles/route.ts",
             "app/api/admin/users/route.ts",
         ]);
+    });
+
+    it("polices only tables the schema has heard of", () => {
+        // The lock that would have caught `membership_access_profiles` on the day it was written,
+        // added 2026-09-11 (tenth issuance) with the correction it describes. A table name is the
+        // one part of this file that cannot be checked by reading TypeScript: the product is
+        // *supposed* to contain no writer for a table nobody writes, so silence proves nothing.
+        // Asking the schema instead makes a fictional name fail by name.
+        const sources = sqlCorpusSources();
+
+        // Non-vacuity first — a mis-rooted or empty walk would clear every name, fictional ones
+        // included, which is precisely the failure this assertion exists to make impossible.
+        expect(sources.length).toBeGreaterThan(300);
+
+        const unknown = AUTHORITY_TABLES.filter((table) => !sources.some((sql) => sql.includes(table)));
+        expect(
+            unknown,
+            "an authority table that appears nowhere under supabase/ is a name this predicate has " +
+                "never matched and never could — `membership_access_profiles` was a migration " +
+                "filename read as a table, and it policed nothing from 2026-08-10 to 2026-09-11"
+        ).toEqual([]);
     });
 
     it("every exemption is still in the discovered subject", () => {

@@ -116,16 +116,18 @@ of which **three are database writes** — `database.apply_migration`, `database
 `database.repair_migration_ledger`. `database.apply_migration` is **not registered-only**: it has a real execute
 branch at `trusted-host-actions.mjs:648-650` (`executeMigrationTrustedHostAction`), a dispatch-map entry, a
 dedicated `trusted-host-migrate.mjs`, and it **accepts `environment: staging`** — the shared target M1 names. So
-**M1 is un*authorized*, not un*appliable***, and §5's *"the same missing write channel that blocks W-6, W-9 and the
+**M1 is un*authorized*, not un*appliable***, and §6's *"the same missing write channel that blocks W-6, W-9 and the
 other seven §11 migrations"* misdiagnoses an authorization gate as a capability gap. **This does not arm anything
 and must not be read as permission**: the apply stays refused by the VOID authorization, `preflight.ok: false`, and
 the operator approval every `privileged_write` requires — a real gate, rather than an absent one. Not executed, and
 must not be: *registered + dispatched + execute branch* is stronger than *advertised*, still short of *proven to
 run*, and proving it is a privileged write on a void authorization. **Second finding, procedural:** the eleventh
-pass committed **mid-read of this one** in a worktree two lanes shared, and its uncommitted intermediate state read
-from the outside as a defect (*narrative committed, repair not*) that did not exist 20 seconds later. In a shared
-worktree `git status` **is not a stable observation**, and a pass auditing its predecessor can file a false finding
-from a transient write window (§4, §6, §11)
+pass committed **mid-read of this one**, and its uncommitted intermediate state read from the outside as a defect
+(*narrative committed, repair not*) that did not exist 20 seconds later — the very trap the tenth and eleventh
+passes had just spent two dispatches documenting, which is what made the false positive plausible. **At least three
+assignments held this worktree during this pass** (W-0 ×2 and the W-1 tenth issuance). In a shared worktree
+`git status` **is not a stable observation**: anchor findings to committed SHAs, and re-read before filing one
+drawn from the working tree (§4, §6, §11)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -271,6 +273,23 @@ symbol bound to it, which is why the defect has recurred three times. `enrollmen
 five of five lines, ten days and two assignments after it was reported**, and a **new** drift is found in
 `tour-booking/[token]/resolve`. Register correction deferred a second time on scope; **a scope grant is
 requested** (§5)
+· **W-1…W-3 issued a tenth time — 2026-09-11, by TWO lanes at once** (`asg_1c769a7163b0a3` under mission
+`msn_beb2e9e462cdce6513`, and `asg_a5a4a95108b427` under `msn_861e1785ec233cf433` — **same brief, same
+contentHash, same title, different mission ids**). Neither lane could execute anything: the promotion worktree
+has no `node_modules` and `npm ci` is refused by the session gate, so the broker returns `rc=1 class=config`,
+*"the command never ran."* They divided the wave rather than collided — W-1 to the first, W-2/W-3 to the second
+— each having read the other's uncommitted work and left it alone. **The eighth and ninth issuances were never
+recorded in §5**; the ninth is reconstructed here from its commit. W-1's four ratchets are **still exact** on a
+corpus that grew 603 → 619 routes, and the static derivation is shown **tight, not merely safe** (zero
+comment-only mentions of a raw primitive in any route file). Two findings, both blind spots in RL-11's
+*discovered* subject and both repaired: `AUTHORITY_RPCS` never named W-17's `assign_member_role_audited` /
+`remove_member_role_audited`, so **two guarded authority-mutating routes sat outside the subject** (hidden twice
+— the names are passed as a *variable*, so a literal-scanning derivation would miss them too); and
+`AUTHORITY_TABLES`' third entry, `membership_access_profiles`, **was a migration filename, not a table**, and
+had matched nothing since 2026-08-10. Subject 6 → **8**, plus a new lock requiring every policed table to exist
+in the SQL corpus. **The repairs are reasoned red, not observed** — no suite ran. A third finding is registered
+and deliberately unfixed by the first lane: `canManageUsersAndRoles.ts` is a wholly new primitive module under
+**twelve** routes that no list names (§5)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
@@ -2200,6 +2219,28 @@ otherwise conclude this run happened outside a sanctioned root.
 **Not verified this run.** No live database query — W-0's run-4 counts are two days old and are the W-0 owner's
 to refresh. Wave 1 needs no live query.
 
+#### Wave 1, ninth issuance — **2026-09-06**: the record §5 never received
+
+**A reconstruction, not that run's own words**, so §5 stops reading eighth-then-tenth. The concurrent
+tenth-issuance record below raises the same absence as its Finding 1; this section exists so the ninth has an
+*entry* rather than only a mention, and adds what reading the commit itself shows.
+
+The ninth issuance of W-1…W-3 shipped as commit `5c5ea716b` — *"a comment reddened the lock, and the lock was
+holding a real writer by a sentence"* — 124 insertions to `selfAuthorityRouteDiscovery.test.ts`, and no document.
+The lock was **red on arrival with no product code changed**: an uncommitted doc-comment edit in another session
+added a sentence to `lib/admin/resolveAdminAccessCore.ts` explaining that `create_membership_with_access_profile`
+*"is convention that a direct INSERT bypasses"*. The predicates read raw source, so the resolver became an
+authority writer and import closure carried that into **180 of 603** routes. That is mention-vs-call — the
+**seventh** instance of this workstream's escape class, and the same defect RL-1 fixed on 2026-08-06, never
+carried across to a discovery lock written after it. It added `codeOnly` (copied from
+`analyticsRouteGates.test.ts`, URL rule included), required the self guard to be *called* rather than named,
+removed a `\b` that made `admin_user_id` unmatchable, and replaced a subject bound carrying 25× slack with the
+exact six-element assertion the tenth issuance grew to eight.
+
+Also worth its own line, because it repeats: **that file was created on 2026-08-10 under commit `ede5d55ba`,
+whose subject is `fix(vacilando): keep Director moving past zombie sessions and false wave opens`.** Two of
+RL-11's three commits are findable only by reading the diff, not the message.
+
 #### Wave 1, tenth issuance — **CONCURRENT**, 2026-09-11, assignment `asg_1c769a7163b0a3`: the ninth shipped without a record, a second lane holds this brief, and the residue the eighth named is now live under twelve routes
 
 > **Two tenth issuances.** This record and the one immediately below (`asg_a5a4a95108b427`) are **two lanes
@@ -2296,24 +2337,31 @@ unprovable lock change to satisfy a required output would be the one move this w
 were not re-derived** — `selfAuthorityRouteDiscovery.test.ts` was held by another lane and `permissionGrid`
 could not be run. W-1 alone is re-derived here. **AC_W1 is met on static derivation; it is not executed.**
 
-#### Wave 1, tenth issuance — **2026-09-11**, assignment `asg_a5a4a95108b427`: two authority writers outside the discovered subject, and a table that never existed
+#### Wave 1, tenth issuance — **CONCURRENT**, 2026-09-11, assignment `asg_a5a4a95108b427`: two authority writers outside the discovered subject, and a table that never existed
 
-The tenth issuance of W-1…W-3. §4's rule holds a tenth time: **re-execute rather than re-assert.** W-1's four
-ratchets are all still exact across the largest interval this workstream has spanned. **W-2's discovery lock
-was green and blind**, and both reasons are findings.
+The tenth issuance of W-1…W-3, and the **second lane holding it at the same moment**. §4's rule holds a tenth
+time: **re-execute rather than re-assert.** W-1's four ratchets are all still exact across the largest interval
+this workstream has spanned. **W-2's discovery lock was green and blind**, and both reasons are findings.
+
+**Division of labour with the concurrent lane, settled by both sides independently.** `asg_1c769a7163b0a3` took
+W-1 and left W-2/W-3 to this record, having read this lane's in-flight edits in the working tree and declined to
+touch them; this record takes W-2 and W-3 and does not restate W-1's derivation, which its record already carries
+in full. The two findings are complementary, and each lane's record says so — which is the best outcome
+concurrency in this workstream has yet produced, and it happened because both lanes *looked* before writing.
 
 | Field | Value |
 |---|---|
-| Base | `ac87f3fe3` @ `promote/devops-8-config-hygiene` — **335 web commits** since the eighth-issuance base `77ddbc622`, the largest interval any Wave 1 issuance has crossed. API routes 603 → **619**, migrations 373 → **413**, `web/lib` modules 4212 → **4299**. Root is `unmanaged` by `alloy-root`, 18 ahead / 0 behind `origin/staging` |
+| Base | Measured at `ac87f3fe3` @ `promote/devops-8-config-hygiene` — **335 web commits** since the eighth-issuance base `77ddbc622`, the largest interval any Wave 1 issuance has crossed. API routes 603 → **619**, migrations 373 → **413**, `web/lib` modules 4212 → **4299**. Committed on top of `b20fc1817`, the concurrent lane's W-1 record, which landed mid-session and changed **commentary only**, so no measurement here is invalidated by it. Root is `unmanaged` by `alloy-root`, 0 behind `origin/staging` |
 | Suites | **Not executed.** See *"what this run could not do"* below |
 | Subjects | **Derived, not executed**: family **27** (floor 27) · class-wide G2 **103 of 619** (floor 103) · aliases **3** (floor 3) · classified exports **21 across 6 modules** (floor 21) · `web/lib` modules **4299** (floor 3000) |
 | Typecheck | Not run — same cause as the suites |
 | Changed | `web/tests/access/selfAuthorityRouteDiscovery.test.ts`, and this section. **No route handler, library, schema or migration**, so nothing here is a behaviour change |
 
-**W-1 — every ratchet still exact, and the derivation is tight rather than merely safe.** 619 route files and
-87 new `web/lib` modules moved no subject: the analytics family is 27 against a floor of 27, the class-wide G2
-subject is 103 against a floor of 103, and every one of those 103 calls a sufficient or capability gate
-(computed as a set difference over the live tree, empty). The sixth issuance had to argue its static count was
+**W-1 — the concurrent lane's derivation is not merely safe, it is tight, and this lane can say why.** Its
+record carries the five figures; this paragraph adds only the thing that upgrades them, because it was measured
+here independently: the analytics family is 27 against a floor of 27, the class-wide G2 subject is 103 against a
+floor of 103, and every one of those 103 calls a sufficient or capability gate (a set difference over the live
+tree, empty). The sixth issuance had to argue its static count was
 a safe *lower* bound because comment-stripping could only move it up; **this run measured that gap directly and
 it is zero** — no route file under `web/app/api` mentions a raw primitive in a comment at all, and the six that
 mention a *gate* in a block comment (four of them in the subject) each also call one in code, checked
@@ -2341,10 +2389,17 @@ diligence, not this lock's doing — which is the exact property a discovered su
 written at a `.rpc("…")` call site: `memberRoleAssignmentWrite.ts:37` passes them as a *variable* typed
 `"assign_member_role_audited" | "remove_member_role_audited"`. A derivation that scanned the product for RPC
 string literals — the obvious durable repair, and the shape the eighth issuance used to derive
-`ACCESS_PRIMITIVE_MODULES` — **would have missed them too.** This is the **eighth** instance of this
+`ACCESS_PRIMITIVE_MODULES` — **would have missed them too.** This is the **ninth** instance of this
 workstream's recurring escape class and the first where the escape is an *indirected name* rather than an
 unlisted list entry, so it is recorded rather than quietly fixed: the next repair in this family must reach
 names that are computed, not just names that are absent.
+
+**The ordinal is contested, and that is itself worth one line.** The concurrent lane numbers *its* finding
+— `canManageUsersAndRoles.ts`, a wholly new primitive module — the **eighth** instance, and this record
+originally claimed the same number. Two instances of one escape class were found on one day by two lanes that
+could not see each other's drafts. This record takes the later ordinal so the register stays monotonic; the
+two are independent, neither is a re-description of the other, and **a count maintained by prose across
+concurrent lanes is not a count anyone should rely on.** W-14's declared table remains the answer to both.
 
 **W-2 finding 2 — the third authority table was a migration filename, and it policed nothing.**
 `AUTHORITY_TABLES` read `["user_roles", "user_department_access", "membership_access_profiles"]`.
@@ -2428,7 +2483,12 @@ W-0's ninth re-issue. That pair therefore carries **two different brief bodies**
 code-changing implementation. The eighth issuance demonstrated this across a mission id; this one demonstrates
 it across an identical `(mission id, contentHash)` pair, and §4 shows the same hash riding **four** mission
 ids. **Neither the hash, the mission id, nor the title identifies the work — only the brief body does.**
-Escalated rather than absorbed for the fifth time; no run has answered it.
+
+**And today it cut the other way as well.** The concurrent lane holds *this same Wave 1 brief* under a
+**different** mission id (`msn_beb2e9e462cdce6513`) with the **same** hash and the same title. So one hash now
+spans two brief bodies under one mission id, **and** one brief body spans two mission ids under one hash — the
+identifier is uninformative in both directions, and it is what let two lanes be dispatched the same
+implementation work simultaneously. Escalated rather than absorbed for the fifth time; no run has answered it.
 
 **Not verified this run.** No live database query, no browser evidence — W-1…W-3 are not lockout-class, so
 §10.4 requires neither. Nothing was pushed.
@@ -5284,7 +5344,7 @@ contributor deleting one has to do it on purpose.
 | **RL-8** | No `SELECT` over the catalog in a grant seed | A | G5 / W-12 | **LIVE (2026-08-07)** — `web/tests/access/grantSeedEnumeration.test.ts` (**15 passed / 0 failed**). **Implemented as a restatement, and the restatement is the finding**: as literally worded this row condemns three seeds that are not the defect — `20260505164000` joins the catalog on a seventeen-key `IN` list, Phase 0's workflows backfill on a two-key list, and M6's own `is_active` narrowing guard reads it too. None lets the catalog decide what is granted. The property the *exit criterion* names is asserted instead: **every statement writing `role_permission_grants` takes its keys from literals in its own text or an enclosing loop's `VALUES` list, never from a catalog relation** — strictly stronger where it matters (a blanket over a non-catalog relation passes the literal reading and fails this one). Subject is discovery over all 315 migrations, not a file list: **14 grant statements in 9 files, 10 bounded, 4 blanket**, all four being superseded definitions of `seed_default_rbac` frozen in applied migrations. That count is a **ratchet enforced over *and* under**, per W-4. Asserts the *end state* after a filename-order replay — RL-7's discipline — plus admin ≡ the function's own catalog literal ≡ the catalog W-11's independent instrument discovers (57, two methods), ops ≡ that less exactly the two withheld keys, and the migration guard slicing on sentinels the function actually carries. `NOT IN` / `NOT EXISTS` / `<> ALL` are stripped before a bound is looked for — the baseline's `ops` blanket names two keys it withholds and would otherwise read as enumerated. **Proven red by five negative fixtures**, each removed and the suite green after. Reading it as "grants are enumerated on the target" would be wrong: **M6 is unapplied** |
 | **RL-9** | No hard-coded portal role set (`PORTAL_ROLES`, `ALLOWED_ROLES`) | A | C6 / W-13 | proposed |
 | **RL-10** | Every route file appears in the declared capability table | A | C1 / W-14 | proposed |
-| **RL-11** | A principal cannot modify its own authority | B + C | G3 / W-2 | **LIVE (tier B), SUBJECT INCOMPLETE** — `web/tests/access/selfAuthorityMutation.test.ts` covers the three routes W-2 guarded. **2026-08-06:** two further self-authority paths exist that its enumeration could not see (a helper-mediated `user_roles` writer, and `user_department_access` — a sixth authority table). Both latent; **W-8 arms one.** See §5. **2026-08-07 — the `user_department_access` path is CLOSED, not armed:** W-8 deleted the insert in the same change that deleted the bypass, and `web/tests/lifecycle/lifecycleWorkspaceDepartmentAccess.test.ts` records every attempted insert through that module so the *absence of the write* is asserted, not just the returned shape. **The helper-mediated `user_roles` writer remains open** — RL-11's subject is still incomplete, one path rather than two |
+| **RL-11** | A principal cannot modify its own authority | B + C | G3 / W-2 | **LIVE (tier B), SUBJECT INCOMPLETE** — `web/tests/access/selfAuthorityMutation.test.ts` covers the three routes W-2 guarded. **2026-08-06:** two further self-authority paths exist that its enumeration could not see (a helper-mediated `user_roles` writer, and `user_department_access` — a sixth authority table). Both latent; **W-8 arms one.** See §5. **2026-08-07 — the `user_department_access` path is CLOSED, not armed:** W-8 deleted the insert in the same change that deleted the bypass, and `web/tests/lifecycle/lifecycleWorkspaceDepartmentAccess.test.ts` records every attempted insert through that module so the *absence of the write* is asserted, not just the returned shape. **The helper-mediated `user_roles` writer remains open** — RL-11's subject is still incomplete, one path rather than two. **2026-09-11 (tenth issuance) — the subject is now DISCOVERED and twice repaired, and the lock's own inputs were the gap:** `selfAuthorityRouteDiscovery.test.ts` derives the subject by import closure, and it had missed W-17's `assign_member_role_audited` / `remove_member_role_audited` (two guarded routes outside the subject, their names passed as a *variable* so no literal scan finds them) and had policed `membership_access_profiles` — **a migration filename, never a table** — in place of the live `user_access_profiles`. Both corrected; subject 6 → **8**; a new assertion requires every policed table to exist in the SQL corpus. **Not executed** — the repairs are reasoned red, and the next runner with dependencies installed owns confirming them |
 | **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 | proposed |
 | **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 | proposed |
 | **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 | proposed |
