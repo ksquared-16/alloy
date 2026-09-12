@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-12
+supersedes: []
+---
+
 # Maintenance Activation Readiness V1
 
 **Status.** Implemented and certified. Candidate held behind the active Host

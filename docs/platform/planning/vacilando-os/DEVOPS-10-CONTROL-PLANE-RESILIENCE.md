@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-12
+supersedes: []
+---
+
 # DevOps 10 — Control Plane Resilience & Host Failover V1
 
 **Status.** Design and code certified. **Live failover NOT activated** — the

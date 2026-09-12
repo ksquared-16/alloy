@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-12
+supersedes: []
+---
+
 # Thread 5 — certification auth unblock
 
 **Status.** Fix implemented and certified. It cannot take effect on the running

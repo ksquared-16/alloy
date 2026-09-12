@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-12
+supersedes: []
+---
+
 # Async Command Acknowledgement & Message Send Reliability V1
 
 **Status.** Implemented and certified. Promotion blocked only by the active Host

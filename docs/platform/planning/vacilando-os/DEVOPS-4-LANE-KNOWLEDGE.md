@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-12
+supersedes: []
+---
+
 # DevOps 4 — Lane Knowledge Base V1
 
 **Status.** Implemented and certified. Candidate held behind the active Host

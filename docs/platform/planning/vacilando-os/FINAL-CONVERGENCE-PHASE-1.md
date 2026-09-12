@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-12
+supersedes: []
+---
+
 # Final Convergence — Phase 1
 
 **Status.** Train composed and certified except for one gate. **BLOCKED_ON_FINAL_TRAIN.**

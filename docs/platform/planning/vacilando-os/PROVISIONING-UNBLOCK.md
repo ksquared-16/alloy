@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-12
+supersedes: []
+---
+
 # Final Convergence — Provisioning Unblock
 
 **Status.** The stated blocker is **resolved**: Level-2 Critical Invariants are

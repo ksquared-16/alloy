@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-12
+supersedes: []
+---
+
 # Director Governance & Interaction Reliability V1
 
 **Status.** Implemented and certified on a clean current-staging candidate.
