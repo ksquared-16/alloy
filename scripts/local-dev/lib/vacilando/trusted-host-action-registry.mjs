@@ -51,6 +51,22 @@ export const ACTION_TYPES = Object.freeze({
   ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION: "environment.execute_registered_reconciliation",
 });
 
+/**
+ * Actions whose EXECUTION consumes a persisted artifact reference.
+ *
+ * Declared in one place so a structural control can prove no artifact-bearing
+ * action is registered without it, which is the defect class this closes: a
+ * filer writing one field and an executor reading another, with nothing in
+ * between that could notice.
+ */
+export function artifactContractFor(def) {
+  if (!def || def.requiresArtifactRef !== true) return null;
+  const keys = Array.isArray(def.artifactInputKeys) && def.artifactInputKeys.length
+    ? def.artifactInputKeys.map(String)
+    : [];
+  return keys.length ? { actionType: def.actionType, inputKeys: keys } : null;
+}
+
 const DEFAULT_TARGET = "alloy_deployed_primary";
 
 function sha256(text) {
@@ -180,6 +196,23 @@ function defineDatabaseReadCensus() {
     inputSchema: {
       required: ["queryArtifactPath", "expectedQueryHash", "databaseTarget"],
     },
+    /*
+     * THE FIELD THE EXECUTOR ACTUALLY READS, DECLARED.
+     *
+     * `executeGovernedAction` resolves this action's query with
+     * `artifactPathFrom(rec.artifact_refs)` — the PERSISTED refs, never
+     * `inputs.queryArtifactPath`. Before this declaration nothing connected the
+     * two, so a request could be filed with a perfectly good
+     * `inputs.queryArtifactPath` and empty `artifact_refs`, and be refused with
+     * "queryArtifactPath required" — naming the one field the filer had in fact
+     * supplied.
+     *
+     * `artifactInputKeys` are the spellings a caller may use; the filer
+     * normalises whichever it finds into `artifact_refs` before the request is
+     * persisted, so filing and execution can never read different fields.
+     */
+    requiresArtifactRef: true,
+    artifactInputKeys: ["queryArtifactPath", "query_artifact_path"],
     outputSchema: { resultJson: "object" },
     evidenceSchema: ["query_artifact", "query_hash", "validation_report", "result_json", "execution_audit"],
     validateInputs(inputs = {}) {

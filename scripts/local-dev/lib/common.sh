@@ -412,8 +412,33 @@ alloy_reset_optional_metadata() {
   done
 }
 
+# WHAT A CALLER ACTUALLY NEEDS FROM A WORKTREE RECORD.
+#
+# This used to demand SLOT, PORT and AGENT from every caller, which quietly made
+# "is this worktree known?" mean "does this worktree hold a Development Slot?".
+# Those are different questions, and the settled architecture says so:
+# persistent worktree capability is not a slot, is not a dev server, and is not a
+# QA session.
+#
+#   dependencies  name, path, branch.  Installing node_modules needs a
+#                 filesystem path and nothing else — alloy_sprint_install_deps
+#                 only ever does `cd "$web_dir"`.
+#   runtime       the above plus slot, port and agent. Anything that starts or
+#                 owns a slot-scoped process still demands all of it.
+#
+# `runtime` is the DEFAULT, so every existing caller keeps exactly today's
+# strictness without being touched. Only a caller that has proven it needs less
+# may ask for less.
+#
+# MEASURED: `alloy-worktree-adopt --no-slot` produces a valid registered,
+# dispatchable, portless worktree — and `alloy-worktree-provision` then refused
+# it for "metadata missing ALLOY_WORKTREE_SLOT". The two halves of the canonical
+# path disagreed, which is why a promotion train could not install the
+# dependencies four Critical Invariants need, while all 12 slots were held by
+# live lanes.
 alloy_load_metadata() {
   local name="$1"
+  local capability="${2:-runtime}"
   local path
   path="$(alloy_metadata_path "$name")"
   [[ -f "$path" ]] || alloy_die "unknown worktree metadata: $name ($path)"
@@ -424,9 +449,22 @@ alloy_load_metadata() {
     alloy_die "metadata name mismatch for $name (found '${ALLOY_WORKTREE_NAME:-}')"
   [[ -n "${ALLOY_WORKTREE_PATH:-}" ]] || alloy_die "metadata missing ALLOY_WORKTREE_PATH for $name"
   [[ -n "${ALLOY_WORKTREE_BRANCH:-}" ]] || alloy_die "metadata missing ALLOY_WORKTREE_BRANCH for $name"
-  [[ -n "${ALLOY_WORKTREE_SLOT:-}" ]] || alloy_die "metadata missing ALLOY_WORKTREE_SLOT for $name"
-  [[ -n "${PORT:-}" ]] || alloy_die "metadata missing PORT for $name"
-  [[ -n "${ALLOY_AGENT:-}" ]] || alloy_die "metadata missing ALLOY_AGENT for $name"
+
+  case "$capability" in
+    dependencies)
+      # Identity and a path. Nothing slot-scoped is read, so nothing slot-scoped
+      # is required.
+      return 0
+      ;;
+    runtime)
+      [[ -n "${ALLOY_WORKTREE_SLOT:-}" ]] || alloy_die "metadata missing ALLOY_WORKTREE_SLOT for $name"
+      [[ -n "${PORT:-}" ]] || alloy_die "metadata missing PORT for $name"
+      [[ -n "${ALLOY_AGENT:-}" ]] || alloy_die "metadata missing ALLOY_AGENT for $name"
+      ;;
+    *)
+      alloy_die "unknown metadata capability '${capability}' for $name (want: dependencies | runtime)"
+      ;;
+  esac
 }
 
 # Metadata discovery is owned by the Shared Read Core. (The slot lookup there

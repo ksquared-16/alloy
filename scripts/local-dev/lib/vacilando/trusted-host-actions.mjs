@@ -17,6 +17,7 @@ import {
 import { join, dirname } from "node:path";
 import { spawnSync } from "node:child_process";
 
+import { assertGatewayHostMutationAllowed } from "./gateway-host-mutation.mjs";
 import { runRegisteredReconciliation } from "./trusted-host-reconciliation.mjs";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
@@ -690,6 +691,35 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
     return executeSetProviderCeilingTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType === ACTION_TYPES.HOST_INSTALL_TOOLKIT) {
+    /*
+     * THE HOLD THAT ALREADY EXISTED AND WAS NOT CONSULTED HERE.
+     *
+     * `gateway_host_mutation` is a capacity-1 exclusive resource on the ordinary
+     * governor, and `install-vacilando-gateway.sh` has honoured it since two
+     * lanes silently undid each other's Gateway installs. The GOVERNED action
+     * did not: `host.install_toolkit` relinks `toolkit/current` and converges
+     * the Gateway onto it without ever asking who holds the host.
+     *
+     * MEASURED. On 2026-09-12 at 03:42Z the Surfaces lane completed
+     * gar_338624523cda6d, moved `toolkit/current` from 14b0e01dcd06 to
+     * 5c7b100bcd64 and restarted the Gateway — invalidating an authoritative
+     * 24-hour Host Lifecycle soak another lane was in the middle of. No rule was
+     * broken, because nothing asked.
+     *
+     * This is not a new lock. It is the existing one, consulted by the path that
+     * most needs it. The holder's own run passes; every other run is refused
+     * with the holder named, which is what makes a convergence window
+     * expressible at all — and an unheld host installs exactly as before.
+     */
+    const allowed = assertGatewayHostMutationAllowed({ runId: action.runId || action.run_id || null });
+    if (!allowed.ok) {
+      action.state = "failed";
+      action.failureReason = allowed.error;
+      action.completed_at = iso(nowMs);
+      action.audit = buildAudit(action, { success: false, failureCode: allowed.error });
+      writeAction(action);
+      return { ok: false, error: allowed.error, detail: allowed.detail, holder: allowed.holder, action };
+    }
     return executeInstallToolkitTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType === ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION) {
