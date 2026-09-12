@@ -7,6 +7,7 @@ import {
     commitApprovedLeadForCase,
 } from "@/lib/pos/processingIdentity/operator";
 import { operatorErrorResponse, resolveOperatorRoute } from "@/lib/pos/processingIdentity/operator/operatorRouteContext";
+import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { persistIntakePersonAddressFieldValues } from "@/lib/pos/processingIdentity/operator/persistIntakePersonAddress";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 
@@ -64,6 +65,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         if (row.case_type === "form_submission") {
             const resolved = await resolveOperatorRoute(caseId);
             if (resolved instanceof NextResponse) return resolved;
+    const denied = requireProcessingCapability(resolved.ctx, PROCESSING_OPERATE);
+    if (denied) return denied;
             try {
                 const { attempt } = await commitApprovedLeadForCase(resolved.deps, { caseId: resolved.caseId });
                 if (attempt.outcome !== "committed") {

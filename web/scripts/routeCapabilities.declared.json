@@ -2,7 +2,7 @@
   "reviewed": "2026-09-10",
   "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
   "ratchet": {
-    "max_pending": 631,
+    "max_pending": 632,
     "$comment": "Lowered 693 -> 679 by the Access & Identity V2 Financials slice: twelve financial record-data handlers converted to fin.read and two GL-account mutations to fin.write, plus two entries overturned from a reasoned `none` (see their `supersedes`). The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack. Lowered 679 -> 656 by the Forms authority cleanup: 23 handlers that were already enforcing authorization moved from pending to declared. The enforcement did not become stricter - it stopped being invisible to this table. A ceiling left at 679 would let those 23 silently regress to undeclared."
   },
   "inherited": {
@@ -2986,8 +2986,8 @@
       "POST": {
         "status": "declared",
         "capability": "processing.operate",
-        "helper": "resolveOperatorRoute",
-        "reason": "POS + Processing authority cleanup. Ordinary Processing work, bound through the shared operator context rather than an inline guard: resolveOperatorRoute is the ONE place these seven routes derive authority, and it now reads processing.operate where it read `ctx.role === \"admin\" || ctx.role === \"ops\"`. Declaring the inline helper here would have named a guard these routes do not call."
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. TIGHTENING, not compatibility. This mutation flowed through the operator context but never actually required the old role gate — assertAuthorized is called by only two of the seven operator functions — so it was authorized by portal admission alone. The guard is explicit at the route because the capability is genuinely required here now."
       }
     },
     "app/api/admin/processing/cases/[caseId]/archive/route.ts": {
@@ -3053,48 +3053,46 @@
       "POST": {
         "status": "declared",
         "capability": "processing.operate",
-        "helper": "resolveOperatorRoute",
-        "reason": "POS + Processing authority cleanup. Ordinary Processing work, bound through the shared operator context rather than an inline guard: resolveOperatorRoute is the ONE place these seven routes derive authority, and it now reads processing.operate where it read `ctx.role === \"admin\" || ctx.role === \"ops\"`. Declaring the inline helper here would have named a guard these routes do not call."
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. Guarded at the ROUTE so authority is decided before the request body is parsed — an empty body used to reach a 400 first, which meant an unauthorized caller learned the payload contract before being refused. The deep assertAuthorized in operatorReviewService stays as defence in depth: this is checked twice on purpose."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/correction/route.ts": {
       "POST": {
         "status": "declared",
         "capability": "processing.operate",
-        "helper": "resolveOperatorRoute",
-        "reason": "POS + Processing authority cleanup. Ordinary Processing work, bound through the shared operator context rather than an inline guard: resolveOperatorRoute is the ONE place these seven routes derive authority, and it now reads processing.operate where it read `ctx.role === \"admin\" || ctx.role === \"ops\"`. Declaring the inline helper here would have named a guard these routes do not call."
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. TIGHTENING, not compatibility. This mutation flowed through the operator context but never actually required the old role gate — assertAuthorized is called by only two of the seven operator functions — so it was authorized by portal admission alone. The guard is explicit at the route because the capability is genuinely required here now."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/execute/route.ts": {
       "POST": {
         "status": "declared",
         "capability": "processing.operate",
-        "helper": "resolveOperatorRoute",
-        "reason": "POS + Processing authority cleanup. Ordinary Processing work, bound through the shared operator context rather than an inline guard: resolveOperatorRoute is the ONE place these seven routes derive authority, and it now reads processing.operate where it read `ctx.role === \"admin\" || ctx.role === \"ops\"`. Declaring the inline helper here would have named a guard these routes do not call."
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. Guarded at the ROUTE so authority is decided before the request body is parsed — an empty body used to reach a 400 first, which meant an unauthorized caller learned the payload contract before being refused. The deep assertAuthorized in operatorReviewService stays as defence in depth: this is checked twice on purpose."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/plan/route.ts": {
       "POST": {
         "status": "declared",
         "capability": "processing.operate",
-        "helper": "resolveOperatorRoute",
-        "reason": "POS + Processing authority cleanup. Ordinary Processing work, bound through the shared operator context rather than an inline guard: resolveOperatorRoute is the ONE place these seven routes derive authority, and it now reads processing.operate where it read `ctx.role === \"admin\" || ctx.role === \"ops\"`. Declaring the inline helper here would have named a guard these routes do not call."
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. TIGHTENING, not compatibility. This mutation flowed through the operator context but never actually required the old role gate — assertAuthorized is called by only two of the seven operator functions — so it was authorized by portal admission alone. The guard is explicit at the route because the capability is genuinely required here now."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/resolution/route.ts": {
       "POST": {
         "status": "declared",
         "capability": "processing.operate",
-        "helper": "resolveOperatorRoute",
-        "reason": "POS + Processing authority cleanup. Ordinary Processing work, bound through the shared operator context rather than an inline guard: resolveOperatorRoute is the ONE place these seven routes derive authority, and it now reads processing.operate where it read `ctx.role === \"admin\" || ctx.role === \"ops\"`. Declaring the inline helper here would have named a guard these routes do not call."
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. TIGHTENING, not compatibility. This mutation flowed through the operator context but never actually required the old role gate — assertAuthorized is called by only two of the seven operator functions — so it was authorized by portal admission alone. The guard is explicit at the route because the capability is genuinely required here now."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/review/route.ts": {
       "GET": {
-        "status": "declared",
-        "capability": "processing.operate",
-        "helper": "resolveOperatorRoute",
-        "reason": "POS + Processing authority cleanup. Ordinary Processing work, bound through the shared operator context rather than an inline guard: resolveOperatorRoute is the ONE place these seven routes derive authority, and it now reads processing.operate where it read `ctx.role === \"admin\" || ctx.role === \"ops\"`. Declaring the inline helper here would have named a guard these routes do not call."
+        "status": "pending",
+        "note": "Open read. It flows through the operator context but never required the old role gate, so declaring a capability here would claim an enforcement that does not exist — and adding one would tighten a read, which this slice was not approved to do."
       }
     },
     "app/api/admin/processing/cases/[caseId]/recommendation/route.ts": {

@@ -95,6 +95,33 @@ export const CUSTOM = {
      * that subject varies two things at once and proves neither.
      */
     formsCrm: "mcert_forms_crm",
+
+    /*
+     * ── THE PROCESSING MATRIX ──
+     *
+     * Four capabilities that deliberately do not imply one another, so each gets a role holding
+     * exactly one of them. The point of the matrix is the DENIALS: a processor must not be able to
+     * archive, an archiver must not be able to work a case, and neither may touch a document.
+     *
+     * `procTitular` is the role-name control — labelled "Admin", holding nothing.
+     *
+     * `procPortalOnly` is the security control for the tightening half of this slice. Before it,
+     * every Processing mutation listed under `processing.operate` was authorized by portal
+     * admission alone, so this persona could commit them. It must now be refused, while the reads
+     * that were open to it stay open.
+     *
+     * `procDocsWriter` is the reason `processing.documents.manage` exists at all: it holds the
+     * general `documents.write` that ops holds in every organization, and must still be refused the
+     * destructive Processing document operations.
+     */
+    procOperate: "mcert_proc_operate",
+    procArchive: "mcert_proc_archive",
+    procDocs: "mcert_proc_docs",
+    procDevCleanup: "mcert_proc_devcleanup",
+    procTitular: "mcert_proc_titular",
+    procPortalOnly: "mcert_proc_portal_only",
+    procDocsWriter: "mcert_proc_docs_writer",
+    procFormsAuthor: "mcert_proc_forms_author",
 };
 
 export const P = {
@@ -114,6 +141,15 @@ export const P = {
     formsBystander: { id: "c0000000-0000-4000-8000-00000000d013", email: "cert.formsbystander@northwind.invalid", role: CUSTOM.formsBystander },
     formsTitular:   { id: "c0000000-0000-4000-8000-00000000d014", email: "cert.formstitular@northwind.invalid",   role: CUSTOM.formsTitular },
     formsCrm:       { id: "c0000000-0000-4000-8000-00000000d015", email: "cert.formscrm@northwind.invalid",       role: CUSTOM.formsCrm },
+
+    procOperate:    { id: "c0000000-0000-4000-8000-00000000d016", email: "cert.procoperate@northwind.invalid",   role: CUSTOM.procOperate },
+    procArchive:    { id: "c0000000-0000-4000-8000-00000000d017", email: "cert.procarchive@northwind.invalid",   role: CUSTOM.procArchive },
+    procDocs:       { id: "c0000000-0000-4000-8000-00000000d018", email: "cert.procdocs@northwind.invalid",      role: CUSTOM.procDocs },
+    procDevCleanup: { id: "c0000000-0000-4000-8000-00000000d019", email: "cert.procdevclean@northwind.invalid",  role: CUSTOM.procDevCleanup },
+    procTitular:    { id: "c0000000-0000-4000-8000-00000000d020", email: "cert.proctitular@northwind.invalid",   role: CUSTOM.procTitular },
+    procPortalOnly: { id: "c0000000-0000-4000-8000-00000000d021", email: "cert.procportal@northwind.invalid",    role: CUSTOM.procPortalOnly },
+    procDocsWriter: { id: "c0000000-0000-4000-8000-00000000d022", email: "cert.procdocswriter@northwind.invalid",role: CUSTOM.procDocsWriter },
+    procFormsAuthor:{ id: "c0000000-0000-4000-8000-00000000d023", email: "cert.procformsauthor@northwind.invalid",role: CUSTOM.procFormsAuthor },
 };
 
 async function principal(p) {
@@ -154,6 +190,16 @@ export async function setup() {
         /* The label is the trap. It holds nothing. */
         { org_id: ORG, role_key: CUSTOM.formsTitular,   role_label: "Forms Administrator", description: "Named for Forms, granted none of it.",                    is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.formsCrm,       role_label: "Customer lookup",     description: "Searches customers. Holds no Forms capability.",          is_system: false, is_active: true },
+
+        { org_id: ORG, role_key: CUSTOM.procOperate,    role_label: "Case processor",       description: "Works the processing queue. Cannot archive or delete.",   is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.procArchive,    role_label: "Queue archiver",       description: "Archives cases. Cannot work one.",                        is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.procDocs,       role_label: "Source doc manager",   description: "Renames and deletes source documents. Nothing else.",     is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.procDevCleanup, role_label: "Test data resetter",   description: "Holds the reset capability. Production still refuses.",   is_system: false, is_active: true },
+        /* The label is the trap. It holds nothing. */
+        { org_id: ORG, role_key: CUSTOM.procTitular,    role_label: "Admin",                description: "Named Admin, granted no Processing capability.",          is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.procPortalOnly, role_label: "Processing bystander", description: "In the portal, holding no Processing capability.",        is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.procDocsWriter, role_label: "General doc writer",   description: "Holds documents.write, as ops does. Not a Processing authority.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.procFormsAuthor,role_label: "Packet author",        description: "Holds forms.author. Authors packets, works no case.",     is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
 
@@ -170,6 +216,15 @@ export async function setup() {
         [CUSTOM.formsBystander, ["portal.access"]],
         [CUSTOM.formsTitular, ["portal.access"]],
         [CUSTOM.formsCrm, ["portal.access", "crm.customers.read"]],
+
+        [CUSTOM.procOperate, ["portal.access", "processing.operate"]],
+        [CUSTOM.procArchive, ["portal.access", "processing.archive"]],
+        [CUSTOM.procDocs, ["portal.access", "processing.documents.manage"]],
+        [CUSTOM.procDevCleanup, ["portal.access", "processing.dev_cleanup"]],
+        [CUSTOM.procTitular, ["portal.access"]],
+        [CUSTOM.procPortalOnly, ["portal.access"]],
+        [CUSTOM.procDocsWriter, ["portal.access", "documents.write", "documents.read"]],
+        [CUSTOM.procFormsAuthor, ["portal.access", "forms.author"]],
     ]) {
         const { error } = await sb.rpc("replace_role_permission_grants", {
             p_org_id: ORG,
