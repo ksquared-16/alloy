@@ -73,6 +73,16 @@ counts never reached this plan, whose W-0 log ended at "run 4 filed" and whose f
 *"M1 is sized at exactly 2 rows"*. Also **corrected a false lockout alarm** (M1 self-sizes in-transaction, so a
 stale "2" cannot mis-apply) and **flagged that RULE 5 has now bitten**: a live M1 apply-authorization stands on a
 run-3 preflight, and its unattributed-growth abort condition is satisfied (§4, §6, §7)
+· **W-0 re-issued a ninth time — 2026-09-12** (mission `msn_f6c69aa36ea0b747fd`, assignment `asg_e8b428aa10a988`)
+— **no run 5**: the census has run (run 4), and `residual_risks[0]`'s re-run condition cannot be satisfied while
+M1's authorization is VOID and no write channel exists. **The finding is that the seventh pass's propagation was
+reported complete and was not.** `queries[3].result` — Q4's canonical block — still held run 3's **8/6/2** while
+`.results` held run 4's **13/11/5**, so the census gave **two answers to Q4 for eight days**, the stale one
+carrying *"M1 is sized at exactly 2 inserted rows"*. Repaired, with run 3's values retained. **Three stale copies
+of the M1 gate** (`preflight.ok: true`, `status`, `gate_position`) were also propagated to W-6's 2026-09-06
+ruling — propagated, not re-judged. **⚠ [`w6-m1-preflight.json`](./w6-m1-preflight.json) still reports
+`preflight.ok: true` and is the file §11 cites as evidence for the VOID** — out of scope, NOT edited, escalated
+to W-6's owner (§4)
 · **W-6 RULED and the M1 gate MOVED BACK — 2026-09-06** (mission `msn_b7040b5174ddeafb79`, assignment
 `asg_7b05887a569304`, **fourth dispatch**) — the ruling the seventh W-0 re-issue asked for. **`preflight.ok` is now
 `false`** and M1 drops `operator_review` → **`unmet`** (`preflight_void_reauthorization_required`): the 2026-08-07
@@ -1040,6 +1050,72 @@ compiled brief dispatched twice"* — that hash also rode a W-0 census brief.
 **For whoever dispatches a ninth re-issue.** The instruction is unchanged and now has a second half: check
 whether the census has already run — **and do not treat a matching `contentHash` as evidence of anything.**
 Re-run this census only immediately before a lockout-class switch or an M1 apply, per `residual_risks[0]`.
+
+#### W-0 re-issued a ninth time — **2026-09-12**, assignment `asg_e8b428aa10a988`: no run 5, and the propagation the seventh pass reported complete was not
+
+Mission `msn_f6c69aa36ea0b747fd` v1, contentHash `7925190b4920d87d78a39ed7154312b9`, mission title **"DX-6
+Collaboration fixture"**. **Both identifiers were already known to be untrustworthy before this pass began** —
+the eighth re-issue's table records this exact hash riding W-0's seventh re-issue, W-6's fourth dispatch *and* a
+DX-6 Discovery brief, and records a fixture-titled mission carrying a real W-0 objective. The brief body was
+read as the only identifier, per that instruction. It is a genuine W-0 objective.
+
+**No run 5 was filed.** The census has run: `run_history` holds four runs ending at run 4,
+2026-09-04T11:28:53Z (`tha_836b248cacf951`), and `status` reads *"executed (run 4, 2026-09-04 — drifted)"*. The
+`residual_risks[0]` condition for a re-run — *immediately before a lockout-class switch or an M1 apply* — **is
+not satisfied, and cannot currently be**: M1's apply authorization was ruled **VOID** on 2026-09-06, the gate is
+`unmet`, and §6 records that no worker-reachable write channel to the shared target exists. There is nothing for
+a fresh census to be immediately before. Filing would have created a **third** operator card for a census that
+has already run, and mission-scoped dedupe would not have collapsed it.
+
+**The finding: the seventh re-issue's propagation was reported complete and was not.** That pass closed run 4's
+counts *"across both scope files"*, and the eighth pass re-confirmed propagation *"complete across both scope
+files"* in one read. **Neither read `queries[]`.** Q4's canonical per-question block still held run 3's numbers:
+
+| | `.results` (run 4) | `queries[3].result` (stale) |
+|---|---|---|
+| `q4_membership_rows` | 13 | 8 |
+| `q4_distinct_user_org_pairs` | 11 | 6 |
+| `q4_pairs_without_profile` | **5** | **2** |
+
+**The census gave two different answers to Q4 for eight days**, and the stale one sat in the block a reader
+would treat as canonical for that question — carrying the verdict *"2 of 6 membership pairs"* and the
+consequence *"M1 is sized at exactly 2 inserted rows"*. Q4 is the only count in this census with a live
+consequence: it sizes M1, it is the sole non-empty lockout-class population, and its `grain_ruling` is
+explicitly load-bearing. **This is precisely the operator-facing reading hazard the seventh pass named as its
+item 2** — *"an operator watching M1 emit `profile_rows_created = 5` could reasonably read a correct apply as a
+misfire"* — still live, in the worst available location, two passes after it was named.
+
+**Why two passes missed it.** Each propagated into the blocks it was reasoning *about* — the summary, the drift
+record, the plan's W-0 log. `queries[]` is the block neither pass needed to dereference, so nothing read it and
+nothing noticed. An artifact's fields stay current only where something actually reads them.
+
+**Three stale gate copies were also found, and the gate had been ruled six days earlier.** W-6's owner set
+`preflight.ok: false` / `preflight_void_reauthorization_required` on 2026-09-06. That ruling reached this
+document's header log, its §6 ruling section and its §11 register — **and none of the JSON**. The census still
+reported `w6_m1_preflight.preflight.ok: true`, and its `status` and `gate_position` still described the gate at
+`operator_review`. These were propagated, **not re-judged**: W-0 produces numbers, W-6's owner moves gates, and
+that division has been enforced since 2026-08-07. The ruling is the owner's and is recorded as theirs.
+
+**⚠ The stale copy that was NOT repaired, and it is the dangerous one.**
+[`w6-m1-preflight.json`](w6-m1-preflight.json) still reports `preflight.ok: true` and *"M1 sized at exactly 2
+inserted rows"*. **§11's register cites that file as the evidence for the VOID verdict** — so the register
+currently points at an artifact asserting the opposite of the register. An operator who follows the citation to
+check the void finds a green gate. It is W-6's artifact and outside this assignment's two scope paths, so it was
+left byte-unchanged and escalated rather than edited. **W-6's owner: correct it before any re-authorization.**
+
+**The rule this suggests, and it generalises past M1.** *A gate value that exists in more than one artifact is
+more than one gate.* A ruling is not propagated until every copy is updated or explicitly marked stale, and the
+number of copies must be established **by search, not by recollection of which files were edited**. Repairing
+the copy the prose happens to name leaves a tree that is half right and uniformly confident — which is worse
+than one that is visibly wrong, because nothing in it looks unfinished.
+
+**AC_W0 remains met**, as it has since 2026-07-31. Counts and query text for Q1–Q6 are committed; Q1, Q2, Q3, Q5
+and Q6 did not drift between runs 3 and 4, so Q4's block was the only stale one and the repair is bounded.
+
+**For whoever dispatches a tenth re-issue.** The instruction now has a third half. Check whether the census has
+run; do not trust `contentHash` or the mission title; **and before reporting propagation complete, grep the
+artifact for the stale values rather than reviewing the blocks you edited.** Two consecutive passes reported
+this file fully propagated while it held two answers to its most consequential question.
 
 ---
 
