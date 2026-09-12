@@ -15,6 +15,10 @@ import { dirname, join } from "node:path";
 import { localNodeId } from "./execution-node.mjs";
 import { normalizeExecutionProvider } from "./execution-providers.mjs";
 import { isManagedSlot } from "./managed-slots.mjs";
+// The stamp only, from the dependency-free leaf. Importing it from the resolver
+// instead would make the registry and the resolver import each other, and that
+// cycle survives today only by accident of hoisting order.
+import { laneBootstrapStamp } from "./lane-bootstrap-contract.mjs";
 
 export const DEVELOPMENT_LANE_SCHEMA = "vacilando.development_lane.v1";
 export const DURABLE_LANE_ID_RE = /^lane_[a-f0-9]{12}$/;
@@ -397,6 +401,25 @@ export function createDurableLane({
     // Which repository this lane executes in. A folder is presentation; this is
     // the execution boundary, and it is never changed by reorganising a list.
     repository_id: repository_id ? String(repository_id) : null,
+    /*
+     * WHICH BOOTSTRAP CONTRACT THIS LANE WAS INITIALISED UNDER.
+     *
+     * The one fact about a lane's baseline that cannot be derived, because it is
+     * historical rather than current: everything else in the contract is
+     * resolved from whichever owner already holds it, but "which contract was in
+     * force when this lane was created" is only knowable if it was recorded at
+     * the time.
+     *
+     * It is a STAMP, not a copy of the baseline. Copying the baseline onto every
+     * lane is how a fleet ends up with N independently maintained configurations
+     * that quietly disagree; `resolveLaneBootstrap` derives the baseline fresh on
+     * every read, so this stays one short version string for ever.
+     *
+     * A lane without it is stale, not broken — every lane created before this
+     * contract existed is in that state by definition, and DevOps 2 owns what to
+     * do about it.
+     */
+    bootstrap: laneBootstrapStamp(nowMs),
   };
   const store = readDevelopmentLaneStore(root);
   store.lanes[rec.lane_id] = rec;
