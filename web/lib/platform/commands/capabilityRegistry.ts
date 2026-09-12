@@ -78,6 +78,7 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "payment.record",
     "payment.refund",
     "payment.collect_card",
+    "payment.reverse_application",
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
@@ -682,6 +683,28 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             + "balance exactly once. Idempotent — a retried request returns the payment already recorded "
             + "and its existing application. This RECORDS money; it does not collect it, so a family who "
             + "pays by cash or check is representable without a provider.",
+    }),
+    def({
+        capabilityKey: "payment.reverse_application",
+        canonicalCommandKey: "payment.reverse_application",
+        operatorLabel: "Unapply payment",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment.reverse_application",
+        implementationStatus: "production",
+        reason:
+            "Corrects WHICH obligation a payment answered, without touching the payment. Money applied to "
+            + "the wrong charge previously had to be refunded to be moved, because reversing an application "
+            + "was only reachable from the refund path. This marks the application reversed, which returns "
+            + "the obligation to the charge and the money to unapplied in one write, since balance readers "
+            + "count only active applications. The receipt, its payer, its method, its date and its "
+            + "processor reference are untouched, no refund row is written and no processor is contacted — "
+            + "the organisation still holds the money.",
     }),
     def({
         capabilityKey: "payment.refund",

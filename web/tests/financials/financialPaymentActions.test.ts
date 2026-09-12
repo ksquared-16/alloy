@@ -4,6 +4,7 @@ import {
     PAYMENT_RECORD_ACTION_KEY,
     PAYMENT_REFUND_ACTION_KEY,
     PAYMENT_COLLECT_CARD_ACTION_KEY,
+    PAYMENT_REVERSE_APPLICATION_ACTION_KEY,
     financialPaymentActions,
 } from "@/lib/adminV2/actions/definitions/financialPaymentActions";
 import { REGISTERED_ACTION_CAPABILITY_KEYS } from "@/lib/platform/commands/capabilityRegistry";
@@ -61,15 +62,20 @@ describe("financial payment actions — the operator can settle what is owed", (
      * received` straight out of a hard-coded zero. Without a reachable record-payment the card could
      * only ever say a family owes everything they have ever been charged.
      */
-    it("registers record, refund and card collection, and all are classified capabilities", () => {
+    it("registers record, refund, card collection and unapply, and all are classified capabilities", () => {
         // Thread 8B adds collection beside recording: `payment.record` writes down money that
-        // already arrived, `payment.collect_card` asks an executor to go and get it. An action that
-        // is registered but unclassified would dispatch without a capability governing it, which is
-        // what this second assertion exists to catch.
-        expect(financialPaymentActions.map((a) => a.actionKey).sort()).toEqual(
-            [PAYMENT_RECORD_ACTION_KEY, PAYMENT_REFUND_ACTION_KEY, PAYMENT_COLLECT_CARD_ACTION_KEY].sort(),
-        );
-        for (const key of [PAYMENT_RECORD_ACTION_KEY, PAYMENT_REFUND_ACTION_KEY, PAYMENT_COLLECT_CARD_ACTION_KEY]) {
+        // already arrived, `payment.collect_card` asks an executor to go and get it. Slice 6 adds
+        // `payment.reverse_application`, which changes WHICH obligation a receipt answered without
+        // touching the receipt. An action that is registered but unclassified would dispatch without
+        // a capability governing it, which is what this second assertion exists to catch.
+        const keys = [
+            PAYMENT_RECORD_ACTION_KEY,
+            PAYMENT_REFUND_ACTION_KEY,
+            PAYMENT_COLLECT_CARD_ACTION_KEY,
+            PAYMENT_REVERSE_APPLICATION_ACTION_KEY,
+        ];
+        expect(financialPaymentActions.map((a) => a.actionKey).sort()).toEqual(keys.sort());
+        for (const key of keys) {
             expect(REGISTERED_ACTION_CAPABILITY_KEYS as readonly string[]).toContain(key);
         }
     });

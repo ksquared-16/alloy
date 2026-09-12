@@ -34,6 +34,7 @@ import {
     readChargeBalance,
     recordAndApplyChildcarePayment,
     refundChildcarePayment,
+    reversePaymentApplication,
     type ChildcarePaymentMethod,
 } from "@/lib/financials/childcarePaymentService";
 import { createCardCollection } from "@/lib/financials/payments/collectionAttempt";
@@ -45,6 +46,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const PAYMENT_RECORD_ACTION_KEY = "payment.record";
 export const PAYMENT_REFUND_ACTION_KEY = "payment.refund";
 export const PAYMENT_COLLECT_CARD_ACTION_KEY = "payment.collect_card";
+export const PAYMENT_REVERSE_APPLICATION_ACTION_KEY = "payment.reverse_application";
 
 /**
  * ── WHO MAY MOVE THIS MONEY ──
@@ -711,4 +713,156 @@ const collectCardPayment: RegisteredAction = {
     },
 };
 
-export const financialPaymentActions: RegisteredAction[] = [recordPayment, refundPayment, collectCardPayment];
+/**
+ * UNDO AN APPLICATION — the correction that used to require a refund.
+ *
+ * A receipt and an allocation are different facts. Money applied to the wrong charge previously had
+ * to be given back and taken again, because reversing an application was only reachable from the
+ * refund path. This exposes that correction on its own.
+ *
+ * `fin.adjust`, the same permission refunding uses. Both change what a family is recorded as owing
+ * after the fact, and that — not whether a processor is involved — is what the permission guards.
+ *
+ * NOT a refund and NOT a provider operation: the organisation still holds the money, so no processor
+ * is contacted and no refund row is written. The receipt, its payer, its method, its date and its
+ * processor reference are untouched, because the service never writes to `payments`.
+ */
+const reversePaymentApplicationAction: RegisteredAction = {
+    actionKey: PAYMENT_REVERSE_APPLICATION_ACTION_KEY,
+    defaultLabel: "Unapply payment",
+    description:
+        "Undo a payment application so the money becomes unapplied and the charge owes it again. The payment itself is unchanged.",
+    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedProcessKeys: [],
+    requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
+    audit: { eventType: "action_executed", category: "record", mutates: true },
+    bosProposalSupport: false,
+    confirmationPolicy: "none",
+
+    validatePayload(payload) {
+        const src = payload ?? {};
+        if (!t(src.allocation_id)) {
+            return {
+                ok: false,
+                blockers: [
+                    { code: "missing_application", message: "An application is required.", field: "allocation_id" },
+                ],
+            };
+        }
+        /*
+         * The reversal row is the only account of why the money moved. The service refuses without
+         * one too; stating it here means the operator is told before they get as far as confirming.
+         */
+        if (!t(src.reason)) {
+            return {
+                ok: false,
+                blockers: [{ code: "missing_reason", message: "A reason is required.", field: "reason" }],
+            };
+        }
+        return { ok: true, value: src };
+    },
+
+    async resolveEligibility({ supabase, ctx, payload }) {
+        const allocationId = t(payload?.allocation_id);
+        const allowed = await permitted(
+            supabase as SupabaseClient,
+            ctx.orgId,
+            ctx.userId,
+            PAYMENT_REFUND_PERMISSION,
+        );
+        return {
+            eligible: Boolean(allocationId) && allowed,
+            blockers: [
+                ...(allocationId ? [] : [{ code: "missing_application", message: "An application is required." }]),
+                ...(allowed
+                    ? []
+                    : [
+                          {
+                              code: "reverse_application_permission_required",
+                              message: `Unapplying a payment requires ${PAYMENT_REFUND_PERMISSION}.`,
+                          },
+                      ]),
+            ],
+            availableTransitions: [],
+            requiredInputs: [],
+        };
+    },
+
+    /*
+     * The preview reads the application SERVER-SIDE and states the consequence in money. The amount
+     * is never taken from the payload: a client that sent its own figure could preview one number
+     * and reverse another.
+     */
+    async buildPreview({ supabase, ctx, payload }) {
+        const allocationId = t(payload?.allocation_id);
+        const { data } = await (supabase as SupabaseClient)
+            .from("payment_allocations")
+            .select("allocated_amount_cents, status")
+            .eq("org_id", ctx.orgId)
+            .eq("id", allocationId)
+            .maybeSingle();
+        const row = data as { allocated_amount_cents?: number; status?: string } | null;
+        if (!row) {
+            return { summary: "This application could not be found.", changes: [] };
+        }
+        if (row.status !== "active") {
+            return { summary: `This application is already ${row.status}.`, changes: [] };
+        }
+        const amount = Number(row.allocated_amount_cents) || 0;
+        return {
+            summary: `Unapply ${money(amount)} from this charge`,
+            changes: [
+                `${money(amount)} stops being applied, and the charge owes it again.`,
+                `${money(amount)} becomes unapplied on the payment, ready to apply elsewhere.`,
+                "The payment itself is unchanged — same payer, same method, same date, no refund.",
+            ],
+        };
+    },
+
+    async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
+        const correlationId = randomUUID();
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, PAYMENT_REFUND_PERMISSION))) {
+            return denied(
+                correlationId,
+                "Unapplying a payment",
+                PAYMENT_REFUND_PERMISSION,
+                "reverse_application_permission_required",
+            );
+        }
+        try {
+            const result = await reversePaymentApplication(supabase as SupabaseClient, {
+                orgId: ctx.orgId,
+                allocationId: t(payload.allocation_id),
+                reason: t(payload.reason),
+                actorUserId: ctx.userId ?? null,
+            });
+            return {
+                ok: true,
+                correlationId,
+                result: {
+                    actionKey: PAYMENT_REVERSE_APPLICATION_ACTION_KEY,
+                    entityType: invocation.entityType,
+                    entityId: t(invocation.entityId),
+                    affectedId: result.allocationId,
+                    detail: {
+                        allocation_id: result.allocationId,
+                        payment_id: result.paymentId,
+                        charge_id: result.chargeId,
+                        reversed_amount_cents: result.reversedAmountCents,
+                        payment_unapplied_cents: result.paymentUnappliedCents,
+                        charge_outstanding_cents: result.chargeOutstandingCents,
+                    },
+                },
+            };
+        } catch (err) {
+            return mapError(err, correlationId);
+        }
+    },
+};
+
+export const financialPaymentActions: RegisteredAction[] = [
+    recordPayment,
+    refundPayment,
+    collectCardPayment,
+    reversePaymentApplicationAction,
+];

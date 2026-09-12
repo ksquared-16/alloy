@@ -107,6 +107,7 @@ describe("the subjectless action census", () => {
             "payment.collect_card",
             "payment.record",
             "payment.refund",
+            "payment.reverse_application",
             "staff.add",
             "subsidy.build_claim",
             "subsidy.configure_agency",
