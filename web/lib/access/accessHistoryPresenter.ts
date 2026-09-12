@@ -247,6 +247,33 @@ export function presentAccessEvent(
             changes = [{ area: "Roles", from: joinRoles(before, names.roles), to: joinRoles(after, names.roles) }];
             break;
         }
+        /*
+         * W-17 — the ADDITIVE pair. These describe one role arriving or leaving, and deliberately
+         * say nothing about capabilities: removing a role that shared `fin.read` with another role
+         * the person still holds revokes nothing, and "Financials revoked" would be a lie the event
+         * is in no position to tell. The effective consequence is derived by the resolver, not
+         * asserted by history.
+         */
+        case "access.user.role_assigned": {
+            const after = splitKeys(row.new_state);
+            summary = `${actorDisplay} assigned ${roleDisplay ?? "a role"} to ${personDisplay}`;
+            changes = [{ area: "Roles", from: joinRoles(splitKeys(row.previous_state), names.roles), to: joinRoles(after, names.roles) }];
+            break;
+        }
+        case "access.user.role_removed": {
+            const after = splitKeys(row.new_state);
+            summary = `${actorDisplay} removed ${roleDisplay ?? "a role"} from ${personDisplay}`;
+            changes = [
+                {
+                    area: "Roles",
+                    from: joinRoles(splitKeys(row.previous_state), names.roles),
+                    // An empty set is stated rather than rendered as a blank: holding no role is a
+                    // real answer, and it is not the same as the membership being gone.
+                    to: after.length ? joinRoles(after, names.roles) : "No roles",
+                },
+            ];
+            break;
+        }
         case "access.user.removed":
             summary = `${actorDisplay} removed ${personDisplay}'s organization access`;
             changes = [{ area: "Organization access", from: joinRoles(splitKeys(row.previous_state), names.roles), to: "No access" }];
