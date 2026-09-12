@@ -300,6 +300,10 @@ export function collectDirectorEvidence(rec, {
       Object.assign(evidence, measureHostedMigrationParity({
         repository,
         expectedHeadSha: sha,
+        // The branch being merged INTO is the promoted revision, and it is what
+        // the parity obligation is drawn from. Defaulted rather than assumed
+        // present: this action's target is already allowlisted to staging.
+        targetBranch: inputs.target_branch || inputs.targetBranch || inputs.base || "staging",
       }, {
         censusRequests,
         gate: migrationGate,
