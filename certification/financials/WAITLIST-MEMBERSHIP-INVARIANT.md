@@ -2,10 +2,10 @@
 
 Thread 11 carried "lifecycle_wu_lead vs lifecycle_wu_waitlist" as unexplained debt. This closes it.
 
-> **An earlier revision of this file said membership is evaluated on status and stage is never
-> consulted. That was half right and is corrected below — both axes are used, and which one bites
-> depends on the lane. Getting this half-right is worse than not writing it down, because the
-> Waitlist lane really is status-gated and the conclusion generalises wrongly.**
+> **Revision 3. Revision 1 said membership is status-only and stage is never consulted (half right).
+> Revision 2 classified the Kurzman case as B, a lifecycle state divergence to be repaired by moving
+> its status to `waitlisted`. That was wrong, and acting on it would have written an invalid value.
+> The gate is unsatisfiable for every case in the tenant, not just this one — see below.**
 
 ## The invariant
 
@@ -46,23 +46,59 @@ This is not a reading artifact. The **"All" work view carries `filters_v1: null`
 **3 rows for a tenant with 4 opportunities** — the three cases at `stage_key = 'lead'`. The stored
 `work_unit_id` points at Lead, which that lane's stage gate then rejects.
 
-## Classification: B — lifecycle state divergence
+## Classification: C — the Waitlist membership contract is cross-grain
 
-The case advanced to the **waitlist stage** without its **status** moving to a status assigned to
-that stage. No case in the tenant carries `waitlisted` at all, so the Waitlist lane is empty and its
-one legitimate member is stranded.
+`waitlisted` is not an opportunity status. Measured from the org's own catalog:
 
-Not C. The department filter audit reports `expected == actual == ["waitlisted"], pass = true`; the
-configuration is coherent. Making the Waitlist lane read `stage_key` would mount this one fixture and
-silently redefine membership for every lifecycle lane.
+```
+GET /api/admin/status-definitions?entity_type=opportunities
+    open, closed, inactive, archived
 
-The smallest safe correction is a **governed lifecycle status transition** to the status the builder
-assigned to the waitlist stage, through the canonical transition path — not a row edit, and not a
-mutation performed merely to make a certification fixture fit.
+GET /api/admin/status-definitions?entity_type=opportunity_customer_members
+    waitlisted, enrolling, enrolled, withdrawn, not_enrolling
+```
 
-## Consequence for certification
+`waitlisted` is a **child enrollment-participation** status on
+`opportunity_customer_members.outcome_status_key`. The Waitlist lane nevertheless applies it as a
+**family-grain** gate — `queryLifecycleVisibleWaitlistOpportunities` runs
+`.from("opportunities").in("status_key", ["waitlisted"])`.
 
-There is no work unit or work view that legitimately contains this case, so
-`Financial Subject Resolution` **cannot be certified through a real mounted route until the lifecycle
-divergence is repaired**. The repair itself remains unchallenged: nothing here reaches the candidate
-projection, the resolver, mountability, the card runtime, or the Financials API.
+**No opportunity can ever satisfy that.** The lane is empty by construction, for every tenant, not
+because of this one case's data.
+
+Three independent authorities agree, so this is not inferred from bad data:
+
+1. the org status catalog above;
+2. the waitlist stage's own `status_rollup_v1`, which declares its selected status `waitlisted` under
+   `entity_type: "enrollment_mixed"`, category `enrollment_statuses`, with stage `grain: "child"` and
+   `track_key: "child_track"`;
+3. `stageOutcomeRuleTargetExecutor.ts`: "`opportunities.status_key` is `open | closed` by migration
+   doctrine".
+
+The builder assigned a child-grain status to a child-grain stage — correctly — and
+`statusKeysForBuilderStageQueueSync` then wrote it into a case-grain `case_status` filter. That
+translation is the defect. The department filter audit reports `expected == actual == ["waitlisted"],
+pass = true` because it compares the sync's output against the sync's own input; it never asks
+whether the resulting key is a legal value for the entity being filtered.
+
+## Why the obvious repair must not be performed
+
+Setting this case's `opportunities.status_key = 'waitlisted'` would write a value absent from the
+`opportunities` catalog — invalid family-grain data, to satisfy a filter that should not have been
+family-grain. It would make one fixture mount and leave the contract defect in place for every other
+tenant.
+
+Note also that the case's current `status_key = 'new'` is **itself not in the opportunities catalog**
+(`open, closed, inactive, archived`), and its two member rows carry `outcome_status_key =
+'new_inquiry'`, not `waitlisted`. So the case is not a waitlist case at the child grain either. There
+is no value to repair it *to* that both satisfies the lane and respects the catalog.
+
+## The smallest correct repair, for whoever owns lifecycle
+
+Make the lane filter the grain it actually means. A stage whose `status_rollup_v1` selects statuses of
+`opportunity_customer_members` must gate on `opportunity_customer_members.outcome_status_key` — the
+lane already has a `child_lifecycle_status` filter doing exactly that — rather than having those keys
+copied into `case_status`.
+
+The regression that belongs with that fix: **every status key written into a case-grain queue filter
+must be a legal `opportunities` status**. That test fails today, which is the point of it.
