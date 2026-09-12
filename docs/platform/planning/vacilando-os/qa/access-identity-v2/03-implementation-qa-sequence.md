@@ -2490,6 +2490,29 @@ spans two brief bodies under one mission id, **and** one brief body spans two mi
 identifier is uninformative in both directions, and it is what let two lanes be dispatched the same
 implementation work simultaneously. Escalated rather than absorbed for the fifth time; no run has answered it.
 
+**Where this lane's changes actually landed, because the commit messages do not say.** Neither of this
+assignment's two files was committed by this assignment. Three lanes held the worktree at once, and both of
+this record's artifacts were swept into other lanes' commits in the seconds before its own commit ran:
+
+| Artifact | Commit that carries it | That commit's subject |
+|---|---|---|
+| This §5 record, the §13 RL-11 update, the header bullet | `79c3be5d1` | *"Wave 1 tenth issuance — W-1 re-derived, and two lanes hold one brief"* |
+| `web/tests/access/selfAuthorityRouteDiscovery.test.ts` — **the RL-11 repair itself** | `e25d4000a` | *"W-0 twelfth re-issue — the channel was never missing"* |
+
+The first was deliberate and is declared in its own message: that lane committed the shared document because a
+third lane had begun writing a full-document patch file, and an uncommitted record in a shared worktree is one
+apply away from being lost. Correct judgment, and it names this assignment as the author. **The second is the
+hazard landing unannounced.** `e25d4000a` records the same class of event from its own side — *"content
+intact, attribution wrong, which in an archaeological programme is how a finding becomes undiscoverable"* —
+without noticing that its own broad staging did it to this lane in the same moment.
+
+So the RL-11 repair now ships under a W-0 census subject. **Three of RL-11's four commits are findable only by
+reading the diff**, after this record had already made that observation about the first two. The remedy is not
+another note: it is `vac checkpoint-create`'s rule — *commit only the named paths, never a broad add* — applied
+by every lane, and it is the third time in this workstream's record that concurrency has been escalated rather
+than solved. Nothing was lost and nothing was reverted; only the attribution is wrong, and it is written down
+here because that is the only place a reader will find it.
+
 **Not verified this run.** No live database query, no browser evidence — W-1…W-3 are not lockout-class, so
 §10.4 requires neither. Nothing was pushed.
 
