@@ -36,8 +36,19 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
-const ORG = "00000000-0000-4000-8000-000000000001";
-const OTHER_ORG = "aaaa1111-0000-4000-8000-000000000001";
+/*
+ * ITS OWN TENANT, FOR A REASON THAT COST A RUN.
+ *
+ * These tests were first written against the shared certification org. Vitest runs files in
+ * parallel, and D2's live suite counts `mutation_events` for that org to prove a no-op writes no
+ * history — so access events produced here, concurrently, made D2's counts drift and its suite fail
+ * intermittently. The failure looked like a D2 regression and was nothing of the kind.
+ *
+ * A fixture that can only be read correctly when it runs alone is not a fixture. These organizations
+ * exist for this file; nothing else observes them.
+ */
+const ORG = "77770000-0000-4000-8000-0000000w1701".replace(/w/g, "7");
+const OTHER_ORG = "77770000-0000-4000-8000-0000000w1702".replace(/w/g, "7");
 const SUBJECT = "w1700000-0000-4000-8000-00000000w170".replace(/w/g, "7");
 const ACTOR = "w17-live-actor";
 
@@ -75,6 +86,9 @@ describeLive("W-17 — additive role assignment, live", () => {
 
     beforeAll(async () => {
         sb = createClient(env!.url, env!.serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+        for (const [id, slug] of [[ORG, "w17-live-a"], [OTHER_ORG, "w17-live-b"]] as const) {
+            await sb.from("orgs").upsert({ id, name: `W-17 live ${slug}`, slug }, { onConflict: "id" });
+        }
         await sb.auth.admin.deleteUser(SUBJECT).catch(() => undefined);
         await sb.auth.admin.createUser({ id: SUBJECT, email: "cert.w17@northwind.invalid", password: "alloy-local-cert", email_confirm: true });
         for (const [org, keys] of [[ORG, [ROLE.a, ROLE.b, ROLE.c]], [OTHER_ORG, [ROLE.other]]] as const) {

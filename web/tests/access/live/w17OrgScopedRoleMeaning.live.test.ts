@@ -36,8 +36,9 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
-const ORG_A = "00000000-0000-4000-8000-000000000001";
-const ORG_B = "aaaa1111-0000-4000-8000-000000000001";
+/* Its own two tenants — see `w17MultiRoleAssignment.live.test.ts` for why sharing one was wrong. */
+const ORG_A = "77770000-0000-4000-8000-0000000d1701".replace(/d/g, "7");
+const ORG_B = "77770000-0000-4000-8000-0000000d1702".replace(/d/g, "7");
 
 /** The SAME key in both organizations, deliberately: org scoping must not depend on distinct keys. */
 const SHARED_KEY = "cert_w17_director";
@@ -52,6 +53,9 @@ describeLive("W-17 — the same role label means what each organization configur
 
     beforeAll(async () => {
         sb = createClient(env!.url, env!.serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+        for (const [id, slug] of [[ORG_A, "w17-dir-a"], [ORG_B, "w17-dir-b"]] as const) {
+            await sb.from("orgs").upsert({ id, name: `W-17 ${slug}`, slug }, { onConflict: "id" });
+        }
 
         for (const [id, email] of [[USER_A, "cert.w17.dir.a@northwind.invalid"], [USER_B, "cert.w17.dir.b@adapter.invalid"]] as const) {
             await sb.auth.admin.deleteUser(id).catch(() => undefined);
