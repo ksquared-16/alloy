@@ -194,7 +194,17 @@ discharged and M4 is struck** (its subject, "retired catalog tables", does not e
 `W-60`/`M20` owns them). What W-9 owed and nobody had built was **RL-7**, now live and **proven red in two
 negative-fixture rounds**: an invariant met by a track that does not own it is the one that reopens silently.
 Phase 0's *"read-only"* views are **auto-updatable and `service_role` holds `ALL`** — the stop-writing step was
-documented, not implemented; raised against `W-60` and bound to RL-7. **`W-10` landed in this worktree
+documented, not implemented; raised against `W-60` and bound to RL-7.
+**· W-9 SECOND ISSUANCE 2026-09-11** (assignment `asg_b3f3289a5b8066`) — **the exit criterion still holds and
+the prediction above came true.** Re-derived against a tree grown **314 → 413 migrations**: one table, one
+RESTRICT FK, and the API clause **moved into SQL** (`W-28`'s RPC), so the first issuance's `grants/route.ts:61`
+citation is stale. `W-60`/`M20` **dropped both views**, which closes the auto-updatable write surface above.
+**RL-7 itself was found RED — 2 failed / 6 passed — broken on 2026-09-09 by two unrelated shipped migrations
+and reported by nothing**, because no required gate runs the general Vitest suite. One failure was a genuine
+premise regression (a migration seeding all three catalog names three weeks after two of them were deleted,
+inert but wrongly commented); the other was a false positive from a `file.includes(...)` proxy. Lock repaired
+and re-discriminated (3 red, then 2 red), subject widened to all four product roots, **no migration authored**
+(§7, §15.11). **`W-10` landed in this worktree
 concurrently** during the pass, so `tests/access` and `typecheck:tests` both carry in-flight grid-projection
 failures that are not W-9's and were not repaired by it (§7). **Superseded 2026-08-07 by W-10's
 re-verification: the two `tests/access` failures were not the projection at all — they were two negative
@@ -373,9 +383,10 @@ blocked (§5)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
-are in §5 and their locks are live in §13. **W-9 (§7) has met its exit criterion and RL-7 is live**, but by a
-migration this programme did not author — read its record before scheduling W-11 or W-12, because two of
-its consequences land on them. **W-10 (§7) is implemented, green, and its two locks are live**; the grid is a
+are in §5 and their locks are live in §13. **W-9 (§7) has met its exit criterion and RL-7 is live again** —
+but the criterion was met by a migration this programme did not author, and **RL-7 was found red on
+2026-09-11, two days after two unrelated migrations broke it with nobody watching** (second issuance, §7 and
+§15.11). Read its record before scheduling W-11 or W-12, because two of its consequences land on them. **W-10 (§7) is implemented, green, and its two locks are live**; the grid is a
 projection of the catalog and no longer a hand-maintained list. **W-11 (§7) is measured, not applied** — its
 exit artifact is delivered and its instrument is green, but the operator review and M5 are open, and its
 correction to the catalog's width applies to every count in §3, §7 and §13 that predates it. Every other wave
@@ -511,7 +522,7 @@ code never requires reverting data.
 | **0** | Facts before changes — read-only live verification | W-0 | — · **DONE 2026-07-31** |
 | **1** | Fail-closed quick wins, no schema | W-1 … W-4 | — · **DONE 2026-07-31** (W-1…W-4) |
 | **2** | The scope invariant (the confirmed fail-open) | W-5 … W-8 | ~~W-0~~ **satisfied** |
-| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; RL-7 live · **W-10 DONE 2026-08-07**; RL-3 and RL-48 live, RL-2 replaced · **W-11 MEASURED 2026-08-07** — the catalog is **57 keys, not 35**; 36 unenforced, deletion list delivered as an exit artifact, **M5 withheld pending operator review**; RL-3's subject repaired. · **W-12 AUTHORED 2026-08-07** — M6 written and **not applied**, RL-8 live over all 315 migrations (4 blanket grant seeds left, all superseded history), §11's width-vs-live preflight carried as a fail-closed assertion inside the migration because no worker channel to it exists. **Wave 3 is complete as far as a worker can take it: three of four exits turn on an operator authorization, not on effort** |
+| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; **re-derived and still met 2026-09-11** against a tree grown 314 → 413 migrations, with the API clause now discharged in SQL and both compatibility views dropped by `W-60`/`M20`; RL-7 live again after two days red · **W-10 DONE 2026-08-07**; RL-3 and RL-48 live, RL-2 replaced · **W-11 MEASURED 2026-08-07** — the catalog is **57 keys, not 35**; 36 unenforced, deletion list delivered as an exit artifact, **M5 withheld pending operator review**; RL-3's subject repaired. · **W-12 AUTHORED 2026-08-07** — M6 written and **not applied**, RL-8 live over all 315 migrations (4 blanket grant seeds left, all superseded history), §11's width-vs-live preflight carried as a fail-closed assertion inside the migration because no worker channel to it exists. **Wave 3 is complete as far as a worker can take it: three of four exits turn on an operator authorization, not on effort** |
 | **4** | Admission and declaration | W-13 … W-15 | W-3, D2 |
 | **5** | Role-model coherence and the long tail | W-16 … W-22 | ~~W-0~~ **satisfied** · D3, D4 |
 
@@ -5689,7 +5700,101 @@ unstarted is `W-13`, still the only instrument for the count the operator actual
 schema-vs-runtime chain), and still gated on `AD-22`/`AD-25`. **Those two decisions are now the whole of what
 stands between the directive and the layer it is aimed at.**
 
-**Status: exit criterion `met` (by another track), lock `live`, tier C `unrun`, no migration authored.**
+#### W-9 second issuance — the criterion still holds; the lock that guards it had been red for two days *(2026-09-11, assignment `asg_b3f3289a5b8066`)*
+
+**Re-derived at base `1bebac521`, not carried.** The tree has grown from **314 migrations to 413** since the
+first issuance. All three exit clauses still hold, and one of them has *moved*:
+
+| Exit clause | Where it is discharged **today** | Change since 2026-08-07 |
+|---|---|---|
+| **One table** | `permission_definitions`. `W-60`/`M20` (`20260818240000_…drop_catalog_compatibility_views.sql:61-62`) **dropped both compatibility views** | "One catalog" is now literal, not a layering convention |
+| **One FK** | `role_permission_grants_permission_definitions_fkey`, `ON DELETE RESTRICT`, sole survivor across all 413 migrations replayed in filename order | Unchanged |
+| **The API validates against the table the FK names** | **In SQL, not in the route.** `W-28` moved key validation inside `replace_role_permission_grants`; the live definition is `20260911260000_d2_no_self_inflicted_access_lockout.sql:67`, which checks `public.permission_definitions` | **The first issuance's citation is stale.** `grants/route.ts:61` no longer exists — the route is `app/api/admin/rbac/grants/route.ts`, it names no catalog table at all, and it delegates. A reader re-deriving from the old record would conclude the clause had broken |
+
+**The view-write finding W-9 raised against `W-60` is closed by the drop.** The first issuance recorded that
+the two "read-only" views were auto-updatable and that their `COMMENT` was *"a claim, not a control."* There
+is no longer an object to write through. `M20`'s zero-readers precondition was satisfied statically then and
+still is — the widened scan below finds **zero** product accesses through either name.
+
+**So W-9 again ships no migration, for the third time in this plan's history, and again that is the finding.**
+Nothing in the schema needs consolidating; it is consolidated, and more completely than when this workstream
+last looked.
+
+##### What was actually wrong: RL-7 was red
+
+**`catalogConsolidationLock.test.ts` failed 2 of 8 at this base** — in a clean tree, with nothing of this
+assignment's in it. Both causes landed on **2026-09-09** (`76df4a699`, `2449f7eb4`) and both are **on
+`origin/staging`**, so this is shipped history and is **not editable**:
+
+| Red assertion | Cause | What it actually means |
+|---|---|---|
+| *no migration writes the catalog through a deprecated name after consolidation* | `20260909230000_attendance_capability.sql:44-59` seeds **all three** catalog names, guarded by `to_regclass(…) IS NOT NULL`, and its comment states the three-table premise as current fact — *"the RBAC catalog is spread across up to three tables"* — **three weeks after `W-60`/`M20` deleted two of them** | **Inert, not harmful.** The guard is false on any current environment, so the writes cannot execute. But the false premise is now written into the tree by an author who had no reason to know better |
+| *every writer of `role_permission_grants` validates against the table the FK names* | `20260909240000_financials_read_for_director_roles.sql:38` grants the literal `fin.read` without naming the canonical table | **A false positive.** `fin.read` has been catalog-resident since `W-12` (`20260807170000:111`); the FK accepts the row. The assertion was `file.includes("permission_definitions")` — a **proxy**, and the migration's only sin was silence |
+
+**This is precisely the failure the first issuance predicted, in its own words:** *"An invariant satisfied by a
+migration from a track that does not own it is precisely the invariant that reopens silently."* It reopened.
+What that issuance did not anticipate is that **the lock it built to catch this cannot report**: no required
+gate runs the general Vitest suite (§13), so RL-7 sat red for two days and the only reason it is known now is
+that a W-9 re-issuance happened to run it.
+
+##### The repair — three changes to RL-7, each strictly no weaker
+
+The assertions were **refined, not relaxed**. A lock that is loosened to go green is the failure mode this
+workstream has recorded three times (RL-1 twice, RL-4 once); the test to apply is whether each change makes
+*more* things fail, not fewer.
+
+1. **The deprecated-write scan now excludes a write it can prove unreachable** — one guarded by
+   `to_regclass('public.X') IS NOT NULL` on that same name. This is sound **only because the companion
+   assertion pins both names to `absent`**, so the guard can never be true: a guarded write becomes live only
+   by first breaking an assertion this lock already makes. An **unguarded** write still fails. The carve-out
+   is by *provable unreachability*, never by filename — the allowlist form that defeated RL-1 and RL-4. A
+   non-vacuity counter asserts the guard matcher still matches, so it cannot go quiet instead of strict.
+2. **The grant-writer proxy is replaced by the real invariant.** Instead of *"the file mentions
+   `permission_definitions`"* — which 26 of 27 SQL writers passed, an unknown number of them on a **comment** —
+   every permission key a writer inserts must be **catalog-resident**, checked against `W-11`'s region-based
+   `discoverCatalog()`. A writer that resolves keys by selecting the canonical table validates dynamically and
+   needs no literal. This is what the RESTRICT survivor would refuse at apply time, enforced in the tree
+   instead of on a deploy.
+3. **The product subject widened from `app`+`lib` to all four product roots**, reusing `productSourceFiles()`
+   so RL-3, RL-7 and the enforcement census answer to **one** definition of "the product tree." `components`
+   — where the Access surfaces live — was outside this lock's reach. It had not yet cost anything, which is
+   the only moment a subject can be widened for free. **This is W-5's sixth-issuance lesson applied before it
+   bit:** *the writer set outgrew the lock's subject*.
+
+**Proven red in two rounds, then green with the fixtures removed** — five of the seven substantive assertions,
+including every one that changed:
+
+| Negative fixture | Assertions it turned red |
+|---|---|
+| Round 1 — an **unguarded** write to `permissions`; a grant of `zz.nosuch`, a key no seed holds; and a `.from("permissions")` read planted in **`web/components/`** | no-deprecated-writer · sql-writer-keys-are-catalogued · no-deprecated-product-access (**3 red**) |
+| Round 2 — `permissions` restored as a real **table**, plus a second FK re-added on the consolidated column | one-catalog-object · one-FK (**2 red**) — the pair the round-1 carve-out depends on |
+
+Round 1's third fixture is the proof that matters for change 3: **that file would have been invisible to this
+lock the day before.**
+
+##### A vacuous assertion, now stated instead of disguised
+
+The old single writer test asserted `writers.length >= 1` over product **and** SQL writers together. **There
+are zero product grant writers today** — `W-28` centralised every write into SQL, correctly — so the 27 SQL
+writers satisfied that guard on their own while the product half had no subject at all. The non-vacuity guard
+meant to notice an empty scan reported healthy. The two are now separate tests, and the product one is
+documented as a deliberately vacuous **tripwire** for a writer returning to the product tree. Asserting a
+non-zero count there would fail the tree for having centralised its writes.
+
+##### Handed forward
+
+- **`20260909230000`'s comment is wrong and is shipped.** It will teach the next author that three catalog
+  tables exist. It cannot be edited; a corrective note belongs with `W-60`'s closeout, which owns the
+  compatibility-view story. RL-7 now fails any *unguarded* successor, but it cannot stop a guarded one being
+  written in good faith from that comment.
+- **RL-7 has no runner.** A tier A lock that only executes when a worker happens to open its workstream is a
+  lock with a two-day — or arbitrarily long — reporting delay. This is `W-50`/`RL-35`'s territory (the
+  standing enforcement check) and is registered here rather than solved from inside W-9.
+- **Tier C is still unrun**, unchanged and for the unchanged reason: `SUPABASE_SERVICE_ROLE_KEY` is absent
+  from every worktree env file by two-tier-env design. Do not read this record as "round-trip proven."
+
+**Status: exit criterion `met` (by another track), lock `live` — **was red 2026-09-09 → 2026-09-11, now
+repaired and re-discriminated** — tier C `unrun`, no migration authored.**
 
 ### W-10 — The grid becomes a projection *(M · I-14 · closes C5 structurally)*
 
@@ -6593,7 +6698,7 @@ contributor deleting one has to do it on purpose.
 | **RL-4** | Membership creation writes a profile row atomically | **A + B + C** | G4 / W-5 | **LIVE (tier A+B), TIER C AUTHORED-NOT-RUN** — `web/tests/access/membershipAtomicWiring.test.ts` (**Passed — 16 passed / 0 failed**): no file under `web/app` or `web/lib` calls `.insert`/`.upsert`/`.update` on `user_roles`, plus outcome-mapping tests. **Widened 2026-08-07**: the subject was a hard-coded list of the three files W-5 had already fixed, so it could not catch a fourth writer — proven by a negative fixture, a probe route that sat in `app/api/` re-opening G4 with the old suite 14/14 green. Subject is now the whole of `app/`+`lib/` by discovery, with a non-vacuity guard on the scan itself. Tier C is `web/tests/access/membershipProfileInvariant.integration.test.ts` — **6 tests, never executed**; `SUPABASE_SERVICE_ROLE_KEY` is absent from every worktree env file by two-tier-env design, so **no worker-side run is possible** — it needs a Director-side channel, not an authorization. Do not read this row as "atomicity is proven" until it runs |
 | **RL-5** | Absent profile denies; never `all` | C | I-19 / W-7 | **LIVE AS A DUAL-READ LOCK, SWITCH NOT THROWN** — `web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts` (~~10~~ **11 green, repaired 2026-09-11**) proves the `deny` answer at the decision layer: both named Tier C cases, denial distinguishable from a stored double-restriction, a malformed scope value resolving `all` rather than becoming an L1 event, and — new — a key census over the denial answer so a later-added scope dimension must be ruled on rather than defaulted. Enforcement is still `legacy-all` and one test **asserts that**, failing the build if the switch is thrown while M1 is unapplied. **That guard was disarmed between the addition of `attendanceCaptureScope` and 2026-09-11**: it passed, but inside an already-red file, so it could not distinguish a thrown switch from a shape change. Read a green *file*, never a green *case*. Pure-function tier, not fixture-principal integration — same authorization boundary as RL-4's Tier C. Do not read this row as "absent profiles deny"; they still resolve `all` |
 | **RL-6** | No role literal appears in `accessScope.ts` | A | C8 / W-8 | **LIVE (2026-08-07)** — `web/tests/lifecycle/lifecycleAdminScopeAndPersistence.test.ts`. Asserts on *executable* lines only (the W-8 comment block names the deleted symbols deliberately), so `portalAdminBypassesDepartmentScope`, `effectiveDepartmentScopeDimensions`, `PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES` and any `"admin"`/`"ops"` literal all fail the lock. Paired with a second assertion that the `user_department_access` self-insert is gone — the first half alone would have passed over an armed path. **Note the scope limit: this locks `accessScope.ts`, not the platform.** `PORTAL_ROLES` in `resolveAdminAccessCore.ts:18` is untouched and is RL-9's subject |
-| **RL-7** | Exactly one FK on `role_permission_grants.permission_key` | A | C3 / W-9 | **LIVE (2026-08-07)** — `web/tests/access/catalogConsolidationLock.test.ts` (**Passed — 8 passed / 0 failed**). Replays the whole migration tree in filename order and asserts the **end state**, rather than reading the consolidation migration and agreeing with it: one surviving FK, named, referencing `permission_definitions`, `ON DELETE RESTRICT`; exactly one catalog **table** with both deprecated names as views; no post-consolidation writer through a deprecated name; no `anon` re-grant on a catalog object; no product code reaching the catalog through a deprecated name; and **every** discovered writer of `role_permission_grants` validating against the table the FK names. Subject is discovery with non-vacuity guards on both scans — RL-1 was defeated twice by a pinned subject and RL-4 once. **Proven red in two negative-fixture rounds (4 red, then 2 red) covering six of six substantive assertions**, fixtures removed, green after. **Necessary because W-9's exit criterion was met by a migration from a track that does not own it** (§7) — nothing was watching this schema. Does **not** close the DB-level write surface on the two views: they are auto-updatable and `service_role` holds `ALL` by default privileges, which is `W-60`/`M20`'s |
+| **RL-7** | Exactly one FK on `role_permission_grants.permission_key` | A | C3 / W-9 | **LIVE — repaired 2026-09-11 after two days red** (`web/tests/access/catalogConsolidationLock.test.ts`, **9 passed / 0 failed**; was 2 failed / 6 passed from 2026-09-09). Replays the whole migration tree in filename order and asserts the **end state**, rather than reading the consolidation migration and agreeing with it: one surviving FK, named, referencing `permission_definitions`, `ON DELETE RESTRICT`; exactly one catalog **table**, with both deprecated names **absent** since `W-60`/`M20` dropped the views — a tightening, since a future migration recreating either as a table *or* a view now fails; no post-consolidation **unguarded** writer through a deprecated name; no `anon` re-grant on a catalog object; no product code reaching the catalog through a deprecated name, across **all four** product roots; and **every SQL writer** of `role_permission_grants` writing only keys the catalog actually holds, per `W-11`'s `discoverCatalog()`. Subject is discovery with non-vacuity guards on every scan — RL-1 was defeated twice by a pinned subject and RL-4 once. **Proven red in four negative-fixture rounds across two issuances** (4, then 2 on 2026-08-07; 3, then 2 on 2026-09-11), fixtures removed, green after. **Necessary because W-9's exit criterion was met by a migration from a track that does not own it** (§7) — and it reopened exactly as predicted: two 2026-09-09 migrations turned this lock red and **nothing reported it**, because no required gate runs the general Vitest suite. The view write-surface caveat is **closed** — `M20` deleted both views. **Open: this lock has no runner** (`W-50`/`RL-35`) |
 | **RL-8** | No `SELECT` over the catalog in a grant seed | A | G5 / W-12 | **LIVE (2026-08-07)** — `web/tests/access/grantSeedEnumeration.test.ts` (**15 passed / 0 failed**). **Implemented as a restatement, and the restatement is the finding**: as literally worded this row condemns three seeds that are not the defect — `20260505164000` joins the catalog on a seventeen-key `IN` list, Phase 0's workflows backfill on a two-key list, and M6's own `is_active` narrowing guard reads it too. None lets the catalog decide what is granted. The property the *exit criterion* names is asserted instead: **every statement writing `role_permission_grants` takes its keys from literals in its own text or an enclosing loop's `VALUES` list, never from a catalog relation** — strictly stronger where it matters (a blanket over a non-catalog relation passes the literal reading and fails this one). Subject is discovery over all 315 migrations, not a file list: **14 grant statements in 9 files, 10 bounded, 4 blanket**, all four being superseded definitions of `seed_default_rbac` frozen in applied migrations. That count is a **ratchet enforced over *and* under**, per W-4. Asserts the *end state* after a filename-order replay — RL-7's discipline — plus admin ≡ the function's own catalog literal ≡ the catalog W-11's independent instrument discovers (57, two methods), ops ≡ that less exactly the two withheld keys, and the migration guard slicing on sentinels the function actually carries. `NOT IN` / `NOT EXISTS` / `<> ALL` are stripped before a bound is looked for — the baseline's `ops` blanket names two keys it withholds and would otherwise read as enumerated. **Proven red by five negative fixtures**, each removed and the suite green after. Reading it as "grants are enumerated on the target" would be wrong: **M6 is unapplied** |
 | **RL-9** | No hard-coded portal role set (`PORTAL_ROLES`, `ALLOWED_ROLES`) | A | C6 / W-13 | proposed |
 | **RL-10** | Every route file appears in the declared capability table | A | C1 / W-14 | proposed |
@@ -7202,3 +7307,62 @@ W-8: the remedy for a lockout is a `user_department_access` grant, not restoring
 
 **Method:** source-grounded and test-backed, against both this tree and `origin/staging`. Docs only; nothing
 pushed, no migration authored or applied, no shared-environment write.
+
+### 15.11 W-9 second issuance — the criterion held, the lock did not (2026-09-11, assignment `asg_b3f3289a5b8066`)
+
+Wave 3's first workstream, re-issued. The assignment asked again for a migration-backed consolidation of
+`permission_keys` / `permissions` / `permission_definitions`. **The consolidation is not merely still done —
+it is more completely done than when W-9 last looked**, because `W-60`/`M20` has since dropped the two
+compatibility views. Authoring a migration would have been a no-op at best. **The available work was that
+W-9's own lock had been failing for two days and nothing was reporting it.**
+
+| Claim | How it was established | Result |
+|---|---|---|
+| The exit criterion still holds at `1bebac521` | Replayed every `ADD`/`DROP CONSTRAINT` on `role_permission_grants` and every `CREATE`/`DROP` of the three catalog objects across **413** migrations (was 314) | One table, one FK (`…permission_definitions_fkey`, RESTRICT), sole survivor |
+| The API clause **moved** | `app/api/admin/rbac/grants/route.ts` read in full; `20260911260000_…:67` | Validation is now in SQL inside `replace_role_permission_grants` (`W-28`). The route names no catalog table. **The first issuance's citation `grants/route.ts:61` is stale** |
+| The views are gone | `20260818240000_w60_m20_…:61-62` | `DROP VIEW … RESTRICT` on both. W-9's auto-updatable-view finding against `W-60` is **closed by deletion** |
+| Zero readers through a deprecated name | Discovery over **all four** product roots (`app`, `lib`, `components`, `scripts`) | **Zero.** Only historical migration bodies and the baseline dump |
+| RL-7 was red | `npx vitest run tests/access/catalogConsolidationLock.test.ts` at a clean base | **2 failed / 6 passed** — before this assignment changed anything |
+| One red was a real premise regression | Read `20260909230000_attendance_capability.sql` in full | Seeds all three catalog names behind a `to_regclass` guard, **three weeks after the views were dropped**, with a comment asserting the three-table picture as current fact. **Inert** — the guard is false — and **on `origin/staging`**, so not editable |
+| The other red was a false positive | Traced `fin.read` through the migration tree | Catalog-resident since `W-12` (`20260807170000:111`). The assertion was `file.includes("permission_definitions")` — a proxy that **26 of 27** SQL writers passed, an unknown number on a comment |
+| The repaired lock still discriminates | Two negative-fixture rounds, then removal | **3 red, then 2 red — five of seven substantive assertions**, including every one that changed; green with fixtures gone |
+| The widened subject is not decorative | Planted `.from("permissions")` in `web/components/` | Caught. **The same file was invisible to this lock the day before** |
+| Neighbours hold | `npx vitest run tests/access tests/admin/permissionGrid.test.ts` | **918 passed / 70 skipped / 0 failed** across 62 files |
+| Typecheck | `vac run typecheck:tests` (brokered) | **rc=0, `class=ok`** — clean, unlike the first issuance's rc=2 |
+
+**What was changed, and why none of it is a relaxation.** Three edits to
+`web/tests/access/catalogConsolidationLock.test.ts`: the deprecated-write scan now excludes only writes it can
+**prove unreachable** (guarded by `to_regclass` on a name a companion assertion pins to `absent` — so the
+excuse collapses the moment that name returns, which round 2 proves); the grant-writer proxy is replaced with
+the **real** invariant, that every key written is catalog-resident per `W-11`'s `discoverCatalog()`; and the
+product subject widened to all four roots via the shared `productSourceFiles()`. Each makes strictly more
+things fail. The carve-out is by provable unreachability, **never by filename** — the allowlist form that
+defeated RL-1 twice and RL-4 once.
+
+**A vacuous assertion was found and is now stated rather than disguised.** The old writer test's
+`writers.length >= 1` non-vacuity guard was satisfied entirely by the 27 SQL writers, while the product half
+had **zero** subject — `W-28` centralised every grant write into SQL. Split into two tests; the product one is
+documented as a deliberately vacuous tripwire.
+
+**Limits of this record.** No live verification, no browser, no query against any tenant. **Tier C —
+grant/revoke/read-back through the API — was not run**, blocked by the same absent `SUPABASE_SERVICE_ROLE_KEY`
+as every prior issuance; it needs a Director-side channel, not an authorization. RL-7 remains **tier A**: it
+proves what the tree says the schema is, not what the deployed database currently is. **RL-7 also has no
+runner** — no required gate executes the general Vitest suite, which is the whole reason a red lock survived
+two days unreported; registered against `W-50`/`RL-35` rather than solved here.
+
+**What this assignment deliberately did not do.** It authored **no migration** — there is nothing left to
+consolidate. It did not edit `20260909230000` or `20260909240000`: both are on `origin/staging` and applied
+migrations are immutable history, so the wrong comment in the first is handed to `W-60`'s closeout as a
+correction rather than rewritten. It did not touch `permissionCatalogDiscovery.ts` (`W-11`'s), importing from
+it instead. It did not start `W-10`–`W-12`, and did not mint an `RL-` number — `DR-12` reserves that to the
+Director.
+
+**Concurrency, recorded because it is now the fourth issuance in a row to hit it.** `asg_367d09478cc9a2` (a
+W-5 lane) was committing to this same branch during the pass and moved `HEAD` from `48a6a2ae7` to
+`1bebac521` mid-assignment; this file was being appended to by it concurrently. All edits here are
+exact-anchor replacements in §7 and a new §15.11, neither of which that assignment touched. The base SHA in
+this record was re-derived after its commit landed, not carried from the start of the pass.
+
+**Method:** static, source-grounded, test-backed. One test file changed; focused Vitest and a brokered
+typecheck only. No migration authored or applied, no shared-environment write, nothing pushed.
