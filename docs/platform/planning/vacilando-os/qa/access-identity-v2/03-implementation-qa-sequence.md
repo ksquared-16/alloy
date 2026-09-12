@@ -266,6 +266,21 @@ control"*, and the distinction is locked rather than assumed. One qualification 
 a hand-maintained key list (`unenforcedPermissionKeys.json`) one layer above the one W-10 deleted — it cannot
 author a row, it is ratcheted both ways, and it is JSON for a stated reason, but **it is still a list a human
 edits** (§7)
+· **W-10 FOURTH ISSUANCE 2026-09-12** (mission `msn_a0e8a6206c63198fab`, assignment `asg_1b2e32aace9b8c`) —
+derived at **two bases**, and at the merged one **the exit criterion is met by a track that had never heard of
+W-10.** `origin/staging`'s Forms capability migrations seed three new catalog keys, and the grid renders three
+new enforced rows with **no edit to any file W-10 owns** — the first time *"a new key surfaces in the grid"* is
+discharged by a third party rather than by a fixture this workstream wrote. The projection's refusal to guess
+verbs held under a key authored a month after the rule: `forms.submissions.confirm` took **its own row** rather
+than folding behind `forms.submissions`'s radio, which is the difference between two controls and one gesture
+granting both. Green at both bases with nothing repaired — **32/0**, **129/0** and 46 rows / 67 keys on this
+branch; **129/0** and 49 rows / 70 keys merged; totality exact both times (0 dropped, 0 invented); no probe in
+shipped source. **The finding is at the seam, not in the grid:** the merge conflicts in
+`w11-catalog-reconciliation.json`, which `catalogVocabularyReconciliation` reads as its expected value, so the
+**conflict resolution is a test input** — resolved toward this branch it turns two W-10-dependent suites red
+(**127/2**) on a projection that did not change. Discriminated by re-running under the other resolution rather
+than reported as a regression. **Promotion hazard handed to W-11: take `origin/staging`'s copy or re-derive
+after merging, never resolve toward this branch** (§7)
 · **W-11 MEASURED 2026-08-07** (assignment `asg_ddd008f2c3d92a`) — §7's *"three disjoint vocabularies"* is
 wrong: **there is a fourth, it holds 57 keys, and it is the widest.** A hand-authored catalog literal inside
 `seed_default_rbac()` was invisible to every static instrument here because the shared parser was pinned to
@@ -453,7 +468,13 @@ the first time in this deliverable's history, with no repair required** — 129/
 suites, RL-3 exact over a live catalog of 67 keys, and the screen re-measured at **46 rows over 67 keys**. The
 qualification worth carrying forward is not about W-10 but about the layer since built on it: `W-50`/`IA-R8`
 suppresses controls for unenforced columns, so **17 of those 46 rows now render "Not enforced yet"** — the row
-still surfaces, the control does not, and that distinction is locked rather than assumed (§7). **W-11 (§7) is measured, not applied** — its
+still surfaces, the control does not, and that distinction is locked rather than assumed (§7). **Re-derived a
+fourth time on 2026-09-12 at both bases — green at both, nothing repaired, and at the merged tree the exit
+clause is met by another track's Forms migrations: three new catalog keys, three new enforced rows, no edit to
+any file W-10 owns.** Its one open item is not in the grid but at the merge seam — `w11-catalog-reconciliation.json`
+conflicts with `origin/staging` and is read by a lock as its expected value, so **resolve that conflict toward
+`origin/staging` or re-derive it after merging; resolving it toward this branch reddens two W-10-dependent
+suites without the projection having changed** (§7). **W-11 (§7) is measured, not applied** — its
 exit artifact is delivered and its instrument is green, but the operator review and M5 are open, and its
 correction to the catalog's width applies to every count in §3, §7 and §13 that predates it. **Re-derived a
 second time on 2026-09-11: the method held and every count had drifted** — the catalog is **67 keys**, the
@@ -604,7 +625,7 @@ code never requires reverting data.
 | **0** | Facts before changes — read-only live verification | W-0 | — · **DONE 2026-07-31** |
 | **1** | Fail-closed quick wins, no schema | W-1 … W-4 | — · **DONE 2026-07-31** (W-1…W-4) |
 | **2** | The scope invariant (the confirmed fail-open) | W-5 … W-8 | ~~W-0~~ **satisfied** |
-| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; **re-derived and still met 2026-09-11** against a tree grown 314 → 413 migrations, with the API clause now discharged in SQL and both compatibility views dropped by `W-60`/`M20`; RL-7 live again after two days red; **re-derived a third time 2026-09-12 at two bases — this branch (413 migrations) and its merge with `origin/staging` (415) — green at both, 9/9, catalog 67 → 70 keys, still no migration authored, and the false "legacy names are views" premise found recurring in a third shipped migration** · **W-10 DONE 2026-08-07**; RL-3 and RL-48 live, RL-2 replaced; **re-verified a third time 2026-09-11 with no repair required** — 129/0 across ten dependent suites, RL-3 exact over 67 live catalog keys, screen re-measured at 46 rows / 67 keys, of which 17 are inert under `W-50`/`IA-R8` · **W-11 MEASURED 2026-08-07** — the catalog is **57 keys, not 35**; 36 unenforced, deletion list delivered as an exit artifact, **M5 withheld pending operator review**; RL-3's subject repaired. **Re-derived 2026-09-11 and every count restated: catalog 67, 34 enforced, deletion list 33** — three keys recovered from it, none ever added; the residual-gap figure recorded as W-11's one met exit clause had been false since 2026-09-10 and is corrected in the artifact. **Tier A now expressible but half-built** (`declared ⊆ catalog` green over 11 capabilities; the reverse direction unimplemented and 56 red, 23 of them enforced keys no declared route names — **M5 does not make it green**, W-15 does). **P2 hardened**: M6 landed without the catalog half and the 57-key seed literal is now frozen byte-for-byte, so M5 must amend that lock. Instrument proven red by a fifth seeding syntax; `typecheck:tests` rc=0 · **W-12 AUTHORED 2026-08-07** — M6 written and **not applied**, RL-8 live over all 315 migrations (4 blanket grant seeds left, all superseded history), §11's width-vs-live preflight carried as a fail-closed assertion inside the migration because no worker channel to it exists. **Re-derived 2026-09-12 at two bases — this branch (413 migrations) and its merge with `origin/staging` (415) — and the criterion holds at both: `admin` ≡ catalog exactly (67 and 70), `ops` 58 / 59, blanket ceiling still 4 over 40 / 45 grant statements, RL-8 19/19 and re-discriminated three ways at 415, no migration authored.** But **M6 is no longer what holds it**: the guard it left runs once at its own apply, nine keys were catalogued after it with no redefinition, and an organization's admin capabilities became a function of its creation date until `20260910183000` repaired it. `seed_default_rbac` is now redefined four times on this branch and five merged — **M6 is the live definition at neither base, and its own guard would abort a late apply of itself**. **Wave 3 is complete as far as a worker can take it: three of four exits turn on an operator authorization, not on effort** |
+| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; **re-derived and still met 2026-09-11** against a tree grown 314 → 413 migrations, with the API clause now discharged in SQL and both compatibility views dropped by `W-60`/`M20`; RL-7 live again after two days red; **re-derived a third time 2026-09-12 at two bases — this branch (413 migrations) and its merge with `origin/staging` (415) — green at both, 9/9, catalog 67 → 70 keys, still no migration authored, and the false "legacy names are views" premise found recurring in a third shipped migration** · **W-10 DONE 2026-08-07**; RL-3 and RL-48 live, RL-2 replaced; **re-verified a third time 2026-09-11 with no repair required** — 129/0 across ten dependent suites, RL-3 exact over 67 live catalog keys, screen re-measured at 46 rows / 67 keys, of which 17 are inert under `W-50`/`IA-R8`; **re-derived a fourth time 2026-09-12 at two bases — this branch (413 migrations, 67 keys, 46 rows) and its merge with `origin/staging` (415, 70 keys, 49 rows) — green at both with nothing repaired, totality exact both times, and the exit clause met at the merged base by another track's Forms migrations rather than by a fixture. The only finding is at the merge seam: `w11-catalog-reconciliation.json` conflicts and is a lock input, so resolving it toward this branch reddens two W-10-dependent suites (127/2) without the projection changing** · **W-11 MEASURED 2026-08-07** — the catalog is **57 keys, not 35**; 36 unenforced, deletion list delivered as an exit artifact, **M5 withheld pending operator review**; RL-3's subject repaired. **Re-derived 2026-09-11 and every count restated: catalog 67, 34 enforced, deletion list 33** — three keys recovered from it, none ever added; the residual-gap figure recorded as W-11's one met exit clause had been false since 2026-09-10 and is corrected in the artifact. **Tier A now expressible but half-built** (`declared ⊆ catalog` green over 11 capabilities; the reverse direction unimplemented and 56 red, 23 of them enforced keys no declared route names — **M5 does not make it green**, W-15 does). **P2 hardened**: M6 landed without the catalog half and the 57-key seed literal is now frozen byte-for-byte, so M5 must amend that lock. Instrument proven red by a fifth seeding syntax; `typecheck:tests` rc=0 · **W-12 AUTHORED 2026-08-07** — M6 written and **not applied**, RL-8 live over all 315 migrations (4 blanket grant seeds left, all superseded history), §11's width-vs-live preflight carried as a fail-closed assertion inside the migration because no worker channel to it exists. **Re-derived 2026-09-12 at two bases — this branch (413 migrations) and its merge with `origin/staging` (415) — and the criterion holds at both: `admin` ≡ catalog exactly (67 and 70), `ops` 58 / 59, blanket ceiling still 4 over 40 / 45 grant statements, RL-8 19/19 and re-discriminated three ways at 415, no migration authored.** But **M6 is no longer what holds it**: the guard it left runs once at its own apply, nine keys were catalogued after it with no redefinition, and an organization's admin capabilities became a function of its creation date until `20260910183000` repaired it. `seed_default_rbac` is now redefined four times on this branch and five merged — **M6 is the live definition at neither base, and its own guard would abort a late apply of itself**. **Wave 3 is complete as far as a worker can take it: three of four exits turn on an operator authorization, not on effort** |
 | **4** | Admission and declaration | W-13 … W-15 | W-3, D2 |
 | **5** | Role-model coherence and the long tail | W-16 … W-22 | ~~W-0~~ **satisfied** · D3, D4 |
 
@@ -6453,6 +6474,134 @@ and were present in the tree for every figure above.
 `live` and green; the catalog width is now ratcheted exactly by `catalogVocabularyReconciliation`; the grid is
 46 rows over 67 keys, of which 29 offer at least one control. No code changed, no migration authored, nothing
 pushed.**
+
+##### Fourth issuance — **the exit criterion was executed by a track that had never heard of W-10** (2026-09-12)
+
+Mission `msn_a0e8a6206c63198fab` v1, assignment `asg_1b2e32aace9b8c`, on branch
+`promote/devops-8-config-hygiene` at `7ddd089d1`. **Derived at two bases**, because the branch is 14 commits
+behind `origin/staging` and W-9's third issuance — the commit this branch's `HEAD` *is* — established that the
+gap can be material. Base 1 is the branch as it stands (413 migrations). Base 2 is the branch merged with
+`origin/staging` `5c7b100bc` (415 migrations), taken in a disposable worktree and discarded.
+
+**At base 1 nothing moved at all.** Every figure the third issuance recorded reproduces exactly, one day and
+one `origin/staging` advance later: 32/0 on the two lock suites, 129/0 across the ten dependent suites, 46
+rows over 67 keys, 0 dropped and 0 invented, 17 inert rows. This record notes that plainly rather than
+re-deriving prose around it, because the interesting reading is at the other base.
+
+**At base 2, W-10's exit criterion is discharged by a natural experiment.** `origin/staging` carries the Forms
+capability track — `20260912020000_forms_capability_model.sql` and `20260912030000_forms_capability_default_seed.sql`
+— which seeds three new catalog keys: `forms.author`, `forms.submissions`, `forms.submissions.confirm`. On the
+merged tree the operator grid renders **three new rows**, labelled *Author forms*, *Handle submissions* and
+*Confirm automatic linkage*, each offering a Write control that the platform actually enforces. **No file W-10
+owns was edited to make that happen, and the Forms authors did not know they were satisfying anything.** Every
+prior issuance asserted *"adding a key to the catalog surfaces it in the grid with no UI change"* against a
+fixture it wrote itself. This is the first time the clause is met by a third party, on a real migration, with
+the change arriving from outside the workstream — which is the only form of the claim that cannot be staged.
+
+**The projection's one deliberate refusal held under a key authored a month after the rule.** W-10's record
+states that a key whose final segment is not one of the five recognised verbs becomes *its own area* rather
+than folding into its stem's row, and gives the reason: folding puts a second capability behind the first's
+radio, so one operator gesture grants two things. `forms.submissions.confirm` is exactly that shape — `confirm`
+is not a recognised verb — and the projection gave it **its own row**, separate from `forms.submissions`, with
+its own control. Had it folded, an operator granting *Handle submissions* would silently also have granted
+authority to confirm automatic linkage. The rule was written in August against `settings.users_roles`; it paid
+out in September against a key nobody anticipated. **That is the difference between a projection and a
+convention.**
+
+| Measure | Base 1 — this branch (413 migrations) | Base 2 — merged with `origin/staging` (415) |
+|---|:--:|:--:|
+| Catalog keys | 67 | **70** |
+| Projected rows | 46 | **49** |
+| Keys reaching a row | 67 | 70 |
+| Dropped / invented / in two places | 0 / 0 / 0 | 0 / 0 / 0 |
+| Rows offering both columns | 21 | 21 |
+| Write-only rows | 23 | **26** |
+| Read-only rows | 2 | 2 |
+| Rows inert in both columns (`IA-R8`) | 17 | **16** |
+| Rows keeping a control but losing a column | 3 | **4** |
+| Rows offering ≥ 1 control | 29 | **33** |
+| `unenforcedPermissionKeys.json` entries | 33 | **32** |
+| …entries naming a key the catalog lacks | 0 | 0 |
+| Two lock suites | **32 passed / 0 failed** | included below |
+| Ten W-10-dependent suites | **129 passed / 0 failed** | **129 passed / 0 failed** |
+| `PERMISSION_GRID_ROWS` in shipped source | none — header comment only | none — header comment only |
+| `NEGATIVE FIXTURE` probes in shipped source | **none** | **none** |
+| Tier D | **Not run**, as in every prior issuance | **Not run** |
+
+**The delta is fully accounted for, and none of it is W-10's.** Three keys in, three write-only rows out —
+that is the projection being total. The two movements in the enforcement columns are one key: `crm.customers.read`
+gains an enforcement site in `origin/staging`, so the `crm.customers` row stops being inert (17 → 16) and
+instead becomes a row that keeps its Read control while losing its Write column (3 → 4), and the hand-maintained
+unenforced list correctly sheds the entry (33 → 32). Every number above closes against every other. **Nothing
+in this issuance required a repair, for the second consecutive time.**
+
+##### The finding — **the merge is not clean, and the conflicting file is a lock input**
+
+Producing base 2 required merging `origin/staging`, and the merge **conflicts**, in exactly one file:
+[`w11-catalog-reconciliation.json`](w11-catalog-reconciliation.json). Both sides have edited it — this branch
+at `8fe2ec358` (W-11's second issuance restating every count), `origin/staging` independently. That file is not
+documentation. `catalogVocabularyReconciliation.test.ts` reads it as its expected value, so **the conflict
+resolution is a test input**, and a plausible-looking resolution decides whether two of the ten W-10-dependent
+suites pass.
+
+It was resolved the wrong way first, deliberately reported here rather than quietly corrected:
+
+| Resolution of `w11-catalog-reconciliation.json` | Ten dependent suites, merged base |
+|---|---|
+| `--ours` (this branch's copy) | **127 passed / 2 failed** — `the enforced set is exactly the artifact's…` and `the deletion list is exactly the catalog keys no product source names` both red, on `crm.customers.read` |
+| `origin/staging`'s copy | **129 passed / 0 failed** |
+
+**The first reading was a manufactured failure, and the discrimination is the deliverable.** Taken at face
+value, `127 / 2` reads as *"W-10's locks go red when this branch merges"* — a Wave 3 regression, reported
+against the projection. It is nothing of the kind: the projection is byte-identical under both resolutions, and
+what failed was an assertion comparing a stale artifact against a tree where one key had gained enforcement.
+Re-running under the other resolution separated the two in one step. This is the rule this deliverable's second
+issuance paid for — *a red result is not finished until you know what made it red* — applied to a merge instead
+of a fixture, and it is the reason this record does not carry a regression that does not exist.
+
+**Handed to W-11, and flagged for promotion.** The artifact is W-11's exit artifact and W-11's to reconcile;
+W-10 only discovered it because W-10's locks read it. Two things follow. The branch's copy is **stale against
+`origin/staging` in W-11's own subject** — it still lists `crm.customers.read` as a deletion candidate after
+that key acquired an enforcement site — so W-11's *"three keys have left the deletion list and none has ever
+joined"* is now four, and the fourth is not recorded on this branch. And **whoever promotes this branch will be
+asked to resolve this conflict by hand**, with a `.json` diff that gives no sign it is a test expectation.
+Resolving it toward the branch turns two suites red at merge time and the redness will read as W-10's. **A
+promotion note is warranted: take `origin/staging`'s copy, or re-derive the artifact after merging — never
+resolve it toward this branch.**
+
+**What this issuance did not verify.** Tier D is unrun, as in every prior issuance — no browser rendered the
+49-row grid, and every figure above is unit-level projection over the discovered catalog. `tests/access` was
+not run whole at either base; the ten dependent suites were named explicitly, which is what the two prior
+issuances measured and is the comparable figure. No typecheck was taken this pass: nothing in W-10's subject
+changed, and this issuance authored no TypeScript.
+
+One near-miss is recorded because it would have entered this table as a defect. `authorityModelDocumentationLock.test.ts`
+was run alongside the ten and **died at import** — `ENOENT` on `README_ADMIN_AUTH.md`. It is not broken. The
+suite resolves its paths from `process.cwd()`, and the governed validation broker runs from the repository
+root rather than `web/`, so the lock cannot be executed the sanctioned way at all: brokered, it does not fail
+an assertion, it reports **0 tests** and a green-looking file count. It is outside W-10's subject and is handed
+forward untouched, but the shape is worth naming — **a lock that resolves from `cwd` is a lock that silently
+stops running when the runner changes**, and the locks this deliverable depends on avoid it only because
+`permissionCatalogDiscovery.ts` resolves from `__dirname`. That is why every figure above survived the same
+invocation.
+
+**Method note, and a concurrency note that matters more than usual.** The row and key figures were taken with
+a temporary harness in `tests/access/`, read once from a failing assertion's diff, **deleted, and the four lock
+suites re-run green afterwards (54 passed / 0 failed)** — the third issuance's figure reproduced exactly, which
+is also the proof the tree carries nothing from this pass. The base-2 worktree was removed. Separately, **this
+worktree was not this session's alone.** Another lane's measurement probe, `web/tests/access/__w12_probe.test.ts`,
+was live in `tests/access/` when this session began and was deleted by that lane mid-measurement; and that
+lane's W-12 record was sitting uncommitted in this very file while this record was written. Every suite above
+was invoked by explicit filename, so no figure here includes another lane's probe — **but a `tests/access`
+whole-directory run taken on arrival would have swept it up**, which is the second time in two issuances that
+this document's own probe-hygiene rule has been broken by someone other than its author. The rule needs a
+lock, not a paragraph, and W-10 is not the place to build one.
+
+**Status: exit criteria `met`, verified a fourth time and a second consecutive time with no repair required —
+and for the first time met by a change this workstream did not author. RL-3 and RL-48 `live` and green at both
+bases; totality exact at 67/67 and 70/70. The grid is 46 rows over 67 keys on this branch and 49 over 70 on the
+merged tree. No code changed, no migration authored, nothing pushed. One promotion hazard handed forward, in
+W-11's artifact rather than W-10's.**
 
 ### W-11 — One vocabulary *(M · I-13 · closes C4)*
 
