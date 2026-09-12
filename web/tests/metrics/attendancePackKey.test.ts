@@ -19,7 +19,14 @@ import {
     validateMetricPackRegistry,
 } from "@/lib/metrics/packs";
 import { listMetricDefinitions } from "@/lib/metrics/registry";
-import { PACK_TO_BUSINESS_PROCESS } from "@/lib/analytics/calculations/types";
+import {
+    PACK_TO_BUSINESS_PROCESS,
+    businessProcessForMetricPack,
+} from "@/lib/analytics/calculations/types";
+import {
+    WORKSPACE_SIGNAL_BUSINESS_PROCESSES,
+    businessProcessForProcessKey,
+} from "@/lib/presentation/runtime/workspaceProcessSignal";
 import type { MetricPackKey } from "@/lib/metrics/types";
 
 describe("attendance is a legitimate pack key", () => {
@@ -30,14 +37,43 @@ describe("attendance is a legitimate pack key", () => {
         expect(key).toBe("attendance");
     });
 
-    it("has an owning business process, and it is its own", () => {
-        // Not `capacity` (how many a room holds) and not `operational_health`
-        // (platform reliability). Attendance is a process an org runs daily.
-        expect(PACK_TO_BUSINESS_PROCESS.attendance).toBe("attendance");
+    it("has NO Business Process owner, and that is the point", () => {
+        /*
+         * Attendance is operational fact authoring on a roster, not a process an
+         * organization runs. The first implementation gave it Business Process
+         * identity purely to satisfy an exhaustive Record, which is inventing a
+         * concept to satisfy a compiler. The mapping is now partial, so "this
+         * measurement domain is not a business process" is expressible.
+         */
+        expect(PACK_TO_BUSINESS_PROCESS.attendance).toBeUndefined();
+        expect(businessProcessForMetricPack("attendance")).toBeNull();
+    });
+
+    it("does not appear as a selectable Business Process anywhere", () => {
+        // A fake process in the selector would be the same error wearing a
+        // different hat: the operator would be offered an Attendance "process"
+        // that does not exist.
+        expect(
+            WORKSPACE_SIGNAL_BUSINESS_PROCESSES.map((b) => String(b.businessProcess)),
+        ).not.toContain("attendance");
+        expect(businessProcessForProcessKey("attendance_daily")).toBeNull();
     });
 
     it("is declared in the pack registry", () => {
         expect(getMetricPack("attendance")).toBeDefined();
+    });
+});
+
+describe("packs that DO own a business process still map to it", () => {
+    it("keeps every pre-existing mapping intact", () => {
+        expect(businessProcessForMetricPack("enrollment")).toBe("enrollment");
+        expect(businessProcessForMetricPack("communications")).toBe("communications");
+        expect(businessProcessForMetricPack("forms")).toBe("forms");
+        expect(businessProcessForMetricPack("operational_health")).toBe("operational_health");
+        expect(businessProcessForMetricPack("capacity")).toBe("capacity");
+        expect(businessProcessForMetricPack("financials")).toBe("financial");
+        // trust was already non-identity, and stays mapped rather than absent.
+        expect(businessProcessForMetricPack("trust")).toBe("operational_health");
     });
 });
 

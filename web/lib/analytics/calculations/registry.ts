@@ -12,7 +12,7 @@
 import { getMetricDefinition } from "@/lib/metrics/registry";
 import type { OipMetricKey } from "@/lib/metrics/types";
 import {
-    PACK_TO_BUSINESS_PROCESS,
+    businessProcessForMetricPack,
     type OperationalCalculation,
     type OperationalCalculationGovernance,
 } from "@/lib/analytics/calculations/types";
@@ -30,7 +30,7 @@ function defineCalculation(
         ...governance,
         key,
         label: def.label,
-        businessProcess: PACK_TO_BUSINESS_PROCESS[def.pack],
+        businessProcess: businessProcessForMetricPack(def.pack),
         format: def.format,
         snapshotStrategy: def.computationKind,
         bounded: def.snapshotSemantics ?? false,

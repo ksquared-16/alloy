@@ -31,7 +31,6 @@ export function businessProcessForProcessKey(
     if (k.includes("enroll")) return "enrollment";
     if (k.includes("form")) return "forms";
     if (k.includes("communic")) return "communications";
-    if (k.includes("attend")) return "attendance";
     if (k.includes("capacity") || k.includes("utiliz")) return "capacity";
     if (k.includes("financ") || k.includes("revenue") || k.includes("billing")) return "financial";
     if (k.includes("operational") || k.includes("health") || k.includes("labor")) return "operational_health";
@@ -65,7 +64,6 @@ export const WORKSPACE_SIGNAL_BUSINESS_PROCESSES: {
     { businessProcess: "communications", label: "Communications" },
     { businessProcess: "forms", label: "Forms" },
     { businessProcess: "capacity", label: "Capacity" },
-    { businessProcess: "attendance", label: "Attendance" },
     { businessProcess: "financial", label: "Financial" },
 ];
 
