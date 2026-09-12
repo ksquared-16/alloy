@@ -319,7 +319,55 @@ export function actualWorktreeBranch(worktreePath, { git = null } = {}) {
  */
 export function reconcileLaneSlotBinding(laneId, { root = runtimeRoot(), nowMs = Date.now(), cfg = null, metadata = null, gitImpl = null } = {}) {
   const resolved = resolveLaneWorktree(laneId, { root, cfg, metadata, gitImpl });
-  if (!resolved.ok) return { ok: false, error: resolved.code, detail: resolved.detail, resolution: resolved };
+  if (!resolved.ok) {
+    /*
+     * A STALE SLOT CLAIM IS THE ONE UNRESOLVABLE STATE THIS CAN REPAIR.
+     *
+     * THE DEFECT, MEASURED. Slot 8 was claimed by two ACTIVE lane records —
+     * Troubleshooting and Documentation & API — while the canonical registry,
+     * `metadata/<name>.env`, declared it exactly once, for documentation-api.
+     * Troubleshooting's own registration carries no slot line at all.
+     *
+     * So its `binding.slot` was a CACHED COPY of a binding it no longer held.
+     * This function could converge a lane ONTO a slot the registry declares, but
+     * had nothing to say when the registry declares none — it refused with
+     * `lane_slot_unregistered` and the stale claim survived indefinitely, its
+     * only symptom being a bootstrap resolution failure three layers away that
+     * described the lane rather than the duplicate.
+     *
+     * The registry is the authority and this record is its cache, so a cache
+     * entry the authority does not back is simply wrong, and clearing it is a
+     * correction rather than a decision. It is also the narrowest possible one:
+     * the slot is not reassigned, no other lane's record is touched, no
+     * registration is written, and the worktree binding itself is left exactly
+     * as it is. The lane becomes slotless — which DevOps 1 and 2 both certify is
+     * a completely valid state for a lane to be in.
+     *
+     * ONLY THIS CODE. Every other unresolvable state means something is unknown,
+     * and clearing a binding on an unknown is how a lane loses a slot it really
+     * holds.
+     */
+    if (resolved.code === LANE_LIFECYCLE_ERRORS.SLOT_UNREGISTERED && resolved.binding_slot != null) {
+      const store = readDevelopmentLaneStore(root);
+      const rec = store.lanes?.[resolved.lane_id];
+      if (!rec) return { ok: false, error: LANE_LIFECYCLE_ERRORS.LANE_NOT_FOUND };
+      const stale = rec.binding?.slot ?? null;
+      rec.binding = { ...(rec.binding || {}), slot: null, port: null };
+      rec.updated_at = iso(nowMs);
+      store.lanes[resolved.lane_id] = rec;
+      writeDevelopmentLaneStore(store, root);
+      return {
+        ok: true,
+        changed: true,
+        slot: null,
+        port: null,
+        branch: rec.binding?.branch || null,
+        cleared_stale_slot: stale,
+        detail: `Slot ${stale} is not registered to this lane's worktree; the stale claim was cleared and the lane is now slotless.`,
+      };
+    }
+    return { ok: false, error: resolved.code, detail: resolved.detail, resolution: resolved };
+  }
   if (!resolved.divergence.length) {
     return { ok: true, changed: false, slot: resolved.slot, port: resolved.port, branch: resolved.branch };
   }

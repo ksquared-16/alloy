@@ -69,6 +69,44 @@ const HEALTHY_PROBES = {
   seats: [{ pid: 1, provider: "claude", lane_id: "lane_a", lane_name: "A" }],
   panes: [{ pid: 1 }],
   lanes: [{ lane_id: "lane_a", name: "A", run_state: "EXECUTING" }],
+  // The bootstrap inventory belongs in the HEALTHY fixture rather than being
+  // left out. Omitting it makes `lane.bootstrap` report INCOMPLETE — correct
+  // behaviour for a check with no data, and a `watch` — so this "fully healthy"
+  // composition would stop being fully healthy. A fixture that claims every
+  // check passes has to actually supply every check.
+  laneBootstrap: {
+    contract_version: "vacilando.lane_bootstrap.v1",
+    lanes: 1,
+    stale: 0,
+    unresolved: 0,
+    rows: [{ lane_id: "lane_a", name: "A", stale: false, unresolved: [], overlay: {} }],
+  },
+  // Same reason the bootstrap inventory is here: a fixture that claims every
+  // check passes has to supply every check, or the newest one reports
+  // INCOMPLETE — correct for a check with no data, and a `watch`.
+  laneFreshness: {
+    policy: { recent_hours: 12, long_inactive_hours: 72, material_behind: 50, canonical_base: "origin/staging" },
+    lanes: 1,
+    by_state: { CURRENT: 1 },
+    blocked: 0,
+    stale: 0,
+    rows: [{ lane_id: "lane_a", name: "A", state: "CURRENT", behind: 0 }],
+  },
+  // Third time this fixture has had to grow, and for the same reason each time:
+  // a composition that claims every check passes has to supply every check, or
+  // the newest one reports INCOMPLETE — right for a check with no data, and a
+  // `watch`.
+  worktreeLifecycle: {
+    policy: { park_hours: 24, promotion_park_hours: 2 },
+    worktrees: 1,
+    by_state: { ACTIVE: 1 },
+    reclaimable: 0,
+    reclaimable_disk_mb: 0,
+    reclaimable_disk_unknown: 0,
+    blocked: 0,
+    rows: [{ name: "wt-a", state: "ACTIVE", reclaimable: false, disk_mb: 0 }],
+  },
+  slotOwnership: { slots_claimed: 1, conflicts: [] },
   runs: [{ run_id: "r1", state: "EXECUTING", state_reason: "instruction_delivered", terminal: false, age_ms: 1000 }],
   run_bounds: { instruction_delivered: 3600000 },
   attribution: { seat_count: 1, attributed_count: 1, records: [{ pid: 2, attribution_status: "ancestry", execution_location: "inside_worktree" }] },
