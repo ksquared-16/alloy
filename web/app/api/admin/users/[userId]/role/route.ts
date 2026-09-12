@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
 import { replaceMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
@@ -83,10 +84,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
     // W-5/G4: the replacement and the access profile are one transaction. This was
     // delete-then-insert as two statements, so a failed insert left the user with
     // no membership at all; the RPC either lands the replacement or moves nothing.
+    // D2 — W-17 is audited, not fixed: the transaction owner records the whole old role set and the
+    // whole new one, so a submit that discards other roles is legible as exactly that.
+    const audit = accessMutationAudit(access);
     const membership = await replaceMembershipWithAccessProfile(supabase, {
         userId,
         orgId: access.orgId,
         role,
+        audit,
     });
     if (!membership.ok) {
         if (membership.kind === "not_found") {

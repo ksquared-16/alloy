@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
 
 /**
@@ -50,11 +51,17 @@ export async function POST(
 
     const supabase = createAdminClient();
 
-    const { error } = await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", userId)
-        .eq("org_id", orgId);
+    // D2 — removal moved to a transaction owner so the revocation and the record of WHAT was revoked
+    // commit together. The event preserves the roles held and the scope applied, because an audit
+    // that records only an absence loses the fact worth keeping.
+    const audit = accessMutationAudit(auth.access);
+    const { error } = await supabase.rpc("remove_member_access_audited", {
+        p_org_id: orgId,
+        p_user_id: userId,
+        p_actor_user_id: audit.actorUserId,
+        p_origin: audit.origin,
+        p_correlation_id: audit.correlationId,
+    });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

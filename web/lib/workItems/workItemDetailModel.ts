@@ -30,7 +30,12 @@ export type WorkItemCompletionAuthority =
     | "processing"
     | "work_items";
 
-export type WorkItemDetailState = "completed" | "overdue" | "due_today" | "waiting" | "open";
+/*
+ * `waiting` was a member here and `resolveWorkItemDetailState` never returned it — the detail panel
+ * carried a chip for a state the derivation cannot produce. It is removed with the chip, so a
+ * label naming a non-existent state cannot reappear by someone simply making it reachable.
+ */
+export type WorkItemDetailState = "completed" | "overdue" | "due_today" | "open";
 
 export type WorkItemDetailModel = {
     kind: WorkItemSourceKind;

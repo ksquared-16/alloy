@@ -16,7 +16,6 @@ export type WorkspaceQueueRowProps = {
     assigneeInitials?: string;
     trailingMeta?: string;
     urgency: WorkspaceQueueRowUrgency;
-    isWaiting: boolean;
     selected: boolean;
     completed: boolean;
     onSelect: (id: string) => void;
@@ -43,7 +42,6 @@ export default function WorkspaceQueueRow({
     assigneeInitials,
     trailingMeta,
     urgency,
-    isWaiting,
     selected,
     completed,
     onSelect,
@@ -55,7 +53,6 @@ export default function WorkspaceQueueRow({
             data-testid="workspace-queue-row"
             data-workspace-queue-row-id={id}
             data-workspace-queue-row-selected={selected ? "true" : "false"}
-            data-workspace-queue-row-waiting={isWaiting ? "true" : "false"}
             data-workspace-queue-row-completed={completed ? "true" : "false"}
             aria-pressed={selected}
             onClick={() => onSelect(id)}
@@ -71,11 +68,6 @@ export default function WorkspaceQueueRow({
                         >
                             {title}
                         </span>
-                        {isWaiting ? (
-                            <span className="shrink-0 rounded-full border border-amber-200/80 bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-950">
-                                Waiting
-                            </span>
-                        ) : null}
                         {badge ? (
                             <span className="shrink-0 rounded-full border border-alloy-stone/20 bg-white px-1.5 py-0.5 text-[9px] font-semibold text-alloy-midnight/62">
                                 {badge}

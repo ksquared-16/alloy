@@ -3,7 +3,7 @@
   "query_hash": "0efebb2e25ecebb6c207ab8b9eb83b79b5179f91c692b5202dcde6f98dc9f5a1",
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-11T18:33:31.008Z",
+    "census_run_at": "2026-09-11T18:42:04.459Z",
     "question_ids": [
       "m140000",
       "ledger_version",
@@ -29,24 +29,36 @@
         "question_id": "ledger_version",
         "row_count": null,
         "rows": [
-          "20260911140000 ~ registered ~ absent ~ false"
+          "20260911140000 ~ registered ~ present ~ true"
         ]
       },
       "ledger_head": {
         "question_id": "ledger_head",
         "row_count": null,
         "rows": [
-          20260911130000
+          20260911140000
         ]
       },
       "ledger_total": {
         "question_id": "ledger_total",
         "row_count": null,
         "rows": [
-          403
+          404
         ]
       }
     },
     "row_count": 11
+  },
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-11T18:42:03.435Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_adb96b47e3f397",
+    "authorization_id": "grnt_cd6902c4b93a47c7",
+    "query_hash": "0efebb2e25ecebb6c207ab8b9eb83b79b5179f91c692b5202dcde6f98dc9f5a1",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
   }
 }

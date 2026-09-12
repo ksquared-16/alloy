@@ -73,6 +73,28 @@ export function isSchemaQualifiedRelation(key: string): boolean {
     return SQL_SCHEMA_QUALIFIER.test(key);
 }
 
+/**
+ * `mutation_events.command_key` values, which are key-shaped and are not capability keys.
+ *
+ * D2 named its audit commands `access.role.grants_changed`, `access.user.removed` and so on — a
+ * DIFFERENT vocabulary in a different column, describing what an operator did rather than what they
+ * may do. The enforcement scan calls any file mentioning permissions "permission-related" and then
+ * reports every key-shaped literal in it as an enforced capability with no catalog row, so the
+ * presenter that renders these commands was convicted of enforcing seven capabilities the platform
+ * does not have.
+ *
+ * Excluded by PREFIX, the same reasoning the schema filter uses: no capability key's first segment
+ * is `access` — the Access surfaces are gated on `settings.users_roles` — so nothing legitimate is
+ * hidden, and `discoverCatalog` asserts its own non-vacuity so an over-broad filter cannot pass by
+ * emptying the set.
+ */
+const MUTATION_COMMAND_KEY = /^access\.(?:role|user)\./;
+
+/** True when a key-shaped literal is an audit command name rather than a capability. */
+export function isMutationCommandKey(key: string): boolean {
+    return MUTATION_COMMAND_KEY.test(key);
+}
+
 const SQL_STRING = /'((?:[^']|'')*)'/g;
 
 function stripSqlComments(sql: string): string {
@@ -113,7 +135,7 @@ export function discoverCatalog(): Map<string, CatalogKey> {
             for (const literal of region.matchAll(SQL_STRING)) {
                 const key = literal[1]!.replace(/''/g, "'");
                 if (!PERMISSION_KEY_GRAMMAR.test(key)) continue;
-                if (isSchemaQualifiedRelation(key)) continue;
+                if (isSchemaQualifiedRelation(key) || isMutationCommandKey(key)) continue;
                 const prior = byKey.get(key);
                 byKey.set(key, { key, seededBy: [...new Set([...(prior?.seededBy ?? []), file])] });
             }
@@ -144,7 +166,7 @@ function discoverLabelledEntries(): Map<string, { key: string; group_key?: strin
             for (const tuple of region.matchAll(TUPLE)) {
                 const key = tuple[1]!;
                 if (!PERMISSION_KEY_GRAMMAR.test(key)) continue;
-                if (isSchemaQualifiedRelation(key)) continue;
+                if (isSchemaQualifiedRelation(key) || isMutationCommandKey(key)) continue;
                 const second = tuple[2]!.replace(/''/g, "'");
                 const third = tuple[3]!.replace(/''/g, "'");
                 // Column order is not fixed across the tree: the canonical seeds write
@@ -226,7 +248,11 @@ export function scanEnforcement(catalog: Iterable<string>): EnforcementScan {
             const literal = match[1]!;
             if (catalogKeys.has(literal)) {
                 sitesByKey.set(literal, [...new Set([...(sitesByKey.get(literal) ?? []), rel])]);
-            } else if (permissionRelated) {
+            } else if (permissionRelated && !isMutationCommandKey(literal)) {
+                // `access.role.grants_changed` and its siblings are `mutation_events.command_key`
+                // values, not capabilities. They are key-shaped and they live in a file that mentions
+                // permissions, which is all this heuristic needs to convict them of being enforced
+                // capabilities the catalog has never heard of.
                 uncatalogued.set(literal, [...new Set([...(uncatalogued.get(literal) ?? []), rel])]);
             }
         }

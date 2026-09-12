@@ -42,7 +42,6 @@ const STATE_CHIP: Record<WorkItemDetailState, { label: string; className: string
     completed: { label: "Completed", className: "bg-alloy-stone/[0.09] text-alloy-midnight/55" },
     overdue: { label: "Overdue", className: "bg-alloy-clay/[0.12] text-alloy-clay" },
     due_today: { label: "Due today", className: "bg-amber-500/[0.14] text-amber-700" },
-    waiting: { label: "Waiting", className: "bg-alloy-stone/[0.09] text-alloy-midnight/55" },
     open: { label: "Open", className: "bg-alloy-juniper/[0.10] text-alloy-juniper" },
 };
 

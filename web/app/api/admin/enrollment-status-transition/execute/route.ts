@@ -103,6 +103,30 @@ export async function POST(request: NextRequest) {
             target_status_key: result.targetStatusKey,
             opportunity_customer_member_id: result.opportunityCustomerMemberId,
             placement_hook: result.placementHook,
+            /*
+             * WHETHER THE CHILD ACTUALLY MOVED, not just what it was labelled.
+             *
+             * The response used to report the status write and the placement hook and stop there,
+             * so a transition that set `waitlisted`, minted a placement candidate and never moved
+             * the child's process instance was indistinguishable from one that converged. That is
+             * exactly the half-recorded state this seam exists to prevent, and it should be
+             * readable from the response rather than inferred from a later drawer read.
+             */
+            outcome_effects:
+                result.outcomeEffects ?
+                    {
+                        outcome_key: result.outcomeEffects.outcome_key,
+                        source_builder_stage_key: result.outcomeEffects.source_builder_stage_key,
+                        applied_targets:
+                            result.outcomeEffects.outcome_execution?.applied_targets?.map((t) => t.kind) ?? [],
+                        destination_stage_moved: Boolean(
+                            result.outcomeEffects.destination_stage_move
+                            && !result.outcomeEffects.destination_stage_move.error,
+                        ),
+                        stage_entry_work: result.outcomeEffects.stage_entry_spawn?.action ?? null,
+                        errors: result.outcomeEffects.errors,
+                    }
+                :   null,
         },
     });
 }

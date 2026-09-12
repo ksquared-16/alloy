@@ -259,11 +259,21 @@ describe("W-28 / S-12 — the replacement is one database operation", () => {
         const rpcs = ops.filter((o) => o.kind === "rpc");
         expect(rpcs).toHaveLength(1);
         expect(rpcs[0].table).toBe("rpc:replace_role_permission_grants");
-        expect(rpcs[0].rows?.[0]).toEqual({
+        /*
+         * D2 added the audit half to this same call rather than a second one: the actor, the origin
+         * and the correlation id travel INTO the transaction so the grant and its event commit
+         * together. Still exactly one RPC, which is what this assertion is about — and the actor is
+         * asserted to be a real value rather than matched loosely, because a route that quietly
+         * stopped passing it would leave the RPC refusing every mutation.
+         */
+        expect(rpcs[0].rows?.[0]).toMatchObject({
             p_org_id: orgId,
             p_role_key: "ops",
             p_permission_keys: ["a.read", "b.write"],
+            p_origin: "operator",
         });
+        expect(String((rpcs[0].rows?.[0] as Record<string, unknown>)?.p_actor_user_id ?? "")).not.toBe("");
+        expect(String((rpcs[0].rows?.[0] as Record<string, unknown>)?.p_correlation_id ?? "")).not.toBe("");
     });
 
     it("issues NO destructive or additive statement of its own — that is the atomicity claim", async () => {

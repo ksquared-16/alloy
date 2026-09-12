@@ -41,6 +41,7 @@
  * and the advanced disclosure below every area shows the catalog keys the level stands for.
  */
 
+import AccessHistoryList from "@/components/adminV2/settings/access/AccessHistoryList";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -138,6 +139,11 @@ export default function AccessRolesConfigurationPage() {
     const [roleLabel, setRoleLabel] = useState("");
     const [roleActive, setRoleActive] = useState(true);
     const [saving, setSaving] = useState(false);
+    /**
+     * Bumped when THIS surface commits a change to the role, so the Change history card re-reads
+     * rather than keeping the answer it fetched before the save.
+     */
+    const [historyToken, setHistoryToken] = useState(0);
     /**
      * Editing is intentional. The identity fields are a read-out until the operator asks to change
      * them — a permanently-live text input beside a role's name reads as a form, and a role page
@@ -318,6 +324,7 @@ export default function AccessRolesConfigurationPage() {
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Create role failed");
             setMessage("Role created.");
+            setHistoryToken((n) => n + 1);
             setNewRoleOpen(false);
             await reload();
             const rk = (json as { role_key?: string }).role_key;
@@ -374,6 +381,7 @@ export default function AccessRolesConfigurationPage() {
                 setGrantLoad(authoritySetLoaded(json.permission_keys as string[]));
             }
             setMessage("Role saved.");
+            setHistoryToken((n) => n + 1);
             setEditingIdentity(false);
             await reload();
         } catch (err) {
@@ -849,6 +857,23 @@ export default function AccessRolesConfigurationPage() {
                                             </ul>
                                         }
                                     </ConfigWorkspaceCard>
+                                    {/*
+                                      * D2 — role history beside the editor that writes it. The same
+                                      * read model and presenter the organization feed uses, filtered
+                                      * to this role by `role_key` rather than by its uuid, because
+                                      * the uuid is gone once a role is deleted and the history has to
+                                      * outlive its subject.
+                                      */}
+                                    <ConfigWorkspaceCard testId="access-role-history" title="Change history">
+                                        <AccessHistoryList
+                                            testId="access-role-history-list"
+                                            roleKey={selectedRoleKey}
+                                            refreshToken={historyToken}
+                                            pageSize={5}
+                                            emptyMessage="No changes have been recorded for this role yet."
+                                        />
+                                    </ConfigWorkspaceCard>
+
                                 </div>
                             }
                         </main>

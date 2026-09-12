@@ -67,8 +67,22 @@ Items–owned waiting flag would let this workspace overrule a domain about whet
 blocked, which is precisely the authority inversion the convergence exists to prevent.
 
 Until a domain-authoritative blocked signal exists, `waiting` is not promoted in the rail: a lens
-that can only ever be empty teaches operators that nothing is ever waiting. It remains reachable so
-the Queue Operational Health vocabulary (Assigned / Waiting / Due Soon / Overdue) stays intact.
+that can only ever be empty teaches operators that nothing is ever waiting. The view key and its
+filter branches remain for compatibility, but nothing operator-facing routes to them.
+
+### The health band does not measure waiting either
+
+The Queue Operational Health vocabulary is **Assigned · Unassigned · Due Soon · Overdue**.
+
+It previously read `Waiting`, and that label was wrong for the same reason the lens is empty: the
+bucket is computed as `assigned_to_user_id` being absent over open tasks — which is *unassigned*,
+not *waiting*. A band cannot report a state the model does not have. The count was correct; only
+its name was not, and the rename moved no number.
+
+This keeps one semantic basis across both surfaces: the rail's **Unassigned** cohort and the health
+band's **Unassigned** metric both mean open work with no assignee. They are not required to be equal
+— the rail merges three sources and honours the selected site, while the band counts
+`operational_tasks` org-wide — but they answer the same question about the same property.
 
 ## 4. Due state — one derivation
 

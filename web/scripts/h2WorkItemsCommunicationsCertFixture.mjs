@@ -2,16 +2,21 @@
 /**
  * H2 — Communications → Work Items convergence certification fixture.
  *
- * ── Why the previous fixture could not be used ────────────────────────────────────────────────
+ * ── Why the previous fixture could not be used, and no longer exists ──────────────────────────
  *
- * `web/scripts/createCommunicationsNeedsReplyQaFixture.ts` SELECTS an existing thread
- * (`order by last_message_at desc limit 10`) and writes `attention_state` onto it with a
- * service-role client. On the certification tenant the threads it would have chosen are
+ * `web/scripts/createCommunicationsNeedsReplyQaFixture.ts` SELECTED an existing thread
+ * (`order by last_message_at desc limit 10`) and wrote `attention_state` onto it with a
+ * service-role client. On the certification tenant the threads it would have chosen were
  * `kelly.kurzman@gmail.com`, a real mobile number, `noreply@nohotwater.net` and
- * `forwarding-noreply@google.com` — real external correspondence. It also bypasses the
- * Communications runtime entirely, so it proves nothing about the behaviour under certification: a
- * hand-written `attention_state` would make the Work Items projection appear without any of the
+ * `forwarding-noreply@google.com` — real external correspondence. It also bypassed the
+ * Communications runtime entirely, so it proved nothing about the behaviour under certification: a
+ * hand-written `attention_state` makes the Work Items projection appear without any of the
  * inbound semantics that are supposed to cause it.
+ *
+ * It was DELETED rather than repaired: this file already is the safe replacement, so keeping a
+ * second script whose only distinguishing feature was that it could reach real families would have
+ * been keeping a hazard for its own sake. Its sender guard now lives in
+ * `scripts/lib/certificationSenderSafety.mjs`, where it is unit-tested on its own terms.
  *
  * ── What this does instead ────────────────────────────────────────────────────────────────────
  *
@@ -64,6 +69,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { assertSafeSender } from "./lib/certificationSenderSafety.mjs";
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const BASE = process.env.H2_BASE_URL || "http://127.0.0.1:3022";
@@ -71,27 +78,6 @@ const STORAGE =
     process.env.H2_STORAGE_STATE ||
     path.join(process.env.HOME || "", ".local/state/alloy-dev/gateway/auth/slot12/storage-state.json");
 const STATE_FILE = path.join(HERE, ".h2-fixture-state.json");
-
-/**
- * The only sender domains this fixture will ever accept.
- *
- * RFC 2606 reserves `.invalid` and `.example` precisely so they can never be registered or
- * delivered to. This guard is what makes requirement 10 true by construction: the fixture cannot
- * select or address an arbitrary real person even if someone edits the sender by hand.
- */
-const SAFE_SENDER_SUFFIXES = [".alloy.invalid", ".invalid", ".example", "@example.com"];
-
-function assertSafeSender(address) {
-    const a = String(address || "").trim().toLowerCase();
-    if (!a) throw new Error("no sender address resolved");
-    if (!SAFE_SENDER_SUFFIXES.some((s) => a.endsWith(s))) {
-        throw new Error(
-            `REFUSING to use sender ${a}: not a reserved, undeliverable certification domain. ` +
-                `This fixture never addresses a real person.`,
-        );
-    }
-    return a;
-}
 
 function readState() {
     try {

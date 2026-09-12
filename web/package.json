@@ -98,6 +98,7 @@
     "dev:layout:publish-child-drawer-v2:execute": "tsx --tsconfig tsconfig.json scripts/publishChildDrawerV2ForOrg.ts --execute",
     "dev:layout:verify-child-drawer-v2": "tsx --tsconfig tsconfig.json scripts/publishChildDrawerV2ForOrg.ts --verify-only",
     "dev:qa:reconcile-orphaned-stage-work": "tsx --tsconfig tsconfig.json scripts/qaReconcileOrphanedStageWork.ts",
+    "dev:qa:converge-placement-waitlisted": "tsx --tsconfig tsconfig.json scripts/qaConvergePlacementWaitlistedChildren.ts",
     "test:playwright-current-work": "playwright test playwright/tests/current-work-journey.spec.ts",
     "dev:certify:enrollment-e2e": "NODE_ENV=test tsx --tsconfig tsconfig.json scripts/certifyEnrollmentE2E.ts"
   },

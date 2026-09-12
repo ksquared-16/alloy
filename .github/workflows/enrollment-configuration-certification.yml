@@ -130,6 +130,11 @@ jobs:
             tests/lifecycle/participantProviderAuthorization.test.ts \
             tests/lifecycle/startEnrollmentParticipantLaunch.test.ts \
             tests/lifecycle/startEnrollmentIdempotentReuse.test.ts \
+            tests/lifecycle/offerSpotIsAnOperatorAct.test.ts \
+            tests/queues/childGrainQueueFollowsChildTruth.test.ts \
+            tests/queues/candidateGrainWaitlistQueue.test.ts \
+            tests/queues/candidateGrainWaitlistSiteScope.test.ts \
+            tests/platform/commands/capabilityRegistry.test.ts \
             tests/lifecycle/participantSurfaceHookOrder.test.ts \
             tests/lifecycle/participantExperienceConvergence.test.ts \
             tests/lifecycle/participantArtifactHandoff.test.ts \
@@ -143,4 +148,14 @@ jobs:
             tests/forms/pdf/fidelityEngine.test.ts \
             tests/forms/pdf/fidelityMappingVertical.test.ts \
             tests/lifecycle/outcomeBehaviorRoundTrip.test.ts \
-            tests/lifecycle/childGrainOutcomeAuthoring.test.ts
+            tests/lifecycle/childGrainOutcomeAuthoring.test.ts \
+            tests/lifecycle/stageEntryWorkForWaitlist.test.ts \
+            tests/admin/enrollmentStatus/placementWaitlistingConvergesOnProcessMembership.test.ts \
+            tests/admin/enrollmentStatus/enrollmentStatusTransitionOutcomeEffects.test.ts \
+            tests/adminV2/runtime/childStageAuthorityIsTheProcessInstance.test.ts \
+            tests/adminV2/runtime/processStageAuthority.test.ts \
+            tests/adminV2/viewModel/lifecycleRailStageIsNotTheLens.test.ts \
+            tests/runtime/childGrainSurfaceComposition.test.ts \
+            tests/lifecycle/childTrackBeginsAtGrainCrossing.test.ts \
+            tests/lifecycle/stageOutcomeChildProcessInstanceWrite.test.ts \
+            tests/lifecycle/startEnrollmentIdempotentReuse.test.ts

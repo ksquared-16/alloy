@@ -371,22 +371,68 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
     const stageContext = subjectVm.workspace.stage_context;
     const lifecycleRail = subjectVm.workspace.lifecycle_rail;
 
+    /*
+     * ── WHOSE STAGE IS THIS? ──
+     *
+     * Everything on this VM — the lifecycle rail, the stage context — describes the CASE that was
+     * loaded. When the subject of attention is that case, those are its own answers and the rail is
+     * the authority.
+     *
+     * When the subject is a CHILD, they are a different record's answers. A child's position is
+     * owned by the child's process instance and by nothing else: `moveEnrollmentInstanceStageByScope`
+     * is its only writer, and the effective-stage rule the queues coalesce on has already been
+     * applied by the provider. The family's rail cannot speak for the child, and the work unit the
+     * operator arrived through is not a position at all.
+     *
+     * The stated child subject is recognised here by the identity the runtime already publishes —
+     * the same resolver `participantScope` uses below, which refuses unless the child is fully
+     * identified. So this changes the answer for exactly one kind of subject and leaves case-grain
+     * resolution untouched.
+     */
+    const childSubjectScope = participantScopeFromChildSubjectTruth(truth);
+    const railStages = Array.isArray(lifecycleRail?.stages) ? lifecycleRail.stages : [];
+    const stageLabelFromRail = (key: string | null): string | null =>
+        key ? railStages.find((s) => s.key === key)?.label ?? null : null;
+
+    /*
+     * NO `??` TO THE CASE. A child whose stage is unresolved has an unresolved stage.
+     *
+     * Falling through to the rail here would reintroduce the defect in a subtler form: the card
+     * would state a stage, it would look entirely ordinary, and it would be the household's. The
+     * canonical fallback for a child (its context's stage when it rides the family track) is
+     * applied UPSTREAM by the provider, so a child that reaches here with no stage has genuinely
+     * been resolved to none — and null is the honest way to say so.
+     */
+    const businessProcess =
+        childSubjectScope ?
+            {
+                key: childSubjectScope.stageKey,
+                label:
+                    childSubjectScope.stageLabel
+                    ?? stageLabelFromRail(childSubjectScope.stageKey)
+                    ?? null,
+                name: lifecycleRail?.process_name ?? null,
+                stageKey: childSubjectScope.stageKey,
+                stages: railStages,
+            }
+        :   {
+                key: stageContext?.stage_key ?? null,
+                label: stageContext?.stage_label ?? statusLabel ?? null,
+                // The process, not the stage. Only the rail knows it; nothing else on the VM does.
+                name: lifecycleRail?.process_name ?? null,
+                stageKey: lifecycleRail?.current_stage_key ?? stageContext?.stage_key ?? null,
+                // The rail already resolved the configured order; publishing it here keeps ONE answer
+                // to "what are this process's stages" rather than a second derivation in the card.
+                stages: railStages,
+            };
+
     return {
         subject: {
             type: subjectVm.entity.type,
             id: input.subjectId,
             label: input.title,
         },
-        businessProcess: {
-            key: stageContext?.stage_key ?? null,
-            label: stageContext?.stage_label ?? statusLabel ?? null,
-            // The process, not the stage. Only the rail knows it; nothing else on the VM does.
-            name: lifecycleRail?.process_name ?? null,
-            stageKey: lifecycleRail?.current_stage_key ?? stageContext?.stage_key ?? null,
-            // The rail already resolved the configured order; publishing it here keeps ONE answer to
-            // "what are this process's stages" rather than a second derivation in the card.
-            stages: Array.isArray(lifecycleRail?.stages) ? lifecycleRail.stages : [],
-        },
+        businessProcess,
         perspective: perspective
             ? { missionLabel: perspective.defaultMission ?? perspective.label ?? null }
             : null,
@@ -409,7 +455,7 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
          * showing that child's own record.
          */
         participantScope:
-            participantScopeFromChildSubjectTruth(truth)
+            childSubjectScope
             ?? resolveParticipantScope({
                 selectedParticipationId: input.selectedParticipationId ?? null,
                 participants: participantCandidatesFromTruth(truth),

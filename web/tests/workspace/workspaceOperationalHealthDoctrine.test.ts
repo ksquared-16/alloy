@@ -47,12 +47,17 @@ describe("Alloy Operational Health Doctrine V3 — Work Items", () => {
         expect(overview).not.toContain("SurfaceHeaderKpiCard");
     });
 
-    it("Work Items queue metrics: Tasks assigned, Waiting, Due Soon, Overdue", () => {
+    it("Work Items queue metrics: Tasks assigned, Unassigned, Due Soon, Overdue", () => {
         const adapter = read("app/adminV2/tasks/WorkItemsKpiStrip.tsx");
         // R14: `Tasks assigned` names the population — this band counts operational tasks only,
         // while the view rail merges three sources. The metric key stays `assigned`.
         expect(adapter).toContain('label: "Tasks assigned"');
-        expect(adapter).toContain('label: "Waiting"');
+        /*
+         * `Unassigned`, not `Waiting`. The bucket is `assigned_to_user_id` absent over open tasks,
+         * which is an assignment fact; `Waiting` named a state the model does not have. The count
+         * did not change — only the question it claims to answer.
+         */
+        expect(adapter).toContain('label: "Unassigned"');
         expect(adapter).toContain('label: "Due Soon"');
         expect(adapter).toContain('label: "Overdue"');
         expect(adapter).not.toContain("overviewItems");
