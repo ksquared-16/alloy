@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const denied = requireFormsCapability(ctx, FORMS_SUBMISSIONS);
-        if (denied) return denied;
+    if (denied) return denied;
 
     let body: Record<string, unknown>;
     try {

@@ -10,7 +10,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const denied = requireFormsCapability(ctx, FORMS_SUBMISSIONS_CONFIRM);
-        if (denied) return denied;
+    if (denied) return denied;
 
     const { submissionId: raw } = await params;
     const submissionId = parseUuidParam(raw, "submissionId");

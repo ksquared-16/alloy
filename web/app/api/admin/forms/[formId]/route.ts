@@ -46,7 +46,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
-        if (denied) return denied;
+    if (denied) return denied;
 
     const { formId: rawId } = await params;
     const formId = parseUuidParam(rawId, "formId");
@@ -106,7 +106,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
-        if (denied) return denied;
+    if (denied) return denied;
 
     const { formId: rawId } = await params;
     const formId = parseUuidParam(rawId, "formId");
