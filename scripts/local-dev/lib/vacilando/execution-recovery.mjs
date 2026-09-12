@@ -21,6 +21,7 @@ import {
 } from "./execution-run.mjs";
 import {
   evaluateResourceQueue,
+  processOwnerHolds,
   readComputeHolders,
   readResourceRequestStore,
   releaseResourceRequest,
@@ -540,6 +541,24 @@ function canonicalComputeRelease(resource, holder) {
 const handlers = {
   stale_governor_resource_holder(ctx) {
     const { rec, root, nowMs } = ctx;
+    /*
+     * The caller already skips these, and this refuses them again on purpose.
+     * The defect being closed was one release path disagreeing with another
+     * about who owns a resource's lifetime, so the answer must not live in only
+     * one of them: any future caller reaching this handler with a live
+     * process-owned claim is refused here too, rather than trusted to have
+     * checked.
+     */
+    if (processOwnerHolds(rec)) {
+      return {
+        ok: false,
+        classification: "RECOVERABLE",
+        error: "process_owner_live",
+        verified: false,
+        consume_budget: false,
+        summary: "A live process owns this resource; the requesting run's state does not end it.",
+      };
+    }
     const run = getExecutionRun(rec.run_id, root);
     const gone = !run || isTerminalRunState(run.state);
     if (!gone) {
@@ -735,6 +754,10 @@ const handlers = {
   resource_queue_drift(ctx) {
     const { rec, root, nowMs, kind } = ctx;
     if (kind === "terminal_queued") {
+      // Same law: a live process owner outlives its requesting run.
+      if (processOwnerHolds(rec)) {
+        return { ok: false, classification: "RECOVERABLE", error: "process_owner_live", verified: false, consume_budget: false };
+      }
       const rel = releaseResourceRequest(rec.request_id, { origin: "governor", nowMs, root, expectedRunId: rec.run_id });
       const after = (readResourceRequestStore(root).requests || []).find((r) => r.request_id === rec.request_id);
       const verified = after?.state !== "QUEUED" && after?.state !== "GRANTED";
