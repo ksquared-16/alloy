@@ -57,6 +57,15 @@ export function parseStageV2DraftInput(raw: unknown): StageV2DraftInput | null {
                         ? a.recommendation
                         : "ready",
                 ...(typeof a.override_label === "string" && a.override_label ? { override_label: a.override_label } : {}),
+                /*
+                 * The work this action operates on. Dropped here, the action persisted as a row
+                 * naming no template — which is how the Waitlist stage came to hold two
+                 * `stage_work.start` entries that could start nothing: every save appended another,
+                 * because the toggle matched on a key the store had silently thrown away.
+                 */
+                ...(typeof a.work_template_key === "string" && a.work_template_key.trim()
+                    ? { work_template_key: a.work_template_key.trim() }
+                    : {}),
             }));
     }
     return result;
