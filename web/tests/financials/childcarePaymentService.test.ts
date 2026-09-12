@@ -27,6 +27,7 @@ import {
     recordAndApplyChildcarePayment,
     recordChildcarePayment,
     refundChildcarePayment,
+    reversePaymentApplication,
 } from "@/lib/financials/childcarePaymentService";
 
 const AGREEMENT_ID = "agr-1";
@@ -486,5 +487,165 @@ describe("refunding — the original is never rewritten", () => {
         await expect(
             refundChildcarePayment(supabase, { orgId: ORG_ID, paymentId: refunded.refund.id }),
         ).rejects.toMatchObject({ code: "invalid_state" });
+    });
+});
+
+/*
+ * UNDOING AN APPLICATION WITHOUT UNDOING THE PAYMENT.
+ *
+ * The correction an operator had no way to make: money applied to the wrong charge previously had to
+ * be refunded to be moved. These pin the service's half — what is written, what is refused, and what
+ * is deliberately left alone. The database's own guarantees (the partial unique index that makes the
+ * re-apply exactly-once, and a real row lock under concurrency) belong to the Postgres certification
+ * for the same reason the header of this file gives.
+ */
+describe("reversing a payment application", () => {
+    const SECOND_CHARGE = postedCharge({ id: "charge-2", amount_cents: 40_000 });
+
+    async function applied() {
+        const { store, supabase } = setup([postedCharge(), SECOND_CHARGE]);
+        const { payment } = await recordChildcarePayment(supabase, {
+            orgId: ORG_ID,
+            billableSourceType: "enrollment_agreement",
+            billableSourceId: AGREEMENT_ID,
+            customerId: HOUSEHOLD_ID,
+            amountCents: 50_000,
+            paymentMethod: "check",
+        });
+        const { allocation } = await applyPaymentToCharge(supabase, {
+            orgId: ORG_ID,
+            paymentId: payment.id,
+            chargeId: "charge-1",
+            amountCents: 50_000,
+        });
+        return { store, supabase, payment, allocation };
+    }
+
+    it("returns the obligation to the charge and the money to unapplied in one write", async () => {
+        const { supabase, payment, allocation } = await applied();
+        expect(await readPaymentUnappliedCents(supabase, ORG_ID, payment.id, 50_000)).toBe(0);
+
+        const result = await reversePaymentApplication(supabase, {
+            orgId: ORG_ID,
+            allocationId: allocation.id,
+            reason: "applied to the wrong charge",
+        });
+
+        expect(result.reversedAmountCents).toBe(50_000);
+        expect(result.paymentUnappliedCents, "the money is available again").toBe(50_000);
+        expect(result.chargeOutstandingCents, "and the charge owes it again").toBe(130_000);
+        expect(await readChargeBalance(supabase, ORG_ID, "charge-1")).toMatchObject({
+            appliedCents: 0,
+            outstandingCents: 130_000,
+        });
+    });
+
+    it("keeps the original application as history rather than editing it away", async () => {
+        const { store, supabase, allocation } = await applied();
+        await reversePaymentApplication(supabase, {
+            orgId: ORG_ID,
+            allocationId: allocation.id,
+            reason: "operator correction",
+        });
+        const row = (store.payment_allocations as Record<string, unknown>[]).find(
+            (r) => r.id === allocation.id,
+        )!;
+        // What was applied stays readable; only the fact that it was undone is added.
+        expect(row.status).toBe("reversed");
+        expect(row.allocated_amount_cents, "the amount is not rewritten").toBe(50_000);
+        expect(row.charge_id, "nor the obligation it answered").toBe("charge-1");
+        expect(row.reversed_at).toBeTruthy();
+        expect(row.reversal_reason).toBe("operator correction");
+    });
+
+    it("lets the same money answer a different obligation afterwards", async () => {
+        const { supabase, payment, allocation } = await applied();
+        await reversePaymentApplication(supabase, {
+            orgId: ORG_ID,
+            allocationId: allocation.id,
+            reason: "wrong charge",
+        });
+        await applyPaymentToCharge(supabase, {
+            orgId: ORG_ID,
+            paymentId: payment.id,
+            chargeId: "charge-2",
+            amountCents: 40_000,
+        });
+        expect(await readChargeBalance(supabase, ORG_ID, "charge-2")).toMatchObject({
+            appliedCents: 40_000,
+            outstandingCents: 0,
+        });
+        expect(await readPaymentUnappliedCents(supabase, ORG_ID, payment.id, 50_000)).toBe(10_000);
+    });
+
+    it("refuses a second reversal instead of double-crediting the charge", async () => {
+        const { supabase, allocation } = await applied();
+        await reversePaymentApplication(supabase, {
+            orgId: ORG_ID,
+            allocationId: allocation.id,
+            reason: "first",
+        });
+        await expect(
+            reversePaymentApplication(supabase, {
+                orgId: ORG_ID,
+                allocationId: allocation.id,
+                reason: "second",
+            }),
+        ).rejects.toThrow(/already reversed/i);
+    });
+
+    it("leaves the receipt, its payer and its provider reference completely alone", async () => {
+        const { store, supabase, payment, allocation } = await applied();
+        const before = JSON.stringify(
+            (store.payments as Record<string, unknown>[]).find((r) => r.id === payment.id),
+        );
+        await reversePaymentApplication(supabase, {
+            orgId: ORG_ID,
+            allocationId: allocation.id,
+            reason: "correction",
+        });
+        const after = JSON.stringify(
+            (store.payments as Record<string, unknown>[]).find((r) => r.id === payment.id),
+        );
+        expect(after, "reversal never writes to payments").toBe(before);
+    });
+
+    it("creates no refund — unapplied is not the same as given back", async () => {
+        const { store, supabase, allocation } = await applied();
+        const refundsBefore = (store.payments as Record<string, unknown>[]).filter(
+            (r) => r.refunds_payment_id,
+        ).length;
+        await reversePaymentApplication(supabase, {
+            orgId: ORG_ID,
+            allocationId: allocation.id,
+            reason: "correction",
+        });
+        const refundsAfter = (store.payments as Record<string, unknown>[]).filter(
+            (r) => r.refunds_payment_id,
+        ).length;
+        expect(refundsAfter).toBe(refundsBefore);
+        expect(refundsAfter).toBe(0);
+    });
+
+    it("requires a reason, because the row is the only account of why the money moved", async () => {
+        const { supabase, allocation } = await applied();
+        await expect(
+            reversePaymentApplication(supabase, {
+                orgId: ORG_ID,
+                allocationId: allocation.id,
+                reason: "   ",
+            }),
+        ).rejects.toThrow(/reason is required/i);
+    });
+
+    it("answers NOT FOUND for another tenant's application rather than admitting it exists", async () => {
+        const { supabase, allocation } = await applied();
+        await expect(
+            reversePaymentApplication(supabase, {
+                orgId: "00000000-0000-0000-0000-0000000000ff",
+                allocationId: allocation.id,
+                reason: "correction",
+            }),
+        ).rejects.toThrow(/not found/i);
     });
 });
