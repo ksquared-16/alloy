@@ -113,6 +113,11 @@ const HEALTHY_PROBES = {
   // temptation each time is to relax the assertion instead; the value of this
   // fixture is precisely that it cannot be satisfied by omission.
   promotionGates: { version: "vacilando.promotion_gate_contract.v1", gates: 6, findings: [], clean: true },
+  // Sixth. A host with no maintenance window is healthy, not incomplete — which
+  // is the severity choice that lets this check exist before maintenance is
+  // ever activated.
+  maintenanceWindow: { phase: "NORMAL", defers: 0 },
+  maintenanceCadence: { due: false, last_ms: 1 },
   laneKnowledge: {
     lanes: 1,
     by_state: { CURRENT: 1 },

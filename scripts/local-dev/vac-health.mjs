@@ -93,6 +93,21 @@ const lanesRaw = await safely(async () => {
 // Freshness, like bootstrap, is a READ. It runs git plumbing against each
 // lane's worktree and acquires no slot, server, browser or provider.
 // Knowledge coverage, a READ over the existing lane-memory store.
+// Maintenance state, a pure READ of one small record plus the steward's own
+// cadence field. No window exists on a host that has never run maintenance, and
+// that is reported as healthy rather than missing.
+const maintenanceWindow = await safely(async () => {
+  const { readMaintenanceWindow } = await import("./lib/vacilando/host-maintenance.mjs");
+  const r = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  return readMaintenanceWindow({ root: r }) || { phase: "NORMAL" };
+}, null);
+
+const maintenanceCadence = await safely(async () => {
+  const { maintenanceCadenceDue } = await import("./lib/vacilando/host-steward-cycle.mjs");
+  const r = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  return maintenanceCadenceDue({ root: r });
+}, null);
+
 // The promotion gate contract, a pure READ over declarations. No network, no
 // GitHub, no database: it audits what the gates say about themselves.
 const promotionGates = await safely(async () => {
@@ -427,7 +442,7 @@ const report = composeReport({
   hw, thresholds, only, startedAt,
   endedAt: new Date().toISOString(),
   probeResults: {
-    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, laneKnowledge, worktreeLifecycle, slotOwnership, promotionGates,
+    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, laneKnowledge, worktreeLifecycle, slotOwnership, promotionGates, maintenanceWindow, maintenanceCadence,
     run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, configured_max: configuredMax,
     validation_routing: validationRouting, validation_bypasses: validationBypasses,

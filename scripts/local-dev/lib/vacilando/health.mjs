@@ -48,6 +48,7 @@ export const CHECKS = Object.freeze([
   "slots.ownership",
   "lane.knowledge",
   "promotion.gates",
+  "host.maintenance",
   "ports.registry",
   "worktrees.registry",
   "toolkit.retention",
@@ -988,6 +989,55 @@ export function checkSlotOwnership({ conflicts = null }) {
  * risk: it is a gate that has already made some class of work unpromotable, and
  * the only question left is which class.
  */
+
+/**
+ * IS WEEKLY MAINTENANCE HEALTHY, OR MERELY QUIET?
+ *
+ * SEVERITY IS CHOSEN SO THE CHECK SURVIVES BEING TRUE. Maintenance has never run
+ * on this host — it cannot, while the Host Lifecycle soak is active — so "never
+ * run" must not be a problem, or the check is red from birth and nobody reads
+ * it. The same lesson DevOps 4's coverage check learned.
+ *
+ * The one PROBLEM is a window that gave up: CONSTRAINED means either a
+ * maintenance that could not find a safe slot in four hours, or a post-boot
+ * certification that failed. Both are states where the host is running with
+ * something unproven and an operator needs to know.
+ *
+ * A window stuck mid-phase is a WATCH, not a problem: the next steward cycle
+ * resumes it, and that is the design working.
+ */
+export function checkHostMaintenance({ window = null, cadence = null }) {
+  if (!window && !cadence) return incompleteFinding("host.maintenance", "no maintenance state available");
+  const phase = window?.phase || null;
+  const constrained = phase === "CONSTRAINED";
+  const inFlight = phase && !["NORMAL", "CONSTRAINED"].includes(phase);
+  const sev = constrained ? "problem" : inFlight ? "watch" : "healthy";
+  const evidence = [];
+  if (constrained) {
+    evidence.push(`maintenance ${window.maintenance_id} ended CONSTRAINED after ${window.defers || 0} defer(s)`);
+    for (const b of (window.last_blockers || []).slice(0, 4)) evidence.push(`blocked by ${b}`);
+  } else if (inFlight) {
+    evidence.push(`maintenance ${window.maintenance_id} is ${phase}; the next steward cycle resumes it`);
+  }
+  return finding({
+    check: "host.maintenance",
+    severity: sev,
+    owner_resource: "vacilando.host_maintenance",
+    measurements: {
+      phase: phase || "NORMAL",
+      defers: window?.defers ?? 0,
+      last_attempt_ms: cadence?.last_ms ?? null,
+      due: cadence?.due ?? null,
+    },
+    evidence,
+    explanation: constrained
+      ? "A maintenance window ended without certifying the host. Admission is constrained until the named failure is resolved."
+      : inFlight
+        ? "A maintenance window is open. New heavy work and new promotion trains are not admitted until it completes."
+        : "No maintenance window is open.",
+  });
+}
+
 export function checkPromotionGates({ audit = null }) {
   if (!audit) return incompleteFinding("promotion.gates", "no promotion gate audit available");
   const circular = (audit.findings || []).filter((f) => f.defect === "circular_precondition");
@@ -1340,6 +1390,7 @@ export function composeReport({
   safe("slots.ownership", () => checkSlotOwnership({ conflicts: probeResults.slotOwnership }));
   safe("lane.knowledge", () => checkLaneKnowledge({ inventory: probeResults.laneKnowledge }));
   safe("promotion.gates", () => checkPromotionGates({ audit: probeResults.promotionGates }));
+  safe("host.maintenance", () => checkHostMaintenance({ window: probeResults.maintenanceWindow, cadence: probeResults.maintenanceCadence }));
   safe("lanes.consistency", () => checkLanesConsistency({ lanes: probeResults.lanes || [], seats: probeResults.seats || [] }));
   safe("ports.registry", () => checkPortsRegistry({ ports: probeResults.ports || [] }));
   safe("worktrees.registry", () => checkWorktreesRegistry({ ...(probeResults.worktrees || {}), states: probeResults.reconciliation || null }));
