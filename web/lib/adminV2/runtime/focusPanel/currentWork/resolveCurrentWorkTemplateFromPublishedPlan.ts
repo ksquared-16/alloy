@@ -407,11 +407,30 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
      * replaced — see `resolvedHelpfulActionRefs`.
      */
     if (catalogActions.supporting.length) {
-        templateConfig.stage_actions = catalogActions.supporting.map((row) => ({
-            action_ref: row.action_ref,
-            ...(row.override_label?.trim() ? { override_label: row.override_label.trim() } : {}),
-            ...(row.work_template_key?.trim() ? { work_template_key: row.work_template_key.trim() } : {}),
-        }));
+        /*
+         * An action bound to a work template is LABELLED by that work.
+         *
+         * The capability's own label is "Start stage work", which is the right name for the generic
+         * thing it does and the wrong name on a button. A stage may configure several startable
+         * templates, and they would all render identically — an operator would face two or three
+         * identical controls with no way to tell which starts the offer and which starts the packet.
+         *
+         * Taken from the stage's own plan rather than authored again, so a renamed work template
+         * renames its control and the two can never disagree. An explicit override still wins.
+         */
+        const workLabelByKey = new Map(
+            (operatingPlan?.work_templates ?? []).map((t) => [t.template_key, (t.label ?? "").trim()]),
+        );
+        templateConfig.stage_actions = catalogActions.supporting.map((row) => {
+            const boundKey = row.work_template_key?.trim();
+            const boundLabel = boundKey ? workLabelByKey.get(boundKey) : undefined;
+            const label = row.override_label?.trim() || boundLabel || undefined;
+            return {
+                action_ref: row.action_ref,
+                ...(label ? { override_label: label } : {}),
+                ...(boundKey ? { work_template_key: boundKey } : {}),
+            };
+        });
     }
 
     return {
