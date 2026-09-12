@@ -765,7 +765,7 @@ function SummaryBody({
      *
      * `Record outcome` acts on the PRIMARY work — correctly, and deliberately so. The consequence
      * was that a second open work item had no way to be resolved from here at all: on staging an
-     * `offer_spot` work was started, was live in the runtime, and its outcomes (Spot offered, No
+     * offer work was started, was live in the runtime, and its outcomes (Spot offered, No
      * response, Candidate paused) were reachable from nowhere, because the only surface that listed
      * secondary work was the expanded workspace.
      *
