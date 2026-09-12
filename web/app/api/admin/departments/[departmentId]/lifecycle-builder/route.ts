@@ -41,6 +41,7 @@ import { parseParticipantDecision } from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
     isAuthorableRequirementKind,
     parseStageRequirementsV1,
+    validateWorkRequirementReferences,
     REQUIREMENT_KIND_UNSUPPORTED_REASON_V1,
 } from "@/lib/lifecycle/stageRequirementsV1";
 import { loadBusinessProcessEditorState } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
@@ -50,6 +51,12 @@ import {
     saveDraft,
 } from "@/lib/businessProcesses/configuration/businessProcessConfigurationService";
 import { applyEnrollmentTemplateInConfig } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
+import { trackAdoptionTemplateForProcessKey } from "@/lib/businessProcessTemplates/processTrackTemplates";
+import {
+    adoptProcessTracks,
+    evaluateProcessTrackAdoption,
+} from "@/lib/businessProcesses/configuration/processTrackAdoption";
+import { observedProcessInstanceStages } from "@/lib/businessProcesses/configuration/observedProcessInstanceStages";
 import { syncWorkUnitSortOrderFromBuilderStages } from "@/lib/lifecycle/syncWorkUnitSortOrderFromBuilder";
 import { logLifecycleBuilderSaveTiming } from "@/lib/lifecycle/lifecycleBuilderSaveTiming";
 import {
@@ -245,6 +252,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
         let config = draftBuilder(draft) ?? lifecycleBuilderFromDepartmentMetadata(row.metadata);
         let ensuredTransition: { transition_ref: string; target_stage_key: string; created: boolean } | null = null;
         let commandSetChange: { added: string[]; removed: string[]; commands: string[] } | null = null;
+        let trackAdoption: Record<string, unknown> | null = null;
         const action = typeof body.action === "string" ? body.action.trim() : "";
 
         switch (action) {
@@ -413,6 +421,27 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                     return NextResponse.json(
                         { error: "One or more requirements are not readable — each needs a unique requirement_id, a known kind with its reference, and a level." },
                         { status: 400 }
+                    );
+                }
+                /*
+                 * A work requirement must name work THIS STAGE produces. The runtime reports state
+                 * for the template keys in the stage's own operating plan, so a requirement naming
+                 * anything else would wait forever on work that never appears here — an operator
+                 * meeting a stage they cannot leave, with a blocker pointing at no button.
+                 */
+                const stageRecord = targetProcess.stages.find((st) => st.key === stageKey);
+                const workRefusals = validateWorkRequirementReferences(
+                    parsed.requirements,
+                    (stageRecord?.stage_operating_plan_v1?.work_templates ?? []).map((t) => t.template_key),
+                );
+                if (workRefusals.length) {
+                    return NextResponse.json(
+                        {
+                            error: workRefusals.map((r) => r.detail).join(" "),
+                            code: "unknown_work_template",
+                            refusals: workRefusals,
+                        },
+                        { status: 422 },
                     );
                 }
                 for (const requirement of parsed.requirements) {
@@ -774,6 +803,94 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 config = removeStageFromProcess(config, pid, stageId);
                 break;
             }
+            /**
+             * PREVIEW ADOPTION — reads, judges, and RETURNS. Never saves.
+             *
+             * The early return is the point: every other action in this switch falls through to
+             * `saveDraft`, so a preview implemented as a normal case would persist a draft revision
+             * just for looking. An operator asking "what would this do" must be able to ask it as
+             * often as they like and change nothing.
+             */
+            case "preview_process_track_adoption":
+            case "adopt_process_tracks": {
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const pid = processId || config.active_process_id || "";
+                if (!pid) return NextResponse.json({ error: "process_id is required" }, { status: 400 });
+                const missingProcess = requireProcessInConfig(config, pid, departmentId, row.metadata);
+                if (missingProcess) return missingProcess;
+
+                const proc = config.processes.find((p) => p.id === pid);
+                if (!proc) {
+                    return NextResponse.json({ error: "Process not found" }, { status: 404 });
+                }
+
+                const template = trackAdoptionTemplateForProcessKey(proc.key);
+                if (!template) {
+                    return NextResponse.json(
+                        {
+                            error: `No canonical track model is published for process "${proc.key}", so there is nothing to adopt.`,
+                            code: "no_adoptable_track_model",
+                        },
+                        { status: 400 },
+                    );
+                }
+
+                /*
+                 * The instance read is part of the DECISION, not decoration on the preview. Adoption
+                 * re-homes every lane onto track membership, so a running record standing on a stage
+                 * no track claims would stop resolving. Reading it here means the same evidence backs
+                 * the preview an operator saw and the apply they then pressed.
+                 */
+                let observed;
+                try {
+                    observed = await observedProcessInstanceStages(createAdminClient(), {
+                        orgId: ctx.orgId,
+                        processKey: proc.key,
+                    });
+                } catch (e) {
+                    return NextResponse.json(
+                        { error: e instanceof Error ? e.message : "Could not read process instances" },
+                        { status: 502 },
+                    );
+                }
+
+                const evaluation = evaluateProcessTrackAdoption({
+                    process: proc,
+                    template,
+                    observedInstanceStageKeys: observed.stage_keys,
+                });
+
+                const report = {
+                    process_id: pid,
+                    process_key: proc.key,
+                    adoptable: evaluation.ok,
+                    already_adopted: evaluation.already_adopted,
+                    blockers: evaluation.blockers,
+                    assignments: evaluation.assignments,
+                    preview: evaluation.preview,
+                    observed_instances: observed,
+                };
+
+                if (action === "preview_process_track_adoption") {
+                    return NextResponse.json({ ...report, previewed: true });
+                }
+
+                if (!evaluation.ok) {
+                    // ALL OR NOTHING. A partially adopted process is one whose routing already flipped.
+                    return NextResponse.json(
+                        {
+                            error: evaluation.blockers.map((b) => b.message).join(" "),
+                            code: "track_adoption_refused",
+                            ...report,
+                        },
+                        { status: 409 },
+                    );
+                }
+
+                config = adoptProcessTracks(config, pid, template, evaluation.assignments);
+                trackAdoption = report;
+                break;
+            }
             case "apply_enrollment_v2_template": {
                 const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
                 const pid = processId || config.active_process_id || "";
@@ -868,6 +985,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
             draft_revision: savedDraft.draftRevision,
             ...(ensuredTransition ? { ensured_transition: ensuredTransition } : {}),
             ...(commandSetChange ? { command_set_change: commandSetChange } : {}),
+            ...(trackAdoption ? { track_adoption: trackAdoption } : {}),
         });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Save failed" }, { status: 400 });

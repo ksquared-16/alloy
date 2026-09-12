@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import BusinessProcessPublicationBar from "@/components/adminV2/settings/lifecycle/BusinessProcessPublicationBar";
 import StageFormRequirementsEditor from "@/components/adminV2/settings/lifecycle/StageFormRequirementsEditor";
+import StageWorkRequirementsEditor from "@/components/adminV2/settings/lifecycle/StageWorkRequirementsEditor";
 import StagePaperworkCard from "@/components/adminV2/settings/lifecycle/StagePaperworkCard";
 import StagePerChildPathsEditor from "@/components/adminV2/settings/lifecycle/StagePerChildPathsEditor";
 import LifecycleStageFieldRequirementsEditor, {
@@ -1009,6 +1010,15 @@ export default function StageEditorV2({
                                 departmentId={departmentId}
                                 stageKey={stageKey}
                                 stageLabel={stageLabel}
+                                stageRecord={stageRecord ?? null}
+                                process={process ?? null}
+                                onSaved={onReloadConfiguration}
+                            />
+                            {/* Work is a requirement kind like any other, so it is authored here
+                                beside forms rather than on a surface of its own. */}
+                            <StageWorkRequirementsEditor
+                                departmentId={departmentId}
+                                stageKey={stageKey}
                                 stageRecord={stageRecord ?? null}
                                 process={process ?? null}
                                 onSaved={onReloadConfiguration}
