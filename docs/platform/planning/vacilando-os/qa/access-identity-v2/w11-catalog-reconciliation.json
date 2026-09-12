@@ -130,7 +130,8 @@
   ],
   "deletion_candidates_by_vocabulary": {
     "legacy_ops_fin_admin_seed_set": {
-      "count": 21,
+      "count": 19,
+      "count_correction": "2026-09-11. Said 21 above its own 19-key array — an internal contradiction rather than a restatement, so it is repaired outright. 21 was correct on 2026-08-07; `fin.read` and `fin.write` left this group for the enforced set on 2026-09-10 and the count was not moved with them. 19 + 10 grid + 4 declared-inert = 33, which is `deletion_candidate_count`.",
       "seeded_by": "20260329165048_remote_schema.sql (seed_default_rbac), re-seeded by 20260729120000_…phase0….sql",
       "operator_meaning": "An operator has never been offered these as controls in a product surface, but since W-10 the grid projects the whole catalog, so they became visible controls that change nothing.",
       "keys": ["admin.roles.read", "admin.roles.write", "admin.users.read", "admin.users.write", "ops.contacts.read", "ops.contacts.write", "ops.customers.read", "ops.customers.write", "ops.jobs.read", "ops.jobs.write", "ops.locations.read", "ops.locations.write", "ops.messaging.read", "ops.opportunities.read", "ops.opportunities.write", "ops.schedules.read", "ops.schedules.write", "ops.workflows.read", "ops.workflows.write"]
@@ -171,17 +172,35 @@
       "keys_enforced_by_nothing": 0,
       "keys_grantable_but_unbindable": 1,
       "note": "communications.send.emergency is the one. It is the residual gap, and it is one key, named.",
-      "w13_restatement": "Was 36 deleted / width 22 / 21 enforced. `settings.users_roles.read` is now enforced rather than deleted, so the surviving catalog is one key wider. OD-3's review list is correspondingly one key shorter — and had that review been executed before W-13, the key would have been deleted out from under the gate that now reads it."
+      "w13_restatement": "Was 36 deleted / width 22 / 21 enforced. `settings.users_roles.read` is now enforced rather than deleted, so the surviving catalog is one key wider. OD-3's review list is correspondingly one key shorter — and had that review been executed before W-13, the key would have been deleted out from under the gate that now reads it.",
+      "STALE_DO_NOT_READ": "2026-09-11. The three figures in the parent block — catalog 23, enforced 22, and the `if_all_35_are_deleted` framing — are WRONG and have been since 2026-09-10. They were not restated when `financials_restatement` moved `fin.read` and `fin.write`, and they never accounted for the ten approved post-artifact additions at all. This is the only clause of W-11's exit that the plan records as `met`, so the gate was met by a false number. Read `wave3_reissue_restatement` below instead. The block is left in place rather than overwritten because it is a dated measurement and this file's discipline is to restate, not to rewrite history."
+    },
+    "wave3_reissue_restatement": {
+      "measured": "2026-09-11, mission msn_861e1785ec233cf433, assignment asg_fcf21a08b73f3a, re-derived from the tree at this commit by the same region-based instrument",
+      "live_catalog_width_before_m5": 67,
+      "note_on_57_vs_67": "`catalog_width: 57` at the top of this file is a BASELINE and is not stale. This file deliberately excludes keys added after it was written; `catalogVocabularyReconciliation` reconciles it to the live tree by adding APPROVED_ADDITIONS, which is why that suite is green at 67 against a file that says 57. Ten additions have been approved since — health.view, health.manage, enrollment.requirement_exception.manage, enrollment.pricing.override, fin.adjust, fin.responsibility, fin.subsidy, attendance.read, attendance.record, portal.access — and all ten are enforced.",
+      "live_enforced": 34,
+      "live_unenforced": 33,
+      "if_all_33_are_deleted_and_the_1_addition_is_seeded": {
+        "catalog_width": 35,
+        "keys_enforced_by_a_route_or_helper": 34,
+        "keys_enforced_by_nothing": 0,
+        "keys_grantable_but_unbindable": 1,
+        "note": "communications.send.emergency is still the one. It is the residual gap, and it is still one key, named."
+      },
+      "what_this_still_does_not_close": "Unchanged in kind and now quantified. 'Enforced' means a product source names the key on an executable line; it does not mean a ROUTE declares it. W-14 has since supplied the declared-route-capability set, so the second half of W-11's tier A criterion is measurable for the first time: only 11 of the 67 catalog keys are named by any declared route. 33 of the other 56 are this deletion list and M5 answers them; the remaining 23 are genuinely enforced keys that no declared route names — they are gated by a helper, not by a declared handler. So M5 does NOT make tier A green in both directions; 23 would remain, and closing them is W-15's sweep of the 700 pending handlers."
     },
     "what_this_does_not_close": "'Enforced' here means a product source names the key. It does not mean a route declares it, and it does not mean the enforcement is reachable — 8 of the 21 gate config-assist proposals only, and 1 is env-conditional. The declared-route-capability set does not exist until W-14, and the standing check that every catalog key resolves to ≥1 enforcement site is W-50/RL-35. W-11 makes those checks authorable; it does not perform them."
   },
   "operator_decision_required": {
     "gate": "The plan makes this review a precondition of M5: deletions are shown before the migration runs. No migration was authored in this assignment.",
-    "the_ask": "Approve, amend, or reject the 36-key deletion list above — and separately, the sequencing question below.",
-    "why_it_cannot_be_decided_by_a_worker": "11 of the 36 have been operator-visible controls with meaningful labels. Deleting them is correct if a control that changes nothing is worse than no control — which is this plan's stated position (05…§7 item 5, and the brief's first rejection condition) — but it removes settings an operator may believe are load-bearing.",
+    "the_ask": "Approve, amend, or reject the 33-key deletion list above — and separately, the sequencing question below.",
+    "COUNT_RESTATED_2026_09_11": "This block said 36 throughout, and the live list is 33. The option ids below keep their original names so that prior records referring to `delete_all_36` still resolve, but the counts in their descriptions are corrected. The three keys that left are `settings.users_roles.read` (W-13/AD-22) and `fin.read` / `fin.write` (Financials, 2026-09-10) — all three recovered rather than deleted, none ever added. Read this block with `wave3_reissue_restatement`, not with the stale residual figures above it.",
+    "sequencing_hazard": "Raised by w45-w51 and now three keys deep: a key is indistinguishable from a deletion candidate while the gate that should read it is still satisfied by a role literal. All three recoveries happened exactly that way. OD-3's review must therefore run AFTER the role-literal sweep, not before — executing it earlier would have deleted `settings.users_roles.read` out from under the gate that now reads it.",
+    "why_it_cannot_be_decided_by_a_worker": "10 of the 33 have been operator-visible controls with meaningful labels. Deleting them is correct if a control that changes nothing is worse than no control — which is this plan's stated position (05…§7 item 5, and the brief's first rejection condition) — but it removes settings an operator may believe are load-bearing.",
     "options": [
-      { "id": "delete_all_36", "description": "M5 deletes every unenforced key. Fully closes C4 in the deletion direction; the grid narrows to 22 rows' worth of keys; C13's workflows row does not return." },
-      { "id": "delete_25_defer_11", "description": "Delete the 21 legacy + 4 inert-declared keys, and defer the 11 grid-vocabulary keys to a wave where their features are either enforced or withdrawn. Lower operator surprise; leaves the visible half of the theatre standing." },
+      { "id": "delete_all_36", "restated_count": 33, "description": "M5 deletes every unenforced key — 33 of them. Fully closes C4 in the deletion direction; the surviving catalog is 34 keys plus the 1 addition; C13's workflows row does not return." },
+      { "id": "delete_25_defer_11", "restated_count": "23 delete / 10 defer", "description": "Delete the 19 legacy + 4 inert-declared keys, and defer the 10 grid-vocabulary keys to a wave where their features are either enforced or withdrawn. Lower operator surprise; leaves the visible half of the theatre standing." },
       { "id": "deactivate_not_delete", "description": "Set is_active = false rather than DELETE. Reversible, avoids the FK problem entirely, and keeps grant rows intact — but leaves the rows in the table, so 'one vocabulary' becomes 'one vocabulary plus a graveyard', and W-50's build check would need an is_active predicate." }
     ]
   },
@@ -189,13 +208,15 @@
     {
       "id": "P1",
       "finding": "Grants must be deleted before keys, or M5 aborts on live data.",
-      "detail": "The one surviving FK on role_permission_grants.permission_key is ON DELETE RESTRICT (W-9's execution record), and seed_default_rbac grants admin every active key, so every one of the 36 is expected to carry live grant rows on every org. Handed forward by W-9 as consequence 1; confirmed here against the corrected catalog."
+      "detail": "The one surviving FK on role_permission_grants.permission_key is ON DELETE RESTRICT (W-9's execution record), and seed_default_rbac grants admin every active key, so every one of the 36 is expected to carry live grant rows on every org. Handed forward by W-9 as consequence 1; confirmed here against the corrected catalog.",
+      "restated_2026_09_11": "Unchanged in substance; the figure is now 33 rather than 36. All 33 are inside the frozen 57-key seed literal, so all 33 are still expected to carry live admin grant rows on every organization."
     },
     {
       "id": "P2",
       "finding": "The deletion is not durable unless the same migration edits seed_default_rbac's catalog literal.",
       "detail": "The live seed_default_rbac() — as rewritten by Phase 0 — inserts all 57 keys into permission_definitions on every call, ON CONFLICT DO NOTHING. Creating one organization after M5 re-creates every key M5 deleted. The plan sequences W-11 before W-12 so that W-12's enumeration knows what to enumerate; that ordering is right for the grant half and insufficient for the catalog half. M5 must either rewrite the function's catalog insert itself or land in the same migration as M6.",
-      "status": "raised against the plan — see §7"
+      "status": "raised against the plan — see §7",
+      "restated_2026_09_11": "The second of the two remedies no longer exists, and the first now costs more. M6 HAS LANDED — 20260807170000_w12_seed_default_rbac_enumerated_grants.sql — and it did not take the catalog half with it. The literal now lives at 20260911140000_w13_portal_access_capability_admission.sql:142-201, is still exactly 57 keys, still `on conflict (key) do nothing`, and all 33 deletion candidates are inside it, so the finding holds verbatim. What changed is that the literal is now FROZEN: grantSeedEnumeration.test.ts:267 asserts `catalog.length === 57` byte-for-byte, and W-13 declined on purpose to add `portal.access` to it, its comment stating the freeze exists so that 'nobody edits history to make a new key look old.' That freeze is correct for its own purpose and it means M5 must amend the lock that exists to prevent exactly the edit M5 requires. Still raised rather than resolved: re-sequencing is not a worker's call."
     },
     {
       "id": "P3",
@@ -203,11 +224,19 @@
       "detail": "Everything here is derived from the tree. M5's §11 preflight must establish, on the target: the live catalog width (is it 57?), whether any key exists live that no migration seeds, the grant-row count per deletion candidate, and whether any org holds a grant on a key the tree does not know about. Channel is the trusted host action database.read_census, as for M1."
     }
   ],
+  "second_list_of_the_same_fact": {
+    "observed": "2026-09-11",
+    "where": "web/lib/admin/unenforcedPermissionKeys.json (W-50 / IA-R8)",
+    "finding": "That file holds EXACTLY these 33 keys. Verified set-equal in both directions to this artifact's deletion_candidates and to a fresh scan of the tree at this commit. It is ratcheted both ways by permissionEnforcementTruth, so it cannot drift silently, and it is JSON rather than TypeScript for a stated reason — a .ts file naming these keys would give every one of them an enforcement site and falsify the scan that produces it.",
+    "why_it_is_still_worth_recording": "It is the same measurement maintained in two files. Two ratcheted lists beat one unratcheted list, but this is the shape that produced the Financials defect: when this list went stale on fin.read/fin.write, rowEnforcement reported the whole fin row inert, offerableLevelsForRow returned only `none`, and the role editor rendered NO control for View or Manage Financials while the server enforced it the whole time. The two lists currently agree.",
+    "status": "recorded, not repaired — W-50 owns that file"
+  },
   "status": {
     "exit_criteria": {
-      "enumerated_deletion_list_reviewed": "not met — the list is produced and presented; operator review is the open gate",
+      "enumerated_deletion_list_reviewed": "not met — the list is produced and presented; operator review (OD-3) is the open gate. The list is 33, not the 36 first recorded.",
       "catalog_and_enforced_set_reconciled": "not met — reconciliation is measured, not applied; no migration authored",
-      "residual_gap_is_a_written_number": "met — see residual_gap_after_w11"
+      "residual_gap_is_a_written_number": "met — but read wave3_reissue_restatement, NOT residual_gap_after_w11. This clause was recorded as `met` on 2026-08-07 and the number backing it went false on 2026-09-10 without being restated; it is the only exit clause W-11 claims, so the gate stood on a stale figure for a day. Live: catalog 35, enforced 34, enforced by nothing 0, grantable-but-unbindable 1.",
+      "tier_A_as_the_plan_specifies_it": "half met, and newly measurable. §7 defers tier A until W-14 supplies the declared set; W-14 has. `declared ⊆ catalog` is implemented at web/tests/access/routeCapabilityDeclaration.test.ts:154 and is GREEN over 11 distinct declared capabilities. The reverse direction §7 also requires — `catalog ⊆ declared` — is NOT implemented and would be 56 red of 67, of which 23 are enforced keys no declared route names. M5 does not close it; W-15 does."
     },
     "migration_authored": false,
     "migration_applied": false,

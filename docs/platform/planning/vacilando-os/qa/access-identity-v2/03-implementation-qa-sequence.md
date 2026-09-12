@@ -269,6 +269,22 @@ function re-creates all 57 keys on the next org creation, so M5 must edit that l
 RL-3's subject is repaired and re-runs green over the full catalog; W-11's instrument is deliberately
 **unnumbered** and a lock number is requested of the Director (`DR-12`). W-10's row and key counts are
 restated to **37 rows over 57 keys** (§7)
+· **W-11 SECOND ISSUANCE 2026-09-11** (mission `msn_861e1785ec233cf433`, assignment `asg_fcf21a08b73f3a`) —
+**the reconciliation is intact and every number recording it was stale.** Nothing regressed: discovery still
+reaches every seeding syntax, no probe survives, and the suite is green. But the tree moved under a
+measurement that was written once and restated twice, each time in some places and not others. Re-derived:
+the catalog is **67 keys, not 57**; **34 enforced, 33 unenforced**; the deletion list is **33, not 36**, and
+**three keys have left it while none has ever joined** — `settings.users_roles.read` via W-13, then
+`fin.read`/`fin.write` — which makes OD-3's *"review after the literal sweep, not before"* a hazard three keys
+deep. **The one exit clause W-11 marked `met` was the one that had gone false:** the residual-gap number read
+*"catalog 23, enforced 22"* against a live **35 and 34**, and the operator's own review text still said
+*"36-key deletion list"*. Corrected in the exit artifact. **Tier A is expressible now and half-built** —
+W-14 supplied the declared set, `declared ⊆ catalog` is green over 11 capabilities, and the reverse direction
+§7 also requires is unimplemented and would be **56 red, 23 of them genuinely enforced keys no declared route
+names** — so **M5 does not make tier A green**; that is W-15's 700-handler sweep. **P2 got harder:** M6 landed
+without the catalog half, and the 57-key seed literal M5 must edit is now **frozen byte-for-byte** by
+`grantSeedEnumeration`. Instrument proven red by a **fifth** seeding syntax with no parser edit (4 red,
+removed, green after); `vac run typecheck:tests` **rc=0**, discharging the debt the first issuance carried (§7)
 · **W-4 fifth issuance 2026-09-04** (mission `msn_0e24196324d1441ac2`, assignment `asg_a7d97e07ef0c59`) —
 **nothing could be executed**: no `node_modules`, no resolvable `typescript`, so the AST walk had no parser
 and **no count is claimed for this date**; the 2026-08-07 column is still the last measured one. The finding
@@ -425,8 +441,16 @@ qualification worth carrying forward is not about W-10 but about the layer since
 suppresses controls for unenforced columns, so **17 of those 46 rows now render "Not enforced yet"** — the row
 still surfaces, the control does not, and that distinction is locked rather than assumed (§7). **W-11 (§7) is measured, not applied** — its
 exit artifact is delivered and its instrument is green, but the operator review and M5 are open, and its
-correction to the catalog's width applies to every count in §3, §7 and §13 that predates it. Every other wave
-remains a proposal.
+correction to the catalog's width applies to every count in §3, §7 and §13 that predates it. **Re-derived a
+second time on 2026-09-11: the method held and every count had drifted** — the catalog is **67 keys**, the
+reconciliation **34 enforced / 33 unenforced**, and the residual-gap figure W-11 recorded as its one met exit
+clause had been false since 2026-09-10. Two things follow for scheduling. **Tier A is no longer deferred but
+is only half-built** — W-14 supplied the declared set, `declared ⊆ catalog` is green, and the reverse
+direction the criterion also names is unimplemented and 56 red, of which **23 are enforced keys no declared
+route names**, so **M5 will not make tier A green** and W-15's sweep owns the remainder. And **P2's escape
+hatch has closed**: M6 landed without the catalog half, so the 57-key seed literal that re-creates every
+deleted key is now frozen byte-for-byte by its own lock, and M5 must amend that lock to proceed (§7). Every
+other wave remains a proposal.
 
 ---
 
@@ -558,7 +582,7 @@ code never requires reverting data.
 | **0** | Facts before changes — read-only live verification | W-0 | — · **DONE 2026-07-31** |
 | **1** | Fail-closed quick wins, no schema | W-1 … W-4 | — · **DONE 2026-07-31** (W-1…W-4) |
 | **2** | The scope invariant (the confirmed fail-open) | W-5 … W-8 | ~~W-0~~ **satisfied** |
-| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; **re-derived and still met 2026-09-11** against a tree grown 314 → 413 migrations, with the API clause now discharged in SQL and both compatibility views dropped by `W-60`/`M20`; RL-7 live again after two days red · **W-10 DONE 2026-08-07**; RL-3 and RL-48 live, RL-2 replaced; **re-verified a third time 2026-09-11 with no repair required** — 129/0 across ten dependent suites, RL-3 exact over 67 live catalog keys, screen re-measured at 46 rows / 67 keys, of which 17 are inert under `W-50`/`IA-R8` · **W-11 MEASURED 2026-08-07** — the catalog is **57 keys, not 35**; 36 unenforced, deletion list delivered as an exit artifact, **M5 withheld pending operator review**; RL-3's subject repaired. · **W-12 AUTHORED 2026-08-07** — M6 written and **not applied**, RL-8 live over all 315 migrations (4 blanket grant seeds left, all superseded history), §11's width-vs-live preflight carried as a fail-closed assertion inside the migration because no worker channel to it exists. **Wave 3 is complete as far as a worker can take it: three of four exits turn on an operator authorization, not on effort** |
+| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; **re-derived and still met 2026-09-11** against a tree grown 314 → 413 migrations, with the API clause now discharged in SQL and both compatibility views dropped by `W-60`/`M20`; RL-7 live again after two days red · **W-10 DONE 2026-08-07**; RL-3 and RL-48 live, RL-2 replaced; **re-verified a third time 2026-09-11 with no repair required** — 129/0 across ten dependent suites, RL-3 exact over 67 live catalog keys, screen re-measured at 46 rows / 67 keys, of which 17 are inert under `W-50`/`IA-R8` · **W-11 MEASURED 2026-08-07** — the catalog is **57 keys, not 35**; 36 unenforced, deletion list delivered as an exit artifact, **M5 withheld pending operator review**; RL-3's subject repaired. **Re-derived 2026-09-11 and every count restated: catalog 67, 34 enforced, deletion list 33** — three keys recovered from it, none ever added; the residual-gap figure recorded as W-11's one met exit clause had been false since 2026-09-10 and is corrected in the artifact. **Tier A now expressible but half-built** (`declared ⊆ catalog` green over 11 capabilities; the reverse direction unimplemented and 56 red, 23 of them enforced keys no declared route names — **M5 does not make it green**, W-15 does). **P2 hardened**: M6 landed without the catalog half and the 57-key seed literal is now frozen byte-for-byte, so M5 must amend that lock. Instrument proven red by a fifth seeding syntax; `typecheck:tests` rc=0 · **W-12 AUTHORED 2026-08-07** — M6 written and **not applied**, RL-8 live over all 315 migrations (4 blanket grant seeds left, all superseded history), §11's width-vs-live preflight carried as a fail-closed assertion inside the migration because no worker channel to it exists. **Wave 3 is complete as far as a worker can take it: three of four exits turn on an operator authorization, not on effort** |
 | **4** | Admission and declaration | W-13 … W-15 | W-3, D2 |
 | **5** | Role-model coherence and the long tail | W-16 … W-22 | ~~W-0~~ **satisfied** · D3, D4 |
 
@@ -6503,6 +6527,124 @@ So the honest seventh answer is not *"W-11 doesn't move it"* alone. It is: **the
 with numbers derived from an instrument this pass found blind, and the corrected numbers make the case for
 the reduction stronger, not weaker.** `W-13` remains the instrument and `AD-22`/`AD-25` remain the whole of
 what stands between the directive and the layer it is aimed at.
+
+#### W-11 second issuance — **2026-09-11**, mission `msn_861e1785ec233cf433`, assignment `asg_fcf21a08b73f3a`: every number in the record above is stale, and the one exit clause it marked `met` is the one that went false
+
+**The reconciliation is intact. The record of it is not.** W-10's third issuance arrived to find record and
+tree in agreement; W-11's arrives to find them in agreement on *method* and in disagreement on *every count*.
+Nothing regressed — the instrument is green, discovery still reaches every seeding syntax, and no probe
+survives. What moved is the tree underneath a measurement that was written down once and restated twice,
+each time in some places and not others.
+
+**Re-derived on this tree at this commit, 413 migrations and 6,872 scanned product files on:**
+
+| | 2026-08-07 | **2026-09-11** | |
+|---|:--:|:--:|---|
+| Catalog keys | 57 | **67** | +10, each named in `APPROVED_ADDITIONS` with the decision that authorized it |
+| Enforced | 21 | **34** | +13: the 10 additions are all enforced, plus 3 recovered from the deletion list |
+| **Unenforced — the deletion list** | 36 | **33** | 19 legacy · 10 grid-vocabulary · 4 declared-but-inert |
+| Enforced with no catalog row | 1 | **1** | `communications.send.emergency`, unchanged and still unbindable |
+| Residual catalog if M5 deletes all and the 1 addition seeds | 22 | **35** | enforced **34**, enforced by nothing **0**, grantable-but-unbindable **1** |
+
+**Three keys have left the deletion list and none has ever joined it.** `settings.users_roles.read`
+(W-13/AD-22), then `fin.read` and `fin.write` (Financials, 2026-09-10). Every movement this initiative has
+recorded is *out*, which is the direction that means the product grew a real gate rather than lost one — and
+it is also the hazard `w45-w51` already named: a key is indistinguishable from a deletion candidate while the
+gate that should read it is still a role literal. **OD-3's review must run after the literal sweep, not
+before**, and the evidence for that is now three keys deep rather than one.
+
+**The artifact's headline is not stale; its exit number is.** `w11-catalog-reconciliation.json` carries
+`57 / 24 / 33` as a *baseline* — the artifact deliberately excludes post-artifact additions, and
+`catalogVocabularyReconciliation` reconciles it to the live tree by adding `APPROVED_ADDITIONS`, which is why
+that suite is green at 67 while the file says 57. That design is sound and is not touched here. But
+`residual_gap_after_w11` was **not** restated when the Financials recovery moved two keys, and never accounted
+for the additions at all: it reads *"catalog 23, enforced 22"* against a live answer of **35 and 34**. That is
+the only clause of W-11's exit the record above marks **met**, and it was met by a number that has been wrong
+since 2026-09-10. The same value also appears in `operator_decision_required` as a *"36-key deletion list"*
+with options named `delete_all_36` and `delete_25_defer_11` — **the live list is 33**, and this is the text an
+operator would read when executing OD-3. One internal contradiction is repaired outright rather than
+restated: `deletion_candidates_by_vocabulary.legacy_ops_fin_admin_seed_set.count` said `21` above its own
+19-key array.
+
+This is the failure mode this programme keeps recording, in its own exit artifact: **a count restated in the
+places the prose names and missed in the place the gate reads.** The restatements were appended in the
+artifact's established idiom — `w13_restatement`, `financials_restatement` — rather than by rewriting the
+dated measurement, and the same idiom is used here.
+
+**Tier A is expressible now, and it is half-built.** §7 defers it — *"only meaningful after W-14 supplies the
+declared set"* — and W-14 supplied it. The check lives at
+`web/tests/access/routeCapabilityDeclaration.test.ts:154` and is **green**. But the plan specifies the set
+difference *"in both directions"*, and one direction is implemented:
+
+- **declared ⊆ catalog** — every capability a route declares is a key the catalog seeds. **Green**, over 11
+  distinct declared capabilities across 56 declared handlers. A route declaring an uncatalogued capability
+  would be a permanent 403 that reads like a gate; none does.
+- **catalog ⊆ declared** — every catalog key is named by some declared route. **Not implemented, and would be
+  56 red of 67.** 33 of those are the deletion list and M5 answers them. **The other 23 are keys that are
+  genuinely enforced and that no declared route names** — `portal.access`, `ops.messaging.write`, the eight
+  config-assist keys, the four `fin.*` additions, both `operational_expectations.*` authoring keys, and the
+  rest. They are enforced by a *helper*, not by a declared route handler.
+
+So **M5 does not make tier A green.** After every deletion applies, that direction is still 23 red, and
+closing it is W-15's sweep of the **700 pending handlers**, not W-11's data change. `w14-…json` records this
+as *"W-11's tier A check is now expressible and green"*; that is true of the half that exists and overstates
+the criterion as §7 writes it. Recorded, not corrected — the W-14 artifact is outside this assignment's scope.
+
+**P2 has become harder, and the remedy it proposed no longer exists.** W-11 raised that the deletion is not
+durable — `seed_default_rbac()` re-creates the catalog on every org creation — and offered a choice: *"M5 must
+rewrite that literal itself or land in the same migration as M6."* **M6 has since landed**
+(`20260807170000`), and it did not take the catalog half with it. The literal now lives in
+`20260911140000_w13_portal_access_capability_admission.sql:142-201`, still **57 keys**, still
+`on conflict (key) do nothing` — and it is now **frozen**: `grantSeedEnumeration.test.ts:267` asserts
+`catalog.length === 57` byte-for-byte, and W-13's own comment states the omission of `portal.access` from it
+is *deliberate*, so that *"nobody edits history to make a new key look old."* The freeze is right for its own
+purpose and it means M5 must amend a lock that exists to prevent exactly the edit M5 needs. **The second
+option is gone and the first now costs a lock amendment.** Raised, not resolved — as before, re-sequencing is
+not a worker's call.
+
+**The same fact is now maintained in two files.** `web/lib/admin/unenforcedPermissionKeys.json` (W-50) holds
+**exactly** the 33 deletion candidates — asserted equal to a fresh derivation in both directions by
+`permissionEnforcementTruth`, and verified here as set-equal to the artifact's list and to the live scan. Two
+ratcheted lists of one measurement is better than one unratcheted list, and it is still the shape that
+produced the Financials defect: when that list went stale on `fin.read`/`fin.write`, the role editor rendered
+no Financials control at all while the server enforced it. W-10's third issuance flagged the reintroduction;
+this issuance confirms the two lists currently agree.
+
+**Proven red by a fifth syntax, and the fixture is gone.** The 2026-08-07 pass planted a fourth seeding syntax
+and took the suite to 3 red. This pass planted a **fifth** — a CTE-wrapped `INSERT … RETURNING` with a named
+column list in description-first order, a shape no migration in the tree uses — and the region-based discovery
+found it **with no parser edit**, taking the suite to **4 red** (width, unexplained-key, set equality, deletion
+list). The fourth red is new: the `APPROVED_ADDITIONS` clause W-10's issuance added means an unapproved key now
+fails on its own account rather than only through the totals. Fixture removed; both suites green after.
+
+**Evidence.**
+
+| Item | Result |
+|---|---|
+| `web/tests/access/catalogVocabularyReconciliation.test.ts` | **11 passed / 0 failed** (10 at last issuance; the width ratchet is the addition) |
+| `web/tests/admin/permissionGrid.test.ts` (RL-3, RL-48, W-11's repaired subject) | **20 passed / 0 failed** |
+| `routeCapabilityDeclaration` + `permissionEnforcementTruth` + `grantSeedEnumeration` + `catalogConsolidationLock` | **93 passed / 0 failed** — the four suites that read W-11's discovery |
+| `web/tests/access` whole (excl. `live/`) | **901 passed / 8 skipped / 0 failed** across 55 files |
+| Red before / green after | **4 red** on a fifth-syntax seed, green once removed |
+| Non-vacuity | **6,872** files walked (>1000 asserted); catalog width pinned to a number a second method produced |
+| Tier A (the plan's) | **Half green, half unbuilt.** `declared ⊆ catalog` green over 11 capabilities; `catalog ⊆ declared` unimplemented and 56 red, 23 of them enforced keys |
+| `vac run typecheck:tests` | **rc=0** — the debt the 2026-08-07 record carried is discharged. The stray `web/tests/tmpWave1EvidenceParse.test.ts` it named as the blocker is **no longer in the tree** |
+| Tier C | **Not run.** Nothing applied; no round-trip to exercise |
+| Tier D | **Not run.** No browser verification |
+
+**Exit criteria — restated, and one clause moves backwards.**
+
+| Clause | Status |
+|---|---|
+| Enumerated deletion list reviewed | **not met, unchanged.** OD-3 is open. The list is now **33**, not 36, and the review text an operator would act on has been corrected to match |
+| Catalog and enforced set reconciled | **not met, unchanged.** Measured in both directions, not applied. No migration authored |
+| The residual gap is a written number, not an unknown | **met — but it was `met` on a false number until this pass.** Live: catalog **35**, enforced **34**, enforced by nothing **0**, grantable-but-unbindable **1** (`communications.send.emergency`) |
+
+**Status: exit `partially met`, unchanged in substance — the two open clauses both turn on OD-3, not on
+effort. The record is repaired: counts restated in §3, §7 and the exit artifact; tier A recorded as half-built
+rather than deferred; P2 restated now that M6 has landed and frozen the literal M5 must edit. Instrument
+`live` and proven red by a fifth syntax, RL-3's subject green, no `RL-` number minted, no migration authored,
+typecheck `rc=0`, tier C and D `unrun`, nothing pushed.**
 
 ### W-12 — Seeds enumerate their grants *(S · I-15 · closes G5)*
 
