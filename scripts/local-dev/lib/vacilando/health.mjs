@@ -49,6 +49,7 @@ export const CHECKS = Object.freeze([
   "lane.knowledge",
   "promotion.gates",
   "host.maintenance",
+  "config.hygiene",
   "ports.registry",
   "worktrees.registry",
   "toolkit.retention",
@@ -1006,6 +1007,48 @@ export function checkSlotOwnership({ conflicts = null }) {
  * A window stuck mid-phase is a WATCH, not a problem: the next steward cycle
  * resumes it, and that is the design working.
  */
+
+/**
+ * DO THE INSTRUCTIONS AGENTS RECEIVE STILL MATCH THE SYSTEM THEY DESCRIBE?
+ *
+ * NOT a prompt-quality score. The findings that matter are prose stating a value
+ * the code computes differently, and a prompt rule whose named guard turns out to
+ * be wired nowhere — both measured on this host before this check existed.
+ *
+ * THIS NEVER GATES MAINTENANCE. DevOps 7's seam declares `gates_admission:
+ * false` and the audit payload repeats `gates_maintenance: false`; this check
+ * colours a health report and nothing more. Failing a weekly reboot on prompt
+ * hygiene would be a category error.
+ *
+ * A WATCH is the resting state and is meant to be: an unconfigured effort level
+ * is a real observation and not damage, and a check that went red for it would
+ * be a check nobody reads.
+ */
+export function checkConfigHygiene({ audit = null }) {
+  if (!audit) return incompleteFinding("config.hygiene", "no agent configuration audit available");
+  const sev = audit.severity === "problem" ? "problem" : audit.severity === "watch" ? "watch" : "healthy";
+  return finding({
+    check: "config.hygiene",
+    severity: sev,
+    owner_resource: "vacilando.agent_configuration",
+    measurements: {
+      baseline_version: audit.baseline_version,
+      claude_version: audit.claude_version,
+      findings: audit.counts?.total ?? 0,
+      problems: audit.counts?.problems ?? 0,
+      conflicts: audit.counts?.conflicts ?? 0,
+      drifted_lanes: audit.drift?.drifted ?? null,
+      effort_configured: audit.model_effort?.configured ?? null,
+    },
+    evidence: (audit.findings || []).slice(0, 8).map((f) => `${f.kind}: ${f.detail}`),
+    explanation: audit.counts?.problems
+      ? "An instruction contradicts the code that owns the same fact, or a prompt rule has no working enforcement. Agents are being told something untrue."
+      : audit.counts?.total
+        ? "Instruction hygiene findings are outstanding. None of them gates maintenance or admission."
+        : "Every audited instruction agrees with the owner of the fact it states.",
+  });
+}
+
 export function checkHostMaintenance({ window = null, cadence = null }) {
   if (!window && !cadence) return incompleteFinding("host.maintenance", "no maintenance state available");
   const phase = window?.phase || null;
@@ -1391,6 +1434,7 @@ export function composeReport({
   safe("lane.knowledge", () => checkLaneKnowledge({ inventory: probeResults.laneKnowledge }));
   safe("promotion.gates", () => checkPromotionGates({ audit: probeResults.promotionGates }));
   safe("host.maintenance", () => checkHostMaintenance({ window: probeResults.maintenanceWindow, cadence: probeResults.maintenanceCadence }));
+  safe("config.hygiene", () => checkConfigHygiene({ audit: probeResults.configAudit }));
   safe("lanes.consistency", () => checkLanesConsistency({ lanes: probeResults.lanes || [], seats: probeResults.seats || [] }));
   safe("ports.registry", () => checkPortsRegistry({ ports: probeResults.ports || [] }));
   safe("worktrees.registry", () => checkWorktreesRegistry({ ...(probeResults.worktrees || {}), states: probeResults.reconciliation || null }));

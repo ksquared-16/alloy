@@ -118,6 +118,13 @@ const HEALTHY_PROBES = {
   // ever activated.
   maintenanceWindow: { phase: "NORMAL", defers: 0 },
   maintenanceCadence: { due: false, last_ms: 1 },
+  // Seventh. A clean audit is healthy; the check exists to surface instruction
+  // drift, and a fixture claiming full health must supply a clean one.
+  configAudit: {
+    baseline_version: "ib_fixture", claude_version: "2.1.269", severity: "healthy",
+    counts: { total: 0, problems: 0, conflicts: 0 }, findings: [],
+    model_effort: { configured: true }, drift: { drifted: 0 },
+  },
   laneKnowledge: {
     lanes: 1,
     by_state: { CURRENT: 1 },

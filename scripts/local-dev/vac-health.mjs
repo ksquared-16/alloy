@@ -93,6 +93,13 @@ const lanesRaw = await safely(async () => {
 // Freshness, like bootstrap, is a READ. It runs git plumbing against each
 // lane's worktree and acquires no slot, server, browser or provider.
 // Knowledge coverage, a READ over the existing lane-memory store.
+// The agent configuration audit, read-only. It calls the SAME collector
+// `vac config-audit` uses, so the health verdict and the CLI cannot disagree.
+const configAudit = await safely(async () => {
+  const { collectConfigurationAudit } = await import("./vac-config-audit.mjs");
+  return collectConfigurationAudit().audit;
+}, null);
+
 // Maintenance state, a pure READ of one small record plus the steward's own
 // cadence field. No window exists on a host that has never run maintenance, and
 // that is reported as healthy rather than missing.
@@ -442,7 +449,7 @@ const report = composeReport({
   hw, thresholds, only, startedAt,
   endedAt: new Date().toISOString(),
   probeResults: {
-    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, laneKnowledge, worktreeLifecycle, slotOwnership, promotionGates, maintenanceWindow, maintenanceCadence,
+    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, laneKnowledge, worktreeLifecycle, slotOwnership, promotionGates, maintenanceWindow, maintenanceCadence, configAudit,
     run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, configured_max: configuredMax,
     validation_routing: validationRouting, validation_bypasses: validationBypasses,
