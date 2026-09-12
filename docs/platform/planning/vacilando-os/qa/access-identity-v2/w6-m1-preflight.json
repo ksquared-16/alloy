@@ -19,11 +19,16 @@
   "durability_rationale": "NOT a transcription for convenience — this file is the DURABLE home of run 3's Q4 numbers, and the census artifact is not. wave0-authority-census.json's `results` block is OVERWRITTEN in place by the Director on every census run (trusted-host-actions.mjs:385-406 rewrites {...prior, status, query_hash, execution, results}), a behaviour that artifact predicts of itself at next_run_prepared.what_the_directors_merge_back_will_do. A run 4 would therefore silently replace the exact numbers this preflight rests on, leaving a preflight.ok:true pointing at counts that no longer exist. Snapshotting them here fixes that.",
 
   "preflight": {
-    "ok": true,
+    "ok": false,
+    "ok_voided_2026_09_11": "SET false BY THE ELEVENTH W-0 RE-ISSUE (asg_e7ef33ff64b548, msn_3944d1cde06e546d5b). This field read `true` from 2026-08-07 until 2026-09-11. It is NOT a correction of the 2026-08-07 measurement, which was sound for its date — see ok_as_measured_2026_08_07. It is the propagation of the 2026-09-06 W-6 ruling (asg_7b05887a569304), which voided the apply authorization on RULE 5 (immediacy) and dropped the §11 gate operator_review -> unmet at status preflight_void_reauthorization_required. MIGRATION-APPLY-GATE.md:16 scores operator_review ONLY when preflight.ok === true and unmet when ok:false, so this file disagreeing with the ruling meant the artifact scored the gate one way while the plan of record scored it the other.",
+    "ok_as_measured_2026_08_07": true,
+    "why_this_was_repaired_here": "03-implementation-qa-sequence.md §6 (the W-6 ruling paragraph 'The 2026-08-07 apply authorization is VOID — on RULE 5, not on safety') has asserted since 2026-09-06 that 'w6-m1-preflight.json now carries preflight.ok: false' — recording the edit as ALREADY DONE. It was never applied to this file. The tenth W-0 re-issue (asg_8181b118c825ad) found the artifact/narrative disagreement and correctly declined to edit an out-of-scope file, describing it as a one-line change 'someone with the file in scope should make'. No dispatch owns this file, and the plan's own text guarantees no future pass would think to re-check it. Repaired in the fail-closed direction (ok:true -> ok:false), which is the direction that refuses an apply rather than admits one. The 2026-08-07 value is preserved above rather than erased.",
+    "superseded_by": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md §6 W-6 ruling, 2026-09-06 (asg_7b05887a569304); §11 register row M1. Re-authorization requires a FRESH census: run 3's counts (below) are superseded by run 4 (2026-09-04), which moved pairs_without_profile 2 -> 5.",
     "scope_of_this_ok": "The PRE-APPLY rules only — RULE 1 (sizing), RULE 2 (grain), RULE 5 (immediacy) and both abort conditions, which are exactly what MIGRATION-APPLY-GATE.md requires a worker to establish BEFORE the operator is asked to authorize. RULES 3 and 4 are POST-apply and are structurally unreachable until the operator authorizes the apply; they are recorded below as pending, not as passed. `ok: true` here means 'safe to ASK', never 'applied' and never 'verified after'.",
     "summary": "pairs_without_profile=2; membership_rows=8; distinct_user_org_pairs=6; orphan_profiles=0; M1 sized at exactly 2 inserted rows against the pairs_without_profile grain; no unattributed growth across three runs; migration functionally proven not-yet-applied on target",
     "evidence_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/w6-m1-preflight.json",
-    "status_of_migration": "awaiting_authorization"
+    "status_of_migration": "preflight_void_reauthorization_required",
+    "status_of_migration_was": "awaiting_authorization (2026-08-07 to 2026-09-11) — superseded per ok_voided_2026_09_11"
   },
 
   "census_source": {
@@ -132,6 +137,7 @@
   },
 
   "apply_authorization": {
+    "VOID_AS_OF_2026_09_06": "THIS AUTHORIZATION IS VOID AND MUST NOT BE ACTED ON. Voided by the §6 W-6 ruling (asg_7b05887a569304) on RULE 5 (immediacy), not on safety — the migration itself is unchanged and correct, and it self-sizes in-transaction. What failed is that this grant rests on a preflight measured 2026-08-07T17:24:15Z against a population that has since moved 2 -> 5 (census run 4, 2026-09-04), and the operator granted it against a written record saying '2 rows'. An apply emitting profile_rows_created=5 under a ticket that says 2 is an operator reading a correct apply as a misfire. A NEW authorization against FRESH counts is required. Every field below records the 2026-08-07 grant as it stood and is retained as history only.",
     "granted": true,
     "granted_at": "2026-08-07",
     "granted_by": "operator (Kelly), answered from Mission Control",

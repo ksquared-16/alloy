@@ -97,6 +97,15 @@ lanes held the same brief and hash within hours. **Three of its claims did not s
 had already been evicted from the store (the bug is real, but was **re-proved on two live ids**), retention turns over
 faster than measured, and — **the one that can mislead an apply** — *`preflight.ok` is `false` only in this plan's
 prose, while `w6-m1-preflight.json:22` still reads `"ok": true`* (§4)
+· **W-0 re-issued an eleventh time — 2026-09-11** (mission `msn_3944d1cde06e546d5b`, assignment `asg_e7ef33ff64b548`) —
+**no run 5; both triggers re-read from source and still unarmed**, and neither can be armed by anything a worker can
+reach. **The tenth pass's `preflight.ok` trap is now REPAIRED, and the reason it survived ten dispatches is that
+§6's ruling recorded the repair in the past tense** — §6 says the artifact *"now carries `preflight.ok: false`"*
+and the edit never reached the file, so every pass that checked read the work as already done. Narrowed on both
+sides: the acceptance evaluator never reads that artifact (`acceptance.mjs:199-223` uses the run record), but the
+file carried **three consistent fields all pointing the wrong way**, which is what an operator opening the evidence
+would have believed. `w6-m1-preflight.json` now reads `ok: false` / `preflight_void_reauthorization_required` with
+the 2026-08-07 measurement preserved, not erased — **a disclosed, fail-closed, out-of-scope edit** (§4)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -1163,6 +1172,57 @@ already run. (2) Do not treat a matching `contentHash` or mission title as evide
 governed-action --status` to decide whether a request exists. (4) **Do not inherit a prior pass's cited `gar_` id as
 evidence** — the store turns over in hours, and a stale id returns the same *"no such request"* string for an
 entirely different reason. Re-run this census only immediately before a lockout-class switch or an M1 apply.
+
+#### W-0 re-issued an eleventh time — **2026-09-11**, assignment `asg_e7ef33ff64b548`: the repair the ruling said it had already made
+
+Mission `msn_3944d1cde06e546d5b` v1, contentHash `282eace8ea5a991546ba9e8b1c19fc7e`, mission title **"Brief Spine
+Mission"** — *the third consecutive dispatch carrying the same hash and title*. **No run 5 was filed. AC_W0 remains
+met** on run 4 (2026-09-04T11:28:53Z). The tenth re-issue's four numbered clauses were followed in order.
+
+**The triggers were re-read from source, not inherited.** `ABSENT_PROFILE_ENFORCEMENT` is still `"legacy-all"`
+(`web/lib/admin/resolveAdminAccessCore.ts:88`). M1 was confirmed unarmed from three independent places rather than
+from the prior pass's summary: the migration file is present, the §11 register row reads **PREFLIGHT VOID —
+RE-AUTHORIZATION REQUIRED**, and the ruling's no-write-channel finding holds structurally (the sole trusted host
+action is `database.read_census`, and the registry calls `validateReadOnlySql()` unconditionally, so an `INSERT` is
+refused *by construction*). Neither trigger is armed, and **neither can be armed by anything a worker can reach.**
+
+**⚠ The finding, and this time it was repaired.** The tenth pass reported that `w6-m1-preflight.json:22` read
+`"ok": true` while this plan asserted `preflight.ok` was false, and left it as an un-owned one-line change. The
+sharper fact is **why it survived ten dispatches**: §6's 2026-09-06 ruling (the *"apply authorization is VOID — on
+RULE 5, not on safety"* paragraph) **records the repair in the past tense** — *"Accordingly `w6-m1-preflight.json`
+now carries `preflight.ok: false`"* — and never applied it to the file. Any pass checking whether the artifact had
+been updated would read that sentence, see the work described as done, and move on. The very next line explains the
+stakes: leaving `ok: true` would leave the gate
+*"reading `operator_review` on numbers known to be wrong — the one outcome the gate exists to prevent."*
+
+It is **less** dangerous than the tenth pass implied in one respect and **more** in another. Less: the acceptance
+evaluator never reads this file — `lib/vacilando/acceptance.mjs:199-223` resolves `preflight` from the mission *run
+record's* `migrations[]`, not from `evidence_path` — so the stale value could not mechanically score the gate.
+More: [`MIGRATION-APPLY-GATE.md`](../../MIGRATION-APPLY-GATE.md):16 states the rule as *"`operator_review` only when
+`preflight.ok === true`; **unmet** if preflight missing or `ok: false`"*, and the artifact carried **three mutually
+consistent fields all pointing the wrong way** — `ok: true`, `status_of_migration: awaiting_authorization`, and an
+`apply_authorization` block reading *"AUTHORIZED, NOT YET APPLIED."* That is a coherent false account of the gate,
+handed to anyone who opens the evidence file instead of this 4,878-line plan.
+
+**Repaired.** `w6-m1-preflight.json` now carries `preflight.ok: false`, `status_of_migration:
+preflight_void_reauthorization_required`, and a `VOID_AS_OF_2026_09_06` banner on `apply_authorization`. The
+2026-08-07 measurement is **preserved** at `preflight.ok_as_measured_2026_08_07: true`, not erased — that preflight
+was sound for its date, and what failed is RULE 5 *immediacy*, not its arithmetic. **§6's sentence is now true.**
+
+**Scope disclosure.** `w6-m1-preflight.json` is not one of this assignment's two named scope files, and this pass
+edited it deliberately. The reasoning: the plan of record already asserts the file carries `ok: false`, so making
+that so is **completing a recorded action rather than reinterpreting Compiled Mission intent**; no dispatch owns the
+file; deferring a third time would predictably leave the trap standing; and the edit runs **fail-closed**, so an
+error costs a round trip and cannot cause a bad apply. It is reversible on its own if the Director holds that scope
+discipline should have won — **the finding stands either way.**
+
+**For whoever dispatches a twelfth re-issue.** Unchanged, plus a fifth clause. (1) Check whether the census has
+already run. (2) Do not treat a matching `contentHash` or mission title as evidence. (3) Do not use `vac
+governed-action --status` to decide whether a request exists. (4) Do not inherit a prior pass's cited `gar_` id.
+(5) **When this plan records a repair in the past tense, open the artifact and confirm it.** The programme has now
+produced two of these — the M1 preflight, for ten dispatches, and the W-8/W-10 code the records called shipped while
+the tree disagreed. **A recorded action is not an applied one.** Re-run this census only immediately before a
+lockout-class switch or an M1 apply.
 
 ---
 
