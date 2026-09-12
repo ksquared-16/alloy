@@ -413,7 +413,7 @@ function queueDefinitionStatusKeysForTrace(queueDefinition: unknown | null): str
 }
 
 /**
- * Does an expanded row belong to the membership that was actually matched?
+ * Does an expanded row belong to THE PAGE that was actually requested?
  *
  * ── WHY CANDIDATE IDENTITY DECIDES, AND THE OPPORTUNITY ONLY ANSWERS FOR ROWS WITHOUT ONE ──
  *
@@ -430,7 +430,33 @@ function queueDefinitionStatusKeysForTrace(queueDefinition: unknown | null): str
  * So a row that CAN be identified as a candidate is judged as that candidate. The opportunity is
  * consulted only for rows carrying no candidate identity at all — the synthetic rows standing in for
  * a family at a waitlist status with no candidate yet, which have nothing else to be judged by.
+ *
+ * The sets passed in are the PAGE's, not the whole matched membership. Passing the matched set was
+ * the second half of the same defect: one waitlisted child no longer pulled in unmatched siblings,
+ * but a page still rendered every MATCHED sibling of everyone on it, so `limit` stopped bounding the
+ * rows and a child could appear on two consecutive pages.
  */
+/**
+ * The identities ONE PAGE admits.
+ *
+ * Extracted so the page-bounding rule has a name and can be driven directly by a test, rather than
+ * being three lines inline that a test would have to restate — and a restated rule is one that can
+ * pass while the real one regresses.
+ *
+ * Synthetic rows carry no candidate identity and are judged by their opportunity, so the opportunity
+ * set is the PAGE's, which is exactly the set the enrichment step is given.
+ */
+export function pageIdentitySets(
+    page: readonly { id: string; opportunity_id: string }[],
+): { candidateIdSet: Set<string>; opportunityIdSet: Set<string> } {
+    return {
+        candidateIdSet: new Set(
+            page.map((r) => r.id).filter((id) => !id.startsWith(SYNTHETIC_WAITLIST_CANDIDATE_ID_PREFIX)),
+        ),
+        opportunityIdSet: new Set(page.map((r) => r.opportunity_id)),
+    };
+}
+
 function waitlistRowMatchesMatchedSet(
     row: Record<string, unknown>,
     candidateIdSet: Set<string>,
@@ -758,10 +784,6 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
     });
 
     const total = matched.length;
-    const candidateIdSet = new Set(
-        matched.map((r) => r.id).filter((id) => !id.startsWith(SYNTHETIC_WAITLIST_CANDIDATE_ID_PREFIX))
-    );
-    const matchedOpportunityIdSet = new Set(matched.map((r) => r.opportunity_id));
 
     const sorted = [...matched].sort((a, b) => {
         const wa = a.wait_since ?? readCandidateOpportunity(a).updated_at ?? "";
@@ -773,6 +795,24 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
     if (!page.length) {
         return { items: [], total, placementDiagnostics: null, expansion: null, shadow_mode: true };
     }
+
+    /*
+     * ── THE PAGE IS THE PAGE, NOT THE FAMILIES THE PAGE TOUCHED ──
+     *
+     * Pagination is already candidate-grain: `total` counts matched candidates and `page` slices
+     * them. But the rows are BUILT by enriching each page candidate's opportunity and expanding it
+     * back into candidate rows, and that expansion was filtered against every MATCHED candidate
+     * rather than against the page. So a page that touched a family with three matched children
+     * rendered all three — `limit: 2` returning three rows, and the same child appearing again on
+     * the next page when its sibling's slot came up.
+     *
+     * Scoping the filter to the page's own identities fixes it where the page is decided, rather
+     * than trimming the surplus afterwards: a client-side trim would drop rows the sort had already
+     * ordered, which is how a page comes to have a gap instead of a duplicate.
+     *
+     * `total` is deliberately untouched — membership was never the thing that was wrong.
+     */
+    const { candidateIdSet, opportunityIdSet: matchedOpportunityIdSet } = pageIdentitySets(page);
 
     const oppById = new Map<string, ReturnType<typeof opportunityPreviewFromCandidateRow>>();
     for (const row of page) {
@@ -951,6 +991,7 @@ export const __testing = {
     passesChildLifecycleFilter,
     passesWaitlistCandidateLocationScope,
     waitlistRowMatchesMatchedSet,
+    pageIdentitySets,
     syntheticWaitlistCandidateRow,
     readOcmOutcomeStatus,
 };
