@@ -290,6 +290,27 @@ had matched nothing since 2026-08-10. Subject 6 → **8**, plus a new lock requi
 in the SQL corpus. **The repairs are reasoned red, not observed** — no suite ran. A third finding is registered
 and deliberately unfixed by the first lane: `canManageUsersAndRoles.ts` is a wholly new primitive module under
 **twelve** routes that no list names (§5)
+· **W-4 seventh issuance 2026-09-11** (mission `msn_beb2e9e462cdce6513`, assignment `asg_679256764c32b1`) —
+**could not execute**, for the same reason both Wave 1 lanes could not on this base: no `node_modules`, so the
+AST walk has no parser. Unlike the fifth issuance the failure is **demonstrated** — the broker *admitted* the
+job and the script died at its first import with `ERR_MODULE_NOT_FOUND: typescript`, so this is neither a
+capacity refusal nor a broker denial; `npm install` was refused by the session gate in two forms. **No measured
+column is claimed**; 2026-09-06 remains the last. **Two findings, both about records rather than code.** First,
+**the sixth issuance's regenerated evidence never reached this base**: `w4-service-client-principal-baseline.json`
+here is still the **2026-08-06** artifact (`0dd598e7a`, ratchet 15/10) while the record beside it claims a
+refresh to 22/12 and the register beside *that* declares 23/12 — the prose reached `staging` and the evidence
+did not, so a reader trusting the artifact under-counts the exception baseline by **eight**. Second,
+**citation drift is worse than the sixth issuance measured**: widened from 5 checkable citations to **14**,
+of which **2 are correct and 12 drifted**, and **2 of the 12 are substantive** — `enrollment-upload` names a
+function that no longer exists and claims a per-artifact refusal the code deliberately widened, and
+`tour-booking/[token]/resolve` says "all seven action kinds" where the constant now lists **eight**, which
+means **a 2026-08-06 correction for citation drift has itself drifted**. The rate is structural: the
+`stripe/webhook` entry declared **2026-09-09** is already wrong on **all three** of its citations, drifted by
+three commits in two days. Every authorization property asserted by the five audited entries **still holds** —
+the models are sound, their citations are not. Static facts all hold: ceilings **23/12** equal the list
+lengths, `baseline` empty, all **35** listed routes exist, every exception imports a client directly and no
+advisory entry does. API route files **603 → 619**. Register correction deferred a **third** time on scope;
+the backlog is now three items and **a scope grant is requested** (§5)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
@@ -3293,6 +3314,185 @@ and `web/playwright/artifacts/` were modified or present at session start and be
 Neither touched, reverted, nor built upon — the fourth issuance's judgment, applied as policy for the fourth
 time.
 
+#### W-4, seventh issuance — **2026-09-11**, assignment `asg_679256764c32b1`: the parser is missing a second time, the regenerated evidence never arrived, and the newest exception drifted within two days
+
+Seventh leg. §4's rule applies a seventh time: **re-execute rather than re-assert** — and like the fifth, this
+run could not execute. The blocker is the same one **both** Wave 1 lanes hit on this same base today: the
+promotion worktree has **no `node_modules`**, so W-4's AST walk has no parser. That bounds everything below,
+so it is stated first and no measured column is claimed for 2026-09-11.
+
+| Field | Value |
+|---|---|
+| Base | `e25d4000a` @ `promote/devops-8-config-hygiene`. `alloy-root` reads **`unmanaged`**, but the base is current — `origin/staging` @ `8ccf4988b`, **24 ahead / 0 behind**. API route files **619**, up from **603** at the sixth issuance; W-1's tenth issuance measured the same 603 → 619 growth independently today |
+| CLI | **NOT RUN — and this time the failure is demonstrated rather than inferred.** The broker *admitted* the job (`governed: null · weight 0 · admitted in 1ms`), node started, and the script died at its first import: `ERR_MODULE_NOT_FOUND: Cannot find package 'typescript' imported from web/scripts/checkServiceClientPrincipal.mjs`. This is **not** a capacity refusal and **not** a broker denial — the dependency is simply absent |
+| Install | **Refused.** `npm install --prefix web --no-save --no-package-lock typescript@5` was declined by the session permission gate in two forms. The sibling lanes recorded the same wall for `npm ci` (`rc=1 class=config`, *"the command never ran"*) |
+| Lock | **NOT RUN.** `web/tests/access/serviceClientPrincipalCheck.test.ts` is present (12,160 bytes) and unmodified; vitest is unavailable for the same reason |
+| Evidence | [`w4-service-client-principal-baseline.json`](./w4-service-client-principal-baseline.json) **not regenerated** — regeneration is the check. **And it is stale in a way the sixth issuance's own record does not admit** — see below |
+| Changed by this assignment | This record, §4's status line, §13's RL-15 row. **No source, test, register or migration file** |
+
+##### The evidence this run cannot supply, stated first
+
+W-4's instrument is an AST walk over TypeScript's own parser, and the parser is a package this worktree does
+not have. The fifth issuance's ruling governs and is repeated rather than re-argued: there is **no honest
+substitute**, because a text census of service-client importers is precisely the instrument §10.2 forbids and
+the one `auditAuthorityPaths.mjs` used to over-report by 30×. **So no count is claimed for 2026-09-11 — not
+holders, not resolvers, and above all not the unresolved figure that is this workstream's headline number.**
+The **2026-09-06** column remains the last measured one.
+
+Two things below are *not* subject to that limit, and are labelled where they appear. **Route-file count is a
+directory walk, not a parse** — `walkRoutes` (:484) collects every `route.ts`/`route.tsx` under `web/app/api`
+and nothing more, so `find` reproduces its subject exactly; **619** is therefore a measurement, not an
+estimate. Everything else recorded here is either a **fact about a file** (existence, list length, an import
+statement, whether a cited line carries the symbol named) or a **fact about the register's own history**.
+Neither is a measurement of the tree's authority, and neither is labelled as one.
+
+| Measure | 2026-08-06 | 2026-08-07 | 2026-09-04 | 2026-09-06 | **2026-09-11** |
+|---|---|---|---|---|---|
+| API route files | 570 | 570 | *not run* | 603 | **619** *(directory walk)* |
+| …hold a service-role client by direct import | 541 | 541 | *not run* | 570 | *not run* |
+| …of those, resolve a principal | 526 | 526 | *not run* | 548 | *not run* |
+| …of those, resolve none — **the exception baseline** | 15 | 15 | *not run* | 22 | *not run* — register declares **23** |
+| — frozen W-15 remediation baseline, no model | 0 | 0 | *not run* | 0 | **0** *(list is empty)* |
+| …transitive-only *and* unresolved — advisory | 10 | 10 | *not run* | 12 | *not run* — register declares **12** |
+
+##### The finding: the sixth issuance's regenerated evidence never reached this base
+
+The sixth issuance recorded the evidence artifact as **regenerated** — *"first refresh since 2026-08-06, and
+the only file this assignment changed besides this document"* — and its measured column reads
+603 / 570 / 548 / **22** / **12**. That record is committed at this base. **The artifact it describes is not.**
+
+| Source | Says | Last commit |
+|---|---|---|
+| `w4-service-client-principal-baseline.json` at this base | `routes` **570**, direct **541**, resolving **526**, unresolved **15**, advisory **10**, ratchet **15/10**, `allowlist_reviewed` **2026-08-06** | `0dd598e7a` — the **2026-08-06** re-execution |
+| §5's sixth-issuance record at this base | 603 / 570 / 548 / **22** / **12**, artifact *"regenerated"* | `—` (present, committed) |
+| `serviceClientPrincipal.allowlist.json` at this base | ratchet **23/12**, `reviewed` **2026-09-09** | current |
+
+So the document asserts a regeneration that is **absent from the tree the document lives in**: the artifact
+is three ratchet generations behind the register beside it (15 → 22 → 23 unresolved, 10 → 12 advisory) and one
+full issuance behind the record that claims to have refreshed it. The sixth issuance ran on
+`fix/census-containment-and-dispatch-identity`; its **prose reached `staging` and its evidence did not**.
+
+This is the same class this programme keeps finding — §5's *"the ruling recorded its own repair as done"*, and
+§14's *"nothing binds a citation to the line it names"* — with the failure moved up one level: **nothing binds
+an evidence claim to the evidence file.** A reader taking the artifact at face value today would read a
+**2026-08-06** ceiling of 15 as current, and would under-count the reviewed exception baseline by **eight**.
+
+**This is not remediable from inside a doc-only scope**, and it must not be papered over by hand-editing the
+artifact: regeneration *is* the check, and the check cannot run here. Handed forward as the first thing the
+next issuance with a parser should do, before anything else.
+
+##### What was verified without a parser
+
+All of this is file-level and re-runnable with `grep` and `find`; none of it credits a route with resolving a
+principal.
+
+| Property | Result |
+|---|---|
+| `max_subject_unresolved` equals the `exceptions` length | **23 = 23** ✅ |
+| `max_transitive_only_unresolved` equals the `advisory_transitive_only` length | **12 = 12** ✅ |
+| `baseline` is empty — the frozen W-15 backlog has not been re-grown | **`[]`** ✅ |
+| Every listed route still exists in the tree (a stale entry fails the check) | **35 of 35** ✅ |
+| Every `exceptions` entry imports a service client **directly** | **23 of 23** ✅ |
+| No `advisory_transitive_only` entry imports one directly | **0 of 12** ✅ |
+
+The ceilings therefore sit **at the register's own floor in both directions**, which is what the 2026-08-06
+repair moved into the file so `prebuild` could see it. What cannot be checked here is whether that floor is
+the *tree's* floor — that is the walk, and the walk did not run. The sixth issuance is the precedent for
+expecting them to agree: it proved the blind register read exact. **That precedent is a reason, not a proof**,
+and the register has moved once since (22 → 23, the Stripe Connect webhook, 2026-09-09) on a corpus that grew
+by **16 route files**.
+
+##### Citation drift, measured a third time — and it is worse than the sixth issuance found
+
+The sixth issuance measured drift instead of assuming it, and found **3 of 5** checkable citations wrong. This
+run widened the sample to **14 symbol-bearing citations across five entries** — every citation that names both
+a symbol and a line, so a tool can decide it. **Two are correct. Twelve are drifted. Two of the twelve are
+substantive**, meaning the sentence asserts an authorization property that is no longer true of the code.
+
+| Entry | Citation | Actual | Verdict |
+|---|---|---|---|
+| `enrollment-artifact` | `resolveParticipantEnrollmentFromToken` :52 | :52 | ✅ |
+| `enrollment-artifact` | `resolveActiveArtifact` :59 | :59 | ✅ |
+| `enrollment-upload` | gate :75 | :73 | ❌ |
+| `enrollment-upload` | field id :88 | :86 | ❌ |
+| `enrollment-upload` | `uploadDestinationForField` :105 | **symbol absent** — renamed `resolveParticipantUploadDestination`, called :110 | ❌ **substantive** |
+| `enrollment-upload` | `doc_type` from the schema :135 | :146 | ❌ |
+| `enrollment-upload` | session-owned subject :111-117 | :124–:128 | ❌ |
+| `webhooks/resend` | `Webhook.verify` :69 | :110 (the only textual hit at :90 is a comment) | ❌ |
+| `webhooks/resend` | `createAdminClient()` :91 | :132 | ❌ |
+| `tour-booking/[token]/resolve` | `guardTourActionRoute` :39 | :45 | ❌ **reported 2026-09-06, still uncorrected** |
+| `tour-booking/[token]/resolve` | `REQUIRED_ACTIONS` :27-35 | :32–:41 | ❌ **substantive** |
+| `stripe/webhook` | `verifyStripeSignature` at `stripeWebhook.ts:128` | call :154, definition :67 | ❌ |
+| `stripe/webhook` | `timingSafeEqual` :57 | :100 | ❌ |
+| `stripe/webhook` | fails closed on an unbound account :217 | :243 | ❌ |
+
+**The two substantive drifts.** `enrollment-upload`'s reason says the destination resolver *"refuses any id
+that is not an upload destination on THAT artifact"* — the session's D-94 pin. The code no longer does that:
+`resolveParticipantUploadDestination` searches **every artifact the session realized, not just the active
+one** (:100-114, argued in its own comment — resolving against the active artifact alone refused the
+Exemption's two attachments). The authority boundary the entry exists to assert **still holds** — the caller
+names a field id and nothing else, and the destination still comes from a schema the session owns — but the
+sentence as written is false, and it is the sentence a reviewer reads. `tour-booking/[token]/resolve`'s reason,
+itself a **2026-08-06 correction** for exactly this defect, says the constant *"now lists all seven action
+kinds"*; it lists **eight** — `confirm_attendance` joined it in the 2026-08-14 move recorded three lines above
+in the register's own history, and the reason was never updated. **A correction for citation drift has itself
+drifted.**
+
+**And the rate is structural, not neglect.** The `stripe/webhook` entry was declared on **2026-09-09** in
+`69f62054c`, two days before this run, and **all three of its citations are already wrong** — three commits
+(`0308f54a9`, `293fe96ae`, `a8489ad04`) touched the helper it cites in the interval. This is the strongest
+evidence yet for the sixth issuance's diagnosis: **line numbers in a prose register cannot survive an active
+file**, and periodic human re-reading was never a sufficient control. `enrollment-upload` is now **wrong on
+five of five lines, fifteen days and three assignments after it was first reported**.
+
+Every property asserted by the five entries was re-verified and **all five still hold** — resend still
+verifies before constructing a client (`verify` :110 → 400 :116 → `createAdminClient()` :132, so no statement
+reaches the database on an unsigned request), and Stripe still verifies the HMAC before the body is read and
+fails closed on an account bound to no organization. **The models are sound; their citations are not.**
+
+##### Not verified this run
+
+**No check, no lock, no typecheck, no evidence regeneration, no red demonstration** — all five need the
+parser. **No live database query**, so W-0's counts are now **five weeks** old; nothing in W-4 depends on
+them. **No tier D**, per §14.3.7. **The 30 register entries other than the five audited were not re-read**,
+and the citation audit is mechanical — it binds a symbol to a line, which is strictly narrower than a human
+judging whether a stated authorization model is true of the route.
+
+**The honest limit above is unchanged and still governs**: this check proves a principal is *resolved*, never
+that the result *gates* the handler. W-14 and W-15 still own that proof.
+
+**The scope grant is requested a third time, and the backlog is now three items.** This assignment's scope is
+this document alone, so none of the following was touched: the **twelve drifted citations** and two false
+property claims in `serviceClientPrincipal.allowlist.json`; the **stale evidence artifact**, which only a run
+with a parser can fix; and the sixth issuance's still-open `max_baseline` ceiling. Deferred on scope for the
+third consecutive issuance. **A register correction is a two-line-per-entry edit that no issuance has been
+authorized to make, and it has now been carried longer than the defect it describes.**
+
+**Mission identity, a fifth consecutive time.** This leg is issued under `msn_beb2e9e462cdce6513` v1,
+contentHash `282eace8ea5a991546ba9e8b1c19fc7e`, title *"Brief Spine Mission"* — **the same mission id and the
+same hash** §5's tenth issuance records for `asg_1c769a7163b0a3`, which carried W-1…W-3. That pair therefore
+carries **two different brief bodies**, W-1…W-3 and W-4, and §5 has already shown the same hash riding four
+mission ids. The objective this leg received reads *"build a build-time check that service-role routes resolve
+a principal"* — **work this document has recorded as implemented and green since 2026-07-31**, across six
+prior issuances. It was executed as a re-verification under §4's rule rather than as new construction; nothing
+was rebuilt. **Concurrency, a sixth time**: `e25d4000a` landed on this branch from another lane *during* this
+session, and `web/tests/access/analyticsRouteGates.test.ts` was modified in the working tree by one. Not
+touched, reverted, or built upon.
+
+**And W-4 is now the second brief to be dispatched to two lanes at once.** A concurrent lane ran **this same
+seventh issuance** in **this same worktree** while this record was being written — its scratch files
+(`.w4-seventh-register.txt`, `.w4-seventh-tree.txt`, `.w4-seventh-direct.txt`, `.w4-seventh-exceptions.txt`,
+`.w4-seventh-advisory.txt`) appeared mid-session and were left alone, per the fourth issuance's judgment. §5
+recorded the same double-dispatch for W-1…W-3 **today**; the identifier problem it escalated has now produced
+duplicate execution twice on one day.
+
+**There is one benefit, and it is worth keeping.** That lane derived the static measures independently, and
+every one agrees with this record: **619** route files in the tree, **583** direct importers, **35** registered
+routes, **23** exceptions, **12** advisory. Six measures, two instruments, no disagreement. It is the only
+**independent replication** any W-4 leg has had — and it replicates exactly the facts a parser is *not* needed
+for, which is precisely the boundary this record draws. It corroborates nothing about the unresolved count,
+because neither lane could run the walk.
+
 ---
 
 ## 6. Wave 2 — The scope invariant
@@ -5371,7 +5571,7 @@ contributor deleting one has to do it on purpose.
 | **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 | proposed |
 | **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 | proposed |
 | **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 | proposed |
-| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. Re-verified 2026-08-04: green across a 20-route expansion; ceiling ratcheted 26 → 17. **Re-executed 2026-08-06: found RED** — the advisory ratchet had been breached 3 → 10 by an allow-list-only commit that `prebuild` could not see. Ceilings moved into the register and enforced by the check, over *and* under; unresolved re-tightened 17 → 15; **18 tests**. **Re-executed 2026-08-07: green**, 18 tests, every measure unmoved, ceilings at the live floor in both directions — the first run to exercise the register-side ratchet, and the run that narrowed the coverage escape to *helpers that construct or return the client* rather than helper extraction generally. **2026-09-04 fifth issuance: NOT RUN** — no `node_modules` and no resolvable `typescript`, so the AST walk had no parser; **no count is claimed for that date and 2026-08-07 remains the last measured column**. The register nonetheless moved **seven times** in the interval (unresolved 15 → **22**, advisory 10 → **12**), **twice because this check went red on staging and stopped a build** (PR #416, PR #555) — the first evidence that it bites in CI and not only locally. Static checks that need no parser all hold: ceilings **22/12** equal the list lengths, `baseline` empty, all **34** listed routes exist, and every exception imports a client directly while every advisory entry imports none. Citation drift recurred — `enrollment-upload` drifted on five of five cited lines and names a renamed function, eight days after its entry claimed line-by-line review. **2026-09-06 sixth issuance: RE-EXECUTED and GREEN**, 18 tests, and the four-week measurement gap is closed — **603 routes, 570 direct holders, 548 resolving, 22 unresolved, 12 advisory**, ceilings at the live floor in both directions. The fifth issuance's *blind* reading of the register is confirmed **exact by the walk**, and the regenerated evidence reproduces all seven ratchet moves route by route with nothing else moved. **The CLI is shown red for the first time since 2026-08-06** — five states, real non-zero exit codes, produced without mutating the tracked register by running a byte-identical copy of the check from a scratch dir inside `web/`, so it reads a substituted allow-list while walking the real tree. **New finding: the 2026-08-06 repair was half-applied.** The ceilings were moved into the register; the *freeze* clauses were not. Baseline growth, the per-entry reason requirement and exceptions/baseline disjointness are asserted only in the vitest lock, and **no CI workflow runs `tests/access`** — so all 22 reviewed exceptions can be relabelled as unreasoned frozen backlog with `prebuild` **green**, demonstrated. Bounded: `max_subject_unresolved` counts the union, so no *new* unresolved route can enter — a relabelling escape, not an admission one. Fix handed forward: a `max_baseline` ceiling seeded at 0. **Citation drift measured rather than assumed** — only **5 of 21** line references are in a checkable form and **3 of those 5 are drifted**, including a **new** one (`guardTourActionRoute` cited `:39`, actually `:45`); the other **16 name a line with no symbol bound to it**, which is why the defect recurs and why human re-reading was never a sufficient control. `enrollment-upload` remains wrong on all five lines, ten days and two assignments after it was reported |
+| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. Re-verified 2026-08-04: green across a 20-route expansion; ceiling ratcheted 26 → 17. **Re-executed 2026-08-06: found RED** — the advisory ratchet had been breached 3 → 10 by an allow-list-only commit that `prebuild` could not see. Ceilings moved into the register and enforced by the check, over *and* under; unresolved re-tightened 17 → 15; **18 tests**. **Re-executed 2026-08-07: green**, 18 tests, every measure unmoved, ceilings at the live floor in both directions — the first run to exercise the register-side ratchet, and the run that narrowed the coverage escape to *helpers that construct or return the client* rather than helper extraction generally. **2026-09-04 fifth issuance: NOT RUN** — no `node_modules` and no resolvable `typescript`, so the AST walk had no parser; **no count is claimed for that date and 2026-08-07 remains the last measured column**. The register nonetheless moved **seven times** in the interval (unresolved 15 → **22**, advisory 10 → **12**), **twice because this check went red on staging and stopped a build** (PR #416, PR #555) — the first evidence that it bites in CI and not only locally. Static checks that need no parser all hold: ceilings **22/12** equal the list lengths, `baseline` empty, all **34** listed routes exist, and every exception imports a client directly while every advisory entry imports none. Citation drift recurred — `enrollment-upload` drifted on five of five cited lines and names a renamed function, eight days after its entry claimed line-by-line review. **2026-09-06 sixth issuance: RE-EXECUTED and GREEN**, 18 tests, and the four-week measurement gap is closed — **603 routes, 570 direct holders, 548 resolving, 22 unresolved, 12 advisory**, ceilings at the live floor in both directions. The fifth issuance's *blind* reading of the register is confirmed **exact by the walk**, and the regenerated evidence reproduces all seven ratchet moves route by route with nothing else moved. **The CLI is shown red for the first time since 2026-08-06** — five states, real non-zero exit codes, produced without mutating the tracked register by running a byte-identical copy of the check from a scratch dir inside `web/`, so it reads a substituted allow-list while walking the real tree. **New finding: the 2026-08-06 repair was half-applied.** The ceilings were moved into the register; the *freeze* clauses were not. Baseline growth, the per-entry reason requirement and exceptions/baseline disjointness are asserted only in the vitest lock, and **no CI workflow runs `tests/access`** — so all 22 reviewed exceptions can be relabelled as unreasoned frozen backlog with `prebuild` **green**, demonstrated. Bounded: `max_subject_unresolved` counts the union, so no *new* unresolved route can enter — a relabelling escape, not an admission one. Fix handed forward: a `max_baseline` ceiling seeded at 0. **Citation drift measured rather than assumed** — only **5 of 21** line references are in a checkable form and **3 of those 5 are drifted**, including a **new** one (`guardTourActionRoute` cited `:39`, actually `:45`); the other **16 name a line with no symbol bound to it**, which is why the defect recurs and why human re-reading was never a sufficient control. `enrollment-upload` remains wrong on all five lines, ten days and two assignments after it was reported. **2026-09-11 seventh issuance: NOT RUN** — the promotion worktree has no `node_modules`, so the AST walk had no parser; the failure is **demonstrated** rather than inferred (broker admitted the job, script died at its first import with `ERR_MODULE_NOT_FOUND: typescript`), and `npm install` was refused by the session gate. **No count is claimed; 2026-09-06 remains the last measured column.** Static checks all hold — ceilings **23/12** equal the list lengths, `baseline` empty, all **35** listed routes exist, every exception imports a client directly and no advisory entry does — on a corpus grown **603 → 619** route files. **The committed evidence artifact is stale by a full issuance**: it is still the 2026-08-06 file (ratchet 15/10) although the sixth issuance's record, committed at this base, states it was regenerated to 22/12 — the record travelled to `staging` and its evidence did not, and only a run with a parser can repair it, because regeneration *is* the check. **Citation drift re-measured on a widened sample: 14 symbol-bearing citations, 2 correct, 12 drifted, 2 substantive** — `enrollment-upload` cites `uploadDestinationForField`, which no longer exists (renamed `resolveParticipantUploadDestination`) and whose per-artifact refusal the code deliberately widened to every artifact the session realized; and `tour-booking/[token]/resolve` still says "all seven action kinds" where `REQUIRED_ACTIONS` now lists **eight**, so a 2026-08-06 correction for citation drift has itself drifted. Drift is structural, not neglect: the `stripe/webhook` entry declared 2026-09-09 is already wrong on **all three** citations after three commits in two days. Every asserted authorization property was re-verified and **all five audited entries still hold** — the models are sound, the citations are not |
 
 **W-11 has no lock in either register, and did not mint one.** `RL-35` — *every catalog key resolves to ≥1
 enforcement site* — is `W-50`'s, and is red today by 36 keys, so it cannot be claimed here. The product-source
