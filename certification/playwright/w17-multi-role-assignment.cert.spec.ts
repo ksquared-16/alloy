@@ -237,6 +237,7 @@ test.describe("W-17 — multi-role assignment, mounted", () => {
         await openTarget(page);
         const card = page.getByTestId("access-user-history");
         await card.scrollIntoViewIfNeeded();
+        await expect(page.getByTestId("access-user-history-list-event").first()).toBeVisible();
         const kinds = await page
             .getByTestId("access-user-history-list-event")
             .evaluateAll((els) => els.map((e) => e.getAttribute("data-command-key") ?? ""));
@@ -280,6 +281,9 @@ test.describe("W-17 — multi-role assignment, mounted", () => {
 
     test("history says the ROLE was removed, not that a capability was revoked", async ({ page }) => {
         await openTarget(page);
+        // The feed answers after the card mounts; reading it first reports "the event is missing"
+        // when the truth is "the answer has not arrived".
+        await expect(page.getByTestId("access-user-history-list-event").first()).toBeVisible();
         const kinds = await page
             .getByTestId("access-user-history-list-event")
             .evaluateAll((els) => els.map((e) => e.getAttribute("data-command-key") ?? ""));

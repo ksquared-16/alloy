@@ -241,8 +241,22 @@ DECLARE
     v_events  integer;
     v_actorless boolean := false;
 BEGIN
-    INSERT INTO auth.users (id, instance_id, aud, role, email)
-    VALUES (v_user, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', '_w17@selftest.invalid');
+    /*
+     * THE EMPTY STRINGS ARE NOT DECORATION.
+     *
+     * GoTrue scans these columns into non-nullable strings, so a row inserted straight into
+     * `auth.users` with NULLs in them makes `auth.admin.listUsers` fail with "Database error finding
+     * users" — for every caller on the stack, not just this tenant. A certification fixture looking
+     * an operator up by email is exactly such a caller, and it broke on this.
+     */
+    INSERT INTO auth.users (
+        id, instance_id, aud, role, email,
+        encrypted_password, confirmation_token, recovery_token, email_change_token_new, email_change
+    )
+    VALUES (
+        v_user, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', '_w17@selftest.invalid',
+        '', '', '', '', ''
+    );
     INSERT INTO public.orgs (id, name, slug) VALUES (v_org, 'W-17 self-test', '_w17_selftest_' || substr(v_org::text, 1, 8));
     INSERT INTO public.role_definitions (org_id, role_key, role_label, is_active)
     VALUES (v_org, '_w17_a', 'A', true), (v_org, '_w17_b', 'B', true);
@@ -297,6 +311,14 @@ BEGIN
     IF NOT v_actorless THEN
         RAISE EXCEPTION 'W-17 ABORT: an assignment was accepted without an actor.';
     END IF;
+
+    /*
+     * The principal goes; the `mutation_events` rows stay, because the append-only trigger is the
+     * point and they are truthful records. Leaving a synthetic auth row behind is a liability to
+     * every other caller on a shared stack, and it buys nothing.
+     */
+    DELETE FROM public.user_access_profiles WHERE org_id = v_org;
+    DELETE FROM auth.users WHERE id = v_user;
 
     RAISE NOTICE 'W-17: assignment composes, removal is targeted, no-ops are silent, and scope outlives the last role.';
 END
