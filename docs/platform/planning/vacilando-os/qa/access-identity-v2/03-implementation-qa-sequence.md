@@ -242,6 +242,20 @@ ungrantable capabilities — C5 one level up), one re-introduced a hand-authored
 (`L6` again). Both removed; **30/30 on the two lock suites and `tests/access` back to 113/6/0**. RL-3 is
 thereby proven red by fixture on both substantive halves — a stronger lock and a finding against the evidence
 discipline: **a negative fixture is finished when it is removed and green, not when it goes red** (§7)
+· **W-10 THIRD ISSUANCE 2026-09-11** (mission `msn_861e1785ec233cf433`, assignment `asg_01f09063168b9f`) —
+**the first issuance of this deliverable whose record and tree agreed on arrival.** Nothing was repaired
+because nothing was broken: the projection is intact 413 migrations and ~1000 web commits on, **no `NEGATIVE
+FIXTURE` probe survives**, and the locks are green as written — **32/0** on the two lock suites and **129/0**
+across the ten W-10-dependent suites, with RL-3 totality **exact** over the live catalog (67 keys, 0 dropped,
+0 invented). The operator screen is re-measured a third time: **46 rows over 67 keys**, restating 25/35 and
+W-11's 37/57. Two things changed underneath rather than within W-10. The catalog width is now **ratcheted
+exactly** by `catalogVocabularyReconciliation`, which partly covers RL-3's still-weak `> 10` non-vacuity
+guard; and `W-50`/`IA-R8` now suppresses controls for unenforced columns, so **17 of 46 rows render "Not
+enforced yet"** — W-10's *"a new key surfaces in the grid"* holds, W-10 never claimed *"surfaces as a usable
+control"*, and the distinction is locked rather than assumed. One qualification recorded: `W-50` re-introduced
+a hand-maintained key list (`unenforcedPermissionKeys.json`) one layer above the one W-10 deleted — it cannot
+author a row, it is ratcheted both ways, and it is JSON for a stated reason, but **it is still a list a human
+edits** (§7)
 · **W-11 MEASURED 2026-08-07** (assignment `asg_ddd008f2c3d92a`) — §7's *"three disjoint vocabularies"* is
 wrong: **there is a fourth, it holds 57 keys, and it is the widest.** A hand-authored catalog literal inside
 `seed_default_rbac()` was invisible to every static instrument here because the shared parser was pinned to
@@ -404,7 +418,12 @@ are in §5 and their locks are live in §13. **W-9 (§7) has met its exit criter
 but the criterion was met by a migration this programme did not author, and **RL-7 was found red on
 2026-09-11, two days after two unrelated migrations broke it with nobody watching** (second issuance, §7 and
 §15.11). Read its record before scheduling W-11 or W-12, because two of its consequences land on them. **W-10 (§7) is implemented, green, and its two locks are live**; the grid is a
-projection of the catalog and no longer a hand-maintained list. **W-11 (§7) is measured, not applied** — its
+projection of the catalog and no longer a hand-maintained list. **Verified a third time on 2026-09-11 and, for
+the first time in this deliverable's history, with no repair required** — 129/0 across its ten dependent
+suites, RL-3 exact over a live catalog of 67 keys, and the screen re-measured at **46 rows over 67 keys**. The
+qualification worth carrying forward is not about W-10 but about the layer since built on it: `W-50`/`IA-R8`
+suppresses controls for unenforced columns, so **17 of those 46 rows now render "Not enforced yet"** — the row
+still surfaces, the control does not, and that distinction is locked rather than assumed (§7). **W-11 (§7) is measured, not applied** — its
 exit artifact is delivered and its instrument is green, but the operator review and M5 are open, and its
 correction to the catalog's width applies to every count in §3, §7 and §13 that predates it. Every other wave
 remains a proposal.
@@ -539,7 +558,7 @@ code never requires reverting data.
 | **0** | Facts before changes — read-only live verification | W-0 | — · **DONE 2026-07-31** |
 | **1** | Fail-closed quick wins, no schema | W-1 … W-4 | — · **DONE 2026-07-31** (W-1…W-4) |
 | **2** | The scope invariant (the confirmed fail-open) | W-5 … W-8 | ~~W-0~~ **satisfied** |
-| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; **re-derived and still met 2026-09-11** against a tree grown 314 → 413 migrations, with the API clause now discharged in SQL and both compatibility views dropped by `W-60`/`M20`; RL-7 live again after two days red · **W-10 DONE 2026-08-07**; RL-3 and RL-48 live, RL-2 replaced · **W-11 MEASURED 2026-08-07** — the catalog is **57 keys, not 35**; 36 unenforced, deletion list delivered as an exit artifact, **M5 withheld pending operator review**; RL-3's subject repaired. · **W-12 AUTHORED 2026-08-07** — M6 written and **not applied**, RL-8 live over all 315 migrations (4 blanket grant seeds left, all superseded history), §11's width-vs-live preflight carried as a fail-closed assertion inside the migration because no worker channel to it exists. **Wave 3 is complete as far as a worker can take it: three of four exits turn on an operator authorization, not on effort** |
+| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; **re-derived and still met 2026-09-11** against a tree grown 314 → 413 migrations, with the API clause now discharged in SQL and both compatibility views dropped by `W-60`/`M20`; RL-7 live again after two days red · **W-10 DONE 2026-08-07**; RL-3 and RL-48 live, RL-2 replaced; **re-verified a third time 2026-09-11 with no repair required** — 129/0 across ten dependent suites, RL-3 exact over 67 live catalog keys, screen re-measured at 46 rows / 67 keys, of which 17 are inert under `W-50`/`IA-R8` · **W-11 MEASURED 2026-08-07** — the catalog is **57 keys, not 35**; 36 unenforced, deletion list delivered as an exit artifact, **M5 withheld pending operator review**; RL-3's subject repaired. · **W-12 AUTHORED 2026-08-07** — M6 written and **not applied**, RL-8 live over all 315 migrations (4 blanket grant seeds left, all superseded history), §11's width-vs-live preflight carried as a fail-closed assertion inside the migration because no worker channel to it exists. **Wave 3 is complete as far as a worker can take it: three of four exits turn on an operator authorization, not on effort** |
 | **4** | Admission and declaration | W-13 … W-15 | W-3, D2 |
 | **5** | Role-model coherence and the long tail | W-16 … W-22 | ~~W-0~~ **satisfied** · D3, D4 |
 
@@ -6128,6 +6147,81 @@ the deliverable.
 **Status: exit criteria `met` and **re-verified on re-issuance after removing two live negative fixtures**,
 RL-3 and RL-48 `live` and now **proven red by fixture on both substantive halves**, RL-2 `replaced`, tier D
 `unrun`, no migration authored, nothing pushed.**
+
+##### Third issuance — **the record and the tree agreed on arrival, for the first time** (2026-09-11)
+
+Mission `msn_861e1785ec233cf433`, assignment `asg_01f09063168b9f`, on branch
+`promote/devops-8-config-hygiene` at base `origin/staging` `9619b8992` — **a tree 413 migrations wide, roughly
+a thousand web commits past the two 2026-08-07 passes**. The two prior issuances of this deliverable each
+found a green record describing a tree that did not match it; the first shipped code the record called done,
+the second found two live `NEGATIVE FIXTURE` probes in shipped source. **This issuance found neither.** The
+projection is in place, no probe survives anywhere in `web/**` — `PERMISSION_GRID_ROWS` appears in the tree
+only in `permissionGrid.ts`'s header comment recording that W-10 deleted it — and every lock is green as
+written. Nothing was repaired, because nothing was broken. **That is the finding**, and it is the first time
+this record can say it.
+
+| Item | Result |
+|---|---|
+| `tests/admin/permissionGrid.test.ts` + `tests/access/accessProductUi.test.ts` | **32 passed / 0 failed** — the two lock suites, up from the recorded 30 as they have gained assertions since |
+| Ten W-10-dependent suites together | **129 passed / 0 failed** — the two above plus `catalogVocabularyReconciliation`, `permissionEnforcementTruth`, `roleEditorSingleSurface`, `oneRoleEditorPage`, `financialsRoleEditorGroup`, `capabilityTaxonomy`, `accessHistoryPresenter`, `effectiveAccessExplanation` |
+| RL-3 totality / soundness over the **live** catalog | **exact** — 67 catalog keys, 67 keys reaching a row, **0 dropped and 0 invented** |
+| Negative-fixture probes in shipped source | **none** — the second issuance's failure mode did not recur |
+| Tier D | **Not run**, as before. No browser verification; every figure below is from unit-level projection over the discovered catalog |
+
+**The operator's screen, re-measured a third time.** W-10's record states 25 rows over 35 keys and W-11
+restates it to 37 over 57. On this tree it is **46 rows over 67 keys** — 21 offering both columns, 23
+write-only, 2 read-only. The catalog's growth from 57 to 67 is the ten entries
+`catalogVocabularyReconciliation` carries in `APPROVED_ADDITIONS`, each tied to the migration that authorised
+it, so the width is **ratcheted exactly** rather than bounded: `expect(catalog.size).toBe(57 + added.length)`.
+That closes the specific hole W-11 opened here — RL-3's non-vacuity guard is still the weak `> 10 keys`, and
+on its own still could not tell 35 from 57, but it is **no longer the only thing watching the subject's
+width.**
+
+**What has changed since 2026-08-07 is not W-10 — it is the layer now sitting on top of it.** `W-50`/`IA-R8`
+added `UNENFORCED_PERMISSION_KEYS`, `rowEnforcement` and `offerableLevelsForRow`, so the grid no longer offers
+a control for a column nothing enforces. Measured here: **17 of the 46 rows are inert in both columns** and
+render *"Not enforced yet"* with no radio at all, and **3 more keep a control while losing a column**. Read
+against W-10's exit criterion this needs stating precisely, because the two claims are easy to conflate:
+
+| W-10's exit clause | Status on this tree |
+|---|---|
+| Adding a key to the catalog **surfaces it in the grid** with no UI change | **met** — the row still appears. An inert row is rendered and labelled, not hidden, so the projection remains total on screen as well as in the data |
+| Adding a key surfaces it **as a usable control** | **never claimed, and now false for 17 rows** — this is `IA-R8` working as designed, and `T-6` finally being paid down rather than widened |
+| Removing a key removes the row | **met** — asserted over the live catalog, not only the fixture |
+
+The separation is deliberate and is itself locked: `permissionEnforcementTruth.test.ts` carries an explicit
+assertion that *"W-10's property is not conditioned on enforcement"*, and `levelsForRow` — what the catalog
+can express, the shape RL-3 locks — is kept distinct from `offerableLevelsForRow` — what the platform will
+act on. **Folding enforcement into the projection would have made a catalog fixture render differently
+depending on repository state**, which is not a property a projection can have. That is the right call and it
+is held by a test rather than by a comment.
+
+**One honest qualification, and it is the shape of `L6` returning.** W-10's achievement was deleting a
+hand-maintained list of permission keys from the UI layer. `W-50` re-introduced one — `unenforcedPermissionKeys.json`,
+a hand-maintained enumeration of catalog keys — one layer over. Three things make it a different object from
+the list W-10 removed, and the record should say all three rather than assert the layer count is unchanged:
+it **does not author the grid**, it annotates a grid derived from elsewhere, so a wrong entry cannot make a
+row name a key the catalog lacks and **C5 stays structurally closed**; it is **ratcheted in both directions**
+against a fresh derivation from the tree, so a stale entry is a red suite rather than a silent lie; and it is
+**JSON on purpose**, because the enforcement scan walks `.ts`/`.tsx` and a TypeScript copy would hand all 17
+keys an enforcement site and become the evidence for its own falsity. That last point means RL-3's tier A
+clause — *no permission-key literal in UI source* — is satisfied partly by a file extension. The suite states
+this in terms rather than relying on it quietly, which is the reason to accept it. **It remains a list a human
+edits**, and the honest form of W-10's layer claim is the one its own re-verification record already reached:
+a layer is removed by the lock that keeps it removed, not by the commit that removes it.
+
+**Method note, since this record is where the discipline was written down.** The row and key figures above
+were taken with a temporary harness placed in `tests/access/`, read once, **deleted, and the four lock suites
+re-run green afterward (54 passed / 0 failed)** — the rule this deliverable's second issuance paid for, applied
+to a measurement probe rather than a negative one. The tree carries nothing from this pass. Separately, four
+files belonging to the **W-7 third dispatch** were uncommitted in this worktree on arrival and were committed
+by that lane as `d2e9a76c4` while this verification ran; they are unrelated to W-10, were not touched here,
+and were present in the tree for every figure above.
+
+**Status: exit criteria `met`, verified a third time and this time with no repair required. RL-3 and RL-48
+`live` and green; the catalog width is now ratcheted exactly by `catalogVocabularyReconciliation`; the grid is
+46 rows over 67 keys, of which 29 offer at least one control. No code changed, no migration authored, nothing
+pushed.**
 
 ### W-11 — One vocabulary *(M · I-13 · closes C4)*
 
