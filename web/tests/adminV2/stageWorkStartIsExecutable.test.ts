@@ -58,11 +58,21 @@ describe("stage_work.start resolves as an executable control", () => {
     });
 
     it("declares its interaction host as metadata, not by name", () => {
-        expect(canonicalActionDefinition(KEY)!.interactionHost).toBe("header_delegate");
+        /*
+         * CONTRACT CHANGED DELIBERATELY. This first declared `header_delegate`, which made the
+         * action resolvable and therefore visible — the fix that closed the fifth layer. Driving it
+         * live then showed the host was wrong: the drawer header is opportunity-scoped and carries
+         * no child-subject command, so pressing the control produced "use drawer header actions"
+         * for an action the header does not have.
+         *
+         * `command_surface` is the host for a command whose subject and inputs are already
+         * resolved. Metadata either way; the value is what changed, not how it is declared.
+         */
+        expect(canonicalActionDefinition(KEY)!.interactionHost).toBe("command_surface");
     });
 
-    it("resolves to the header host, where a registry action is invoked", () => {
-        expect(resolveCurrentWorkActionSurface(configuredAction())).toBe("header_delegate");
+    it("resolves to the command surface, where a resolved command runs", () => {
+        expect(resolveCurrentWorkActionSurface(configuredAction())).toBe("command_surface");
     });
 
     it("is EXECUTABLE — the property that was false and made it invisible", () => {

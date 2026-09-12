@@ -17,6 +17,8 @@ export type CurrentWorkActionExecutionPlan =
     | { kind: "open_inline_panel"; action: CurrentWorkActionVM; surface: CurrentWorkActionSurface }
     | { kind: "communications_composer" }
     | { kind: "header_delegate"; action: CurrentWorkActionVM }
+    /** Run it here — the surface has the subject and configuration bound the inputs. */
+    | { kind: "command_surface"; action: CurrentWorkActionVM }
     | { kind: "process_transition"; action: CurrentWorkActionVM; nextStatusKey: string }
     | { kind: "cancel_tour"; bookingId: string }
     | { kind: "blocked"; reason: string }
@@ -78,6 +80,8 @@ export function planCurrentWorkActionExecution(
             return { kind: "communications_composer" };
         case "header_delegate":
             return { kind: "header_delegate", action };
+        case "command_surface":
+            return { kind: "command_surface", action };
         case "unsupported":
         default:
             return {
