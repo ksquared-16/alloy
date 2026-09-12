@@ -1076,8 +1076,9 @@ mission-scoped and `msn_861e1785ec233cf433` had no prior census action, so nothi
 --status <gar_id>` **answers "no such request" for every request id on this host, including ids that provably
 exist.** It is a confident false negative, not a missing capability:
 
-- `gar_7fc0905cf5be45` sits at line 6 of `~/.local/state/alloy-dev/**gateway**/vacilando/governed-actions/requests.json`
-  — a `database.read_census` against `alloy_deployed_primary`. `--status` on that exact id prints *"no such request"*.
+- `gar_7fc0905cf5be45` sits at line 6 of `~/.local/state/alloy-dev/gateway/vacilando/governed-actions/requests.json`
+  — note the **`gateway/`** segment — a `database.read_census` against `alloy_deployed_primary`. `--status` on that
+  exact id prints *"no such request"*.
 - **Mechanism.** `vac-governed-action.mjs:106-110` calls `listGovernedActions({})` with no root, which defaults to
   `$HOME/.local/state/alloy-dev` (`governed-action-request.mjs:182-185`) and appends `vacilando/governed-actions/requests.json`
   (`:209-211`). **That directory does not exist.** The Gateway host deliberately runs with
