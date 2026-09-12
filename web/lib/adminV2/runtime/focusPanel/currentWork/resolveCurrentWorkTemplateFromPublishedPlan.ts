@@ -272,13 +272,18 @@ function actionsFromCatalog(actionCatalog: StageActionCatalogV1 | null): {
         if (!key || seen.has(key)) continue;
         seen.add(key);
 
+        // Carried, not dropped: an action configured to operate on one of this stage's work
+        // templates needs that key at invoke time, and this is the only place it can travel.
+        const workTemplateKey = candidate.work_template_key?.trim();
+        const ref = { action_ref: key, ...(workTemplateKey ? { work_template_key: workTemplateKey } : {}) };
+
         const bucket = catalogActionBucket(key, candidate.recommendation);
         if (bucket === "communication") {
             communication_actions.push({ action_ref: key });
         } else if (bucket === "alternate_path") {
-            alternate_paths.push({ action_ref: key });
+            alternate_paths.push(ref);
         } else if (bucket === "supporting") {
-            supporting.push({ action_ref: key });
+            supporting.push(ref);
         }
     }
 

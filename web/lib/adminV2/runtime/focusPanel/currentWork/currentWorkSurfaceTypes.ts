@@ -43,6 +43,14 @@ export type CurrentWorkActionVM = {
     actionRef?: string | null;
     disabled?: boolean;
     disabledReason?: string | null;
+    /**
+     * The stage work this action operates on, when configuration named one.
+     *
+     * Travels into the invocation payload as `template_key`. `stage_work.start` is the reason it
+     * exists: the action takes the template as an INPUT so it need not hardcode one, which left it
+     * requiring an argument that no configuration could supply and no operator could reach.
+     */
+    workTemplateKey?: string;
     /** Resolved registry action for client invoke — when available. */
     resolved?: ResolvedActionForClient | null;
     /** Resolved execution state (Slice F) — every visible enabled action is provably executable. */
