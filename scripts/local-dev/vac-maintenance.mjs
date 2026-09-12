@@ -23,6 +23,7 @@ import {
   readMaintenanceWindow, maintenanceDue, evaluateDrain, evaluateCheckpoint,
   rebootDecision, assessCleanliness, planCleanup, certifyPostBoot,
 } from "./lib/vacilando/host-maintenance.mjs";
+import { collectCheckpoint } from "./lib/vacilando/maintenance-activation.mjs";
 import { maintenanceCadenceDue } from "./lib/vacilando/host-steward-cycle.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -36,6 +37,58 @@ function governedActions() {
   const p = join(ROOT, "vacilando", "governed-actions", "requests.json");
   const raw = readJson(p, []);
   return Array.isArray(raw) ? raw : (raw?.requests || []);
+}
+
+/** Lanes, from the durable registry the lane owner already writes. */
+function lanes() {
+  const p = join(ROOT, "vacilando", "lanes", "lanes.json");
+  const j = readJson(p, null);
+  const raw = j?.lanes;
+  const list = Array.isArray(raw) ? raw : (raw && typeof raw === "object" ? Object.values(raw) : null);
+  if (!list) return null;
+  return list.map((l) => ({
+    lane_id: l.lane_id ?? null,
+    active: String(l.status || l.state || "").toUpperCase() === "ACTIVE",
+    blocked_on: l.blocked_on ?? null,
+    restart_context: l.restart_context || l.next_step || null,
+    blocker_recorded: Boolean(l.blockers?.length),
+  }));
+}
+
+/**
+ * Worktrees, with branch durability measured by its canonical owner.
+ *
+ * There is no persisted durability file — DevOps 3 measures it live, because a
+ * stored durability class is stale the moment somebody commits. So this calls
+ * `measureWorktreeGit`, which is the same function retirement itself uses, and
+ * gets the same answer retirement would get. Read-only git plumbing per
+ * worktree; nothing is written and nothing is reclaimed.
+ *
+ * An unreadable worktree yields `durability: null`, which the collector treats
+ * as UNMEASURED and which blocks — the DevOps 3 law that unmeasured durability
+ * must never precede a destructive step, applied to a reboot.
+ */
+async function worktrees() {
+  let measure;
+  try {
+    ({ measureWorktreeGit: measure } = await import("./lib/vacilando/worktree-retirement-observe.mjs"));
+  } catch { return null; }
+  const roots = [join(homedir(), "Code", "alloy-worktrees"), join(homedir(), "Code", "alloy-promotions")];
+  const out = [];
+  for (const root of roots) {
+    let names = [];
+    try { names = readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { continue; }
+    for (const name of names) {
+      const full = join(root, name);
+      try {
+        const m = measure(full);
+        out.push({ name, path: full, durability: m?.durability ?? null });
+      } catch {
+        out.push({ name, path: full, durability: null });
+      }
+    }
+  }
+  return out.length ? out : null;
 }
 
 function runs() {
@@ -70,13 +123,27 @@ const due = maintenanceDue({ root: ROOT });
 
 if (argv.includes("--preflight")) {
   const actions = governedActions();
-  const drain = evaluateDrain({ runs: runs(), governedActions: actions, trains: [], queue: [] });
-  // Nothing is claimed measured that was not: an unmeasured checkpoint blocks,
-  // and a preflight run from a CLI has measured none of it.
-  const checkpoint = evaluateCheckpoint({ measurements: {} });
+  const allRuns = runs();
+  const drain = evaluateDrain({ runs: allRuns, governedActions: actions, trains: [], queue: [] });
+
+  /*
+   * THE COLLECTORS, WIRED. DevOps 7 shipped this gate with nothing behind it, so
+   * the live preflight reported all five requirements UNMEASURED and refused —
+   * correct, and useless. Each observation below is read from the owner that
+   * already holds it; anything this CLI genuinely cannot see stays absent, and an
+   * absent observation is still UNMEASURED, which still blocks.
+   */
+  const observations = {
+    lanes: lanes(),
+    runs: allRuns,
+    governedActions: actions,
+    worktrees: await worktrees(),
+  };
+  const collected = collectCheckpoint(observations);
+  const checkpoint = evaluateCheckpoint({ measurements: collected.measurements });
   const decision = rebootDecision({ preflight: { pass: true }, drain, checkpoint });
 
-  const out = { root: ROOT, phase: window.phase, cadence, drain, checkpoint, decision };
+  const out = { root: ROOT, phase: window.phase, cadence, drain, checkpoint, collected, decision };
   if (asJson) { process.stdout.write(`${JSON.stringify(out, null, 2)}\n`); process.exit(decision.may_reboot ? 0 : 1); }
 
   process.stdout.write(`maintenance preflight — ${ROOT}\n\n`);
@@ -86,6 +153,9 @@ if (argv.includes("--preflight")) {
   for (const b of drain.blockers) process.stdout.write(`  BLOCK   ${b.kind}: ${b.detail}  [${b.owner}]\n`);
   for (const w of drain.warnings.slice(0, 6)) process.stdout.write(`  warn    ${w.kind}: ${w.detail}\n`);
   process.stdout.write(`checkpoint     ${checkpoint.durable}  (${checkpoint.reason})\n`);
+  for (const r of collected.rows) {
+    process.stdout.write(`  ${r.outcome.padEnd(11)} ${r.id.padEnd(30)} ${r.detail || ""}\n`);
+  }
   process.stdout.write(`\nmay reboot     ${decision.may_reboot}\n`);
   for (const r of decision.refusals) process.stdout.write(`  REFUSE  ${r.gate}: ${r.detail}\n`);
   if (decision.intent) process.stdout.write(`  intent  ${decision.intent.mechanism} ${decision.intent.argv.join(" ")} — ${decision.intent.restores_gateway_via}\n`);
