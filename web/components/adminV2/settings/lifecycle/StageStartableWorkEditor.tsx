@@ -67,13 +67,23 @@ export default function StageStartableWorkEditor({
     const toggle = useCallback(
         (templateKey: string) => {
             const isOn = enabledKeys.has(templateKey);
+            /*
+             * A start action naming NO work can never start anything — the action requires the
+             * template as an input and refuses without it. Such rows existed on the staging tenant
+             * because an earlier persistence step dropped the key, and every save appended another.
+             * They are dropped on any edit here rather than preserved as "operator-authored
+             * behaviour": nothing authored them, and nothing can execute them.
+             */
+            const usable = candidateActions.filter(
+                (a) => a.action_key !== STAGE_WORK_START_ACTION_KEY || Boolean(a.work_template_key?.trim()),
+            );
             const next = isOn
-                ? candidateActions.filter(
+                ? usable.filter(
                       (a) =>
                           !(a.action_key === STAGE_WORK_START_ACTION_KEY && a.work_template_key === templateKey),
                   )
                 : [
-                      ...candidateActions,
+                      ...usable,
                       {
                           action_key: STAGE_WORK_START_ACTION_KEY,
                           recommendation: "ready" as const,
