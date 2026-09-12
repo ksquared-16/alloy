@@ -8,14 +8,20 @@ import {
 /**
  * W-7 — absent scope denies (I-19, lockout class L1).
  *
- * The switch itself is blocked on M1 being applied (W-0 Q4 = 2 pairs with no profile row).
+ * The switch itself is blocked on M1 being applied — W-0 Q4 stood at 2 pairs with no profile
+ * row when this suite was written and census run 4 (2026-09-04) re-derived it to **5**. Re-derive
+ * at switch time rather than trusting either number: the 2026-09-06 W-6 ruling moved W-7's
+ * precondition off the count entirely and onto an invariant (*no writer can create a membership
+ * without a profile*), because a count can change between the re-derivation and the flip.
+ *
  * These cover the two Tier C cases the plan names, and prove the `deny` answer is correct
  * *before* it is enforced, so the flip is a constant change rather than a re-derivation.
  */
 describe("W-7 absent-profile scope resolution", () => {
     it("enforcement stays legacy-all until M1 is applied", () => {
-        // Guard, not decoration: flipping this constant while M1 is unapplied denies the 2
-        // known profile-less pairs every row. Plan §5 Q4 — "W-7 cannot precede it."
+        // Guard, not decoration: flipping this constant while M1 is unapplied denies every
+        // profile-less pair every row — 5 of them as of census run 4, not the 2 this suite was
+        // written against. Plan §5 Q4 — "W-7 cannot precede it."
         expect(ABSENT_PROFILE_ENFORCEMENT).toBe("legacy-all");
     });
 
@@ -25,6 +31,11 @@ describe("W-7 absent-profile scope resolution", () => {
             expect(answer).toEqual({
                 departmentScope: "restricted",
                 siteScope: "restricted",
+                // Moot under denial and deliberately NOT the narrower `assigned`: denyAll
+                // already forces an empty site allow-list, and capture scope is evaluated
+                // after site scope, so `site` over zero sites reaches nothing. Setting
+                // `assigned` here would read as a second, independent restriction.
+                attendanceCaptureScope: "site",
                 denyAll: true,
             });
         });
@@ -37,6 +48,7 @@ describe("W-7 absent-profile scope resolution", () => {
             expect(answer).toEqual({
                 departmentScope: "all",
                 siteScope: "all",
+                attendanceCaptureScope: "site",
                 denyAll: false,
             });
         });
@@ -49,6 +61,7 @@ describe("W-7 absent-profile scope resolution", () => {
             expect(answer).toEqual({
                 departmentScope: "restricted",
                 siteScope: "all",
+                attendanceCaptureScope: "site",
                 denyAll: false,
             });
         });
@@ -64,6 +77,28 @@ describe("W-7 absent-profile scope resolution", () => {
             expect(denied.denyAll).toBe(true);
             expect(stored.denyAll).toBe(false);
         });
+
+        it("covers every scope dimension the answer carries — a new one must be ruled on, not defaulted", () => {
+            /*
+             * This suite went red, not stale, when `attendanceCaptureScope` was added to
+             * `ScopeAnswer` by a later workstream and no one revisited what denial means for
+             * it. Five of ten cases failed on shape alone, including both named Tier C cases,
+             * and the guard below them stopped being able to say anything — a red suite cannot
+             * distinguish "someone threw the L1 switch" from "a field moved".
+             *
+             * The underlying risk is W-7 finding 1 generalised: a dimension that denial does
+             * not explicitly answer falls through to whatever another table holds, which is
+             * how "flip to deny" ships a fail-open one table over. So enumerate the keys. A
+             * dimension added later fails HERE, with this comment, and whoever adds it has to
+             * decide what an absent profile means for it.
+             */
+            expect(Object.keys(resolveScopeAnswerFromProfile(null, "deny")).sort()).toEqual([
+                "attendanceCaptureScope",
+                "denyAll",
+                "departmentScope",
+                "siteScope",
+            ]);
+        });
     });
 
     describe("under legacy-all (what is enforced today)", () => {
@@ -71,6 +106,7 @@ describe("W-7 absent-profile scope resolution", () => {
             expect(resolveScopeAnswerFromProfile(null, "legacy-all")).toEqual({
                 departmentScope: "all",
                 siteScope: "all",
+                attendanceCaptureScope: "site",
                 denyAll: false,
             });
         });
@@ -112,6 +148,7 @@ describe("W-7 absent-profile scope resolution", () => {
             expect(read.enforced).toEqual({
                 departmentScope: "all",
                 siteScope: "all",
+                attendanceCaptureScope: "site",
                 denyAll: false,
             });
         });

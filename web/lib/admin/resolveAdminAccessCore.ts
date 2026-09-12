@@ -77,11 +77,22 @@ export function normalizeRoleKey(raw: unknown): string {
  * - `deny`       — W-7's target: the membership sees nothing.
  *
  * MUST remain `legacy-all` until M1 (`20260807140000_backfill_membership_access_profiles.sql`)
- * is APPLIED on the shared target. W-0 Q4 stands at 2 `(user, org)` pairs with no profile row,
- * so flipping this ahead of the backfill locks out those 2 principals — the exact L1 outcome
- * W-7 exists to avoid. Plan §5 Q4: "W-7 cannot precede it."
+ * is APPLIED on the shared target. Flipping it ahead of the backfill locks out every membership
+ * with no profile row — the exact L1 outcome W-7 exists to avoid. Plan §5 Q4: "W-7 cannot
+ * precede it."
+ *
+ * **Do not cite a count from this comment.** W-0 Q4 read 2 `(user, org)` pairs when this was
+ * written; census run 4 (2026-09-04) re-derived it to 5. Re-derive at switch time.
+ *
+ * **Applying M1 is necessary and NOT sufficient** (2026-09-06 W-6 ruling). "Q4 is 0" is a
+ * momentary property: M1 drives it to zero at commit and seed/QA tooling refills it. The
+ * precondition is therefore an INVARIANT — *no writer can create a membership without a
+ * profile*, which is W-5/M9 scope — and not a count.
  *
  * Flipping this constant to `deny` and deleting the two lines above it is the whole switch.
+ * Per plan §2 step 4 the switch commit must also DELETE this constant, the `legacy-all` branch
+ * and the guard test asserting it; leaving it flipped-but-present is the dormant fallback W-20
+ * exists to clean up.
  */
 export type AbsentProfileMode = "legacy-all" | "deny";
 
@@ -164,7 +175,8 @@ export function dualReadScopeAnswer(profileRow: ProfileScopeRow): {
  *
  * **This is a different population from {@link ABSENT_PROFILE_ENFORCEMENT}, and that is why it can
  * ship while that constant is still pinned to `legacy-all`.** That constant governs a membership
- * whose profile row is genuinely ABSENT — 2 known `(user, org)` pairs — and flipping it before the
+ * whose profile row is genuinely ABSENT — 5 such `(user, org)` pairs at census run 4, 2026-09-04,
+ * a population that moves; re-derive rather than citing this line — and flipping it before the
  * M1 backfill locks those principals out. A read FAILURE is not that population: it is a transient
  * fault affecting whoever happens to be mid-request. Denying it changes nothing for any healthy
  * read, so it carries no lockout risk and does not wait on the migration.

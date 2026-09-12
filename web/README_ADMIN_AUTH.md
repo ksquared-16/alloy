@@ -127,7 +127,7 @@ Three cases, and they are deliberately different:
 | Case | Resolves to | Why |
 |---|---|---|
 | Profile row present | its `department_scope` / `site_scope` | — |
-| **No profile row** | both scopes `all` | `ABSENT_PROFILE_ENFORCEMENT = "legacy-all"`, a transition default. Flipping it to `deny` is a **lockout-class** change and waits on migration `M1` (`W-7`). A shadow resolution runs the opposite mode and logs the divergence. |
+| **No profile row** | both scopes `all` | `ABSENT_PROFILE_ENFORCEMENT = "legacy-all"` — a **fail-open a constant withholds**, not a transition default: nothing is in transit and no date carries it. Flipping it to `deny` is a **lockout-class (L1)** change. It waits on migration `M1` *and* on an invariant — *no writer can create a membership without a profile* (`W-5`/`M9`) — because the count `M1` drives to zero refills from seed/QA tooling. A shadow resolution runs the opposite mode and logs the divergence (`W-7`). |
 | **A read that FAILS** | **`restricted` with explicitly empty allow-lists — i.e. deny** | `W-43` (`I-30`ᴬ). A transient fault is a different population from a missing row, which is why it can deny today while absence cannot. |
 
 > The failure case is stated in terms of **failure, not absence**, because the two were once

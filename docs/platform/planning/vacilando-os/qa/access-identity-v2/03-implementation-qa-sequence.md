@@ -86,7 +86,7 @@ invariant, not a count** (W-5/M9 scope). Tier A evidence remains uncapturable: s
 · **W-0 re-issued a ninth time — 2026-09-11** (mission `msn_861e1785ec233cf433`, assignment `asg_c79f56d685fe83`) —
 **no run 5, and this time the re-run trigger was checked rather than argued.** §4's standing instruction is *"re-run
 only immediately before a lockout-class switch or an M1 apply"*; **neither is armed** — `ABSENT_PROFILE_ENFORCEMENT`
-is still `legacy-all` (`resolveAdminAccessCore.ts:88`) and M1's authorization has been VOID since 2026-09-06 with no
+is still `legacy-all` (`resolveAdminAccessCore.ts:99`) and M1's authorization has been VOID since 2026-09-06 with no
 write channel to apply it. **New, and it reaches past this programme: `vac governed-action --status` reads a runtime
 root the Gateway does not write to, so it answers *"no such request"* for every request id — including ones that
 provably exist.** The store itself *is* worker-readable (the route the seventh and eighth passes declared closed),
@@ -108,7 +108,7 @@ would have believed. `w6-m1-preflight.json` now reads `ok: false` / `preflight_v
 the 2026-08-07 measurement preserved, not erased — **a disclosed, fail-closed, out-of-scope edit** (§4)
 · **W-0 re-issued a twelfth time — 2026-09-11** (mission `msn_a0e8a6206c63198fab`, assignment `asg_4cd9ecb855a587`) —
 **no run 5; both triggers re-read from source and still unarmed** (`ABSENT_PROFILE_ENFORCEMENT` = `legacy-all` at
-`resolveAdminAccessCore.ts:88`; M1's authorization VOID, `preflight.ok: false` — now verified *committed*, at
+`resolveAdminAccessCore.ts:99`; M1's authorization VOID, `preflight.ok: false` — now verified *committed*, at
 `9745f7111`). **The decision to decline is unchanged for the fourth consecutive pass. What changed is the stated
 reason.** ⚠ **THE "NO WRITE CHANNEL" PREMISE IS FALSE, and it is load-bearing in six places.** The eleventh pass
 rested it on *"`read_census` is the only trusted host action"*; `vac governed-action --list` returns **eighteen**,
@@ -128,6 +128,20 @@ passes had just spent two dispatches documenting, which is what made the false p
 assignments held this worktree during this pass** (W-0 ×2 and the W-1 tenth issuance). In a shared worktree
 `git status` **is not a stable observation**: anchor findings to committed SHAs, and re-read before filing one
 drawn from the working tree (§4, §6, §11)
+· **W-7 dispatched a second time, switch STILL NOT THROWN — 2026-09-11** (mission `msn_861e1785ec233cf433`,
+assignment `asg_79d1f058e3abcb`) — the objective again asserts its own precondition (*"after W-6 seeds"*);
+**W-6 has not seeded**, verified from `w6-m1-preflight.json` (`ok: false`, `preflight_void_reauthorization_required`,
+`apply_authorization.VOID_AS_OF_2026_09_06`). **Third consecutive W-7 dispatch to arrive with a precondition the
+plan had already ruled false.** ⚠ **W-7's own QA lock was RED and this plan said it was green**:
+`absentProfileDenies.test.ts` ran **5 failed / 5 passed** because a later workstream added a third dimension,
+`attendanceCaptureScope`, to `ScopeAnswer` and never revisited the whole-object assertions — **both named Tier C
+cases were among the failures**, and the L1 guard, though itself passing, sat in an already-red file and so could
+no longer distinguish *"someone threw the switch"* from *"a field moved"*. **Read a green file, never a green
+case.** Repaired to **11 green** (88 across six neighbouring suites) plus a key census so the next added dimension
+must be ruled on. **Applying W-6's own "grep for the fact, not the file" lesson found deliverable 2 outstanding**:
+this plan has said since 2026-08-07 that the legacy-transition comment was *"already deleted"*, and it survived in
+`web/README_ADMIN_AUTH.md:130` as *"a transition default"* — now corrected, along with two stale `Q4 = 2` counts in
+the resolver (§4, §6)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -1186,7 +1200,7 @@ tree, and both halves were tested:
 
 | Trigger | State | Evidence |
 |---|---|---|
-| Lockout-class switch | **not armed** | W-7's whole switch is one constant, and `ABSENT_PROFILE_ENFORCEMENT` is still `"legacy-all"` (`web/lib/admin/resolveAdminAccessCore.ts:88`). The 2026-09-06 ruling also moved W-7 onto an **invariant rather than a count**, so no census result can arm it. |
+| Lockout-class switch | **not armed** | W-7's whole switch is one constant, and `ABSENT_PROFILE_ENFORCEMENT` is still `"legacy-all"` (`web/lib/admin/resolveAdminAccessCore.ts:99`). The 2026-09-06 ruling also moved W-7 onto an **invariant rather than a count**, so no census result can arm it. ⚠ **The build-time guard against arming it accidentally was disarmed from the addition of `attendanceCaptureScope` until 2026-09-11** — the guard case kept passing, but its file was already red for unrelated shape drift, and a red file cannot signal. Repaired (§6 W-7, second dispatch). The constant was never flipped; what lapsed was the alarm, not the lock. |
 | M1 apply | **not armed** | `20260807140000_backfill_membership_access_profiles.sql` is present, but its authorization is **VOID on RULE 5** since 2026-09-06, `preflight.ok: false`, gate `unmet`. ~~and the same ruling recorded that **no worker-reachable write channel exists to apply it**~~ — **that reason is WRONG and was corrected 2026-09-11 by the twelfth W-0 re-issue**: `database.apply_migration` is registered, dispatched, has an execute branch (`trusted-host-actions.mjs:648-650`) and accepts `environment: staging`. **The conclusion is unchanged — M1 is still not armed — but it is held by the VOID authorization and `preflight.ok: false`, not by an absent channel.** |
 
 So the condition is unmet, and filing would have risked a **third** card for a census that already ran — dedupe is
@@ -1244,7 +1258,7 @@ tree, written by a *different* mission and assignment (`msn_861e1785ec233cf433` 
 re-verified its claims from source. **Three did not survive.**
 
 **The triggers were re-read, not inherited.** `ABSENT_PROFILE_ENFORCEMENT` is still `"legacy-all"`
-(`resolveAdminAccessCore.ts:88`); M1's authorization is still VOID on RULE 5 per the 2026-09-06 ruling. Neither is
+(`resolveAdminAccessCore.ts:99`); M1's authorization is still VOID on RULE 5 per the 2026-09-06 ruling. Neither is
 armed, so `residual_risks[0]`'s re-run condition is unmet.
 
 **⚠ Correction 1 — the `--status` finding is right, but its evidence had already rotted.** The ninth pass cited
@@ -1285,7 +1299,7 @@ Mission"** — *the third consecutive dispatch carrying the same hash and title*
 met** on run 4 (2026-09-04T11:28:53Z). The tenth re-issue's four numbered clauses were followed in order.
 
 **The triggers were re-read from source, not inherited.** `ABSENT_PROFILE_ENFORCEMENT` is still `"legacy-all"`
-(`web/lib/admin/resolveAdminAccessCore.ts:88`). M1 was confirmed unarmed from three independent places rather than
+(`web/lib/admin/resolveAdminAccessCore.ts:99`). M1 was confirmed unarmed from three independent places rather than
 from the prior pass's summary: the migration file is present, the §11 register row reads **PREFLIGHT VOID —
 RE-AUTHORIZATION REQUIRED**, and the ruling's no-write-channel finding holds structurally (the sole trusted host
 action is `database.read_census`, and the registry calls `validateReadOnlySql()` unconditionally, so an `INSERT` is
@@ -4836,7 +4850,10 @@ prohibits: convenient, adjacent, and someone else's exit criterion. `PORTAL_ROLE
 - Tier C: the same principal with a profile row present is unaffected.
 - Tier D: one authenticated browser pass on `:3020` confirming a normally-configured operator is unaffected.
 
-**QA status — `web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts`, 10 tests green.** Both
+**QA status — `web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts`, ~~10 tests green~~ 11
+tests green.** *(This claim read "10 green" and was **false from the moment a third scope dimension was added
+to `ScopeAnswer` until 2026-09-11**, when the second W-7 dispatch found the suite at 5 failed / 5 passed and
+repaired it — see that dispatch record below. The description that follows is accurate again.)* Both
 named Tier C cases are covered at the resolver's decision layer, plus: a stored restriction still reads from
 the profile and not the mode; denial is distinguishable from a stored double-restriction (`denyAll` set vs
 clear); the dual read diverges *exactly* when the row is absent across all four stored combinations; the
@@ -4870,6 +4887,90 @@ schedulable ask, rather than behind a channel that would first have to be built.
 apply remains gated on its own preflight and an operator approval; M1's specifically stays refused while its
 authorization is VOID and `preflight.ok` is `false`. The channel has **not** been executed and must not be
 exercised to settle the point.
+
+#### The second dispatch — **2026-09-11**, assignment `asg_79d1f058e3abcb` (`msn_861e1785ec233cf433`)
+
+**The switch was not thrown, for the third time, and the objective's stated precondition is the reason.** The
+dispatched objective reads *"flip `resolveAdminAccessCore` missing-profile fallback from both scopes all to
+deny … Follow the dual-read ritual **after W-6 seeds**."* **W-6 has not seeded**, and this pass verified that
+from the artifact rather than inheriting it: [`w6-m1-preflight.json`](w6-m1-preflight.json) carries
+`preflight.ok: false`, `status_of_migration: "preflight_void_reauthorization_required"`, and an
+`apply_authorization` block whose first key is `VOID_AS_OF_2026_09_06`. The gate is fail-closed and consistent
+with §11. Flipping today would deny every profile-less pair every row — **lockout class L1 itself**, which is
+the class this workstream is filed under. The plan of record was right and the assignment text was wrong again;
+the plan won again. This is now the **third** consecutive W-7 dispatch to arrive with a precondition the plan
+had already ruled false (2026-08-07 `(done)`, 2026-09-06, this one). An objective that keeps asserting the
+precondition cannot establish it.
+
+**The finding, and it is W-6's lesson landing one section later.** W-6's fifth dispatch (`2997f4171`, the
+immediately preceding commit) concluded: *"when you repair a duplicated fact, grep for the fact, not the
+file."* Applied to W-7's own second deliverable, it immediately produced one. This section has asserted since
+2026-08-07 that *"the legacy-transition comment named in the objective is **already deleted**"*. That is true
+of `resolveAdminAccessCore.ts` and **false of the codebase**: [`web/README_ADMIN_AUTH.md:130`](../../../../../../web/README_ADMIN_AUTH.md)
+— the operator-facing scope-resolution authority table — still described `ABSENT_PROFILE_ENFORCEMENT =
+"legacy-all"` as **"a transition default"**, the exact characterisation W-7 exists to delete, surviving in the
+other artifact for five weeks while the plan recorded the deletion as complete. **Deliverable 2 of this
+objective was genuinely outstanding**; it simply was not in the file anyone had checked. Now corrected, and
+strengthened past a rename: the row states the fail-open as *a constant withholds it*, and records that the
+precondition is M1 **plus** the W-5/M9 invariant, not M1 alone.
+
+**W-7's own QA lock was RED on this base, and this section's "10 tests green" was stale.**
+`web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts` ran **5 failed / 5 passed**. A later
+workstream added a third dimension, `attendanceCaptureScope`, to the `ScopeAnswer` shape and never revisited
+this suite's `toEqual` assertions, which compare whole objects. **Both named Tier C cases were among the
+failures** — the two this section cites as the evidence that W-7's answer is correct. Nothing was wrong with
+the resolver; the proof had simply stopped being a proof, and no dispatch noticed because W-7 has not been
+executed since. **The consequence is worse than five red assertions.** The guard case —
+`ABSENT_PROFILE_ENFORCEMENT === "legacy-all"`, which this section correctly calls *"a guard, not decoration: it
+fails the build if anyone flips the switch while M1 is unapplied"* — was still passing, but it lived in a file
+that was already failing. A red suite cannot raise an alarm: it cannot distinguish *"someone threw the L1
+switch"* from *"a field moved"*. **The lockout protection this section relies on had been silently disarmed,
+and the section asserting it was green is what kept anyone from looking.**
+
+Repaired mechanically — the five assertions now carry `attendanceCaptureScope`, with no change to resolver
+behaviour — and the third dimension was verified genuinely safe under denial rather than assumed:
+`denyAll` forces an empty site allow-list, `locationAllowedUnderSiteScope` resolves `[].includes(site)` to
+`false` (`accessScope.ts:128-129`), and `assertAttendanceCaptureAllowed` evaluates site scope at step 2
+*before* capture scope at step 3, so `"site"` over zero sites reaches nothing. **W-7 finding 1 does not recur
+in the new dimension.** A twelfth case was added enumerating the keys of the denial answer, so the next
+dimension added to `ScopeAnswer` fails *there* and forces a ruling on what absence means for it, rather than
+silently inheriting a default — which is finding 1 generalised from "another table's contents" to "another
+workstream's field". **Suite now 11 green; 88 green across the six neighbouring access suites.**
+
+**Two further stale copies of the gate-sizing fact, both in the resolver, both repaired.**
+`resolveAdminAccessCore.ts` asserted *"W-0 Q4 stands at 2 `(user, org)` pairs"* at the constant and *"2 known
+`(user, org)` pairs"* in W-43's comment. Census run 4 moved that to **5** on 2026-09-04. Neither is a safety
+defect — the constant is pinned either way — but a reader sizing the blast radius from the code got a number
+2.5× low, and the code is what a reader opens at the moment of flipping. Both now decline to carry a count at
+all and say *re-derive*, which is the only form of that fact that cannot go stale. The constant's comment also
+now records the **§2 step 4** obligation it omitted: the switch commit must delete the constant, the
+`legacy-all` branch and the guard test together.
+
+**The invariant is further from holding than this section assumes — from the W-5 lane, concurrently.** W-7's
+precondition is now *no writer can create a membership without a profile* (W-5/M9). The W-5 lane running
+against this same base (`asg_367d09478cc9a2`) reports that the fourth issuance's *"exactly two `INSERT INTO …
+user_roles`, both inside W-5's own migration"* is **false at 413 migrations: six sites across four files**.
+Two membership-writing functions now arrive from other workstreams — D2's `replace_membership_with_access_profile`
+overload and W-17's `assign_member_role_audited` — and each **copies** the profile insert rather than calling
+W-5's function. Both are individually correct, so the invariant holds today *by coincidence of three
+independent implementations agreeing*, which is not an invariant. No lock covers it: tier B's `PRODUCT_TREES`
+is `["app","lib"]` and `supabase/migrations/` has never been any lock's subject. **W-7 should not read "W-5
+delivered" as "the invariant holds"** — it must read the lock, and the lock does not exist yet.
+
+**Unchanged and deliberately not done.** `ABSENT_PROFILE_ENFORCEMENT` is still `legacy-all`. The
+department-scope bypass (W-8) is untouched, per the assignment's explicit prohibition. `PORTAL_ROLES` is
+untouched, for the reason the 2026-08-07 dispatch recorded. Tier D was not run and should not be: nothing
+user-visible changed.
+
+**One artifact left uncorrected, deliberately, and named here so it is owned.**
+[`w6-m1-preflight.json`](w6-m1-preflight.json) `:148` still asserts *"NO EXECUTION CHANNEL EXISTS … There is no
+`database.apply_migration` action to authorize."* The twelfth W-0 re-issue corrected that in the plan and the
+§11 register — the channel exists and has an execute branch — but the claim survives in W-6's scope file, which
+is exactly the two-artifact shape above. It is **fail-closed-neutral** (it misattributes *why* the gate holds,
+not *whether* it holds) but it is the file an operator opens when deciding whether to re-authorize, and it
+currently tells them the ask is impossible rather than merely unrequested. It is W-6's file and this is W-7's
+dispatch, so it is flagged rather than edited — **but per the eleventh re-issue's precedent, "no dispatch owns
+it" is how the last one survived five days.**
 
 ### W-8 — No role widens a scope dimension *(M · I-20 · closes C8)*
 
@@ -6119,7 +6220,7 @@ contributor deleting one has to do it on purpose.
 | **RL-3** | The grid is generated; no literal key list in UI source | A | I-14 / W-10 | **LIVE (2026-08-07)** — `web/tests/admin/permissionGrid.test.ts` (**Passed — 20 passed / 0 failed**, with RL-48 below). Four assertions, each strictly stronger than RL-2: the projection is **total** (every catalog key reaches exactly one row and one column — a dropped key is an ungrantable capability, C5 re-created one level up), **sound** (no row names a key the catalog lacks — the range *is* the domain), **deterministic** (any input ordering renders the same grid), and **literal-free** (no permission-key string literal in four Access UI sources, comments and imports stripped, plus `PERMISSION_GRID_ROWS` absent from the module's exports). **SUBJECT REPAIRED 2026-08-07 by W-11 — it had been running over 35 of the catalog's 57 keys.** The migration-tree parser was pinned to `(key, group_key, label, …)`, so a transposed literal in `seed_default_rbac` (20 keys) and a variable-driven loop in the wave-C authority seed (2 keys) were invisible, and the non-vacuity guard below could not tell 35 from 57. Discovery is now by *region* — any part of a migration that can write a catalog row — in `web/tests/access/permissionCatalogDiscovery.ts`; all four clauses re-run over the full catalog and none needed weakening (**20 passed / 0 failed**). Third instance of the enumerated-subject failure in this workstream, and the first by syntax rather than by file list. Non-vacuity guarded: the migration-tree parser must find >10 keys before anything is asserted about them — **which is exactly what did not catch this**, and is why the reconciliation instrument pins the width to a number a second method produced. **Proven red by negative fixture on both substantive halves — totality and literal-freedom — on the 2026-08-07 re-issuance**, where both probes were found still live in the working tree (a key-dropping `continue` in the projection loop; a re-introduced `PERMISSION_GRID_ROWS` literal in the component), taking the pair of suites to 4 red. Fixtures removed, green after, `tests/access` back to its pre-W-10 baseline. Read the fixture proof as strength in the lock and a finding against the evidence discipline, not as a clean run — see §7 |
 | **RL-48** | A grant save preserves every key the surface cannot display — **H2** | B | `01…§48` / W-10 | **LIVE (2026-08-07)** — `web/tests/admin/permissionGrid.test.ts`. Numbered from the product-source register (`03…§25`), which the QA copy does not carry; recorded here because W-10 is where it was owed. `03…§47.1` amendment 4 made H2 a **precondition** of W-10, and W-10 needed it more than the old grid did: the nine hand-authored rows were compiled into the bundle, so a failed catalog read changed nothing on screen, whereas the projection renders an empty grid. Asserts the preservation property over **every** projected row against a granted set holding the whole catalog, and over a granted key absent from the catalog entirely. `01…§54`'s bottom row — *every control in the authority chain is unlocked* — loses one entry |
 | **RL-4** | Membership creation writes a profile row atomically | **A + B + C** | G4 / W-5 | **LIVE (tier A+B), TIER C AUTHORED-NOT-RUN** — `web/tests/access/membershipAtomicWiring.test.ts` (**Passed — 16 passed / 0 failed**): no file under `web/app` or `web/lib` calls `.insert`/`.upsert`/`.update` on `user_roles`, plus outcome-mapping tests. **Widened 2026-08-07**: the subject was a hard-coded list of the three files W-5 had already fixed, so it could not catch a fourth writer — proven by a negative fixture, a probe route that sat in `app/api/` re-opening G4 with the old suite 14/14 green. Subject is now the whole of `app/`+`lib/` by discovery, with a non-vacuity guard on the scan itself. Tier C is `web/tests/access/membershipProfileInvariant.integration.test.ts` — **6 tests, never executed**; `SUPABASE_SERVICE_ROLE_KEY` is absent from every worktree env file by two-tier-env design, so **no worker-side run is possible** — it needs a Director-side channel, not an authorization. Do not read this row as "atomicity is proven" until it runs |
-| **RL-5** | Absent profile denies; never `all` | C | I-19 / W-7 | **LIVE AS A DUAL-READ LOCK, SWITCH NOT THROWN** — `web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts` (10 green) proves the `deny` answer at the decision layer: both named Tier C cases, denial distinguishable from a stored double-restriction, and a malformed scope value resolving `all` rather than becoming an L1 event. Enforcement is still `legacy-all` and one test **asserts that**, failing the build if the switch is thrown while M1 is unapplied. Pure-function tier, not fixture-principal integration — same authorization boundary as RL-4's Tier C. Do not read this row as "absent profiles deny"; they still resolve `all` |
+| **RL-5** | Absent profile denies; never `all` | C | I-19 / W-7 | **LIVE AS A DUAL-READ LOCK, SWITCH NOT THROWN** — `web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts` (~~10~~ **11 green, repaired 2026-09-11**) proves the `deny` answer at the decision layer: both named Tier C cases, denial distinguishable from a stored double-restriction, a malformed scope value resolving `all` rather than becoming an L1 event, and — new — a key census over the denial answer so a later-added scope dimension must be ruled on rather than defaulted. Enforcement is still `legacy-all` and one test **asserts that**, failing the build if the switch is thrown while M1 is unapplied. **That guard was disarmed between the addition of `attendanceCaptureScope` and 2026-09-11**: it passed, but inside an already-red file, so it could not distinguish a thrown switch from a shape change. Read a green *file*, never a green *case*. Pure-function tier, not fixture-principal integration — same authorization boundary as RL-4's Tier C. Do not read this row as "absent profiles deny"; they still resolve `all` |
 | **RL-6** | No role literal appears in `accessScope.ts` | A | C8 / W-8 | **LIVE (2026-08-07)** — `web/tests/lifecycle/lifecycleAdminScopeAndPersistence.test.ts`. Asserts on *executable* lines only (the W-8 comment block names the deleted symbols deliberately), so `portalAdminBypassesDepartmentScope`, `effectiveDepartmentScopeDimensions`, `PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES` and any `"admin"`/`"ops"` literal all fail the lock. Paired with a second assertion that the `user_department_access` self-insert is gone — the first half alone would have passed over an armed path. **Note the scope limit: this locks `accessScope.ts`, not the platform.** `PORTAL_ROLES` in `resolveAdminAccessCore.ts:18` is untouched and is RL-9's subject |
 | **RL-7** | Exactly one FK on `role_permission_grants.permission_key` | A | C3 / W-9 | **LIVE (2026-08-07)** — `web/tests/access/catalogConsolidationLock.test.ts` (**Passed — 8 passed / 0 failed**). Replays the whole migration tree in filename order and asserts the **end state**, rather than reading the consolidation migration and agreeing with it: one surviving FK, named, referencing `permission_definitions`, `ON DELETE RESTRICT`; exactly one catalog **table** with both deprecated names as views; no post-consolidation writer through a deprecated name; no `anon` re-grant on a catalog object; no product code reaching the catalog through a deprecated name; and **every** discovered writer of `role_permission_grants` validating against the table the FK names. Subject is discovery with non-vacuity guards on both scans — RL-1 was defeated twice by a pinned subject and RL-4 once. **Proven red in two negative-fixture rounds (4 red, then 2 red) covering six of six substantive assertions**, fixtures removed, green after. **Necessary because W-9's exit criterion was met by a migration from a track that does not own it** (§7) — nothing was watching this schema. Does **not** close the DB-level write surface on the two views: they are auto-updatable and `service_role` holds `ALL` by default privileges, which is `W-60`/`M20`'s |
 | **RL-8** | No `SELECT` over the catalog in a grant seed | A | G5 / W-12 | **LIVE (2026-08-07)** — `web/tests/access/grantSeedEnumeration.test.ts` (**15 passed / 0 failed**). **Implemented as a restatement, and the restatement is the finding**: as literally worded this row condemns three seeds that are not the defect — `20260505164000` joins the catalog on a seventeen-key `IN` list, Phase 0's workflows backfill on a two-key list, and M6's own `is_active` narrowing guard reads it too. None lets the catalog decide what is granted. The property the *exit criterion* names is asserted instead: **every statement writing `role_permission_grants` takes its keys from literals in its own text or an enclosing loop's `VALUES` list, never from a catalog relation** — strictly stronger where it matters (a blanket over a non-catalog relation passes the literal reading and fails this one). Subject is discovery over all 315 migrations, not a file list: **14 grant statements in 9 files, 10 bounded, 4 blanket**, all four being superseded definitions of `seed_default_rbac` frozen in applied migrations. That count is a **ratchet enforced over *and* under**, per W-4. Asserts the *end state* after a filename-order replay — RL-7's discipline — plus admin ≡ the function's own catalog literal ≡ the catalog W-11's independent instrument discovers (57, two methods), ops ≡ that less exactly the two withheld keys, and the migration guard slicing on sentinels the function actually carries. `NOT IN` / `NOT EXISTS` / `<> ALL` are stripped before a bound is looked for — the baseline's `ops` blanket names two keys it withholds and would otherwise read as enumerated. **Proven red by five negative fixtures**, each removed and the suite green after. Reading it as "grants are enumerated on the target" would be wrong: **M6 is unapplied** |
