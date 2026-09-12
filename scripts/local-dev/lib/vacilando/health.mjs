@@ -43,6 +43,7 @@ export const CHECKS = Object.freeze([
   "subprocess.ancestry",
   "lanes.consistency",
   "lane.bootstrap",
+  "lane.freshness",
   "ports.registry",
   "worktrees.registry",
   "toolkit.retention",
@@ -811,6 +812,67 @@ export function checkLaneBootstrap({ inventory = null }) {
   });
 }
 
+/**
+ * Can the fleet's lanes safely start new implementation against current staging?
+ *
+ * IN THE EXISTING FRAMEWORK, beside `lane.bootstrap` — same registry, same
+ * finding shape, same severities. Freshness is not a second doctor and not a
+ * second lifecycle; it is one more question asked of facts that already exist.
+ *
+ * SEVERITY IS ABOUT CONSEQUENCE, NOT TIDINESS.
+ *
+ * `UNRESOLVED_BOOTSTRAP` is a problem: the lane cannot resolve the baseline it is
+ * entitled to, which on a slotted lane usually means its slot cannot do QA — so
+ * which slot the scheduler picked is deciding what the lane can do.
+ *
+ * `STALE_SAFE_TO_RECONCILE` is a watch. The lane is behind, nothing is wrong
+ * with it, and reconciliation is available and safe. Scoring that as a problem
+ * would mean a fleet doing normal work reported red continuously.
+ *
+ * `BLOCKED_*` is a watch too, and deliberately. A dirty worktree is somebody
+ * working; a promotion candidate is evidence being preserved. Those are refusals
+ * the policy made CORRECTLY, and a check that scored its own correct refusals as
+ * faults would be teaching the operator to ignore it.
+ */
+export function checkLaneFreshness({ inventory = null }) {
+  if (!inventory) return incompleteFinding("lane.freshness", "no freshness inventory available");
+  const rows = Array.isArray(inventory.rows) ? inventory.rows : [];
+  const unresolved = rows.filter((r) => r.state === "UNRESOLVED_BOOTSTRAP");
+  const stale = rows.filter((r) => r.state === "STALE_SAFE_TO_RECONCILE");
+  const blocked = rows.filter((r) => String(r.state).startsWith("BLOCKED"));
+  const sev = unresolved.length ? "problem" : (stale.length || blocked.length) ? "watch" : "healthy";
+  const worst = [...stale].sort((a, b) => (b.behind || 0) - (a.behind || 0))[0];
+  return finding({
+    check: "lane.freshness",
+    severity: sev,
+    owner_resource: "vacilando.development_lane",
+    measurements: {
+      lanes: rows.length,
+      unresolved: unresolved.length,
+      stale: stale.length,
+      blocked: blocked.length,
+      max_behind: rows.reduce((m, r) => Math.max(m, Number(r.behind) || 0), 0),
+      material_behind: inventory.policy?.material_behind ?? null,
+      recent_hours: inventory.policy?.recent_hours ?? null,
+    },
+    evidence: [
+      ...unresolved.map((r) => `${r.name || r.lane_id}: ${r.reason || "baseline unresolved"}`),
+      ...stale.slice(0, 6).map((r) => `${r.name || r.lane_id}: ${r.behind} behind ${r.base || "staging"} — safe to reconcile`),
+      ...blocked.slice(0, 6).map((r) => `${r.name || r.lane_id}: ${r.state} (${r.reason || ""})`),
+    ],
+    explanation: unresolved.length
+      ? "A lane cannot resolve its baseline, so it is not equally capable of the work any lane should be able to do."
+      : stale.length
+        ? `The furthest-behind lane is ${worst?.behind ?? "?"} commits from staging and can be reconciled safely.`
+        : blocked.length
+          ? "Some lanes are deliberately not auto-reconciled: work in progress or evidence being preserved."
+          : "Every lane is current with staging.",
+    suggested_action: unresolved.length
+      ? "Resolve the named baseline gap; a managed slot that cannot resolve QA makes slot assignment decide capability."
+      : null,
+  });
+}
+
 export function checkPortsRegistry({ ports = [] }) {
   // S7 verdicts. `foreign_owner` is a problem because the registry is wrong
   // about WHO owns a live port; `ambiguous` is a watch because we refused to
@@ -1095,6 +1157,7 @@ export function composeReport({
   safe("providers.orphaned", () => checkProvidersOrphaned({ seats: probeResults.seats || [], panes: probeResults.panes || [] }));
   safe("subprocess.ancestry", () => checkSubprocessAncestry({ attribution: probeResults.attribution }));
   safe("lane.bootstrap", () => checkLaneBootstrap({ inventory: probeResults.laneBootstrap }));
+  safe("lane.freshness", () => checkLaneFreshness({ inventory: probeResults.laneFreshness }));
   safe("lanes.consistency", () => checkLanesConsistency({ lanes: probeResults.lanes || [], seats: probeResults.seats || [] }));
   safe("ports.registry", () => checkPortsRegistry({ ports: probeResults.ports || [] }));
   safe("worktrees.registry", () => checkWorktreesRegistry({ ...(probeResults.worktrees || {}), states: probeResults.reconciliation || null }));

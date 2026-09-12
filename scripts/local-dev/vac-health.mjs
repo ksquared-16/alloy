@@ -90,6 +90,13 @@ const lanesRaw = await safely(async () => {
 // browser, no provider — so asking "are my lanes consistent?" costs none of the
 // resources it is asking about. `safely` keeps a failure here from taking the
 // rest of the report down; the check reports INCOMPLETE instead.
+// Freshness, like bootstrap, is a READ. It runs git plumbing against each
+// lane's worktree and acquires no slot, server, browser or provider.
+const laneFreshness = await safely(async () => {
+  const { inventoryLaneFreshness } = await import("./lib/vacilando/lane-freshness.mjs");
+  return inventoryLaneFreshness({ lanes: lanesRaw });
+}, null);
+
 const laneBootstrap = await safely(async () => {
   const { inventoryLaneBootstrap } = await import("./lib/vacilando/lane-bootstrap.mjs");
   return inventoryLaneBootstrap({ lanes: lanesRaw });
@@ -359,7 +366,7 @@ const report = composeReport({
   hw, thresholds, only, startedAt,
   endedAt: new Date().toISOString(),
   probeResults: {
-    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap,
+    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness,
     run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, configured_max: configuredMax,
     validation_routing: validationRouting, validation_bypasses: validationBypasses,

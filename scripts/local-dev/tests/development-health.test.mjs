@@ -81,6 +81,17 @@ const HEALTHY_PROBES = {
     unresolved: 0,
     rows: [{ lane_id: "lane_a", name: "A", stale: false, unresolved: [], overlay: {} }],
   },
+  // Same reason the bootstrap inventory is here: a fixture that claims every
+  // check passes has to supply every check, or the newest one reports
+  // INCOMPLETE — correct for a check with no data, and a `watch`.
+  laneFreshness: {
+    policy: { recent_hours: 12, long_inactive_hours: 72, material_behind: 50, canonical_base: "origin/staging" },
+    lanes: 1,
+    by_state: { CURRENT: 1 },
+    blocked: 0,
+    stale: 0,
+    rows: [{ lane_id: "lane_a", name: "A", state: "CURRENT", behind: 0 }],
+  },
   runs: [{ run_id: "r1", state: "EXECUTING", state_reason: "instruction_delivered", terminal: false, age_ms: 1000 }],
   run_bounds: { instruction_delivered: 3600000 },
   attribution: { seat_count: 1, attributed_count: 1, records: [{ pid: 2, attribution_status: "ancestry", execution_location: "inside_worktree" }] },
