@@ -651,7 +651,13 @@ describe("W-14 · RL-10 — inherited handlers, the enumerated denominator", () 
         expect(report.ratchet.owned_pending).toBe(report.counts.pending - report.ratchet.inherited);
         expect(report.ratchet.owned_pending).toBeLessThanOrEqual(695);
         // And the treatment is doing real work — if inherited were empty this would be red.
-        expect(report.counts.pending).toBeGreaterThan(695);
+        //
+        // Against the ceiling IN FORCE, not against 695. The Forms capability conversion retired
+        // 23 handlers and took raw pending to 677 — below the frozen treatment ceiling — so a
+        // constant here would have stopped biting at exactly the moment the backlog got small
+        // enough for one unlisted handler to matter most. The property was never "695"; it is
+        // that the enumerated list is load-bearing against the bound this table actually enforces.
+        expect(report.counts.pending).toBeGreaterThan(table.ratchet.max_pending);
     });
 
     it("every inherited entry names a live, still-exported, still-pending handler", () => {

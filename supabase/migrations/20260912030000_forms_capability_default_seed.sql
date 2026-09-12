@@ -389,7 +389,8 @@ BEGIN
      WHERE strpos(v_ops_region, '''' || k || '''') > 0;
     IF v_ops_extra IS NOT NULL THEN
         RAISE EXCEPTION
-            'FORMS ABORT: the ops enumeration grants %, which this migration exists to withhold. That would widen ops, not preserve it.', v_ops_extra;
+            'FORMS ABORT: the ops enumeration grants %, which the migration that introduced each of those keys explicitly withheld from ops. This would widen ops, not preserve it.',
+            v_ops_extra;
     END IF;
 
     IF strpos(v_ops_region, '''forms.submissions.confirm''') = 0 THEN

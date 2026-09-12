@@ -42,7 +42,15 @@ import {
 
 const WEB_ROOT = join(__dirname, "..", "..");
 
-const ctxOk = { ok: true as const, orgId: "org-1", role: "admin", userId: "user-1" };
+// `permissionKeys` is empty on purpose: this seam is about consumer and organization POLICY,
+// and a fixture that carried capabilities would suggest the stage consults them. It does not.
+const ctxOk = {
+    ok: true as const,
+    orgId: "org-1",
+    role: "admin",
+    userId: "user-1",
+    permissionKeys: [] as string[],
+};
 const accessOk = {
     ok: true as const,
     userId: "user-1",

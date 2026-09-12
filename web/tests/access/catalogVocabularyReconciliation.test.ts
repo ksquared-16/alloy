@@ -166,8 +166,10 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         );
         // 21 until W-13/AD-22 gave `settings.users_roles.read` an enforcement site; 22 until the
         // Financials workspace and the financial action package gave `fin.read` and `fin.write`
-        // theirs, which the artifact records as `financials_restatement`.
-        expect(enforced.length).toBe(24 + added.length);
+        // theirs, which the artifact records as `financials_restatement`; 24 until the Forms
+        // authority cleanup gave `crm.customers.read` its first enforcement site anywhere — the CRM
+        // entity search under Forms, which had been gated on the literal `admin` role.
+        expect(enforced.length).toBe(25 + added.length);
         /*
          * A health key that is SEEDED but not ENFORCED would be the D-H6 failure mode: the catalogue
          * would advertise a boundary the product does not apply. Both keys must have call sites.
@@ -179,10 +181,12 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         const unenforced = [...catalog.keys()].filter((k) => (scan.sitesByKey.get(k) ?? []).length === 0);
         expect(unenforced.sort()).toEqual([...artifact.deletion_candidates].sort());
         // 36 until W-13/AD-22 recovered `settings.users_roles.read`; 35 until `fin.read` and
-        // `fin.write` were recovered the same way. Every movement this initiative has recorded has
-        // been OUT of the deletion list, which is the direction that means the product grew a real
-        // gate rather than lost one.
-        expect(unenforced.length).toBe(33);
+        // `fin.write` were recovered the same way; 33 until the Forms authority cleanup recovered
+        // `crm.customers.read`, which the catalog had held and nothing had ever enforced — the CRM
+        // entity search under Forms was gated on the literal `admin` role instead. Every movement
+        // this initiative has recorded has been OUT of the deletion list, which is the direction that
+        // means the product grew a real gate rather than lost one.
+        expect(unenforced.length).toBe(32);
     });
 
     it("C13 resolves against the measurement: nothing enforces a workflows key", () => {
