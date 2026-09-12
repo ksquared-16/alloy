@@ -59,7 +59,13 @@ main() {
 
   alloy_load_config
   alloy_ensure_runtime_dirs
-  alloy_load_metadata "$name"
+  # DEPENDENCIES, NOT RUNTIME. This command installs node_modules: it starts no
+  # server, opens no port, mints no QA identity and consumes no provider
+  # capacity. Demanding a Development Slot for it made a registered slotless
+  # worktree — which `alloy-worktree-adopt --no-slot` exists to create —
+  # unprovisionable, and with all slots held by live lanes that left a promotion
+  # train unable to measure four Critical Invariants.
+  alloy_load_metadata "$name" dependencies
 
   local path="$ALLOY_WORKTREE_PATH"
   local before after remedy
@@ -94,10 +100,18 @@ Provisioned
   worktree:  ${name}
   path:      ${path}
   readiness: ${before} -> ${after}
-  port:      ${PORT}
-
-Start it with: alloy-dev-start ${name}
+  slot:      ${ALLOY_WORKTREE_SLOT:-none (slotless)}
+  port:      ${PORT:-none}
 EOS
+  if [[ -n "${ALLOY_WORKTREE_SLOT:-}" ]]; then
+    printf '\nStart it with: alloy-dev-start %s\n' "$name"
+  else
+    # Honest about what was NOT done: a slotless worktree has dependencies and
+    # still has no runtime. Saying "start it" here would promise a server this
+    # command deliberately did not arrange.
+    printf '\nDependencies only. No slot, no port and no dev server: this worktree can run\n'
+    printf 'tests and proofs. Re-adopt it with a slot when it needs a running server.\n'
+  fi
 }
 
 main "$@"
