@@ -3,6 +3,7 @@
  * No arbitrary shell.
  */
 import { createHash } from "node:crypto";
+import { resolveReconciliationRequest } from "./reconciliation-registry.mjs";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,6 +48,7 @@ export const ACTION_TYPES = Object.freeze({
   CAPACITY_SET_PROVIDER_CEILING: "capacity.set_provider_ceiling",
   HOST_INSTALL_TOOLKIT: "host.install_toolkit",
   LANE_DISPATCH_MEASUREMENT_INSTRUCTION: "lane.dispatch_measurement_instruction",
+  ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION: "environment.execute_registered_reconciliation",
 });
 
 const DEFAULT_TARGET = "alloy_deployed_primary";
@@ -365,6 +367,45 @@ function defineRetireWorktree() {
           runtimeRoot: inputs.runtimeRoot || null,
         },
       };
+    },
+  };
+}
+
+/**
+ * EXECUTE A REGISTERED RECONCILIATION — a key, an environment, and a boolean.
+ *
+ * Deliberately NOT a script runner. `vacilando.apply_reconciliation_plan` is the neighbouring
+ * capability and is a different thing entirely: it applies Vacilando METADATA corrections from a
+ * plan the executor recomputes. Using it to move children between enrollment stages would launder
+ * product data through a governance capability, so this is its own registration with its own
+ * capability, its own approval, and its own allowlist.
+ *
+ * The caller cannot express a command. There is no path input, no shell string, no executable and
+ * no environment variables: which script runs, which environments it may touch and what a dry run
+ * means are all resolved from `reconciliation-registry.mjs`, a frozen table reviewed like any other
+ * promoted code. `dry_run` is REQUIRED and not defaulted — a missing boolean on an apply-capable
+ * capability is the one ambiguity that could turn a look into a write.
+ */
+function defineEnvironmentExecuteRegisteredReconciliation() {
+  return {
+    actionType: ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION,
+    version: 1,
+    title: "Execute a registered reconciliation against a permitted environment",
+    requiredCapability: "trusted_host.environment.execute_registered_reconciliation",
+    riskClass: "privileged_write",
+    alwaysRequiresOperatorApproval: true,
+    timeoutMs: 600_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: { required: ["reconciliation_key", "target_environment", "dry_run"] },
+    outputSchema: { dry_run: "boolean", counts: "object", refusals: "array", exit_code: "number" },
+    evidenceSchema: [
+      "reconciliation_registered", "environment_permitted", "runner_resolved_from_registry",
+      "dry_run_declared", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      const resolved = resolveReconciliationRequest(inputs);
+      if (!resolved.ok) return { ok: false, code: resolved.code, detail: resolved.detail };
+      return { ok: true, normalized: { ...resolved.normalized, runtimeRoot: inputs.runtimeRoot || null } };
     },
   };
 }
@@ -805,6 +846,7 @@ const REGISTRY = new Map([
   [ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING, defineCapacitySetProviderCeiling()],
   [ACTION_TYPES.HOST_INSTALL_TOOLKIT, defineHostInstallToolkit()],
   [ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION, defineLaneDispatchMeasurementInstruction()],
+  [ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION, defineEnvironmentExecuteRegisteredReconciliation()],
 ]);
 
 export function listRegisteredActions() {
