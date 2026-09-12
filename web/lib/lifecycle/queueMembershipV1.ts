@@ -167,3 +167,45 @@ export function parseQueueMembershipV1(raw: unknown): QueueMembershipV1 | null {
 
     return membership;
 }
+
+/**
+ * WHICH QUEUE SUBJECTS A STAGE OF THIS GRAIN MAY PRODUCE ROWS FOR.
+ *
+ * Grain says what ONE queue row represents; `subject_type` says what the membership resolver goes
+ * and fetches. When the two disagree the stage still renders — it just renders the wrong entity, or
+ * counts a population it does not list, which is how a family-grain stage came to be counted in
+ * enrollment tracks.
+ *
+ * Until now nothing named the agreement, so every caller re-derived it. It is stated once here,
+ * beside the vocabulary it constrains, because the fact belongs to queue membership rather than to
+ * whichever validator happens to need it.
+ *
+ * `child` admits TWO subjects deliberately. A child-grain row is one child's participation, and the
+ * platform has two records for that depending on how far the child has got — `candidate` before a
+ * track exists, `child` once it does. Both are one row per child; neither is a family.
+ *
+ * The grains with no entry (`person`, `account`, `work_item`) are not errors here — they are grains
+ * this vocabulary has no subject for, and a caller must treat an empty list as "cannot be expressed
+ * as queue membership" rather than as "anything goes".
+ */
+const QUEUE_SUBJECTS_BY_STAGE_GRAIN: Readonly<Record<string, readonly QueueMembershipSubjectType[]>> = {
+    family: ["case"],
+    child: ["child", "candidate"],
+};
+
+export function queueSubjectTypesForStageGrain(
+    grain: string | null | undefined,
+): readonly QueueMembershipSubjectType[] {
+    const key = typeof grain === "string" ? grain.trim() : "";
+    return QUEUE_SUBJECTS_BY_STAGE_GRAIN[key] ?? [];
+}
+
+/** True when a membership's subject can honestly be one row of a stage with this grain. */
+export function isQueueSubjectCompatibleWithStageGrain(
+    grain: string | null | undefined,
+    subjectType: string | null | undefined,
+): boolean {
+    const allowed = queueSubjectTypesForStageGrain(grain);
+    if (!allowed.length) return false;
+    return allowed.includes((subjectType ?? "").trim() as QueueMembershipSubjectType);
+}
