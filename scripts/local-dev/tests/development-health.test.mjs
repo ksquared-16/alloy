@@ -107,6 +107,16 @@ const HEALTHY_PROBES = {
     rows: [{ name: "wt-a", state: "ACTIVE", reclaimable: false, disk_mb: 0 }],
   },
   slotOwnership: { slots_claimed: 1, conflicts: [] },
+  // Fourth check added to the report, fourth time this fixture has grown. The
+  // pattern is now the rule: a composition claiming every check passes must
+  // supply every check, or the newest one correctly reports INCOMPLETE.
+  laneKnowledge: {
+    lanes: 1,
+    by_state: { CURRENT: 1 },
+    missing: 0,
+    stale: 0,
+    rows: [{ lane_id: "lane_a", name: "A", state: "CURRENT", stale: [] }],
+  },
   runs: [{ run_id: "r1", state: "EXECUTING", state_reason: "instruction_delivered", terminal: false, age_ms: 1000 }],
   run_bounds: { instruction_delivered: 3600000 },
   attribution: { seat_count: 1, attributed_count: 1, records: [{ pid: 2, attribution_status: "ancestry", execution_location: "inside_worktree" }] },

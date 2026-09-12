@@ -92,6 +92,12 @@ const lanesRaw = await safely(async () => {
 // rest of the report down; the check reports INCOMPLETE instead.
 // Freshness, like bootstrap, is a READ. It runs git plumbing against each
 // lane's worktree and acquires no slot, server, browser or provider.
+// Knowledge coverage, a READ over the existing lane-memory store.
+const laneKnowledge = await safely(async () => {
+  const { inventoryLaneKnowledge } = await import("./lib/vacilando/lane-knowledge.mjs");
+  return inventoryLaneKnowledge({ lanes: lanesRaw });
+}, null);
+
 const laneFreshness = await safely(async () => {
   const { inventoryLaneFreshness } = await import("./lib/vacilando/lane-freshness.mjs");
   return inventoryLaneFreshness({ lanes: lanesRaw });
@@ -414,7 +420,7 @@ const report = composeReport({
   hw, thresholds, only, startedAt,
   endedAt: new Date().toISOString(),
   probeResults: {
-    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, worktreeLifecycle, slotOwnership,
+    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, laneKnowledge, worktreeLifecycle, slotOwnership,
     run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, configured_max: configuredMax,
     validation_routing: validationRouting, validation_bypasses: validationBypasses,

@@ -46,6 +46,7 @@ export const CHECKS = Object.freeze([
   "lane.freshness",
   "worktrees.lifecycle",
   "slots.ownership",
+  "lane.knowledge",
   "ports.registry",
   "worktrees.registry",
   "toolkit.retention",
@@ -953,6 +954,60 @@ export function checkSlotOwnership({ conflicts = null }) {
   });
 }
 
+/**
+ * Can a lane be resumed from what is written down, or only from memory?
+ *
+ * SEVERITY IS CHOSEN SO THE CHECK SURVIVES BEING TRUE. The brief is explicit
+ * that incomplete historical documentation must not be a catastrophic failure,
+ * and on the day this ships 12 of 13 lanes have no record at all. Scoring that
+ * as a problem would paint the fleet red for a gap nobody created on purpose,
+ * and a check that is red from birth is a check nobody reads.
+ *
+ * So MISSING and SEEDED are a `watch`: work to do, not damage. STALE_OBSERVATIONS
+ * is also a watch — a fact needing revalidation is the model working exactly as
+ * designed, since the alternative was a fact that quietly stayed "true" for ever.
+ *
+ * A CONTRADICTION is the one `problem`. It means a written fact disagrees with
+ * what a canonical owner says right now, which is the precise failure this whole
+ * subsystem exists to prevent: documentation becoming authority by outliving the
+ * thing it recorded.
+ */
+export function checkLaneKnowledge({ inventory = null }) {
+  if (!inventory) return incompleteFinding("lane.knowledge", "no lane knowledge inventory available");
+  const rows = Array.isArray(inventory.rows) ? inventory.rows : [];
+  const missing = rows.filter((r) => r.state === "MISSING" || r.state === "UNCLASSIFIED");
+  const stale = rows.filter((r) => r.state === "STALE_OBSERVATIONS");
+  const contradicted = rows.filter((r) => (r.contradictions || 0) > 0);
+  const sev = contradicted.length ? "problem" : (missing.length || stale.length) ? "watch" : "healthy";
+  return finding({
+    check: "lane.knowledge",
+    severity: sev,
+    owner_resource: "vacilando.lane_memory",
+    measurements: {
+      lanes: rows.length,
+      ...inventory.by_state,
+      missing: missing.length,
+      stale_observations: stale.length,
+      contradictions: contradicted.length,
+    },
+    evidence: [
+      ...contradicted.map((r) => `${r.name || r.lane_id}: written knowledge disagrees with canonical truth`),
+      ...missing.slice(0, 8).map((r) => `${r.name || r.lane_id}: ${r.reason || r.state}`),
+      ...stale.slice(0, 5).map((r) => `${r.name || r.lane_id}: ${(r.stale || []).join(", ")} need revalidation`),
+    ],
+    explanation: contradicted.length
+      ? "A lane's written knowledge contradicts a canonical owner. Canonical truth wins; the record is out of date and should be updated."
+      : missing.length
+        ? `${missing.length} lane(s) have no durable knowledge record, so resuming them means reconstructing context from history.`
+        : stale.length
+          ? "Some recorded observations are past their revalidation window. That is the model working: they are marked rather than assumed."
+          : "Every lane has a current knowledge record.",
+    suggested_action: contradicted.length
+      ? "Update the recorded observation from its canonical owner; do not rewrite the durable decisions."
+      : null,
+  });
+}
+
 export function checkPortsRegistry({ ports = [] }) {
   // S7 verdicts. `foreign_owner` is a problem because the registry is wrong
   // about WHO owns a live port; `ambiguous` is a watch because we refused to
@@ -1240,6 +1295,7 @@ export function composeReport({
   safe("lane.freshness", () => checkLaneFreshness({ inventory: probeResults.laneFreshness }));
   safe("worktrees.lifecycle", () => checkWorktreeLifecycle({ inventory: probeResults.worktreeLifecycle }));
   safe("slots.ownership", () => checkSlotOwnership({ conflicts: probeResults.slotOwnership }));
+  safe("lane.knowledge", () => checkLaneKnowledge({ inventory: probeResults.laneKnowledge }));
   safe("lanes.consistency", () => checkLanesConsistency({ lanes: probeResults.lanes || [], seats: probeResults.seats || [] }));
   safe("ports.registry", () => checkPortsRegistry({ ports: probeResults.ports || [] }));
   safe("worktrees.registry", () => checkWorktreesRegistry({ ...(probeResults.worktrees || {}), states: probeResults.reconciliation || null }));
