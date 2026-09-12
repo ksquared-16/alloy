@@ -118,6 +118,13 @@ concurrency:
 # whole section, so a kind-specific editor submitting only its own rows silently deletes the
 # others).
 
+# Candidate-grain pagination added one: `candidateGrainWaitlistPagination` — a page of two is two
+# rows even when it lands on a family with three waitlisted children. Pagination was already
+# candidate-first where the page is sliced; the expansion that rebuilds rows from each page
+# candidate's opportunity was filtered against every MATCHED candidate instead, so `limit` stopped
+# bounding the rows and a sibling rendered twice. The suite walks all three pages and checks
+# duplicates and gaps together, because trimming the surplus would have turned one into the other.
+
 jobs:
   run:
     name: Enrollment configuration certification
@@ -181,4 +188,5 @@ jobs:
             tests/lifecycle/trackAdoptionSettingsAuthoring.test.ts \
             tests/queues/adoptedTracksActivateRouting.test.ts \
             tests/lifecycle/workRequirementEvaluation.test.ts \
-            tests/lifecycle/workRequirementAuthoring.test.ts
+            tests/lifecycle/workRequirementAuthoring.test.ts \
+            tests/queues/candidateGrainWaitlistPagination.test.ts
