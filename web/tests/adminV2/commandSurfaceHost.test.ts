@@ -178,3 +178,44 @@ describe("command_surface — what it must not become", () => {
         expect(read("components/admin/focusPanel/cards/CurrentWorkCard.tsx")).toContain("handleActionPanelComplete();");
     });
 });
+
+/**
+ * THE PROCESS CARD IS A SECOND CALLER, AND IT HAD ITS OWN SWITCH.
+ *
+ * Wiring `command_surface` into Current Work was not enough. The control an operator actually
+ * presses on the Waitlist Process Card is composed by `BusinessProcessCard`, which plans through the
+ * same planner but dispatches through its OWN switch — and `command_surface` fell into its
+ * `default:` branch, which carries the command into the Current Work workspace. That workspace hosts
+ * capability surfaces, has no host for a command that needs nothing, and rendered
+ * "This action cannot be run from What's Next" for an action no other host carries.
+ *
+ * Measured live: the label read "Offer spot", the selector matched one element, and thirty minutes
+ * of deploy polling never produced an execute POST — because the click was never going to make one.
+ */
+describe("command_surface — the Process Card path", () => {
+    const card = () => read("components/admin/focusPanel/cards/BusinessProcessCard.tsx");
+
+    it("dispatches command_surface itself rather than falling through to the workspace", () => {
+        const src = card();
+        expect(src).toContain('case "command_surface"');
+        expect(src).toContain("executeCommandSurfaceAction");
+        // The default branch still exists for the surfaces that genuinely belong in the workspace.
+        expect(src).toContain("default:");
+    });
+
+    it("runs against the card's own subject, never the enclosing case", () => {
+        expect(card()).toContain("context.truth?.row_subject");
+    });
+
+    it("carries the configured template through to the payload", () => {
+        expect(card()).toContain("plan.action.workTemplateKey");
+        expect(card()).toContain("template_key: plan.action.workTemplateKey");
+    });
+
+    it("refreshes only on success, through the canonical scoped update", () => {
+        const src = card();
+        expect(src).toContain("dispatchOpportunityDrawerScopedUpdate");
+        // A refusal must not redraw and imply something happened.
+        expect(src).toContain("if (result.ok && drawerOpportunityId)");
+    });
+});
