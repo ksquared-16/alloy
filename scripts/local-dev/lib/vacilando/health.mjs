@@ -42,6 +42,7 @@ export const CHECKS = Object.freeze([
   "providers.orphaned",
   "subprocess.ancestry",
   "lanes.consistency",
+  "lane.bootstrap",
   "ports.registry",
   "worktrees.registry",
   "toolkit.retention",
@@ -748,6 +749,68 @@ export function checkLanesConsistency({ lanes = [], seats = [] }) {
   });
 }
 
+/**
+ * Are the fleet's lanes on the current bootstrap contract, and does each resolve
+ * its baseline?
+ *
+ * A SECOND DOCTOR WAS NOT BUILT. This is a check in the existing health
+ * framework, reported through `vac health` beside `lanes.consistency`, using the
+ * same `finding()` shape, the same severities and the same exit-code mapping. A
+ * separate `lane doctor` would have been a second place to look, a second
+ * severity vocabulary, and a second thing to keep working.
+ *
+ * WHAT IS A PROBLEM AND WHAT IS NOT — that distinction is the whole value here.
+ *
+ * UNRESOLVED is a problem: a lane that cannot resolve its worktree, its branch
+ * or its instruction pack does not have the baseline it is entitled to, and
+ * something is wrong with it now.
+ *
+ * STALE is only a watch. Every lane created before this contract existed is
+ * unstamped by definition, so on the day this ships the whole fleet reads stale.
+ * Scoring that as a problem would make the check's first act be to declare the
+ * system broken, which is how a signal gets ignored for ever. Stale means
+ * "DevOps 2 should decide about this" — and DevOps 2 owns whether a refresh is
+ * safe, because it will have the dirty/shared/candidate refusals that do not
+ * exist yet.
+ *
+ * A SLOTLESS LANE IS HEALTHY and appears in neither list. The contract is about
+ * what a lane RESOLVES, never about what it currently holds.
+ */
+export function checkLaneBootstrap({ inventory = null }) {
+  if (!inventory) return incompleteFinding("lane.bootstrap", "no lane inventory available");
+  const rows = Array.isArray(inventory.rows) ? inventory.rows : [];
+  const unresolved = rows.filter((r) => (r.unresolved || []).length);
+  const stale = rows.filter((r) => r.stale);
+  const overlaid = rows.filter((r) => Object.keys(r.overlay || {}).length);
+  const sev = unresolved.length ? "problem" : stale.length ? "watch" : "healthy";
+  return finding({
+    check: "lane.bootstrap",
+    severity: sev,
+    owner_resource: "vacilando.development_lane",
+    measurements: {
+      contract_version: inventory.contract_version,
+      lanes: rows.length,
+      stale: stale.length,
+      unresolved: unresolved.length,
+      with_overlay: overlaid.length,
+    },
+    evidence: [
+      ...unresolved.map((r) => `${r.name || r.lane_id}: ${(r.unresolved || []).join(", ")}`),
+      ...stale.slice(0, 8).map((r) =>
+        `${r.name || r.lane_id}: bootstrap ${r.observed_contract_version || "unstamped"}`),
+    ],
+    explanation: unresolved.length
+      ? "A lane cannot resolve part of its baseline, so it does not have the development context every lane is entitled to."
+      : stale.length
+        ? "Lanes were initialised before the current bootstrap contract. They are valid; they simply predate it."
+        : "Every lane resolves the current bootstrap contract.",
+    // Deliberately not "rebase them".
+    suggested_action: unresolved.length
+      ? "Resolve the named baseline gaps; a lane missing its worktree or instructions cannot be dispatched consistently."
+      : null,
+  });
+}
+
 export function checkPortsRegistry({ ports = [] }) {
   // S7 verdicts. `foreign_owner` is a problem because the registry is wrong
   // about WHO owns a live port; `ambiguous` is a watch because we refused to
@@ -1031,6 +1094,7 @@ export function composeReport({
   safe("runs.stale", () => checkRunsStale({ runs: probeResults.runs || [], bounds: probeResults.run_bounds || {}, waits: probeResults.waits || null }));
   safe("providers.orphaned", () => checkProvidersOrphaned({ seats: probeResults.seats || [], panes: probeResults.panes || [] }));
   safe("subprocess.ancestry", () => checkSubprocessAncestry({ attribution: probeResults.attribution }));
+  safe("lane.bootstrap", () => checkLaneBootstrap({ inventory: probeResults.laneBootstrap }));
   safe("lanes.consistency", () => checkLanesConsistency({ lanes: probeResults.lanes || [], seats: probeResults.seats || [] }));
   safe("ports.registry", () => checkPortsRegistry({ ports: probeResults.ports || [] }));
   safe("worktrees.registry", () => checkWorktreesRegistry({ ...(probeResults.worktrees || {}), states: probeResults.reconciliation || null }));
