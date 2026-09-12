@@ -15,6 +15,7 @@ import {
   isTerminalRunState,
 } from "./execution-run.mjs";
 import {
+  processOwnerHolds,
   queuedRequestsFor,
   readComputeHolders,
   readResourceRequestStore,
@@ -103,6 +104,29 @@ export async function reconcileGovernor({
 
   for (const rec of requests) {
     if (!ACTIVE.has(rec.state)) continue;
+    /*
+     * A RUN IS THE REQUESTER. A PROCESS CAN BE THE OWNER. THEY END AT DIFFERENT TIMES.
+     *
+     * MEASURED. The criterion-12 soak acquired `gateway_host_mutation`
+     * ereq_381b2f3aa73f7165 at 12:42:00.289Z and the Governor released it 2.4
+     * seconds later, with the soak process alive and its start identity
+     * matching. Its requesting run had reached FAILED seven minutes EARLIER, so
+     * every ordinary run-lifecycle rule below said "terminal run, reclaim its
+     * resources" — and for a run-owned resource that is exactly right.
+     *
+     * `cleanupRunResources` already knew better and had retained the same claim
+     * moments earlier: the event log reads `resource_survived_run` (agent) and
+     * then `resource_released` (governor) on the same request. One path
+     * retaining while another releases is not a fix, it is a race with extra
+     * steps.
+     *
+     * So the check moves to where every path in this loop must pass it. While a
+     * process owner is LIVE or UNVERIFIED it owns the lifetime, and run
+     * terminality alone cannot take the resource from it. A dead owner is still
+     * reclaimed — by `reclaimDeadProcessOwners`, from the readers it would
+     * otherwise block — and PID reuse is still refused by start identity.
+     */
+    if (processOwnerHolds(rec)) continue;
     const run = getExecutionRun(rec.run_id, root);
     if (run && !isTerminalRunState(run.state)) continue;
     if (rec.state === "GRANTED" && String(rec.holder || "").startsWith("vac-erun_")) {
