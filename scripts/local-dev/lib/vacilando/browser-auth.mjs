@@ -174,8 +174,65 @@ export function qaIdentityForSlot(slot) {
     return v;
   }
   const fromFiles = qaIdentityFromConfigFiles(n);
-  qaIdentityCache.set(n, fromFiles || null);
+  /*
+   * ABSENCE IS NOT CACHED, AND THAT IS THE WHOLE POINT.
+   *
+   * This cached `null` alongside the hits, which quietly made a missing QA
+   * identity PERMANENT for the life of the process. Declaring
+   * ALLOY_SLOT_9_QA_IDENTITY in the config after the Gateway had once asked
+   * about slot 9 changed nothing until the Gateway restarted — and restarting
+   * the Gateway is precisely what an active Host Lifecycle soak forbids. So the
+   * one safe, canonical, non-destructive way to complete the slot topology was
+   * unavailable for a reason nobody could see.
+   *
+   * A hit is worth caching: the answer came from a config file and will not
+   * change without an edit. A MISS is a fact about a file that does not say
+   * something yet, and re-reading it costs one `readFileSync` of a small file on
+   * a path that is not hot. Caching the miss bought nothing and cost the ability
+   * to fix the fleet without a restart.
+   */
+  if (fromFiles) qaIdentityCache.set(n, fromFiles);
   return fromFiles || null;
+}
+
+/**
+ * CAN this slot do QA — without doing any.
+ *
+ * The uniformity invariant is that CAPABILITY is uniform while ACTIVATION stays
+ * on demand. Every managed Development Slot must be able to resolve a QA
+ * identity and a port; none of them is required to be holding a browser or a
+ * minted session right now, and asking the question must not create either.
+ *
+ * So this resolves configuration and returns. It mints nothing, launches
+ * nothing, and acquires nothing — which is what makes it safe to call on every
+ * lane in a freshness sweep.
+ *
+ * WHY IT EXISTS AT ALL. A lane that lands on slot 9 must not be less capable
+ * than the same lane on slot 3. Before this, slots 7 and 9-11 had no declared
+ * identity while 1-6, 8 and 12 did, so which slot the scheduler happened to pick
+ * decided whether the lane could run mounted certification. That is slot
+ * assignment silently changing a lane's capabilities, and it is the drift this
+ * makes visible.
+ */
+export function qaCapabilityForSlot(slot) {
+  const n = Number(slot);
+  if (!Number.isInteger(n)) {
+    return { slot: null, capable: false, reason: "not_a_slot" };
+  }
+  if (!isManagedSlot(n)) {
+    return { slot: n, capable: false, reason: "slot_not_managed" };
+  }
+  const identity = qaIdentityForSlot(n);
+  if (!identity) {
+    return {
+      slot: n,
+      capable: false,
+      reason: "qa_identity_undeclared",
+      // Named so the fix is obvious from the finding alone.
+      declare: `ALLOY_SLOT_${n}_QA_IDENTITY`,
+    };
+  }
+  return { slot: n, capable: true, identity, port: portForSlot(n) };
 }
 
 export function slotAuthStoragePath(slot, { root = stateRoot() } = {}) {

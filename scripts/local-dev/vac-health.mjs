@@ -85,6 +85,36 @@ const lanesRaw = await safely(async () => {
   return listDurableLanes();
 }, []);
 
+// The bootstrap inventory is a READ. It resolves each lane's baseline from the
+// owners that already hold it and acquires nothing — no slot, no server, no
+// browser, no provider — so asking "are my lanes consistent?" costs none of the
+// resources it is asking about. `safely` keeps a failure here from taking the
+// rest of the report down; the check reports INCOMPLETE instead.
+// Freshness, like bootstrap, is a READ. It runs git plumbing against each
+// lane's worktree and acquires no slot, server, browser or provider.
+// Knowledge coverage, a READ over the existing lane-memory store.
+// The promotion gate contract, a pure READ over declarations. No network, no
+// GitHub, no database: it audits what the gates say about themselves.
+const promotionGates = await safely(async () => {
+  const { auditPromotionGates } = await import("./lib/vacilando/promotion-gate-contract.mjs");
+  return auditPromotionGates();
+}, null);
+
+const laneKnowledge = await safely(async () => {
+  const { inventoryLaneKnowledge } = await import("./lib/vacilando/lane-knowledge.mjs");
+  return inventoryLaneKnowledge({ lanes: lanesRaw });
+}, null);
+
+const laneFreshness = await safely(async () => {
+  const { inventoryLaneFreshness } = await import("./lib/vacilando/lane-freshness.mjs");
+  return inventoryLaneFreshness({ lanes: lanesRaw });
+}, null);
+
+const laneBootstrap = await safely(async () => {
+  const { inventoryLaneBootstrap } = await import("./lib/vacilando/lane-bootstrap.mjs");
+  return inventoryLaneBootstrap({ lanes: lanesRaw });
+}, null);
+
 const runFor = await safely(async () => {
   const { activeRunForLane } = await import("./lib/vacilando/execution-run.mjs");
   return (laneId) => activeRunForLane(laneId);
@@ -111,6 +141,54 @@ const repositories = await safely(async () => {
 
 // ── S1 is the canonical attribution source. Health never re-derives ancestry. ─
 const processes = psText ? parseProcessTable(psText) : [];
+
+/*
+ * Worktree lifecycle and slot ownership, both READS.
+ *
+ * The evaluations come from the EXISTING retirement observer, and disk from the
+ * EXISTING cached sizes — `peek`, never `collect`, so a health report can never
+ * become the reason a fleet-wide `du` runs. An absent size reads as unknown.
+ */
+const worktreeLifecycle = await safely(async () => {
+  const { observeReconciliation } = await import("./lib/vacilando/reconciliation-observe.mjs");
+  const { observeRetirementCandidates } = await import("./lib/vacilando/worktree-retirement-observe.mjs");
+  const { inventoryWorktreeLifecycle } = await import("./lib/vacilando/worktree-lifecycle.mjs");
+  const { peekWorktreeDiskCache } = await import("./lib/vacilando/resources.mjs");
+  const { execFileSync } = await import("node:child_process");
+  const wtRoot = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const worktreeParent = join(homedir(), "Code", "alloy-worktrees");
+  // The same inputs `vac worktree-retire` assembles, so the health projection and
+  // the retirement preview cannot disagree about which worktrees exist.
+  let gitWorktrees = null;
+  try {
+    gitWorktrees = execFileSync("git", ["worktree", "list", "--porcelain"], {
+      cwd: join(homedir(), "Alloy"), encoding: "utf8", timeout: 15000, stdio: ["ignore", "pipe", "ignore"],
+    }).split("\n").filter((l) => l.startsWith("worktree ")).map((l) => l.replace("worktree ", ""));
+  } catch { /* absent git worktree list is reported as an incomplete check */ }
+  const s7 = observeReconciliation({ root: wtRoot, processes, worktreeParent, gitWorktrees });
+  const evaluations = observeRetirementCandidates({
+    root: wtRoot, s7Worktrees: s7?.worktrees || [], processes, worktreeParent,
+    // Same as `vac worktree-retire`. Without it `not_self_retirement` is
+    // UNMEASURED, and an unmeasured gate blocks — so every worktree would read
+    // as blocked for a reason that is an input gap rather than a fact about it.
+    requestingWorktree: process.env.ALLOY_WORKTREE || process.cwd(),
+  });
+  return inventoryWorktreeLifecycle({ evaluations, diskSizes: peekWorktreeDiskCache().sizes || {} });
+}, null);
+
+const slotOwnership = await safely(async () => {
+  const { detectSlotOwnershipConflicts } = await import("./lib/vacilando/worktree-lifecycle.mjs");
+  // The REGISTRY is the slot authority; a lane's binding.slot is its cache.
+  const { listRegisteredWorktrees } = await import("./lib/vacilando/worktree-registration.mjs");
+  const registrySlots = {};
+  const regRoot = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  for (const r of listRegisteredWorktrees({ root: regRoot }) || []) {
+    const slot = Number(r?.slot);
+    if (Number.isInteger(slot) && r?.name) registrySlots[slot] = r.name;
+  }
+  return detectSlotOwnershipConflicts({ lanes: lanesRaw, registrySlots });
+}, null);
+
 const attribution = psText
   ? attributionReport({
     seats, processes, lanes: lanesRaw, repositories, runFor,
@@ -349,7 +427,7 @@ const report = composeReport({
   hw, thresholds, only, startedAt,
   endedAt: new Date().toISOString(),
   probeResults: {
-    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs,
+    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, laneKnowledge, worktreeLifecycle, slotOwnership, promotionGates,
     run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, configured_max: configuredMax,
     validation_routing: validationRouting, validation_bypasses: validationBypasses,

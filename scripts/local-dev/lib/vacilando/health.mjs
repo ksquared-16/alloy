@@ -42,6 +42,12 @@ export const CHECKS = Object.freeze([
   "providers.orphaned",
   "subprocess.ancestry",
   "lanes.consistency",
+  "lane.bootstrap",
+  "lane.freshness",
+  "worktrees.lifecycle",
+  "slots.ownership",
+  "lane.knowledge",
+  "promotion.gates",
   "ports.registry",
   "worktrees.registry",
   "toolkit.retention",
@@ -748,6 +754,303 @@ export function checkLanesConsistency({ lanes = [], seats = [] }) {
   });
 }
 
+/**
+ * Are the fleet's lanes on the current bootstrap contract, and does each resolve
+ * its baseline?
+ *
+ * A SECOND DOCTOR WAS NOT BUILT. This is a check in the existing health
+ * framework, reported through `vac health` beside `lanes.consistency`, using the
+ * same `finding()` shape, the same severities and the same exit-code mapping. A
+ * separate `lane doctor` would have been a second place to look, a second
+ * severity vocabulary, and a second thing to keep working.
+ *
+ * WHAT IS A PROBLEM AND WHAT IS NOT — that distinction is the whole value here.
+ *
+ * UNRESOLVED is a problem: a lane that cannot resolve its worktree, its branch
+ * or its instruction pack does not have the baseline it is entitled to, and
+ * something is wrong with it now.
+ *
+ * STALE is only a watch. Every lane created before this contract existed is
+ * unstamped by definition, so on the day this ships the whole fleet reads stale.
+ * Scoring that as a problem would make the check's first act be to declare the
+ * system broken, which is how a signal gets ignored for ever. Stale means
+ * "DevOps 2 should decide about this" — and DevOps 2 owns whether a refresh is
+ * safe, because it will have the dirty/shared/candidate refusals that do not
+ * exist yet.
+ *
+ * A SLOTLESS LANE IS HEALTHY and appears in neither list. The contract is about
+ * what a lane RESOLVES, never about what it currently holds.
+ */
+export function checkLaneBootstrap({ inventory = null }) {
+  if (!inventory) return incompleteFinding("lane.bootstrap", "no lane inventory available");
+  const rows = Array.isArray(inventory.rows) ? inventory.rows : [];
+  const unresolved = rows.filter((r) => (r.unresolved || []).length);
+  const stale = rows.filter((r) => r.stale);
+  const overlaid = rows.filter((r) => Object.keys(r.overlay || {}).length);
+  const sev = unresolved.length ? "problem" : stale.length ? "watch" : "healthy";
+  return finding({
+    check: "lane.bootstrap",
+    severity: sev,
+    owner_resource: "vacilando.development_lane",
+    measurements: {
+      contract_version: inventory.contract_version,
+      lanes: rows.length,
+      stale: stale.length,
+      unresolved: unresolved.length,
+      with_overlay: overlaid.length,
+    },
+    evidence: [
+      ...unresolved.map((r) => `${r.name || r.lane_id}: ${(r.unresolved || []).join(", ")}`),
+      ...stale.slice(0, 8).map((r) =>
+        `${r.name || r.lane_id}: bootstrap ${r.observed_contract_version || "unstamped"}`),
+    ],
+    explanation: unresolved.length
+      ? "A lane cannot resolve part of its baseline, so it does not have the development context every lane is entitled to."
+      : stale.length
+        ? "Lanes were initialised before the current bootstrap contract. They are valid; they simply predate it."
+        : "Every lane resolves the current bootstrap contract.",
+    // Deliberately not "rebase them".
+    suggested_action: unresolved.length
+      ? "Resolve the named baseline gaps; a lane missing its worktree or instructions cannot be dispatched consistently."
+      : null,
+  });
+}
+
+/**
+ * Can the fleet's lanes safely start new implementation against current staging?
+ *
+ * IN THE EXISTING FRAMEWORK, beside `lane.bootstrap` — same registry, same
+ * finding shape, same severities. Freshness is not a second doctor and not a
+ * second lifecycle; it is one more question asked of facts that already exist.
+ *
+ * SEVERITY IS ABOUT CONSEQUENCE, NOT TIDINESS.
+ *
+ * `UNRESOLVED_BOOTSTRAP` is a problem: the lane cannot resolve the baseline it is
+ * entitled to, which on a slotted lane usually means its slot cannot do QA — so
+ * which slot the scheduler picked is deciding what the lane can do.
+ *
+ * `STALE_SAFE_TO_RECONCILE` is a watch. The lane is behind, nothing is wrong
+ * with it, and reconciliation is available and safe. Scoring that as a problem
+ * would mean a fleet doing normal work reported red continuously.
+ *
+ * `BLOCKED_*` is a watch too, and deliberately. A dirty worktree is somebody
+ * working; a promotion candidate is evidence being preserved. Those are refusals
+ * the policy made CORRECTLY, and a check that scored its own correct refusals as
+ * faults would be teaching the operator to ignore it.
+ */
+export function checkLaneFreshness({ inventory = null }) {
+  if (!inventory) return incompleteFinding("lane.freshness", "no freshness inventory available");
+  const rows = Array.isArray(inventory.rows) ? inventory.rows : [];
+  const unresolved = rows.filter((r) => r.state === "UNRESOLVED_BOOTSTRAP");
+  const stale = rows.filter((r) => r.state === "STALE_SAFE_TO_RECONCILE");
+  const blocked = rows.filter((r) => String(r.state).startsWith("BLOCKED"));
+  const sev = unresolved.length ? "problem" : (stale.length || blocked.length) ? "watch" : "healthy";
+  const worst = [...stale].sort((a, b) => (b.behind || 0) - (a.behind || 0))[0];
+  return finding({
+    check: "lane.freshness",
+    severity: sev,
+    owner_resource: "vacilando.development_lane",
+    measurements: {
+      lanes: rows.length,
+      unresolved: unresolved.length,
+      stale: stale.length,
+      blocked: blocked.length,
+      max_behind: rows.reduce((m, r) => Math.max(m, Number(r.behind) || 0), 0),
+      material_behind: inventory.policy?.material_behind ?? null,
+      recent_hours: inventory.policy?.recent_hours ?? null,
+    },
+    evidence: [
+      ...unresolved.map((r) => `${r.name || r.lane_id}: ${r.reason || "baseline unresolved"}`),
+      ...stale.slice(0, 6).map((r) => `${r.name || r.lane_id}: ${r.behind} behind ${r.base || "staging"} — safe to reconcile`),
+      ...blocked.slice(0, 6).map((r) => `${r.name || r.lane_id}: ${r.state} (${r.reason || ""})`),
+    ],
+    explanation: unresolved.length
+      ? "A lane cannot resolve its baseline, so it is not equally capable of the work any lane should be able to do."
+      : stale.length
+        ? `The furthest-behind lane is ${worst?.behind ?? "?"} commits from staging and can be reconciled safely.`
+        : blocked.length
+          ? "Some lanes are deliberately not auto-reconciled: work in progress or evidence being preserved."
+          : "Every lane is current with staging.",
+    suggested_action: unresolved.length
+      ? "Resolve the named baseline gap; a managed slot that cannot resolve QA makes slot assignment decide capability."
+      : null,
+  });
+}
+
+/**
+ * How much of the worktree fleet is still earning its place on disk?
+ *
+ * Reports the DERIVED lifecycle classification, which is a function of the
+ * existing retirement evaluation — so this and an actual reclamation are reading
+ * one truth, and a preview cannot drift from what a removal would do.
+ *
+ * SEVERITY IS ABOUT RISK, NOT TIDINESS. Reclaimable worktrees are `healthy`:
+ * they are the system working, correctly identified and waiting for the steward.
+ * Accumulation only becomes a `watch` when there is a lot of it, because a
+ * number nobody can act on is not a fault. `BLOCKED_UNDURABLE` is the one that
+ * earns a `problem` — commits that exist in exactly one place, on a laptop,
+ * which is a real risk of losing work rather than a housekeeping preference.
+ */
+export function checkWorktreeLifecycle({ inventory = null }) {
+  if (!inventory) return incompleteFinding("worktrees.lifecycle", "no worktree inventory available");
+  const rows = Array.isArray(inventory.rows) ? inventory.rows : [];
+  const undurable = rows.filter((r) => r.state === "BLOCKED_UNDURABLE");
+  const reclaimable = rows.filter((r) => r.reclaimable);
+  const sev = undurable.length ? "problem" : (reclaimable.length >= 10 ? "watch" : "healthy");
+  return finding({
+    check: "worktrees.lifecycle",
+    severity: sev,
+    owner_resource: "vacilando.worktree",
+    measurements: {
+      worktrees: rows.length,
+      ...inventory.by_state,
+      reclaimable: reclaimable.length,
+      reclaimable_disk_mb: inventory.reclaimable_disk_mb ?? null,
+      reclaimable_disk_unknown: inventory.reclaimable_disk_unknown ?? null,
+    },
+    evidence: [
+      ...undurable.map((r) => `${r.name}: ${r.branch || "?"} exists only here — ${r.reason}`),
+      ...reclaimable.slice(0, 8).map((r) => `${r.name}: ${r.state}${r.disk_mb != null ? ` (${r.disk_mb} MB)` : ""}`),
+    ],
+    explanation: undurable.length
+      ? "Some worktrees hold commits that exist nowhere else. They are correctly refused for removal, and the work is one disk away from gone."
+      : reclaimable.length
+        ? `${reclaimable.length} worktree(s) have passed every safety gate and are outside their retention window.`
+        : "No worktree is currently reclaimable.",
+    suggested_action: undurable.length
+      ? "Push or land the unique branches; until then these checkouts are the only copy."
+      : null,
+  });
+}
+
+/**
+ * ONE MANAGED SLOT, AT MOST ONE CURRENT LANE OWNER.
+ *
+ * A duplicate claim is always a `problem`. It is not a preference: the symptom
+ * is a lane that cannot resolve its own bootstrap, reported as a fact about the
+ * lane rather than about the duplicate, which is why slot 8 went unnoticed until
+ * a freshness sweep tripped over it.
+ */
+export function checkSlotOwnership({ conflicts = null }) {
+  if (!conflicts) return incompleteFinding("slots.ownership", "slot ownership not measured");
+  const list = Array.isArray(conflicts.conflicts) ? conflicts.conflicts : [];
+  return finding({
+    check: "slots.ownership",
+    severity: list.length ? "problem" : "healthy",
+    owner_resource: "vacilando.development_slot",
+    measurements: {
+      slots_claimed: conflicts.slots_claimed ?? null,
+      conflicts: list.length,
+      repairable: list.filter((c) => c.repairable).length,
+    },
+    evidence: list.map((c) =>
+      `slot ${c.slot}: claimed by ${c.claimants.map((x) => x.name || x.lane_id).join(" and ")}`
+      + (c.registry_holder ? ` — the registry gives it to ${c.registry_holder}` : " — the registry gives it to nobody")),
+    explanation: list.length
+      ? "A managed Development Slot has more than one lane record claiming it. The registry is the authority; the other claims are stale caches."
+      : "Every managed slot has at most one lane owner.",
+    suggested_action: list.some((c) => c.repairable)
+      ? "reconcileLaneSlotBinding can clear the stale claim; the slot itself is not reassigned."
+      : (list.length ? "The registry backs none of the claims — this needs an operator decision, not a repair." : null),
+  });
+}
+
+/**
+ * Can a lane be resumed from what is written down, or only from memory?
+ *
+ * SEVERITY IS CHOSEN SO THE CHECK SURVIVES BEING TRUE. The brief is explicit
+ * that incomplete historical documentation must not be a catastrophic failure,
+ * and on the day this ships 12 of 13 lanes have no record at all. Scoring that
+ * as a problem would paint the fleet red for a gap nobody created on purpose,
+ * and a check that is red from birth is a check nobody reads.
+ *
+ * So MISSING and SEEDED are a `watch`: work to do, not damage. STALE_OBSERVATIONS
+ * is also a watch — a fact needing revalidation is the model working exactly as
+ * designed, since the alternative was a fact that quietly stayed "true" for ever.
+ *
+ * A CONTRADICTION is the one `problem`. It means a written fact disagrees with
+ * what a canonical owner says right now, which is the precise failure this whole
+ * subsystem exists to prevent: documentation becoming authority by outliving the
+ * thing it recorded.
+ */
+
+/**
+ * ARE THE PROMOTION GATES STILL HONEST ABOUT THEMSELVES?
+ *
+ * Not "did a promotion pass" — that is the gates' own business. This reads the
+ * declared contract and reports the five defect classes that made
+ * `hosted_migration_parity` deny a clean candidate for a week: an undeclared
+ * lifecycle boundary, a reconstructed fact, recorded evidence with no freshness
+ * rule, a gate that can only say true or false, and a precondition that can only
+ * be met after the thing it gates.
+ *
+ * A circular precondition is a `problem` and nothing else, because it is not a
+ * risk: it is a gate that has already made some class of work unpromotable, and
+ * the only question left is which class.
+ */
+export function checkPromotionGates({ audit = null }) {
+  if (!audit) return incompleteFinding("promotion.gates", "no promotion gate audit available");
+  const circular = (audit.findings || []).filter((f) => f.defect === "circular_precondition");
+  const failOpen = (audit.findings || []).filter((f) => f.defect === "unmeasured_may_pass");
+  const rest = (audit.findings || []).filter((f) => !circular.includes(f) && !failOpen.includes(f));
+  const sev = circular.length || failOpen.length ? "problem" : rest.length ? "watch" : "healthy";
+  return finding({
+    check: "promotion.gates",
+    severity: sev,
+    owner_resource: "vacilando.promotion_gates",
+    measurements: {
+      gates: audit.gates,
+      findings: (audit.findings || []).length,
+      circular: circular.length,
+      fail_open: failOpen.length,
+    },
+    evidence: (audit.findings || []).slice(0, 8).map((f) => `${f.gate}: ${f.defect} — ${f.detail}`),
+    explanation: circular.length
+      ? "A promotion gate requires something that can only become true after the gate passes. Work in its class cannot be promoted at all."
+      : failOpen.length
+        ? "A promotion gate treats an unmeasured result as a pass."
+        : rest.length
+          ? "A promotion gate cannot fully explain itself; a denial from it will not say what to do about it."
+          : "Every canonical promotion gate declares its lifecycle boundary, owner, freshness and explanation.",
+  });
+}
+
+export function checkLaneKnowledge({ inventory = null }) {
+  if (!inventory) return incompleteFinding("lane.knowledge", "no lane knowledge inventory available");
+  const rows = Array.isArray(inventory.rows) ? inventory.rows : [];
+  const missing = rows.filter((r) => r.state === "MISSING" || r.state === "UNCLASSIFIED");
+  const stale = rows.filter((r) => r.state === "STALE_OBSERVATIONS");
+  const contradicted = rows.filter((r) => (r.contradictions || 0) > 0);
+  const sev = contradicted.length ? "problem" : (missing.length || stale.length) ? "watch" : "healthy";
+  return finding({
+    check: "lane.knowledge",
+    severity: sev,
+    owner_resource: "vacilando.lane_memory",
+    measurements: {
+      lanes: rows.length,
+      ...inventory.by_state,
+      missing: missing.length,
+      stale_observations: stale.length,
+      contradictions: contradicted.length,
+    },
+    evidence: [
+      ...contradicted.map((r) => `${r.name || r.lane_id}: written knowledge disagrees with canonical truth`),
+      ...missing.slice(0, 8).map((r) => `${r.name || r.lane_id}: ${r.reason || r.state}`),
+      ...stale.slice(0, 5).map((r) => `${r.name || r.lane_id}: ${(r.stale || []).join(", ")} need revalidation`),
+    ],
+    explanation: contradicted.length
+      ? "A lane's written knowledge contradicts a canonical owner. Canonical truth wins; the record is out of date and should be updated."
+      : missing.length
+        ? `${missing.length} lane(s) have no durable knowledge record, so resuming them means reconstructing context from history.`
+        : stale.length
+          ? "Some recorded observations are past their revalidation window. That is the model working: they are marked rather than assumed."
+          : "Every lane has a current knowledge record.",
+    suggested_action: contradicted.length
+      ? "Update the recorded observation from its canonical owner; do not rewrite the durable decisions."
+      : null,
+  });
+}
+
 export function checkPortsRegistry({ ports = [] }) {
   // S7 verdicts. `foreign_owner` is a problem because the registry is wrong
   // about WHO owns a live port; `ambiguous` is a watch because we refused to
@@ -1031,6 +1334,12 @@ export function composeReport({
   safe("runs.stale", () => checkRunsStale({ runs: probeResults.runs || [], bounds: probeResults.run_bounds || {}, waits: probeResults.waits || null }));
   safe("providers.orphaned", () => checkProvidersOrphaned({ seats: probeResults.seats || [], panes: probeResults.panes || [] }));
   safe("subprocess.ancestry", () => checkSubprocessAncestry({ attribution: probeResults.attribution }));
+  safe("lane.bootstrap", () => checkLaneBootstrap({ inventory: probeResults.laneBootstrap }));
+  safe("lane.freshness", () => checkLaneFreshness({ inventory: probeResults.laneFreshness }));
+  safe("worktrees.lifecycle", () => checkWorktreeLifecycle({ inventory: probeResults.worktreeLifecycle }));
+  safe("slots.ownership", () => checkSlotOwnership({ conflicts: probeResults.slotOwnership }));
+  safe("lane.knowledge", () => checkLaneKnowledge({ inventory: probeResults.laneKnowledge }));
+  safe("promotion.gates", () => checkPromotionGates({ audit: probeResults.promotionGates }));
   safe("lanes.consistency", () => checkLanesConsistency({ lanes: probeResults.lanes || [], seats: probeResults.seats || [] }));
   safe("ports.registry", () => checkPortsRegistry({ ports: probeResults.ports || [] }));
   safe("worktrees.registry", () => checkWorktreesRegistry({ ...(probeResults.worktrees || {}), states: probeResults.reconciliation || null }));

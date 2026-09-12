@@ -346,33 +346,54 @@ export function deleteRemoteBranch(inputs = {}, { gh = defaultGh } = {}) {
 export function measureHostedMigrationParity(n, { gh = defaultGh, censusRequests = [], nowMs = Date.now(), gate, provenFrom } = {}) {
   const out = { hosted_migration_parity: null };
   try {
-    const res = gh(["api", `repos/${n.repository}/contents/supabase/migrations?ref=${n.expectedHeadSha}`,
-      "--jq", "[.[].name]"]);
-    if (res.status !== 0) {
+    const listAt = (ref) => {
+      const res = gh(["api", `repos/${n.repository}/contents/supabase/migrations?ref=${ref}`, "--jq", "[.[].name]"]);
+      if (res.status !== 0) return null;
+      const names = parseJson(res.stdout);
+      return Array.isArray(names) ? gate.requiredVersionsFromFilenames(names) : null;
+    };
+
+    /*
+     * THE PROMOTED REVISION, NOT THE CANDIDATE — the same correction made in
+     * trusted-host-merge.mjs, and it had to be made twice because this is a
+     * SEPARATE COPY of the measurement. That is not incidental: the merge
+     * executor's copy decides whether a merge runs, and THIS copy is what the
+     * policy reads, so the Director's `hosted_migration_parity` denial came from
+     * here. Fixing only the executor would have left the denial exactly where
+     * the operator sees it, which is the "trusted-child guards are separate
+     * copies" failure this codebase has already paid for once.
+     *
+     * Both now delegate to the one owner in migration-parity.mjs, so a third
+     * copy has nothing to copy.
+     */
+    const expectedRevision = n.targetBranch || "staging";
+    const expected = listAt(expectedRevision);
+    if (!expected) {
       out.hosted_migration_parity_detail = "could not read the promoted revision's migration set";
       return out;
     }
-    const names = parseJson(res.stdout);
-    if (!Array.isArray(names)) {
-      out.hosted_migration_parity_detail = "unparseable migration listing for the promoted revision";
-      return out;
-    }
-    const required = gate.requiredVersionsFromFilenames(names);
-    const proven = provenFrom(censusRequests);
-    const verdict = gate.migrationMergeGate({
-      requiredHead: required.length ? required[required.length - 1] : null,
-      requiredCount: required.length,
-      provenHead: proven?.head || null,
-      provenAtMs: proven?.atMs || null,
-      nowMs,
+    const candidate = listAt(n.expectedHeadSha);
+    const evidence = gate.hostedMigrationEvidence(censusRequests, {
+      artifactPath: "hosted-migration-identity-census.sql",
     });
+    const freshness = gate.hostedEvidenceFreshness(evidence, { requests: censusRequests, nowMs });
+    const verdict = gate.promotionParityGate({ expected, candidate, evidence, freshness, expectedRevision, nowMs });
+
     // null (not false) when unmeasured: the policy treats an unmeasured gate as
-    // "escalate", which is the answer an unreadable measurement deserves.
+    // "escalate", which is the answer an unreadable measurement deserves. STALE
+    // is unmeasured for this purpose — it blocks, and it must not be recorded as
+    // a measured claim that hosted is behind.
     out.hosted_migration_parity = verdict.measured ? verdict.promote : null;
     out.hosted_migration_parity_detail = verdict.reason;
-    out.hosted_migration_required_head = verdict.required_head || null;
-    out.hosted_migration_proven_head = verdict.proven_head || null;
-    out.hosted_migration_proof_request = proven?.request_id || null;
+    out.hosted_migration_parity_status = verdict.status;
+    out.hosted_migration_expected_revision = verdict.expected_revision || null;
+    out.hosted_migration_expected_revision_kind = verdict.expected_revision_kind || null;
+    out.hosted_migration_required_head = verdict.expected_migration_head || null;
+    out.hosted_migration_proven_head = verdict.hosted_migration_head || null;
+    out.hosted_migration_missing_on_hosted = verdict.missing_on_hosted || [];
+    out.hosted_migration_candidate_only = verdict.candidate_only_migrations || [];
+    out.hosted_migration_evidence_age_ms = verdict.evidence_age_ms ?? null;
+    out.hosted_migration_proof_request = evidence?.request_id || null;
   } catch (err) {
     out.hosted_migration_parity_detail = String(err?.message || err).slice(0, 200);
   }
