@@ -519,7 +519,19 @@ catalogued after it without redefining the function, and an organization's admin
 function of its creation date until `20260910183000` repaired it. `seed_default_rbac` is now redefined four
 times on this branch and five merged, so **the definition M5 must amend is W-13's — or, after the merge,
 Forms' — not M6's**, while the 57-key catalog literal P2 turns on is carried forward unchanged inside it.
-Every other wave remains a proposal.
+**Re-derived a third time 2026-09-12 against unmoved bases, and every count reproduces** — 67 / 67 / 58 here,
+70 / 70 / 59 merged, blanket ceiling 4, RL-8 19/19 at both, `tests/access` 901 passed / 0 failed. Two items
+belong to scheduling rather than to W-12. First, **`W12-F1` is open and is now the live control**: no migration
+of 413 or 415 revokes `EXECUTE` on `seed_default_rbac`, the grant to `authenticated` is explicit and was
+deliberately preserved by the 2026-08-04 anon revocation, the function has no internal caller check, and the
+set an arbitrary signed-in principal can restore with one RPC call has grown **57 → 67 / 70** — grown, because
+the completeness assertion that repaired the creation-date defect requires `admin` ≡ the whole catalog. The
+function now has a trigger caller that runs as `postgres` and needs no such grant, so **the revocation is a
+one-line privilege migration with nothing to break, and it needs a Director-minted register row.** Second,
+**the merged-base measurement method has a false-green mode** — running this branch's copy of a lock against
+the merged tree can report 19/19 while reading the stale base, because `origin/staging` carries its own newer
+revision of that lock; a merged probe must pin **which assertions it ran**, not only which files they read
+(§7). Every other wave remains a proposal.
 
 ---
 
@@ -651,7 +663,7 @@ code never requires reverting data.
 | **0** | Facts before changes — read-only live verification | W-0 | — · **DONE 2026-07-31** |
 | **1** | Fail-closed quick wins, no schema | W-1 … W-4 | — · **DONE 2026-07-31** (W-1…W-4) |
 | **2** | The scope invariant (the confirmed fail-open) | W-5 … W-8 | ~~W-0~~ **satisfied** |
-| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; **re-derived and still met 2026-09-11** against a tree grown 314 → 413 migrations, with the API clause now discharged in SQL and both compatibility views dropped by `W-60`/`M20`; RL-7 live again after two days red; **re-derived a third time 2026-09-12 at two bases — this branch (413 migrations) and its merge with `origin/staging` (415) — green at both, 9/9, catalog 67 → 70 keys, still no migration authored, and the false "legacy names are views" premise found recurring in a third shipped migration** · **W-10 DONE 2026-08-07**; RL-3 and RL-48 live, RL-2 replaced; **re-verified a third time 2026-09-11 with no repair required** — 129/0 across ten dependent suites, RL-3 exact over 67 live catalog keys, screen re-measured at 46 rows / 67 keys, of which 17 are inert under `W-50`/`IA-R8`; **re-derived a fourth time 2026-09-12 at two bases — this branch (413 migrations, 67 keys, 46 rows) and its merge with `origin/staging` (415, 70 keys, 49 rows) — green at both with nothing repaired, totality exact both times, and the exit clause met at the merged base by another track's Forms migrations rather than by a fixture. The only finding is at the merge seam: `w11-catalog-reconciliation.json` conflicts and is a lock input, so resolving it toward this branch reddens two W-10-dependent suites (127/2) without the projection changing** · **W-11 MEASURED 2026-08-07** — the catalog is **57 keys, not 35**; 36 unenforced, deletion list delivered as an exit artifact, **M5 withheld pending operator review**; RL-3's subject repaired. **Re-derived 2026-09-11 and every count restated: catalog 67, 34 enforced, deletion list 33** — three keys recovered from it, none ever added; the residual-gap figure recorded as W-11's one met exit clause had been false since 2026-09-10 and is corrected in the artifact. **Tier A now expressible but half-built** (`declared ⊆ catalog` green over 11 capabilities; the reverse direction unimplemented and 56 red, 23 of them enforced keys no declared route names — **M5 does not make it green**, W-15 does). **P2 hardened**: M6 landed without the catalog half and the 57-key seed literal is now frozen byte-for-byte, so M5 must amend that lock. Instrument proven red by a fifth seeding syntax; `typecheck:tests` rc=0 · **W-12 AUTHORED 2026-08-07** — M6 written and **not applied**, RL-8 live over all 315 migrations (4 blanket grant seeds left, all superseded history), §11's width-vs-live preflight carried as a fail-closed assertion inside the migration because no worker channel to it exists. **Re-derived 2026-09-12 at two bases — this branch (413 migrations) and its merge with `origin/staging` (415) — and the criterion holds at both: `admin` ≡ catalog exactly (67 and 70), `ops` 58 / 59, blanket ceiling still 4 over 40 / 45 grant statements, RL-8 19/19 and re-discriminated three ways at 415, no migration authored.** But **M6 is no longer what holds it**: the guard it left runs once at its own apply, nine keys were catalogued after it with no redefinition, and an organization's admin capabilities became a function of its creation date until `20260910183000` repaired it. `seed_default_rbac` is now redefined four times on this branch and five merged — **M6 is the live definition at neither base, and its own guard would abort a late apply of itself**. **Wave 3 is complete as far as a worker can take it: three of four exits turn on an operator authorization, not on effort** |
+| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; **re-derived and still met 2026-09-11** against a tree grown 314 → 413 migrations, with the API clause now discharged in SQL and both compatibility views dropped by `W-60`/`M20`; RL-7 live again after two days red; **re-derived a third time 2026-09-12 at two bases — this branch (413 migrations) and its merge with `origin/staging` (415) — green at both, 9/9, catalog 67 → 70 keys, still no migration authored, and the false "legacy names are views" premise found recurring in a third shipped migration** · **W-10 DONE 2026-08-07**; RL-3 and RL-48 live, RL-2 replaced; **re-verified a third time 2026-09-11 with no repair required** — 129/0 across ten dependent suites, RL-3 exact over 67 live catalog keys, screen re-measured at 46 rows / 67 keys, of which 17 are inert under `W-50`/`IA-R8`; **re-derived a fourth time 2026-09-12 at two bases — this branch (413 migrations, 67 keys, 46 rows) and its merge with `origin/staging` (415, 70 keys, 49 rows) — green at both with nothing repaired, totality exact both times, and the exit clause met at the merged base by another track's Forms migrations rather than by a fixture. The only finding is at the merge seam: `w11-catalog-reconciliation.json` conflicts and is a lock input, so resolving it toward this branch reddens two W-10-dependent suites (127/2) without the projection changing** · **W-11 MEASURED 2026-08-07** — the catalog is **57 keys, not 35**; 36 unenforced, deletion list delivered as an exit artifact, **M5 withheld pending operator review**; RL-3's subject repaired. **Re-derived 2026-09-11 and every count restated: catalog 67, 34 enforced, deletion list 33** — three keys recovered from it, none ever added; the residual-gap figure recorded as W-11's one met exit clause had been false since 2026-09-10 and is corrected in the artifact. **Tier A now expressible but half-built** (`declared ⊆ catalog` green over 11 capabilities; the reverse direction unimplemented and 56 red, 23 of them enforced keys no declared route names — **M5 does not make it green**, W-15 does). **P2 hardened**: M6 landed without the catalog half and the 57-key seed literal is now frozen byte-for-byte, so M5 must amend that lock. Instrument proven red by a fifth seeding syntax; `typecheck:tests` rc=0 · **W-12 AUTHORED 2026-08-07** — M6 written and **not applied**, RL-8 live over all 315 migrations (4 blanket grant seeds left, all superseded history), §11's width-vs-live preflight carried as a fail-closed assertion inside the migration because no worker channel to it exists. **Re-derived 2026-09-12 at two bases — this branch (413 migrations) and its merge with `origin/staging` (415) — and the criterion holds at both: `admin` ≡ catalog exactly (67 and 70), `ops` 58 / 59, blanket ceiling still 4 over 40 / 45 grant statements, RL-8 19/19 and re-discriminated three ways at 415, no migration authored.** But **M6 is no longer what holds it**: the guard it left runs once at its own apply, nine keys were catalogued after it with no redefinition, and an organization's admin capabilities became a function of its creation date until `20260910183000` repaired it. `seed_default_rbac` is now redefined four times on this branch and five merged — **M6 is the live definition at neither base, and its own guard would abort a late apply of itself**. **Re-derived a third time 2026-09-12 against unmoved bases — every count reproduces (67/67/58 and 70/70/59, 40 and 45 statements, ceiling 4, RL-8 19/19 at both, `tests/access` 901/0) — and two things are new. `W12-F1` re-derived and open at both bases: no migration revokes `EXECUTE` on `seed_default_rbac`, the grant to `authenticated` is explicit and was deliberately preserved, the function has no caller check, and what one RPC call restores has grown 57 → 67/70 *because* the completeness repair requires `admin` ≡ catalog — while the new trigger caller runs as `postgres` and needs no such grant, making the revocation a one-line migration awaiting a register row. And the merged-base method has a false-green mode: this branch's copy of a lock run against the merged tree reported 19/19 while reading 413, since `origin/staging` owns the newer revision of that lock** · **Wave 3 is complete as far as a worker can take it: three of four exits turn on an operator authorization, not on effort** |
 | **4** | Admission and declaration | W-13 … W-15 | W-3, D2 |
 | **5** | Role-model coherence and the long tail | W-16 … W-22 | ~~W-0~~ **satisfied** · D3, D4 |
 
@@ -7388,6 +7400,165 @@ ratchet red**). The lock is not going quiet at 415.
 | Adding a catalog key grants nothing implicitly | **met at both bases** — no statement in either end state sources its key set from a catalog relation; blanket ceiling still 4 and still superseded history; RL-8 green, re-discriminated three ways at 415 |
 | A freshly seeded org has exactly the enumerated grants (tier C) | **not met — unrun.** Requires the apply |
 
+#### W-12 third issuance — every count reproduces, and the thing now holding the criterion is a privilege nobody has revoked *(2026-09-12, assignment `asg_4c9863aa329ec4`)*
+
+**Status: exit criterion `met` in the tree at both bases, lock `live` and green **19/19** at both, tier C still
+`unrun`, no migration authored** (§15.15). The bases did not move between the second issuance and this one, so
+the arithmetic is a reproduction rather than a discovery — and that is the right result to report, because a
+count that changes when nothing changed is the failure mode this workstream keeps finding. Two things are new:
+a **false-green mode in the merged-base method**, walked into and caught here; and a **re-derivation of W-12's
+own 2026-08-07 finding**, which is still open, is worse than the record states, and is now the only control
+standing between an unprivileged principal and the whole enumerated grant set.
+
+##### The bases did not move, and that was measured rather than assumed
+
+`origin/staging` was re-fetched and is still `5c7b100bc`. The branch moved `7ddd089d1` → `9d2b807f1` by **three
+commits, all of them edits to this file** (W-12's second issuance, W-10's fourth, W-11's third). The merge still
+adds exactly the two Forms migrations. Every count below was re-derived from the instruments, not copied from
+the section above, and every one reproduces:
+
+| | This branch (`9d2b807f1`) | Merged with `origin/staging` |
+|---|---|---|
+| Migrations | **413** | **415** |
+| Live definition of `seed_default_rbac` | `20260911140000` (W-13) | `20260912030000` (Forms) |
+| Catalog width | **67** | **70** |
+| `admin` enumeration | **67** | **70** |
+| `admin` ≡ catalog, both directions | **exact** — neither difference non-empty | **exact** |
+| `ops` enumeration | **58** (67 − 9 withheld) | **59** (70 − 11 withheld) |
+| Grant-writing statements | **40** across 27 files | **45** across 29 files |
+| By binding | literal 32 · loop-values 1 · parameter-bound 3 · **blanket 4** | literal 37 · loop-values 1 · parameter-bound 3 · **blanket 4** |
+| Blanket files | the two historical ones, unchanged | the same two |
+| RL-8 | **19 passed / 0 failed** | **19 passed / 0 failed** |
+| Migrations revoking `EXECUTE` on `seed_default_rbac` | **0** | **0** |
+
+`tests/access` whole, excluding the live subdirectory: **901 passed / 8 skipped / 0 failed across 55 files.**
+The *"six `tests/access` failures"* §3 still carries against W-11/W-12 are not present at this base.
+
+##### The merged-base method has a false-green mode, and this pass hit it on the first attempt
+
+The second issuance's technique is *"import the merged worktree's own instruments across, so they derive their
+own `REPO_ROOT`"*, pinned with `expect(files.length).toBe(415)`. That pin proves the **instruments** read 415.
+It does not prove the **assertions** being run are the merged tree's assertions, and those are not the same
+question.
+
+Run this branch's `grantSeedEnumeration.test.ts` with the probe's instruments aliased in and it returns
+**19/19 green — measuring 413.** The aliases had not bound at all. The single assertion that would have caught
+it is the one naming `LIVE_SEED`, and it could not: `origin/staging` carries **its own revision of the suite**,
+in which `LIVE_SEED` and `OPS_WITHHELD` have already moved for Forms. So the branch's copy of the lock names
+`20260911140000` and the merged tree's live definition is `20260912030000` — a correctly-bound run of *this
+branch's* suite against the merged tree **must fail**, and a green one is proof the bridge is not connected.
+The failure is silent in the one direction that matters: it reports the stale base as healthy.
+
+The corrected probe runs **the merged worktree's own copy of the suite**, which is the lock that will actually
+exist after the merge, and imports nothing across. Binding was then proven rather than trusted: `forms.author`
+was dropped from the admin enumeration in the disposable worktree, producing **2 red whose numbers (`59`, and
+69 against 70) are unreachable at 413**, and the fixture was removed and the suite green again.
+
+This **refines the second issuance rather than contradicting it.** Its merged RL-8 row is hedged — *"green on
+every substantive assertion"* — and that hedge is exactly this: the branch's suite names a `LIVE_SEED` the
+merged tree does not have. Measured with the merged tree's own lock, the result is **19/19 outright, with
+nothing excused.** Every number it published reproduces. What needs correcting is the method as recorded, not
+the answer it reached: **a merged-base probe must pin which assertions it ran, not only which files they read.**
+
+##### W-12's own finding, re-derived: `W12-F1` is open at both bases, and the record understates it
+
+The 2026-08-07 execution record raised *"`seed_default_rbac` has no caller, and every authenticated principal
+can call it"*. Three issuances have carried it. It has never been re-measured. It is now the load-bearing
+control, so it was:
+
+- **Nothing has revoked it, at either base.** Zero migrations of 413, and zero of 415, contain a `REVOKE`
+  naming the function — measured by the probe, not read by eye.
+- **The grant is explicit, and its survival was deliberate.** `20260329165048_remote_schema.sql:8991` —
+  `GRANT ALL ON FUNCTION public.seed_default_rbac(uuid) TO authenticated`. The 2026-08-04 platform anon
+  revocation removed `anon`'s line and revoked PUBLIC's default `EXECUTE` on every routine, and it states in
+  its own text that `authenticated` held *"126 effective EXECUTE / 126 EXPLICIT grants"* so that removing the
+  PUBLIC entry could not narrow it — with a self-verification block that **aborts if it does**. This surface is
+  therefore not an accident of what happened not to be revoked. It is an explicit grant whose preservation was
+  asserted.
+- **There is no guard inside the function.** It is `SECURITY DEFINER`, takes `p_org_id uuid`, and its body
+  contains no `auth.uid()` check, no membership check and no `RAISE`. Any principal holding `EXECUTE` can call
+  it **for an arbitrary organization id**.
+- **One clause of the original finding is wrong, and it is the reassuring one.** The record says *"`ON CONFLICT
+  DO NOTHING` means it cannot remove a revocation, but every grant it names comes back."* Revocation through
+  the grid is a **`DELETE`**, not an `allowed = false` row —
+  `20260820130000_w28_replace_role_permission_grants_rpc.sql:105`, reproduced by `20260911200000` and
+  `20260911260000`. A deleted row is not a conflict, so `ON CONFLICT DO NOTHING` never engages. There is no
+  revocation row for it to preserve: the grant is simply reinserted. The mitigating half of that sentence
+  describes a mechanism that is not in the path.
+- **The blast radius grew with the enumeration, and the repair is what grew it.** In August the call restored
+  **57** keys. It now restores **67** to `admin` on this branch and **70** merged, **58 / 59** to `ops`, and —
+  since `20260909240000` and the completeness migration — `fin.read` to `school_director` and `regional_lead`.
+  W-12's stated mitigation (*"M6 shrinks the blast radius — after enumeration it can restore only the
+  enumerated set"*) was true of a frozen 57-key list. The completeness assertion that closed the creation-date
+  defect requires `admin` ≡ the whole catalog, so it **necessarily maximises what this call restores.** That is
+  not an argument against the assertion — it is the reason the `EXECUTE` surface, not the enumeration, is now
+  the control that matters.
+- **And the fix became cheap, which changes the recommendation.** In August the function had **no caller at
+  all**, so revoking `EXECUTE` was a change with an unmeasured blast radius. It now has one:
+  `orgs_seed_default_rbac`, an `AFTER INSERT` trigger on `public.orgs` added by `20260910183000` and reproduced
+  by W-13 and by Forms. That trigger function is `SECURITY DEFINER` **owned by `postgres`**, so it does not run
+  as the inserting principal and does not consult `authenticated`'s grant. The only other caller in the tree is
+  `supabase/seed/local_representative_seed.sql`. **Nothing in this repository requires `authenticated` to hold
+  `EXECUTE` on `seed_default_rbac`.** The assertion that looks like it would block the revocation — the anon
+  migration's *"must not narrow `authenticated`"* check — **runs once, at its own apply**, and cannot constrain
+  a later migration. The same one-shot property that let M6's guard go stale is what leaves this path open.
+
+**It is still not fixed here, for the reason it was not fixed in August and one more.** Revoking `EXECUTE` is a
+privilege change, not grant enumeration; `03…§33.1`/`DR-12` reserves minting a register row to the Director;
+and this assignment's scope is this file alone. What has changed is that the finding is no longer speculative
+about its own cost — **the revocation is now a one-line privilege migration with no caller to break**, and it
+should be numbered.
+
+##### The criterion is met in the mechanism, and a plain reading of it promises something else
+
+Worth stating once, at the end of wave 3, because the exit clause is quotable and will be quoted. *"Adding a
+catalog key grants nothing implicitly"* is **met**: no statement in either end state sources its key set from a
+catalog relation, and a person must type each key into a list. But RL-8's completeness assertion requires
+`admin` ≡ the catalog **exactly, with no exception list**. So adding a catalog key does not grant it
+implicitly — **it makes granting it to `admin` compulsory**, and the repository fails the commit that omits it.
+
+G5's defect was *"the blanket widens whenever any migration seeds a key."* After W-12 and the completeness
+repair, **`admin` still widens whenever any migration seeds a key.** What changed is that the widening is
+authored, reviewed, and visible in a diff instead of being a consequence of a `SELECT` — G5 is closed as a
+**visibility** defect, not as a **policy** one, and closing it as a policy defect was never the right goal: an
+Organization Administrator who does not administer the whole tenant is the creation-date bug in a different
+costume. The only role where per-key policy is genuinely exercised is **`ops`**, whose withheld set is a real
+decision taken per key — **9** on this branch, **11** merged, each traceable to the migration that made it.
+
+##### The lock this branch carries is not the lock that will exist
+
+`git log HEAD --not origin/staging -- web/tests/access/grantSeedEnumeration.test.ts` is **empty**;
+`origin/staging --not HEAD` carries **one** commit, `786f4b6b3` *("Forms authority is a capability, not a job
+title")*. This branch has made no change to RL-8 that staging lacks, so the merge takes staging's revision
+cleanly and without conflict. Anyone reading the lock **on this branch** to predict post-merge behaviour is
+reading the older file — which is precisely what produced the false green above.
+
+##### What did not change
+
+- **No migration authored.** Nothing required one, at either base.
+- **Tier C remains `unrun`** — it still needs an applied migration and a service-role round trip.
+- **No PostgreSQL has parsed M6.** Unchanged since 2026-08-07, and still stated rather than implied.
+- **The merge conflict is still exactly one docs artifact**, `w11-catalog-reconciliation.json`, resolved
+  `--ours` in the disposable worktree for measurement only. It is **not an RL-8 input** — the lock reads
+  migrations — so the resolution cannot move any number in this record. The real resolution is W-11's.
+- **The exit artifact is still stale, and this is the third issuance to say so without being able to fix it.**
+  [`w12-grant-enumeration.json`](w12-grant-enumeration.json) — which the 2026-08-07 record links to as *the
+  full record* — still describes the live function as **57 admin / 55 ops** over **315** migrations and still
+  offers *"authorize the M6 apply"* as a live operator option; an M6 apply would now abort on its own guard.
+  Each issuance's scope has been this file alone, so each has flagged it and moved on. **A fact that three
+  records agree is false, in a file three scopes have excluded, is not a follow-up item — it is a gap in how
+  the work is being cut.** The recommendation is that the next W-12 scope name the artifact, or that the §7
+  link above be demoted so no reader is sent to it.
+
+**Exit criteria, re-derived 2026-09-12 (third issuance).**
+
+| Clause | Status |
+|---|---|
+| Grant seeds are a readable list | **met at both bases** — `admin` 67 / 70 and `ops` 58 / 59 literal rows in the surviving definition; all 40 / 45 grant statements bounded, asserted rather than assumed |
+| Adding a catalog key grants nothing implicitly | **met at both bases** — no statement in either end state sources its key set from a catalog relation; blanket ceiling still 4 and still superseded history; RL-8 19/19 at both, re-discriminated at 415 with the probe's binding proven first |
+| A freshly seeded org has exactly the enumerated grants (tier C) | **not met — unrun.** Requires the apply |
+| *(carried, not an exit clause)* `W12-F1` — the `EXECUTE` surface | **open at both bases, severity raised.** Explicit grant to `authenticated`, never revoked, no guard in the function, and the set it restores has grown 57 → 67 / 70. Needs a Director-minted register row |
+
 #### The carried revision request — **W-12 does not move it, and the ledger is now complete for wave 3** (2026-08-07)
 
 The assignment arrived carrying the same open guidance for the eighth time — *"Role hierarchy is still too deep
@@ -7691,7 +7862,7 @@ Migrations introduced by this plan, against `supabase/migrations/` (289 files to
 | ~~M3~~ | ~~W-9~~ | ~~Catalog consolidation — repoint grants to one FK~~ **DISCHARGED OUT-OF-TRACK 2026-07-30** by `20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql` (Access & Roles V2 Phase 0), live on the target as version `20260730000602`, vendored `555fa056a`. Its own §0 preflight ran the orphan-grant and unexpected-FK checks this row specifies, **fail-closed before any `DROP`**. W-9 authored no migration — see §7 | — | — |
 | ~~M4~~ | ~~W-9~~ | ~~Drop retired catalog tables (**separate, later**)~~ **STRUCK — there are no retired catalog *tables*.** Phase 0 recreated `permissions`/`permission_keys` as views; retiring those views is **`W-60`/`M20`** (wave 14, product-source copy §47), which audits the base-table grants *before* dropping. A W-9 owner authoring a drop here duplicates `W-60` and pre-empts its audit | — | — |
 | M5 | W-11 | Catalog reconciliation — add enforced keys, delete unenforced. **NOT AUTHORED 2026-08-07**, deliberately: the plan makes operator review of the deletion list a precondition of the migration, and the review has not happened. Subject is now **57 keys, not 35** — **36 deletions, 1 addition**, enumerated in [`w11-catalog-reconciliation.json`](w11-catalog-reconciliation.json) | shared | Enumerated deletion list reviewed by the operator first. **Three preconditions established by W-11 and carried here:** (1) grants must be deleted **before** keys — the surviving FK is `ON DELETE RESTRICT` and `seed_default_rbac` grants `admin` every active key, so all 36 are expected to carry live grants on every org; (2) **the deletion is not durable** — the live `seed_default_rbac()` re-inserts all 57 keys on every call, so one org creation after M5 re-creates everything it deleted; M5 must rewrite that literal or land with M6; (3) live preflight unrun — catalog width, keys present live that no migration seeds, and grant counts per candidate are `database.read_census` subjects |
-| M6 | W-12 | `seed_default_rbac()` enumerates grants — **AUTHORED 2026-08-07**, `20260807170000_w12_seed_default_rbac_enumerated_grants.sql` (**not applied**) | shared | Catalog width vs live — a new tenant must not silently get a thinner set. **Amended 2026-08-07 by W-11:** the function this row targets is no longer the baseline's. Phase 0 rewrote it, and it now carries a hand-authored **57-key catalog literal** as well as the blanket grant — so `seed_default_rbac` is a *catalog writer*, not only a grant writer, and it is the vocabulary W-11 measured as widest. Preflight must state which half it is changing. **Answered 2026-08-07 by W-12: the GRANT half only** — the catalog literal is reproduced byte-for-byte and narrowing it stays M5's. **The width-vs-live preflight could not be run** (P3's wall: `database.read_census` has no worker-reachable side), so it is carried **inside the migration as a fail-closed assertion** — the guard reads the enumeration back out of the installed function via `pg_get_functiondef` and aborts if one active catalog key on the target is not named in it. That is not a substitute for a §11 preflight: the operator is still authorizing an apply whose live width is unmeasured, and **no PostgreSQL has parsed this file**. **Re-derived 2026-09-12 by W-12's second issuance — this row is now historical.** M6's guard runs **once, at its own apply**, so it never saw the nine keys catalogued after it; `20260910183000` repaired the resulting creation-date-dependent admin package, and `seed_default_rbac` has since been redefined by that migration, by W-13, and (merged) by Forms. **M6 is the live definition at neither base.** Its guard now reads as a refusal of *itself*: a late apply onto a 67- or 70-key catalog would regress `admin` to 57 keys, and the guard aborts instead. The width-vs-live preflight this row asks for is **moot for M6** and belongs to whichever migration next redefines the function |
+| M6 | W-12 | `seed_default_rbac()` enumerates grants — **AUTHORED 2026-08-07**, `20260807170000_w12_seed_default_rbac_enumerated_grants.sql` (**not applied**) | shared | Catalog width vs live — a new tenant must not silently get a thinner set. **Amended 2026-08-07 by W-11:** the function this row targets is no longer the baseline's. Phase 0 rewrote it, and it now carries a hand-authored **57-key catalog literal** as well as the blanket grant — so `seed_default_rbac` is a *catalog writer*, not only a grant writer, and it is the vocabulary W-11 measured as widest. Preflight must state which half it is changing. **Answered 2026-08-07 by W-12: the GRANT half only** — the catalog literal is reproduced byte-for-byte and narrowing it stays M5's. **The width-vs-live preflight could not be run** (P3's wall: `database.read_census` has no worker-reachable side), so it is carried **inside the migration as a fail-closed assertion** — the guard reads the enumeration back out of the installed function via `pg_get_functiondef` and aborts if one active catalog key on the target is not named in it. That is not a substitute for a §11 preflight: the operator is still authorizing an apply whose live width is unmeasured, and **no PostgreSQL has parsed this file**. **Re-derived 2026-09-12 by W-12's second issuance — this row is now historical.** M6's guard runs **once, at its own apply**, so it never saw the nine keys catalogued after it; `20260910183000` repaired the resulting creation-date-dependent admin package, and `seed_default_rbac` has since been redefined by that migration, by W-13, and (merged) by Forms. **M6 is the live definition at neither base.** Its guard now reads as a refusal of *itself*: a late apply onto a 67- or 70-key catalog would regress `admin` to 57 keys, and the guard aborts instead. The width-vs-live preflight this row asks for is **moot for M6** and belongs to whichever migration next redefines the function. **Re-confirmed unchanged by W-12's third issuance (2026-09-12)** — and with one addition a scheduler needs: the enumeration this row governs is also **what an unprivileged caller can restore**. `EXECUTE` on `seed_default_rbac` is still granted to `authenticated` at both bases and revoked by no migration, the function contains no caller check, and the completeness contract has grown the restorable set from 57 to **67 / 70**. The live control on this function is therefore a **privilege**, not a preflight — see `W12-F1` in §7 |
 | M7 | W-13 | Seed `portal.access` and grant it | shared | Every org with an `admin`/`ops` membership receives the grant (**W-0 Q5 = 0**, so no org is missed) |
 | ~~M8~~ | ~~W-16~~ | ~~Remediate undefined `user_roles.role` values~~ **STRUCK — W-0 Q3 = 0, nothing to remediate** | — | — |
 | M9 | W-16 | FK `user_roles.role` → `role_definitions` | shared | Zero violating rows — re-run Q3 at preflight (M8 no longer precedes it) |
@@ -7763,7 +7934,7 @@ contributor deleting one has to do it on purpose.
 | **RL-5** | Absent profile denies; never `all` | C | I-19 / W-7 | **LIVE AS A DUAL-READ LOCK, SWITCH NOT THROWN** — `web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts` (~~10~~ **11 green, repaired 2026-09-11**) proves the `deny` answer at the decision layer: both named Tier C cases, denial distinguishable from a stored double-restriction, a malformed scope value resolving `all` rather than becoming an L1 event, and — new — a key census over the denial answer so a later-added scope dimension must be ruled on rather than defaulted. Enforcement is still `legacy-all` and one test **asserts that**, failing the build if the switch is thrown while M1 is unapplied. **That guard was disarmed between the addition of `attendanceCaptureScope` and 2026-09-11**: it passed, but inside an already-red file, so it could not distinguish a thrown switch from a shape change. Read a green *file*, never a green *case*. Pure-function tier, not fixture-principal integration — same authorization boundary as RL-4's Tier C. Do not read this row as "absent profiles deny"; they still resolve `all`. **Re-executed 2026-09-11 (third dispatch): 11 green, confirmed from a run and not derived.** The lock's subject was **widened that pass**, because the file above covers the resolver only: `tests/access/memberIdentityProjection.test.ts` now also locks that the *explanation* of the absent answer is derived from `ABSENT_PROFILE_ENFORCEMENT` — in source, so it fires today — after the sentence was found hard-coded to `legacy-all` and bound for the operator's lockout-diagnosis surface. **The subject of this lock is every consumer of the constant, not the file that declares it** |
 | **RL-6** | No role literal appears in `accessScope.ts` | A | C8 / W-8 | **LIVE (2026-08-07)** — `web/tests/lifecycle/lifecycleAdminScopeAndPersistence.test.ts`. Asserts on *executable* lines only (the W-8 comment block names the deleted symbols deliberately), so `portalAdminBypassesDepartmentScope`, `effectiveDepartmentScopeDimensions`, `PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES` and any `"admin"`/`"ops"` literal all fail the lock. Paired with a second assertion that the `user_department_access` self-insert is gone — the first half alone would have passed over an armed path. **Note the scope limit: this locks `accessScope.ts`, not the platform.** `PORTAL_ROLES` in `resolveAdminAccessCore.ts:18` is untouched and is RL-9's subject |
 | **RL-7** | Exactly one FK on `role_permission_grants.permission_key` | A | C3 / W-9 | **LIVE — repaired 2026-09-11 after two days red, and the repair verified to hold on 2026-09-12 at two bases** (`web/tests/access/catalogConsolidationLock.test.ts`, **9 passed / 0 failed** on this branch at 413 migrations **and 9 passed / 0 failed on the branch merged with `origin/staging` at 415**, the second measured in a disposable worktree; was 2 failed / 6 passed from 2026-09-09). Replays the whole migration tree in filename order and asserts the **end state**, rather than reading the consolidation migration and agreeing with it: one surviving FK, named, referencing `permission_definitions`, `ON DELETE RESTRICT`; exactly one catalog **table**, with both deprecated names **absent** since `W-60`/`M20` dropped the views — a tightening, since a future migration recreating either as a table *or* a view now fails; no post-consolidation **unguarded** writer through a deprecated name; no `anon` re-grant on a catalog object; no product code reaching the catalog through a deprecated name, across **all four** product roots; and **every SQL writer** of `role_permission_grants` writing only keys the catalog actually holds, per `W-11`'s `discoverCatalog()`. Subject is discovery with non-vacuity guards on every scan — RL-1 was defeated twice by a pinned subject and RL-4 once. **Proven red in five negative-fixture rounds across three issuances** (4, then 2 on 2026-08-07; 3, then 2 on 2026-09-11; 3 on the **merged 415-migration tree** on 2026-09-12), fixtures removed, green after. **Necessary because W-9's exit criterion was met by a migration from a track that does not own it** (§7) — and it reopened exactly as predicted: two 2026-09-09 migrations turned this lock red and **nothing reported it**, because no required gate runs the general Vitest suite. The view write-surface caveat is **closed** — `M20` deleted both views. **Open: this lock has no runner** (`W-50`/`RL-35`) |
-| **RL-8** | No `SELECT` over the catalog in a grant seed | A | G5 / W-12 | **LIVE (2026-08-07)** — `web/tests/access/grantSeedEnumeration.test.ts` (**15 passed / 0 failed**). **Implemented as a restatement, and the restatement is the finding**: as literally worded this row condemns three seeds that are not the defect — `20260505164000` joins the catalog on a seventeen-key `IN` list, Phase 0's workflows backfill on a two-key list, and M6's own `is_active` narrowing guard reads it too. None lets the catalog decide what is granted. The property the *exit criterion* names is asserted instead: **every statement writing `role_permission_grants` takes its keys from literals in its own text or an enclosing loop's `VALUES` list, never from a catalog relation** — strictly stronger where it matters (a blanket over a non-catalog relation passes the literal reading and fails this one). Subject is discovery over all 315 migrations, not a file list: **14 grant statements in 9 files, 10 bounded, 4 blanket**, all four being superseded definitions of `seed_default_rbac` frozen in applied migrations. That count is a **ratchet enforced over *and* under**, per W-4. Asserts the *end state* after a filename-order replay — RL-7's discipline — plus admin ≡ the function's own catalog literal ≡ the catalog W-11's independent instrument discovers (57, two methods), ops ≡ that less exactly the two withheld keys, and the migration guard slicing on sentinels the function actually carries. `NOT IN` / `NOT EXISTS` / `<> ALL` are stripped before a bound is looked for — the baseline's `ops` blanket names two keys it withholds and would otherwise read as enumerated. **Proven red by five negative fixtures**, each removed and the suite green after. Reading it as "grants are enumerated on the target" would be wrong: **M6 is unapplied**. **Re-derived 2026-09-12 (W-12 second issuance) and the counts have all moved — the lock had already moved with them.** Now **19 passed / 0 failed** over **413** migrations on this branch (**40 grant statements in 27 files**) and green over **415** merged (**45 in 29**); the blanket ceiling is **still 4** at both. The subject followed two redefinitions without being edited around — `LIVE_SEED` went M6 → `20260910183000` → `20260911140000`, merged → `20260912030000` — because the assertions are stated over whichever definition survives a replay. The catalog comparison is no longer the 57-key literal: it is **`admin` ≡ the catalog the tree defines, exactly and with no exception list** (67 here, 70 merged), which is the assertion that would have prevented the creation-date defect and is deliberately written without excusals. `ops` ≡ that less **9** withheld keys here, **11** merged. Re-discriminated three ways at 415 |
+| **RL-8** | No `SELECT` over the catalog in a grant seed | A | G5 / W-12 | **LIVE (2026-08-07)** — `web/tests/access/grantSeedEnumeration.test.ts` (**15 passed / 0 failed**). **Implemented as a restatement, and the restatement is the finding**: as literally worded this row condemns three seeds that are not the defect — `20260505164000` joins the catalog on a seventeen-key `IN` list, Phase 0's workflows backfill on a two-key list, and M6's own `is_active` narrowing guard reads it too. None lets the catalog decide what is granted. The property the *exit criterion* names is asserted instead: **every statement writing `role_permission_grants` takes its keys from literals in its own text or an enclosing loop's `VALUES` list, never from a catalog relation** — strictly stronger where it matters (a blanket over a non-catalog relation passes the literal reading and fails this one). Subject is discovery over all 315 migrations, not a file list: **14 grant statements in 9 files, 10 bounded, 4 blanket**, all four being superseded definitions of `seed_default_rbac` frozen in applied migrations. That count is a **ratchet enforced over *and* under**, per W-4. Asserts the *end state* after a filename-order replay — RL-7's discipline — plus admin ≡ the function's own catalog literal ≡ the catalog W-11's independent instrument discovers (57, two methods), ops ≡ that less exactly the two withheld keys, and the migration guard slicing on sentinels the function actually carries. `NOT IN` / `NOT EXISTS` / `<> ALL` are stripped before a bound is looked for — the baseline's `ops` blanket names two keys it withholds and would otherwise read as enumerated. **Proven red by five negative fixtures**, each removed and the suite green after. Reading it as "grants are enumerated on the target" would be wrong: **M6 is unapplied**. **Re-derived 2026-09-12 (W-12 second issuance) and the counts have all moved — the lock had already moved with them.** Now **19 passed / 0 failed** over **413** migrations on this branch (**40 grant statements in 27 files**) and green over **415** merged (**45 in 29**); the blanket ceiling is **still 4** at both. The subject followed two redefinitions without being edited around — `LIVE_SEED` went M6 → `20260910183000` → `20260911140000`, merged → `20260912030000` — because the assertions are stated over whichever definition survives a replay. The catalog comparison is no longer the 57-key literal: it is **`admin` ≡ the catalog the tree defines, exactly and with no exception list** (67 here, 70 merged), which is the assertion that would have prevented the creation-date defect and is deliberately written without excusals. `ops` ≡ that less **9** withheld keys here, **11** merged. Re-discriminated three ways at 415. **Re-derived a third time 2026-09-12 against unmoved bases and every count reproduces** — 19/19 at both, 67/67/58 and 70/70/59, 40 statements in 27 files and 45 in 29, blanket ceiling 4, binding split literal 32 / loop-values 1 / parameter-bound 3 / blanket 4 here and 37 / 1 / 3 / 4 merged. **The third issuance's finding is about how this lock is invoked, not about the lock.** `origin/staging` carries its own newer revision of this file (`786f4b6b3`, Forms), in which `LIVE_SEED` and `OPS_WITHHELD` have already moved; this branch has **no** commit on it. So running *this* copy against the merged tree must fail on the `LIVE_SEED` assertion — and when it instead returned **19/19, it was reading 413**, because the bridge to the merged instruments had silently not bound. The `expect(files.length).toBe(415)` pin the second issuance introduced proves which files the *instruments* read and cannot prove which *assertions* ran; the second issuance's *"green on every substantive assertion"* hedge is the same effect, unnamed. **A merged-base run of this lock must use the merged tree's own copy of it and prove binding with a planted defect first** — done here by dropping `forms.author`, which went 2 red on values unreachable at 413, then green on removal |
 | **RL-9** | No hard-coded portal role set (`PORTAL_ROLES`, `ALLOWED_ROLES`) | A | C6 / W-13 | proposed |
 | **RL-10** | Every route file appears in the declared capability table | A | C1 / W-14 | proposed |
 | **RL-11** | A principal cannot modify its own authority | B + C | G3 / W-2 | **LIVE (tier B), SUBJECT INCOMPLETE** — `web/tests/access/selfAuthorityMutation.test.ts` covers the three routes W-2 guarded. **2026-08-06:** two further self-authority paths exist that its enumeration could not see (a helper-mediated `user_roles` writer, and `user_department_access` — a sixth authority table). Both latent; **W-8 arms one.** See §5. **2026-08-07 — the `user_department_access` path is CLOSED, not armed:** W-8 deleted the insert in the same change that deleted the bypass, and `web/tests/lifecycle/lifecycleWorkspaceDepartmentAccess.test.ts` records every attempted insert through that module so the *absence of the write* is asserted, not just the returned shape. **The helper-mediated `user_roles` writer remains open** — RL-11's subject is still incomplete, one path rather than two. **2026-09-11 (tenth issuance) — the subject is now DISCOVERED and twice repaired, and the lock's own inputs were the gap:** `selfAuthorityRouteDiscovery.test.ts` derives the subject by import closure, and it had missed W-17's `assign_member_role_audited` / `remove_member_role_audited` (two guarded routes outside the subject, their names passed as a *variable* so no literal scan finds them) and had policed `membership_access_profiles` — **a migration filename, never a table** — in place of the live `user_access_profiles`. Both corrected; subject 6 → **8**; a new assertion requires every policed table to exist in the SQL corpus. **Not executed** — the repairs are reasoned red, and the next runner with dependencies installed owns confirming them |
@@ -8648,4 +8819,51 @@ not mint an `RL-` number — `DR-12` reserves that to the Director.
 
 **Method:** static, source-grounded, test-backed, at two bases, re-discriminated at the merged one. Docs only;
 nothing pushed, no migration authored or applied, no shared-environment write, no governed action filed.
+
+---
+
+### 15.15 W-12 third issuance — the numbers reproduce, the method had a false green, and the open finding is the live control (2026-09-12, assignment `asg_4c9863aa329ec4`)
+
+Wave 3's last workstream, issued a third time. **The bases had not moved since the second issuance** —
+`origin/staging` still `5c7b100bc`, the branch advanced only by three edits to this file — so the honest
+deliverable was a reproduction, plus whatever the reproduction turned up. It turned up two things: the
+merged-base technique can return a green computed over the stale base, and did here on the first attempt; and
+W-12's own 2026-08-07 finding, carried unexamined through three issuances, is open at both bases and worse than
+recorded.
+
+| Claim | How it was established | Result |
+|---|---|---|
+| The bases had not moved | `git fetch origin staging`; `git diff --name-only HEAD origin/staging -- supabase/migrations/` | `origin/staging` still **`5c7b100bc`**, still **14** behind; the merge still adds exactly `20260912020000` and `20260912030000`. The three new branch commits touch **only this file** |
+| Every published count reproduces | The lock's own instruments via a dump probe at each base, derived not copied | Branch **413**: catalog **67**, `admin` **67** set-equal both directions, `ops` **58**, **40** statements / **27** files, blanket **4**. Merged **415**: **70 / 70 / 59**, **45** / **29**, blanket **4** |
+| The criterion holds on the branch | `npx vitest run tests/access/grantSeedEnumeration.test.ts` | **19 passed / 0 failed** |
+| The criterion holds on the merged tree | The **merged worktree's own copy** of the suite, run against its own tree | **19 passed / 0 failed**, unhedged |
+| …and that run was really reading 415 | `forms.author` dropped from the admin enumeration in the disposable worktree | **2 red**, with values (`59`; 69 vs 70) **unreachable at 413**. Fixture removed, green again |
+| **The method has a false-green mode** | Ran THIS branch's suite with the probe's instruments aliased in | **19/19 — over 413.** The aliases never bound. `origin/staging` carries its own revision of the suite, so the branch's `LIVE_SEED` (`20260911140000`) names a definition the merged tree does not have: a correctly-bound run **must fail**, and green proves the bridge is disconnected. The second issuance's *"green on every substantive assertion"* hedge is this same effect, named |
+| Nothing regressed | `npx vitest run tests/access` (live subdirectory excluded) | **901 passed / 8 skipped / 0 failed across 55 files.** The six `tests/access` failures §3 still attributes to W-11/W-12 are not present at this base |
+| `W12-F1` is still open | Probe scan for `REVOKE` naming the function, at both bases | **0 of 413 and 0 of 415.** The grant is explicit — `20260329165048:8991`, `GRANT ALL … TO authenticated` — and the 2026-08-04 anon revocation preserved it deliberately, asserting that `authenticated`'s `EXECUTE` set must not narrow |
+| …and the function has no internal guard | Read of the live body | `SECURITY DEFINER`, `p_org_id uuid`, **no `auth.uid()`, no membership check, no `RAISE`**. Any holder of `EXECUTE` can call it for an arbitrary org |
+| …and one clause of the original finding is wrong | Traced how a revocation is persisted | The grid **`DELETE`s** the row (`20260820130000:105`, reproduced by `20260911200000` / `20260911260000`). `ON CONFLICT DO NOTHING` therefore never engages — the reassuring half of *"it cannot remove a revocation"* describes a mechanism not in the path |
+| …and its blast radius grew, by way of the repair | Compared the August enumeration to the measured one | **57 → 67** (branch) / **70** (merged) for `admin`, **58 / 59** for `ops`, plus `fin.read` to two director roles. The completeness assertion that closed the creation-date defect requires `admin` ≡ catalog, so it necessarily maximises what the call restores |
+| …and the fix is now cheap | Caller census at this base | `orgs_seed_default_rbac`, an `AFTER INSERT` trigger on `public.orgs`, `SECURITY DEFINER` **owned by `postgres`** — it does not consult the caller's grant. Plus the local seed. **Nothing in the repository needs `authenticated` to hold `EXECUTE`.** The anon migration's counter-assertion is **one-shot** and cannot constrain a later migration |
+| The lock on this branch is not the post-merge lock | `git log` both directions over `grantSeedEnumeration.test.ts` | Branch-only commits: **none**. Staging-only: **one** (`786f4b6b3`). The merge takes staging's revision cleanly — which is why reading the branch's lock to predict post-merge behaviour produced the false green above |
+| The promotion base was never moved | `git worktree add --detach` inside the repo → merge → measure → `git worktree remove --force`; `git status` after | Branch **not merged, not rebased, not modified**; working tree clean, no scratch file committed |
+
+**The one conclusion worth carrying out of wave 3.** W-12's exit clause — *"adding a catalog key grants nothing
+implicitly"* — is met, and a plain reading of it overpromises. RL-8 requires `admin` ≡ the catalog exactly, so
+adding a key does not grant it implicitly; it makes granting it **compulsory**. `admin` still widens with every
+catalog key. G5 is closed as a **visibility** defect, not a policy one, and that was the right thing to close.
+The role where policy is actually exercised is `ops` — 9 withheld here, 11 merged, each traceable to the
+migration that decided it.
+
+**What this assignment deliberately did not do.** It authored **no migration** — including the one-line
+`EXECUTE` revocation that `W12-F1` now clearly warrants, because `DR-12` reserves minting a register row to the
+Director and the scope is this file. It did not edit `grantSeedEnumeration.test.ts` or `grantSeedDiscovery.ts`;
+the false green was a defect in **how the suite was invoked**, not in the suite. It did not repair
+`w12-grant-enumeration.json`, which is out of scope for the third consecutive issuance and is flagged in §7 as
+a cut-of-work problem rather than a follow-up. It did not run tier C, start a Supabase stack, merge, rebase or
+push, and filed no governed action.
+
+**Method:** static, source-grounded, test-backed, at two bases, with the merged probe's binding **proven by a
+planted defect before its green was believed**. Docs only; nothing pushed, no migration authored or applied, no
+shared-environment write.
 
