@@ -6,6 +6,102 @@ import type {
 } from "@/lib/metrics/types";
 
 const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
+    "attendance.expected_count": {
+        key: "attendance.expected_count",
+        label: "Expected today",
+        description:
+            "How many children are expected at the site today, after known operational intent is applied. " +
+            "Authoritative source: buildCombinedRoster, which applies interpretServiceDay and " +
+            "applyObservedPresence - the Thread 3/4 owners. This metric counts their answer and " +
+            "does not classify service-day state itself.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["child_attendance_events", "operational_expectations", "child_enrollment_agreements"],
+        snapshotSemantics: true,
+        snapshotPolicy: "live_only",
+    },
+    "attendance.here_now_count": {
+        key: "attendance.here_now_count",
+        label: "Here now",
+        description:
+            "How many children are physically in the building right now, including any who attended despite a plan. " +
+            "Authoritative source: buildCombinedRoster, which applies interpretServiceDay and " +
+            "applyObservedPresence - the Thread 3/4 owners. This metric counts their answer and " +
+            "does not classify service-day state itself.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["child_attendance_events", "operational_expectations", "child_enrollment_agreements"],
+        snapshotSemantics: true,
+        snapshotPolicy: "live_only",
+    },
+    "attendance.not_arrived_count": {
+        key: "attendance.not_arrived_count",
+        label: "Not arrived (unexplained)",
+        description:
+            "How many expected children have not arrived and have no explanation. Known-away, closed and attended-despite-plan children are explained and excluded. " +
+            "Authoritative source: buildCombinedRoster, which applies interpretServiceDay and " +
+            "applyObservedPresence - the Thread 3/4 owners. This metric counts their answer and " +
+            "does not classify service-day state itself.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["child_attendance_events", "operational_expectations", "child_enrollment_agreements"],
+        snapshotSemantics: true,
+        snapshotPolicy: "live_only",
+    },
+    "attendance.checked_out_count": {
+        key: "attendance.checked_out_count",
+        label: "Checked out",
+        description:
+            "How many children have been collected and are no longer on site today. " +
+            "Authoritative source: buildCombinedRoster, which applies interpretServiceDay and " +
+            "applyObservedPresence - the Thread 3/4 owners. This metric counts their answer and " +
+            "does not classify service-day state itself.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["child_attendance_events", "operational_expectations", "child_enrollment_agreements"],
+        snapshotSemantics: true,
+        snapshotPolicy: "live_only",
+    },
+    "attendance.known_away_count": {
+        key: "attendance.known_away_count",
+        label: "Known away",
+        description:
+            "How many children are away today for a recorded reason - sickness, holiday, or any authored absence. " +
+            "Authoritative source: buildCombinedRoster, which applies interpretServiceDay and " +
+            "applyObservedPresence - the Thread 3/4 owners. This metric counts their answer and " +
+            "does not classify service-day state itself.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["child_attendance_events", "operational_expectations", "child_enrollment_agreements"],
+        snapshotSemantics: true,
+        snapshotPolicy: "live_only",
+    },
+    "attendance.unknown_state_count": {
+        key: "attendance.unknown_state_count",
+        label: "Unresolved service day",
+        description:
+            "How many children whose service day could not be resolved. A data-integrity signal, not a missing child. " +
+            "Authoritative source: buildCombinedRoster, which applies interpretServiceDay and " +
+            "applyObservedPresence - the Thread 3/4 owners. This metric counts their answer and " +
+            "does not classify service-day state itself.",
+        pack: "attendance",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_24h",
+        sources: ["child_attendance_events", "operational_expectations", "child_enrollment_agreements"],
+        snapshotSemantics: true,
+        snapshotPolicy: "live_only",
+    },
     "enrollment.time_to_schedule_tour": {
         key: "enrollment.time_to_schedule_tour",
         label: "Time to schedule tour",

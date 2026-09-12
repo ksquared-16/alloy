@@ -48,6 +48,14 @@ import {
     resolveFinancialsUnresolvedSubsidyVarianceAmount,
 } from "@/lib/metrics/resolvers/financialsMetrics";
 import {
+    resolveAttendanceCheckedOutCount,
+    resolveAttendanceExpectedCount,
+    resolveAttendanceHereNowCount,
+    resolveAttendanceKnownAwayCount,
+    resolveAttendanceNotArrivedCount,
+    resolveAttendanceUnknownStateCount,
+} from "@/lib/metrics/resolvers/attendanceServiceDayMetrics";
+import {
     resolveTrustDeterministicResolutionRate,
     resolveTrustEscalatedDecisionCount,
     resolveTrustExecutionsCommittedCount,
@@ -62,6 +70,18 @@ import {
 
 async function resolveLiveMetric(ctx: MetricResolveContext, key: OipMetricKey): Promise<ResolvedMetricValue> {
     switch (key) {
+        case "attendance.expected_count":
+            return resolveAttendanceExpectedCount(ctx);
+        case "attendance.here_now_count":
+            return resolveAttendanceHereNowCount(ctx);
+        case "attendance.not_arrived_count":
+            return resolveAttendanceNotArrivedCount(ctx);
+        case "attendance.checked_out_count":
+            return resolveAttendanceCheckedOutCount(ctx);
+        case "attendance.known_away_count":
+            return resolveAttendanceKnownAwayCount(ctx);
+        case "attendance.unknown_state_count":
+            return resolveAttendanceUnknownStateCount(ctx);
         case "enrollment.time_to_schedule_tour":
             return resolveEnrollmentTimeToScheduleTour(ctx);
         case "enrollment.tour_conversion_rate":

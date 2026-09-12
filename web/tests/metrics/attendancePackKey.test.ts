@@ -84,11 +84,19 @@ describe("existing pack behaviour is unchanged", () => {
 
     it("packs with no metrics are still excluded from the available set", () => {
         const available = listAvailableMetricPacks().map((p) => p.key);
-        // attendance is registered but still empty at Phase A, so it must NOT
-        // appear as available — an empty pack on a surface is a broken promise.
-        expect(available).not.toContain("attendance");
+        // An empty pack on a surface is a broken promise. staffing and capacity
+        // stay empty by decision — supervision grouping has no canonical owner,
+        // so no ratio metric may ship (Thread 9 section 11).
         expect(available).not.toContain("staffing");
         expect(available).not.toContain("capacity");
+    });
+
+    it("attendance IS available now that it carries metrics", () => {
+        // The reverse of the rule above: a pack with real metrics must surface,
+        // or the metrics are unreachable.
+        const available = listAvailableMetricPacks().map((p) => p.key);
+        expect(available).toContain("attendance");
+        expect(getMetricPack("attendance")?.metricKeys.length).toBeGreaterThan(0);
     });
 
     it("keeps the packs that were already available", () => {

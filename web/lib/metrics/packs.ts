@@ -82,10 +82,19 @@ const PACKS: readonly MetricPackDefinition[] = [
     {
         key: "attendance",
         label: "Attendance",
-        description: "Check-in patterns and attendance compliance.",
-        metricKeys: [],
+        description:
+            "Who is expected, who is here, and who is unaccounted for \u2014 read from the same " +
+            "service-day interpretation the Attendance workspace uses.",
+        metricKeys: [
+            "attendance.expected_count",
+            "attendance.here_now_count",
+            "attendance.not_arrived_count",
+            "attendance.checked_out_count",
+            "attendance.known_away_count",
+            "attendance.unknown_state_count",
+        ],
         defaultSurfaceOrder: 60,
-        domainStatus: "coming_soon",
+        domainStatus: "available",
     },
     {
         key: "staffing",
