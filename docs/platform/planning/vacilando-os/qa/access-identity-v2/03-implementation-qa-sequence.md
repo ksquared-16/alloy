@@ -5598,9 +5598,9 @@ W-8 they see *no departments at all*, because the bypass was the only thing show
 L-class outcome, it was not named by the first issuance, and it changes what the announcement has to say.
 
 **Status: code `met`, announcement gate `BREACHED`** — re-verified independently on the third issuance
-(§15.6) and again on the fourth (§15.10). Both halves of the exit criterion hold in the tree — no role literal
-in `accessScope.ts`, and department scope enforced for every role — and the self-authority write the deletion
-would have armed is gone in the same change.
+(§15.6), the fourth (§15.10) and the fifth (§15.12, at a base five commits newer). Both halves of the exit
+criterion hold in the tree — no role literal in `accessScope.ts`, and department scope enforced for every
+role — and the self-authority write the deletion would have armed is gone in the same change.
 
 ~~**The deletion is local and unpushed, so it reaches no live principal until promotion; the gate binds
 promotion, not this commit.** Do not promote before `identity_sql` has been run and the affected principal
@@ -5644,6 +5644,96 @@ count and has never carried `allowed_department_count`. That column is the only 
 
 Thirty-two days of a possible workspace lockout is not a preflight question. **Run `identity_sql` first, and
 treat a `0` as an open incident rather than a decision to be made.**
+
+#### What lockout actually looks like in the product *(fifth issuance, 2026-09-11)*
+
+The fourth issuance named the two branches but did not establish what branch B *does* at runtime. It is
+reachable by reading, and it changes how the branch-B message should be read. Verified in this tree:
+
+| Step | Location | Behaviour when `allowedDepartmentIds` is `[]` |
+|---|---|---|
+| Re-read | `ensureLifecycleDepartmentWorkspaceAccess.ts:182` | On a query error, returns `allowedDepartmentIds: []` — the same shape as "genuinely zero rows" |
+| Filter | `workspaceActiveDepartments.ts:31-33` | `allowed` is an empty `Set`; `items.filter((d) => allowed.has(d.id))` returns **`[]`** |
+| Surface | `fetchWorkspaceActiveDepartments:47` | The department list comes back **empty, with no error** |
+
+**So branch B is a silent empty state, not a refusal.** The affected principal sees a workspace with no
+departments and nothing telling them why — no permission error, no empty-state explanation naming scope. That
+is worse than a refusal for triage, because it is indistinguishable from "this org has no departments," and it
+is why branch B's draft opens by explaining the cause rather than announcing a change.
+
+**The platform already classifies this state as broken.** `validateLifecycleWorkspaceE2E.ts:332-334` raises
+`fail("restricted scope with empty allowedDepartmentIds")` — restricted-with-zero-departments is a condition
+the product's own end-to-end validator treats as a defect, not as a configuration a principal may legitimately
+hold. That is independent corroboration, from a file no part of W-8 authored, that a `0` is an incident. **It
+is also not a control**: that script is a manual E2E validator, not a gate — nothing runs it against the
+deployed tenant, so it would not have caught this in the 32 days and did not.
+
+**A second reason the 32 days were silent, and it is the one that will outlive this gate.**
+`buildAdminShellContextCacheKey` (`adminShellContextCache.ts:46-49`) computes the department half of its
+fingerprint as `params.allowedDepartmentIds?.length && params.departmentScope === "restricted" ? … : "*"`. An
+**empty** allow-list makes `.length` falsy, so a locked-out restricted principal fingerprints as **`"*"` — the
+exact value an unrestricted principal gets**. The one observability surface that could have shown this
+condition renders it identically to "sees everything."
+
+**Bounded deliberately: this is a diagnosability defect, not a security one.** The storage key is
+`shell:${userId}` (`:32-34`), one bundle per user, and `scopeKey` is only ever emitted as the `cache_key` log
+field on hit and miss (`:66`, `:89`). No principal can read another's bundle through this collision, and the
+enforcement path does not consult the fingerprint. **Registered as a follow-up, not fixed here** — it is in
+`lib/adminV2/`, outside this deliverable's scope, and changing a cache key's shape is not a doc issuance's
+call.
+
+#### The severity answer has nowhere lawful to live — and that is why this gate cannot be checked
+
+`identity_sql` returns the recipient's name and email **and** `allowed_department_count` in one statement, and
+its own header says *"DO NOT paste this query's result back into this repository."* Read literally that
+forbids recording the severity column too. So the single fact that decides whether W-8 is a narrowing or a
+32-day incident **has no sanctioned place in the record**.
+
+**This is the same failure that produced the breach, one turn later.** §15.10 found a gate whose state nothing
+could check, and the plan therefore kept publishing `held` for a month. If the Director runs `identity_sql`
+tomorrow and finds `0`, a sixth issuance opening this file will see no recorded answer and **will not be able
+to distinguish "never run" from "run, and lawfully unrecordable."** The gate would stay unverifiable after
+being discharged.
+
+**The resolution is a reading, and it is narrow.** The header's stated intent is in its own last line —
+*"Record only that the announcement happened, never whom it named."* The prohibition is on **identity**, not
+on severity. This file already records that exactly **one** `(user, org)` pair is department-restricted while
+holding `admin`/`ops`; adding *"and that pair holds N `user_department_access` rows"* is the same class of
+fact about the same unnamed population of one, and names no one. **Recording the bucket is therefore
+permitted; recording the row is not.**
+
+To remove the ambiguity rather than rely on this paragraph being found, the severity question should be asked
+by a **separate, non-identifying probe** whose result is recordable without reading a header first:
+
+```sql
+-- W-8 severity probe. NON-IDENTIFYING: no user_id, no email, no org.
+-- Answers narrowing-vs-lockout only. Its result MAY be recorded in this repository.
+SELECT
+  count(*) FILTER (WHERE d.n = 0) AS locked_out_pairs,
+  count(*) FILTER (WHERE d.n > 0) AS narrowed_pairs
+FROM (
+  SELECT (SELECT count(*) FROM public.user_department_access uda
+           WHERE uda.user_id = p.user_id AND uda.org_id = p.org_id) AS n
+  FROM public.user_access_profiles p
+  WHERE p.department_scope = 'restricted'
+    AND EXISTS (
+      SELECT 1 FROM public.user_roles ur
+      WHERE ur.user_id = p.user_id AND ur.org_id = p.org_id
+        AND ur.role IN ('admin','ops')
+    )
+) d;
+```
+
+Two scalars, summing to Q6's `1`. `locked_out_pairs = 1` is branch B and an open incident; `narrowed_pairs = 1`
+is branch A. **It does not replace `identity_sql`** — the announcement still needs a recipient, and that
+lookup stays Director-side and unrecorded. It splits the one question a worker may record from the one it may
+not, so that discharging this gate leaves evidence behind.
+
+**Not filed as a governed census by this assignment.** `database.read_census` is registered and has a real
+execute path (`trusted-host-actions.mjs:696,971`), and a worker may file a request against it — but a census
+request carries its query by `artifact_refs`, and this probe is not in `wave0-authority-census.json`. Adding
+it there is outside this deliverable's single-file scope. **Filing it is one small edit plus one request, and
+is handed to the Director with the probe above rather than done half-way here.**
 
 #### The announcement, drafted *(fourth issuance — the half a worker can produce)*
 
@@ -7591,3 +7681,86 @@ this record was re-derived after its commit landed, not carried from the start o
 
 **Method:** static, source-grounded, test-backed. One test file changed; focused Vitest and a brokered
 typecheck only. No migration authored or applied, no shared-environment write, nothing pushed.
+
+### 15.12 W-8 fifth issuance — the severity answer had nowhere lawful to live (2026-09-11, assignment `asg_039b63878b585a`)
+
+Mission `msn_a0e8a6206c63198fab` v1, contentHash `282eace8ea5a991546ba9e8b1c19fc7e` — **the same hash the
+fourth issuance carried**, dispatched **twelve minutes** after that issuance committed (`48a6a2ae7`,
+20:30:55 -0700). The objective was again *"remove `portalAdminBypassesDepartmentScope` … announce impact for
+the one W-0 Q6 principal."* Neither half was available: the removal shipped on 2026-08-10, and the
+announcement needs an identity and a send channel a worker has neither of.
+
+| Field | Value |
+|---|---|
+| Base | `11550265b` @ `promote/devops-8-config-hygiene`, **unmoved** through the pass. Root class **`unmanaged`** per `alloy-root`; 42 ahead / **14 behind** `origin/staging` |
+| Changed | **This plan only.** No file under `web/`, `supabase/` or `scripts/` — none needed changing |
+| Locks | **112 passed / 0 failed**, the same 5 files §15.10 ran — at a base **five commits newer** |
+| Finding | The fact that decides whether W-8 is a narrowing or an incident **could not be written down** |
+
+##### What was re-verified rather than carried
+
+The fourth issuance's conclusions were re-derived from the tree and from `origin/staging`, not inherited:
+
+| Claim | Method | Result |
+|---|---|---|
+| No executable occurrence survives | Grep for all three symbols across `lib`, `app`, `components`, comment lines stripped | **Zero.** Every remaining hit is a doc-comment or an inverted lock |
+| Bypass absent on `origin/staging` | `git show origin/staging:web/lib/admin/accessScope.ts` | Only the historical comment at `:56` |
+| The refusal shipped with it | `git show origin/staging:…/ensureLifecycleDepartmentWorkspaceAccess.ts` | `SELF_DEPARTMENT_PROVISIONING_MESSAGE` returned at `:163` |
+| **No insert survives** — checked, not assumed | Read `:140-195` on `origin/staging` | Three `user_department_access` touches remain, **all `.select()`**; the insert is gone |
+| Q6 still 1 | `wave0-authority-census.json` run 4, 2026-09-04 | `q6_restricted_admin_ops_pairs` **= 1** |
+| `identity_sql` still never run | Sibling field, outside `combined_query`; no result recorded anywhere | **Unexecuted.** 32 days |
+
+##### What this issuance produced beyond re-verification
+
+**Three findings, all in §6 W-8 above.**
+
+1. **Branch B is a silent empty state.** `applyDepartmentAccessScope` (`workspaceActiveDepartments.ts:31-33`)
+   filters against an empty `Set` and returns `[]` with **no error** — the locked-out principal sees a
+   workspace with no departments and no explanation, indistinguishable from an org that has none.
+2. **The product already calls that state broken** — `validateLifecycleWorkspaceE2E.ts:332-334` fails on
+   `restricted scope with empty allowedDepartmentIds`. Independent corroboration that a `0` is an incident,
+   from a file W-8 never touched. **But it is a manual validator, not a gate**, so it caught nothing here.
+3. **The lockout is invisible in logs.** `buildAdminShellContextCacheKey` (`adminShellContextCache.ts:46-49`)
+   renders an empty allow-list as `"*"` — byte-identical to an unrestricted principal — because `.length` on
+   `[]` is falsy. **Bounded as diagnosability, not security**: storage is `shell:${userId}` (`:32-34`), and
+   `scopeKey` is only ever a log field (`:66`, `:89`). Registered as a follow-up against `lib/adminV2/`.
+
+**The finding that matters is the fourth one, and it is about the record rather than the code.**
+`identity_sql` returns name, email **and** `allowed_department_count` in one statement under a blanket *"do
+not paste this query's result back into this repository."* So the one fact that grades the incident had **no
+sanctioned place in this file** — and a sixth issuance would have been unable to tell *"never run"* from
+*"run, and lawfully unrecordable."* That is precisely the shape §15.10 diagnosed: a gate whose state nothing
+can check, which is why `held` published for a month. Discharging the gate would not have made it verifiable.
+
+Resolved two ways, both in §6 W-8: the header's intent is narrowed to **identity** against its own closing
+line (*"Record only that the announcement happened, never whom it named"*), so a severity **bucket** about an
+already-recorded population of one is recordable; and a **non-identifying severity probe** is authored so the
+question can be asked without reading a header first. Two scalars, summing to Q6's `1`. It does not replace
+`identity_sql` — the recipient lookup stays Director-side and unrecorded.
+
+**Limits of this record.**
+- **No live verification.** No query against any tenant, no browser, no request issued. Whether the staging
+  **deployment** has rebuilt — and so whether the principal has actually experienced this — remains unchecked,
+  exactly as §15.10 left it. The 32 days are branch age, not confirmed harm.
+- **The severity probe was not executed, and not filed.** `database.read_census` is registered with a real
+  execute path (`trusted-host-actions.mjs:696,971`) and a worker may file against it, but a census request
+  carries its query by `artifact_refs` and this probe is not in `wave0-authority-census.json`. Adding it there
+  is outside this deliverable's single-file scope, so filing is handed over whole rather than done half-way.
+  **No governed request was issued.**
+- **`vac run typecheck` was not run** — `unmanaged` root, so the broker refuses and the watchdog kills raw
+  `tsc`. No source file changed, so there is no typecheck subject. Focused Vitest only.
+- **The three code findings are read, not executed.** No test was added to pin them; they are registered, and
+  finding 3 needs a change in another workstream's file.
+
+**Concurrency — the fifth W-class issuance in a row to record it.** `HEAD` held at `11550265b` throughout.
+An untracked `web/tests/access/w11ProbeB.test.ts` from a concurrent W-11 lane was present in the worktree at
+start and at finish; it was **not staged and not committed**, per the precedent §15.8 set when W-11 declined
+to commit W-10's pending file. This commit carries one file and only its own hunks.
+
+**What this assignment deliberately did not do.** It did not re-remove an already-removed bypass, did not
+revert W-8 (the remedy for a lockout is a `user_department_access` grant, not restoring a platform-wide
+fail-open), did not touch `PORTAL_ROLES` or W-13's files, did not enter Wave 3 catalog work, did not edit
+`wave0-authority-census.json`, and did not send, address or complete the announcement.
+
+**Method:** static, source-grounded, test-backed, against both this tree and `origin/staging`. Docs only;
+nothing pushed, no migration authored or applied, no shared-environment write, no governed action filed.
