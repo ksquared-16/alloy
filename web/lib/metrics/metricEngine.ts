@@ -4,7 +4,7 @@ import type {
     OipMetricKey,
     ResolvedMetricValue,
 } from "@/lib/metrics/types";
-import { getMetricDefinition } from "@/lib/metrics/registry";
+import { getMetricDefinition, isLiveOnlyMetric } from "@/lib/metrics/registry";
 import { kpiForMetric } from "@/lib/metrics/kpiRegistry";
 import { evaluateKpiForMetric } from "@/lib/metrics/kpiEvaluator";
 import { readLatestMetricSnapshot } from "@/lib/metrics/snapshots/readMetricSnapshot";
@@ -189,7 +189,22 @@ async function resolveFromSnapshotIfAvailable(
 }
 
 export async function resolveSingleMetric(ctx: MetricResolveContext, key: OipMetricKey): Promise<ResolvedMetricValue> {
-    if (ctx.mode === "snapshot") {
+    /*
+     * A live-only metric is never satisfied from storage, even when the caller
+     * asked for snapshot resolution.
+     *
+     * The snapshot read below returns the most recent row with NO staleness
+     * bound, and stamps it `resolveMode: "snapshot"` with the snapshot's own
+     * `computed_at`. For a windowed metric that is the point. For "how many
+     * children are here right now" it would answer with a count from some
+     * earlier hour, and the surface asking the question has no way to tell.
+     *
+     * Refusing here rather than at the surface means every consumer — API, BOS
+     * read, workspace card, a future one nobody has written — inherits the
+     * guarantee, and `resolveMode` stays honest because the value really was
+     * resolved live.
+     */
+    if (ctx.mode === "snapshot" && !isLiveOnlyMetric(key)) {
         const snap = await resolveFromSnapshotIfAvailable(ctx, key);
         if (snap) return snap;
     }

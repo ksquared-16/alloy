@@ -1,4 +1,9 @@
-import type { MetricDefinition, OipMetricKey, MetricSourceMetadata } from "@/lib/metrics/types";
+import type {
+    MetricDefinition,
+    MetricSnapshotPolicy,
+    MetricSourceMetadata,
+    OipMetricKey,
+} from "@/lib/metrics/types";
 
 const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
     "enrollment.time_to_schedule_tour": {
@@ -494,6 +499,28 @@ export function listMetricDefinitionsByPack(pack: string): readonly MetricDefini
 }
 
 const DEFINITIONS_LIST = Object.values(DEFINITIONS);
+
+/**
+ * May a stored snapshot stand in for this metric?
+ *
+ * One reader for the whole platform, so the engine and the writer cannot drift
+ * into disagreeing about which metrics are current-state.
+ */
+export function metricSnapshotPolicy(key: OipMetricKey): MetricSnapshotPolicy {
+    return getMetricDefinition(key).snapshotPolicy ?? "eligible";
+}
+
+/** True when a stored historical value must never substitute for this metric. */
+export function isLiveOnlyMetric(key: OipMetricKey): boolean {
+    return metricSnapshotPolicy(key) === "live_only";
+}
+
+/** Every live-only metric, for the lock test that makes the set deliberate. */
+export function listLiveOnlyMetricKeys(): OipMetricKey[] {
+    return listMetricDefinitions()
+        .filter((d) => (d.snapshotPolicy ?? "eligible") === "live_only")
+        .map((d) => d.key);
+}
 
 export function getMetricSourceMetadata(key: OipMetricKey): MetricSourceMetadata {
     const d = DEFINITIONS[key];

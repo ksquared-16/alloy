@@ -24,6 +24,7 @@ export type OperationalCalculationBusinessProcess =
     | "forms"
     | "operational_health"
     | "capacity"
+    | "attendance"
     | "financial";
 
 export type OperationalCalculationStatus = "draft" | "active" | "archived";
@@ -126,6 +127,14 @@ export const PACK_TO_BUSINESS_PROCESS: Record<MetricPackKey, OperationalCalculat
     operational_health: "operational_health",
     capacity: "capacity",
     trust: "operational_health",
+    /*
+     * Identity. Attendance is a business process an organization runs every day —
+     * recording who was present — not platform infrastructure like `trust`, and
+     * not a view of `capacity`, which answers how many a room may hold rather
+     * than who is in it. Filing Attendance under either would be the category
+     * error the `trust` note above describes, in the opposite direction.
+     */
+    attendance: "attendance",
     /* Identity: the Financials pack IS the financial business process an organization runs. */
     financials: "financial",
 };

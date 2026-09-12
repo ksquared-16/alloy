@@ -30,6 +30,7 @@ const BUSINESS_PROCESS_LABEL: Record<OperationalCalculation["businessProcess"], 
     forms: "Forms",
     operational_health: "Operations",
     capacity: "Capacity",
+    attendance: "Attendance",
     financial: "Financial",
 };
 
