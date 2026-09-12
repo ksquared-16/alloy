@@ -139,11 +139,11 @@ export function resetQaIdentityCacheForTests() {
   qaIdentityCache.clear();
 }
 
-function parseSlotQaIdentityFromFile(file, slot) {
+function parseSlotSettingFromFile(file, slot, name) {
   try {
     const text = readFileSync(file, "utf8");
     const re = new RegExp(
-      String.raw`^\s*(?:export\s+)?ALLOY_SLOT_${Number(slot)}_QA_IDENTITY=(["']?)([^"'\n]*)\1\s*$`,
+      String.raw`^\s*(?:export\s+)?ALLOY_SLOT_${Number(slot)}_${name}=(["']?)([^"'\n]*)\1\s*$`,
       "m",
     );
     const m = text.match(re);
@@ -154,13 +154,76 @@ function parseSlotQaIdentityFromFile(file, slot) {
   }
 }
 
-function qaIdentityFromConfigFiles(slot) {
+function parseSlotQaIdentityFromFile(file, slot) {
+  return parseSlotSettingFromFile(file, slot, "QA_IDENTITY");
+}
+
+function slotConfigFiles() {
   const user = process.env.ALLOY_CONFIG_FILE?.trim()
     || join(homedir(), ".config", "alloy-dev", "config");
   const toolkit = join(homedir(), ".local", "share", "alloy", "toolkit", "current");
-  const example = join(toolkit, "alloy-config.example");
   // User config wins, matching alloy_load_config.
+  return [user, join(toolkit, "alloy-config.example")];
+}
+
+function qaIdentityFromConfigFiles(slot) {
+  const [user, example] = slotConfigFiles();
   return parseSlotQaIdentityFromFile(user, slot) || parseSlotQaIdentityFromFile(example, slot);
+}
+
+/**
+ * WHICH ENVIRONMENT THIS SLOT'S QA SESSION IS MINTED AGAINST.
+ *
+ * THE DEFECT. `trustedEnvSource()` had one value for the whole host: the
+ * canonical checkout's `web/.env.local`, which is the HOSTED project. Slot 8 was
+ * deliberately retargeted to the local `alloy-cert` stack — its server reads
+ * `web/.env.certification.local` and talks to Supabase on 127.0.0.1:54421 — but
+ * the mint went on reading the hosted source, so it produced an auth cookie for
+ * the hosted project while the server it was for validated cookies for the
+ * certification project. Authentication failed before any product path could be
+ * reached, and Gate 2 stalled with zero mounted coverage against a candidate
+ * nobody had shown to be defective.
+ *
+ * THIS IS THE SAME DEFECT PR 821 ALREADY CLOSED ONCE, somewhere else. That change
+ * added `ALLOY_CERT_DATABASE_URL` because, in its own words, "reading the deployed
+ * credential for a certification request is the defect PR 821 closed". It is
+ * wrong here for exactly the same reason; the QA mint never got the same
+ * treatment.
+ *
+ * WHY PER SLOT, AND WHY NOT `ALLOY_SERVER_ENV_SOURCE`. That variable is
+ * process-wide and is read by the trusted host for migrations, raw SQL and
+ * production applies as well as by this mint. Pointing it at certification to fix
+ * one slot would silently repoint every privileged operation on the host. The
+ * runtime target is a property of the SLOT, so the declaration is one too — and
+ * it reuses the `ALLOY_SLOT_<N>_*` vocabulary the config already uses for
+ * `ALLOY_SLOT_8_QA_IDENTITY`, rather than inventing a mechanism.
+ *
+ * ABSENT MEANS UNCHANGED. A slot that declares nothing keeps the host default
+ * byte-for-byte, so no hosted slot moves. Declared-but-missing is handled by the
+ * caller, which REFUSES rather than falling back — a silent fallback to hosted is
+ * the exact failure this exists to end.
+ */
+const qaEnvSourceCache = new Map();
+
+export function resetQaEnvSourceCacheForTests() {
+  qaEnvSourceCache.clear();
+}
+
+export function qaEnvSourceForSlot(slot) {
+  const n = Number(slot);
+  if (!Number.isInteger(n)) return null;
+  if (qaEnvSourceCache.has(n)) return qaEnvSourceCache.get(n);
+  const fromEnv = process.env[`ALLOY_SLOT_${n}_QA_ENV_SOURCE`];
+  if (fromEnv && fromEnv.trim()) {
+    const v = fromEnv.trim();
+    qaEnvSourceCache.set(n, v);
+    return v;
+  }
+  const [user, example] = slotConfigFiles();
+  const fromFiles = parseSlotSettingFromFile(user, n, "QA_ENV_SOURCE")
+    || parseSlotSettingFromFile(example, n, "QA_ENV_SOURCE");
+  qaEnvSourceCache.set(n, fromFiles || null);
+  return fromFiles || null;
 }
 
 export function qaIdentityForSlot(slot) {
