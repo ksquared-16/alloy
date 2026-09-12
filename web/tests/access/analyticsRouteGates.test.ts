@@ -684,6 +684,44 @@ describe("W-1 — routes already portal-gated stay gated (RL-1 regression lock)"
  * four of `SUFFICIENT_GATES`' own entries since before the classification lock was written, which
  * is why the lock that reads them was the missing piece rather than the modules themselves.
  */
+/**
+ * **The residue named by the eighth issuance is live — recorded 2026-09-11 (tenth issuance), NOT closed.**
+ *
+ * The eighth issuance closed by stating what the derivation below still cannot reach: *"a module exporting a
+ * wholly new primitive that no list names is still outside every lock here."* That module exists, and it has
+ * been gating live routes since W-13.
+ *
+ * `lib/admin/canManageUsersAndRoles.ts` exports four access primitives — `requireUsersRolesManageAuth`,
+ * `requirePortalOrUsersRolesManageAuth`, `canManageUsersAndRoles`, `canReadUsersAndRolesCatalog`. None is
+ * named by `SUFFICIENT_GATES`, `RAW_RESOLUTIONS`, `CAPABILITY_GATES` or `REVIEWED_NON_GATES`, so the module
+ * houses no already-classified symbol, so `definingLibModules` cannot discover it and its own exports are
+ * never classified. It is outside every lock in this file.
+ *
+ * **It is hidden by reach, not by name, and that is the half this file cannot currently see.**
+ * `requireUsersRolesManageAuth` calls `getAdminAccessContextCached()` and `requirePortalOrUsersRolesManageAuth`
+ * calls `loadAdminAccessBundleCached()` (`canManageUsersAndRoles.ts:44,86`). **Twelve route files** reach a raw
+ * resolution through them — the six `users`/`users/[userId]/*` routes, the four `rbac/*` routes,
+ * `settings/users-roles/members` and `access/history` — and **none calls a raw resolution directly, so none
+ * enters the class-wide subject above.** `reachesAuthorityWrite` in `selfAuthorityRouteDiscovery.test.ts`
+ * follows imports transitively; `resolvesRawAccessContext` here reads the route file alone. Two locks in the
+ * same wave, over the same route corpus, disagree about whether reach counts.
+ *
+ * **Not an exposure.** `requireUsersRolesManageAuth` is *stronger* than the gates it is missing from: it
+ * refuses unless `access.ok` **and** the caller holds `settings.users_roles` (`:44-57`), a capability, where a
+ * listed gate need only prove portal eligibility. The twelve routes are correctly protected — but **no lock
+ * established that, a human reading did**, which is the labour these locks exist to retire and the exact shape
+ * `getAdminAuthCached` escaped through for months. Eighth instance of this workstream's escape class.
+ *
+ * **Why it is registered and not fixed.** Classifying the four exports would pull this module into the
+ * derivation, and the larger question it exposes — whether `resolvesRawAccessContext` should become transitive
+ * — would move the class-wide subject well past 103 and must be *measured* before it is asserted. The tenth
+ * issuance could execute nothing: its worktree has no `node_modules` and `npm ci` is refused by its session
+ * gate, so `vac run test` and `vac run typecheck:tests` both return `class=config`, *"the command never ran."*
+ * This document's rule is that a negative fixture is finished when it is removed and green, and the sixth
+ * issuance set the precedent for exactly this position by deferring its repair to *"a run that can prove it
+ * red."* **The next runner that can execute owns this.** Changing the lists here without proving them red
+ * would be the one move this workstream has never made.
+ */
 const ACCESS_PRIMITIVE_MODULES = [
     "lib/admin/getAdminContext.ts",
     "lib/admin/getAdminAccessContext.ts",
