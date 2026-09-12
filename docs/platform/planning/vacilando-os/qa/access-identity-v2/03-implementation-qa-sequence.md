@@ -2079,6 +2079,152 @@ otherwise conclude this run happened outside a sanctioned root.
 **Not verified this run.** No live database query — W-0's run-4 counts are two days old and are the W-0 owner's
 to refresh. Wave 1 needs no live query.
 
+#### Wave 1, ninth issuance — **2026-09-12**, assignment `asg_b08ee5fdbba36f`: the escape the eighth issuance priced at "a new module" already had twenty-two callers
+
+The ninth issuance of W-1…W-3. §4's rule holds a ninth time: **re-execute rather than re-assert** — and for the
+second time in this workstream's record, the suites could not be executed, so this run re-derives rather than
+re-proves. The eighth issuance closed by pricing the remaining escape: *"it now takes a new module whose
+primitive is called by no listed name — a larger and more visible act than adding an export beside an existing
+gate."* **That module exists, it is called by 22 route files, and its own header says it replaces two listed
+gates.** So the eighth issuance's finding repeats one layer up, in the same shape: the residue it named as a
+future cost was a description of the tree it was written against.
+
+| Field | Value |
+|---|---|
+| Base | `f35c3cd08` @ `promote/activation-closure` — **343 web commits** since the eighth-issuance base `77ddbc622`, the largest interval since the sixth. API routes 603 → **619**; migrations 373 → **415**; `web/lib` modules 4212 → **4321** |
+| Root | `/Users/vacilando/Code/alloy-promotions/activation-closure`, class **`unmanaged`** — a promotion worktree, so no slot. Base verified independently: **0 behind `origin/staging`** (`c5d8acfcf`), 3 ahead, `scripts/local-dev` present. The class means "no slot", not "wrong base" |
+| Suites | **NOT RUN.** `web/node_modules` does not exist in this worktree; see *"The evidence this run cannot supply"* |
+| Subjects | Re-derived statically: analytics family **27** (floor 27) · class-wide G2 **103 of 619** (floor 103) · aliases **3** (floor 3) · classified exports **21 across 6 modules** (floor 21) · lib modules **4321** (floor 3000) |
+| Changed | **No source, test, schema or migration file.** This record is the deliverable — the fourth issuance's form, and for the reason given under *"Why the repair is not made here"* |
+| Evidence | [`wave1-ninth-issuance-evidence.json`](./wave1-ninth-issuance-evidence.json) |
+
+**The evidence this run cannot supply, stated first.** `web/node_modules` is absent, so `npx vitest` cannot load
+`vitest.config.ts` (`Cannot find module 'vitest/config'`) and the brokered `vac run test` reaches the same wall
+(`rc=1 class=config`, *"the command never ran"*). `npm install` required an approval this session did not have.
+`vac run typecheck:tests` is the same story with one detail worth recording: the broker **admitted** the run
+(`slot=0`, claim `vcl_mtyca0lv_1`) and the command still never started, for want of
+`node_modules/typescript/bin/tsc` — `rc=1 class=config`. A first attempt returned **exit 144 with stdout
+suppressed**, which is the broker's capacity path and not a result; re-running it unpiped produced the real
+cause. **So no suite result and no typecheck result are claimed here — not green, not red, not a count.** Every
+number above is a static re-derivation replicating each lock's own predicate over the same file set, and is
+labelled as such. This is the sixth issuance's position, reached for the same reason, with the same
+consequence: W-1…W-3's exit criteria are **re-derived but not re-proved**, and that gap is the honest scope of
+this record.
+
+**Two divergence directions were measured rather than argued**, because the sixth issuance's safety case rested
+on them and the seventh confirmed it exactly. `readdirSync` versus ripgrep's gitignore filter: **619 route
+files both ways**, so no file is visible to one and not the other. Comment-stripping: **zero** raw-resolution
+calls occur inside a comment anywhere under `app/api`, so `codeOnly` cannot shrink the subject. In the other
+direction it could have — a gate named only in prose would be credited by a raw scan and stripped by the lock —
+and **six files do name a gate inside a block comment**, four of them in the subject
+(`schedules/[id]/post-{completion,customer-payment,vendor-payout}`, `financials/journal-entries/[id]`). All four
+also **call** `getAdminContextCached()` in code, so comment-stripping changes no verdict. The derivation and the
+executed predicate therefore agree on this corpus in both directions.
+
+**W-1 / RL-1 — every ratchet is still exact, across the largest interval since the sixth issuance.** Family
+**27**, class-wide **103**, aliases **3**, classified exports **21** — each equal to its floor. The class-wide
+subject held at 103 while the API surface grew by **16 route files**, which is the more interesting half: the
+new routes did not reach for the raw primitive. All four pinned path assertions hold, including both negative
+ones (`admin/departments` and `metrics/resolve` still absent from the subject), and
+`configuration/programs` / `lifecycle-catalog/repair` are still in it. **Every one of the 103 subject routes
+calls a listed sufficient gate or a capability gate** — the set of `app/api` routes calling no listed gate is 91
+files, and its intersection with the subject is **empty**. Both named aliases are present with both sides
+listed, the third (`getAdminAuth` → `getAdminAuthCached`) likewise; every defining module of a classified symbol
+is one of the six declared; no declared module has gone stale; and both route-defined capability gates are still
+exported from `configuration/programs/route.ts` at the lines the register cites.
+
+**The finding: a seventh access-primitive module, unlisted, with 22 live callers — and two more beside it.**
+
+`lib/admin/getAdminOrgContextLight.ts` appears on no list in `analyticsRouteGates.test.ts`. It exports
+`getAdminOrgContextLightCached`, which returns **403 unless `core.portalEligible`** (`:52-68`) — a
+portal-enforcing resolution by the same test the other gates pass — and `requireAdminOrgContextLight`, whose
+own doc comment reads *"Single gate for lightweight routes — **replaces `requireAdminOrOps` +
+`getAdminContextCached`**"* (`:105-107`). **Both symbols it replaces are listed; it is not.** 22 route files
+call it. Two further unlisted modules sit in the same class: `lib/admin/canManageUsersAndRoles.ts`
+(`requireUsersRolesManageAuth`, `canManageUsersAndRoles`, `canReadUsersAndRolesCatalog`,
+`requirePortalOrUsersRolesManageAuth` — capability gates in exactly the `canReadAnalytics` shape, **12 route
+callers**, and they are what gates the W-2 and RBAC surfaces), and `lib/admin/portalAdmission.ts`, which holds
+W-13's `PORTAL_ADMISSION_CAPABILITY = "portal.access"` — the capability §5 says replaces the `portalEligible`
+leg of W-1's own predicate.
+
+**Why the derived-module lock did not catch it.** That lock discovers modules housing an *already-listed*
+symbol. These three house none, so they are outside its subject by construction — precisely the residue the
+eighth issuance documented. This is the **seventh** instance of this workstream's recurring escape class, and
+the pattern is now seven deep: directories (2026-08-04) → the primitive (08-06) → the alias (08-07) → a wholly
+new export (09-04) → the modules housing listed gates (09-06) → **a module housing no listed symbol at all**.
+
+**The direction is noisy, not unsafe, and it has zero live victims — both checked, not assumed.** An unlisted
+*gate* can only cause a correctly-gated route to be flagged; it can never hide an exposure. For it to flag
+anything, a route would have to call a listed raw resolution *and* gate only through the light module — no route
+does, since all 103 subject routes call a listed gate. The genuinely dangerous direction would be a route
+reaching a *deeper* resolution directly and so never entering the subject: `resolveAdminPortalOrgCore`,
+`resolveAdminAccessCore` and `fetchPortalAdmission` have **zero** direct route callers, and all 22 light-gate
+routes use the enforcing `requireAdminOrgContextLight()` form — **none** calls the raw
+`getAdminOrgContextLightCached()` and ignores its `.ok`. The single route matching a deep-resolution search,
+`users/[userId]/access-scope/route.ts`, calls `resolveAdminAccessDimensionsForOrgMember` on the **target**
+user id after `requireUsersRolesManageAuth()` has admitted the caller — a read of another member's scope, not a
+principal resolution, and therefore not the G2 shape. Latent, one import away from live: the same standing
+shape as W-0 Q1's `handle_new_user()` and the `getAdminAccessContext` alias.
+
+**Why the repair is not made here.** The repair is four coupled edits — list the two gates in `SUFFICIENT_GATES`
+(*permissive*), add the module to `ACCESS_PRIMITIVE_MODULES` (which drags its three runtime exports into the
+classification lock), register `adminOrgContextLightFailureResponse` as a reviewed non-gate, and move the export
+floor 21 → 24 — and they only hold together: the "no declared module that defines no classified primitive"
+assertion fails unless the permissive step lands with them. **This session cannot execute the suite**, so it
+could not observe any of that red or green. The sixth issuance faced this exact choice, declined for this exact
+reason — *"widening a lock speculatively, against no observed failure and without the ability to execute the
+suite, is how a lock quietly stops locking"* — and the seventh vindicated it by building the same repair with
+execution and three negative fixtures behind it. Committing four blind coupled edits to a lock four other suites
+depend on would also hand the next runner a debugging session instead of a measurement. **Recorded, not
+absorbed**, and it is the next executing run's first piece of work; the permissive step must not land without the
+classification lock that makes it safe.
+
+**No ratchet was moved, because none carries slack.** The sixth issuance had a floor sitting 12 below the live
+count and raised it blind, correctly, on the argument that a loud failure beats silent slack. Here all four
+ratchets are already exact, so that question does not arise and this run changes no number.
+
+**W-2 / RL-11 — the exit criterion is MET, and the writer set grew with its guard already attached.**
+`lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess.ts` still contains **zero** `insert`/`upsert`/`update`
+calls, so the two `user_department_access` paths that three consecutive issuances recorded as unmet remain
+closed. The self-authority guard is now called by **five** routes, not three: `role:35`, `remove:48`,
+`access-scope:83`, and **two new multi-role write paths** — `users/[userId]/roles/route.ts:28` and
+`users/[userId]/roles/[roleKey]/route.ts:34`. That is W-17's surface arriving, and **it arrived guarded** rather
+than being found unguarded by a later census, which is the first time in this record that a new authority writer
+has done so. An authority-writer census across `web/lib` and `web/app` finds only
+`lib/admin/membershipWithProfile.ts` (the two RPCs) and `lib/lifecycle/lifecycleActivationOwned.ts` (a delete,
+known since 2026-08-06). `selfAuthorityRouteDiscovery`'s exemption register is **three** entries and all three
+routes still exist, so it carries no stale exemption — though its *stale* assertion also requires each exempt
+route to be in the discovered subject, which only execution can confirm.
+
+**W-3 / RL-2 → RL-3 — unchanged.** `lib/admin/permissionGrid.ts` mentions `PERMISSION_GRID_ROWS` **only** in the
+header comment recording that W-10 removed it; the grid remains a projection of `permission_definitions`, so a
+row naming an absent key stays unrepresentable. C13 → W-11 still owns the `workflows.*` restore question.
+
+**Mission identity divergence — a fifth consecutive run raising it, and the title now collides.** This
+assignment arrives under mission `msn_f6c69aa36ea0b747fd`, titled **"DX-6 Collaboration fixture"**, contentHash
+`7925190b4920d87d78a39ed7154312b9`, against a file headed `msn_e9133cdade883793d2`. DX-6 has issued Wave 1
+before — the **seventh** issuance ran under `msn_b7040b5174ddeafb79`, *also* titled "DX-6 Collaboration
+fixture". So a fifth fixture-titled mission is issuing this access workstream, and **two distinct mission ids
+now share one title**. The eighth issuance proved one `(mission id, contentHash)` pair spans a read-only census
+and a code-changing brief; this run adds that the *title* does not identify the mission either. Only the brief
+body does. `X-2` / `DR-4` / `QE-15` register the document divergence; escalated rather than absorbed for the
+fifth time, and no run has answered it.
+
+**Concurrency, a sixth time.** Ten files were modified or untracked at session start, all under
+`scripts/local-dev/**` (toolkit libraries, `install-vacilando-gateway.sh`, `vacilando-host-soak.mjs`, plus
+untracked `tests/activation-closure.test.mjs` and `vac-lane-baseline.mjs`) — another lane's toolkit work, not
+this assignment's. **None was touched, reverted, or built upon**, and this commit names its paths explicitly
+rather than staging the worktree: the fourth issuance's judgment, applied as policy for the fifth time.
+
+**The standing operator guidance is already recorded elsewhere and is not Wave 1's.** *"Keep architecture;
+simplify role editor"* has a discovery record on this branch at `68d078abe`, which finds the two halves in
+tension — the access architecture is pinned by fs+regex locks keyed on the mutation call site and the
+access-chapter directory, so hoisting grant logic into a shared hook fails them. Noted so the next reader does
+not re-open it inside Wave 1, whose scope is W-1…W-3.
+
+**Not verified this run.** No suite, no typecheck, no live database query — W-0's counts are now **six days**
+old and are the W-0 owner's to refresh. Wave 1 needs no live query.
+
 ### W-4 — Service-client principal check *(M · I-3 · addresses G6)*
 
 517 of 539 route files hold a service-role client. I-3 requires every one to resolve and gate a principal

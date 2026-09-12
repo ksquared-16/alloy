@@ -1,0 +1,214 @@
+{
+  "artifact": "wave1-ninth-issuance-evidence",
+  "generated_on": "2026-09-12",
+  "mission": "msn_f6c69aa36ea0b747fd",
+  "mission_title": "DX-6 Collaboration fixture",
+  "assignment": "asg_b08ee5fdbba36f",
+  "context_version": "v1",
+  "content_hash": "7925190b4920d87d78a39ed7154312b9",
+  "workstreams": ["W-1", "W-2", "W-3"],
+  "issuance_ordinal": 9,
+  "rule_applied": "§4 — re-execute rather than re-assert",
+
+  "base": {
+    "head": "f35c3cd08",
+    "branch": "promote/activation-closure",
+    "prior_base": "77ddbc622",
+    "commits_since_prior_base": 770,
+    "web_commits_since_prior_base": 343,
+    "upstream": "origin/staging @ c5d8acfcf",
+    "ahead_behind_staging": "3 ahead / 0 behind",
+    "api_route_files": { "prior": 603, "now": 619, "delta": 16 },
+    "migrations": { "prior": 373, "now": 415, "delta": 42 },
+    "lib_modules": { "prior": 4212, "now": 4321, "delta": 109 }
+  },
+
+  "root": {
+    "path": "/Users/vacilando/Code/alloy-promotions/activation-closure",
+    "class": "unmanaged",
+    "sanctioned_by_alloy_root": false,
+    "note": "A promotion worktree, so no slot is assigned; alloy-root reports the class, not a base defect. Base was verified independently and is current with origin/staging, with scripts/local-dev present."
+  },
+
+  "suites": {
+    "executed": false,
+    "reason": "web/node_modules does not exist in this worktree. npx vitest cannot load web/vitest.config.ts (Cannot find module 'vitest/config'); the brokered `vac run test` reaches the same wall and reports rc=1 class=config with 'the command never ran'. npm install required an approval this session did not have.",
+    "claim": "No suite outcome of any kind is claimed by this run — not green, not red, not a count. Every figure below is a static re-derivation of a lock's own predicate, labelled as such.",
+    "files_not_executed": [
+      "web/tests/access/analyticsRouteGates.test.ts",
+      "web/tests/access/selfAuthorityMutation.test.ts",
+      "web/tests/access/selfAuthorityRouteDiscovery.test.ts",
+      "web/tests/admin/permissionGrid.test.ts"
+    ]
+  },
+
+  "typecheck": {
+    "executed": false,
+    "target": "vac run typecheck:tests",
+    "first_attempt": "exit 144, stdout suppressed — the broker's capacity path, which is not a result",
+    "second_attempt": "admitted (slot=0, claim vcl_mtyca0lv_1, request req_1789214769784028_29869) and the command still never started: Cannot find module web/node_modules/typescript/bin/tsc. rc=1 class=config.",
+    "conclusion": "The wall is absent dependencies, not broker capacity and not the unslotted root."
+  },
+
+  "derivation_fidelity": {
+    "method": "Each figure replicates the lock's own predicate over the same file set using ripgrep, with both divergence directions measured rather than argued.",
+    "file_visibility": {
+      "readdirSync_equivalent": 619,
+      "ripgrep_gitignore_filtered": 619,
+      "divergence": 0
+    },
+    "comment_stripping": {
+      "raw_resolution_calls_inside_comments_under_app_api": 0,
+      "gate_calls_inside_comments_under_app_api": 6,
+      "of_those_in_the_g2_subject": 4,
+      "subject_files_whose_only_gate_mention_is_a_comment": 0,
+      "files_checked": [
+        "app/api/admin/schedules/[id]/post-completion/route.ts",
+        "app/api/admin/schedules/[id]/post-customer-payment/route.ts",
+        "app/api/admin/schedules/[id]/post-vendor-payout/route.ts",
+        "app/api/admin/financials/journal-entries/[id]/route.ts"
+      ],
+      "conclusion": "All four also call getAdminContextCached() in code, so codeOnly changes no verdict in either direction on this corpus."
+    }
+  },
+
+  "w1": {
+    "lock": "RL-1",
+    "ratchets": [
+      { "name": "analytics family", "floor": 27, "derived": 27, "slack": 0 },
+      { "name": "class-wide G2 subject", "floor": 103, "derived": 103, "of_route_files": 619, "slack": 0 },
+      { "name": "exported aliases", "floor": 3, "derived": 3, "slack": 0 },
+      { "name": "classified exports", "floor": 21, "derived": 21, "across_modules": 6, "slack": 0 },
+      { "name": "lib modules scanned", "floor": 3000, "derived": 4321, "note": "deliberately loose by design" }
+    ],
+    "ratchet_changes": "none — no floor carries slack, so this run moves no number",
+    "subject_gating": {
+      "subject_size": 103,
+      "app_api_routes_calling_no_listed_gate": 91,
+      "intersection_with_subject": 0,
+      "conclusion": "Every subject route calls a listed sufficient gate or capability gate."
+    },
+    "pinned_assertions": [
+      { "assertion": "subject excludes app/api/admin/departments/route.ts", "holds": true },
+      { "assertion": "subject excludes app/api/admin/metrics/resolve/route.ts", "holds": true },
+      { "assertion": "subject includes app/api/admin/configuration/programs/route.ts", "holds": true },
+      { "assertion": "subject includes app/api/admin/lifecycle-catalog/repair/route.ts", "holds": true }
+    ],
+    "module_derivation": {
+      "declared_modules": 6,
+      "modules_defining_a_classified_symbol": 6,
+      "undeclared_but_defining": 0,
+      "declared_but_stale": 0,
+      "route_defined_gates_present": ["canReadProgramPublication", "canManageProgramPublication"]
+    },
+
+    "finding": {
+      "id": "seventh instance of the recurring escape class",
+      "summary": "A seventh access-primitive module exists, is on no list in analyticsRouteGates.test.ts, and is called by 22 route files. The eighth issuance priced the remaining escape at 'a new module whose primitive is called by no listed name'; that module already existed.",
+      "modules": [
+        {
+          "path": "web/lib/admin/getAdminOrgContextLight.ts",
+          "unlisted_exports": [
+            "getAdminOrgContextLightCached — returns 403 unless core.portalEligible (:52-68): a portal-enforcing resolution",
+            "requireAdminOrgContextLight — doc comment: 'Single gate for lightweight routes — replaces requireAdminOrOps + getAdminContextCached' (:105-107)",
+            "adminOrgContextLightFailureResponse — a failure renderer, the reviewed-non-gate shape"
+          ],
+          "route_callers": 22,
+          "note": "Both symbols its own header says it replaces are listed; it is not."
+        },
+        {
+          "path": "web/lib/admin/canManageUsersAndRoles.ts",
+          "unlisted_exports": [
+            "requireUsersRolesManageAuth",
+            "canManageUsersAndRoles",
+            "canReadUsersAndRolesCatalog",
+            "requirePortalOrUsersRolesManageAuth"
+          ],
+          "route_callers": 12,
+          "note": "Capability gates in exactly the canReadAnalytics shape; they gate the W-2 and RBAC surfaces."
+        },
+        {
+          "path": "web/lib/admin/portalAdmission.ts",
+          "unlisted_exports": ["PORTAL_ADMISSION_CAPABILITY = portal.access", "fetchPortalAdmission", "isPortalAdmitted", "portalAdmissionFromPermissionKeys"],
+          "route_callers": 0,
+          "note": "W-13's machinery — the capability §5 says replaces the portalEligible leg of W-1's own predicate."
+        }
+      ],
+      "why_the_lock_missed_it": "The derived-module lock discovers modules housing an already-listed symbol. These three house none, so they are outside its subject by construction — the exact residue the eighth issuance documented.",
+      "direction": "noisy, not unsafe",
+      "live_victims": 0,
+      "severity_checks": [
+        { "check": "routes calling a listed raw resolution and gated only through the light module", "result": 0 },
+        { "check": "direct route callers of resolveAdminPortalOrgCore / resolveAdminAccessCore / fetchPortalAdmission", "result": 0 },
+        { "check": "light-gate routes using the enforcing requireAdminOrgContextLight() form", "result": 22 },
+        { "check": "light-gate routes calling raw getAdminOrgContextLightCached() and ignoring .ok", "result": 0 },
+        { "check": "users/[userId]/access-scope/route.ts deep call", "result": "resolveAdminAccessDimensionsForOrgMember on the TARGET user id, after requireUsersRolesManageAuth() admits the caller — a read of another member's scope, not a principal resolution, so not the G2 shape" }
+      ],
+      "status": "latent, one import away from live — the same standing shape as W-0 Q1's handle_new_user() and the getAdminAccessContext alias",
+      "repair_deferred_to": "the next run that can execute the suite",
+      "why_deferred": "The repair is four coupled edits — two gates into SUFFICIENT_GATES (permissive), the module into ACCESS_PRIMITIVE_MODULES, adminOrgContextLightFailureResponse into REVIEWED_NON_GATES, and the export floor 21 to 24. They only hold together: the 'no declared module that defines no classified primitive' assertion fails unless the permissive step lands with them. This session cannot execute the suite and so could not observe any of it. The sixth issuance declined the same widening for the same reason and the seventh vindicated it by building the repair with execution and negative fixtures behind it."
+    }
+  },
+
+  "w2": {
+    "lock": "RL-11",
+    "exit_criterion": "met",
+    "ensureLifecycleDepartmentWorkspaceAccess_write_calls": 0,
+    "guard_call_sites": [
+      "app/api/admin/users/[userId]/role/route.ts:35",
+      "app/api/admin/users/[userId]/remove/route.ts:48",
+      "app/api/admin/users/[userId]/access-scope/route.ts:83",
+      "app/api/admin/users/[userId]/roles/route.ts:28",
+      "app/api/admin/users/[userId]/roles/[roleKey]/route.ts:34"
+    ],
+    "writer_set_change": "three guarded routes became five: the two multi-role write paths (W-17's surface) arrived already carrying the guard — the first time in this record that a new authority writer has done so rather than being found unguarded by a later census.",
+    "authority_writers_across_lib_and_app": [
+      "web/lib/admin/membershipWithProfile.ts (the two RPCs)",
+      "web/lib/lifecycle/lifecycleActivationOwned.ts (a delete, known since 2026-08-06)"
+    ],
+    "discovery_exemption_register": {
+      "entries": 3,
+      "routes_present_on_disk": 3,
+      "stale_by_absence": 0,
+      "limit": "The lock's stale assertion also requires each exempt route to be in the discovered subject, which only execution can confirm."
+    }
+  },
+
+  "w3": {
+    "lock": "RL-2 → RL-3",
+    "status": "unchanged",
+    "permission_grid_rows": "present only in the header comment recording that W-10 removed it",
+    "grid_shape": "projection of permission_definitions, so a row naming an absent key is unrepresentable",
+    "c13": "C13 → W-11 still owns the workflows.* restore question"
+  },
+
+  "changed_files": [
+    "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+    "docs/platform/planning/vacilando-os/qa/access-identity-v2/wave1-ninth-issuance-evidence.json"
+  ],
+  "source_files_changed": 0,
+  "behaviour_change": false,
+
+  "mission_identity_divergence": {
+    "raised_by_issuances": [5, 6, 7, 8, 9],
+    "this_mission": "msn_f6c69aa36ea0b747fd — 'DX-6 Collaboration fixture'",
+    "file_header_mission": "msn_e9133cdade883793d2",
+    "new_this_run": "DX-6 has issued Wave 1 before, under msn_b7040b5174ddeafb79 (seventh issuance), also titled 'DX-6 Collaboration fixture'. Two distinct mission ids now share one title. The eighth issuance proved one (mission id, contentHash) pair spans a census and a code-changing brief; this run adds that the title does not identify the mission either. Only the brief body does.",
+    "registered_as": ["X-2", "DR-4", "QE-15"],
+    "status": "escalated rather than absorbed for the fifth time; unanswered"
+  },
+
+  "concurrency": {
+    "instance": 6,
+    "artifacts_present_at_session_start": 10,
+    "paths": "scripts/local-dev/** — toolkit libraries, install-vacilando-gateway.sh, vacilando-host-soak.mjs, plus untracked tests/activation-closure.test.mjs and vac-lane-baseline.mjs",
+    "owner": "another lane's toolkit work, not this assignment",
+    "action": "none touched, reverted, or built upon; this commit names its paths explicitly rather than staging the worktree"
+  },
+
+  "not_verified_this_run": [
+    "suite execution — no installed dependencies",
+    "typecheck — same cause",
+    "live database query — W-0's counts are six days old and are the W-0 owner's to refresh; Wave 1 needs no live query"
+  ]
+}
