@@ -7753,9 +7753,12 @@ question can be asked without reading a header first. Two scalars, summing to Q6
   finding 3 needs a change in another workstream's file.
 
 **Concurrency — the fifth W-class issuance in a row to record it.** `HEAD` held at `11550265b` throughout.
-An untracked `web/tests/access/w11ProbeB.test.ts` from a concurrent W-11 lane was present in the worktree at
-start and at finish; it was **not staged and not committed**, per the precedent §15.8 set when W-11 declined
-to commit W-10's pending file. This commit carries one file and only its own hunks.
+An untracked `web/tests/access/w11ProbeB.test.ts` from a concurrent W-11 lane was present in the worktree when
+this pass began and was **deleted by that lane mid-pass** — a negative fixture of the kind §15.11 describes
+("two negative-fixture rounds, then removal"), never committed by anyone. It was **not staged here**, per the
+precedent §15.8 set when W-11 declined to commit W-10's pending file. **Stated because the outcome was timing,
+not control**: had that lane not removed it before this commit, a `git add -A` would have swept another
+assignment's scratch fixture into an access record. This commit carries one file and only its own hunks.
 
 **What this assignment deliberately did not do.** It did not re-remove an already-removed bypass, did not
 revert W-8 (the remedy for a lockout is a `user_department_access` grant, not restoring a platform-wide
