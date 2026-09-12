@@ -83,6 +83,14 @@ product path** — W-5's product closure is complete (the dev create-org route, 
 atomic RPC), so the **class** is attributed and the **instance** is not. **The finding that outlives M1: W-6 cannot
 establish W-7's precondition, and no version of W-6 can** — *"Q4 returns 0"* is momentary, so **W-7 now waits on an
 invariant, not a count** (W-5/M9 scope). Tier A evidence remains uncapturable: still no write channel (§4, §5, §6, §11)
+· **W-0 re-issued a ninth time — 2026-09-11** (mission `msn_861e1785ec233cf433`, assignment `asg_c79f56d685fe83`) —
+**no run 5, and this time the re-run trigger was checked rather than argued.** §4's standing instruction is *"re-run
+only immediately before a lockout-class switch or an M1 apply"*; **neither is armed** — `ABSENT_PROFILE_ENFORCEMENT`
+is still `legacy-all` (`resolveAdminAccessCore.ts:88`) and M1's authorization has been VOID since 2026-09-06 with no
+write channel to apply it. **New, and it reaches past this programme: `vac governed-action --status` reads a runtime
+root the Gateway does not write to, so it answers *"no such request"* for every request id — including ones that
+provably exist.** The store itself *is* worker-readable (the route the seventh and eighth passes declared closed),
+but it retains only ~8 hours, so the open-card question is blocked by **retention, not by the workspace boundary** (§4)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -392,7 +400,12 @@ across contributors once W-14's mechanism exists.
 
 ### W-0 — Live authority census *(S · read-only · no product change)*
 
-Five read-only queries against the deployed database. Produces a JSON evidence file; changes nothing.
+**Six** read-only queries against the deployed database. Produces a JSON evidence file; changes nothing.
+
+> This line read *"Five read-only queries"* until 2026-09-11, and every W-0 dispatch since has copied that number
+> into its objective while the table below has listed six. Q1–Q5 were the original five; **Q6 was folded in** from
+> §6/W-8 (see the note under the table) and has been part of every executed run. Corrected at the source so the
+> tenth re-issue does not arrive asking for five again.
 
 | # | Question | Query | Gates |
 |---|---|---|---|
@@ -1040,6 +1053,63 @@ compiled brief dispatched twice"* — that hash also rode a W-0 census brief.
 **For whoever dispatches a ninth re-issue.** The instruction is unchanged and now has a second half: check
 whether the census has already run — **and do not treat a matching `contentHash` as evidence of anything.**
 Re-run this census only immediately before a lockout-class switch or an M1 apply, per `residual_risks[0]`.
+
+#### W-0 re-issued a ninth time — **2026-09-11**, assignment `asg_c79f56d685fe83`: the trigger checked, and a reader that lies
+
+Mission `msn_861e1785ec233cf433` v1, contentHash `282eace8ea5a991546ba9e8b1c19fc7e`, mission title **"Brief Spine
+Mission"**. **No run 5 was filed. AC_W0 remains met**, on run 4 (2026-09-04T11:28:53Z), and the propagation the
+seventh and eighth passes completed is intact across both scope files.
+
+**This pass did not re-argue the decision; it checked the condition.** The instruction above is not "never re-run",
+it is *"re-run only immediately before a lockout-class switch or an M1 apply."* That is a testable claim about the
+tree, and both halves were tested:
+
+| Trigger | State | Evidence |
+|---|---|---|
+| Lockout-class switch | **not armed** | W-7's whole switch is one constant, and `ABSENT_PROFILE_ENFORCEMENT` is still `"legacy-all"` (`web/lib/admin/resolveAdminAccessCore.ts:88`). The 2026-09-06 ruling also moved W-7 onto an **invariant rather than a count**, so no census result can arm it. |
+| M1 apply | **not armed** | `20260807140000_backfill_membership_access_profiles.sql` is present, but its authorization is **VOID on RULE 5** since 2026-09-06, `preflight.ok: false`, gate `unmet`, and the same ruling recorded that **no worker-reachable write channel exists to apply it**. |
+
+So the condition is unmet, and filing would have risked a **third** card for a census that already ran — dedupe is
+mission-scoped and `msn_861e1785ec233cf433` had no prior census action, so nothing would have collapsed it.
+
+**⚠ The new finding is not about W-0, and it is the reason this pass was worth spending.** `vac governed-action
+--status <gar_id>` **answers "no such request" for every request id on this host, including ids that provably
+exist.** It is a confident false negative, not a missing capability:
+
+- `gar_7fc0905cf5be45` sits at line 6 of `~/.local/state/alloy-dev/**gateway**/vacilando/governed-actions/requests.json`
+  — a `database.read_census` against `alloy_deployed_primary`. `--status` on that exact id prints *"no such request"*.
+- **Mechanism.** `vac-governed-action.mjs:106-110` calls `listGovernedActions({})` with no root, which defaults to
+  `$HOME/.local/state/alloy-dev` (`governed-action-request.mjs:182-185`) and appends `vacilando/governed-actions/requests.json`
+  (`:209-211`). **That directory does not exist.** The Gateway host deliberately runs with
+  `ALLOY_RUNTIME_ROOT=$HOME/.local/state/alloy-dev/gateway` (`vacilando-gateway-host.mjs:23-24,32`) *"so ownership
+  files cannot collide"*. Reader and writer resolve two different roots.
+- **Why it is dangerous.** `vac`'s own help says *"After filing, read state with --status. Never infer it from side
+  effects."* **That instruction cannot be followed.** A worker that files an action, checks `--status`, and is told
+  the request does not exist will reasonably file again — which is precisely how 2026-09-04 produced two operator
+  cards for one census. The eighth re-issue's conclusion that *"`vac` exposes no governed-action read subcommand"*
+  is **wrong**, and the truth is worse: a missing reader is visibly absent, whereas this one answers.
+- **Not confirmed.** The clean experiment — re-running `--status` with `ALLOY_RUNTIME_ROOT` overridden to the gateway
+  root — is permission-walled in this session, the same Bash gate that walls `node`. The conclusion rests on the
+  direct store read plus the code path, not on a successful override.
+
+**The open-card question: same answer, different reason.** Route 1 of the four the eighth pass declared closed is
+**open** — the request store was read directly from this worktree. But its earliest entry is `2026-09-11T18:48:45Z`,
+about eight hours of history, so it does not reach 2026-09-04. **The absence of `gar_3368b11eb1b1ce` from it is a
+retention artifact and is NOT evidence the card was declined.** The escalation stands, but an operator chasing it
+should look at whatever the Gateway archives, not at the live `requests.json`. **Operator action is unchanged:
+check `dec_b1c5c947f5129e` / `gar_3368b11eb1b1ce` and decline it if still pending.**
+
+**One registry note, because the half-truth is load-bearing.** `alloy_deployed_primary` is **absent** from the
+deployed *browser* target registry (`deployed-target-registry.mjs` lists only `alloy_staging_web`) but **present**
+in the *database* target registry (`trusted-host-database-target.mjs:54` → `TARGET_CLASS.STAGING`). The census
+channel is unaffected by the browser-target refactor. *"`alloy_deployed_primary` is not a registered target"* is
+true of one registry and false of the other, and W-0 depends on the other.
+
+**For whoever dispatches a tenth re-issue.** Unchanged, plus a third clause. (1) Check whether the census has
+already run — `run_history` and `wave0-authority-census.results.json` answer it in one read, with no authorization.
+(2) Do not treat a matching `contentHash`, or a mission title, as evidence of anything. (3) **Do not use `vac
+governed-action --status` to decide whether a request exists** — it will tell you every request is absent. Re-run
+this census only immediately before a lockout-class switch or an M1 apply.
 
 ---
 
