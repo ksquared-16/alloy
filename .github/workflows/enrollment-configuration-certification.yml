@@ -100,6 +100,16 @@ concurrency:
   group: enrollment-config-cert-${{ github.ref }}
   cancel-in-progress: true
 
+# Track adoption added three: `processTrackAdoption` (the generic evaluator and writer — an
+# existing builder-owned process may adopt the canonical track model without losing its stage
+# inventory, validated before it is written and all-or-nothing), `adoptedTracksActivateRouting`
+# (the claim that matters — the REAL resolver routes family stages by case and child stages by
+# child only after adoption, asserted against a before/after pair) and
+# `trackAdoptionSettingsAuthoring` (the operator path exists in Settings, and previewing writes
+# no draft revision). They gate here because adoption flips lane routing for a whole process at
+# once: a regression would not show up as one wrong lane, it would show up as every lane being
+# decided by something else.
+
 jobs:
   run:
     name: Enrollment configuration certification
@@ -158,4 +168,7 @@ jobs:
             tests/runtime/childGrainSurfaceComposition.test.ts \
             tests/lifecycle/childTrackBeginsAtGrainCrossing.test.ts \
             tests/lifecycle/stageOutcomeChildProcessInstanceWrite.test.ts \
-            tests/lifecycle/startEnrollmentIdempotentReuse.test.ts
+            tests/lifecycle/startEnrollmentIdempotentReuse.test.ts \
+            tests/lifecycle/processTrackAdoption.test.ts \
+            tests/lifecycle/trackAdoptionSettingsAuthoring.test.ts \
+            tests/queues/adoptedTracksActivateRouting.test.ts
