@@ -52,8 +52,30 @@ function postedCharge(over: Record<string, unknown> = {}): Record<string, unknow
     };
 }
 
-function setup(charges: Record<string, unknown>[] = [postedCharge()]) {
-    const store = createOperationalEnrollmentMockStore({ charges });
+/*
+ * The agreement is seeded because a charge's household is resolved THROUGH it. Without this row the
+ * service cannot establish whose the charge is and refuses to apply — correctly, since "we could not
+ * tell whose this is" must never open the gate. A fixture that omits it is not a lighter fixture; it
+ * is a different scenario, one where the account genuinely cannot be identified.
+ */
+function agreement(over: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        id: AGREEMENT_ID,
+        org_id: ORG_ID,
+        customer_id: HOUSEHOLD_ID,
+        customer_member_id: "member-1",
+        ...over,
+    };
+}
+
+function setup(
+    charges: Record<string, unknown>[] = [postedCharge()],
+    agreements: Record<string, unknown>[] = [agreement()],
+) {
+    const store = createOperationalEnrollmentMockStore({
+        charges,
+        child_enrollment_agreements: agreements,
+    });
     return { store, supabase: createOperationalEnrollmentMockSupabase(store) };
 }
 
@@ -647,5 +669,140 @@ describe("reversing a payment application", () => {
                 reason: "correction",
             }),
         ).rejects.toThrow(/not found/i);
+    });
+});
+
+/*
+ * ONE FAMILY'S MONEY MAY ONLY ANSWER THAT FAMILY'S OBLIGATIONS.
+ *
+ * This was reachable: a household-A payment applied in full to a charge raised against a household-B
+ * agreement, same org, allocation created, no complaint. Everything the service checked looked at the
+ * payment and the charge separately, and nothing asked whether they belonged to the same family.
+ *
+ * The boundary is the HOUSEHOLD, not the billable source — a household pays and the money answers a
+ * charge raised against one of its children's agreements, which is a supported flow and must stay
+ * allowed. And it is enforced in the service that inserts the allocation, because a target the UI
+ * never offered is still reachable by anyone who can call it.
+ */
+describe("a payment may only be applied within its own household", () => {
+    const HOUSEHOLD_B = "cust-B";
+    const AGREEMENT_B = "agr-B";
+
+    function twoHouseholds() {
+        const store = createOperationalEnrollmentMockStore({
+            charges: [
+                postedCharge(),
+                postedCharge({ id: "charge-B", billable_source_id: AGREEMENT_B, amount_cents: 90_000 }),
+            ],
+            child_enrollment_agreements: [
+                agreement(),
+                agreement({ id: AGREEMENT_B, customer_id: HOUSEHOLD_B, customer_member_id: "member-B" }),
+            ],
+        });
+        return { store, supabase: createOperationalEnrollmentMockSupabase(store) };
+    }
+
+    /** PART F — the load-bearing positive: the household pays, a child's agreement charge is answered. */
+    it("lets a household payment answer a charge raised against its own child's agreement", async () => {
+        const { supabase } = setup();
+        const { payment } = await recordChildcarePayment(supabase, {
+            orgId: ORG_ID,
+            billableSourceType: "customer",
+            billableSourceId: HOUSEHOLD_ID,
+            amountCents: 40_000,
+            paymentMethod: "check",
+        });
+        const { allocation } = await applyPaymentToCharge(supabase, {
+            orgId: ORG_ID,
+            paymentId: payment.id,
+            chargeId: "charge-1",
+            amountCents: 40_000,
+        });
+        expect(allocation.charge_id, "cross-GRAIN within one household is allowed").toBe("charge-1");
+    });
+
+    /** PART G — household is the boundary, not the child. */
+    it("lets one household payment answer two different children's charges", async () => {
+        const store = createOperationalEnrollmentMockStore({
+            charges: [
+                postedCharge(),
+                postedCharge({ id: "charge-sibling", billable_source_id: "agr-2", amount_cents: 30_000 }),
+            ],
+            child_enrollment_agreements: [
+                agreement(),
+                agreement({ id: "agr-2", customer_id: HOUSEHOLD_ID, customer_member_id: "member-2" }),
+            ],
+        });
+        const supabase = createOperationalEnrollmentMockSupabase(store);
+        const { payment } = await recordChildcarePayment(supabase, {
+            orgId: ORG_ID,
+            billableSourceType: "customer",
+            billableSourceId: HOUSEHOLD_ID,
+            amountCents: 50_000,
+            paymentMethod: "check",
+        });
+        await applyPaymentToCharge(supabase, {
+            orgId: ORG_ID, paymentId: payment.id, chargeId: "charge-1", amountCents: 20_000,
+        });
+        const second = await applyPaymentToCharge(supabase, {
+            orgId: ORG_ID, paymentId: payment.id, chargeId: "charge-sibling", amountCents: 30_000,
+        });
+        expect(second.allocation.charge_id, "two children, one household, one payment").toBe("charge-sibling");
+    });
+
+    /** PART H/I — the defect, refused. Called directly, as a forged target would be. */
+    it("refuses another household's charge, and changes nothing when it does", async () => {
+        const { store, supabase } = twoHouseholds();
+        const { payment } = await recordChildcarePayment(supabase, {
+            orgId: ORG_ID,
+            billableSourceType: "enrollment_agreement",
+            billableSourceId: AGREEMENT_ID,
+            customerId: HOUSEHOLD_ID,
+            amountCents: 50_000,
+            paymentMethod: "check",
+        });
+        const allocationsBefore = (store.payment_allocations as unknown[]).length;
+        const paymentsBefore = JSON.stringify(store.payments);
+
+        await expect(
+            applyPaymentToCharge(supabase, {
+                orgId: ORG_ID,
+                paymentId: payment.id,
+                chargeId: "charge-B",
+                amountCents: 50_000,
+            }),
+        ).rejects.toThrow(/different household/i);
+
+        // A refusal that still moved money would be worse than no refusal at all.
+        expect((store.payment_allocations as unknown[]).length, "no allocation was created").toBe(
+            allocationsBefore,
+        );
+        expect(JSON.stringify(store.payments), "no payment row changed").toBe(paymentsBefore);
+        expect(await readPaymentUnappliedCents(supabase, ORG_ID, payment.id, 50_000)).toBe(50_000);
+        expect(await readChargeBalance(supabase, ORG_ID, "charge-B")).toMatchObject({
+            appliedCents: 0,
+            outstandingCents: 90_000,
+        });
+    });
+
+    /* An unresolvable household refuses too: a dangling source id must not read as "no objection". */
+    it("refuses when the charge's household cannot be established at all", async () => {
+        const store = createOperationalEnrollmentMockStore({
+            charges: [postedCharge({ id: "charge-orphan", billable_source_id: "agr-missing" })],
+            child_enrollment_agreements: [agreement()],
+        });
+        const supabase = createOperationalEnrollmentMockSupabase(store);
+        const { payment } = await recordChildcarePayment(supabase, {
+            orgId: ORG_ID,
+            billableSourceType: "customer",
+            billableSourceId: HOUSEHOLD_ID,
+            amountCents: 10_000,
+            paymentMethod: "cash",
+        });
+        await expect(
+            applyPaymentToCharge(supabase, {
+                orgId: ORG_ID, paymentId: payment.id, chargeId: "charge-orphan", amountCents: 10_000,
+            }),
+        ).rejects.toThrow(/cannot establish the household/i);
     });
 });

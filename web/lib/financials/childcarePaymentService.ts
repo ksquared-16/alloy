@@ -43,6 +43,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { resolveBillableSourceHouseholdId } from "@/lib/financials/billableSourceHousehold";
+
 import {
     OperationalEnrollmentServiceError,
     trimOrNull,
@@ -669,6 +671,66 @@ export async function applyPaymentToCharge(
         throw new OperationalEnrollmentServiceError(
             "invalid_state",
             "this service applies payments to childcare charges; a job charge uses the job billing path",
+        );
+    }
+
+    /*
+     * ── ONE FAMILY'S MONEY MAY ONLY ANSWER THAT FAMILY'S OBLIGATIONS ─────────────────────────────
+     *
+     * Everything above this point checks the payment and the charge SEPARATELY — direction, status,
+     * source type, amounts. None of it asks whether they belong to the same household, and without
+     * that question a same-org operator could apply one family's receipt to another family's charge.
+     * That was reachable: proven by applying a household-A payment to a household-B agreement charge.
+     *
+     * The comparison is at HOUSEHOLD grain deliberately. Requiring the two billable sources to be
+     * equal would refuse the supported case where a household pays and the money answers a charge
+     * raised against one of its children's agreements.
+     *
+     * It lives HERE, in the service that inserts the allocation, rather than in a chooser or an
+     * action: a target the UI never offered is still reachable by anyone who can call this, and a
+     * filter is not a boundary.
+     */
+    const { data: chargeSourceRow, error: chargeSourceError } = await supabase
+        .from("charges")
+        .select("billable_source_type, billable_source_id")
+        .eq("org_id", orgId)
+        .eq("id", chargeId)
+        .maybeSingle();
+    if (chargeSourceError) translateDbError(chargeSourceError, "load charge billable source");
+    const chargeSource = chargeSourceRow as
+        | { billable_source_type?: string | null; billable_source_id?: string | null }
+        | null;
+    const paymentHousehold = await resolveBillableSourceHouseholdId(
+        supabase,
+        orgId,
+        payment.billable_source_type,
+        payment.billable_source_id,
+    );
+    const chargeHousehold = await resolveBillableSourceHouseholdId(
+        supabase,
+        orgId,
+        chargeSource?.billable_source_type ?? null,
+        chargeSource?.billable_source_id ?? null,
+    );
+    /*
+     * An unresolvable household REFUSES. "We could not tell whose this is" is the one answer that
+     * must not open the gate, and it is the answer a forged or dangling source id produces.
+     */
+    if (!paymentHousehold || !chargeHousehold) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `cannot establish the household for payment ${paymentId} or charge ${chargeId}; refusing to apply`,
+        );
+    }
+    if (paymentHousehold !== chargeHousehold) {
+        /*
+         * The other household is not named. The refusal says whose money this is and that the target
+         * is not theirs, which is what the operator needs; which family the charge belongs to is not
+         * this caller's to learn.
+         */
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `charge ${chargeId} belongs to a different household than payment ${paymentId}; a payment may only be applied within the household whose money was received`,
         );
     }
 

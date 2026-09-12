@@ -16,6 +16,7 @@ import {
 } from "@/tests/childcareOperational/mockOperationalEnrollmentSupabase";
 
 const AGREEMENT_ID = "agr-1";
+const HOUSEHOLD_ID = "cust-1";
 const ACTOR = "user-1";
 
 function action(key: string) {
@@ -26,6 +27,14 @@ function action(key: string) {
 
 function setup(over: Record<string, unknown> = {}) {
     const store = createOperationalEnrollmentMockStore({
+        /*
+         * A charge's household is resolved THROUGH its agreement, so the agreement has to exist or
+         * the service cannot tell whose the charge is and refuses to apply. Seeding it makes this
+         * fixture the scenario it was always meant to be: a real household with a real agreement.
+         */
+        child_enrollment_agreements: [
+            { id: AGREEMENT_ID, org_id: ORG_ID, customer_id: HOUSEHOLD_ID, customer_member_id: "member-1" },
+        ],
         // Recording and collecting are `fin.write`; sending money back is `fin.adjust`. The
         // lifecycle scenarios seed both so a refusal here always means what the scenario says.
         ...financialAuthority(["fin.write", "fin.adjust"], ACTOR),
@@ -311,6 +320,14 @@ describe("payments refuse server-side without the capability", () => {
 
     function supabaseWith(permissions: readonly string[]) {
         const store = createOperationalEnrollmentMockStore({
+        /*
+         * A charge's household is resolved THROUGH its agreement, so the agreement has to exist or
+         * the service cannot tell whose the charge is and refuses to apply. Seeding it makes this
+         * fixture the scenario it was always meant to be: a real household with a real agreement.
+         */
+        child_enrollment_agreements: [
+            { id: AGREEMENT_ID, org_id: ORG_ID, customer_id: HOUSEHOLD_ID, customer_member_id: "member-1" },
+        ],
             ...financialAuthority(permissions, ACTOR),
             charges: [
                 {
