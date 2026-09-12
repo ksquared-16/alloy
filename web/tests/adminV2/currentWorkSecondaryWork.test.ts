@@ -193,3 +193,37 @@ describe("secondary work is reachable from the summary card", () => {
         expect(code).not.toContain("offer_spot");
     });
 });
+
+
+/**
+ * A REQUIREMENT AND A PIECE OF WORK ARE NOT TWO ANSWERS TO ONE QUESTION.
+ *
+ * `stageChecklist` is the only source carrying the stage's WORK rows, and it was reached only when
+ * both requirement sources were empty. So the moment a stage authored any requirement, every work
+ * row vanished from the checklist — and with them the only record that a second work item was open.
+ *
+ * Measured on staging: an offer work was started and live (a repeat invocation deduped onto the same
+ * work id), and it appeared in no checklist, so no surface could offer its outcomes. Four authored
+ * field requirements on the Waitlist stage were all it took.
+ */
+describe("work rows compose with requirement rows", () => {
+    const vm = () =>
+        readFileSync(resolve(__dirname, "../..", "lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkSurfaceVM.ts"), "utf8");
+
+    it("work rows are no longer gated behind an empty requirement set", () => {
+        const src = vm();
+        // The old shape returned stageChecklist only as a final fallback.
+        expect(src).not.toMatch(/:\s*stageChecklist;/);
+        expect(src).toContain("...stageChecklist.filter((item) => !requirementKeys.has(item.key))");
+    });
+
+    it("requirement source precedence is unchanged", () => {
+        // config still wins over readiness; an authored empty set still means empty.
+        expect(vm()).toContain("configChecklist.length > 0\n            ? mergeChecklists(configChecklist, readinessChecklist)\n            : readinessChecklist;");
+    });
+
+    it("a requirement key still wins over a work row of the same key", () => {
+        // Dedupe keeps the requirement's richer projection rather than shadowing it with work.
+        expect(vm()).toContain("requirementKeys.has(item.key)");
+    });
+});
