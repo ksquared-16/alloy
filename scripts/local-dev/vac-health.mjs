@@ -93,6 +93,15 @@ const lanesRaw = await safely(async () => {
 // Freshness, like bootstrap, is a READ. It runs git plumbing against each
 // lane's worktree and acquires no slot, server, browser or provider.
 // Knowledge coverage, a READ over the existing lane-memory store.
+// Toolchain activation state, a pure READ of one small record. Absent on a host
+// that has never activated anything through the canary path, which is healthy.
+const activationState = await safely(async () => {
+  const { readFileSync: rf, existsSync: ex } = await import("node:fs");
+  const r = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const p = join(r, "vacilando", "toolchain-canary", "activation.json");
+  return ex(p) ? JSON.parse(rf(p, "utf8")) : null;
+}, null);
+
 // The agent configuration audit, read-only. It calls the SAME collector
 // `vac config-audit` uses, so the health verdict and the CLI cannot disagree.
 const configAudit = await safely(async () => {
@@ -449,7 +458,7 @@ const report = composeReport({
   hw, thresholds, only, startedAt,
   endedAt: new Date().toISOString(),
   probeResults: {
-    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, laneKnowledge, worktreeLifecycle, slotOwnership, promotionGates, maintenanceWindow, maintenanceCadence, configAudit,
+    load, memory, disk, gateway, seats, panes: panes || [], lanes, runs, laneBootstrap, laneFreshness, laneKnowledge, worktreeLifecycle, slotOwnership, promotionGates, maintenanceWindow, maintenanceCadence, configAudit, activationState,
     run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, configured_max: configuredMax,
     validation_routing: validationRouting, validation_bypasses: validationBypasses,

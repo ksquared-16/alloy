@@ -337,13 +337,23 @@ export function classifyUpdate(kind) {
     : { kind, class: UPDATE_CLASS.MANUAL_DEFERRED, why: "unrecognised update kinds are never applied automatically" };
 }
 
-/** Where DevOps 9's canary policy attaches. Named, deliberately not implemented. */
-export function canarySeam() {
+/**
+ * Where DevOps 9's canary policy attaches — now implemented by that owner.
+ *
+ * The division stays strict in both directions. DevOps 9 decides whether a
+ * change is good; this module carries out a decision already made. Maintenance
+ * has no evidence with which to judge tool quality, and a reboot window is the
+ * worst moment to start forming an opinion — so `decide` is injected and, when
+ * nothing is injected, the answer stays "not applied".
+ */
+export function canarySeam({ decide = null } = {}) {
   return {
     seam: "vacilando.toolchain_canary.v1",
     owner: "DevOps 9",
-    contract: "given an update of class CANARY_REQUIRED, return { proven: boolean, evidence_ref } before maintenance may apply it",
+    contract: "given an update of class CANARY_REQUIRED, return { apply: boolean, reason } before maintenance may apply it",
     implemented_here: false,
+    implemented_by: decide ? "toolchain-canary.maintenanceUpdateDecision" : null,
+    decide: decide || (() => ({ apply: false, report_only: true, reason: "no canary authority is wired; CANARY_REQUIRED updates are not applied" })),
     behaviour_without_it: "CANARY_REQUIRED updates are not applied and are reported as deferred",
   };
 }

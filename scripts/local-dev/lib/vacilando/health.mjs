@@ -50,6 +50,7 @@ export const CHECKS = Object.freeze([
   "promotion.gates",
   "host.maintenance",
   "config.hygiene",
+  "toolchain.activation",
   "ports.registry",
   "worktrees.registry",
   "toolkit.retention",
@@ -1024,6 +1025,57 @@ export function checkSlotOwnership({ conflicts = null }) {
  * is a real observation and not damage, and a check that went red for it would
  * be a check nobody reads.
  */
+
+/**
+ * IS A TOOLCHAIN ACTIVATION STUCK HALFWAY?
+ *
+ * The state that matters is ACTIVATED_NOT_RESTARTED: the pointer moved, the
+ * process still runs the old build, and from then on every version probe
+ * disagrees with every observed behaviour. This host has produced that shape
+ * before as `gateway_restart_required`, and it is invisible unless something
+ * asks.
+ *
+ * CONSTRAINED is the other problem: an activation that failed and could not be
+ * rolled back. Both are `problem`; a normal in-flight activation is a `watch`,
+ * because an activation in progress is the system working.
+ *
+ * No activation at all is `healthy`, and must be: nothing has ever been
+ * activated through this path, and a check red from birth is a check nobody
+ * reads.
+ */
+export function checkToolchainActivation({ state = null }) {
+  if (!state) return finding({
+    check: "toolchain.activation",
+    severity: "healthy",
+    owner_resource: "vacilando.toolchain_canary",
+    measurements: { state: "NONE" },
+    evidence: [],
+    explanation: "No toolchain activation is in flight.",
+  });
+  const s = String(state.state || state);
+  const stuck = s === "ACTIVATED_NOT_RESTARTED" || s === "CONSTRAINED";
+  const inFlight = ["CANDIDATE_STAGED", "ACTIVE_UNCERTIFIED", "ROLLBACK_IN_PROGRESS"].includes(s);
+  return finding({
+    check: "toolchain.activation",
+    severity: stuck ? "problem" : inFlight ? "watch" : "healthy",
+    owner_resource: "vacilando.toolchain_canary",
+    measurements: {
+      state: s,
+      component: state.component || null,
+      rollback_attempts: state.attempts ?? 0,
+      has_known_good: Boolean(state.snapshot),
+    },
+    evidence: state.reason ? [state.reason] : [],
+    explanation: s === "ACTIVATED_NOT_RESTARTED"
+      ? "A candidate is active but the process has not restarted. Version probes and actual behaviour disagree until it does."
+      : s === "CONSTRAINED"
+        ? "An activation failed and could not be returned to a certified known-good state. Admission is constrained."
+        : inFlight
+          ? "A toolchain activation is in progress."
+          : "The toolchain is at a certified state.",
+  });
+}
+
 export function checkConfigHygiene({ audit = null }) {
   if (!audit) return incompleteFinding("config.hygiene", "no agent configuration audit available");
   const sev = audit.severity === "problem" ? "problem" : audit.severity === "watch" ? "watch" : "healthy";
@@ -1435,6 +1487,7 @@ export function composeReport({
   safe("promotion.gates", () => checkPromotionGates({ audit: probeResults.promotionGates }));
   safe("host.maintenance", () => checkHostMaintenance({ window: probeResults.maintenanceWindow, cadence: probeResults.maintenanceCadence }));
   safe("config.hygiene", () => checkConfigHygiene({ audit: probeResults.configAudit }));
+  safe("toolchain.activation", () => checkToolchainActivation({ state: probeResults.activationState }));
   safe("lanes.consistency", () => checkLanesConsistency({ lanes: probeResults.lanes || [], seats: probeResults.seats || [] }));
   safe("ports.registry", () => checkPortsRegistry({ ports: probeResults.ports || [] }));
   safe("worktrees.registry", () => checkWorktreesRegistry({ ...(probeResults.worktrees || {}), states: probeResults.reconciliation || null }));
