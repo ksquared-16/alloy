@@ -73,7 +73,12 @@ import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
 import { statSync } from "node:fs";
 import { join } from "node:path";
 import { listResourceClaims } from "./resource-claims.mjs";
-import { describeWait, reconcileWait, waitStatus } from "./run-wait.mjs";
+import {
+  describeWait,
+  isDeclaredWaitReason,
+  reconcileWait,
+  waitStatus,
+} from "./run-wait.mjs";
 
 const OPEN_REQUEST = new Set(["REQUESTED", "QUEUED", "GRANTED"]);
 const IN_FLIGHT_CONTINUATION = new Set(["PENDING", "DELIVERING"]);
@@ -952,10 +957,44 @@ export function reconcileUndeliveredRuns({
 export const WAITING_RUN_STATES = Object.freeze(["QUEUED", "NEEDS_INPUT", "WAITING_RESOURCE", "RECOVERING"]);
 
 /** The wait reason for a run, by the same rules `vac health` applies. */
+/**
+ * THE SEMANTIC WAIT CODE — NEVER THE CAPTION.
+ *
+ * THE DEFECT THIS CLOSES, measured across the fleet: 21 runs in 6 lanes failed
+ * `unknown_wait_reason` and 3 more `missing_wait_reason`, and every one of them
+ * was healthy. This function returned `run.state_reason`, which
+ * `attachRunWait` sets to `presentationForGovernedAction(rec).wait_label` — a
+ * HUMAN CAPTION such as "Waiting on Director — branch push". `describeWait`
+ * looked that caption up in `WAIT_REASONS`, did not find it, returned
+ * `bound_policy: "invalid"`, and `reconcileWait` correctly failed an invalid
+ * descriptor. Every layer behaved as designed. The caption was being used as
+ * the key.
+ *
+ * The semantic code was there the whole time. The same `attachRunWait` call
+ * writes `resource_wait` from `waitProjection`, whose reason is
+ * `needs_operator_input` with policy `human_indefinite` — "hold for as long as
+ * it takes". erun_5a070693f25078fc carries exactly that descriptor and was
+ * killed anyway, because the caption won.
+ *
+ * ORDER OF TRUTH, and it is deliberate:
+ *   1. the run STATE, where it is unambiguous;
+ *   2. the semantic code the producer wrote into `resource_wait`;
+ *   3. `state_reason`, but ONLY when it is itself a declared code — some
+ *      producers legitimately set it to one;
+ *   4. otherwise nothing, which fails closed exactly as before.
+ *
+ * A caption can never be step 3, because `isDeclaredWaitReason` is an exact
+ * lookup in the same table the classifier uses. Undeclared prose is not
+ * reinterpreted, guessed at, or pattern-matched into a nearby code — it simply
+ * is not a key, and the run falls through to whatever the descriptor says.
+ */
 function waitReasonFor(run) {
   if (run.state === "NEEDS_INPUT") return "needs_operator_input";
   if (run.state === "RECOVERING") return "recovering";
-  return run.state_reason || null;
+  const declared = run.resource_wait?.reason;
+  if (isDeclaredWaitReason(declared)) return declared;
+  if (isDeclaredWaitReason(run.state_reason)) return run.state_reason;
+  return null;
 }
 
 /**
