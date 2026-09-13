@@ -128,8 +128,14 @@ export async function preflightStageTransitionReconciliation(params: {
      * through. The requirement runtime was correct; it was being asked about the wrong stage.
      *
      * Only OPEN stage work is consulted, and only to name the stage — never to decide the outcome.
-     * If several stages have open work, the record is departing the one the status does not name,
-     * so a status-derived stage still wins when it resolves.
+     * This stage WINS over the status-derived one — the status is the weaker signal, and preferring
+     * it is what produced the wrong departure stage in the first place. (An earlier revision of this
+     * comment said the opposite of what the code does; the code was right.)
+     *
+     * A record should hold open work at one stage, but it can briefly hold work at two, and picking
+     * the first row would then be an accident of `due_at` ordering. The destination is excluded
+     * instead: whatever the record is departing, it is not the stage it is entering. That is enough
+     * to be deterministic here, because the remaining candidate is the stage actually being left.
      */
     const openStageWorkRows = (openRowsResult.data ?? []).filter((row) =>
         isBusinessProcessStageWorkTaskRow(row as { metadata?: Record<string, unknown>; source?: string }),
@@ -139,7 +145,7 @@ export async function preflightStageTransitionReconciliation(params: {
             const md = ((row as { metadata?: Record<string, unknown> }).metadata ?? {}) as Record<string, unknown>;
             return trimOrNull(md.lifecycle_stage_key);
         })
-        .filter((key): key is string => key != null);
+        .filter((key): key is string => key != null && key !== nextStatusKey);
 
     const transition = detectBuilderStageTransition({
         previousStatusKey,
