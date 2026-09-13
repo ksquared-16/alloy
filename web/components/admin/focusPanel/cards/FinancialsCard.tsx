@@ -579,10 +579,14 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 reason: adjustReason,
                 effective_date: adjustEffectiveDate,
             });
+            /*
+             * The action writes a DRAFT charge. What the family owes has not moved yet, and saying
+             * it had would be the one thing this panel must never do.
+             */
             setAdjustNotice(
                 amountCents < 0
-                    ? "Recorded. The family owes less, and the reason is on the record."
-                    : "Recorded. The family owes more, and the reason is on the record.",
+                    ? "Recorded as a draft credit. It lowers what the family owes once it is posted."
+                    : "Recorded as a draft adjustment. It raises what the family owes once it is posted.",
             );
             closeAdjustPanels();
         } catch (e) {
@@ -2118,6 +2122,14 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                 {adjustPreview.changes.map((c) => (
                                     <span key={c}>{c}</span>
                                 ))}
+                                {/*
+                                  * The action's own summary speaks in the present tense. It writes a
+                                  * draft, so the timing is stated here rather than left to be
+                                  * discovered when the balance does not move.
+                                  */}
+                                <span data-testid="adjustment-preview-timing">
+                                    Recorded as a draft — it changes what the family owes once posted.
+                                </span>
                             </div>
                         ) : null}
                         {adjustError ? (

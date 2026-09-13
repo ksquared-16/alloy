@@ -39,6 +39,14 @@ export type AccountReduction = {
     createdAt: string | null;
     /** The charge row this reduction wrote — how it reaches the ledger. */
     chargeId: string | null;
+    /**
+     * The status of that charge: `draft` until somebody posts it.
+     *
+     * This is load-bearing, not decoration. A manual reduction is written as a DRAFT, and a draft is
+     * not owed — so the decision exists and what the family owes has not moved yet. A surface that
+     * showed the amount without the status would be telling an operator the money had changed.
+     */
+    chargeStatus: string | null;
     /** Set once this reduction has been reversed. Its presence is the reverse-once bound. */
     reversedByApplicationId: string | null;
     /** Set on a reversal, naming the reduction it undoes. */
@@ -85,15 +93,19 @@ export async function readAccountReductions(
      * the surface cannot tell a credit from an adjustment, and those are different decisions.
      */
     const categoryByCharge = new Map<string, string>();
+    const statusByCharge = new Map<string, string>();
     if (chargeIds.length > 0) {
         const { data: chargeRows } = await supabase
             .from("charges")
-            .select("id, charge_category")
+            .select("id, charge_category, status")
             .eq("org_id", input.orgId)
             .in("id", chargeIds);
         for (const c of (chargeRows ?? []) as unknown as Row[]) {
             const id = t(c.id);
-            if (id) categoryByCharge.set(id, t(c.charge_category));
+            if (id) {
+                categoryByCharge.set(id, t(c.charge_category));
+                statusByCharge.set(id, t(c.status));
+            }
         }
     }
 
@@ -110,6 +122,7 @@ export async function readAccountReductions(
             periodKey: nullable(r.period_key),
             createdAt: nullable(r.created_at),
             chargeId: nullable(r.charge_id),
+            chargeStatus: statusByCharge.get(t(r.charge_id)) ?? null,
             reversedByApplicationId: nullable(r.reversed_by_id),
             reversesApplicationId: nullable(r.reverses_id),
         }))

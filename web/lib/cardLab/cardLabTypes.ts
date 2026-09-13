@@ -353,6 +353,11 @@ export type FinancialsEvidenceAdjustment = {
     recordedOn: string | null;
     /** Which child's enrolment it was recorded against, when the account has more than one. */
     subjectName: string | null;
+    /**
+     * True once the reduction's charge is posted. A draft is recorded but NOT yet owed — the money
+     * has not moved, and the card must not imply that it has.
+     */
+    applied: boolean;
     /** A reduction already reversed cannot be reversed again. */
     reversed: boolean;
     /** True when this row IS a reversal of an earlier one. */

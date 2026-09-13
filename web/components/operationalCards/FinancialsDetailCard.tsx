@@ -338,8 +338,17 @@ export default function FinancialsDetailCard({
                                     {a.subjectName ? ` · ${a.subjectName}` : ""}
                                 </span>
                                 <span className="alloy-os-billing__line-value">{a.amountLabel}</span>
-                                <span className="alloy-os-fdetail__adjmeta">
-                                    {a.reducesObligation ? "Lowers what is owed" : "Raises what is owed"}
+                                <span className="alloy-os-fdetail__adjmeta" data-adjustment-applied={a.applied ? "true" : "false"}>
+                                    {/*
+                                      * A manual reduction is written as a DRAFT charge, and a draft
+                                      * is not owed. Saying only "lowers what is owed" would tell the
+                                      * operator the money had already moved when it has not.
+                                      */}
+                                    {a.applied
+                                        ? a.reducesObligation ? "Lowers what is owed" : "Raises what is owed"
+                                        : a.reducesObligation
+                                            ? "Recorded — lowers what is owed once posted"
+                                            : "Recorded — raises what is owed once posted"}
                                     {a.recordedOn ? ` · ${a.recordedOn}` : ""}
                                 </span>
                                 {a.reason ? (

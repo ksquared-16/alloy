@@ -314,6 +314,7 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 subjectName: r.customerMemberId
                     ? vm.subjects.find((sub) => sub.customerMemberId === r.customerMemberId)?.displayName ?? null
                     : null,
+                applied: r.chargeStatus === "posted",
                 reversed: r.reversedByApplicationId !== null,
                 isReversal: r.reversesApplicationId !== null,
             })),
