@@ -3429,8 +3429,30 @@ function applyExecuteResult(rec, out, { nowMs, root, actor } = {}) {
   // run; success did not, so a completed governed action left "Waiting on
   // Director" sitting on the record as though it were still true. Seventeen
   // terminal runs were carrying wait text for work that had long since landed.
+  /*
+   * BUT A LIVE WAIT IS NOT A RESOLVED ONE EITHER.
+   *
+   * Clearing unconditionally strands the run: the transition back to EXECUTING
+   * happens later, in resumeLaneAfterGovernedAction, and between these two
+   * moments the run sits in WAITING_RESOURCE with no wait at all.
+   * `waitReasonFor` reads `resource_wait.reason`, finds nothing, and the
+   * Governor fails the run `missing_wait_reason`.
+   *
+   * MEASURED TWICE. erun_f4f9ff73ca8144ce and erun_02e4ebd11a33fead both died
+   * exactly here, on a worktree retirement, ten seconds after entering the wait
+   * — the second one after the wait envelope itself had been repaired, which is
+   * how this half became visible. Push, open_pr and merge survive the same race
+   * only because their resume follows quickly enough.
+   *
+   * So the wait is cleared only once the run is no longer IN it. The resume
+   * path already clears it as part of the transition, which is the one place
+   * that can do both without a window in between.
+   */
   if (rec.run_id) {
-    try { patchRunResourceWait(rec.run_id, null, root); } catch { /* the run may be gone */ }
+    try {
+      const run = getExecutionRun(rec.run_id, root);
+      if (!run || run.state !== "WAITING_RESOURCE") patchRunResourceWait(rec.run_id, null, root);
+    } catch { /* the run may be gone */ }
   }
   emitNotification("governed_action_complete", rec, {
     title: `${rec.title || rec.action_key} complete`,

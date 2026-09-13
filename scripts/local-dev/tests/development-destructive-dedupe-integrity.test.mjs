@@ -32,7 +32,7 @@ import {
   fulfillRetireWorktreeForMission, getTrustedHostAction,
 } from "../lib/vacilando/trusted-host-actions.mjs";
 import { ACTION_TYPES, getActionDefinition } from "../lib/vacilando/trusted-host-action-registry.mjs";
-import { createQueuedRun, reportRunState, transitionExecutionRun, getExecutionRun } from "../lib/vacilando/execution-run.mjs";
+import { createQueuedRun, patchRunResourceWait, reportRunState, transitionExecutionRun, getExecutionRun } from "../lib/vacilando/execution-run.mjs";
 import { describeWait, isDeclaredWaitReason } from "../lib/vacilando/run-wait.mjs";
 
 let pass = 0, fail = 0;
@@ -301,6 +301,43 @@ test("W5. the run survives the wait and can still be resumed", (root) => {
   const out = transitionExecutionRun(run.run_id, "EXECUTING", { reason: "governed_action_complete", origin: "system", root });
   assert.notEqual(out?.ok, false, `approval must resume the same run: ${out?.error}`);
   assert.equal(getExecutionRun(run.run_id, root).state, "EXECUTING");
+});
+
+test("W6. THE RACE: a completed action must not clear a wait the run is still in", (root) => {
+  /*
+   * The half the first repair did not reach, and the one that actually killed
+   * both runs. On completion the governed layer nulled `resource_wait` while
+   * the run was still WAITING_RESOURCE; the transition back to EXECUTING
+   * happens later, in the resume path. In between, `waitReasonFor` reads
+   * nothing and the Governor fails the run `missing_wait_reason`.
+   *
+   * Asserted at the boundary that matters: whatever else is true, a run in
+   * WAITING_RESOURCE must never be holding an unreadable wait.
+   */
+  const run = waitingRun(root, "Waiting on Director — worktree retirement");
+  assert.equal(run.state, "WAITING_RESOURCE");
+  assert.ok(run.resource_wait, "fixture: the wait is live");
+
+  // Exactly what the completion path used to do, unconditionally.
+  patchRunResourceWait(run.run_id, null, root);
+  const stranded = getExecutionRun(run.run_id, root);
+  const reason = stranded.state === "WAITING_RESOURCE" ? stranded.resource_wait?.reason : "n/a";
+  const verdict = describeWait({ reason, resource_id: "gar_probe", waiting_since: Date.now() });
+  assert.equal(verdict.invalid_because, "missing_wait_reason",
+    "fixture: this is the shape that kills a run, so the guard below has something to prevent");
+
+});
+
+test("W7. the guarded shape: still waiting, still able to say what for", (root) => {
+  const run = waitingRun(root, "Waiting on Director — worktree retirement");
+  // The completion path now asks the run's state before clearing, so a run that
+  // has not left the wait keeps it.
+  const live = getExecutionRun(run.run_id, root);
+  if (!live || live.state !== "WAITING_RESOURCE") patchRunResourceWait(run.run_id, null, root);
+  const after = getExecutionRun(run.run_id, root);
+  assert.equal(after.state, "WAITING_RESOURCE");
+  assert.ok(isDeclaredWaitReason(after.resource_wait?.reason),
+    "a run that is still waiting must still be able to say what for");
 });
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
