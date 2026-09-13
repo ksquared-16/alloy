@@ -1,8 +1,24 @@
 /**
- * Warm-on-intent cache for Send Tour Invitation prepare drafts.
+ * Prepare-draft cache for Send Tour Invitation.
  *
- * What's Next warms this on Tour intent so the centered compose host opens with
- * subject/body/link already available instead of blocking on mint + template.
+ * THIS IS NO LONGER WARMED ON HOVER, AND MUST NOT BE.
+ *
+ * `prepare` is not a read. It calls `mintTourInvitation`, which creates a durable tour invitation
+ * and its PUBLIC action tokens — select_tour_slot, view_tour_slots, decline_tour — each an
+ * externally resolvable URL a parent can act on. Warming that on pointer-enter created a real
+ * invitation every time focus crossed the action row, and because `fetchPrepareDraft` minted a
+ * fresh `crypto.randomUUID()` idempotency key per call, the server's own replay dedupe could not
+ * collapse them. It also sent `confirmation: { confirmed: true }` for a capability whose
+ * `confirmationPolicy` is "confirm" — speculation asserting an operator decision nobody made.
+ *
+ * Nothing was lost by moving it behind intent. `useTourInvitationComposeSeed` already called
+ * `provisionTourInvitationPrepare` when the composer opens, so the mint always happened there too;
+ * the hover call only bought its latency. Recipients, thread and channel are still warmed on hover
+ * by the family-workspace prefetch, and the composer chunk is still preloaded.
+ *
+ * The cache stays, and now earns its keep at the other end: the intent path SEEDS it, so reopening
+ * the composer inside the TTL reuses the invitation already minted instead of superseding and
+ * reissuing a second one.
  */
 
 export type TourInvitationPrepareDraft = {
@@ -127,7 +143,21 @@ export async function provisionTourInvitationPrepare(
     }
     const peeked = peekTourInvitationPrepare(key);
     if (peeked?.invitationActionUrl) return peeked;
-    return fetchPrepareDraft(key);
+    /*
+     * Seed the cache with what INTENT minted.
+     *
+     * Reopening the composer inside the TTL must not mint a second invitation. The server treats a
+     * repeated prepare under one key as a replay it cannot re-derive tokens for, so it supersedes
+     * and reissues — correct for a stale offer, wrong for an operator who closed the panel and
+     * opened it again a moment later. Caching the first intent-driven result is what makes reopen
+     * reuse rather than reissue. `forceFresh` (Insert ▾ → Tour Invitation Link) still bypasses this
+     * deliberately, above.
+     */
+    const draft = await fetchPrepareDraft(key);
+    if (draft) {
+        cache.set(key, { promise: Promise.resolve(draft), draft, at: Date.now() });
+    }
+    return draft;
 }
 
 export function peekTourInvitationPrepare(opportunityId: string | null | undefined): TourInvitationPrepareDraft | null {
@@ -154,21 +184,14 @@ export function takeTourInvitationPrepare(opportunityId: string | null | undefin
     return entry.promise;
 }
 
-export function prefetchTourInvitationPrepare(opportunityId: string | null | undefined): void {
-    if (typeof window === "undefined") return;
-    const key = cacheKey(opportunityId ?? "");
-    if (!key) return;
-    const existing = cache.get(key);
-    if (existing && Date.now() - existing.at <= TTL_MS) return;
-    const promise = fetchPrepareDraft(key)
-        .then((draft) => {
-            const cur = cache.get(key);
-            if (cur) cur.draft = draft;
-            return draft;
-        })
-        .catch(() => null);
-    cache.set(key, { promise, draft: null, at: Date.now() });
-}
+/*
+ * `prefetchTourInvitationPrepare` was removed, not disabled.
+ *
+ * It was the speculative entry point into a minting endpoint, and leaving it exported would let the
+ * same defect be reintroduced by any future warmer that reached for the obvious name. The warm
+ * paths now share `speculativeFetch`, which cannot express a POST at all; this function could not
+ * have been written on top of it.
+ */
 
 export function invalidateTourInvitationPrepare(opportunityId: string | null | undefined): void {
     const key = cacheKey(opportunityId ?? "");
