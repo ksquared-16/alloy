@@ -2725,6 +2725,21 @@ export function executeInstallToolkitTrustedHostAction(action, { actor = "direct
     readback_verified: out.readback_verified,
     rollback_target: out.rollback_target,
     gateway_restart_required: out.gateway_restart_required,
+    /*
+     * THE PRODUCER COMPUTED IT AND THIS LIST DROPPED IT.
+     *
+     * `installPromotedToolkit` returns a `convergence` block saying which of
+     * CONVERGENCE_SCHEDULED / CONVERGED applies and that no operator action is
+     * required - added precisely because `gateway_restart_required: true` reads
+     * as "required of you" when the TOOLKIT_DRIFT episode already owns it.
+     *
+     * It never reached a single result, because this is an explicit field list
+     * and nobody added it. I predicted twice that the next install would carry
+     * it and was wrong twice: the cause was never a generation lag, it was an
+     * allowlist one layer up. Third time this exact shape has cost something -
+     * the executor's provenance and the wait envelope were the other two.
+     */
+    convergence: out.convergence ?? null,
     credentialsExposed: false,
   };
   action.completed_at = iso(nowMs);

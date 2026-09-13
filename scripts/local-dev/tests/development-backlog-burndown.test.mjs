@@ -143,5 +143,21 @@ await test("B6. operator_review explains itself where the operator meets it", ()
   assert.match(cli, /state=candidate/, "and what would change it");
 });
 
+await test("B7. the convergence block actually reaches the install result", () => {
+  /*
+   * `installPromotedToolkit` has returned this since yesterday and no result
+   * ever carried it, because the executor builds `action.result` from an
+   * EXPLICIT FIELD LIST. I predicted twice that the next install would show it
+   * and was wrong twice - the cause was an allowlist one layer up, not a
+   * generation lag. The same shape has now cost three things: the executor's
+   * provenance, the wait envelope, and this.
+   */
+  const exec = readFileSync(new URL("../lib/vacilando/trusted-host-actions.mjs", import.meta.url), "utf8");
+  const block = exec.slice(exec.indexOf("installed_sha: out.installed_sha"));
+  const result = block.slice(0, block.indexOf("};"));
+  assert.match(result, /convergence: out\.convergence/, "the install result must carry it");
+  assert.match(result, /gateway_restart_required/, "beside the flag it explains");
+});
+
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
 process.exit(fail ? 1 : 0);
