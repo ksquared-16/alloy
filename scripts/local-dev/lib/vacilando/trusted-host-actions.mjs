@@ -74,6 +74,7 @@ import {
   migrationPostconditionDescription,
   listMigrationsAtSha,
 } from "./trusted-host-migrate.mjs";
+import { buildRegistrationSql } from "./trusted-host-register-application.mjs";
 import {
   PRODUCTION_APPLY_TARGETS,
   validateProductionMigrationInputs,
@@ -748,6 +749,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION) {
     return executeRegisteredReconciliationTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION) {
+    return executeRegisterDeveloperApplicationTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
@@ -2392,6 +2396,137 @@ export function executeSetProviderCeilingTrustedHostAction(action, { actor = "di
     audited_at: out.audited_at,
     credentialsExposed: false,
   }, { nowMs });
+}
+
+/**
+ * Register ONE developer application in a named database.
+ *
+ * The statement is built here from validated values — see
+ * `trusted-host-register-application.mjs` for why a registration takes no query
+ * artifact where a census does. The invariants (ownership mode, duplicate
+ * behaviour, audit row) belong to `public.register_developer_application`; this
+ * function's job is to reach the right database, run one statement, and record
+ * what came back without interpreting it.
+ *
+ * A REFUSAL BY THE FUNCTION IS NOT AN EXECUTION FAILURE. `ok: false` from the
+ * platform function means the platform declined — an unsupported ownership mode,
+ * a conflicting slug — and it arrives as a completed action carrying that code.
+ * Collapsing it into `execution_failed` would tell a lane to retry a decision.
+ */
+export function executeRegisterDeveloperApplicationTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+
+  const i = action.inputs || {};
+  const sql = buildRegistrationSql({
+    slug: i.slug,
+    name: i.name,
+    publisher: i.publisher,
+    ownershipMode: i.ownershipMode,
+    applicationEnvironment: i.applicationEnvironment,
+    distributionMode: i.distributionMode,
+    status: i.status,
+    registeredBy: i.registeredBy || action.id,
+  });
+
+  const tmpDir = join(storeDir(), "tmp");
+  ensureDir(tmpDir);
+  const sqlFile = join(tmpDir, `${action.id}.register.sql`);
+  const outFile = join(tmpDir, `${action.id}.register.out`);
+  const errFile = join(tmpDir, `${action.id}.register.err`);
+  writeFileSync(sqlFile, `${sql};\n`);
+
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.hostProcess = { kind: "trusted-host-register-application" };
+  action.retryState.attempts = (action.retryState.attempts || 0) + 1;
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  try { chmodSync(APPLY_MIGRATION_SH, 0o755); } catch { /* */ }
+  const child = spawnSync("bash", [APPLY_MIGRATION_SH, sqlFile, outFile, errFile, String(i.databaseTarget || "")], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: action.inputs.timeoutMs || 120_000,
+    encoding: "utf8",
+  });
+  const errText = redactSecrets((existsSync(errFile) ? readFileSync(errFile, "utf8") : "") || child.stderr || "");
+  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8").trim() : "";
+  try { unlinkSync(sqlFile); } catch { /* */ }
+
+  const fail = (code, detail) => {
+    action.state = "failed";
+    action.executionState = "failed";
+    action.failureReason = code;
+    action.completed_at = iso(nowMs);
+    action.audit = buildAudit(action, { success: false, failureCode: code });
+    action.updated_at = iso(nowMs);
+    writeAction(action);
+    return { ok: false, error: code, detail: detail ? String(detail).slice(0, 400) : null, action };
+  };
+
+  if (child.status !== 0) {
+    return fail(classifySqlChildFailure(errText, "execution_failed"), errText);
+  }
+
+  let payload = null;
+  for (const line of outText.split("\n").map((l) => l.trim()).filter(Boolean).reverse()) {
+    if (!line.startsWith("{")) continue;
+    try { payload = JSON.parse(line); break; } catch { /* keep looking */ }
+  }
+  if (!payload) return fail("result_parse_failed", outText.slice(0, 200));
+
+  const app = payload.application || {};
+  action.result = {
+    ok: Boolean(payload.ok),
+    code: payload.ok ? null : String(payload.code || "registration_refused"),
+    detail: payload.detail ?? null,
+    duplicate: Boolean(payload.duplicate),
+    application_id: app.id ?? null,
+    application_key: app.slug ?? null,
+    application_status: app.status ?? null,
+    ownership_mode: app.ownership_mode ?? null,
+    application_environment: app.environment ?? null,
+    distribution_mode: app.distribution_mode ?? null,
+    audit_id: payload.audit_id ?? null,
+    database_target: i.databaseTarget ?? null,
+    // Named so a reader never has to infer it from the absence of a field: this
+    // action creates an identity and nothing else.
+    installation_created: false,
+    credential_created: false,
+  };
+  action.state = "completed";
+  action.executionState = "completed";
+  action.completed_at = iso(nowMs);
+  action.audit = buildAudit(action, { success: true, authorizingOperator: authz.authorization?.granted_by || null });
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  return { ok: true, action, result: action.result };
+}
+
+export function fulfillRegisterDeveloperApplicationForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export function fulfillSetProviderCeilingForMission(missionId, {

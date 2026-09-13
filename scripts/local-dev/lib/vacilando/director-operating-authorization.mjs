@@ -319,6 +319,18 @@ export const ACTION_CLASS_INVENTORY = Object.freeze([
     bounds: "Read-only mode, hash pinned by the REQUEST, artifact resolving inside the originating worktree and still matching its hash, SQL statically proven non-mutating, and the target exactly the one the executor will read — all re-measured at decision time by the registry's own validator, never remembered from filing.",
   }),
   Object.freeze({
+    class_id: "platform.register_developer_application", surface: "data",
+    action_key: "platform.register_developer_application", tier: C,
+    executes_via: "operator only",
+    why: "A write into the global application catalog. It creates a software identity that every "
+      + "organization's installation chooser can then offer, so its blast radius is the platform "
+      + "rather than one tenant — and nothing generic can measure whether a given identity SHOULD "
+      + "exist. The mechanical risks are bounded (one row, closed vocabularies, duplicate-safe, "
+      + "no installation and no credential), but 'should this application exist at all' is the "
+      + "judgement, and that is what tier C names.",
+    bounds: null,
+  }),
+  Object.freeze({
     class_id: "database.apply_migration", surface: "data", action_key: "database.apply_migration", tier: C,
     executes_via: "operator only",
     why: "Schema change against a deployed environment. Reversibility depends on the migration's own content, which no generic gate can measure.",

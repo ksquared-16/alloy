@@ -327,6 +327,15 @@ export type ApprovedApplication = {
  * behind it. `alreadyInstalled` exists because the schema allows one installation
  * per application per organization, and an operator should learn that from the
  * chooser rather than from a constraint violation.
+ *
+ * NAMING DEBT, RECORDED RATHER THAN PAPERED OVER. "Approved" has no referent:
+ * `developer_applications.status` is `active | disabled` and there is no approval
+ * state, no reviewer and no lifecycle between them. The eligibility rule below is
+ * the whole rule — `status = 'active'`. The name is left alone deliberately:
+ * renaming it would be cosmetic, and adding the approval lifecycle it implies
+ * would be a product decision nobody has made. Registration
+ * (`platform.register_developer_application`, V1) creates rows `active`, so an
+ * application is offerable the moment it exists.
  */
 export async function listApprovedApplications(
     supabase: SupabaseClient,

@@ -90,6 +90,15 @@ Collection Runtime + Installation Runtime (§02, §03) over the now-real tables.
 Tenant-private applications only. This is the first slice with visible product
 value and it is browser-provable.
 
+> **Corrected 2026-09-13.** "Tenant-private applications only" was never built
+> and does not describe V1. The plan above stands as the record of what was
+> intended; what shipped is a GLOBAL application catalog with no `org_id` and no
+> tenant write path, and V1 registration — added in
+> `platform.register_developer_application` — supports `alloy_managed` only.
+> `tenant_private` is refused by name until an explicit publisher/application
+> ownership model exists, because the schema cannot answer whose private
+> application a row is. See §02 "Registration authority".
+
 ### B-4 — Reads and the reference
 `GET /v1/locations`, `/v1/children`. Public OpenAPI artifact + prebuild guard
 (G-4). Generated reference (§04).

@@ -28,6 +28,7 @@ import {
 import { validateInstallToolkitInputs, CONVERGENCE_REF } from "./toolkit-convergence.mjs";
 import { ALLOWED_ENVIRONMENTS } from "./trusted-host-migrate.mjs";
 import { validateLaneDispatchInputs, DISPATCH_PURPOSES } from "./lane-dispatch.mjs";
+import { validateRegisterDeveloperApplicationInputs } from "./trusted-host-register-application.mjs";
 
 export const ACTION_TYPES = Object.freeze({
   DATABASE_READ_CENSUS: "database.read_census",
@@ -49,6 +50,7 @@ export const ACTION_TYPES = Object.freeze({
   HOST_INSTALL_TOOLKIT: "host.install_toolkit",
   LANE_DISPATCH_MEASUREMENT_INSTRUCTION: "lane.dispatch_measurement_instruction",
   ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION: "environment.execute_registered_reconciliation",
+  PLATFORM_REGISTER_DEVELOPER_APPLICATION: "platform.register_developer_application",
 });
 
 /**
@@ -870,8 +872,40 @@ function defineEnvironmentAssignQaIdentityAccess() {
   };
 }
 
+function definePlatformRegisterDeveloperApplication() {
+  return {
+    actionType: ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION,
+    version: 1,
+    title: "Register one platform developer application",
+    requiredCapability: "trusted_host.database.write",
+    riskClass: "privileged_write",
+    timeoutMs: 120_000,
+    // NOT retried automatically. The function is duplicate-safe — a retry that
+    // asks for the state already on disk succeeds and says `duplicate` — but a
+    // registration is a catalog identity, and re-running one without a person
+    // seeing the first outcome is how two near-identical applications appear.
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["slug", "name", "publisher", "databaseTarget"],
+    },
+    // No artifact. The caller supplies values from closed vocabularies; the
+    // executor owns the statement. There is nothing to hash and no path to any
+    // other table.
+    requiresArtifactRef: false,
+    outputSchema: { resultJson: "object" },
+    evidenceSchema: [
+      "application_id", "application_key", "application_status", "ownership_mode",
+      "application_environment", "distribution_mode", "audit_id", "duplicate", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      return validateRegisterDeveloperApplicationInputs(inputs);
+    },
+  };
+}
+
 const REGISTRY = new Map([
   [ACTION_TYPES.DATABASE_READ_CENSUS, defineDatabaseReadCensus()],
+  [ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION, definePlatformRegisterDeveloperApplication()],
   [ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION, defineEnvironmentRestoreQaSession()],
   [ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION, defineEnvironmentRestoreDeployedQaSession()],
   [ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY, defineEnvironmentProvisionQaIdentity()],
