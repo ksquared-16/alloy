@@ -1,0 +1,45 @@
+{
+  "trusted_host_action_id": "tha_80b78f0b67733c",
+  "query_hash": "a74899525bf86505fc06bad9010a8e12f4ec0a17c5f757cc0762b0e654fa24e8",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-13T16:19:34.411Z",
+    "question_ids": [
+      "q2_app_installations",
+      "q3_app_credentials",
+      "q4_integration_resource_refs",
+      "q6_producer_id_columns"
+    ],
+    "questions": {
+      "q2_app_installations": {
+        "question_id": "q2_app_installations",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "q3_app_credentials": {
+        "question_id": "q3_app_credentials",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "q4_integration_resource_refs": {
+        "question_id": "q4_integration_resource_refs",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "q6_producer_id_columns": {
+        "question_id": "q6_producer_id_columns",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}
