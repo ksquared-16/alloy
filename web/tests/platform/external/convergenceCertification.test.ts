@@ -250,23 +250,25 @@ describe("principal → attendance ingest author", () => {
     it("writes the installation identity column, and never producer_id", async () => {
         const r = await attendanceAuthorForPrincipal(fake.client, principal());
         if (!r.ok) return;
-        expect(evidenceIdentityOf(r.author)).toEqual({ producer_id: null, installation_id: "inst-1" });
+        expect(evidenceIdentityOf(r.author)).toEqual({ installation_id: "inst-1" });
     });
 
-    it("producer_id is never written again, though the column remains for history", () => {
+    it("the evidence shape has one author column, and producer_id is not in it", () => {
         /*
-         * `attendance_integration_events.producer_id` stays in the schema as
-         * historical storage for events legacy producers authored before the
-         * retirement. What changed is that nothing can write it: a production
-         * census found zero legacy producers, so the credential path was removed
-         * rather than left dormant, and the only author left is an installation.
+         * This used to assert `producer_id === null`: the column was still in the
+         * table as historical storage, and writing an explicit NULL kept the
+         * two-author CHECK honest. Migration `20260913160000` dropped the column
+         * after two governed censuses found nothing had ever authored through it,
+         * so the assertion changed from "written NULL" to "not a key at all".
+         * Naming a dropped column in an insert is an error, not a courtesy.
          */
         const r = evidenceIdentityOf({
             kind: "installation", installationId: "inst-9", orgId: ORG_A,
             producerKey: "partner:org-a", label: "partner",
             authority: { producerKey: "partner:org-a", allowedSiteLocationIds: [SITE_A1], grantedPermissionKeys: [] },
         });
-        expect(r.producer_id).toBeNull();
+        expect(Object.keys(r)).toEqual(["installation_id"]);
+        expect("producer_id" in r).toBe(false);
         expect(r.installation_id).toBe("inst-9");
     });
 });

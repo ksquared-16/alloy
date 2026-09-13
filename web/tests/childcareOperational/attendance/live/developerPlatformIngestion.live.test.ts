@@ -218,16 +218,30 @@ describeLive("developer platform attendance ingestion — live", () => {
     }, 120_000);
 
     it("records the author as an installation, never as unattributed", async () => {
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from("attendance_integration_events")
-            .select("installation_id, producer_id, disposition")
+            .select("installation_id, disposition")
             .eq("installation_id", installationId)
             .eq("provider_event_id", `dp-evt-${run}`)
             .limit(1);
-        const row = (data ?? [])[0] as { installation_id: string; producer_id: string | null } | undefined;
+        expect(error, `select failed: ${error?.message}`).toBeNull();
+        const row = (data ?? [])[0] as { installation_id: string } | undefined;
         expect(row?.installation_id).toBe(installationId);
-        // The whole reason 20260911180000 exists.
-        expect(row?.producer_id).toBeNull();
+    }, 120_000);
+
+    it("the event ledger has no producer author column left to write", async () => {
+        /*
+         * This replaces an assertion that `producer_id` came back NULL. Selecting
+         * a dropped column does not return null — PostgREST refuses the whole
+         * request, which made the original test fail for a reason that had
+         * nothing to do with authorship. `20260913160000` dropped the column, so
+         * the invariant to hold is that asking for it is now an error.
+         */
+        const { error } = await supabase
+            .from("attendance_integration_events")
+            .select("producer_id")
+            .limit(1);
+        expect(error, "producer_id is still selectable on the event ledger").not.toBeNull();
     }, 120_000);
 
     it("a replay of the same event id authors no second fact", async () => {

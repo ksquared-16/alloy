@@ -102,6 +102,13 @@ inbox.
 
 ## Bridge disposition
 
+> **Discharged in [14](14-slice-b7-producer-retirement.md).** Everything this
+> section listed as ready-but-not-done was carried out there: `producer_id`
+> and its foreign key dropped, `producerAdministration.ts` and the three
+> producer routes retired, the lock's compatibility allowlist removed, and the
+> three bridge tables dropped. The readiness evidence below is why.
+
+
 **BRIDGE_RETIREMENT_READY**, with one precondition recorded below.
 
 | Evidence | Measurement |

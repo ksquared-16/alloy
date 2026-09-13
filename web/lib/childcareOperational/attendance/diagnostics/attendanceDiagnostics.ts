@@ -184,7 +184,7 @@ export function diagnoseProducer(facts: ProducerFacts): AttendanceDiagnostic[] {
             severity: "blocking",
             title: "This system has been revoked",
             detail: "It can no longer record attendance. Nothing it sends will be accepted.",
-            settingsHref: "/adminV2/settings/attendance-integrations",
+            settingsHref: "/adminV2/settings/organization/integrations",
         });
         return out;
     }
@@ -198,7 +198,7 @@ export function diagnoseProducer(facts: ProducerFacts): AttendanceDiagnostic[] {
             severity: "blocking",
             title: "This system is not allowed to record for this site",
             detail: "Add the site to the list of places this system may record attendance for.",
-            settingsHref: "/adminV2/settings/attendance-integrations",
+            settingsHref: "/adminV2/settings/organization/integrations",
         });
     }
 
@@ -212,7 +212,7 @@ export function diagnoseProducer(facts: ProducerFacts): AttendanceDiagnostic[] {
                 :   `${facts.unresolvedMappingCount} records arrived that could not be matched to a child or room`,
             detail:
                 "The system sent attendance for someone Alloy could not identify. Matching them will let those records be applied.",
-            settingsHref: "/adminV2/settings/attendance-integrations",
+            settingsHref: "/adminV2/settings/organization/integrations",
         });
     }
 
