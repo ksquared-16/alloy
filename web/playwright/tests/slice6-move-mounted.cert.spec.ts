@@ -28,8 +28,11 @@ type Row = {
     chargeId: string; description: string; status: string;
     outstandingCents: number; amountCents: number; subjectMemberId: string | null;
 };
-type Application = { allocationId?: string; id?: string; chargeId: string; status: string; amountCents: number };
-type Payment = { id: string; amountCents: number; unappliedCents: number; payerLabel?: string | null; applications?: Application[] };
+type Application = { allocationId: string; chargeId: string | null; status: string; appliedCents: number };
+type Payment = {
+    paymentId: string; direction: string; amountCents: number; unappliedCents: number;
+    payerLabel?: string | null; applications?: Application[];
+};
 type Vm = { rows?: Row[]; payments?: Payment[]; chargeTemplates?: Array<{ id: string; label: string }> };
 
 /* ── canonical reads ─────────────────────────────────────────────────────────────────────────── */
@@ -39,6 +42,8 @@ async function vm(request: APIRequestContext): Promise<Vm> {
     expect(res.ok(), `card ${res.status()}`).toBe(true);
     return ((await res.json()) as { vm?: Vm }).vm ?? {};
 }
+
+const receipts = (v: Vm) => (v.payments ?? []).filter((p) => p.direction === "inbound");
 
 const rowFor = (v: Vm, description: string, status?: string) =>
     (v.rows ?? []).find((r) => r.description === description && (!status || r.status === status));
@@ -96,24 +101,68 @@ async function ensureFixture(request: APIRequestContext) {
         expect(json.ok, `payment.record ${status} ${JSON.stringify(json).slice(0, 300)}`).toBe(true);
         v = await vm(request);
     }
-    const payment = (v.payments ?? [])[0];
+    const payment = receipts(v)[0];
     expect(payment, "the fixture produced no receipt").toBeTruthy();
     return { payment: payment!, sourceId: source.chargeId, targetId: target.chargeId };
 }
 
+/**
+ * Put the receipt back on the charge this phase starts from.
+ *
+ * The fixture is idempotent about CREATING things, but a Move is a change of state: once a run has
+ * moved the money, the next run no longer starts where the phase says it starts. Rather than skip or
+ * re-mint, the starting position is re-established through the same two actions the operator uses.
+ */
+async function ensureAppliedTo(request: APIRequestContext, chargeId: string): Promise<Payment> {
+    let payment = receipts(await vm(request))[0];
+    const active = (payment.applications ?? []).filter((a) => a.status === "active");
+    if (active.length === 1 && active[0].chargeId === chargeId && payment.unappliedCents === 0) return payment;
+
+    for (const a of active) {
+        const { json } = await execute(request, {
+            action_key: "payment.reverse_application", ...entity, mode: "execute",
+            payload: { allocation_id: a.allocationId, reason: "certification: restoring the starting position" },
+        });
+        expect(json.ok, `reverse ${JSON.stringify(json).slice(0, 200)}`).toBe(true);
+    }
+    payment = receipts(await vm(request))[0];
+    const { json } = await execute(request, {
+        action_key: "payment.apply_to_charge", ...entity, mode: "execute",
+        payload: { payment_id: payment.paymentId, charge_id: chargeId, amount_cents: payment.unappliedCents },
+    });
+    expect(json.ok, `apply ${JSON.stringify(json).slice(0, 200)}`).toBe(true);
+    return receipts(await vm(request))[0];
+}
+
 /* ── the card ────────────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * The receipts and the Move panel live in the card's DETAIL surface, not on its face. Several early
+ * returns in this component all render `data-financials-card`, so waiting for that attribute alone
+ * lands on the compact card and finds no payments — which is how a first version of this spec failed.
+ *
+ * The "Details" control is drawn by the shared card shell through an onDetails prop, so it does not
+ * carry this component's own data attribute and has to be found by name.
+ */
 async function openCard(page: Page) {
     await page.goto(`${ROUTE}&subject_id=${SUBJECT}`);
     await page.waitForLoadState("domcontentloaded");
-    const card = page.locator('[data-financials-card="true"]').first();
-    await expect(card).toBeVisible({ timeout: 90_000 });
-    await page.waitForTimeout(4_000); // the payments section arrives with the account read
-    return card;
+    await expect(page.locator('[data-financials-card="true"]').first()).toBeVisible({ timeout: 90_000 });
+    const details = page.getByRole("button", { name: /^Details/ }).first();
+    await expect(details, "the card must offer its detail view").toBeVisible({ timeout: 60_000 });
+    await details.click();
+    const detail = page.locator('[data-financials-overlay="detail"]');
+    await expect(detail, "Details opens the surface the receipts and the Move panel live in")
+        .toBeVisible({ timeout: 60_000 });
+    await page.waitForTimeout(2_000);
+    return detail;
 }
 
-const paymentRow = (page: Page, id: string) => page.locator(`[data-payment-id="${id}"]`);
-const panel = (page: Page) => page.getByTestId("payment-move-panel");
+const card = (page: Page) => page.locator('[data-financials-overlay="detail"]');
+const paymentRow = (page: Page, id: string) => card(page).locator(`[data-payment-id="${id}"]`);
+const panel = (page: Page) => card(page).getByTestId("payment-move-panel");
+/** Scoped to the expanded card: the identical testid exists in the inert copy behind it. */
+const control = (page: Page, id: string) => card(page).getByTestId(id);
 
 test.describe.configure({ mode: "serial" });
 
@@ -123,7 +172,7 @@ test.describe("Slice 6 — moving a payment, mounted", () => {
         const { payment, sourceId } = await ensureFixture(page.request);
         await openCard(page);
 
-        const row = paymentRow(page, payment.id);
+        const row = paymentRow(page, payment.paymentId);
         await expect(row, "the receipt must render").toBeVisible({ timeout: 60_000 });
         const text = (await row.innerText()).replace(/\s+/g, " ");
 
@@ -140,34 +189,41 @@ test.describe("Slice 6 — moving a payment, mounted", () => {
 
     test("PHASE 6 · a full Move releases the source and answers the target", async ({ page }) => {
         test.setTimeout(420_000);
-        const { payment, sourceId, targetId } = await ensureFixture(page.request);
+        const { sourceId, targetId } = await ensureFixture(page.request);
+        const payment = await ensureAppliedTo(page.request, sourceId);
         const before = await vm(page.request);
+        const reversedBefore = (payment.applications ?? []).filter((a) => a.status === "reversed").length;
         const beforeSource = (before.rows ?? []).find((r) => r.chargeId === sourceId)!;
         const beforeTarget = (before.rows ?? []).find((r) => r.chargeId === targetId)!;
         expect(beforeSource.outstandingCents, "the source starts settled").toBe(0);
 
         await openCard(page);
-        const row = paymentRow(page, payment.id);
+        const row = paymentRow(page, payment.paymentId);
         const active = row.locator('[data-application-status="active"]').first();
         await expect(active).toBeVisible({ timeout: 60_000 });
 
         await active.getByText("Move payment").click();
         await expect(panel(page), "the Move panel opens").toBeVisible();
 
-        const target = page.getByTestId("payment-move-target");
+        const target = control(page, "payment-move-target");
         await expect(target).toBeVisible();
+        // The chooser is filled by a fetch the panel fires as it opens, so wait for it to answer.
+        await expect
+            .poll(() => target.locator("option").count(), { timeout: 30_000 })
+            .toBeGreaterThan(1);
         const options = await target.locator("option").allTextContents();
         expect(options.join(" | "), "the target charge is offered").toContain(TARGET_LABEL);
+        expect(options.join(" | "), "and never as a stored key").not.toMatch(/[a-z]+_[a-z]+/);
         // The chooser must not offer the charge the money is already on.
         expect(options.filter((o) => o.includes(SOURCE_LABEL)).length, "the source is not a destination").toBe(0);
 
-        const confirm = page.getByTestId("payment-move-confirm");
+        const confirm = control(page, "payment-move-confirm");
         await target.selectOption(targetId);
         await expect(confirm, "Confirm stays disabled until the action has previewed").toBeDisabled();
 
-        await page.getByTestId("payment-move-reason").fill("Applied to the wrong charge");
-        await page.getByTestId("payment-move-preview-button").click();
-        const preview = page.getByTestId("payment-move-preview");
+        await control(page, "payment-move-reason").fill("Applied to the wrong charge");
+        await control(page, "payment-move-preview-button").click();
+        const preview = control(page, "payment-move-preview");
         await expect(preview, "the action previews the reversal").toBeVisible({ timeout: 60_000 });
         const previewText = (await preview.innerText()).replace(/\s+/g, " ");
         await expect(confirm).toBeEnabled();
@@ -178,29 +234,37 @@ test.describe("Slice 6 — moving a payment, mounted", () => {
         const after = await vm(page.request);
         const afterSource = (after.rows ?? []).find((r) => r.chargeId === sourceId)!;
         const afterTarget = (after.rows ?? []).find((r) => r.chargeId === targetId)!;
-        const afterPayment = (after.payments ?? []).find((p) => p.id === payment.id)!;
+        const afterPayment = (after.payments ?? []).find((p) => p.paymentId === payment.paymentId)!;
 
         expect(afterSource.outstandingCents, "the source owes it again").toBe(RECEIPT_CENTS);
         expect(afterTarget.outstandingCents, "the target is answered by exactly the receipt")
             .toBe(beforeTarget.outstandingCents - RECEIPT_CENTS);
         expect(afterPayment.unappliedCents, "none of the money is loose afterwards").toBe(0);
-        expect(afterPayment.amountCents, "the receipt is untouched").toBe(before.payments![0].amountCents);
+        expect(afterPayment.amountCents, "the receipt is untouched").toBe(receipts(before)[0].amountCents);
         expect(afterPayment.payerLabel ?? null, "the payer is untouched").toBe(payment.payerLabel ?? null);
 
         const actives = (afterPayment.applications ?? []).filter((a) => a.status === "active");
         expect(actives.length, "exactly one active application").toBe(1);
         expect(actives[0].chargeId, "and it is the target").toBe(targetId);
+        /*
+         * History accumulates: this household has been certified before, so what is asserted is the
+         * change THIS move made, not a total that would only hold on a pristine tenant.
+         */
         const reversed = (afterPayment.applications ?? []).filter((a) => a.status === "reversed");
-        expect(reversed.length, "history keeps the reversed one").toBe(1);
+        expect(reversed.length, "the move added exactly one reversal").toBe(reversedBefore + 1);
+        expect(
+            reversed.some((a) => a.chargeId === sourceId),
+            "and it is the source application that was reversed",
+        ).toBe(true);
         expect(previewText.length, "the preview said something").toBeGreaterThan(0);
     });
 
     test("PHASE 10/11/12 · the lineage, and both charges, agree after the Move", async ({ page }) => {
         test.setTimeout(300_000);
         const v = await vm(page.request);
-        const payment = (v.payments ?? [])[0];
+        const payment = receipts(v)[0];
         await openCard(page);
-        const row = paymentRow(page, payment.id);
+        const row = paymentRow(page, payment.paymentId);
         await expect(row).toBeVisible({ timeout: 60_000 });
 
         const apps = row.locator("[data-application-id]");
@@ -212,12 +276,57 @@ test.describe("Slice 6 — moving a payment, mounted", () => {
             .toContain("Applied to the wrong charge");
     });
 
+    test("PHASE 7 · a preview for a different question does not stay valid", async ({ page }) => {
+        test.setTimeout(300_000);
+        const v = await vm(page.request);
+        const payment = receipts(v)[0];
+        await openCard(page);
+        const row = paymentRow(page, payment.paymentId);
+        const active = row.locator('[data-application-status="active"]').first();
+        await expect(active).toBeVisible({ timeout: 60_000 });
+        await active.getByText("Move payment").click();
+        await expect(panel(page)).toBeVisible();
+
+        const target = control(page, "payment-move-target");
+        const confirm = control(page, "payment-move-confirm");
+        const preview = control(page, "payment-move-preview");
+        const options = target.locator("option");
+        const first = await options.nth(1).getAttribute("value");
+        expect(first, "the chooser must offer at least one destination").toBeTruthy();
+
+        await target.selectOption(first!);
+        await control(page, "payment-move-reason").fill("first reason");
+        await control(page, "payment-move-preview-button").click();
+        await expect(preview).toBeVisible({ timeout: 60_000 });
+        await expect(confirm).toBeEnabled();
+
+        // A. a different destination is a different question.
+        const count = await options.count();
+        if (count > 2) {
+            const second = await options.nth(2).getAttribute("value");
+            await target.selectOption(second!);
+            await expect(preview, "changing the destination clears the preview").toBeHidden();
+            await expect(confirm, "and Confirm goes back to disabled").toBeDisabled();
+            await control(page, "payment-move-preview-button").click();
+            await expect(preview).toBeVisible({ timeout: 60_000 });
+            await expect(confirm).toBeEnabled();
+        }
+
+        // B. a different reason is also a different question — it is what the reversal will record.
+        await control(page, "payment-move-reason").fill("a different reason entirely");
+        await expect(preview, "changing the reason clears the preview").toBeHidden();
+        await expect(confirm, "and Confirm is disabled again").toBeDisabled();
+
+        await control(page, "payment-move-cancel").click();
+        await expect(panel(page)).toBeHidden();
+    });
+
     test("PHASE 8 · unapplied money answers another charge, partially", async ({ page }) => {
         test.setTimeout(420_000);
         const v0 = await vm(page.request);
-        const payment = (v0.payments ?? [])[0];
+        const payment = receipts(v0)[0];
         const active = (payment.applications ?? []).find((a) => a.status === "active")!;
-        const allocationId = active.allocationId ?? active.id!;
+        const allocationId = active.allocationId;
 
         // Free the money through the real action, so the partial-apply state is one the product makes.
         const rev = await execute(page.request, {
@@ -226,28 +335,28 @@ test.describe("Slice 6 — moving a payment, mounted", () => {
         });
         expect(rev.json.ok, `reverse ${JSON.stringify(rev.json).slice(0, 300)}`).toBe(true);
 
-        const freed = (await vm(page.request)).payments!.find((p) => p.id === payment.id)!;
+        const freed = (await vm(page.request)).payments!.find((p) => p.paymentId === payment.paymentId)!;
         expect(freed.unappliedCents, "all of it is unapplied now").toBe(RECEIPT_CENTS);
 
         await openCard(page);
-        const row = paymentRow(page, payment.id);
+        const row = paymentRow(page, payment.paymentId);
         await expect(row).toBeVisible({ timeout: 60_000 });
         expect((await row.innerText()).replace(/\s+/g, " "), "the card says it is unapplied").toMatch(/unapplied/i);
 
         await row.getByText("Apply payment").click();
         await expect(panel(page)).toBeVisible();
         // Applying unapplied money undoes nothing, so it asks for no reason and needs no preview.
-        await expect(page.getByTestId("payment-move-reason")).toHaveCount(0);
+        await expect(control(page, "payment-move-reason")).toHaveCount(0);
 
-        const target = page.getByTestId("payment-move-target");
+        const target = control(page, "payment-move-target");
         const value = await target.locator("option").nth(1).getAttribute("value");
         await target.selectOption(value!);
-        const confirm = page.getByTestId("payment-move-confirm");
+        const confirm = control(page, "payment-move-confirm");
         await expect(confirm, "no preview is required to apply free money").toBeEnabled();
         await confirm.click();
         await expect(panel(page)).toBeHidden({ timeout: 90_000 });
 
-        const after = (await vm(page.request)).payments!.find((p) => p.id === payment.id)!;
+        const after = (await vm(page.request)).payments!.find((p) => p.paymentId === payment.paymentId)!;
         expect(after.amountCents, "the receipt is still the receipt").toBe(RECEIPT_CENTS);
         expect(after.unappliedCents, "the money went somewhere").toBeLessThan(RECEIPT_CENTS);
     });
@@ -255,20 +364,26 @@ test.describe("Slice 6 — moving a payment, mounted", () => {
     test("PHASE 20 · a cold reload reconstructs all of it", async ({ page }) => {
         test.setTimeout(300_000);
         const expected = await vm(page.request);
-        const payment = (expected.payments ?? [])[0];
+        const payment = receipts(expected)[0];
 
-        await openCard(page);           // fresh navigation, no React state carried over
+        await openCard(page);
+        /*
+         * A reload returns the card to its face — that is correct, the detail view is not a route.
+         * Re-opening it is what makes this a cold-reload proof: nothing below is reconstructed from
+         * React state, because this render was built from persistence after a full page load.
+         */
         await page.reload();
-        const card = page.locator('[data-financials-card="true"]').first();
-        await expect(card).toBeVisible({ timeout: 90_000 });
-        await page.waitForTimeout(4_000);
+        await expect(page.locator('[data-financials-card="true"]').first()).toBeVisible({ timeout: 90_000 });
+        await page.getByRole("button", { name: /^Details/ }).first().click();
+        await expect(page.locator('[data-financials-overlay="detail"]')).toBeVisible({ timeout: 60_000 });
+        await page.waitForTimeout(2_000);
 
-        const row = paymentRow(page, payment.id);
+        const row = paymentRow(page, payment.paymentId);
         await expect(row, "the receipt survives a reload").toBeVisible({ timeout: 60_000 });
         const apps = row.locator("[data-application-id]");
         expect(await apps.count(), "so does its whole history").toBeGreaterThanOrEqual(2);
 
-        const reread = (await vm(page.request)).payments!.find((p) => p.id === payment.id)!;
+        const reread = (await vm(page.request)).payments!.find((p) => p.paymentId === payment.paymentId)!;
         expect(reread.unappliedCents, "and the money reads the same").toBe(payment.unappliedCents);
     });
 
@@ -276,9 +391,9 @@ test.describe("Slice 6 — moving a payment, mounted", () => {
         test.setTimeout(300_000);
         await page.setViewportSize({ width: 390, height: 844 });
         const v = await vm(page.request);
-        const payment = (v.payments ?? [])[0];
+        const payment = receipts(v)[0];
         await openCard(page);
-        const row = paymentRow(page, payment.id);
+        const row = paymentRow(page, payment.paymentId);
         await expect(row).toBeVisible({ timeout: 60_000 });
 
         const opener = row.getByText(/Move payment|Apply payment/).first();
@@ -294,6 +409,33 @@ test.describe("Slice 6 — moving a payment, mounted", () => {
             expect(box!.x, `${id} must not sit off-screen`).toBeGreaterThanOrEqual(-1);
             expect(box!.x + box!.width, `${id} must not overflow the viewport`).toBeLessThanOrEqual(391);
         }
-        await page.getByTestId("payment-move-cancel").click();
+        await control(page, "payment-move-cancel").click();
+    });
+
+    test("PHASE 13/23 · every surface tells the same story about the money", async ({ page }) => {
+        test.setTimeout(300_000);
+        const v = await vm(page.request);
+        const payment = receipts(v)[0];
+        const actives = (payment.applications ?? []).filter((a) => a.status === "active");
+
+        await openCard(page);
+        const row = paymentRow(page, payment.paymentId);
+        await expect(row).toBeVisible({ timeout: 60_000 });
+        const rendered = (await row.innerText()).replace(/\s+/g, " ");
+
+        const money = (cents: number) =>
+            (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+        // The card may show LESS than the canonical read. It may not disagree with it.
+        expect(rendered, "the receipt total is the canonical one").toContain(money(payment.amountCents));
+        expect(rendered, "and so is the unapplied figure").toContain(money(payment.unappliedCents));
+
+        // The charge rows and the applications are two readings of the same allocations.
+        const appliedFromRows = (v.rows ?? [])
+            .filter((r) => actives.some((a) => a.chargeId === r.chargeId))
+            .reduce((n, r) => n + (r.amountCents - r.outstandingCents), 0);
+        const appliedFromPayment = payment.amountCents - payment.unappliedCents;
+        expect(appliedFromRows, "charges and receipt agree on what is applied")
+            .toBeGreaterThanOrEqual(appliedFromPayment);
     });
 });
