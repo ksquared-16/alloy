@@ -308,12 +308,14 @@ must_fail "P14 · an application cannot be deleted" \
     "delete from payment_allocations where payment_id='$PAY_REF'" "is not deletable"
 
 REFUND="$(q "insert into payments (org_id, job_id, customer_id, billable_source_type, billable_source_id,
-              refunds_payment_id, amount_cents, currency, status, direction, payment_method,
-              received_at, posted_at, metadata, created_by, updated_by)
+              refunds_payment_id, reversal_origin, amount_cents, currency, status, direction,
+              payment_method, received_at, posted_at, metadata, created_by, updated_by)
             values ('$ORG', null, '$HOUSEHOLD', 'enrollment_agreement', '$AGREEMENT', '$PAY_REF',
-                    70000, 'USD', 'posted', 'outbound', 'check', now(), now(), '{}'::jsonb,
+                    'operator', 70000, 'USD', 'posted', 'outbound', 'check', now(), now(), '{}'::jsonb,
                     '$ACTOR', '$ACTOR') returning id")"
-if [ -z "$REFUND" ]; then bad "could not record a refund"; else
+if ! printf '%s' "$REFUND" | grep -Eq '^[0-9a-f-]{36}$'; then
+    bad "could not record a refund: $REFUND"
+else
     ok "refund $REFUND persisted with lineage to $PAY_REF"
     must_eq "P12 · the receipt still reads exactly as received" \
         "select (amount_cents=70000 and direction='inbound' and status='posted')::text
@@ -327,16 +329,16 @@ if [ -z "$REFUND" ]; then bad "could not record a refund"; else
 
     must_fail "P13 · refunding more than was received is refused" \
         "insert into payments (org_id, job_id, customer_id, billable_source_type, billable_source_id,
-           refunds_payment_id, amount_cents, currency, status, direction, payment_method, received_at,
-           posted_at, metadata)
-         values ('$ORG', null, '$HOUSEHOLD', 'enrollment_agreement', '$AGREEMENT', '$PAY_REF', 1,
+           refunds_payment_id, reversal_origin, amount_cents, currency, status, direction,
+           payment_method, received_at, posted_at, metadata)
+         values ('$ORG', null, '$HOUSEHOLD', 'enrollment_agreement', '$AGREEMENT', '$PAY_REF', 'operator', 1,
                  'USD', 'posted', 'outbound', 'check', now(), now(), '{}'::jsonb)" \
         "would exceed the"
     must_fail "P13 · a refund cannot itself be refunded" \
         "insert into payments (org_id, job_id, customer_id, billable_source_type, billable_source_id,
-           refunds_payment_id, amount_cents, currency, status, direction, payment_method, received_at,
-           posted_at, metadata)
-         values ('$ORG', null, '$HOUSEHOLD', 'enrollment_agreement', '$AGREEMENT', '$REFUND', 1,
+           refunds_payment_id, reversal_origin, amount_cents, currency, status, direction,
+           payment_method, received_at, posted_at, metadata)
+         values ('$ORG', null, '$HOUSEHOLD', 'enrollment_agreement', '$AGREEMENT', '$REFUND', 'operator', 1,
                  'USD', 'posted', 'outbound', 'check', now(), now(), '{}'::jsonb)" \
         "is itself a refund"
 fi
