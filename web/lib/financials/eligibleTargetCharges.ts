@@ -21,6 +21,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveBillableSourceHouseholdId } from "@/lib/financials/billableSourceHousehold";
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { readChargeBalance } from "@/lib/financials/childcarePaymentService";
+import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 
 export type EligibleTargetCharge = {
     chargeId: string;
@@ -34,6 +35,7 @@ export type EligibleTargetCharge = {
 
 type ChargeCandidate = {
     id: string;
+    charge_template_id: string | null;
     billable_source_type: string | null;
     billable_source_id: string | null;
     charge_category: string | null;
@@ -42,12 +44,37 @@ type ChargeCandidate = {
     status: string;
 };
 
-/** A readable name for a charge, preferring what the charge itself says it is. */
-function labelFor(row: ChargeCandidate): string {
+/**
+ * A readable name for a charge, preferring what the charge itself says it is.
+ *
+ * NO STORED KEYS ON SCREEN. A template-created charge carries no description, so the label falls
+ * back to the stored category — and that value is a key. Mounted certification found the chooser
+ * offering `registration_fee` to an operator deciding where money goes.
+ *
+ * The declared vocabulary answers first. It is not enough on its own: the category actually stored
+ * on that charge was `registration_fee`, which is not in the vocabulary at all, so looking it up
+ * returns the key unchanged. Anything the vocabulary does not know is therefore humanised rather
+ * than passed through, which is the difference between a chooser that always reads as language and
+ * one that reads as language only for the categories somebody remembered to enumerate.
+ */
+function labelFor(row: ChargeCandidate, labelByTemplateId: Map<string, string>): string {
+    /*
+     * `writeTemplateDraftCharge` stores `description: intent.templateKey`, so a template-created
+     * charge's stored description is an internal key like `registration_fee`. The tenant already
+     * named that template, and the card's read model resolves the same way — without this join the
+     * chooser is the one surface in the product that shows the key.
+     */
+    const templateId = typeof row.charge_template_id === "string" ? row.charge_template_id.trim() : "";
+    const configured = templateId ? (labelByTemplateId.get(templateId) ?? "").trim() : "";
+    if (configured) return configured;
     const described = typeof row.description === "string" ? row.description.trim() : "";
     if (described) return described;
     const category = typeof row.charge_category === "string" ? row.charge_category.trim() : "";
-    return category || "Charge";
+    if (!category) return "Charge";
+    const known = chargeCategoryLabel(category);
+    if (known !== category) return known;
+    const words = category.replace(/[_-]+/g, " ").trim();
+    return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Charge";
 }
 
 /**
@@ -87,14 +114,17 @@ export async function resolveEligibleTargetCharges(
 
     const { data: chargeRows, error: chargeError } = await supabase
         .from("charges")
-        .select("id, billable_source_type, billable_source_id, charge_category, description, service_date, status")
+        .select(
+            "id, charge_template_id, billable_source_type, billable_source_id, charge_category, "
+            + "description, service_date, status",
+        )
         .eq("org_id", orgId)
         .eq("status", "posted")
         .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES]);
     if (chargeError) return [];
 
     const exclude = new Set((input.excludeChargeIds ?? []).map((id) => id.trim()).filter(Boolean));
-    const candidates = ((chargeRows ?? []) as ChargeCandidate[]).filter((c) => !exclude.has(c.id));
+    const candidates = ((chargeRows ?? []) as unknown as ChargeCandidate[]).filter((c) => !exclude.has(c.id));
 
     /*
      * Household first, balance second. `resolveBillableSourceHouseholdId` is memoised per source here
@@ -119,6 +149,27 @@ export async function resolveEligibleTargetCharges(
         if (householdBySource.get(key) === household) mine.push(c);
     }
 
+    /*
+     * The labels the tenant configured, in ONE lookup for the whole chooser rather than one per
+     * charge. Deliberately not restricted to active templates: retiring a template does not rename
+     * the charges it already created, and falling back to the stored description there would put
+     * the key back on screen for exactly the charges whose history is oldest.
+     */
+    const templateIds = [...new Set(mine.map((c) => (c.charge_template_id ?? "").trim()).filter(Boolean))];
+    const labelByTemplateId = new Map<string, string>();
+    if (templateIds.length) {
+        const { data: templateRows } = await supabase
+            .from("financial_charge_templates")
+            .select("id, label")
+            .eq("org_id", orgId)
+            .in("id", templateIds);
+        for (const row of (templateRows ?? []) as Array<{ id?: string; label?: string | null }>) {
+            const id = typeof row?.id === "string" ? row.id : "";
+            const label = typeof row?.label === "string" ? row.label.trim() : "";
+            if (id && label) labelByTemplateId.set(id, label);
+        }
+    }
+
     const eligible: EligibleTargetCharge[] = [];
     for (const c of mine) {
         const balance = await readChargeBalance(supabase, orgId, c.id);
@@ -126,7 +177,7 @@ export async function resolveEligibleTargetCharges(
         if (balance.outstandingCents <= 0) continue;
         eligible.push({
             chargeId: c.id,
-            label: labelFor(c),
+            label: labelFor(c, labelByTemplateId),
             serviceDate: c.service_date,
             outstandingCents: balance.outstandingCents,
             billableSourceType: c.billable_source_type ?? "",
