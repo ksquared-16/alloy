@@ -1021,6 +1021,29 @@ function waitReasonFor(run) {
  * `needs_operator_input` — the single deliberate human_indefinite reason — is
  * held for ever here exactly as the table says, and never collected.
  */
+/**
+ * What to tell a person when the governor collected a wait.
+ *
+ * A reason nobody declared is not named in operator copy - "waited on null" is
+ * worse than saying nothing, because it looks like a value rather than a gap.
+ */
+export function waitCollectionSummary(descriptor = {}) {
+  const OWNERS = {
+    needs_operator_input: "an operator decision",
+    waiting_for_agent_session: "a provider session",
+    waiting_for_provider_capacity: "provider capacity",
+    waiting_for_execution_capacity: "execution capacity",
+    waiting_for_validation_capacity: "validation capacity",
+    provider_provisioning: "a provider starting up",
+    provider_prompt_block: "a provider prompt only a person can clear",
+    recovering: "session recovery",
+  };
+  const what = OWNERS[String(descriptor?.reason || "")] || null;
+  return what
+    ? `The run waited on ${what} for longer than allowed and was stopped. It never reached a provider.`
+    : "The run waited longer than allowed and was stopped. It never reached a provider.";
+}
+
 export function reconcileExpiredRunWaits({
   root,
   nowMs = Date.now(),
@@ -1063,7 +1086,18 @@ export function reconcileExpiredRunWaits({
           nowMs,
           root,
           completion_report: {
-            summary: `The run waited on ${descriptor.reason} past its ${descriptor.bound_policy} bound and was collected by the governor. It never reached a provider.`,
+            /*
+             * OPERATOR COPY, NOT THE STATE MACHINE TALKING TO ITSELF.
+             *
+             * This interpolated `descriptor.reason` raw. When the reason was
+             * missing it reached the operator as "The run waited on null", and
+             * when it was a caption, "The run waited on Waiting on Director...".
+             * Both were shown as a completed lane's CURRENT summary.
+             *
+             * It now says what happened in words a person can act on, and the
+             * machine detail stays in the evidence travelling beside it.
+             */
+            summary: waitCollectionSummary(descriptor),
           },
           // The wait descriptor travels onto the terminal run as evidence, so
           // the reason it was collected outlives the sweep that collected it.

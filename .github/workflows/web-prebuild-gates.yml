@@ -125,3 +125,9 @@ jobs:
       - name: Operating report determinism
         working-directory: .
         run: node scripts/local-dev/tests/development-operating-report.test.mjs
+      # "Needs you" means the operator actually has something to do. A badge
+      # that is sometimes wrong is a badge that gets checked every time and
+      # trusted none of the time.
+      - name: Operator state language
+        working-directory: .
+        run: node scripts/local-dev/tests/development-operator-state-language.test.mjs
