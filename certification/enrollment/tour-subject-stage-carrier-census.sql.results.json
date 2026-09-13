@@ -1,0 +1,29 @@
+{
+  "trusted_host_action_id": "tha_69be1ca2ff7c2b",
+  "query_hash": "91fb6a453d1574b976f51219f26864b3d89c26096f67209ff80349f05bc640d7",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-13T02:43:50.839Z",
+    "question_ids": [
+      "q1_opportunity",
+      "q3_open_work"
+    ],
+    "questions": {
+      "q1_opportunity": {
+        "question_id": "q1_opportunity",
+        "row_count": null,
+        "rows": [
+          "id=8baf8418-654d-41dc-9779-1c8c44198e41 | status_key=open | metadata={\"tour_date\": \"2026-09-14\", \"tour_time\": \"09:00\"}"
+        ]
+      },
+      "q3_open_work": {
+        "question_id": "q3_open_work",
+        "row_count": null,
+        "rows": [
+          "id=560a8c1c-1fe2-4489-9f14-58c78a06cb9d | title=Conduct Tour | status=open | metadata={\"shape\": \"task\", \"category\": \"other\", \"provenance\": {\"source\": \"lifecycle_template\", \"idempotency_key\": \"lifecycle_intent:93667019-bd28-49b5-a688-acc9bb1e0a19:8baf8418-654d-41dc-9779-1c8c44198e41:tour:work_3\", \"created_by_user_id\": \"a92a0f18-6efb-40d0-b74f-52708e96fb03\"}, \"attempt_count\": 0, \"department_id\": \"3933ac47-077a-4de8-aaac-8aed48d80413\", \"work_intent_key\": \"work_3\", \"context_snapshot\": {\"lifecycle_stage_key\": \"tour\"}, \"lifecycle_stage_key\": \"tour\", \"subject_fingerprint\": \"93667019-bd28-49b5-a688-acc9bb1e0a19:opportunities:8baf8418-654d-41dc-9779-1c8c44198e41:stage:tour\", \"work_definition_key\": \"manual_ad_hoc\", \"lifecycle_provenance\": \"lifecycle_template\", \"bp_runtime_fingerprint\": \"bpw:93667019-bd28-49b5-a688-acc9bb1e0a19:opportunities:8baf8418-654d-41dc-9779-1c8c44198e41:manual_ad_hoc\", \"work_framework_version\": 1, \"operating_plan_template\": true, \"operating_plan_template_key\": \"work_3\"}"
+        ]
+      }
+    },
+    "row_count": 2
+  }
+}
