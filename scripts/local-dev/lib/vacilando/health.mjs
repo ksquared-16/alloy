@@ -804,8 +804,13 @@ export function checkLanesConsistency({ lanes = [], seats = [] }) {
  * They stay VISIBLE, named by what they are. They stop being blocking.
  */
 const SELF_RESOLVING_BASELINE = Object.freeze({
+  // lane.bootstrap's vocabulary.
   "branch:drift": "SELF_HEALING",
   "worktree:lane_slot_unregistered": "IDLE_BY_DESIGN",
+  // lane.freshness states the same two facts in its own words, one layer up.
+  // Both spellings live here so the two checks can never disagree about whether
+  // a condition is the operator's problem.
+  "lane_slot_unregistered": "IDLE_BY_DESIGN",
 });
 
 function classifyBaselineGap(reason) {
@@ -885,9 +890,40 @@ export function checkLaneFreshness({ inventory = null }) {
   if (!inventory) return incompleteFinding("lane.freshness", "no freshness inventory available");
   const rows = Array.isArray(inventory.rows) ? inventory.rows : [];
   const unresolved = rows.filter((r) => r.state === "UNRESOLVED_BOOTSTRAP");
+  /*
+   * THE SAME THREE LANES, ONE LAYER UP.
+   *
+   * lane.bootstrap stopped reporting branch drift and a slotless managed lane as
+   * operator problems, because promoted doctrine handles both. lane.freshness
+   * was still calling the identical three lanes a problem in its own vocabulary,
+   * so the false alarm simply moved checks. Its verdict already carries the
+   * underlying reasons — `unresolved` for the contract gaps, `reason` for the
+   * unresolvable-worktree case — so the same table classifies both without the
+   * producer changing at all.
+   *
+   * A row whose gaps are ALL self-resolving is not blocking. One real gap among
+   * them still is.
+   */
+  const rowGaps = (r) => {
+    /*
+     * `bootstrap_unresolved` is the WRAPPER, not a gap — it means "see the list".
+     * Counting it as a reason of its own would classify every row with a list as
+     * blocking, whatever the list actually said.
+     */
+    if (Array.isArray(r.unresolved) && r.unresolved.length) return r.unresolved;
+    return r.reason ? [r.reason] : [];
+  };
+  const selfResolvingRow = (r) => {
+    const gaps = rowGaps(r);
+    return gaps.length > 0 && gaps.every((x) => classifyBaselineGap(x) !== "ACTION_REQUIRED");
+  };
+  const blockingUnresolved = unresolved.filter((r) => !selfResolvingRow(r));
+  const selfResolving = unresolved.filter(selfResolvingRow);
   const stale = rows.filter((r) => r.state === "STALE_SAFE_TO_RECONCILE");
   const blocked = rows.filter((r) => String(r.state).startsWith("BLOCKED"));
-  const sev = unresolved.length ? "problem" : (stale.length || blocked.length) ? "watch" : "healthy";
+  const sev = blockingUnresolved.length
+    ? "problem"
+    : (stale.length || blocked.length || selfResolving.length) ? "watch" : "healthy";
   const worst = [...stale].sort((a, b) => (b.behind || 0) - (a.behind || 0))[0];
   return finding({
     check: "lane.freshness",
@@ -896,6 +932,8 @@ export function checkLaneFreshness({ inventory = null }) {
     measurements: {
       lanes: rows.length,
       unresolved: unresolved.length,
+      blocking: blockingUnresolved.length,
+      self_resolving: selfResolving.length,
       stale: stale.length,
       blocked: blocked.length,
       max_behind: rows.reduce((m, r) => Math.max(m, Number(r.behind) || 0), 0),
@@ -903,11 +941,15 @@ export function checkLaneFreshness({ inventory = null }) {
       recent_hours: inventory.policy?.recent_hours ?? null,
     },
     evidence: [
-      ...unresolved.map((r) => `${r.name || r.lane_id}: ${r.reason || "baseline unresolved"}`),
+      ...blockingUnresolved.map((r) => `${r.name || r.lane_id}: ${r.reason || "baseline unresolved"}`),
+      ...selfResolving.map((r) => {
+        const gaps = rowGaps(r);
+        return `${r.name || r.lane_id}: ${gaps.join(", ")} (${classifyBaselineGap(gaps[0])})`;
+      }),
       ...stale.slice(0, 6).map((r) => `${r.name || r.lane_id}: ${r.behind} behind ${r.base || "staging"} — safe to reconcile`),
       ...blocked.slice(0, 6).map((r) => `${r.name || r.lane_id}: ${r.state} (${r.reason || ""})`),
     ],
-    explanation: unresolved.length
+    explanation: blockingUnresolved.length
       ? "A lane cannot resolve its baseline, so it is not equally capable of the work any lane should be able to do."
       : stale.length
         ? `The furthest-behind lane is ${worst?.behind ?? "?"} commits from staging and can be reconciled safely.`
