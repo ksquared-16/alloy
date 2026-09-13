@@ -11,25 +11,17 @@
  * `attendance_integration_events.producer_id` still references the producer
  * table for events authored before the retirement.
  *
- * ── WHAT THIS LOCK ACTUALLY PROTECTS ──
+ * ── WHAT THIS LOCK PROTECTS ──
  *
- * Retired means no production code resolves AUTHORITY from these tables and no
- * ingestion path reads them. It does not mean the rows became invisible.
+ * Retired means no production code resolves authority from these tables, reads
+ * them, or writes them. There are no exceptions.
  *
- * Attendance Thread 8 shipped an operator surface over the same tables while
- * this slice was retiring the authority — the two landed in parallel and met
- * here. Deleting that surface to make this lock pass would destroy a shipped
- * Attendance feature to satisfy a Developer Platform invariant, and reading it
- * as a violation would be wrong anyway: listing the rows an operator must
- * convert is the opposite of authorizing a write with them.
- *
- * So the surface is allowlisted BY PATH below, narrowly, with its own reason.
- * Everything else — and in particular anything on the ingestion or authority
- * path — still fails this test.
- *
- * The allowlist is temporary by construction. It disappears with the tables in
- * the producer→installation conversion slice, which must retire this surface
- * and `attendance_integration_events.producer_id` in the same change.
+ * There used to be one. Attendance Thread 8 shipped an operator surface over the
+ * same tables while this thread retired their authority, and the lock carried a
+ * four-path allowlist so that neither side had to be deleted to make the other
+ * pass. The producer/bridge retirement slice removed that surface and dropped the
+ * tables, so the exception went with it. A lock with no exceptions is the end
+ * state this was always heading toward.
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -38,23 +30,6 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-
-/**
- * The operator-facing administration of the legacy rows, which is not authority.
- * `producerAdministration.ts` is read-only; the two site routes write, and may,
- * because a site cannot be attached to a producer that does not exist — and the
- * deployed primary holds zero producers. The surface can display and drain the
- * legacy model; it cannot repopulate it.
- *
- * Exact paths, never a prefix: a directory rule would silently absorb a future
- * file that does resolve authority.
- */
-const ADMINISTRATION_ALLOWLIST = new Set([
-    "lib/childcareOperational/attendance/integration/producerAdministration.ts",
-    "app/api/admin/attendance/producers/route.ts",
-    "app/api/admin/attendance/producers/[producerId]/route.ts",
-    "app/api/admin/attendance/producers/[producerId]/sites/route.ts",
-]);
 
 const LEGACY_TABLES = [
     "attendance_integration_producers",
@@ -87,8 +62,6 @@ describe("the legacy Attendance integration authority is retired", () => {
          */
         const offenders: string[] = [];
         for (const file of productionFiles()) {
-            const rel = path.relative(webRoot, file).split(path.sep).join("/");
-            if (ADMINISTRATION_ALLOWLIST.has(rel)) continue;
             const src = readFileSync(file, "utf8");
             for (const table of LEGACY_TABLES) {
                 const access = new RegExp(String.raw`(?:\.from|\.rpc)\(\s*["'\`]${table}["'\`]|INSERT\s+INTO\s+\w*\.?${table}|UPDATE\s+\w*\.?${table}|FROM\s+\w*\.?${table}\b`, "i");
@@ -98,30 +71,22 @@ describe("the legacy Attendance integration authority is retired", () => {
         expect(offenders, `legacy table access returned to production code:\n${offenders.join("\n")}`).toEqual([]);
     });
 
-    it("every administration exception names a file that still exists", () => {
+    it("no production module writes producer_id", () => {
         /*
-         * A dead entry is worse than no entry: it looks like a considered
-         * exception while protecting nothing, and it would silently absorb a
-         * future file that happened to take the same path.
+         * `attendance_integration_events.producer_id` was dropped in
+         * `20260913160000`. Naming it in an insert or update is now a runtime
+         * error rather than a harmless NULL, and the foreign key that used to
+         * make a bad write fail loudly is gone with it. This is what replaces it.
          */
-        const present = new Set(
-            productionFiles().map((f) => path.relative(webRoot, f).split(path.sep).join("/")),
-        );
-        const stale = [...ADMINISTRATION_ALLOWLIST].filter((rel) => !present.has(rel));
-        expect(stale, `allowlisted files no longer exist:\n${stale.join("\n")}`).toEqual([]);
-    });
-
-    it("the ingestion and authority path is never allowlisted", () => {
-        // The exception exists for operator administration. If it ever covers
-        // the seam itself, the lock has been turned off rather than narrowed.
-        const protectedPaths = [
-            "lib/childcareOperational/attendance/integration/ingestExternalAttendance.ts",
-            "lib/childcareOperational/attendance/integration/attendanceIngestAuthor.ts",
-            "lib/platform/principal/attendanceAuthorityAdapter.ts",
-        ];
-        for (const p of protectedPaths) {
-            expect(ADMINISTRATION_ALLOWLIST.has(p), `${p} must never be allowlisted`).toBe(false);
+        const offenders: string[] = [];
+        for (const file of productionFiles()) {
+            const src = readFileSync(file, "utf8");
+            // A key in an object literal, not the name in prose explaining the drop.
+            if (/(?<!\/\/.*)\bproducer_id\s*:/.test(src)) {
+                offenders.push(path.relative(webRoot, file));
+            }
         }
+        expect(offenders, `producer_id is written again in:\n${offenders.join("\n")}`).toEqual([]);
     });
 
     it("the legacy credential resolver and mapping resolver are gone", () => {

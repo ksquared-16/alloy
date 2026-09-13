@@ -261,13 +261,14 @@ export async function ingestExternalAttendanceEvent(params: {
     /*
      * THE MAPPING RESOLVED A UUID. IT DID NOT PROVE A CHILD.
      *
-     * `attendance_integration_mappings.child_customer_member_id` is a foreign key
-     * into `customer_members`, and that household table holds adults too. A
-     * provider that maps a parent's badge — deliberately or by an operator's
-     * honest mistake at mapping time — would otherwise produce a canonical
-     * attendance fact saying a CHILD was present because an ADULT moved.
+     * `integration_resource_refs.child_customer_member_id` is a foreign key into
+     * `customer_members`, and that household table holds adults too. An
+     * installation whose reference names a parent's badge — deliberately or by an
+     * operator's honest mistake when the reference was created — would otherwise
+     * produce a canonical attendance fact saying a CHILD was present because an
+     * ADULT moved.
      *
-     * The provider's own `entity_type = "child"` is not evidence of this: it
+     * The installation's own `resource_type = "child"` is not evidence of this: it
      * describes what the provider believes its identifier means, and the entire
      * point of the boundary is that the provider does not get to describe Alloy's
      * subjects. So the canonical resolver decides, and it fails closed.
@@ -383,8 +384,8 @@ async function upsertEvidence(
         provider_event_id: args.event.externalEventId,
         provider_event_type: args.event.eventKind,
         org_id: args.author.orgId,
-        // Exactly one of producer_id / installation_id is set; the table carries
-        // a CHECK saying so, and each has its own partial unique index.
+        // One author column, with its own partial unique index. The CHECK that
+        // used to police two of them went with `producer_id` in 20260913160000.
         ...evidenceIdentityOf(args.author),
         presented_producer_key: args.author.producerKey,
         disposition: args.disposition,

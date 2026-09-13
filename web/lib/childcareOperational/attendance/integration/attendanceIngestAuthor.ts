@@ -48,16 +48,15 @@ export type AttendanceIngestAuthor = {
 /**
  * The columns that identify an author on an evidence row.
  *
- * `producer_id` is written NULL and stays in the shape deliberately: the table
- * keeps it as historical storage for events legacy producers authored before the
- * retirement, and the CHECK that only one author is ever set still holds. What
- * changed is that nothing can write it again.
+ * There is one author column. `producer_id` was carried here as an explicit NULL
+ * for as long as the column existed, so that the two-author CHECK kept holding
+ * while nothing could write the second one. Migration `20260913160000` dropped
+ * the column, so naming it here would now be an error rather than a courtesy.
  */
 export function evidenceIdentityOf(author: AttendanceIngestAuthor): {
-    producer_id: string | null;
     installation_id: string | null;
 } {
-    return { producer_id: null, installation_id: author.installationId };
+    return { installation_id: author.installationId };
 }
 
 export type CorrelationResult =

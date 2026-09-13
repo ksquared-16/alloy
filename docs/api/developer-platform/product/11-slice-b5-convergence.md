@@ -7,6 +7,14 @@ supersedes: []
 
 # 11 — Slice B.5 Gate 1: integration convergence
 
+> **The bridge disposition in this document is historical.** B.5 left the three
+> producer tables in place as COMPATIBILITY_ONLY with recorded removal
+> triggers, and planned a per-org conversion before retiring them. The
+> triggers were later satisfied vacuously — two governed censuses found zero
+> rows — so the conversion was never needed and the tables were dropped in
+> [14](14-slice-b7-producer-retirement.md). G-14 is closed, not reduced.
+> Everything below stands as the record of what was true in B.5.
+
 **Status: PARTIAL.** Gate 1 is built and certified as far as this lane can prove.
 Gate 2 (the Integrations UI) was not begun, and one Gate 1 step was deliberately
 left for a slotted lane. Both reasons are below.
@@ -157,7 +165,7 @@ this slice is PARTIAL and why Gate 2 did not begin even setting the slot aside.
 
 | # | Gap |
 |---|---|
-| G-14 | **Reduced, not closed.** The model is converged; the legacy tables remain as bridges until the ingestion rewire and per-org conversion land. |
+| G-14 | **Closed** in [14](14-slice-b7-producer-retirement.md). Recorded here as *reduced* because that was true in B.5: the model was converged and the legacy tables were still bridged. |
 | G-15 | **Closed** — `integration_resource_refs` exists and is canonical. |
 | G-16 | No deletion feed, unchanged. |
 | G-17 | **New.** `attendance.write` is in the catalog with no public route, by instruction. The catalog can now describe a capability the API does not expose — acceptable here, but it means catalog membership is not evidence of a live endpoint. |
