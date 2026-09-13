@@ -11,7 +11,9 @@
  * multiplying it by the number of devices was.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { sendPushToSubscriptions } from "../lib/vacilando/lane-push.mjs";
 import { governedRequestRetentionCap } from "../lib/vacilando/governed-action-request.mjs";
@@ -29,24 +31,44 @@ const src = (f) => readFileSync(new URL(`../lib/vacilando/${f}`, import.meta.url
 await test("B1. THE DEFECT: subscriptions go out together, not one after another", async () => {
   /*
    * Three sends that each take 50ms cost ~50ms concurrently and ~150ms in
-   * series. Asserted as WALL TIME rather than by reading the code, because the
-   * property that matters is how long an operator waits.
+   * series. Asserted as WALL TIME, because the property that matters is how
+   * long an operator waits.
+   *
+   * The store is seeded in a temp root rather than borrowed from the host: the
+   * first version of this test passed here and failed in CI, because this
+   * machine has real push subscriptions and a CI runner has none. A timing
+   * test that only runs where someone happens to own a phone is not a test.
    */
-  const root = "/tmp/does-not-matter";
-  let live = 0;
-  let peak = 0;
-  const send = async () => {
-    live += 1; peak = Math.max(peak, live);
-    await new Promise((r) => setTimeout(r, 50));
-    live -= 1;
-  };
-  const subs = [1, 2, 3].map((i) => ({ endpoint: `https://push.example/${i}`, keys: {} }));
-  const started = Date.now();
-  const out = await sendPushToSubscriptions({ title: "t" }, { root, send, subscriptions: subs });
-  const elapsed = Date.now() - started;
-  if (out?.skipped) return; // no subscriber plumbing in this environment; B2 still binds
-  assert.equal(peak, 3, "all three were in flight at once");
-  assert.ok(elapsed < 120, `three 50ms sends took ${elapsed}ms — that is serial`);
+  const root = mkdtempSync(join(tmpdir(), "vac-push-"));
+  try {
+    mkdirSync(join(root, "vacilando"), { recursive: true });
+    writeFileSync(join(root, "vacilando", "web-push.json"), JSON.stringify({
+      schema_version: "vacilando.web_push.v1",
+      vapid: { subject: "mailto:ops@example.com", publicKey: "k", privateKey: "k" },
+      subscriptions: [1, 2, 3].map((i) => ({
+        endpoint: `https://push.example/${i}`, keys: { p256dh: "x", auth: "y" },
+        created_at: new Date().toISOString(),
+      })),
+    }));
+    let live = 0;
+    let peak = 0;
+    const send = async () => {
+      live += 1; peak = Math.max(peak, live);
+      await new Promise((r) => setTimeout(r, 50));
+      live -= 1;
+    };
+    const started = Date.now();
+    const out = await sendPushToSubscriptions(
+      { title: "t", body: "b", kind: "governed_action_approval_required" },
+      { root, send, ignorePreference: true },
+    );
+    const elapsed = Date.now() - started;
+    assert.equal(out.sent, 3, `fixture: all three must be attempted (${JSON.stringify(out)})`);
+    assert.equal(peak, 3, "all three were in flight at once");
+    assert.ok(elapsed < 120, `three 50ms sends took ${elapsed}ms - that is serial`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 await test("B2. the results stay index-mapped to their subscriptions", async () => {
