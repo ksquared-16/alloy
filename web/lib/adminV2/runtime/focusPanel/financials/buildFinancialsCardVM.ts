@@ -33,6 +33,7 @@
  */
 
 import { readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
+import { resolveHouseholdPaymentViews } from "@/lib/financials/paymentApplicationView";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
@@ -87,8 +88,32 @@ export type FinancialsPaymentRow = {
     postedAt: string | null;
     /** Active applications on this payment, summed. Zero for a payment sitting on the account. */
     appliedCents: number;
+    /**
+     * Received money not currently answering any obligation. NOT a credit and NOT a refund: the
+     * organisation holds it and it can still be applied. Canonical — `readPaymentUnappliedCents`.
+     */
+    unappliedCents: number;
+    /**
+     * The applications themselves, active and reversed. The summed `appliedCents` above says HOW MUCH
+     * is doing something; this says WHICH obligations, and which were undone — the difference between
+     * a balance and an explanation, and the thing an operator needs before moving money.
+     */
+    applications: FinancialsPaymentApplication[];
     reference: string | null;
     notes: string | null;
+};
+
+export type FinancialsPaymentApplication = {
+    allocationId: string;
+    chargeId: string | null;
+    chargeLabel: string;
+    chargeServiceDate: string | null;
+    appliedCents: number;
+    /** `active` answers an obligation now; `reversed` is history that no longer counts. */
+    status: string;
+    allocatedAt: string | null;
+    reversedAt: string | null;
+    reversalReason: string | null;
 };
 
 export type FinancialsSubject = {
@@ -692,6 +717,10 @@ async function readAccountPayments(
             receivedAt: t(raw.received_at) || null,
             postedAt: t(raw.posted_at) || null,
             appliedCents: appliedByPaymentId.get(id) ?? 0,
+            // Enriched below from the canonical application composition; a payment read that never
+            // reaches it still renders, with no applications rather than invented ones.
+            unappliedCents: 0,
+            applications: [],
             reference: t(raw.reference_number) || null,
             notes: t(raw.notes) || null,
         };
@@ -1008,6 +1037,29 @@ export async function buildFinancialsCardVM(
         );
         vm.payments = received.payments;
         appliedByChargeId = received.appliedByChargeId;
+
+        /*
+         * ONE COMPOSITION OWNS APPLICATIONS AND UNAPPLIED MONEY.
+         *
+         * `readAccountPayments` sums active allocations and then discards them, which is all a balance
+         * needs. Rendering "which charge, and was it undone" needs the rows themselves plus the
+         * reversed history it deliberately filters out. Rather than widen that query and grow a second
+         * place where applied money is decided, the canonical composition is asked and merged in by
+         * payment id. It is the same authority the service uses, so the two cannot disagree.
+         */
+        const household = t(args.customerId) || null;
+        if (household) {
+            const views = await resolveHouseholdPaymentViews(supabase, {
+                orgId: args.orgId,
+                customerId: household,
+            });
+            const byPaymentId = new Map(views.map((v) => [v.paymentId, v]));
+            vm.payments = vm.payments.map((row) => {
+                const view = byPaymentId.get(row.paymentId);
+                if (!view) return row;
+                return { ...row, unappliedCents: view.unappliedCents, applications: view.applications };
+            });
+        }
     } catch (e) {
         /*
          * A payments read that fails must not become "nothing has been paid" — that would show a

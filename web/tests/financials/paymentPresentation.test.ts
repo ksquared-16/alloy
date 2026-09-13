@@ -21,6 +21,8 @@ function payment(over: Partial<FinancialsPaymentRow>): FinancialsPaymentRow {
         receivedAt: "2026-09-10T00:00:00Z",
         postedAt: "2026-09-10T00:00:00Z",
         appliedCents: 50_000,
+        unappliedCents: 0,
+        applications: [],
         reference: null,
         notes: null,
         ...over,
