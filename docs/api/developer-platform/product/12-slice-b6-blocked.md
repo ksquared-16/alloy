@@ -1,17 +1,24 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-11
+last_reviewed: 2026-09-13
 supersedes: []
 ---
 
 # 12 — Slice B.6: blocked on the required environment
 
-**Status: BLOCKED.** The slice mandates a slotted lane with live certification.
-Three of the five required conditions are absent, and both "lane is not slotted"
-and "live Attendance suite cannot run" are named stop conditions.
+> **SUPERSEDED 2026-09-13 — the block was a measurement error, not an
+> environment.** Every condition below was either already satisfied at the time
+> or became satisfied since. The original readings are preserved verbatim,
+> because how this was got wrong is the useful part. See
+> [Correction](#correction-2026-09-13-what-was-actually-there) below; the slice
+> is no longer blocked and the ingestion rewire has been executed and certified.
 
-## The environment gate, measured
+**Status (historical): BLOCKED.** The slice mandates a slotted lane with live
+certification. Three of the five required conditions are absent, and both "lane
+is not slotted" and "live Attendance suite cannot run" are named stop conditions.
+
+## The environment gate, as measured on 2026-09-11 (historical)
 
 | Requirement | Observed |
 |---|---|
@@ -20,6 +27,30 @@ and "live Attendance suite cannot run" are named stop conditions.
 | Certification database available | **port 54322 CLOSED** |
 | Live Attendance tests runnable | **No** — 5 suites present, none executable |
 | Mounted browser automation | **No** — follows from the above |
+
+## Correction (2026-09-13): what was actually there
+
+Re-measured from the control plane rather than from inside an agent session.
+Nothing in the environment was repaired to produce this table — it is the same
+host, re-read through the canonical source for each fact.
+
+| Requirement | 2026-09-11 reading | Canonical measurement | Why they differ |
+|---|---|---|---|
+| `ALLOY_WORKTREE_SLOT` present | UNSET | **`8`** | The variable was read from the session's own environment, where it is not exported. It is recorded in `~/.local/state/alloy-dev/gateway/metadata/documentation-api.env`, and lane `lane_a9b79e1b351b` carries `binding.slot: 8`. |
+| Managed development port | unset | **3018**, `HTTP 200` | Same file, `PORT="3018"`. The managed server was running and answering. |
+| Certification database available | port 54322 CLOSED | **available** — Kong `127.0.0.1:54421`, Postgres `127.0.0.1:54422` | 54322 is the Supabase default, not this topology's port. It is closed because nothing was ever meant to listen there. The `alloy-cert` stack was up and healthy throughout. |
+| Live Attendance tests runnable | No — none executable | **runnable** | They self-skip without certification env, which reads as "not executable". Published properly they run: 70/70 on staging's legacy path, and the converged path is certified in [13](13-slice-b6-ingestion-rewire.md). |
+| Mounted browser automation | No | **closed** | Browser Auth A/C closed at `52d0f3cffbd1`; hosted and loopback (slot 8, cookie `sb-alloy-local-auth`) mounted proofs both pass. |
+
+**The shape of the error.** Four of the five readings came from inside a session
+and were reported as properties of the host. A closed default port became "no
+database"; an unexported variable became "no slot"; a suite that skips politely
+became "not executable". Only the last row was a real dependency, and it was
+discharged by Attendance rather than here.
+
+The lesson is narrow and worth keeping: *measure a control-plane fact from the
+control plane.* A probe that names its own default is not evidence about a
+topology that chose different ports.
 
 The instruction: *"If any of those are unavailable, stop before production
 rewiring or UI implementation and report PARTIAL/BLOCKED."*

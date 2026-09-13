@@ -1,10 +1,16 @@
 /**
  * Gate 1 — the Developer Platform authors attendance, against the real database.
  *
- * The five sibling live suites prove the LEGACY producer path. This proves the
- * converged one: an installation resolves to an authority, that authority becomes
- * an ingestion author, and Attendance treats it exactly as it treats a producer —
- * same gate, same facts, same idempotency, same refusals.
+ * This proves the converged path: an installation resolves to an authority, that
+ * authority becomes an ingestion author, and Attendance treats it exactly as it
+ * treated a producer — same gate, same facts, same idempotency, same refusals.
+ *
+ * It also carries the subject-validity guard outright. That invariant used to be
+ * proved by `externalProducerIngestion.live.test.ts`, which this slice deleted
+ * along with the credential path it exercised. The guard itself did not go
+ * anywhere — `resolveChildMemberEligibility` still runs on every ingestion — so
+ * the proof had to move here rather than lapse. A retired model is a reason to
+ * restate an invariant on the new path, never a reason to stop proving it.
  *
  * Nothing is mocked. The failure modes worth fearing are the ones a mock cannot
  * have: a `integration_resource_refs` row resolving another tenant's child, an
@@ -67,6 +73,8 @@ describeLive("developer platform attendance ingestion — live", () => {
     let applicationId = "";
     let installationId = "";
     let otherOrgInstallationId = "";
+    /** A real ADULT household member, for the subject-validity guard. */
+    let guardianMemberId = "";
 
     const principal = (over: Partial<ApplicationPrincipal> = {}): ApplicationPrincipal => ({
         kind: "application",
@@ -123,6 +131,9 @@ describeLive("developer platform attendance ingestion — live", () => {
             await supabase.from("app_installations").delete().eq("id", id);
         }
         if (applicationId) await supabase.from("developer_applications").delete().eq("id", applicationId);
+        // The guardian is a household member this suite created; no fact may
+        // reference it, which is exactly what the M-scenarios below assert.
+        if (guardianMemberId) await supabase.from("customer_members").delete().eq("id", guardianMemberId);
     }
 
     beforeAll(async () => {
@@ -151,11 +162,43 @@ describeLive("developer platform attendance ingestion — live", () => {
         if (!other.error) otherOrgInstallationId = (other.data as { id: string }).id;
 
         // Correlation is owned by integration_resource_refs, not by a legacy mapping.
+        /*
+         * A guardian in the same household as the certified child. Created here
+         * rather than assumed, because the guard being tested is precisely that
+         * an ADULT canonical member cannot become a child's attendance — and a
+         * tenant whose members all happen to be children would prove nothing.
+         */
+        const { data: childRow } = await supabase
+            .from("customer_members").select("customer_id").eq("org_id", ORG).eq("id", CHILD).single();
+        const guardian = await supabase
+            .from("customer_members")
+            .insert({
+                org_id: ORG,
+                customer_id: (childRow as { customer_id: string }).customer_id,
+                relationship: "guardian",
+                first_name: "DP Cert",
+                last_name: `Guardian ${run}`,
+                display_name: `DP Cert Guardian ${run}`,
+                is_active: true,
+            })
+            .select("id")
+            .single();
+        expect(guardian.error, `guardian fixture: ${guardian.error?.message}`).toBeNull();
+        guardianMemberId = (guardian.data as { id: string }).id;
+
+        // Correlation is owned by integration_resource_refs, not by a legacy mapping.
         const refs = await supabase.from("integration_resource_refs").insert([
             { installation_id: installationId, org_id: ORG, resource_type: "child",
               external_id: "DP-CHILD-1", child_customer_member_id: CHILD, status: "active" },
             { installation_id: installationId, org_id: ORG, resource_type: "location",
               external_id: "DP-ROOM-A", location_id: ROOM_A, status: "active" },
+            /*
+             * A reference the installation is fully entitled to: active, this
+             * org's, this installation's, and declared `child`. Everything the
+             * correlation layer can check passes. It points at an adult.
+             */
+            { installation_id: installationId, org_id: ORG, resource_type: "child",
+              external_id: "DP-ADULT-BADGE", child_customer_member_id: guardianMemberId, status: "active" },
         ]);
         expect(refs.error, `refs insert: ${refs.error?.message}`).toBeNull();
     }, 120_000);
@@ -250,6 +293,138 @@ describeLive("developer platform attendance ingestion — live", () => {
         const out = await ingest(principal({ grantedScopes: ["locations.read"] }),
             evt({ externalEventId: `dp-evt-${run}-noscope` }));
         expect(out.disposition).not.toBe("applied");
+    }, 120_000);
+
+    // ── Replay is not conflict, and lineage must name something real ───────
+    //
+    // Also ported from the deleted suite. Both invariants are Attendance's, not
+    // the identity model's, so retiring the producer path does not retire them.
+
+    it("the same event id carrying different meaning conflicts, and authors nothing", async () => {
+        /*
+         * A redelivery whose payload fingerprint moved is not a replay. The
+         * committed fact stays standing — demoting it would orphan every
+         * correction that already named this provider event — so the conflict is
+         * reported to the caller while the evidence row keeps its outcome.
+         */
+        const before = (await factsFromThisRun()).length;
+        const out = await ingest(principal(), evt({
+            externalEventId: `dp-evt-${run}`, physicalEventAt: `${TODAY}T09:59:00.000Z`,
+        }));
+        expect(out.disposition, JSON.stringify(out)).toBe("conflicted");
+        expect(out.code).toBe("payload_conflict");
+        expect((await factsFromThisRun()).length).toBe(before);
+
+        const { data } = await supabase
+            .from("attendance_integration_events")
+            .select("disposition, failure_code")
+            .eq("installation_id", installationId)
+            .eq("provider_event_id", `dp-evt-${run}`)
+            .single();
+        // The durable OUTCOME is unchanged; the note records the last processing.
+        expect(data).toMatchObject({ disposition: "applied", failure_code: "payload_conflict" });
+    }, 120_000);
+
+    it("a correction naming an original this installation never committed is refused", async () => {
+        const out = await ingest(principal(), evt({
+            externalEventId: `dp-evt-${run}-orphan`,
+            correctsExternalEventId: `dp-evt-${run}-never-existed`,
+        }));
+        expect(out.disposition, JSON.stringify(out)).toBe("rejected");
+        expect(out.code).toBe("unknown_correction_target");
+        expect(out.attendanceEventId).toBeFalsy();
+    }, 120_000);
+
+    // ── M — the correlated subject must be a CHILD, not merely a row ───────
+    //
+    // Ported from the deleted `externalProducerIngestion.live.test.ts`. The
+    // scenarios there resolved through `attendance_integration_mappings`; these
+    // resolve through `integration_resource_refs`. The invariant is identical
+    // and belongs to Attendance, not to whichever identity model is current.
+
+    it("M1 — a reference to a legitimate child still commits", async () => {
+        // The positive control for the guard below: without it, M2 would only
+        // prove that something refused the event.
+        const out = await ingest(principal(), evt({
+            externalEventId: `dp-evt-${run}-m1`, physicalEventAt: `${TODAY}T08:05:00.000Z`,
+        }));
+        expect(out.disposition, JSON.stringify(out)).toBe("applied");
+    }, 120_000);
+
+    it("M2 — a reference that resolves to an ADULT authors no attendance", async () => {
+        const out = await ingest(principal(), evt({
+            externalEventId: `dp-evt-${run}-m2`, externalChildId: "DP-ADULT-BADGE",
+        }));
+        /*
+         * The reference RESOLVED — active, this installation's, this org's, and
+         * pointing at a real row. Everything the correlation layer can check
+         * passed. The refusal comes from the canonical subject resolver, which is
+         * the only thing that knows the row is a guardian.
+         */
+        expect(out.disposition, JSON.stringify(out)).toBe("rejected");
+        expect(out.code).toBe("member_not_a_child");
+        expect(out.attendanceEventId).toBeFalsy();
+
+        // And nothing was written anywhere in the Attendance ledger for them.
+        const { data } = await supabase
+            .from("child_attendance_events")
+            .select("id")
+            .eq("org_id", ORG)
+            .eq("customer_member_id", guardianMemberId);
+        expect(data ?? []).toHaveLength(0);
+    }, 120_000);
+
+    it("M2 — the installation's own claim that the identifier is a child changes nothing", async () => {
+        // `resource_type = 'child'` is what the INSTALLATION believes its
+        // identifier means. The whole boundary exists because an installation
+        // does not get to describe Alloy's subjects.
+        const { data } = await supabase
+            .from("integration_resource_refs")
+            .select("resource_type, status")
+            .eq("installation_id", installationId)
+            .eq("external_id", "DP-ADULT-BADGE")
+            .single();
+        expect(data).toMatchObject({ resource_type: "child", status: "active" });
+    }, 120_000);
+
+    it("M5 — a reference REPOINTED at an adult stops working, ref changes and all", async () => {
+        /*
+         * A guard applied only when the reference is created would miss this;
+         * the check runs on every ingestion, so it does not.
+         *
+         * `uq_resource_ref_child_target` allows one reference per child target,
+         * so the adult badge is retired before the good reference is repointed
+         * at the same member — the constraint is doing its job, and working
+         * around it by pointing two references at one member would test nothing.
+         */
+        const retire = await supabase
+            .from("integration_resource_refs")
+            .delete()
+            .eq("installation_id", installationId)
+            .eq("external_id", "DP-ADULT-BADGE");
+        expect(retire.error, `retire adult ref: ${retire.error?.message}`).toBeNull();
+        const repoint = await supabase
+            .from("integration_resource_refs")
+            .update({ child_customer_member_id: guardianMemberId })
+            .eq("installation_id", installationId)
+            .eq("external_id", "DP-CHILD-1");
+        expect(repoint.error, `repoint: ${repoint.error?.message}`).toBeNull();
+        try {
+            const out = await ingest(principal(), evt({ externalEventId: `dp-evt-${run}-m5` }));
+            expect(out.disposition, JSON.stringify(out)).toBe("rejected");
+            expect(out.code).toBe("member_not_a_child");
+        } finally {
+            // Restore both, so this scenario cannot decide the outcome of any other.
+            await supabase
+                .from("integration_resource_refs")
+                .update({ child_customer_member_id: CHILD })
+                .eq("installation_id", installationId)
+                .eq("external_id", "DP-CHILD-1");
+            await supabase.from("integration_resource_refs").insert({
+                installation_id: installationId, org_id: ORG, resource_type: "child",
+                external_id: "DP-ADULT-BADGE", child_customer_member_id: guardianMemberId, status: "active",
+            });
+        }
     }, 120_000);
 
     it("writes no canonical fact for any refusal in this suite", async () => {
