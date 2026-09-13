@@ -29,9 +29,11 @@ import { randomUUID } from "crypto";
 import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import {
+    applyPaymentToCharge,
     CHILDCARE_PAYMENT_METHODS,
     isChildcarePaymentMethod,
     readChargeBalance,
+    readPaymentUnappliedCents,
     recordAndApplyChildcarePayment,
     refundChildcarePayment,
     reversePaymentApplication,
@@ -47,6 +49,7 @@ export const PAYMENT_RECORD_ACTION_KEY = "payment.record";
 export const PAYMENT_REFUND_ACTION_KEY = "payment.refund";
 export const PAYMENT_COLLECT_CARD_ACTION_KEY = "payment.collect_card";
 export const PAYMENT_REVERSE_APPLICATION_ACTION_KEY = "payment.reverse_application";
+export const PAYMENT_APPLY_ACTION_KEY = "payment.apply_to_charge";
 
 /**
  * ── WHO MAY MOVE THIS MONEY ──
@@ -860,9 +863,136 @@ const reversePaymentApplicationAction: RegisteredAction = {
     },
 };
 
+/**
+ * PUT RECEIVED MONEY AGAINST AN OBLIGATION — the other half of a correction.
+ *
+ * Reversing an application leaves money unapplied, which is a true state but not a finished one. This
+ * is how it finds its way to the right charge, and it is also the ordinary path for a payment that
+ * arrived before anyone decided what it was for.
+ *
+ * `fin.write`, matching `payment.record`: putting received money against an obligation is recording
+ * financial fact, not correcting it after the event. Undoing an application is the heavier authority
+ * and keeps `fin.adjust`.
+ *
+ * The service owns every bound — unapplied remainder, over-payment, household. This wrapper adds no
+ * arithmetic of its own; if it did, there would be two answers to how much may be applied.
+ */
+const applyPaymentToChargeAction: RegisteredAction = {
+    actionKey: PAYMENT_APPLY_ACTION_KEY,
+    defaultLabel: "Apply payment",
+    description: "Apply received money that is not yet allocated to an outstanding charge.",
+    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedProcessKeys: [],
+    requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
+    audit: { eventType: "action_executed", category: "record", mutates: true },
+    bosProposalSupport: false,
+    confirmationPolicy: "none",
+
+    validatePayload(payload) {
+        const src = payload ?? {};
+        if (!t(src.payment_id)) {
+            return { ok: false, blockers: [{ code: "missing_payment", message: "A payment is required.", field: "payment_id" }] };
+        }
+        if (!t(src.charge_id)) {
+            return { ok: false, blockers: [{ code: "missing_charge", message: "A charge is required.", field: "charge_id" }] };
+        }
+        if (src.amount_cents != null) {
+            const amount = Number(src.amount_cents);
+            if (!Number.isInteger(amount) || amount <= 0) {
+                return {
+                    ok: false,
+                    blockers: [{ code: "invalid_amount", message: "An amount must be greater than zero.", field: "amount_cents" }],
+                };
+            }
+        }
+        return { ok: true, value: src };
+    },
+
+    async resolveEligibility({ supabase, ctx, payload }) {
+        const paymentId = t(payload?.payment_id);
+        const chargeId = t(payload?.charge_id);
+        const allowed = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, PAYMENT_WRITE_PERMISSION);
+        return {
+            eligible: Boolean(paymentId) && Boolean(chargeId) && allowed,
+            blockers: [
+                ...(paymentId ? [] : [{ code: "missing_payment", message: "A payment is required." }]),
+                ...(chargeId ? [] : [{ code: "missing_charge", message: "A charge is required." }]),
+                ...(allowed ? [] : [{ code: "payment_permission_required", message: `Applying a payment requires ${PAYMENT_WRITE_PERMISSION}.` }]),
+            ],
+            availableTransitions: [],
+            requiredInputs: [],
+        };
+    },
+
+    /* Both figures are read server-side. The operator is told what is available and what is owed. */
+    async buildPreview({ supabase, ctx, payload }) {
+        const paymentId = t(payload?.payment_id);
+        const chargeId = t(payload?.charge_id);
+        const { data: paymentRow } = await (supabase as SupabaseClient)
+            .from("payments")
+            .select("amount_cents")
+            .eq("org_id", ctx.orgId)
+            .eq("id", paymentId)
+            .maybeSingle();
+        const amountCents = Number((paymentRow as { amount_cents?: number } | null)?.amount_cents ?? 0);
+        if (!paymentRow) return { summary: "This payment could not be found.", changes: [] };
+        const unapplied = await readPaymentUnappliedCents(supabase as SupabaseClient, ctx.orgId, paymentId, amountCents);
+        let outstanding: number | null = null;
+        try {
+            outstanding = (await readChargeBalance(supabase as SupabaseClient, ctx.orgId, chargeId)).outstandingCents;
+        } catch {
+            return { summary: "This charge could not be found.", changes: [] };
+        }
+        const requested = payload?.amount_cents == null ? Math.min(unapplied, outstanding) : Number(payload.amount_cents);
+        return {
+            summary: `Apply ${money(requested)} to this charge`,
+            changes: [
+                `${money(unapplied)} is currently unapplied on this payment.`,
+                `This charge has ${money(outstanding)} outstanding.`,
+                `${money(requested)} will be applied, reducing what the family owes by that amount.`,
+            ],
+        };
+    },
+
+    async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
+        const correlationId = randomUUID();
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, PAYMENT_WRITE_PERMISSION))) {
+            return denied(correlationId, "Applying a payment", PAYMENT_WRITE_PERMISSION, "payment_permission_required");
+        }
+        try {
+            const result = await applyPaymentToCharge(supabase as SupabaseClient, {
+                orgId: ctx.orgId,
+                paymentId: t(payload.payment_id),
+                chargeId: t(payload.charge_id),
+                amountCents: payload.amount_cents == null ? undefined : Number(payload.amount_cents),
+            });
+            return {
+                ok: true,
+                correlationId,
+                result: {
+                    actionKey: PAYMENT_APPLY_ACTION_KEY,
+                    entityType: invocation.entityType,
+                    entityId: t(invocation.entityId),
+                    affectedId: result.allocation.id,
+                    detail: {
+                        allocation_id: result.allocation.id,
+                        payment_id: t(payload.payment_id),
+                        charge_id: t(payload.charge_id),
+                        applied_amount_cents: result.allocation.allocated_amount_cents,
+                        already_applied: result.alreadyApplied,
+                    },
+                },
+            };
+        } catch (err) {
+            return mapError(err, correlationId);
+        }
+    },
+};
+
 export const financialPaymentActions: RegisteredAction[] = [
     recordPayment,
     refundPayment,
     collectCardPayment,
     reversePaymentApplicationAction,
+    applyPaymentToChargeAction,
 ];

@@ -104,6 +104,7 @@ describe("the subjectless action census", () => {
             "charge.reverse",
             "child.add",
             "create_lead",
+            "payment.apply_to_charge",
             "payment.collect_card",
             "payment.record",
             "payment.refund",

@@ -79,6 +79,7 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "payment.refund",
     "payment.collect_card",
     "payment.reverse_application",
+    "payment.apply_to_charge",
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
@@ -683,6 +684,26 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             + "balance exactly once. Idempotent — a retried request returns the payment already recorded "
             + "and its existing application. This RECORDS money; it does not collect it, so a family who "
             + "pays by cash or check is representable without a provider.",
+    }),
+    def({
+        capabilityKey: "payment.apply_to_charge",
+        canonicalCommandKey: "payment.apply_to_charge",
+        operatorLabel: "Apply payment",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment.apply_to_charge",
+        implementationStatus: "production",
+        reason:
+            "Puts received money that is not yet allocated against an outstanding charge. The other half "
+            + "of a correction -- reversing an application leaves money unapplied, which is true but "
+            + "unfinished -- and also the ordinary path for money that arrived before anyone decided what "
+            + "it was for. Every bound belongs to the service: the unapplied remainder, over-payment, and "
+            + "the household boundary that refuses another family's charge.",
     }),
     def({
         capabilityKey: "payment.reverse_application",

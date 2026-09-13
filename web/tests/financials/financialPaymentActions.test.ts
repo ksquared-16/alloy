@@ -5,6 +5,7 @@ import {
     PAYMENT_REFUND_ACTION_KEY,
     PAYMENT_COLLECT_CARD_ACTION_KEY,
     PAYMENT_REVERSE_APPLICATION_ACTION_KEY,
+    PAYMENT_APPLY_ACTION_KEY,
     financialPaymentActions,
 } from "@/lib/adminV2/actions/definitions/financialPaymentActions";
 import { REGISTERED_ACTION_CAPABILITY_KEYS } from "@/lib/platform/commands/capabilityRegistry";
@@ -71,7 +72,7 @@ describe("financial payment actions — the operator can settle what is owed", (
      * received` straight out of a hard-coded zero. Without a reachable record-payment the card could
      * only ever say a family owes everything they have ever been charged.
      */
-    it("registers record, refund, card collection and unapply, and all are classified capabilities", () => {
+    it("registers record, refund, card collection, unapply and apply, and all are classified capabilities", () => {
         // Thread 8B adds collection beside recording: `payment.record` writes down money that
         // already arrived, `payment.collect_card` asks an executor to go and get it. Slice 6 adds
         // `payment.reverse_application`, which changes WHICH obligation a receipt answered without
@@ -82,6 +83,7 @@ describe("financial payment actions — the operator can settle what is owed", (
             PAYMENT_REFUND_ACTION_KEY,
             PAYMENT_COLLECT_CARD_ACTION_KEY,
             PAYMENT_REVERSE_APPLICATION_ACTION_KEY,
+            PAYMENT_APPLY_ACTION_KEY,
         ];
         expect(financialPaymentActions.map((a) => a.actionKey).sort()).toEqual(keys.sort());
         for (const key of keys) {
