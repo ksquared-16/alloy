@@ -1739,6 +1739,8 @@ ${view.type ? `<div class="meta">${esc(view.type)}</div>` : ""}
     const { attachLaneAdmissions } = await import("./execution-admission.mjs");
     const { attachLaneSourceControl } = await import("./source-control.mjs");
     const { attachLaneRunLifecycle } = await import("./execution-stale.mjs");
+    const { attachLaneOperatorState } = await import("./lane-operator-state.mjs");
+    const { listGovernedActions } = await import("./governed-action-request.mjs");
     try {
       const { evaluateExclusiveWindow } = await import("./execution-exclusive.mjs");
       evaluateExclusiveWindow();
@@ -1749,6 +1751,22 @@ ${view.type ? `<div class="meta">${esc(view.type)}</div>` : ""}
     } catch { /* */ }
     const out = await listDevelopmentLanes();
     let lanes = attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes || []), undefined, { includeInstruction: false })))))));
+    /*
+     * ONE PRODUCER OF CURRENT OPERATOR STATE.
+     *
+     * This chain attached no operator state at all, so the list, the header, the
+     * bell, the approval card and the composer each derived their own from
+     * `lane.execution_run`. Five readers, five rules, and the only way to find
+     * out they disagreed was to look at two of them at once - which is how a
+     * lane came to show "Accepted" on the card and "Needs you" in the header.
+     *
+     * The governed requests are read ONCE for the whole list: reading per lane
+     * would let two lanes in the same response answer from different instants,
+     * which is the same disagreement in a smaller window.
+     */
+    lanes = attachLaneOperatorState(lanes, {
+      readRequests: () => (listGovernedActions({}) || []),
+    });
     // A lane whose browser session is dead cannot execute, and until this was
     // attached the Director had no way to see that or fix it. The recovery card
     // is already rendered by the view; without this the data never arrives, so

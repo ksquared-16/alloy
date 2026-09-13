@@ -1132,8 +1132,34 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
       live: false, stale: false,
     };
   }
-  if (cap.state === "NEEDS_INPUT" || run?.state === "NEEDS_INPUT") {
+  /*
+   * THE API DECIDES WHETHER THE OPERATOR IS NEEDED. THIS MAPS IT.
+   *
+   * This read `run?.state === "NEEDS_INPUT"` and called it "Needs input". But a
+   * run is parked in NEEDS_INPUT when a governed action FAILS, which asks nobody
+   * anything - measured, 10 of 34 NEEDS_INPUT entries got there that way. Each
+   * one put a lane in the needs_input band with nothing for the operator to do,
+   * discoverable only by opening it.
+   *
+   * `lane.needs_you` comes from laneOperatorState, which reads the one store
+   * that knows: a request awaiting_operator with no decision recorded. When the
+   * payload carries that field it is the answer. A parked run with nothing
+   * outstanding is BLOCKED - "this stopped, you may want to look" - which is a
+   * different sentence from "it cannot continue until you answer".
+   *
+   * The old inference survives only for a payload that predates the field, so an
+   * older Gateway still renders something sensible.
+   */
+  const apiSaysNeedsYou = typeof lane?.needs_you === "boolean" ? lane.needs_you : null;
+  const inferredNeedsInput = cap.state === "NEEDS_INPUT" || run?.state === "NEEDS_INPUT";
+  if (apiSaysNeedsYou === true || (apiSaysNeedsYou === null && inferredNeedsInput)) {
     return { key: "needs_input", label: "Needs input", group: "needs_input", tone: "needs", mark: "!", hint: cap.hint || "Needs input", headline: "Needs input", live: false, stale: false };
+  }
+  if (apiSaysNeedsYou === false && inferredNeedsInput) {
+    // Parked with nothing outstanding. Still surfaced, still in the band that
+    // gets looked at — but not claiming the operator owes an answer.
+    const why = lane?.secondary_status || run?.state_reason || "Stopped and waiting to be looked at";
+    return { key: "blocked", label: "Blocked", group: "needs_input", tone: "failed", mark: "!", hint: why, headline: "Blocked", live: false, stale: false };
   }
   if (cap.state === "FAILED" || run?.state === "FAILED") {
     return { key: "failed", label: "Failed", group: "completed", tone: "failed", mark: "×", hint: "Failed", headline: "Failed", live: false, stale: false };

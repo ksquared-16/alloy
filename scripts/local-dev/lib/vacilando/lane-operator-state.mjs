@@ -178,3 +178,67 @@ function finalize({ state, pending, secondary, summary }) {
     summary: presentableSummary(summary),
   };
 }
+
+/**
+ * ATTACH THE CANONICAL STATE TO EVERY LANE THE API RETURNS.
+ *
+ * `/api/v2/lanes` composed a lane from a chain of `attach*` helpers and attached
+ * no operator state at all, so every surface that needed one — the list, the
+ * header, the bell, the approval card, the composer — derived its own from
+ * `lane.execution_run`. Six readers, six rules, and the only way to find out
+ * they disagreed was to look at two of them at once.
+ *
+ * This makes the API the single producer. A surface may map or re-word what it
+ * finds here; it may not compute it again.
+ *
+ * The governed requests are READ ONCE for the whole list. Reading per lane is
+ * not merely slower — it lets two lanes in the same response answer from
+ * different instants, which is exactly the class of disagreement this removes.
+ */
+export function attachLaneOperatorState(lanes, { requests = null, readRequests = null } = {}) {
+  const list = Array.isArray(lanes) ? lanes : [];
+  if (!list.length) return list;
+  let all = requests;
+  if (!Array.isArray(all)) {
+    try { all = typeof readRequests === "function" ? readRequests() : []; }
+    catch { all = []; }
+  }
+  return list.map((lane) => {
+    const run = lane?.execution_run || null;
+    const state = laneOperatorState({
+      laneId: lane?.lane_id ?? null,
+      runState: run?.state ?? null,
+      runStateReason: run?.state_reason ?? null,
+      requests: all,
+      // A lane whose provider is working without a run attached is WORKING with
+      // a tracking note, never an error and never an operator obligation.
+      executionTracked: Boolean(run?.run_id),
+      summary: lane?.summary ?? run?.state_reason ?? null,
+    });
+    return {
+      ...lane,
+      operator_state: state.state,
+      operator_tone: state.tone,
+      needs_you: state.actionable,
+      needs_you_count: state.needs_you_count,
+      pending_request_ids: state.pending_request_ids,
+      primary_status: state.label,
+      secondary_status: state.secondary,
+      operator_summary: state.summary,
+      // The whole object too, so a surface that wants everything reads one
+      // field rather than reassembling it from six.
+      lane_operator_state: state,
+    };
+  });
+}
+
+/**
+ * The badge. One number, and it is the number of decisions outstanding.
+ *
+ * Not runs in NEEDS_INPUT, not historical approvals, not failed actions. A count
+ * that includes any of those has to be verified by opening the lane, which is
+ * the same as not having a count.
+ */
+export function operatorAttentionCount(requests = []) {
+  return unresolvedOperatorRequests(requests).length;
+}
