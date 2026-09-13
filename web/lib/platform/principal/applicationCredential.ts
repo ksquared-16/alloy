@@ -43,6 +43,48 @@ const SECRET_PREFIX = "alloy_sk_";
 /** 256 bits. See the header for why this is not run through a slow KDF. */
 const SECRET_BYTES = 32;
 
+/**
+ * The refusals in this module that are BUSINESS RULES, not failures.
+ *
+ * `rotateCredential` and `revokeCredential` both return `{ ok: false, reason }`,
+ * and until now every one of those reached the client as HTTP 500. Two unlike
+ * things were being reported identically: a credential whose state forbids the
+ * operation, which is the rule working, and a database error, which is not.
+ *
+ * Mounted certification caught it on `credential_not_active`. A caller that asks
+ * to rotate a revoked credential has been refused, not failed — the credential
+ * exists, the caller is authorized, and the resource's own state is what says no.
+ * That is `CONFLICT` in `web/lib/api/apiErrors.ts`, which the API response
+ * contract defines as "State conflict" and maps to 409.
+ *
+ * Membership of this table is what makes a reason a business rule. A reason that
+ * is not here — a Postgres message, a thrown error — stays a 500, because saying
+ * "you did something wrong" about an internal fault is its own kind of lie.
+ */
+export const CREDENTIAL_BUSINESS_REFUSALS = Object.freeze({
+    credential_not_active: Object.freeze({
+        code: "credential_not_active",
+        status: 409,
+        message: "That credential is no longer active, so it cannot be rotated or revoked.",
+    }),
+}) as Readonly<Record<string, Readonly<{ code: string; status: number; message: string }>>>;
+
+/**
+ * Is this refusal a stated business rule, and if so how does it answer?
+ *
+ * Reasons are matched EXACTLY. A prefix or substring match would let an
+ * arbitrary database message that happens to contain a rule name borrow that
+ * rule's 4xx, which is the failure this function exists to prevent.
+ */
+export function credentialBusinessRefusal(
+    reason: string | null | undefined,
+): Readonly<{ code: string; status: number; message: string }> | null {
+    if (typeof reason !== "string") return null;
+    return Object.hasOwn(CREDENTIAL_BUSINESS_REFUSALS, reason)
+        ? CREDENTIAL_BUSINESS_REFUSALS[reason]
+        : null;
+}
+
 export function hashCredentialSecret(plaintext: string): string {
     return createHash("sha256").update(String(plaintext).trim(), "utf8").digest("hex");
 }
