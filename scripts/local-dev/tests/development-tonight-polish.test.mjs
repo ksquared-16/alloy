@@ -128,17 +128,32 @@ test("P10. the cadence is declared data, at the configured times", () => {
   assert.deepEqual([...OPERATING_REPORT_SCHEDULE.weekly.days], [0], "Sunday");
 });
 
+/*
+ * THE CONTRACT CHANGED, DELIBERATELY. These read the HOST's clock, which is the
+ * thing the timer wiring removed: with no canonical timezone in the platform,
+ * defaulting to the host would have made "wherever this Mac is" a product
+ * contract. The zone is now required and explicit, so these state one.
+ */
+const ZONE = "America/Los_Angeles";
+const pacific = (isoUtc) => new Date(isoUtc);
+
 test("P11. a timer that fires late still finds it due; one that fires early does not", () => {
-  const sunday = (h, m) => new Date(2026, 8, 13, h, m); // 2026-09-13 is a Sunday
-  assert.equal(reportIsDue("daily", sunday(18, 30)).due, true);
-  assert.equal(reportIsDue("daily", sunday(18, 55)).due, true, "within the grace window");
-  assert.equal(reportIsDue("daily", sunday(18, 29)).due, false);
-  assert.equal(reportIsDue("daily", sunday(19, 30)).due, false, "and not all evening");
+  // 01:30Z on the 14th is 18:30 Pacific on Sunday the 13th.
+  const due = (iso) => reportIsDue("daily", pacific(iso), { timeZone: ZONE }).due;
+  assert.equal(due("2026-09-14T01:30:00Z"), true);
+  assert.equal(due("2026-09-14T01:55:00Z"), true, "within the grace window");
+  assert.equal(due("2026-09-14T01:29:00Z"), false);
+  assert.equal(due("2026-09-14T02:30:00Z"), false, "and not all evening");
 });
 
 test("P12. the weekly report is due only on its day", () => {
-  assert.equal(reportIsDue("weekly", new Date(2026, 8, 13, 18, 30)).due, true, "Sunday");
-  assert.equal(reportIsDue("weekly", new Date(2026, 8, 14, 18, 30)).due, false, "Monday");
+  const due = (iso) => reportIsDue("weekly", pacific(iso), { timeZone: ZONE }).due;
+  assert.equal(due("2026-09-14T01:30:00Z"), true, "Sunday 18:30 Pacific");
+  assert.equal(due("2026-09-15T01:30:00Z"), false, "Monday");
+});
+
+test("P12b. and with no zone configured it is due on no day at all", () => {
+  assert.equal(reportIsDue("daily", new Date(), { timeZone: null }).reason, "timezone_not_configured");
 });
 
 test("P13. firing twice cannot produce two reports", () => {

@@ -223,7 +223,27 @@ export async function runStewardCycleWithHygiene({
 } = {}) {
   const steward = runStewardCycle({ root, nowMs, dryRun, groupAlive, exec, stopDevServer });
   try {
-    return await asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene, hygieneOptions, recoveryStage, dispatchStage });
+    const stages = await asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene, hygieneOptions, recoveryStage, dispatchStage });
+    /*
+     * THE OPERATING REPORTS RIDE THIS LOOP.
+     *
+     * The host has one launchd entry and it is a KeepAlive daemon with no
+     * schedule, so there is no host timer to add a line to. This cycle is the
+     * periodic owner that already exists, and its own doctrine says the steward
+     * is wired into the timers the server owns "rather than a second scheduler".
+     *
+     * Five minutes against a thirty-minute window cannot miss it, and identity
+     * is derived from the window so repeated evaluation rewrites one file. The
+     * usual answer is NOT_DUE, which is an outcome and not a fault, and a
+     * failure here is attached rather than thrown: an end-of-day report that
+     * could not be written must never interrupt anybody's development.
+     */
+    let reports = null;
+    if (!dryRun) {
+      try { reports = await runOperatingReportStage({ root, nowMs }); }
+      catch (e) { reports = { ok: false, error: "report_stage_threw", detail: String(e?.message || e).slice(0, 300) }; }
+    }
+    return { ...stages, reports };
   } catch (err) {
     // The server swallows this to stay up, which is right. Recording it is what
     // makes the difference between a protected process and a silent one.
@@ -231,6 +251,52 @@ export async function runStewardCycleWithHygiene({
     if (!dryRun) recordStageOutcome({ root, nowMs, outcome: { ok: false, threw: true, detail } });
     return { ...steward, recovery: null, hygiene: { error: "stage_threw", detail }, dispatch: null };
   }
+}
+
+
+/**
+ * Evaluate the report cadence and write whatever is due.
+ *
+ * Kept here rather than inside the report module so the report generator stays
+ * a pure derivation with no idea that a clock exists.
+ */
+async function runOperatingReportStage({ root, nowMs }) {
+  const { runDueOperatingReports, buildOperatingReport } = await import("./operating-report.mjs");
+  const { mkdirSync, writeFileSync, readFileSync, existsSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const base = join(root, "vacilando");
+  const readJson = (p, fallback) => {
+    try { return existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : fallback; } catch { return fallback; }
+  };
+  return runDueOperatingReports({
+    now: new Date(nowMs),
+    build: (kind) => {
+      const day = new Date(nowMs).toISOString().slice(0, 10);
+      const start = new Date(`${day}T00:00:00.000Z`);
+      const windowStart = kind === "weekly"
+        ? new Date(start.getTime() - 6 * 24 * 3600 * 1000).toISOString()
+        : start.toISOString();
+      const windowEnd = new Date(start.getTime() + 24 * 3600 * 1000).toISOString();
+      const requests = readJson(join(base, "governed-actions", "requests.json"), { requests: [] }).requests || [];
+      const runStore = readJson(join(base, "execution-runs", "runs.json"), { lanes: {} }).lanes || {};
+      const runs = Object.values(runStore).flatMap((e) => e.runs || []);
+      const laneStore = readJson(join(base, "lanes", "lanes.json"), { lanes: {} }).lanes || {};
+      const notifStore = readJson(join(base, "notifications.json"), { notifications: [] });
+      const notifications = Array.isArray(notifStore) ? notifStore : (notifStore.notifications || []);
+      return buildOperatingReport({
+        kind, windowStart, windowEnd, requests, runs,
+        lanes: Object.values(laneStore), notifications,
+      });
+    },
+    write: (report) => {
+      const dir = join(base, "operating-reports");
+      mkdirSync(dir, { recursive: true });
+      // Idempotent BY WINDOW: the same day rewrites the same file, never a second.
+      const file = join(dir, `${report.report_id}.json`);
+      writeFileSync(file, JSON.stringify(report, null, 2));
+      return file;
+    },
+  });
 }
 
 async function asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene, hygieneOptions, recoveryStage, dispatchStage }) {
