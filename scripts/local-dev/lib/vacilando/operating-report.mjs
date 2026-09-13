@@ -333,3 +333,48 @@ export function renderOperatingReport(r) {
   }
   return L.join("\n");
 }
+
+/*
+ * ── CADENCE, DECLARED RATHER THAN EMBEDDED ──
+ *
+ * There is no time-of-day scheduler in this platform, deliberately: the steward
+ * runs on a recovery cadence and its own doctrine says it must not become "a
+ * second scheduler". Building one tonight to fire a report would be exactly
+ * that.
+ *
+ * So the schedule is DATA. The host already runs a real timer — the launchd
+ * agent that keeps the Gateway up — and it asks this module whether a report is
+ * due. The report generator itself knows nothing about clocks or geography; it
+ * knows about windows.
+ *
+ * The timezone is a setting, not a fact about where anyone lives. It is read
+ * from the environment so a host in another place is a configuration change
+ * rather than a code change.
+ */
+export const OPERATING_REPORT_SCHEDULE = Object.freeze({
+  daily: Object.freeze({ kind: "daily", hour: 18, minute: 30, days: null }),
+  // Sunday. The week's report is written after the week's last working day.
+  weekly: Object.freeze({ kind: "weekly", hour: 18, minute: 30, days: Object.freeze([0]) }),
+});
+
+/**
+ * Is a report of this kind due at this local moment?
+ *
+ * Deliberately a WINDOW rather than an instant: a timer that fires a minute late
+ * must still find the report due, and one that fires twice must not produce two.
+ * Duplication is prevented by identity, not by timing — `reportId` is derived
+ * from the window, so a second run rewrites the same file.
+ */
+export function reportIsDue(kind, at = new Date(), { graceMinutes = 30 } = {}) {
+  const spec = OPERATING_REPORT_SCHEDULE[kind];
+  if (!spec) return { due: false, reason: "unknown_kind" };
+  if (Array.isArray(spec.days) && !spec.days.includes(at.getDay())) {
+    return { due: false, reason: "not_a_scheduled_day" };
+  }
+  const minutesNow = at.getHours() * 60 + at.getMinutes();
+  const target = spec.hour * 60 + spec.minute;
+  const delta = minutesNow - target;
+  if (delta < 0) return { due: false, reason: "before_window", minutes_until: -delta };
+  if (delta > graceMinutes) return { due: false, reason: "after_window", minutes_late: delta };
+  return { due: true, reason: "in_window", minutes_late: delta };
+}

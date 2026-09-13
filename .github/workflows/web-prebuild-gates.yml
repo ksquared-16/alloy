@@ -136,3 +136,9 @@ jobs:
       - name: Operator state surfaces
         working-directory: .
         run: node scripts/local-dev/tests/development-operator-state-surfaces.test.mjs
+      # Operator-facing wording and cadence. Cheap to break, and each of these
+      # was a real sentence a person read: "Authorize authorized", "Finalizing"
+      # at the start of a turn, and a week that could not see itself.
+      - name: Operator polish (copy, cadence, retention)
+        working-directory: .
+        run: node scripts/local-dev/tests/development-tonight-polish.test.mjs

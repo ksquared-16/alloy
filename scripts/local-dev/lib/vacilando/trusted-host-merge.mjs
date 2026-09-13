@@ -625,7 +625,9 @@ export function inspectPullRequest(inputs, { gh = defaultGh, censusRequests = nu
     return {
       ok: false,
       code: "pr_lookup_failed",
-      detail: String(view.stderr || view.stdout || "gh pr view failed").split("\n")[0].slice(0, 200),
+      // Line zero is often blank from `gh`. Same defect already closed on the
+      // merge and push paths; this is the read-back call the same promotion makes.
+      detail: firstMeaningfulLine(String(view.stderr || view.stdout || ""), "gh pr view failed").slice(0, 200),
     };
   }
   const pr = parseJson(view.stdout);
