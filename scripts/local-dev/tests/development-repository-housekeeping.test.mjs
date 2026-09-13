@@ -123,11 +123,30 @@ await test("NC11 — production never inherits housekeeping authority", () => {
   }
 });
 
-await test("NC12 — self-expansion still escalates, and merge stays disabled", () => {
+await test("NC12 — self-expansion still escalates, and merge carries the strictest gates", () => {
   const d = ev({ request: { ...DEL_REQ, inputs: { ...DEL_REQ.inputs, changed_files: ["scripts/local-dev/lib/vacilando/director-authority.mjs"] } }, evidence: DEL_EV });
   assert.equal(d.decision, "operator_approval_required");
   assert.match(d.escalation_reason, /own authority/);
-  assert.equal(D.DELEGATED_POLICIES_V1.find((p) => p.action_key === "repository.merge_pull_request").enabled, false);
+  /*
+   * THIS ASSERTION WAS STALE, NOT THE PRODUCT.
+   *
+   * It read `enabled === false`, which was true when merge delegation did not
+   * exist. `certified_staging_merge_v1` has since been promoted deliberately and
+   * is enabled — the comment beside it says merge "carries the strictest gate
+   * set". A test asserting the opposite of promoted doctrine is a test that will
+   * be edited to pass rather than read, so it now asserts the thing that must
+   * actually stay true: delegation may exist, but never on weaker evidence.
+   */
+  const merge = D.DELEGATED_POLICIES_V1.find((p) => p.action_key === "repository.merge_pull_request");
+  assert.equal(merge.environments.includes("staging"), true, "staging only");
+  assert.equal(merge.environments.length, 1, "and nowhere else");
+  for (const gate of [
+    "full_exact_sha", "base_is_staging", "required_checks_successful",
+    "pull_request_mergeable", "head_sha_still_matches", "certification_suite_passed",
+    "hosted_migration_parity", "no_operator_hold", "no_governance_exception",
+  ]) {
+    assert.ok(merge.gates.includes(gate), `a delegated merge must still gate on ${gate}`);
+  }
 });
 
 await test("NC13 — scope did not widen: no force, rewrite or delete-repository capability", () => {

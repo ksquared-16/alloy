@@ -118,3 +118,10 @@ jobs:
       - name: Operator convergence signal quality
         working-directory: .
         run: node scripts/local-dev/tests/development-operator-convergence.test.mjs
+      # The operating report is a measurement, not a narrative. These lock what
+      # it REFUSES to say: an unmeasured stage is null rather than zero, operator
+      # time is never added to system time, and a join that matched the wrong row
+      # is caught rather than published as a negative latency.
+      - name: Operating report determinism
+        working-directory: .
+        run: node scripts/local-dev/tests/development-operating-report.test.mjs

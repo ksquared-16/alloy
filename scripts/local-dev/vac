@@ -23,6 +23,9 @@ Usage:
   vac reconcile [--apply]      S7 reconciliation: read-only plan; --apply FILES a governed request
   vac worktree-retire [<wt> --apply]  Retirement candidates + evidence; --apply FILES a governed request
   vac hygiene [--plan|--apply ...]  Retention scoreboard; --apply needs --cycle or an explicit --kind/--target
+  vac operating-report [--kind daily|weekly] [--date YYYY-MM-DD] [--json] [--write]
+                           End-of-day / end-of-week operating report, derived
+                           from authoritative state. Idempotent per window.
   vac scoreboard [--json]      One composed view: runtime, lanes, scheduling, hygiene, findings, attention
   vac run-report <run_id> <type> --message-file <path|->
                            Submit the user-facing agent report that IS the
@@ -80,6 +83,10 @@ case "${1:-}" in
   worktree-retire)
     shift
     exec node "$SCRIPT_DIR/vac-worktree-retire.mjs" "$@"
+    ;;
+  operating-report)
+    shift
+    exec node "$SCRIPT_DIR/vac-operating-report.mjs" "$@"
     ;;
   hygiene)
     shift
