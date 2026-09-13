@@ -15,6 +15,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 const R = await import("../lib/vacilando/trusted-host-action-registry.mjs");
 const Q = await import("../lib/vacilando/governed-action-request.mjs");
@@ -125,4 +126,34 @@ await test("RA10 — the registration's own validateInputs enforces the same bou
   const bad = def.validateInputs({ reconciliation_key: "nope", target_environment: "staging", dry_run: true });
   assert.equal(bad.ok, false);
   assert.equal(bad.code, REG.RECONCILIATION_REFUSALS.UNREGISTERED_KEY);
+});
+
+/*
+ * ── THE RESULT IS PART OF THE ACTION ──
+ *
+ * The executor computed provenance and the fulfil leg dropped it, and
+ * failTrustedAction clamped a failure to 400 characters of prose and discarded
+ * everything else. So the action that most needs to say WHERE it ran — a failing
+ * one — said the least. These read the wiring the way qa-access-assign-org-
+ * resolution.test.mjs reads its child: the behaviour of the runner itself is
+ * proven in development-reconciliation-context.test.mjs.
+ */
+const actionsSource = await readFile(new URL("../lib/vacilando/trusted-host-actions.mjs", import.meta.url), "utf8");
+const reconFulfil = actionsSource.slice(actionsSource.indexOf("export function executeRegisteredReconciliationTrustedHostAction"));
+const reconBody = reconFulfil.slice(0, reconFulfil.indexOf("\nexport function", 1));
+
+await test("RA11 — the executor is handed the trusted env SOURCE, not just the trusted env", () => {
+  assert.ok(reconBody.length > 0, "the reconciliation executor is present");
+  assert.match(reconBody, /trustedEnvSource:\s*resolveTrustedServerEnvSource\(\)/,
+    "DEV_QUEUE_ORG_ID lives in that file; without it the action refuses on the host the platform ships");
+  assert.match(reconBody, /repoRoot:\s*resolveCanonicalRepoRoot\(\)/,
+    "repository content runs from the canonical checkout, never from wherever the Gateway started");
+});
+
+await test("RA12 — provenance survives BOTH terminal states", () => {
+  const failLeg = reconBody.slice(0, reconBody.indexOf("return completeTrustedAction"));
+  assert.match(failLeg, /provenance/, "a failed reconciliation must still say where it ran");
+  assert.match(reconBody.slice(reconBody.indexOf("return completeTrustedAction")), /provenance/);
+  // And the terminal helper must be able to carry it at all.
+  assert.match(actionsSource, /function failTrustedAction\(action, code, detail, \{ nowMs, extra/);
 });
