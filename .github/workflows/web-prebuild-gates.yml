@@ -78,3 +78,16 @@ jobs:
       - name: Governed action contract (registered ⇒ mode + dispatch + executor)
         working-directory: .
         run: node --test scripts/local-dev/tests/development-governed-action-contract.test.mjs
+      # Reachable is not runnable, and a result that loses the reason is not a result.
+      #
+      # The contract suite above proves an action can be dispatched. It cannot see
+      # that the reconciliation runner needed ORG_ID nobody could supply, nor that
+      # `stderr || stdout` threw away the only sentence saying so. These two named
+      # files cover exactly that, and are added by name for the same reason the
+      # suite above is scoped: a glob over scripts/local-dev/tests would drag in
+      # pre-existing failures and block the fleet.
+      - name: Trusted-host executor fidelity (context resolution, diagnostics, provenance)
+        working-directory: .
+        run: |
+          node --test scripts/local-dev/tests/development-reconciliation-context.test.mjs
+          node --test scripts/local-dev/tests/development-push-diagnostic-fidelity.test.mjs
