@@ -116,6 +116,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     const [subjectFilter, setSubjectFilter] = useState<string>("all");
     const [running, setRunning] = useState(false);
     const [commandError, setCommandError] = useState<string | null>(null);
+
+
     const [chargeAmount, setChargeAmount] = useState("");
     const [chargeNote, setChargeNote] = useState("");
     const [chargeEventDate, setChargeEventDate] = useState("");
@@ -235,6 +237,208 @@ export default function FinancialsCard({ model, context, receded = false, coordi
             if (current()) setLoading(false);
         }
     }, [customerId, scopedMemberId]);
+
+    /*
+     * ── MOVING MONEY BETWEEN OBLIGATIONS ─────────────────────────────────────────────────────────
+     *
+     * A Move is deliberately TWO governed actions: reverse the application, then apply the freed
+     * money to the chosen charge. It is not atomic and is not pretended to be — if the second step
+     * refuses, the first stays committed and the money is genuinely unapplied, which is a true state
+     * the operator can act on. `moveNotice` exists to say exactly that rather than "Move failed",
+     * which would imply the original application survived.
+     */
+    type MoveTarget = { chargeId: string; label: string; serviceDate: string | null; outstandingCents: number };
+    const [movePending, setMovePending] = useState<{ paymentId: string; allocationId: string } | null>(null);
+    const [applyPending, setApplyPending] = useState<{ paymentId: string } | null>(null);
+    const [moveTargets, setMoveTargets] = useState<MoveTarget[]>([]);
+    const [moveTargetId, setMoveTargetId] = useState("");
+    const [moveReason, setMoveReason] = useState("");
+    const [movePreview, setMovePreview] = useState<{ summary: string; changes: string[] } | null>(null);
+    const [moveError, setMoveError] = useState<string | null>(null);
+    const [moveNotice, setMoveNotice] = useState<string | null>(null);
+
+    const closeMovePanels = useCallback(() => {
+        setMovePending(null);
+        setApplyPending(null);
+        setMoveTargets([]);
+        setMoveTargetId("");
+        setMoveReason("");
+        setMovePreview(null);
+        setMoveError(null);
+    }, []);
+
+    /** Targets come from the server resolver; the panel never assembles charges itself. */
+    const loadMoveTargets = useCallback(async (paymentId: string, excludeChargeId?: string | null) => {
+        setMoveTargets([]);
+        try {
+            const q = new URLSearchParams({ payment_id: paymentId });
+            if (excludeChargeId) q.append("exclude_charge_id", excludeChargeId);
+            const res = await fetch(`/api/admin/financials/eligible-target-charges?${q.toString()}`, {
+                credentials: "include",
+            });
+            const json = (await res.json()) as { ok?: boolean; charges?: MoveTarget[]; error?: string };
+            if (!json?.ok) {
+                setMoveError(json?.error || "Charges to apply this payment to could not be loaded.");
+                return;
+            }
+            setMoveTargets(json.charges ?? []);
+        } catch {
+            setMoveError("Charges to apply this payment to could not be loaded.");
+        }
+    }, []);
+
+    const openMovePayment = useCallback(
+        (args: { paymentId: string; allocationId: string }) => {
+            closeMovePanels();
+            setMovePending(args);
+            const source = vm?.payments
+                .find((p) => p.paymentId === args.paymentId)
+                ?.applications.find((a) => a.allocationId === args.allocationId);
+            void loadMoveTargets(args.paymentId, source?.chargeId ?? null);
+        },
+        [closeMovePanels, loadMoveTargets, vm],
+    );
+
+    const openApplyPayment = useCallback(
+        (args: { paymentId: string }) => {
+            closeMovePanels();
+            setApplyPending(args);
+            void loadMoveTargets(args.paymentId, null);
+        },
+        [closeMovePanels, loadMoveTargets],
+    );
+
+    const actionEntity = useCallback(
+        () => ({
+            entity_type: context.subject?.type ?? "opportunity",
+            entity_id: context.subject?.id ?? "",
+        }),
+        [context.subject?.id, context.subject?.type],
+    );
+
+    /* The preview is the ACTION's. Nothing about the consequence is reconstructed here. */
+    const previewMove = useCallback(async () => {
+        if (!movePending || running) return;
+        setRunning(true);
+        setMoveError(null);
+        try {
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: "payment.reverse_application",
+                    ...actionEntity(),
+                    mode: "preview",
+                    payload: { allocation_id: movePending.allocationId, reason: moveReason },
+                }),
+            });
+            const json = (await res.json()) as {
+                ok?: boolean;
+                error?: string | { message?: string };
+                data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
+            };
+            const p = json?.data?.execution_result?.preview;
+            if (!json?.ok || !p?.summary) {
+                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                setMoveError(err || "This move could not be previewed.");
+                return;
+            }
+            setMovePreview({ summary: p.summary, changes: p.changes ?? [] });
+        } catch {
+            setMoveError("The preview could not be requested.");
+        } finally {
+            setRunning(false);
+        }
+    }, [actionEntity, movePending, moveReason, running]);
+
+    const runAction = useCallback(
+        async (actionKey: string, payload: Record<string, unknown>) => {
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: actionKey,
+                    ...actionEntity(),
+                    mode: "execute",
+                    confirmation: { confirmed: true },
+                    payload,
+                }),
+            });
+            const json = (await res.json()) as { ok?: boolean; error?: string | { message?: string } };
+            if (!json?.ok) {
+                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                throw new Error(err || "The action was refused.");
+            }
+        },
+        [actionEntity],
+    );
+
+    const confirmMove = useCallback(async () => {
+        if (!movePending || !moveTargetId || running) return;
+        setRunning(true);
+        setMoveError(null);
+        setMoveNotice(null);
+        const target = moveTargets.find((t) => t.chargeId === moveTargetId);
+        try {
+            await runAction("payment.reverse_application", {
+                allocation_id: movePending.allocationId,
+                reason: moveReason,
+            });
+        } catch (e) {
+            // Nothing has changed yet; the original application is untouched.
+            setMoveError(e instanceof Error ? e.message : String(e));
+            setRunning(false);
+            return;
+        }
+        /*
+         * THE REVERSAL IS COMMITTED FROM HERE ON. If the apply refuses, the money is unapplied and
+         * stays that way; saying "Move failed" would tell the operator the opposite of what is true.
+         */
+        try {
+            await runAction("payment.apply_to_charge", {
+                payment_id: movePending.paymentId,
+                charge_id: moveTargetId,
+            });
+            setMoveNotice(
+                `Moved to ${target?.label ?? "the selected charge"}. The payment itself is unchanged.`,
+            );
+            closeMovePanels();
+        } catch (e) {
+            setMovePending(null);
+            setMovePreview(null);
+            setMoveNotice(
+                "The original application was reversed, so that money is now unapplied and can be applied to another charge. "
+                + `It was not applied to ${target?.label ?? "the selected charge"}: `
+                + (e instanceof Error ? e.message : String(e)),
+            );
+        } finally {
+            setRunning(false);
+            await load();
+        }
+    }, [closeMovePanels, load, movePending, moveReason, moveTargetId, moveTargets, runAction, running]);
+
+    const confirmApply = useCallback(async () => {
+        if (!applyPending || !moveTargetId || running) return;
+        setRunning(true);
+        setMoveError(null);
+        setMoveNotice(null);
+        const target = moveTargets.find((t) => t.chargeId === moveTargetId);
+        try {
+            await runAction("payment.apply_to_charge", {
+                payment_id: applyPending.paymentId,
+                charge_id: moveTargetId,
+            });
+            setMoveNotice(`Applied to ${target?.label ?? "the selected charge"}.`);
+            closeMovePanels();
+        } catch (e) {
+            setMoveError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+            await load();
+        }
+    }, [applyPending, closeMovePanels, load, moveTargetId, moveTargets, runAction, running]);
 
     useEffect(() => {
         // Clear FIRST: the previous household's balance must not linger while the next resolves.
@@ -1493,7 +1697,111 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     if (overlay === "detail" && vm && reconciliation) {
         return (
             <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="detail">
+                {/*
+                  * The Move / Apply panel. One panel serves both intents because they differ only in
+                  * whether a reversal has to happen first — the destination question is identical, and
+                  * two panels asking it would be two places to get it wrong.
+                  */}
+                {moveNotice ? (
+                    <div className="alloy-os-fdetail__movenotice" data-testid="payment-move-notice">
+                        {moveNotice}
+                    </div>
+                ) : null}
+                {movePending || applyPending ? (
+                    <div className="alloy-os-fdetail__movepanel" data-testid="payment-move-panel">
+                        <div className="alloy-os-fdetail__moveheader">
+                            {movePending ? "Move payment" : "Apply payment"}
+                        </div>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>{movePending ? "Move to" : "Apply to"}</span>
+                            <select
+                                data-testid="payment-move-target"
+                                value={moveTargetId}
+                                onChange={(e) => {
+                                    setMoveTargetId(e.target.value);
+                                    // A new destination invalidates a preview taken for the old one.
+                                    setMovePreview(null);
+                                }}
+                            >
+                                <option value="">Choose a charge…</option>
+                                {moveTargets.map((t) => (
+                                    <option key={t.chargeId} value={t.chargeId}>
+                                        {t.label}
+                                        {t.serviceDate ? ` · ${t.serviceDate}` : ""}
+                                        {` · ${(t.outstandingCents / 100).toLocaleString(undefined, {
+                                            style: "currency",
+                                            currency,
+                                        })} outstanding`}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        {/* A reversal must say why; applying unapplied money undoes nothing. */}
+                        {movePending ? (
+                            <label className="alloy-os-fdetail__movefield">
+                                <span>Reason</span>
+                                <input
+                                    data-testid="payment-move-reason"
+                                    value={moveReason}
+                                    onChange={(e) => {
+                                        setMoveReason(e.target.value);
+                                        setMovePreview(null);
+                                    }}
+                                    placeholder="Applied to the wrong charge"
+                                />
+                            </label>
+                        ) : null}
+                        {movePreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="payment-move-preview">
+                                <strong>{movePreview.summary}</strong>
+                                {movePreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                            </div>
+                        ) : null}
+                        {moveError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="payment-move-error">
+                                {moveError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-fdetail__moveactions">
+                            {/*
+                              * Preview first, and only for a Move: Confirm stays disabled until the
+                              * ACTION has said what reversing this application will do. Applying
+                              * unapplied money has no reversal to explain.
+                              */}
+                            {movePending ? (
+                                <button
+                                    type="button"
+                                    data-testid="payment-move-preview-button"
+                                    disabled={running || !moveReason.trim()}
+                                    onClick={() => void previewMove()}
+                                >
+                                    Preview
+                                </button>
+                            ) : null}
+                            <button
+                                type="button"
+                                data-testid="payment-move-confirm"
+                                disabled={
+                                    running
+                                    || !moveTargetId
+                                    || (movePending ? !movePreview : false)
+                                }
+                                onClick={() => void (movePending ? confirmMove() : confirmApply())}
+                            >
+                                Confirm
+                            </button>
+                            <button type="button" data-testid="payment-move-cancel" onClick={closeMovePanels}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
+
                 <FinancialsDetailCard
+                    onMovePayment={openMovePayment}
+                    onApplyPayment={openApplyPayment}
                     evidence={adaptFinancialsVmToFinancialsCard({
                         vm,
                         reconciliation,

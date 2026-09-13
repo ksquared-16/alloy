@@ -54,3 +54,38 @@ or assigns a role to a user — the closest keys are `environment.provision_qa_i
 Not done from this lane: writing deployed RBAC through the app's own admin API would route around the
 governed seam that exists for privileged writes, and the narrow and broad options differ in blast
 radius in a way that is the operator's call.
+
+---
+
+## The same identity, the other half: `fin.write` (found 2026-09-13)
+
+Mounting the Slice 6 payment-reallocation certification refused at the fixture, before any UI was
+exercised:
+
+```
+ACTION_BLOCKED   Recording a payment requires fin.write.
+```
+
+Measured through the product's own surface — `/api/admin/rbac/grants?role_key=admin` — the role holds
+`fin.read` (the repair above), `fin.adjust`, `fin.responsibility` and `fin.subsidy`, and **not**
+`fin.write`.
+
+**Why this one is not merely the next item on the backlog.** Moving a payment between charges is a
+reversal under `fin.adjust` followed by an application under `fin.write`. This role holds the first
+and not the second, so an administrator here can take money off the charge it was answering and has
+no permitted way to place it anywhere — the obligation returns and the money stays unapplied. Holding
+neither half is coherent; holding both is coherent; holding exactly the destructive half is the one
+combination that loses money's placement.
+
+The repair reuses this document's own reasoning and is
+`supabase/migrations/20260913030000_admin_holds_financials_write.sql`, which carries the argument in
+full. It was proven by replaying against real Postgres with the hosted condition reconstructed on one
+tenant inside a rolled-back transaction: one org stranded before, none after, and a second apply
+inserts nothing. `web/tests/access/financialsReadAuthorityCoherence.test.ts` states the invariant over
+roles and takes both permission keys from the action definitions, so renaming either half moves the
+lock rather than unbinding it.
+
+**Still not done from this lane, for the reason stated above:** the grant reaches the deployed tenant
+only by promoting that migration through the governed seam. Until it does, the mounted proofs that
+need a receipt cannot run — the persistence scenarios, the certification script and the authorization
+boundaries were certified without one.
