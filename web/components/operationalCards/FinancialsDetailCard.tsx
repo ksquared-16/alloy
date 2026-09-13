@@ -38,6 +38,8 @@ export default function FinancialsDetailCard({
     onMovePayment,
     onAddAdjustment,
     onReverseAdjustment,
+    onPostCharge,
+    onReverseCharge,
     onApplyPayment,
 }: {
     evidence: FinancialsEvidence;
@@ -64,6 +66,10 @@ export default function FinancialsDetailCard({
     onMovePayment?: (args: { paymentId: string; allocationId: string }) => void;
     onAddAdjustment?: () => void;
     onReverseAdjustment?: (args: { applicationId: string }) => void;
+    /** A draft the operator may post. The row says whether it qualifies; this decides nothing. */
+    onPostCharge?: (args: { chargeId: string; label: string }) => void;
+    /** A posted charge the operator may correct. Eligibility is the read model's answer. */
+    onReverseCharge?: (args: { chargeId: string; label: string }) => void;
     /** Put already-received money against an obligation. */
     onApplyPayment?: (args: { paymentId: string }) => void;
 }) {
@@ -225,7 +231,42 @@ export default function FinancialsDetailCard({
                                                 {e.amount}
                                             </span>
                                             <span className="alloy-os-billingdetail__status">{e.status ?? "—"}</span>
-                                            <span className="alloy-os-billingdetail__source">{e.source ?? "—"}</span>
+                                            <span className="alloy-os-billingdetail__source">
+                                                {e.source ?? "—"}
+                                                {/*
+                                                  * THE TRANSITIONS THIS ROW ALREADY QUALIFIES FOR.
+                                                  *
+                                                  * Both are registered actions and both were already
+                                                  * decided by the read model — the card asks, it does
+                                                  * not work out the answer from a status string. They
+                                                  * are rendered here because this is the ledger the
+                                                  * operator actually reaches: the other copy of these
+                                                  * controls sits behind a condition that cannot be
+                                                  * true, so `charge.reverse` had no way in at all.
+                                                  */}
+                                                {e.chargeId && e.offersPost && onPostCharge ? (
+                                                    <button
+                                                        type="button"
+                                                        className="alloy-os-fdetail__rowaction"
+                                                        data-charge-command="charge.post"
+                                                        data-charge-id={e.chargeId}
+                                                        onClick={() => onPostCharge({ chargeId: e.chargeId!, label: e.label })}
+                                                    >
+                                                        Post
+                                                    </button>
+                                                ) : null}
+                                                {e.chargeId && e.offersReverse && onReverseCharge ? (
+                                                    <button
+                                                        type="button"
+                                                        className="alloy-os-fdetail__rowaction"
+                                                        data-charge-command="charge.reverse"
+                                                        data-charge-id={e.chargeId}
+                                                        onClick={() => onReverseCharge({ chargeId: e.chargeId!, label: e.label })}
+                                                    >
+                                                        Reverse
+                                                    </button>
+                                                ) : null}
+                                            </span>
                                         </div>
                                     ))}
                                 </div>

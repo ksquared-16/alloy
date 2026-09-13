@@ -226,6 +226,17 @@ export type LedgerEntry = {
     kind: "charge" | "credit";
     status?: string | null;
     source?: string | null;
+    /**
+     * The charge this row IS, so the surface can offer the transitions it already qualifies for.
+     *
+     * Carried rather than displayed. Without it the ledger can describe a posted charge and cannot
+     * act on it, which is how `charge.reverse` ended up with no reachable operator path at all.
+     */
+    chargeId?: string | null;
+    /** Server-decided, never re-derived here: a draft that may be posted. */
+    offersPost?: boolean;
+    /** Server-decided: posted, not void, not already reversed, not itself a correction. */
+    offersReverse?: boolean;
 };
 
 export type FinancialsPayer = {

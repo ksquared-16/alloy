@@ -2212,3 +2212,20 @@
   display: flex;
   gap: 8px;
 }
+
+/* A transition offered on a ledger row — Post a draft, Reverse a posted charge. */
+.alloy-os-fdetail__rowaction {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 18%, transparent));
+  border-radius: 6px;
+  background: var(--alloy-os-surface, #fff);
+  color: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.alloy-os-fdetail__rowaction:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
