@@ -368,6 +368,13 @@ export function adaptFinancialsVmToLedgerPeriods(input: {
             kind: row.amountCents < 0 ? "credit" : "charge",
             status: row.lifecycleStatus,
             source: row.categoryLabel,
+            /*
+             * Identity and eligibility, both decided by the read model. The card asks whether a row
+             * offers a transition; it never works out the answer from a status string.
+             */
+            chargeId: row.chargeId,
+            offersPost: row.status === "draft",
+            offersReverse: row.offersReverse,
         })),
     }));
 }

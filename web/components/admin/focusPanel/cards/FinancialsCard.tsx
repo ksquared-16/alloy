@@ -276,6 +276,11 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     const [reverseError, setReverseError] = useState<string | null>(null);
     const [adjustNotice, setAdjustNotice] = useState<string | null>(null);
 
+    /* Reversing a posted charge is a correction to money already told to a family: it previews first. */
+    const [reverseCharge, setReverseCharge] = useState<{ chargeId: string; label: string } | null>(null);
+    const [reverseChargePreview, setReverseChargePreview] = useState<{ summary: string; changes: string[] } | null>(null);
+    const [reverseChargeError, setReverseChargeError] = useState<string | null>(null);
+
     const [movePreview, setMovePreview] = useState<{ summary: string; changes: string[] } | null>(null);
     const [moveError, setMoveError] = useState<string | null>(null);
     const [moveNotice, setMoveNotice] = useState<string | null>(null);
@@ -651,6 +656,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
             await load();
         }
     }, [closeAdjustPanels, load, reversePending, reversePreview, reverseReason, runAction, running]);
+
+
 
 
     useEffect(() => {
@@ -1172,6 +1179,79 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         void preview(first, vm.chargeTemplates.find((t) => t.id === first)?.label ?? "");
         // eslint-disable-next-line react-hooks/exhaustive-deps -- re-previews on open, subject and date change
     }, [overlay, subjectFilter, chargeEventDate]);
+
+    /** The row as the read model knows it — the callback carries identity, not attribution. */
+    const rowForCharge = useCallback(
+        (chargeId: string) => {
+            const row = vm?.rows.find((r) => r.chargeId === chargeId);
+            return {
+                chargeId,
+                description: row?.description ?? null,
+                subjectMemberId: row?.subjectMemberId ?? null,
+            };
+        },
+        [vm],
+    );
+
+    const openReverseCharge = useCallback((args: { chargeId: string; label: string }) => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setReverseChargePreview(null);
+        setReverseChargeError(null);
+        setAdjustNotice(null);
+        setReverseCharge(args);
+    }, [closeAdjustPanels, closeMovePanels]);
+
+    const previewReverseCharge = useCallback(async () => {
+        if (!reverseCharge || running) return;
+        setRunning(true);
+        setReverseChargeError(null);
+        try {
+            const row = rowForCharge(reverseCharge.chargeId);
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: "charge.reverse",
+                    entity_type: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
+                    entity_id: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
+                    mode: "preview",
+                    payload: {
+                        charge_id: reverseCharge.chargeId,
+                        charge_label: reverseCharge.label,
+                        kind: "reversal",
+                    },
+                }),
+            });
+            const json = (await res.json()) as {
+                ok?: boolean;
+                error?: string | { message?: string };
+                data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
+            };
+            const p = json?.data?.execution_result?.preview;
+            if (!json?.ok || !p?.summary) {
+                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                setReverseChargeError(err || "This reversal could not be previewed.");
+                return;
+            }
+            setReverseChargePreview({ summary: p.summary, changes: p.changes ?? [] });
+        } catch (e) {
+            setReverseChargeError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+        }
+    }, [chargeInvocation, reverseCharge, rowForCharge, running]);
+
+    const confirmReverseCharge = useCallback(async () => {
+        if (!reverseCharge || running || !reverseChargePreview) return;
+        const target = reverseCharge;
+        setReverseCharge(null);
+        setReverseChargePreview(null);
+        await runRowAction("charge.reverse", rowForCharge(target.chargeId));
+        // The original stays posted; what changed is that a corrective line now references it.
+        setAdjustNotice(`Reversed ${target.label}. The original charge stays on the record, with its correction beside it.`);
+    }, [reverseCharge, reverseChargePreview, rowForCharge, runRowAction, running]);
 
     // Elevation reported from RENDER-adjacent state, so the depth layer and this card agree on the
     // same frame. A card that reported after paint would flash its base surface first.
@@ -2161,6 +2241,53 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     </div>
                 ) : null}
 
+                {reverseCharge ? (
+                    <div className="alloy-os-fdetail__movepanel" data-testid="charge-reverse-panel">
+                        <div className="alloy-os-fdetail__moveheader">Reverse charge</div>
+                        <div className="alloy-os-fdetail__movefield">
+                            <span data-testid="charge-reverse-subject">{reverseCharge.label}</span>
+                        </div>
+                        {reverseChargePreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="charge-reverse-preview">
+                                <strong>{reverseChargePreview.summary}</strong>
+                                {reverseChargePreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                            </div>
+                        ) : null}
+                        {reverseChargeError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="charge-reverse-error">
+                                {reverseChargeError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-fdetail__moveactions">
+                            <button
+                                type="button"
+                                data-testid="charge-reverse-preview-button"
+                                disabled={running}
+                                onClick={() => void previewReverseCharge()}
+                            >
+                                Preview
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="charge-reverse-confirm"
+                                disabled={running || !reverseChargePreview}
+                                onClick={() => void confirmReverseCharge()}
+                            >
+                                Confirm
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="charge-reverse-cancel"
+                                onClick={() => { setReverseCharge(null); setReverseChargePreview(null); }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
+
                 {/* REVERSE. The original is never edited; its opposite is appended. */}
                 {reversePending ? (
                     <div className="alloy-os-fdetail__movepanel" data-testid="adjustment-reverse-panel">
@@ -2220,6 +2347,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     /* Only offered where an enrolment exists: the action is scoped to an agreement. */
                     onAddAdjustment={adjustableSubjects.length > 0 ? openAddAdjustment : undefined}
                     onReverseAdjustment={openReverseAdjustment}
+                    onPostCharge={({ chargeId }) => void runRowAction("charge.post", rowForCharge(chargeId))}
+                    onReverseCharge={openReverseCharge}
                     evidence={adaptFinancialsVmToFinancialsCard({
                         vm,
                         reconciliation,
