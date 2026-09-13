@@ -14,6 +14,7 @@ import { LANE_ID_RE, LANE_INSTRUCTION_MAX, runReceiptToken, textProvesInstructio
 import { assertResettableRoot, canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
 import { cleanupRunResources, onExecutionRunTransition, resetResourceRequestsForTests } from "./execution-resource.mjs";
 import { TOOLKIT_DIR } from "./workspace-facts.mjs";
+import { isDeclaredWaitReason } from "./run-wait.mjs";
 import { localNodeId, vacilandoGatewayRoot } from "./execution-node.mjs";
 import * as attachmentsModule from "./lane-attachments.mjs";
 import { recordLaneProgress } from "./lane-memory.mjs";
@@ -1124,7 +1125,41 @@ export function transitionExecutionRun(runId, toState, {
   }
   if (to === "WAITING_RESOURCE") {
     const key = resource_wait?.resource_key || resource_wait?.key || null;
+    /*
+     * THE MACHINE REASON SURVIVES THE WRITE.
+     *
+     * This rebuild used a presentation allowlist — resource_key, label, summary
+     * and friends — and `reason` was not in it. So `waitProjection()` built a
+     * correct S6 descriptor (`needs_operator_input`, human_indefinite, owner
+     * director), handed it here, and the writer dropped the entire envelope on
+     * the way to disk. Every governed approval wait was stored with no machine
+     * reason at all.
+     *
+     * MEASURED: erun_f4f9ff73ca8144ce entered WAITING_RESOURCE for a worktree
+     * retirement at 19:32:43 and the Governor failed it `missing_wait_reason`
+     * ten seconds later. The push wait is written exactly as wrongly; it
+     * survives only because it resumes before a sweep sees it. The comment on
+     * waitProjection already says the text was never the problem and the
+     * missing envelope was — and then the envelope was thrown away here.
+     *
+     * An UNDECLARED reason is not stored. A wait nobody defined must keep
+     * reading as missing rather than be preserved as a plausible-looking key.
+     */
+    const declared = isDeclaredWaitReason(resource_wait?.reason) ? resource_wait.reason : null;
     found.resource_wait = {
+      ...(declared
+        ? {
+          schema_version: resource_wait?.schema_version || null,
+          reason: declared,
+          resource_type: resource_wait?.resource_type || null,
+          owner: resource_wait?.owner || null,
+          waiting_since: Number(resource_wait?.waiting_since) || nowMs,
+          deadline: resource_wait?.deadline ?? null,
+          bound_policy: resource_wait?.bound_policy || null,
+          resolution_state: resource_wait?.resolution_state || null,
+          last_observed_at: Number(resource_wait?.last_observed_at) || nowMs,
+        }
+        : {}),
       resource_key: key ? String(key).slice(0, 80) : null,
       label: bound(resource_wait?.label || reason || key, 120),
       summary: bound(resource_wait?.summary || resource_wait?.purpose, 240),

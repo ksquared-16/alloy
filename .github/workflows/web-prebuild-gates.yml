@@ -91,3 +91,14 @@ jobs:
         run: |
           node --test scripts/local-dev/tests/development-reconciliation-context.test.mjs
           node --test scripts/local-dev/tests/development-push-diagnostic-fidelity.test.mjs
+      # A destructive action may not register without a semantic identity, and a
+      # governed approval wait may not be stored without its machine reason.
+      #
+      # Eleven worktree retirements reported success and removed nothing, each
+      # returning a twelfth worktree's result — and the run that filed the first
+      # was killed by the Governor for a `reason` the writer had dropped. Both
+      # are locked here, and a new deletion capability with no identity fails on
+      # the pull request rather than on a fleet.
+      - name: Destructive-action dedupe + governed wait contract
+        working-directory: .
+        run: node scripts/local-dev/tests/development-destructive-dedupe-integrity.test.mjs

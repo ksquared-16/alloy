@@ -294,6 +294,44 @@ export function sameActionOwnership(candidate, { executionSessionId = null, assi
   return true;
 }
 
+/** Order-independent structural equality over one action's normalised inputs. */
+export function sameNormalizedInputs(a = {}, b = {}) {
+  const canon = (v) => {
+    if (v === null || typeof v !== "object") return v === undefined ? null : v;
+    if (Array.isArray(v)) return v.map(canon);
+    return Object.keys(v).sort().reduce((acc, k) => { acc[k] = canon(v[k]); return acc; }, {});
+  };
+  try { return JSON.stringify(canon(a)) === JSON.stringify(canon(b)); } catch { return false; }
+}
+
+/**
+ * DOES THIS ACTION DESCRIBE THE THING THE CALLER ASKED ABOUT?
+ *
+ * Compared on the fields that name a target rather than on the whole payload: a
+ * reused action may legitimately differ in incidental context, but never in
+ * WHAT it acts on. Fields absent from both sides are not evidence and are
+ * skipped, so this can only ever refuse a real, visible disagreement.
+ */
+export const ACTION_IDENTITY_FIELDS = Object.freeze([
+  "worktree", "path", "branch", "safetyFingerprint", "repository",
+  "expectedHeadSha", "pullRequestNumber", "deployed_target", "laneId",
+]);
+
+export function resultOwnershipMatches(existingInputs = {}, requestedInputs = {}) {
+  for (const field of ACTION_IDENTITY_FIELDS) {
+    const had = existingInputs?.[field];
+    const want = requestedInputs?.[field];
+    if (had === undefined && want === undefined) continue;
+    if (String(had ?? "") !== String(want ?? "")) {
+      return {
+        ok: false,
+        detail: `a completed action for ${field}="${had ?? "—"}" cannot answer a request for ${field}="${want ?? "—"}"`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
 export function requestTrustedHostAction({
   missionId,
   assignmentId = null,
@@ -341,7 +379,37 @@ export function requestTrustedHostAction({
    * COMPLETED state is withheld, and only from definitions that say their result does not keep.
    */
   const REUSABLE_IN_FLIGHT_STATES = ["requested", "policy_review", "authorized", "executing", "retrying"];
-  const reusableStates = def.resultKeeps === false
+  /*
+   * A COMPLETED RESULT MAY ONLY BE REPLAYED BY SOMETHING THAT SAYS WHICH
+   * QUESTION IT ANSWERED.
+   *
+   * `dedupeKey` and `queryHash` are both OPTIONAL. Most actions declare one in
+   * their own module — push, open_pr, merge, close_pr, delete_branch,
+   * install_toolkit, the reconciliations — and `retire_worktree` did not. For an
+   * action that declares neither, the predicate below reduced to
+   * `undefined === undefined`, and `sameActionOwnership` compares only session,
+   * assignment and lane — so ANY completed action of that type satisfied ANY
+   * later request of that type in the same scope. Measured still true today for
+   * `platform.register_developer_application`.
+   *
+   * That is how eleven worktree retirements returned a twelfth worktree's
+   * result. The hazard is general: `resultKeeps: false` was the per-action fix
+   * for one instance of it, and it cannot be the fix for an action nobody
+   * noticed.
+   *
+   * SCOPED TO WHAT IT IS ABOUT. Withholding completed reuse from EVERY keyless
+   * action would also move `restore_qa_session`, whose ownership contract is
+   * locked by its own test and is not this mission's to change. The narrowing
+   * applies to actions that DECLARE themselves destructive: replaying a finished
+   * deletion is categorically different from replaying a finished answer, and a
+   * destructive action that cannot say what it acted on may not replay at all.
+   * In-flight reuse is kept for everything — two concurrent requests must still
+   * never both execute.
+   */
+  const hasSemanticIdentity = Boolean(dedupeKey);
+  const mayNotReplayFinished = def.resultKeeps === false
+    || (def.destructive === true && !hasSemanticIdentity);
+  const reusableStates = mayNotReplayFinished
     ? REUSABLE_IN_FLIGHT_STATES
     : [...REUSABLE_IN_FLIGHT_STATES, "completed"];
   const existing = listTrustedHostActions(missionId).find((a) =>
@@ -349,9 +417,30 @@ export function requestTrustedHostAction({
     && sameActionOwnership(a, { executionSessionId, assignmentId, inputs: validated.normalized })
     && (dedupeKey
       ? (a.inputs?.dedupeKey === dedupeKey || a.inputs?.queryHash === dedupeKey)
-      : a.inputs?.queryHash === validated.normalized.queryHash)
+      /*
+       * NO KEY IS NOT A WILDCARD — for something that deletes. With nothing
+       * declared, the only honest statement of "the same request" is the same
+       * normalised inputs, compared whole, so two distinct retirements can no
+       * longer share an action merely by both being keyless. Everything else
+       * keeps the existing predicate.
+       */
+      : (def.destructive === true
+        ? sameNormalizedInputs(a.inputs, validated.normalized)
+        : a.inputs?.queryHash === validated.normalized.queryHash))
     && reusableStates.includes(a.state));
   if (existing) {
+    /*
+     * DEFENCE IN DEPTH: the reused action must be about the same thing.
+     *
+     * Reached only if a future dedupe rule is wrong. A destructive action that
+     * replays someone else's success is the failure this refuses to make
+     * possible twice, so the mismatch is a named integrity error rather than a
+     * silently adopted result.
+     */
+    const owned = resultOwnershipMatches(existing.inputs, validated.normalized);
+    if (!owned.ok) {
+      return { ok: false, error: "action_identity_mismatch", detail: owned.detail, actionType };
+    }
     return { ok: true, action: existing, deduped: true };
   }
 
@@ -2737,7 +2826,33 @@ export function fulfillRetireWorktreeForMission(missionId, {
     authorizationContext: exactContext,
   });
   if (!req.ok) return req;
-  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  if (req.action.state === "completed" && req.deduped) {
+    /*
+     * THE RESULT ITSELF MUST NAME THIS WORKTREE.
+     *
+     * The framework already refuses to reuse an action about something else,
+     * and this checks the other end: the stored RESULT, which is what a caller
+     * reads and what an operator is shown. Eleven callers were handed a result
+     * whose `worktree` was not the one they asked to retire, and whose
+     * `filesystem_path_absent: true` was true of a different directory.
+     *
+     * A deletion is not a fact you may infer from someone else's receipt.
+     */
+    const out = req.action.result || {};
+    const wantWorktree = String(inputs.worktree ?? "").trim();
+    const wantFingerprint = String(inputs.safetyFingerprint ?? "").trim();
+    const mismatch = (out.worktree && wantWorktree && String(out.worktree) !== wantWorktree)
+      || (out.safety_fingerprint && wantFingerprint && String(out.safety_fingerprint) !== wantFingerprint);
+    if (mismatch) {
+      return {
+        ok: false,
+        error: "destructive_result_ownership_mismatch",
+        detail: `a completed retirement of "${out.worktree}" (fingerprint ${String(out.safety_fingerprint).slice(0, 12)}) cannot report the retirement of "${wantWorktree}" (fingerprint ${wantFingerprint.slice(0, 12)})`,
+        action: req.action,
+      };
+    }
+    return { ok: true, action: req.action, already: true };
+  }
   const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
   if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
   return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
