@@ -1178,7 +1178,32 @@ export function transitionExecutionRun(runId, toState, {
       mission_id: resource_wait?.mission_id || resource_wait?.missionId || null,
     };
   } else if (to !== "WAITING_RESOURCE" && from === "WAITING_RESOURCE") {
-    found.resource_wait = found.resource_wait;
+    /*
+     * LEAVING A WAIT RESOLVES IT.
+     *
+     * This was the literal no-op `found.resource_wait = found.resource_wait`,
+     * so a run could leave WAITING_RESOURCE and keep a wait that still read
+     * `resolution_state: "waiting"`. An active wait on a running run is the same
+     * class of lie as a wait with no reason on a waiting one, and the live proof
+     * produced exactly it: erun_828e075e3c1ed70a ran for minutes carrying the
+     * retirement wait it had already left.
+     *
+     * RESOLVED, NOT ERASED. The earlier repair in this area cleared the wait
+     * outright and destroyed the forensic record on terminal failures — an
+     * operator looking at a failed run could no longer see what it had been
+     * waiting for. The record stays; only its state moves, and the moment it
+     * moved is recorded. An owner that genuinely wants the wait gone still
+     * clears it outright through patchRunResourceWait.
+     */
+    if (found.resource_wait && found.resource_wait.resolution_state === "waiting") {
+      found.resource_wait = {
+        ...found.resource_wait,
+        resolution_state: "resolved",
+        resolved_at: nowMs,
+        resolved_into: to,
+        last_observed_at: nowMs,
+      };
+    }
   }
   if (resource_wait?.governed_action) found.governed_action = resource_wait.governed_action;
   if (fingerprint) found.output_fingerprint_at_send = found.output_fingerprint_at_send || String(fingerprint);
