@@ -12,7 +12,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { buildOperatingReport, renderOperatingReport } from "./lib/vacilando/operating-report.mjs";
+import { buildOperatingReport, renderOperatingReport, reportIsDue } from "./lib/vacilando/operating-report.mjs";
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback = null) => {
@@ -80,6 +80,17 @@ try {
     converged: m.toolkit_drift === false,
   };
 } catch { /* same */ }
+
+/*
+ * `--due` lets the host's EXISTING timer ask whether to run, instead of this
+ * process growing a clock of its own. Exit 0 when due, 3 when not, so a shell
+ * line can gate on it without parsing anything.
+ */
+if (has("due")) {
+  const verdict = reportIsDue(kind, new Date());
+  process.stdout.write(`${JSON.stringify({ kind, ...verdict })}\n`);
+  process.exit(verdict.due ? 0 : 3);
+}
 
 const report = buildOperatingReport({ kind, windowStart, windowEnd, requests, runs, lanes, notifications, health, runtime });
 

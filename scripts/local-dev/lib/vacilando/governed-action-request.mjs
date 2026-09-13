@@ -1286,7 +1286,26 @@ const SETTLED = new Set(SETTLED_GOVERNED_STATUSES);
  * there are — an unbounded backlog is a problem to SHOW the operator, never
  * one to fix by forgetting the oldest of it.
  */
-export function retainGovernedRequests(requests, cap = 200) {
+/**
+ * How many SETTLED records to keep.
+ *
+ * 200 was a fine number for a queue and a poor one for history: a single busy
+ * day produced 200 governed actions, so the weekly operating report's SHIPPING
+ * figures were identical to the daily one - the week simply had no older
+ * records left to count.
+ *
+ * Raised to 1000 and made a setting. The cost is one JSON file: a record is
+ * roughly 1-2 KB, so this is a few megabytes at the cap, and the eviction rule
+ * below is unchanged - an unanswered request is never disposable at any cap.
+ */
+export const GOVERNED_REQUEST_RETENTION_DEFAULT = 1000;
+
+export function governedRequestRetentionCap() {
+  const raw = Number(process.env.VACILANDO_GOVERNED_REQUEST_RETENTION);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : GOVERNED_REQUEST_RETENTION_DEFAULT;
+}
+
+export function retainGovernedRequests(requests, cap = governedRequestRetentionCap()) {
   if (!Array.isArray(requests) || requests.length <= cap) return requests;
   const unsettled = requests.filter((r) => !SETTLED.has(r.status));
   const settled = requests.filter((r) => SETTLED.has(r.status));

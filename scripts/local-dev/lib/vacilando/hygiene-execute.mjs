@@ -25,6 +25,7 @@ import { LOG_TAIL_BYTES } from "./artifact-retention.mjs";
 import { reclaimOne } from "./hygiene-reclaim.mjs";
 import { executeWorktreeRetirement } from "./trusted-host-worktree-retirement.mjs";
 import { defaultCanonicalRoot, fileHasLiveWriter, readGitWorktrees } from "./hygiene-observe.mjs";
+import { firstMeaningfulLine } from "./trusted-host-push.mjs";
 
 export const HYGIENE_EXECUTE_SCHEMA = "vacilando.hygiene_execute.v1";
 
@@ -32,7 +33,9 @@ function git(args, cwd, { timeout = 60_000 } = {}) {
   try {
     return { ok: true, stdout: execFileSync("git", args, { cwd, encoding: "utf8", timeout, stdio: ["ignore", "pipe", "pipe"] }) };
   } catch (e) {
-    return { ok: false, error: String(e?.stderr || e?.message || e).split("\n")[0].slice(0, 300) };
+    // Hygiene removes things. A blank reason on a refusal is the worst place
+    // to lose the sentence that said why.
+    return { ok: false, error: firstMeaningfulLine(String(e?.stderr || e?.message || e), "hygiene step failed").slice(0, 300) };
   }
 }
 

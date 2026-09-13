@@ -612,6 +612,34 @@ export function executeToolkitInstall({
   }
 
   const gw = observeGatewayExecution({ toolkitRoot });
+  const restartRequired = gw.executing_sha !== after;
+  /*
+   * "RESTART REQUIRED" DOES NOT MEAN "REQUIRED OF YOU".
+   *
+   * `gateway_restart_required: true` is a true statement about the Gateway and a
+   * misleading one about the operator. The restart is already owned: the drift
+   * raises a TOOLKIT_DRIFT episode and `converge_toolkit_then_restart` performs
+   * it automatically, measured at 77s and 291-308s. An operator reading the raw
+   * flag has no way to tell that from "nothing is going to happen unless you do
+   * it", and inferring that a convergence owner is missing is exactly the wrong
+   * conclusion.
+   *
+   * So the result also says, in words, which of the three it is. The flag stays
+   * for every existing reader; nothing about the lifecycle or its cadence moves.
+   */
+  const convergence = restartRequired
+    ? {
+      state: "CONVERGENCE_SCHEDULED",
+      owner: "control-plane TOOLKIT_DRIFT episode",
+      operator_action_required: false,
+      detail: "The installed toolkit differs from the running Gateway. Convergence is scheduled automatically and typically completes within a few minutes; no operator action is needed.",
+    }
+    : {
+      state: "CONVERGED",
+      owner: null,
+      operator_action_required: false,
+      detail: "The running Gateway is already executing the installed toolkit.",
+    };
   return {
     ok: true,
     previous_sha: before,
@@ -620,6 +648,7 @@ export function executeToolkitInstall({
     readback_verified: Boolean(want) && after === want,
     rollback_target: before,
     gateway_executing_sha: gw.executing_sha,
-    gateway_restart_required: gw.executing_sha !== after,
+    gateway_restart_required: restartRequired,
+    convergence,
   };
 }
