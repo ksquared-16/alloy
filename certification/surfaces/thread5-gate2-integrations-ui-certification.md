@@ -1,6 +1,6 @@
 # Thread 5 Gate 2 — Integrations UI, mounted certification
 
-**Terminal status: `THREAD5_GATE2_INTEGRATIONS_UI_BLOCKED`**
+**Terminal status: `THREAD5_GATE2_INTEGRATIONS_UI_BLOCKED`** — superseded; see the continuation at the end of this record.
 
 Not blocked by a defect. Blocked by a data precondition Surfaces cannot satisfy and must not
 manufacture: the platform application catalog is empty, so the half of the surface that begins at
@@ -174,3 +174,153 @@ Register one active `developer_applications` row in staging through the develope
 (Documentation/API owns it), then re-run this matrix. The nine BLOCKED scenarios are scripted and
 will execute unchanged — `gate2-mounted-matrix.mjs` derives everything from the installation ids the
 list returns.
+
+---
+
+# Gate 2 — final mounted certification (continuation)
+
+**Terminal status: `THREAD5_GATE2_SURFACE_DEFECT_FOUND` → repaired, promoted, re-proven.**
+
+The nine scenarios blocked in the first pass all executed. One real Surfaces defect was found by
+pressing the product rather than reading it, and one foreign-domain defect was found and handed on.
+
+## Environment
+
+| | |
+| --- | --- |
+| staging at start | `581fe3b4f50fd82178960be2e3872add889f47c9` (PR #898) |
+| staging after repair | `2378af6875a0278142ffe16b93619ef0c6716007` (PR #899) |
+| installed toolkit | `581fe3b4f50f` |
+| running Gateway | `581fe3b4f50f` — installed 10:06:24, Gateway restarted 10:07 from `toolkit/current` |
+| toolkit drift | **none**; steward healthy, 50 cycles, 0 executed, 0 refused |
+| lane / slot / port | `lane_faacca6079ad` · 6 · 3016 · registered == actual branch · clean |
+| QA identity | `qa-slot1-product@example.com` |
+
+## Prerequisite visibility (Phase 2)
+
+Mounted wizard showed **Alloy Certification Sandbox · active · alloy-platform**,
+`wizard-no-applications` = 0, and `wizard-next` disabled before selection → enabled after. The prior
+data blocker is cleared.
+
+## Installation created through the UI (Phase 4)
+
+No API or DB pre-creation. The wizard walked application → capabilities (3 offered) → locations
+(org-wide) → review, and Create issued:
+
+```
+201 POST /api/admin/integrations/installations
+```
+
+**Installation id: `5bdc7c1e-86ca-45f9-a18d-7d00fd7b6923`** — exactly one row.
+
+## Existing matrix, rerun unchanged (Phase 3)
+
+`gate2-mounted-matrix.mjs`, byte-identical to the committed copy: **17 PASS · 0 FAIL · 0 BLOCKED**,
+against 9 PASS + 9 BLOCKED before.
+
+One scenario in that file — `G2-N2` (detail → back) — is unreachable as written: `G2-N1` reloads and
+lands on the list, which removes the `installation-back` precondition. Classified
+**QA_HARNESS_DEFECT**, proven separately below rather than papered over, and left in place because
+the instruction forbids editing the matrix absent a harness defect finding.
+
+## Deeper proofs
+
+| id | goal | result | evidence |
+| --- | --- | --- | --- |
+| G2-T4 | detail shows canonical application identity | PASS | "Alloy Certification Sandbox" |
+| G2-T5 | no producer identifier in detail | PASS | 0 mentions, no `producer_id` |
+| G2-N2 | detail → back returns to the list | PASS | proven directly; list root + 1 row |
+| G2-N3 | refresh **while on detail** | PASS | coherent surface after reload |
+| G2-X3 | access change persists via canonical API | PASS | granted `locations.read` → `200 PATCH` |
+| G2-X4 | persisted access survives full reload | PASS | `locations.read` still checked |
+| G2-X5 | revocation of a grant also persists | PASS | `200 PATCH`, state restored |
+| G2-S4 | write API refuses anonymous | PASS | `PATCH installation` → **401** |
+| G2-S5 | credential write refuses anonymous | PASS | `POST credentials` → **401** |
+| G2-C3 | no secret before issue | PASS | none rendered |
+| G2-C4 | issue reveals secret once via canonical API | PASS | `201 POST …/credentials`, 52-char secret |
+| G2-C5 | secret **not** re-exposed after refresh | PASS | absent after navigation |
+| G2-C6 | rotation issues a new secret + overlap | PASS | differs from first; overlap stated |
+| G2-C7 | no service-role/admin secret leak | PASS | no leak markers |
+| G2-S1/S2/S3, G2-E1 | permission + error matrix | PASS | 401 anon / 200 granted / `/login` / clean 404 |
+
+## Defect 1 — SURFACE_PRESENTATION_DEFECT (Surfaces, fixed)
+
+`G2-C8` failed: after revoking, **Rotate and Revoke stayed enabled**. The buttons gated on
+`!installation.credential`, and a revoked credential is still returned so the surface can name it.
+
+Pressed in that state: `500 {"error":"credential_not_active"}`, credential unchanged
+(`status: revoked`), health `needs_attention / no_active_credential`. So nothing was resurrected —
+never a security hole, just a dead control that spent a round trip to say no.
+
+Fixed in **PR #899** by gating on an active credential, mirroring the server's own predicate.
+`rotating` stays actionable (overlap window); `Issue` stays available so an operator can recover.
+The regression test fails against the shipped gating.
+
+## Defect 2 — DOCUMENTATION_API_CONTRACT_DEFECT (Documentation/API, handed on)
+
+`credential_not_active` is a business-rule refusal answered with **HTTP 500**. A 500 implies server
+fault and will trip alerting that should stay quiet; 409/422 is the honest code. **Not repaired
+inside Surfaces.**
+
+## Certification data disposition
+
+| | |
+| --- | --- |
+| developer application `alloy-cert-sandbox` | **retained** — global certification fixture, not deleted |
+| installation `5bdc7c1e-…` | **retained** — deterministic reusable certification state |
+| capabilities | restored to `context.read` only (the as-installed set) |
+| credential `860cd137-…` | **revoked** through the product's own control; record retained with `status: revoked` |
+
+All state was created and left through canonical APIs. No direct DB writes, no cleanup by SQL.
+
+## Post-repair recertification on the deployed runtime
+
+Deployment was **proven from runtime evidence, not merge status**. `GET /api/build-info` on staging:
+
+```json
+{"gitSha":"2378af6875a0278142ffe16b93619ef0c6716007","gitBranch":"staging",
+ "gitMessage":"Merge pull request #899 … fix(integrations): rotate and revoke need an active credential…",
+ "vercelDeploymentId":"dpl_GE8VpYoxqGQeRSYFA5zDLPyyoobL"}
+```
+
+That `gitSha` is exactly PR #899's merge commit, so the runtime under test contains the repair.
+
+The matrix was rerun **byte-identical** to the committed copy.
+
+| suite | result |
+| --- | --- |
+| `gate2-mounted-matrix.mjs` (unchanged) | **17 PASS · 0 FAIL · 0 BLOCKED** |
+| `gate2-permission-boundary.mjs` | **4 PASS** |
+| `gate2-deep-scenarios.mjs` (T4/T5, N2/N3, X3/X4/X5, S4/S5) | **9 PASS** |
+| `gate2-credential-gate.mjs` (C8/C9, the repaired gate) | **2 PASS** |
+| **total** | **32 PASS · 0 FAIL · 0 BLOCKED** |
+
+The repaired gate, observed live:
+
+```
+label: "Credentials  Revoked · ends zXZ4 · never used"
+rotate_disabled = true    revoke_disabled = true    issue_disabled = false
+```
+
+### Disposition of the nine previously BLOCKED scenarios
+
+All nine executed and passed. They were blocked only by the empty application catalog, which
+Developer Application Registration V1 (PR #898) cleared.
+
+| scenario | before | after |
+| --- | --- | --- |
+| G2-T1 detail governed by canonical installation id | BLOCKED | **PASS** |
+| G2-T2 no producer identifiers in detail | BLOCKED | **PASS** |
+| G2-T3 health/state presented | BLOCKED | **PASS** |
+| G2-X1 access region reachable | BLOCKED | **PASS** |
+| G2-X2 capability editor loads with resolved scopes | BLOCKED | **PASS** |
+| G2-C1 no secret before an explicit reveal | BLOCKED | **PASS** |
+| G2-C2 no raw service/admin secret leak | BLOCKED | **PASS** |
+| G2-N1 refresh retains a coherent surface | BLOCKED | **PASS** |
+| G2-N2 detail → back returns to the list | BLOCKED | **PASS** (proven directly; see harness note) |
+
+C3–C7 (issue → reveal-once → rotate → no-leak) were proven on `581fe3b4f` before the repair. The
+repair changed only button gating, not issue/reveal/rotate, so those results stand; C8/C9 are the
+ones re-proven on `2378af687`.
+
+**Terminal: `THREAD5_GATE2_INTEGRATIONS_UI_CERTIFIED`.**
