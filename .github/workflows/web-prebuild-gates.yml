@@ -131,3 +131,8 @@ jobs:
       - name: Operator state language
         working-directory: .
         run: node scripts/local-dev/tests/development-operator-state-language.test.mjs
+      # The surfaces must MAP the canonical state, never re-derive it. The guard
+      # fails if the lane route grows a second rule about what needs the operator.
+      - name: Operator state surfaces
+        working-directory: .
+        run: node scripts/local-dev/tests/development-operator-state-surfaces.test.mjs
