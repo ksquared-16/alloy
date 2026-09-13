@@ -18,6 +18,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    PAYMENT_REFUND_PERMISSION,
+    PAYMENT_WRITE_PERMISSION,
+} from "@/lib/adminV2/actions/definitions/financialPaymentActions";
+import {
     keyLiterals,
     liveFunctionDefinition,
     migrationFiles,
@@ -106,5 +110,57 @@ describe("financials read authority", () => {
                 });
         });
         expect(repairs, "no migration grants fin.read to admin in existing orgs").not.toHaveLength(0);
+    });
+});
+
+/**
+ * A ROLE THAT MAY UNAPPLY MONEY MUST BE ABLE TO PUT IT BACK.
+ *
+ * Moving a payment from one charge to another is a reversal followed by an application, and the two
+ * halves are enforced under DIFFERENT permissions. A role holding only the first can take money off
+ * the charge it was answering and has no permitted way to place it anywhere: the obligation returns,
+ * the money goes unapplied, and it stays there. Granting neither half is coherent and granting both
+ * is coherent; granting exactly the destructive half is the one combination that loses money's
+ * placement — and a hosted tenant was measured in it (`admin` held fin.adjust and not fin.write).
+ *
+ * Taken from the action definitions rather than written out here, so that renaming either half's
+ * permission moves this lock with it instead of quietly unbinding it.
+ */
+describe("payment reallocation authority", () => {
+    const admin = region("W12:ADMIN-GRANTS:BEGIN", "W12:ADMIN-GRANTS:END");
+    const ops = region("W12:OPS-GRANTS:BEGIN", "W12:OPS-GRANTS:END");
+    const directors = region("ACCESSV2:DIRECTOR-GRANTS:BEGIN", "ACCESSV2:DIRECTOR-GRANTS:END");
+
+    it.each([
+        ["admin", admin],
+        ["ops", ops],
+        ["director package", directors],
+    ])("%s: seeding the reversal half seeds the application half", (_label, keys) => {
+        if (!keys.has(PAYMENT_REFUND_PERMISSION)) return; // no reversal authority, nothing to strand
+        expect(
+            [...keys],
+            `seeds ${PAYMENT_REFUND_PERMISSION} without ${PAYMENT_WRITE_PERMISSION} — such a role can `
+                + "unapply money and never reapply it",
+        ).toContain(PAYMENT_WRITE_PERMISSION);
+    });
+
+    /*
+     * As with the read repair: a new org's seed is not a repair for orgs that already exist. Scoped
+     * to the grants INSERT STATEMENT and excluding the seed function's own parameterised insert,
+     * because several later migrations mention admin and fin.write in unrelated catalog literals.
+     */
+    it("carries a migration granting admin fin.write in existing orgs", () => {
+        const repairs = migrationFiles().filter((f) => {
+            const sql = stripSqlComments(readMigration(f));
+            return sql
+                .split(/insert\s+into\s+public\.role_permission_grants/i)
+                .slice(1)
+                .some((rest) => {
+                    const stmt = rest.slice(0, rest.indexOf(";") + 1 || rest.length);
+                    if (/p_org_id/.test(stmt)) return false;
+                    return /'admin'/.test(stmt) && /'fin\.write'/.test(stmt);
+                });
+        });
+        expect(repairs, "no migration grants fin.write to admin in existing orgs").not.toHaveLength(0);
     });
 });
