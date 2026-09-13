@@ -165,11 +165,33 @@ test("T11. THE GAP: the cadence is recorded, not just evaluated", async () => {
   const src = readFileSync(new URL("../lib/vacilando/host-steward-run.mjs", import.meta.url), "utf8");
   const staged = src.slice(src.indexOf("const dispatch = await dispatchStage"));
   const recorded = staged.slice(0, staged.indexOf("return { ...steward"));
-  assert.match(recorded, /runOperatingReportStage/, "the stage runs before the record is written");
-  assert.match(recorded, /reports: reportsSummary\(reports\)/, "and its outcome is in the record");
+  assert.match(recorded, /reports: reportsSummary\(reports\)/, "its outcome is in the record");
   // Bounded like its neighbour: a reason and an id, never the report itself.
   assert.match(src, /function reportsSummary/);
   assert.doesNotMatch(src, /reports: reports,/, "the whole report must not land in the state file");
+});
+
+test("T12. THE DEFECT: the cadence is evaluated every tick, not every six hours", async () => {
+  /*
+   * I first put the stage on the hygiene-due path. Hygiene is due every six
+   * hours, so an 18:30 report evaluated there would usually not be evaluated at
+   * all - the exact defect the comment beside that branch already describes for
+   * scheduling. Three consecutive live cycles recorded `reports: null` while
+   * `hygiene: not_due`, which is what caught it.
+   *
+   * Asserted structurally: the stage must run BEFORE the branch, and the
+   * not-due path must carry its outcome.
+   */
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../lib/vacilando/host-steward-run.mjs", import.meta.url), "utf8");
+  const stagePos = src.indexOf("runOperatingReportStage({ root, nowMs })");
+  const branchPos = src.indexOf("const due = forceHygiene");
+  assert.ok(stagePos > 0 && branchPos > 0, "both landmarks present");
+  assert.ok(stagePos < branchPos, "the report stage must run before the hygiene branch");
+  // And the cheap path records it.
+  const notDue = src.slice(src.indexOf('hygiene: "not_due"'));
+  assert.match(notDue.slice(0, 400), /reports: reportsSummary\(reports\)/,
+    "the five-minute path must record the cadence too");
 });
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
