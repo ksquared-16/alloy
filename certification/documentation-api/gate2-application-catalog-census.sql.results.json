@@ -1,0 +1,37 @@
+{
+  "trusted_host_action_id": "tha_192350f3974a63",
+  "query_hash": "3f870fefe201a6f8a90d1906a76edbf3edd5d63efd291ee2b50183a68870d02c",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-13T16:43:17.239Z",
+    "question_ids": [
+      "q1_developer_applications_total",
+      "q2_developer_applications_active",
+      "q3_control_orgs_total"
+    ],
+    "questions": {
+      "q1_developer_applications_total": {
+        "question_id": "q1_developer_applications_total",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "q2_developer_applications_active": {
+        "question_id": "q2_developer_applications_active",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "q3_control_orgs_total": {
+        "question_id": "q3_control_orgs_total",
+        "row_count": null,
+        "rows": [
+          3
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}
