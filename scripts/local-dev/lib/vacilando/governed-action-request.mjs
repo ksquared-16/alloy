@@ -4808,6 +4808,41 @@ export function tickGovernedActions({
     if (seen.has(rec.request_id)) continue;
     out.push(processGovernedAction(rec.request_id, { nowMs, root, actor: "director" }));
   }
+
+  /*
+   * AND THE RESUME, WHICH HAD NO OWNER AT ALL.
+   *
+   * `executeGovernedAction` assigns `applied.resumePromise` and nothing durable
+   * holds it: one caller awaits it in-process, the other calls `.catch(() => {})`.
+   * When the action executes inside a short-lived `vac` process — which is how a
+   * worktree retirement runs — the process exits and the run is never taken out
+   * of WAITING_RESOURCE. It does not die, because `needs_operator_input` is
+   * human_indefinite by design; it rests there for ever.
+   *
+   * MEASURED on erun_828e075e3c1ed70a: the retirement completed and the run sat
+   * waiting for over four minutes, until a worker resumed it by hand.
+   *
+   * `scheduleAcceptedExecution` states the rule this restores, a few hundred
+   * lines up: the tick is the owner and the immediate call is an optimisation
+   * "written so that losing it costs nothing". The completed record is durable
+   * and the waiting run is durable, so the shape is still here on the next tick.
+   * Re-running it is safe: a run that has already resumed is no longer
+   * WAITING_RESOURCE and is skipped.
+   */
+  const stranded = readGovernedActionStore(root).requests.filter((r) => {
+    if (r.status !== "complete" || !r.run_id) return false;
+    const run = getExecutionRun(r.run_id, root);
+    if (!run || run.state !== "WAITING_RESOURCE") return false;
+    const waitingOn = run.resource_wait?.governed_request_id;
+    return !waitingOn || waitingOn === r.request_id;
+  });
+  for (const rec of stranded) {
+    // Fire-and-forget HERE is honest: if it is lost, the next tick finds the
+    // identical shape. That is what makes this an owner rather than a promise.
+    out.push({ ok: true, resuming: rec.request_id });
+    Promise.resolve(resumeLaneAfterGovernedAction(rec.request_id, { nowMs, root, actor: "director" }))
+      .catch(() => { /* the tick is the owner and will find it again */ });
+  }
   return out;
 }
 
@@ -5353,6 +5388,21 @@ export async function resumeLaneAfterGovernedAction(requestId, {
 
   if (rec.run_id) {
     const run = getExecutionRun(rec.run_id, root);
+    /*
+     * THE RUN MUST BE WAITING ON *THIS* ACTION.
+     *
+     * `WAITING_RESOURCE` alone is not the same question. A completion that
+     * arrives late — a slow executor, a retried tick, a duplicate delivery —
+     * would otherwise resume a run that has since begun waiting on something
+     * else entirely, and the second wait would vanish with nobody to satisfy
+     * it. The wait names the request it belongs to; an unrelated one is left
+     * exactly where it is.
+     */
+    const waitingOnThis = !run?.resource_wait?.governed_request_id
+      || run.resource_wait.governed_request_id === rec.request_id;
+    if (run && run.state === "WAITING_RESOURCE" && !waitingOnThis) {
+      return { ok: true, stale: true, run_waiting_on: run.resource_wait.governed_request_id };
+    }
     if (run && run.state === "WAITING_RESOURCE") {
       transitionExecutionRun(rec.run_id, "EXECUTING", {
         reason: "governed_action_complete",

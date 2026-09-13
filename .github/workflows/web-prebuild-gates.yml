@@ -102,3 +102,12 @@ jobs:
       - name: Destructive-action dedupe + governed wait contract
         working-directory: .
         run: node scripts/local-dev/tests/development-destructive-dedupe-integrity.test.mjs
+      # A satisfied wait must be released, and by exactly one owner.
+      #
+      # The resume existed only as an un-awaited Promise, so a governed action
+      # that executed inside a short-lived `vac` process left its run parked in
+      # WAITING_RESOURCE for ever. Locks both halves: the tick owns the resume,
+      # and leaving a wait resolves it so an EXECUTING run cannot carry one.
+      - name: Governed wait resume ownership
+        working-directory: .
+        run: node scripts/local-dev/tests/development-governed-resume-owner.test.mjs
