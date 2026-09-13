@@ -151,6 +151,13 @@ export default function InstallationDetail({
         );
     };
 
+
+    /*
+     * Mirrors the server's own predicate in `integrationsService`: active means NOT revoked.
+     * A revoked credential is still returned so the surface can name it; it is not actionable.
+     */
+    const credentialIsActive =
+        installation.credential != null && installation.credential.status !== "revoked";
     return (
         <div className="p-6" data-testid={`installation-detail-${installation.id}`}>
             <button type="button" onClick={onBack} className="text-xs underline" data-testid="installation-back">
@@ -227,6 +234,7 @@ export default function InstallationDetail({
                 </ul>
             </section>
 
+            {/* Mirrors the server's own predicate in `integrationsService`: not revoked. */}
             <section className="mt-5" data-testid="installation-credentials">
                 <h2 className="text-sm font-medium">Credentials</h2>
                 {installation.credential ? (
@@ -244,10 +252,25 @@ export default function InstallationDetail({
                     <button type="button" disabled={busy} onClick={() => void issue()} data-testid="credential-issue" className="rounded border px-2 py-1 text-xs">
                         Issue credential
                     </button>
-                    <button type="button" disabled={busy || !installation.credential} onClick={rotate} data-testid="credential-rotate" className="rounded border px-2 py-1 text-xs">
+                    {/*
+                      * Rotate and Revoke need an ACTIVE credential, not merely a credential.
+                      *
+                      * A revoked credential is still returned — deliberately, so the surface can say
+                      * "Revoked · ends zXZ4" rather than forget it ever existed. Gating on presence
+                      * therefore left both controls live after a revoke, offering the operator two
+                      * actions that cannot succeed. Mounted certification pressed Rotate in exactly
+                      * that state: the server refused with `credential_not_active` and nothing was
+                      * resurrected, so this was never a security hole — it was a dead control that
+                      * spent a round trip to say no.
+                      *
+                      * The label two lines up already reads `status`; only the buttons were asking a
+                      * weaker question. `rotating` stays actionable: that is an active credential
+                      * inside its overlap window, not a retired one.
+                      */}
+                    <button type="button" disabled={busy || !credentialIsActive} onClick={rotate} data-testid="credential-rotate" className="rounded border px-2 py-1 text-xs">
                         Rotate
                     </button>
-                    <button type="button" disabled={busy || !installation.credential} onClick={revoke} data-testid="credential-revoke" className="rounded border px-2 py-1 text-xs">
+                    <button type="button" disabled={busy || !credentialIsActive} onClick={revoke} data-testid="credential-revoke" className="rounded border px-2 py-1 text-xs">
                         Revoke
                     </button>
                 </div>
