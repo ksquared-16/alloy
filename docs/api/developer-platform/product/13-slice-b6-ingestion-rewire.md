@@ -117,7 +117,38 @@ zero producers, zero sites, zero mappings, zero events authored via a producer.
 Nothing is left to converge, so the removal trigger is satisfied vacuously —
 which is the strongest form it can take, not the weakest.
 
-**Precondition for the retiring slice.** `attendance_integration_events` still
-carries `producer_id` with a foreign key into `attendance_integration_producers`.
-No row uses it (`events_via_producer = 0`), but the column and constraint must be
-retired in the same change that drops the tables.
+### Two preconditions for the retiring slice
+
+1. `attendance_integration_events` still carries `producer_id` with a foreign key
+   into `attendance_integration_producers`. No row uses it
+   (`events_via_producer = 0`), but the column and constraint must be retired in
+   the same change that drops the tables.
+2. An operator surface over the legacy rows must be retired with them —
+   `producerAdministration.ts` and the three
+   `app/api/admin/attendance/producers/**` routes.
+
+## The collision reconciliation surfaced
+
+Attendance Thread 8 shipped an operator surface over the same three tables while
+this slice was retiring their authority. The two landed in parallel and met at
+the merge: this branch's retirement lock asserts no production module touches the
+legacy tables, and staging's administration module and routes do.
+
+Both are correct, and neither was wrong to ship. Listing the rows an operator
+must convert is the opposite of authorizing a write with them — and the surface
+cannot repopulate the model it administers, because a site cannot be attached to
+a producer that does not exist and the deployed primary holds zero producers.
+
+Resolved by narrowing the lock to what it protects — authority resolution and the
+ingestion path — and allowlisting the administration surface by **exact path**,
+never a directory prefix, which would silently absorb a future file that does
+resolve authority. Two guards keep the exception honest: every allowlisted path
+must still exist, and the seam, the author module and the authority adapter may
+never appear in the allowlist.
+
+Verified by planting `.from("attendance_integration_producers")` in the ingestion
+seam: the narrowed lock still fails. It was narrowed, not switched off.
+
+Deleting Attendance's shipped surface to satisfy a Developer Platform invariant
+was available and was not taken. That is the next slice's work, done deliberately
+and with the tables, not a side effect of this one's merge.
