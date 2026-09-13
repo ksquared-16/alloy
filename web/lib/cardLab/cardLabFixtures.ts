@@ -366,6 +366,8 @@ export const FINANCIALS_CURRENT: FinancialsEvidence = {
     historyLine: "Last payment · $1,665 · Aug 20",
     // Lab specimens exercise layout, not money: no receipts unless a case is about them.
     payments: [],
+        // No manual reductions in the lab fixtures: these specimens are about layout.
+        adjustments: [],
     upcoming: [
         { label: "Next period", value: "Sep 1 – Sep 30" },
         { label: "Scheduled charge", value: "$1,850 · Sep 1" },
@@ -425,6 +427,8 @@ export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
     historyLine: "Last payment · $925 · Aug 20",
     // Lab specimens exercise layout, not money: no receipts unless a case is about them.
     payments: [],
+        // No manual reductions in the lab fixtures: these specimens are about layout.
+        adjustments: [],
     upcoming: [
         { label: "Next period", value: "Sep 1 – Sep 30" },
         { label: "Scheduled charge", value: "$1,850 · Sep 1" },
@@ -469,6 +473,8 @@ export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
     historyLine: "Last payment · $925 · Aug 20",
     // Lab specimens exercise layout, not money: no receipts unless a case is about them.
     payments: [],
+        // No manual reductions in the lab fixtures: these specimens are about layout.
+        adjustments: [],
     upcoming: [
         { label: "Next period", value: "Sep 1 – Sep 30" },
         { label: "Scheduled charge", value: "$1,850 · Sep 1" },

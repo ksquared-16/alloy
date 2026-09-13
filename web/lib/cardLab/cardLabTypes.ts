@@ -330,6 +330,33 @@ export type FinancialsEvidence = {
      * are the account VM's answers, which are the service's answers.
      */
     payments: FinancialsEvidencePayment[];
+    /** Manual reductions recorded against this account, newest first. Formatting only. */
+    adjustments: FinancialsEvidenceAdjustment[];
+};
+
+/**
+ * A manual reduction, as the operator reads it.
+ *
+ * `appliedById` is the application id the reversal action addresses. It is carried rather than
+ * displayed: reversing needs it, and an operator cannot be asked to know it.
+ */
+export type FinancialsEvidenceAdjustment = {
+    applicationId: string;
+    /** credit / adjustment / discount, in the operator's words. */
+    categoryLabel: string;
+    /** Signed money, already formatted — e.g. "−$25.00". */
+    amountLabel: string;
+    /** True when this lowers what the family owes. The card asks; it does not infer from a string. */
+    reducesObligation: boolean;
+    reason: string | null;
+    periodLabel: string | null;
+    recordedOn: string | null;
+    /** Which child's enrolment it was recorded against, when the account has more than one. */
+    subjectName: string | null;
+    /** A reduction already reversed cannot be reversed again. */
+    reversed: boolean;
+    /** True when this row IS a reversal of an earlier one. */
+    isReversal: boolean;
 };
 
 export type FinancialsEvidencePayment = {

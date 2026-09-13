@@ -39,6 +39,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
+import { readAccountReductions, type AccountReduction } from "@/lib/financials/reductions/readAccountReductions";
 import {
     billingPeriodForDate,
     billingPeriodFromKey,
@@ -253,6 +254,14 @@ export type FinancialsCardVM = {
     account: { customerId: string | null; label: string | null } | null;
     period: BillingPeriod;
     subjects: FinancialsSubject[];
+    /**
+     * The manual reductions recorded against this account, newest first.
+     *
+     * The reconciliation already says what they came to. A total cannot be reversed, and reversing
+     * one needs its application id — which an operator cannot be expected to know — so the records
+     * themselves reach the surface.
+     */
+    reductions: AccountReduction[];
     /** Every row across every period, already placed and presented. */
     rows: FinancialsLedgerRow[];
     /** The CURRENT period only. */
@@ -406,6 +415,7 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
             currentlyCollectibleCents: 0,
         },
         subjects: [],
+        reductions: [],
         rows: [],
         reconciliation: emptyReconciliation(),
         reconciliationBySubject: {},
@@ -815,6 +825,21 @@ export async function buildFinancialsCardVM(
         displayName: nameByMember.get(a.customer_member_id) ?? "Child",
         agreementStatus: a.status,
     }));
+
+    /*
+     * Scoped by the agreements resolved just above rather than by customer id, which is nullable on
+     * these rows — so there is one answer to whose account this is, not two.
+     */
+    try {
+        vm.reductions = await readAccountReductions(supabase, {
+            orgId: args.orgId,
+            agreementIds: agreements.map((a) => a.id),
+        });
+    } catch {
+        // A reduction read that fails must not take the whole account down with it: the balance
+        // above is still true, and an empty history is the honest presentation of "not loaded".
+        vm.reductions = [];
+    }
 
     const memberByAgreement = new Map(agreements.map((a) => [a.id, a.customer_member_id]));
     /*

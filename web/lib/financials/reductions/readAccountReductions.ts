@@ -1,0 +1,117 @@
+/**
+ * THE MANUAL REDUCTIONS ON A HOUSEHOLD'S ACCOUNT, AS RECORDS AN OPERATOR CAN ACT ON.
+ *
+ * `financial_reduction_applications` already holds every reduction, but nothing rendered them. The
+ * reconciliation shows what they came to — a `discountsCents` and an `adjustmentsCents` total — and
+ * a total cannot be reversed. Reversing one needs its `application_id`, and an operator cannot be
+ * asked to know that, so the records have to reach the surface.
+ *
+ * ── ONLY THE MANUAL ONES ──
+ *
+ * `reduction_kind` separates a decision somebody made by hand from the output of authored policy.
+ * Both lower what a family owes and both land in the same reconciliation bucket, but only one of
+ * them is anybody's to reverse: undoing a policy application by hand would leave the policy still
+ * saying the family qualifies, and the next billing run would simply apply it again. Policy rows are
+ * therefore read for CONTEXT and never offered a reversal.
+ *
+ * ── SCOPED BY AGREEMENT, NOT BY CUSTOMER ──
+ *
+ * `customer_id` is nullable on these rows — the writer passes it through as `?? null` — so scoping a
+ * household by that column silently loses the reductions that carry only an agreement. The caller
+ * already resolved this household's agreements to build its subjects; the same set scopes this, and
+ * there is no second answer to "whose account is this".
+ */
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+export type AccountReduction = {
+    applicationId: string;
+    /** `manual` was decided by a person; `policy` came from authored commercial policy. */
+    kind: string;
+    agreementId: string | null;
+    customerMemberId: string | null;
+    /** The category the reduction was written under: credit, adjustment, discount, subsidy_offset. */
+    category: string | null;
+    /** SIGNED cents, exactly as stored. Negative lowers what the family owes. */
+    amountCents: number;
+    currencyCode: string;
+    reason: string | null;
+    periodKey: string | null;
+    createdAt: string | null;
+    /** The charge row this reduction wrote — how it reaches the ledger. */
+    chargeId: string | null;
+    /** Set once this reduction has been reversed. Its presence is the reverse-once bound. */
+    reversedByApplicationId: string | null;
+    /** Set on a reversal, naming the reduction it undoes. */
+    reversesApplicationId: string | null;
+};
+
+type Row = Record<string, unknown>;
+
+const t = (v: unknown): string => (v != null ? String(v).trim() : "");
+const nullable = (v: unknown): string | null => {
+    const s = t(v);
+    return s === "" ? null : s;
+};
+
+/**
+ * Every reduction recorded against these agreements, newest first.
+ *
+ * Returns [] for an empty agreement list rather than querying for nothing — a household with no
+ * enrolment has no agreement-scoped reductions, and `.in()` on an empty array is a query that can
+ * only ever answer nothing.
+ */
+export async function readAccountReductions(
+    supabase: SupabaseClient,
+    input: { orgId: string; agreementIds: readonly string[] },
+): Promise<AccountReduction[]> {
+    const ids = [...new Set(input.agreementIds.map((id) => t(id)).filter(Boolean))];
+    if (ids.length === 0) return [];
+
+    const { data, error } = await supabase
+        .from("financial_reduction_applications")
+        .select(
+            "id, reduction_kind, enrollment_agreement_id, customer_member_id, charge_id, "
+            + "amount_cents, currency_code, reason, period_key, created_at, reversed_by_id, reverses_id",
+        )
+        .eq("org_id", input.orgId)
+        .in("enrollment_agreement_id", ids);
+    if (error) throw new Error(`reductions unavailable: ${error.message}`);
+
+    const rows = (data ?? []) as unknown as Row[];
+    const chargeIds = [...new Set(rows.map((r) => t(r.charge_id)).filter(Boolean))];
+
+    /*
+     * The CATEGORY lives on the charge the reduction wrote, not on the application row. Without it
+     * the surface cannot tell a credit from an adjustment, and those are different decisions.
+     */
+    const categoryByCharge = new Map<string, string>();
+    if (chargeIds.length > 0) {
+        const { data: chargeRows } = await supabase
+            .from("charges")
+            .select("id, charge_category")
+            .eq("org_id", input.orgId)
+            .in("id", chargeIds);
+        for (const c of (chargeRows ?? []) as unknown as Row[]) {
+            const id = t(c.id);
+            if (id) categoryByCharge.set(id, t(c.charge_category));
+        }
+    }
+
+    return rows
+        .map((r): AccountReduction => ({
+            applicationId: t(r.id),
+            kind: t(r.reduction_kind),
+            agreementId: nullable(r.enrollment_agreement_id),
+            customerMemberId: nullable(r.customer_member_id),
+            category: categoryByCharge.get(t(r.charge_id)) ?? null,
+            amountCents: Number(r.amount_cents) || 0,
+            currencyCode: t(r.currency_code) || "USD",
+            reason: nullable(r.reason),
+            periodKey: nullable(r.period_key),
+            createdAt: nullable(r.created_at),
+            chargeId: nullable(r.charge_id),
+            reversedByApplicationId: nullable(r.reversed_by_id),
+            reversesApplicationId: nullable(r.reverses_id),
+        }))
+        .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+}

@@ -36,6 +36,8 @@ export default function FinancialsDetailCard({
     onAddCharge,
     onManagePayment,
     onMovePayment,
+    onAddAdjustment,
+    onReverseAdjustment,
     onApplyPayment,
 }: {
     evidence: FinancialsEvidence;
@@ -60,6 +62,8 @@ export default function FinancialsDetailCard({
     onManagePayment?: () => void;
     /** Correct WHICH obligation a receipt answered. Absent in the lab, where controls are inert. */
     onMovePayment?: (args: { paymentId: string; allocationId: string }) => void;
+    onAddAdjustment?: () => void;
+    onReverseAdjustment?: (args: { applicationId: string }) => void;
     /** Put already-received money against an obligation. */
     onApplyPayment?: (args: { paymentId: string }) => void;
 }) {
@@ -306,6 +310,59 @@ export default function FinancialsDetailCard({
                                 ) : null}
                             </div>
                         ))}
+                    </div>
+                ) : null}
+
+                {/*
+                  * WHAT SOMEBODY DECIDED BY HAND.
+                  *
+                  * The reconciliation already says what these came to. A total cannot be reversed and
+                  * cannot be explained, so the decisions themselves are listed: what it was, which way
+                  * it went, why, and whether it still stands. Only a reduction that has not already
+                  * been reversed offers a reversal — reversing twice would credit the family twice for
+                  * one decision, and the service refuses it anyway.
+                  */}
+                {evidence.adjustments.length || onAddAdjustment ? (
+                    <div className="alloy-os-fdetail__adjustments">
+                        <SectionHead>Adjustments</SectionHead>
+                        {evidence.adjustments.map((a) => (
+                            <div
+                                key={a.applicationId}
+                                className="alloy-os-fdetail__adjustment"
+                                data-adjustment-id={a.applicationId}
+                                data-adjustment-reversed={a.reversed ? "true" : "false"}
+                                data-adjustment-is-reversal={a.isReversal ? "true" : "false"}
+                            >
+                                <span className="alloy-os-billing__line-label">
+                                    {a.categoryLabel}
+                                    {a.subjectName ? ` · ${a.subjectName}` : ""}
+                                </span>
+                                <span className="alloy-os-billing__line-value">{a.amountLabel}</span>
+                                <span className="alloy-os-fdetail__adjmeta">
+                                    {a.reducesObligation ? "Lowers what is owed" : "Raises what is owed"}
+                                    {a.recordedOn ? ` · ${a.recordedOn}` : ""}
+                                </span>
+                                {a.reason ? (
+                                    <span className="alloy-os-fdetail__adjreason">Reason: {a.reason}</span>
+                                ) : null}
+                                {a.reversed ? (
+                                    <span className="alloy-os-fdetail__adjstatus">Reversed</span>
+                                ) : a.isReversal ? (
+                                    <span className="alloy-os-fdetail__adjstatus">Reversal</span>
+                                ) : onReverseAdjustment ? (
+                                    <FooterAction
+                                        onClick={() => onReverseAdjustment({ applicationId: a.applicationId })}
+                                    >
+                                        Reverse adjustment →
+                                    </FooterAction>
+                                ) : null}
+                            </div>
+                        ))}
+                        {onAddAdjustment ? (
+                            <div className="alloy-os-fdetail__adjustadd">
+                                <FooterAction onClick={() => onAddAdjustment()}>Add adjustment →</FooterAction>
+                            </div>
+                        ) : null}
                     </div>
                 ) : null}
 
