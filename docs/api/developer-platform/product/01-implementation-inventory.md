@@ -1,0 +1,128 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
+# 01 — Thread 4 implementation inventory (Slice A, Part 1)
+
+Verified against `origin/staging` at `005c0da228e37c22388bafc14d91857c897feb43`.
+**Repository reality, not documentation.** Every row was checked by inspecting
+the tree, not by reading the specification.
+
+
+> **Updated 2026-09-10 by Slice B.1, and again by B.2.** The rows below described the estate when
+> Slice A ran, and six of them have since changed: application, installation,
+> credential, principal, scopes/boundary and audit are now **implemented**. The
+> table is annotated in place rather than rewritten, because the Slice A finding
+> — that Thread 4 shipped a specification and no implementation — is the reason
+> Slice B.1 exists and should stay legible. See
+> [`07-slice-b1-trust-foundation.md`](07-slice-b1-trust-foundation.md) and
+> [`08-slice-b2-external-boundary.md`](08-slice-b2-external-boundary.md). B.2 added
+> the HTTP boundary: token exchange, `GET /api/v1/context`, a shared limiter, the
+> public error contract, correlation, API activity and the guarded public OpenAPI.
+
+## Headline
+
+> **Thread 4 shipped a specification. It shipped no implementation, and that was
+> deliberate.**
+
+Thread 4's promoted commit `737d8aa8b` changed 11 files — 8 new specification
+documents, 1 index line, 2 one-line terminology tightenings — and **no product
+code**. It was certified, promoted and reported as specification-only.
+
+So Part 1's premise ("inspect the exact Thread 4 implementation now on staging")
+has an answer, and the answer is that there is none. This is **not** a deviation
+from the certified architecture and therefore not a stop condition: nothing
+differs from what was certified. What differs is the assumption that Slice A
+would find a backend to productize.
+
+## Verification performed
+
+| Probe | Result |
+|---|---|
+| `web/app/api/v1/**` route files | **0** |
+| `developer_applications` in migrations | **0** |
+| `app_installations` in migrations | **0** |
+| `app_credentials` in migrations | **0** |
+| `app_access_tokens` in migrations | **0** |
+| `integration_resource_refs` in migrations | **0** |
+| `app_request_audit` in migrations | **0** |
+| `app_idempotency_records` / `app_rate_limit_windows` | **0** |
+| `web/lib/platform/principal/**` | **0** |
+| `client_credentials` / `PlatformPrincipalAuthority` in `web/` | **0** |
+| Public OpenAPI artifact | **none** — only the *internal* `alloy-api.v0.yaml` |
+
+## The inventory
+
+| Capability | Architecture | Schema | API | Operator UI | Developer UI | Docs | Production-ready | Gap |
+|---|---|---|---|---|---|---|---|---|
+| Developer Application | ✅ | **✅ B.1** | ❌ | ❌ | ❌ | ✅ | ❌ | No API or UI |
+| Installation | ✅ | **✅ B.1** | ❌ | ❌ | ❌ | ✅ | ❌ | No API or UI |
+| Credential (inbound) | ✅ | **✅ B.1** | ❌ | ❌ | ❌ | ✅ | ❌ | Issue/rotate/revoke exist server-side; no endpoint, no UI |
+| Application Principal | ✅ | n/a | **✅ B.1** | n/a | n/a | ✅ | ❌ | Resolver built; nothing consumes it yet |
+| External scopes | ✅ | **✅ B.1** | **✅ B.1** | ❌ | ❌ | ✅ | ❌ | Evaluation built; catalog/mapping table still absent |
+| Resource/location boundary | ✅ | **✅ B.1** | **✅ B.1** | ❌ | ❌ | ✅ | ❌ | — |
+| `integration_resource_refs` | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | — |
+| `/api/v1` namespace | ✅ | n/a | **✅ B.2** | n/a | n/a | ✅ | ❌ | Two routes; drift guard replaces the planned prebuild guard |
+| Canonical resource adapters | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | — |
+| Governed operation adapter | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | — |
+| Attendance external ingestion | ✅ | **partial** | ❌ | n/a | n/a | ✅ | ❌ | `integration_api` channel exists; **no producer** |
+| Public OpenAPI | ✅ | n/a | **✅ B.2** | n/a | ❌ | ✅ | ❌ | `alloy-public-api.v1.json`, coverage enforced both ways |
+| Error contract | ✅ | n/a | **✅ B.2** | n/a | n/a | ✅ | ❌ | Public envelope implemented |
+| Collection/pagination | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | — |
+| Idempotency | ✅ | **partial** | ❌ | n/a | n/a | ✅ | ❌ | Domain layer real (attendance); platform layer absent |
+| Concurrency | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | — |
+| Audit / provenance | ✅ | **✅ B.1** | ❌ | ❌ | ❌ | ✅ | ❌ | `app_security_audit` exists for the trust boundary. `logAdminAudit` is still a `console.log` for everything else. |
+| Rate limiting | ✅ | **✅ B.2** | **✅ B.2** | ❌ | ❌ | ✅ | ❌ | Shared durable limiter; per-installation quotas not configurable |
+| Security prerequisites | ✅ documented | — | — | — | — | ✅ | **❌ unmet** | All three still open |
+
+**Legend:** ✅ exists · ❌ absent · partial = a domain-level piece exists that the
+platform layer would build on.
+
+## What *does* exist, and is worth not rebuilding
+
+Three pieces of real prior art were found, and each changes a Slice B estimate:
+
+1. **`NonHumanProducerAuthority` + `assertNonHumanCaptureAllowed`** — the
+   non-human principal type and its three-axis gate. Thread 4 ratified minting
+   into it; it is present and unchanged.
+2. **`integration_api` provenance channel** — modeled, in the DB `CHECK`
+   constraint, covered by tests, still with **no production producer**.
+3. **`org_provider_credential_*`** (`web/lib/communications/orgProviderCredential.ts`)
+   — an organization-owned, **Supabase Vault-backed** credential system whose
+   database function owns tenancy, Vault access and its own audit trail, and
+   whose API layer "deals in `hasCredential` booleans" so a secret can never be
+   serialized back to a caller.
+
+### The credential direction distinction — and it matters for Classroom Coach
+
+| Direction | Meaning | Status |
+|---|---|---|
+| **Inbound** — partner authenticates **to** Alloy | Thread 4 `app_credentials`, `client_id`/`client_secret`, token exchange | **Does not exist** |
+| **Outbound** — Alloy authenticates **to** a provider | `org_provider_credential_*`, Vault-backed | **Exists and is mature** |
+
+Thread 4 designed the inbound half only, because its reference case was a
+partner writing attendance *into* Alloy. **A Classroom Coach integration may well
+need the outbound half** (Alloy calling Classroom Coach), and that half already
+exists in a form Thread 4 never considered. Slice B must not rebuild it, and must
+not assume Thread 4's credential model covers it — they solve different problems.
+
+## Consequences for Slice A
+
+- **No Developer Platform UI can be implemented.** There is no table to list, no
+  installation to display, no credential to rotate. Part 9's allowance is
+  explicitly scoped to "credential management **where backend authority already
+  exists**", and it does not.
+- **The API Activity / Health surface has no data source.** `logAdminAudit`
+  writes to `console.log` and no `audit_log` table exists. Building the surface
+  would mean building the audit store first — which is Thread 4 security
+  prerequisite #1, not a UI task.
+- **Credential issuance would be unsafe today** even if the UI existed. All three
+  Thread 4 prerequisites remain unmet. This is a named stop condition for
+  implementation, and it holds.
+
+Slice A therefore delivers the **product specification, information architecture
+and developer documentation**, and does not implement. That is reported as
+`PARTIAL` rather than dressed up as complete.

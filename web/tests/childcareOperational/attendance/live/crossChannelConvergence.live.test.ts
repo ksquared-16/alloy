@@ -35,7 +35,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { assertNonHumanCaptureAllowed } from "@/lib/childcareOperational/attendance/attendancePermissions";
-import { hashProducerCredential } from "@/lib/childcareOperational/attendance/integration/producerAuthority";
+import { attendanceAuthorForPrincipal } from "@/lib/platform/principal/attendanceAuthorityAdapter";
+import type { ApplicationPrincipal } from "@/lib/platform/principal/platformPrincipalTypes";
 import { ingestExternalAttendanceEvent } from "@/lib/childcareOperational/attendance/integration/ingestExternalAttendance";
 import {
     correctAttendanceEvent,
@@ -87,7 +88,6 @@ const CHILD = "00000000-0000-4000-8000-000070000052";
 const AGREEMENT = "00000000-0000-4000-8000-000070000062";
 
 const PROVIDER = "classroom_coach";
-const EXTERNAL_SECRET = "cert-convergence-external";
 const TODAY = new Date().toISOString().slice(0, 10);
 const run = Date.now();
 
@@ -107,7 +107,8 @@ describeLive("cross-channel convergence — live", () => {
         ? createClient(env.url, env.serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
         : null) as unknown as SupabaseClient;
 
-    let externalProducerId = "";
+    let applicationId = "";
+    let externalInstallationId = "";
     const ids: Record<string, string> = {};
 
     async function cleanup() {
@@ -117,10 +118,12 @@ describeLive("cross-channel convergence — live", () => {
          * provider — which it did, and which made two unrelated scenarios fail
          * only when the directory ran together.
          */
-        if (externalProducerId) {
-            await supabase.from("attendance_integration_events").delete().eq("producer_id", externalProducerId);
+        if (externalInstallationId) {
+            await supabase.from("attendance_integration_events").delete().eq("installation_id", externalInstallationId);
+            await supabase.from("integration_resource_refs").delete().eq("installation_id", externalInstallationId);
+            await supabase.from("app_installations").delete().eq("id", externalInstallationId);
         }
-        await supabase.from("attendance_integration_producers").delete().eq("producer_key", EXTERNAL_PRODUCER_KEY);
+        if (applicationId) await supabase.from("developer_applications").delete().eq("id", applicationId);
         await supabase.from("action_links").delete().eq("token_hash", hashFormLinkToken(PARENT_TOKEN));
     }
 
@@ -135,37 +138,40 @@ describeLive("cross-channel convergence — live", () => {
             (e) => String(e.actor_label ?? "").includes(`conv-${run}`) || e.source_key === EXTERNAL_PRODUCER_KEY,
         );
 
+    const externalPrincipal = (): ApplicationPrincipal => ({
+        kind: "application", applicationId, applicationSlug: `conv-cert-${run}`,
+        ownershipMode: "tenant_private", environment: "production",
+        installationId: externalInstallationId, orgId: ORG, producerKey: EXTERNAL_PRODUCER_KEY,
+        credentialId: "cred-conv", clientId: `alloy_app_conv_${run}`,
+        grantedScopes: ["attendance.write"],
+        boundary: { mode: "locations", locationIds: [RIVERSIDE] },
+    });
+
     beforeAll(async () => {
         await cleanup();
 
-        const { data, error } = await supabase
-            .from("attendance_integration_producers")
-            .insert({
-                org_id: ORG,
-                provider_key: PROVIDER,
-                producer_key: EXTERNAL_PRODUCER_KEY,
-                label: "Cert convergence producer",
-                credential_hash: hashProducerCredential(EXTERNAL_SECRET),
-                credential_last_four: EXTERNAL_SECRET.slice(-4),
-            })
-            .select("id")
-            .single();
-        if (error) throw new Error(`producer fixture failed: ${error.message}`);
-        externalProducerId = (data as { id: string }).id;
+        const app = await supabase.from("developer_applications").insert({
+            slug: `conv-cert-${run}`, name: `Convergence cert ${run}`, publisher: "alloy-certification",
+            ownership_mode: "tenant_private", environment: "production", status: "active",
+        }).select("id").single();
+        if (app.error) throw new Error(`application fixture failed: ${app.error.message}`);
+        applicationId = (app.data as { id: string }).id;
 
-        const grant = await supabase
-            .from("attendance_integration_producer_sites")
-            .insert({ org_id: ORG, producer_id: externalProducerId, site_location_id: RIVERSIDE });
-        if (grant.error) throw new Error(`site grant failed: ${grant.error.message}`);
+        const inst = await supabase.from("app_installations").insert({
+            application_id: applicationId, org_id: ORG, producer_key: EXTERNAL_PRODUCER_KEY,
+            granted_scopes: ["attendance.write"], boundary_mode: "locations",
+            location_boundary: [RIVERSIDE], status: "active",
+        }).select("id").single();
+        if (inst.error) throw new Error(`installation fixture failed: ${inst.error.message}`);
+        externalInstallationId = (inst.data as { id: string }).id;
 
         for (const m of [
-            { external_entity_type: "child", external_id: "CONV-CHILD", child_customer_member_id: CHILD },
-            { external_entity_type: "location", external_id: "CONV-ROOM-A", location_id: ROOM_A },
+            { resource_type: "child", external_id: "CONV-CHILD", child_customer_member_id: CHILD, location_id: null },
+            { resource_type: "location", external_id: "CONV-ROOM-A", child_customer_member_id: null, location_id: ROOM_A },
         ]) {
-            const r = await supabase
-                .from("attendance_integration_mappings")
-                .insert({ org_id: ORG, producer_id: externalProducerId, ...m });
-            if (r.error) throw new Error(`mapping fixture failed: ${r.error.message}`);
+            const r = await supabase.from("integration_resource_refs")
+                .insert({ installation_id: externalInstallationId, org_id: ORG, status: "active", ...m });
+            if (r.error) throw new Error(`ref fixture failed: ${r.error.message}`);
         }
 
         const link = await supabase.from("action_links").insert({
@@ -281,20 +287,17 @@ describeLive("cross-channel convergence — live", () => {
             physicalEventAt: `${TODAY}T16:20:00.000Z`,
             raw: { source: "convergence" },
         };
+        const authored = await attendanceAuthorForPrincipal(supabase, externalPrincipal());
+        expect(authored.ok, JSON.stringify(authored)).toBe(true);
+        if (!authored.ok) return;
         const first = await ingestExternalAttendanceEvent({
-            supabase,
-            presentedCredential: EXTERNAL_SECRET,
-            providerKey: PROVIDER,
-            event,
+            supabase, providerKey: PROVIDER, event, author: authored.author,
         });
         expect(first.disposition).toBe("applied");
         ids.externalOut = first.attendanceEventId ?? "";
 
         const replay = await ingestExternalAttendanceEvent({
-            supabase,
-            presentedCredential: EXTERNAL_SECRET,
-            providerKey: PROVIDER,
-            event,
+            supabase, providerKey: PROVIDER, event, author: authored.author,
         });
         expect(replay.disposition).toBe("duplicate");
         expect(replay.attendanceEventId).toBe(ids.externalOut);

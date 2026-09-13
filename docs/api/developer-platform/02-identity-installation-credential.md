@@ -103,7 +103,7 @@ kiosk's posture, not the workflow route's.
 `client_secret` for a short-lived, server-validated opaque access token.**
 
 ```text
-POST /api/public/v1/oauth/token
+POST /api/v1/oauth/token
   grant_type=client_credentials, client_id, client_secret
         ↓
   access_token (opaque, 15 min), token_type=Bearer, expires_in, scope

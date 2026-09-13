@@ -72,7 +72,7 @@ Installation  (application × organization)
         ↓
   granted scopes  ∩  resource boundary
         ↓
-Public API Runtime   /api/public/v1/*
+Public API Runtime   /api/v1/*
         ├── Canonical Resource APIs   (read)
         ├── Governed Command APIs     (write)
         └── Public Events / Webhooks  (deferred to V1.1)
@@ -93,6 +93,24 @@ Canonical truth
 | 05 | [Mutation, commands, provenance](05-mutation-commands-provenance.md) | M, N, O |
 | 06 | [Request contract](06-request-contract.md) | P, Q, R, S, T |
 | 07 | [Implementation sequence](07-implementation-sequence.md) | first slice |
+
+## Slice A — productization and discovery
+
+| Document | Covers |
+|---|---|
+| [`product/01-implementation-inventory.md`](product/01-implementation-inventory.md) | What of Thread 4 actually exists on staging. **Answer: the specification, and nothing below it.** |
+| [`product/02-product-model-ia-journey.md`](product/02-product-model-ia-journey.md) | Product model, IA reconciled to frozen Configuration doctrine, developer journey, Developer Platform vs Integrations boundary |
+| [`product/03-surface-contracts.md`](product/03-surface-contracts.md) | Installation collection and runtime, credentials, activity/health contracts |
+| [`product/04-api-documentation-architecture.md`](product/04-api-documentation-architecture.md) | Narrative vs generated reference; renderer decision |
+| [`product/05-classroom-coach-discovery.md`](product/05-classroom-coach-discovery.md) | Evidence register, capability classification, generic-platform validation, installation concept |
+| [`product/06-gaps-and-slice-b.md`](product/06-gaps-and-slice-b.md) | Gap classification and the recommended Slice B ordering |
+| [`product/07-slice-b1-trust-foundation.md`](product/07-slice-b1-trust-foundation.md) | **Slice B.1 — implemented.** Security prerequisite reconciliation, threat review, implementation paths, remaining `/api/v1` prerequisites |
+| [`product/08-slice-b2-external-boundary.md`](product/08-slice-b2-external-boundary.md) | **Slice B.2 — implemented.** Token exchange, `/api/v1/context`, rate limiting, errors, correlation, API activity, public OpenAPI + drift guard, threat review |
+| [`product/09-slice-b3-first-resource.md`](product/09-slice-b3-first-resource.md) | **Slice B.3 — implemented.** Canonical Location authority, scope catalog, `GET /api/v1/locations`, hierarchy decision, collection contract |
+| [`product/10-slice-b4-sync-and-admin-foundations.md`](product/10-slice-b4-sync-and-admin-foundations.md) | **Slice B.4 — PARTIAL.** `updated_since`, administrative audit hardening, internal operator authorization, health model, scope presentation. UI deferred: browser certification needs a slotted lane |
+| [`product/11-slice-b5-convergence.md`](product/11-slice-b5-convergence.md) | **Slice B.5 Gate 1 — PARTIAL.** Attendance producer audit, ownership classification, `integration_resource_refs`, principal→attendance authority adapter, legacy disposition |
+| [`product/12-slice-b6-blocked.md`](product/12-slice-b6-blocked.md) | **Slice B.6 — BLOCKED** on the required slotted/live environment. Contains the Organization-not-Settings correction and the legacy-consumer analysis for the slotted run |
+| [`guide/`](guide/README.md) | **The developer documentation starter** — getting started, conventions, attendance example |
 
 ## What V1 deliberately excludes
 

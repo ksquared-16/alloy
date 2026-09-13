@@ -47,7 +47,7 @@ From here on, in all canonical documentation:
 - **"Developer Platform"** — means category 3, and only category 3.
 - **"Partner API"** — a *product* framing of category 3. Not a synonym for any
   existing route.
-- **"Public API"** — the category 3 HTTP contract at `/api/public/v1/*`.
+- **"Public API"** — the category 3 HTTP contract at `/api/v1/*`.
 - A category 1 route is never described as "available to partners" because it
   works. Thread 3's law stands: **no existing route is externally supported
   merely because it functions internally.**

@@ -74,6 +74,13 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
                 icon: "communications",
                 testId: "config-mode-nav-communications",
             },
+            {
+                href: "/organization/integrations",
+                label: "Integrations",
+                description: "Approved external software, and exactly what it may access.",
+                icon: "integrations",
+                testId: "config-mode-nav-integrations",
+            },
         ],
     },
     {
