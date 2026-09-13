@@ -785,13 +785,47 @@ export function checkLanesConsistency({ lanes = [], seats = [] }) {
  * A SLOTLESS LANE IS HEALTHY and appears in neither list. The contract is about
  * what a lane RESOLVES, never about what it currently holds.
  */
+/*
+ * CONDITIONS THE RUNTIME ALREADY HANDLES ARE NOT OPERATOR PROBLEMS.
+ *
+ * Promoted doctrine, in `assertLaneDispatchable`: a moved branch is repaired on
+ * the next dispatch and "delivery is never refused for either", and a registered
+ * managed worktree with no slot returns `ok: true, slotless: true` because "only
+ * the environment actions need the slot itself". The doc comment above this
+ * function already says a slotless lane is healthy — the scoring did not agree,
+ * and reported both as `problem`.
+ *
+ * MEASURED: three of thirteen lanes sat at `problem` indefinitely for exactly
+ * these two conditions, while every one of them was dispatchable. A health check
+ * that contradicts promoted doctrine trains its reader to ignore it, which is
+ * the failure `autonomous-operations.md` names — and it did it while real work
+ * was running.
+ *
+ * They stay VISIBLE, named by what they are. They stop being blocking.
+ */
+const SELF_RESOLVING_BASELINE = Object.freeze({
+  "branch:drift": "SELF_HEALING",
+  "worktree:lane_slot_unregistered": "IDLE_BY_DESIGN",
+});
+
+function classifyBaselineGap(reason) {
+  return SELF_RESOLVING_BASELINE[String(reason || "")] || "ACTION_REQUIRED";
+}
+
 export function checkLaneBootstrap({ inventory = null }) {
   if (!inventory) return incompleteFinding("lane.bootstrap", "no lane inventory available");
   const rows = Array.isArray(inventory.rows) ? inventory.rows : [];
   const unresolved = rows.filter((r) => (r.unresolved || []).length);
+  // Only the gaps a person has to act on decide the severity.
+  const blocking = rows.filter((r) =>
+    (r.unresolved || []).some((u) => classifyBaselineGap(u) === "ACTION_REQUIRED"));
+  const selfResolving = rows.flatMap((r) =>
+    (r.unresolved || [])
+      .filter((u) => classifyBaselineGap(u) !== "ACTION_REQUIRED")
+      .map((u) => `${r.name || r.lane_id}: ${u} (${classifyBaselineGap(u)})`));
   const stale = rows.filter((r) => r.stale);
   const overlaid = rows.filter((r) => Object.keys(r.overlay || {}).length);
-  const sev = unresolved.length ? "problem" : stale.length ? "watch" : "healthy";
+  const sev = blocking.length ? "problem" : (stale.length || selfResolving.length) ? "watch" : "healthy";
   return finding({
     check: "lane.bootstrap",
     severity: sev,
@@ -801,16 +835,21 @@ export function checkLaneBootstrap({ inventory = null }) {
       lanes: rows.length,
       stale: stale.length,
       unresolved: unresolved.length,
+      blocking: blocking.length,
+      self_resolving: selfResolving.length,
       with_overlay: overlaid.length,
     },
     evidence: [
-      ...unresolved.map((r) => `${r.name || r.lane_id}: ${(r.unresolved || []).join(", ")}`),
+      ...blocking.map((r) => `${r.name || r.lane_id}: ${(r.unresolved || []).join(", ")}`),
+      ...selfResolving.slice(0, 8),
       ...stale.slice(0, 8).map((r) =>
         `${r.name || r.lane_id}: bootstrap ${r.observed_contract_version || "unstamped"}`),
     ],
-    explanation: unresolved.length
+    explanation: blocking.length
       ? "A lane cannot resolve part of its baseline, so it does not have the development context every lane is entitled to."
-      : stale.length
+      : selfResolving.length
+        ? "The only baseline gaps are ones the runtime resolves itself: a moved branch is repaired at the next dispatch, and a slotless managed lane is dispatchable by design."
+        : stale.length
         ? "Lanes were initialised before the current bootstrap contract. They are valid; they simply predate it."
         : "Every lane resolves the current bootstrap contract.",
     // Deliberately not "rebase them".
