@@ -94,6 +94,12 @@ export type FinancialsPaymentRow = {
      */
     unappliedCents: number;
     /**
+     * The household the receipt was taken against, named. Null when canonical data cannot name it —
+     * an absent label is never replaced with a guess, because the wrong family on a payment is worse
+     * than no family at all.
+     */
+    payerLabel: string | null;
+    /**
      * The applications themselves, active and reversed. The summed `appliedCents` above says HOW MUCH
      * is doing something; this says WHICH obligations, and which were undone — the difference between
      * a balance and an explanation, and the thing an operator needs before moving money.
@@ -720,6 +726,7 @@ async function readAccountPayments(
             // Enriched below from the canonical application composition; a payment read that never
             // reaches it still renders, with no applications rather than invented ones.
             unappliedCents: 0,
+            payerLabel: null,
             applications: [],
             reference: t(raw.reference_number) || null,
             notes: t(raw.notes) || null,
@@ -1057,7 +1064,12 @@ export async function buildFinancialsCardVM(
             vm.payments = vm.payments.map((row) => {
                 const view = byPaymentId.get(row.paymentId);
                 if (!view) return row;
-                return { ...row, unappliedCents: view.unappliedCents, applications: view.applications };
+                return {
+                    ...row,
+                    unappliedCents: view.unappliedCents,
+                    payerLabel: view.payerLabel,
+                    applications: view.applications,
+                };
             });
         }
     } catch (e) {

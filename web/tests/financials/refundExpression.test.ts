@@ -26,6 +26,7 @@ const receipt = (over: Partial<FinancialsPaymentRow> = {}): FinancialsPaymentRow
     postedAt: null,
     appliedCents: 1_000,
         unappliedCents: 0,
+        payerLabel: null,
         applications: [],
     reference: null,
     notes: null,

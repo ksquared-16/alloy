@@ -257,6 +257,36 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 `Payments received · ${money(reconciliation.paymentsCents, currency)}`
             :   `No payments recorded this period`,
         upcoming: [],
+        /*
+         * THE RECEIPTS, AND WHAT EACH IS ANSWERING.
+         *
+         * Formatting only. `appliedCents`, `unappliedCents` and the applications all arrive decided
+         * by the account VM, which takes them from the canonical readers — so the card cannot reach a
+         * different answer than the service, because it is not permitted to compute one.
+         *
+         * Refunds are excluded: an outbound row is money going back, not a receipt with obligations
+         * to answer, and listing it here would invite an operator to move it.
+         */
+        payments: vm.payments
+            .filter((p) => p.direction === "inbound")
+            .map((p) => ({
+                paymentId: p.paymentId,
+                receivedLabel: money(p.amountCents, p.currencyCode || currency),
+                payerLabel: p.payerLabel ?? null,
+                receivedOn: p.receivedAt,
+                method: p.method || null,
+                appliedLabel: money(p.appliedCents, p.currencyCode || currency),
+                unappliedLabel: money(p.unappliedCents, p.currencyCode || currency),
+                unappliedCents: p.unappliedCents,
+                applications: p.applications.map((a) => ({
+                    allocationId: a.allocationId,
+                    chargeId: a.chargeId,
+                    chargeLabel: a.chargeLabel,
+                    amountLabel: money(a.appliedCents, p.currencyCode || currency),
+                    status: a.status,
+                    reversalReason: a.reversalReason,
+                })),
+            })),
     };
 }
 

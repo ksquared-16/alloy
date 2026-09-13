@@ -322,6 +322,38 @@ export type FinancialsEvidence = {
     historyLine: string;
     /** Detail-only: forward-looking facts, and only where authoritative. */
     upcoming: { label: string; value: string; unowned?: boolean }[];
+    /**
+     * Detail-only: the receipts themselves, and what each one is currently answering.
+     *
+     * Every figure here arrives already formatted from canonical truth. The card must not add them
+     * up, difference them, or decide what "applied" means — a receipt's applied and unapplied money
+     * are the account VM's answers, which are the service's answers.
+     */
+    payments: FinancialsEvidencePayment[];
+};
+
+export type FinancialsEvidencePayment = {
+    paymentId: string;
+    receivedLabel: string;
+    /** The household the receipt was taken against. Null when canonical data cannot name it. */
+    payerLabel: string | null;
+    receivedOn: string | null;
+    method: string | null;
+    appliedLabel: string;
+    unappliedLabel: string;
+    /** Raw cents, so the card can ASK whether there is money to apply without doing arithmetic. */
+    unappliedCents: number;
+    applications: FinancialsEvidenceApplication[];
+};
+
+export type FinancialsEvidenceApplication = {
+    allocationId: string;
+    chargeId: string | null;
+    chargeLabel: string;
+    amountLabel: string;
+    /** `active` is answering an obligation now; `reversed` is history that no longer counts. */
+    status: string;
+    reversalReason: string | null;
 };
 
 /**

@@ -35,6 +35,8 @@ export default function FinancialsDetailCard({
     onPayment,
     onAddCharge,
     onManagePayment,
+    onMovePayment,
+    onApplyPayment,
 }: {
     evidence: FinancialsEvidence;
     periods: FinancialsLedgerPeriod[];
@@ -56,6 +58,10 @@ export default function FinancialsDetailCard({
     onPayment?: () => void;
     onAddCharge?: () => void;
     onManagePayment?: () => void;
+    /** Correct WHICH obligation a receipt answered. Absent in the lab, where controls are inert. */
+    onMovePayment?: (args: { paymentId: string; allocationId: string }) => void;
+    /** Put already-received money against an obligation. */
+    onApplyPayment?: (args: { paymentId: string }) => void;
 }) {
     const payerFilters = ["All payers", ...evidence.payers.map((p) => (p.funding ? "Funding" : p.name.split(" ")[0]!))];
     const { period, pastDue } = evidence;
@@ -230,6 +236,78 @@ export default function FinancialsDetailCard({
                         guarantee.
                     </p>
                 </div>
+
+                {/*
+                  * THE RECEIPTS, AND WHAT EACH IS ANSWERING.
+                  *
+                  * Every figure is already formatted by the adapter from the account VM's canonical
+                  * numbers. Nothing here adds, differences or decides what "applied" means — the card
+                  * would otherwise become a second opinion about money, which is the one thing a
+                  * presentation layer must never be.
+                  */}
+                {evidence.payments.length ? (
+                    <div className="alloy-os-fdetail__payments">
+                        <SectionHead>Payments</SectionHead>
+                        {evidence.payments.map((p) => (
+                            <div key={p.paymentId} className="alloy-os-fdetail__payment" data-payment-id={p.paymentId}>
+                                <div className="alloy-os-fdetail__strip">
+                                    <Stat label="Received" value={p.receivedLabel} strong />
+                                    {/* Never a guessed name: an absent payer reads as unnamed. */}
+                                    <Stat label="From" value={p.payerLabel ?? "—"} />
+                                    <Stat label="Method" value={p.method ?? "—"} />
+                                    <Stat label="Applied" value={p.appliedLabel} />
+                                    <Stat label="Unapplied" value={p.unappliedLabel} tone={p.unappliedCents > 0 ? "due" : "ok"} />
+                                </div>
+                                {p.applications.map((a) => (
+                                    <div
+                                        key={a.allocationId}
+                                        className="alloy-os-fdetail__application"
+                                        data-application-id={a.allocationId}
+                                        data-application-status={a.status}
+                                    >
+                                        <span className="alloy-os-billing__line-label">{a.chargeLabel}</span>
+                                        <span className="alloy-os-billing__line-value">{a.amountLabel}</span>
+                                        <span className="alloy-os-fdetail__appstatus">
+                                            {a.status === "active" ? "Active" : "Reversed"}
+                                        </span>
+                                        {a.reversalReason ? (
+                                            <span className="alloy-os-fdetail__appreason">Reason: {a.reversalReason}</span>
+                                        ) : null}
+                                        {/*
+                                          * Only an ACTIVE application can be moved. A reversed row is
+                                          * history; offering to correct it again would imply the money
+                                          * is still there, and there is nothing to release.
+                                          */}
+                                        {a.status === "active" && onMovePayment ? (
+                                            <FooterAction
+                                                onClick={() =>
+                                                    onMovePayment({ paymentId: p.paymentId, allocationId: a.allocationId })
+                                                }
+                                            >
+                                                Move payment →
+                                            </FooterAction>
+                                        ) : null}
+                                    </div>
+                                ))}
+                                {/*
+                                  * Unapplied money is received money that is not answering anything —
+                                  * not a credit, not a refund. Whether it arrived that way or came back
+                                  * from a reversal, the operator's next move is the same.
+                                  */}
+                                {p.unappliedCents > 0 && onApplyPayment ? (
+                                    <div className="alloy-os-fdetail__unapplied">
+                                        <span className="alloy-os-billing__line-label">
+                                            {p.unappliedLabel} unapplied
+                                        </span>
+                                        <FooterAction onClick={() => onApplyPayment({ paymentId: p.paymentId })}>
+                                            Apply payment →
+                                        </FooterAction>
+                                    </div>
+                                ) : null}
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
 
                 <div className="alloy-os-fdetail__upcoming">
                     <SectionHead>Upcoming</SectionHead>
