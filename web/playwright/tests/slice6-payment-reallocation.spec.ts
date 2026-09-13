@@ -10,14 +10,29 @@ import { expect, type APIRequestContext, type Page, test } from "@playwright/tes
  * It is deterministic and idempotent: the household, the two posted charges and the amount are
  * fixed, and the run reuses the receipt it finds rather than minting a second one each time.
  */
-const HOUSEHOLD_PREFIX = "29944d3e";
-const SOURCE = "Late pickup";      // posted, 2500 — the charge the money first answered
-const TARGET = "Registration fee"; // posted, 7500 — where the money should end up
+/* Pinned in-file, like the mounted spec: this suite must not depend on how it was invoked. */
+const STORAGE = "/Users/vacilando/.local/state/alloy-dev/gateway/auth/slot2/storage-state.json";
+
+const HOUSEHOLD_PREFIX = "0658832a";  // Kurzman: the household the mounted proofs certify
+const SOURCE = "Late pickup";      // posted — the charge the money first answered
+const TARGET = "Registration fee"; // posted — where the money should end up
 const RECEIPT_CENTS = 2500;
 
+/** The certification receipt, named by its deterministic amount rather than by arrival order. */
+function subject(v: NonNullable<Card["vm"]>): Payment {
+    const mine = (v.payments ?? []).filter((p) => p.direction === "inbound" && p.amountCents === RECEIPT_CENTS);
+    expect(mine.length, "exactly one certification receipt of this amount").toBe(1);
+    return mine[0];
+}
+
+test.use({ storageState: STORAGE, baseURL: "http://127.0.0.1:3012" });
+
 type Row = { chargeId: string; description: string; status: string; outstandingCents: number; subjectMemberId: string | null };
-type Application = { id: string; chargeId: string; status: string; amountCents: number };
-type Payment = { id: string; amountCents: number; unappliedCents: number; payerLabel?: string | null; applications?: Application[] };
+type Application = { allocationId: string; chargeId: string | null; status: string; appliedCents: number };
+type Payment = {
+    paymentId: string; direction: string; amountCents: number; unappliedCents: number;
+    payerLabel?: string | null; applications?: Application[];
+};
 type Card = { vm?: { rows?: Row[]; payments?: Payment[]; subjects?: Array<{ id?: string }> } };
 
 async function householdId(request: APIRequestContext): Promise<string> {
@@ -52,7 +67,7 @@ async function execute(request: APIRequestContext, body: Record<string, unknown>
 /** Record the receipt only if this household has none — reruns must not mint more money. */
 async function ensureReceipt(request: APIRequestContext, customerId: string): Promise<Payment> {
     let vm = await card(request, customerId);
-    if ((vm.payments ?? []).length === 0) {
+    if (!(vm.payments ?? []).some((p) => p.direction === "inbound" && p.amountCents === RECEIPT_CENTS)) {
         const source = charge(vm, SOURCE);
         const { status, json } = await execute(request, {
             action_key: "payment.record",
@@ -64,9 +79,7 @@ async function ensureReceipt(request: APIRequestContext, customerId: string): Pr
         expect(json.ok, `payment.record ${status} ${JSON.stringify(json).slice(0, 400)}`).toBe(true);
         vm = await card(request, customerId);
     }
-    const payment = (vm.payments ?? [])[0];
-    expect(payment, "the fixture produced no receipt").toBeTruthy();
-    return payment!;
+    return subject(vm);
 }
 
 async function openHousehold(page: Page, customerId: string) {
@@ -74,19 +87,30 @@ async function openHousehold(page: Page, customerId: string) {
     await page.waitForLoadState("networkidle");
 }
 
-test("PHASE 2 — a deterministic receipt exists, applied to the charge it answered", async ({ page }) => {
+test("PHASE 2 — the deterministic receipt exists, and its money adds up", async ({ page }) => {
     const customerId = await householdId(page.request);
-    const payment = await ensureReceipt(page.request, customerId);
+    await ensureReceipt(page.request, customerId);
     const vm = await card(page.request, customerId);
-    const source = charge(vm, SOURCE);
+    const payment = subject(vm);
 
     expect(payment.amountCents, "the receipt is the deterministic amount").toBe(RECEIPT_CENTS);
+
+    /*
+     * WHICH charge the money is on is not fixed: the mounted phases move it, and that is the point
+     * of the fixture. What must always hold is the accounting law, read from the canonical account
+     * rather than recomputed here — applied plus unapplied is the receipt, exactly.
+     */
     const active = (payment.applications ?? []).filter((a) => a.status === "active");
-    expect(active.length, "it answers exactly one charge").toBe(1);
-    expect(active[0].chargeId, "and that charge is the source").toBe(source.chargeId);
-    expect(payment.unappliedCents, "none of it is loose").toBe(0);
-    // The whole point of an application: the obligation is answered.
-    expect(source.outstandingCents, "the source charge is settled").toBe(0);
+    const applied = active.reduce((n, a) => n + a.appliedCents, 0);
+    expect(applied + payment.unappliedCents, "applied plus unapplied is the receipt")
+        .toBe(payment.amountCents);
+
+    // And every charge it answers belongs to this household.
+    const household = new Set((vm.rows ?? []).map((r) => r.chargeId));
+    for (const a of active) {
+        expect(household.has(a.chargeId ?? ""), `application ${a.allocationId} points outside the household`)
+            .toBe(true);
+    }
 });
 
 test("PHASE 3 — the receipt carries a payer, not a blank", async ({ page }) => {
@@ -125,25 +149,37 @@ test.describe("reallocation boundaries", () => {
         expect(authed.status(), "and must not refuse it as unauthenticated").not.toBe(401);
     });
 
-    test("PHASE 13 — applying a payment is refused without fin.write, and says which permission", async ({ page }) => {
+    test("PHASE 4 — the same operator now authorizes BOTH halves of a Move", async ({ page }) => {
         await page.goto("/workspace");
         const customerId = await householdId(page.request);
         const vm = await card(page.request, customerId);
         const target = charge(vm, TARGET);
-        const { json } = await execute(page.request, {
-            action_key: "payment.apply_to_charge",
-            entity_type: "opportunity_customer_member",
-            entity_id: target.subjectMemberId ?? "",
-            mode: "execute",
+        const ent = { entity_type: "opportunity_customer_member", entity_id: target.subjectMemberId ?? "" };
+
+        /*
+         * BEFORE the grant was deployed this same call was refused with "Applying a payment requires
+         * fin.write", on authority, before the payment was looked up — that refusal was measured on
+         * this identity and is what the grant migration repairs. It cannot be re-exercised here now
+         * that the role holds the permission, and minting a second, unpermitted identity is not this
+         * lane's to do; so what is asserted now is the other side: the gate no longer stops us, and
+         * the refusal that remains is about the subject rather than about authority.
+         */
+        const apply = await execute(page.request, {
+            action_key: "payment.apply_to_charge", ...ent, mode: "execute",
             payload: { payment_id: "00000000-0000-4000-8000-000000000000", charge_id: target.chargeId, amount_cents: 100 },
         });
-        expect(json.ok, "a role without fin.write must not move money").toBe(false);
-        /*
-         * The permission is checked BEFORE the payment is looked up: the refusal must be about
-         * authority, not about a missing row. A not-found here would mean an unpermitted caller can
-         * probe which payment ids exist.
-         */
-        expect(JSON.stringify(json)).toMatch(/fin\.write/);
+        expect(apply.json.ok, "a payment that does not exist still cannot be applied").toBe(false);
+        expect(JSON.stringify(apply.json), "but no longer because the operator lacks fin.write")
+            .not.toMatch(/fin\.write/);
+
+        // The reversal half was always permitted through fin.adjust; it must still be.
+        const reverse = await execute(page.request, {
+            action_key: "payment.reverse_application", entity_type: "customer", entity_id: customerId,
+            mode: "execute",
+            payload: { allocation_id: "00000000-0000-4000-8000-000000000000", reason: "authorization probe" },
+        });
+        expect(reverse.json.ok, "a missing allocation still refuses").toBe(false);
+        expect(JSON.stringify(reverse.json), "and not for want of fin.adjust").not.toMatch(/fin\.adjust/);
     });
 
     test("PHASE 14 — a forged allocation from outside the org reads as absent, and changes nothing", async ({ page }) => {
@@ -166,5 +202,77 @@ test.describe("reallocation boundaries", () => {
 
         const after = JSON.stringify((await card(page.request, customerId)).rows);
         expect(after, "no charge balance moved").toBe(before);
+    });
+
+    /*
+     * PHASE 15/16 — the refusals that need a real receipt. These skip themselves until the fixture
+     * exists rather than passing vacuously, so a green here always means the refusal was exercised.
+     */
+    test("PHASE 15 · applying refuses a malformed target and an over-application", async ({ page }) => {
+        await page.goto("/workspace");
+        const customerId = await householdId(page.request);
+        const v = await card(page.request, customerId);
+        const payment = (v.payments ?? [])[0];
+        test.skip(!payment, "no receipt in this household yet");
+        const target = charge(v, TARGET);
+
+        const malformed = await execute(page.request, {
+            action_key: "payment.apply_to_charge",
+            entity_type: "opportunity_customer_member",
+            entity_id: target.subjectMemberId ?? "",
+            mode: "execute",
+            payload: { payment_id: payment.paymentId, charge_id: "not-a-uuid", amount_cents: 100 },
+        });
+        expect(malformed.json.ok, "a malformed target must refuse").toBe(false);
+
+        const tooMuch = await execute(page.request, {
+            action_key: "payment.apply_to_charge",
+            entity_type: "opportunity_customer_member",
+            entity_id: target.subjectMemberId ?? "",
+            mode: "execute",
+            // More than the receipt itself: money that was never received cannot answer anything.
+            payload: { payment_id: payment.paymentId, charge_id: target.chargeId, amount_cents: payment.amountCents + 1_000_000 },
+        });
+        expect(tooMuch.json.ok, "applying more than was received must refuse").toBe(false);
+    });
+
+    test("PHASE 16 · a forged same-org cross-household apply refuses and changes nothing", async ({ page }) => {
+        await page.goto("/workspace");
+        const mine = await householdId(page.request);
+        const v = await card(page.request, mine);
+        const payment = (v.payments ?? [])[0];
+        test.skip(!payment, "no receipt in this household yet");
+
+        // Another household in the SAME org — the chooser would never offer this, so it is forged.
+        const others = await page.request.get("/api/admin/customers?limit=50");
+        const list = ((await others.json()) as { customers?: Array<{ id: string }> }).customers ?? [];
+        let foreign: { customerId: string; chargeId: string } | null = null;
+        for (const c of list) {
+            if (c.id === mine) continue;
+            const ov = await card(page.request, c.id);
+            const row = (ov.rows ?? []).find((r) => r.status === "posted" && r.outstandingCents > 0);
+            if (row) { foreign = { customerId: c.id, chargeId: row.chargeId }; break; }
+        }
+        test.skip(!foreign, "no second household with a posted charge to forge against");
+
+        const beforeMine = JSON.stringify((await card(page.request, mine)).rows);
+        const beforeTheirs = JSON.stringify((await card(page.request, foreign!.customerId)).rows);
+
+        const { json } = await execute(page.request, {
+            action_key: "payment.apply_to_charge",
+            entity_type: "opportunity_customer_member",
+            entity_id: charge(v, TARGET).subjectMemberId ?? "",
+            mode: "execute",
+            payload: { payment_id: payment.paymentId, charge_id: foreign!.chargeId, amount_cents: 100 },
+        });
+        expect(json.ok, "one family's money may only answer that family's obligations").toBe(false);
+        expect(JSON.stringify(json), "and the refusal names the household reason")
+            .toMatch(/household/i);
+
+        expect(JSON.stringify((await card(page.request, mine)).rows), "our balances did not move").toBe(beforeMine);
+        expect(JSON.stringify((await card(page.request, foreign!.customerId)).rows), "theirs did not either")
+            .toBe(beforeTheirs);
+        const after = (await card(page.request, mine)).payments!.find((p) => p.paymentId === payment.paymentId)!;
+        expect(after.unappliedCents, "and the receipt is untouched").toBe(payment.unappliedCents);
     });
 });
