@@ -60,6 +60,35 @@ export function defaultGit(args, cwd, { timeout = 60_000 } = {}) {
   });
 }
 
+/**
+ * The first line of git's complaint that actually says something.
+ *
+ * `err.split("\n")[0]` looks equivalent and is not. A refusal written for a
+ * human to read starts with a blank line so it stands off from the command, and
+ * the push guard does exactly that: it printf's a leading newline before
+ * "PUSH BLOCKED — archive/recovery refs may not be pushed...". Line zero is
+ * therefore the empty string, which is falsy, so the caller's
+ * `detail || "Push failed"` discarded 554 bytes of precise, actionable
+ * diagnosis and reported a generic sentence instead.
+ *
+ * That cost two missions. The refusal was correct every time — a namespace
+ * policy protecting the deployable remote — and it was unreadable, so it looked
+ * like a broken durability mechanism rather than a working guard.
+ *
+ * ANSI colour is stripped because it is presentation, and a stored failure
+ * reason is data: escape codes in a JSON record are noise a reader has to
+ * decode before they can see the sentence.
+ */
+export function firstMeaningfulLine(text, fallback = "git push failed") {
+  const lines = String(text ?? "")
+    // eslint-disable-next-line no-control-regex
+    .replace(/\u001b\[[0-9;]*m/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines[0] || fallback;
+}
+
 export function validatePushInputs(inputs = {}) {
   for (const k of FORCE_KEYS) {
     if (inputs[k]) {
@@ -333,9 +362,9 @@ export function pushBranch(inputs, { git = defaultGit } = {}) {
   if (out.status !== 0) {
     const err = String(out.stderr || out.stdout || "git push failed");
     if (/\[rejected\]|non-fast-forward|fetch first/i.test(err)) {
-      return { ok: false, code: "non_fast_forward", detail: err.split("\n")[0].slice(0, 240) };
+      return { ok: false, code: "non_fast_forward", detail: firstMeaningfulLine(err).slice(0, 240) };
     }
-    return { ok: false, code: "push_failed", detail: err.split("\n")[0].slice(0, 240) };
+    return { ok: false, code: "push_failed", detail: firstMeaningfulLine(err).slice(0, 240) };
   }
 
   // VERIFY WHAT LANDED. A push that succeeded is not a push that put the right
