@@ -51,6 +51,7 @@ import {
   fulfillRepositoryPushForMission,
   fulfillClosePullRequestForMission,
   fulfillApplyReconciliationPlanForMission,
+  fulfillExecuteRegisteredReconciliationForMission,
   fulfillRetireWorktreeForMission,
   fulfillDeleteRemoteBranchForMission,
   fulfillRestoreDeployedQaSessionForMission,
@@ -1798,6 +1799,18 @@ function defaultModeForAction(actionKey, requested) {
   if (actionKey === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) return "other";
   if (actionKey === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) return "other";
   if (actionKey === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) return "other";
+  /*
+   * Executing a registered reconciliation is a privileged_write against a permitted environment —
+   * `reconciliation-registry.mjs` permits staging and, by construction, no production entry exists.
+   * It is not a promotion: nothing moves between branches. It is not a migration_apply: no schema
+   * changes, and borrowing that mode would let it inherit migration governance it has no business
+   * inheriting. "other" is where its nearest neighbour `vacilando.apply_reconciliation_plan` already
+   * lives, and the mode is chosen from those semantics rather than to satisfy a red test.
+   *
+   * Operator approval is NOT granted by this line and is not affected by it: the registration carries
+   * `alwaysRequiresOperatorApproval: true`, which is enforced elsewhere and stays enforced.
+   */
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION) return "other";
   if (actionKey === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) return "other";
   if (actionKey === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) return "other";
   /*
@@ -3105,6 +3118,18 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       // worker that could name its own requester could name someone else's and
       // retire the tree it is running in.
       inputs: { ...(rec.inputs || {}), requestingWorktree: rec.worktree_path || null },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION) {
+    return fulfillExecuteRegisteredReconciliationForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
       actor,
       nowMs,
       grant,

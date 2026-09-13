@@ -2720,6 +2720,35 @@ export function fulfillApplyReconciliationPlanForMission(missionId, {
   return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
+/**
+ * Execute a REGISTERED reconciliation.
+ *
+ * Same shape as every other fulfil, deliberately: the whole point of this
+ * capability is that it adds no new execution mechanism. Which script runs,
+ * which environments it may touch and what a dry run means are resolved by
+ * `reconciliation-registry.mjs` inside `validateInputs`, so there is nothing
+ * here to parameterise and nowhere for a caller-supplied command to enter.
+ *
+ * This function is the leg that was missing. The action was registered, had an
+ * executor branch, was discoverable and approvable — and had no way to be
+ * reached, because `requestGovernedAction` had no branch that named it.
+ */
+export function fulfillExecuteRegisteredReconciliationForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
 export function fulfillClosePullRequestForMission(missionId, {
   assignmentId = null, executionSessionId = null, inputs = {},
   actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,

@@ -59,3 +59,22 @@ jobs:
       # scripts/routeCapabilities.declared.json fails here, on the PR, instead
       # of on staging after the merge.
       - run: npm run prebuild
+      # THE GOVERNED-ACTION CONTRACT, WHICH NOTHING RAN.
+      #
+      # GC2, GC4 and GC5 assert that every registered action has a governed mode,
+      # a fulfil dispatch branch and an executor branch. They were correct and
+      # they were red: `environment.execute_registered_reconciliation` sat
+      # registered, approvable and unreachable on staging, and no workflow ran
+      # the suite that said so, so nothing reported it.
+      #
+      # Scoped to this one file on purpose. Other suites under
+      # scripts/local-dev/tests have pre-existing failures unrelated to the action
+      # contract, and making a REQUIRED check depend on all of them would block
+      # every pull request in the fleet to fix one class of defect.
+      #
+      # No npm dependencies: these are plain `node --test` modules that import
+      # from scripts/local-dev/lib directly, which is why this runs from the
+      # repository root rather than `web`.
+      - name: Governed action contract (registered ⇒ mode + dispatch + executor)
+        working-directory: .
+        run: node --test scripts/local-dev/tests/development-governed-action-contract.test.mjs
