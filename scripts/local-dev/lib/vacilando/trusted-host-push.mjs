@@ -153,7 +153,7 @@ export function validatePushInputs(inputs = {}) {
 export function remoteBranchSha(normalized, { gitImpl = defaultGit } = {}) {
   const out = gitImpl(["ls-remote", normalized.remote, `refs/heads/${normalized.branch}`], normalized.worktreePath, { timeout: 45_000 });
   if (out.status !== 0) {
-    return { ok: false, code: "remote_unreadable", detail: String(out.stderr || "ls-remote failed").split("\n")[0].slice(0, 200) };
+    return { ok: false, code: "remote_unreadable", detail: firstMeaningfulLine(String(out.stderr || ""), "ls-remote failed").slice(0, 200) };
   }
   const line = String(out.stdout || "").trim().split("\n").find(Boolean);
   if (!line) return { ok: true, sha: null };

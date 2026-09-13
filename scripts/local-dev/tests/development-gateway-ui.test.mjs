@@ -2481,8 +2481,24 @@ test("the sign-in route exists and the agent cannot complete one", () => {
 // present in the file proved nothing — that is how this shipped twice.
 
 await test("browser-auth routes answer POST, which is what the buttons send", async () => {
+  /*
+   * THE SETUP WENT STALE, NOT THE ROUTES.
+   *
+   * This opened the gate with VACILANDO_REQUIRE_API_AUTH=0 and asserted 404.
+   * It returned 401 instead, because `apiAuthRequired()` was later hardened:
+   * "Remote Gateway cannot be opened by VACILANDO_REQUIRE_API_AUTH=0". This
+   * host runs with VACILANDO_GATEWAY_REMOTE=1, so the bypass the test relied on
+   * is deliberately unavailable and the test was measuring the guard rather
+   * than the routes.
+   *
+   * The question it asks is about the LOCAL gateway the buttons talk to, so it
+   * now describes that condition honestly instead of trying to switch the guard
+   * off underneath a remote one.
+   */
   const prevAuth = process.env.VACILANDO_REQUIRE_API_AUTH;
+  const prevRemote = process.env.VACILANDO_GATEWAY_REMOTE;
   process.env.VACILANDO_REQUIRE_API_AUTH = "0";
+  delete process.env.VACILANDO_GATEWAY_REMOTE;
   try {
     const api = await import("../lib/vacilando/v2-api.mjs");
     for (const route of ["status", "sign-in", "verify"]) {
@@ -2497,6 +2513,34 @@ await test("browser-auth routes answer POST, which is what the buttons send", as
   } finally {
     if (prevAuth === undefined) delete process.env.VACILANDO_REQUIRE_API_AUTH;
     else process.env.VACILANDO_REQUIRE_API_AUTH = prevAuth;
+    if (prevRemote === undefined) delete process.env.VACILANDO_GATEWAY_REMOTE;
+    else process.env.VACILANDO_GATEWAY_REMOTE = prevRemote;
+  }
+});
+
+await test("a REMOTE gateway cannot be opened by the local bypass flag", async () => {
+  /*
+   * The contract the test above accidentally discovered, asserted deliberately.
+   * A flag that opens a loopback Electron gateway must never open one that is
+   * reachable over a network, whatever it is set to.
+   */
+  const prevAuth = process.env.VACILANDO_REQUIRE_API_AUTH;
+  const prevRemote = process.env.VACILANDO_GATEWAY_REMOTE;
+  process.env.VACILANDO_REQUIRE_API_AUTH = "0";
+  process.env.VACILANDO_GATEWAY_REMOTE = "1";
+  try {
+    const { apiAuthRequired } = await import("../lib/vacilando/vacilando-api-auth.mjs");
+    assert.equal(apiAuthRequired(), true, "remote mode stays closed");
+    const api = await import("../lib/vacilando/v2-api.mjs");
+    const out = await api.handleV2Post("/api/v2/browser-auth/status",
+      { lane_id: "lane_does_not_exist" }, { headers: { host: "127.0.0.1:3020" } });
+    assert.equal(out.status, 401);
+    assert.equal(out.body.error, "unauthorized");
+  } finally {
+    if (prevAuth === undefined) delete process.env.VACILANDO_REQUIRE_API_AUTH;
+    else process.env.VACILANDO_REQUIRE_API_AUTH = prevAuth;
+    if (prevRemote === undefined) delete process.env.VACILANDO_GATEWAY_REMOTE;
+    else process.env.VACILANDO_GATEWAY_REMOTE = prevRemote;
   }
 });
 

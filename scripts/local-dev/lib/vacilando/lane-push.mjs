@@ -608,8 +608,27 @@ export async function sendPushToSubscriptions(payload, {
   let failed = 0;
   let lastError = null;
   const dead = [];
-  const results = [];
-  for (const sub of subs) {
+  /*
+   * THE SUBSCRIPTIONS GO OUT TOGETHER.
+   *
+   * This awaited each send in turn, so N devices cost N sequential round-trips
+   * to a push provider — the notification was not slow, it was slow N times.
+   *
+   * MEASURED over 497 delivered notifications: P50 0.61s but P90 12.5s, P95
+   * 18.7s and a 47s maximum, with 20.5% over five seconds. Every slow case had
+   * `sent: 3`, `attempted: true`, no error and no retry, so nothing was failing
+   * and nothing was being re-attempted — three healthy devices were simply
+   * being waited on one after another.
+   *
+   * The remaining latency is the provider's and is not Vacilando's to fix.
+   * Multiplying it by the number of devices was.
+   *
+   * Per-subscription results stay INDEX-MAPPED rather than pushed as they
+   * settle: a result list whose order depends on which provider answered first
+   * would make `results[i]` stop meaning `subs[i]`, and the dead-endpoint prune
+   * below reads exactly that correspondence.
+   */
+  const settled = await Promise.all(subs.map(async (sub) => {
     const provider = pushProviderKind(sub.endpoint);
     try {
       if (send) {
@@ -622,19 +641,24 @@ export async function sendPushToSubscriptions(payload, {
           keys: sub.keys,
         }, body, { TTL: 300, urgency: "normal" });
       }
-      sent += 1;
       sub.last_ok_at = new Date().toISOString();
       sub.last_error = null;
-      results.push({ ok: true, provider });
+      return { ok: true, provider };
     } catch (e) {
-      failed += 1;
       const status = Number(e?.statusCode || e?.status || 0);
       const error = classifyPushError(e);
-      lastError = error;
       sub.last_error = error;
-      results.push({ ok: false, provider, error, status: status || undefined });
-      if (status === 404 || status === 410 || status === 403) dead.push(sub.endpoint);
+      return { ok: false, provider, error, status: status || undefined, endpoint: sub.endpoint };
     }
+  }));
+  const results = [];
+  for (const r of settled) {
+    if (r.ok) { sent += 1; results.push({ ok: true, provider: r.provider }); continue; }
+    failed += 1;
+    lastError = r.error;
+    const { endpoint, ...rest } = r;
+    results.push(rest);
+    if (r.status === 404 || r.status === 410 || r.status === 403) dead.push(endpoint);
   }
   const live = readPushStore(root);
   live.subscriptions = (live.subscriptions || [])

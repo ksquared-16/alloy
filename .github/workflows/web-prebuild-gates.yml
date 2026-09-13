@@ -147,3 +147,9 @@ jobs:
       - name: Operating report timer wiring
         working-directory: .
         run: node scripts/local-dev/tests/development-report-timer.test.mjs
+      # The push fan-out must stay concurrent and index-mapped, routine failure
+      # paths must keep their first diagnostic line, and successful-output
+      # parsing must stay untouched.
+      - name: Backlog burn-down invariants
+        working-directory: .
+        run: node scripts/local-dev/tests/development-backlog-burndown.test.mjs

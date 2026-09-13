@@ -171,11 +171,13 @@ test("P14. retention keeps a week, and still never evicts an unanswered request"
    * governed actions, so the weekly report's SHIPPING figures were identical to
    * the daily one - the week had no older records left to count.
    */
-  assert.equal(governedRequestRetentionCap(), 1000);
-  const many = Array.from({ length: 1500 }, (_, i) => ({ request_id: `g${i}`, status: "complete" }));
+  // Re-sized once measured: 204 governed actions landed in a single day, so
+  // 1000 was five days at that rate and the weekly window needs seven.
+  assert.equal(governedRequestRetentionCap(), 2000);
+  const many = Array.from({ length: 2500 }, (_, i) => ({ request_id: `g${i}`, status: "complete" }));
   many.push({ request_id: "pending", status: "awaiting_operator" });
   const kept = retainGovernedRequests(many);
-  assert.equal(kept.length, 1000);
+  assert.equal(kept.length, 2000);
   assert.ok(kept.some((r) => r.request_id === "pending"), "an unanswered request is never disposable");
 });
 
@@ -185,7 +187,7 @@ test("P15. the cap is a setting, not a number in the code", () => {
     process.env.VACILANDO_GOVERNED_REQUEST_RETENTION = "50";
     assert.equal(governedRequestRetentionCap(), 50);
     process.env.VACILANDO_GOVERNED_REQUEST_RETENTION = "nonsense";
-    assert.equal(governedRequestRetentionCap(), 1000, "a bad value falls back rather than truncating history");
+    assert.equal(governedRequestRetentionCap(), 2000, "a bad value falls back rather than truncating history");
   } finally {
     if (prev === undefined) delete process.env.VACILANDO_GOVERNED_REQUEST_RETENTION;
     else process.env.VACILANDO_GOVERNED_REQUEST_RETENTION = prev;

@@ -1294,11 +1294,21 @@ const SETTLED = new Set(SETTLED_GOVERNED_STATUSES);
  * figures were identical to the daily one - the week simply had no older
  * records left to count.
  *
- * Raised to 1000 and made a setting. The cost is one JSON file: a record is
- * roughly 1-2 KB, so this is a few megabytes at the cap, and the eviction rule
- * below is unchanged - an unanswered request is never disposable at any cap.
+ * Raised, and made a setting. The cost is one JSON file: a record is roughly
+ * 1-2 KB, so this is a few megabytes at the cap, and the eviction rule below is
+ * unchanged - an unanswered request is never disposable at any cap.
+ *
+ * 2000 IS A MEASURED NUMBER, NOT A ROUND ONE. 2026-09-13 produced 204 governed
+ * actions in a single day, and the run store shows ordinary days between 4 and
+ * 56 runs at roughly 5 actions each. So 1000 was five days at the observed peak
+ * - short of the seven the weekly report needs, and with nothing left over for
+ * the week-over-week comparison it wants next. 2000 covers a heavy week twice.
+ *
+ * It cannot recover what is already gone: the records before today were evicted
+ * under the old 200 cap, and no retention setting brings them back. The weekly
+ * report's SHIPPING section becomes meaningful as days accumulate from here.
  */
-export const GOVERNED_REQUEST_RETENTION_DEFAULT = 1000;
+export const GOVERNED_REQUEST_RETENTION_DEFAULT = 2000;
 
 export function governedRequestRetentionCap() {
   const raw = Number(process.env.VACILANDO_GOVERNED_REQUEST_RETENTION);
