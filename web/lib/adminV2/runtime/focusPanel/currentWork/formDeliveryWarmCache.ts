@@ -7,6 +7,7 @@
  * Same contract as the tour + communication warm caches: TTL + in-flight de-dup, errors never
  * cached, browser-only. The forms list is org-level but is bundled per record for one warm entry.
  */
+import { speculativeFetch } from "@/lib/adminV2/runtime/speculation/speculativeFetch";
 
 export type FormDeliveryFormOption = { id: string; name: string };
 export type FormDeliveryRecipientOption = {
@@ -34,7 +35,7 @@ function isFresh(entry: Entry, now: number): boolean {
 }
 
 async function fetchForms(): Promise<FormDeliveryFormOption[]> {
-    const res = await fetch("/api/admin/forms", { credentials: "include" });
+    const res = await speculativeFetch("/api/admin/forms", { credentials: "include" });
     if (!res.ok) return [];
     // /api/admin/forms answers { data: FormRow[] } — an array directly under `data`. The old
     // `data.forms` read never matched, so the warm cache pre-seeded an empty form list.
@@ -48,7 +49,7 @@ async function fetchForms(): Promise<FormDeliveryFormOption[]> {
 }
 
 async function fetchRecipients(opportunityId: string): Promise<FormDeliveryRecipientOption[]> {
-    const res = await fetch(
+    const res = await speculativeFetch(
         `/api/admin/communications/drawer-recipients?entity_type=opportunities&entity_id=${encodeURIComponent(opportunityId)}`,
         { credentials: "include" },
     );
@@ -58,7 +59,7 @@ async function fetchRecipients(opportunityId: string): Promise<FormDeliveryRecip
 }
 
 async function fetchSubjects(opportunityId: string): Promise<FormDeliverySubjectOption[]> {
-    const res = await fetch(`/api/admin/opportunities/${encodeURIComponent(opportunityId)}/delivery-subjects`, {
+    const res = await speculativeFetch(`/api/admin/opportunities/${encodeURIComponent(opportunityId)}/delivery-subjects`, {
         credentials: "include",
     });
     if (!res.ok) return [];
