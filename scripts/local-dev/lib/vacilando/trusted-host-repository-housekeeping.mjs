@@ -179,25 +179,89 @@ export function measureMergePullRequestGates(n, { gh = defaultGh } = {}) {
     },
   };
 
-  // Checks. A PR with zero checks is not "all checks passed" — the gate
-  // requires total > 0, so an unchecked PR escalates rather than sails through.
+  /*
+   * Checks. A PR with zero checks is not "all checks passed" — the gate
+   * requires total > 0, so an unchecked PR escalates rather than sails through.
+   *
+   * ── REQUIRED MEANS REQUIRED ──
+   *
+   * These fields are named `required_checks_*` and the gate that reads them asks
+   * whether every REQUIRED status check concluded successfully. They used to be
+   * counted over every check the pull request had. `gh pr checks` does not report
+   * requiredness at all, so a deploy preview sat in the same denominator as a
+   * branch-protection gate.
+   *
+   * Measured on PR #895: 14 checks, 3 required and all three green, and one
+   * cancelled Supabase preview — cancelled by that integration's own
+   * concurrent-branch quota, which is not a statement about the candidate.
+   * `cancelled` is classified with the failures, so `required_checks_failing`
+   * came out 1 and `required_checks_passing === required_checks_total` came out
+   * 13 === 14. The gate refused a promotion whose every required check had
+   * passed, and the snapshot beside it in the same record said so: required 3,
+   * passing 3, failing none, pending none.
+   *
+   * Any repository with a flaky or quota-limited optional check could therefore
+   * never satisfy `certified_staging_merge_v1`.
+   *
+   * Requiredness comes from branch protection on the base branch, which is the
+   * only authority for it. If that cannot be read, the counts stay null and the
+   * gate escalates: not knowing which checks are required is not evidence that
+   * the required ones passed.
+   */
+  /*
+   * The same endpoint, parsed the same way, as `protectionRequiredNames` in
+   * trusted-host-merge.mjs. Deliberately duplicated rather than imported: this
+   * module imports nothing but `node:child_process`, and governed-action-request
+   * depends on that staying true so its static import cannot become a cycle.
+   * Two resolvers disagreeing about requiredness is the defect this closes, so
+   * they must at least ask the identical question of the identical endpoint.
+   *
+   * `contexts` is the legacy shape and `checks[].context` the current one;
+   * GitHub returns either, so both are read and merged.
+   */
+  const protection = gh(["api",
+    `repos/${n.repository}/branches/${encodeURIComponent(pr.base_ref)}/protection/required_status_checks`]);
+  let requiredNames = null;
+  if (protection.status === 0) {
+    const body = parseJson(protection.stdout);
+    const contexts = Array.isArray(body?.contexts) ? body.contexts : [];
+    const fromChecks = Array.isArray(body?.checks) ? body.checks.map((c) => c?.context).filter(Boolean) : [];
+    requiredNames = [...new Set([...contexts, ...fromChecks].map(String))];
+  }
+
   const checks = gh(["pr", "checks", String(n.pullRequestNumber), "--repo", n.repository,
     "--json", "name,state,bucket"]);
-  if (checks.status !== 0 && !String(checks.stdout || "").trim()) {
+  if ((checks.status !== 0 && !String(checks.stdout || "").trim()) || !Array.isArray(requiredNames)) {
     ev.required_checks_total = null;
   } else {
     const rows = parseJson(checks.stdout) || [];
     // "skipping" is neither a pass nor a failure: a skipped check has asserted
     // nothing, so it is excluded from the denominator rather than counted as
     // green. Counting it green is how a suite that never ran looks certified.
-    const counted = rows.filter((r) => lower(r.bucket) !== "skipping" && lower(r.state) !== "skipped");
+    const present = rows.filter((r) => lower(r.bucket) !== "skipping" && lower(r.state) !== "skipped");
     const bucketOf = (r) => lower(r.bucket) || lower(r.state);
-    ev.required_checks_total = counted.length;
+    const requiredSet = new Set(requiredNames.map((x) => String(x)));
+    const counted = present.filter((r) => requiredSet.has(String(r.name || "")));
+
+    /*
+     * A REQUIRED CONTEXT THAT NEVER REPORTED IS NOT AN ABSENCE OF PROBLEMS.
+     * Scoping by name alone would drop it from the denominator entirely, and 2
+     * of 2 present would read as "all required checks green" while GitHub holds
+     * the pull request waiting for the third. It is counted in the total and in
+     * nothing else, so the gate cannot pass without it.
+     */
+    const reportedNames = new Set(present.map((r) => String(r.name || "")));
+    const missingRequired = [...requiredSet].filter((name) => !reportedNames.has(name));
+
+    ev.required_checks_total = counted.length + missingRequired.length;
     ev.required_checks_passing = counted.filter((r) => ["pass", "success"].includes(bucketOf(r))).length;
     ev.required_checks_failing = counted.filter((r) => ["fail", "failure", "cancel", "cancelled", "timed_out", "action_required"].includes(bucketOf(r))).length;
     ev.required_checks_pending = counted.filter((r) => ["pending", "queued", "in_progress", "waiting"].includes(bucketOf(r))).length;
-    // The certification suite specifically, not the deploy previews.
-    const certs = counted.filter((r) => /certification/i.test(String(r.name || "")));
+    ev.required_checks_missing = missingRequired;
+    // The certification suite specifically, not the deploy previews. Judged over
+    // every check that ran, required or not: a certification job is evidence
+    // about the candidate whether or not protection happens to demand it.
+    const certs = present.filter((r) => /certification/i.test(String(r.name || "")));
     ev.certification_suite_passed = certs.length === 0
       ? null
       : certs.every((r) => ["pass", "success"].includes(bucketOf(r)));
