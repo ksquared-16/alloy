@@ -150,9 +150,12 @@ describe("registered reconciliation — execution", () => {
          * reconciliation ran and failed"; those need different people to act.
          */
         const spawn = recordingSpawn();
+        // An env source that does not exist, so the assertion is about the refusal and not
+        // about whichever .env.local the machine running the test happens to have.
+        const NO_SOURCE = "/nonexistent/trusted/.env.local";
         const unresolved = runRegisteredReconciliation(
             { reconciliation_key: KEY, target_environment: "staging", dry_run: true },
-            { spawn, repoRoot: "/repo", trustedEnv: {} },
+            { spawn, repoRoot: "/repo", trustedEnv: {}, trustedEnvSource: NO_SOURCE },
         );
         expect(unresolved.ok).toBe(false);
         expect(unresolved.error).toBe(RECONCILIATION_REFUSALS.CONTEXT_UNRESOLVED);
@@ -160,7 +163,7 @@ describe("registered reconciliation — execution", () => {
         // Ambiguity is refused rather than resolved — the same rule assign_qa_identity_access uses.
         const malformed = runRegisteredReconciliation(
             { reconciliation_key: KEY, target_environment: "staging", dry_run: true },
-            { spawn, repoRoot: "/repo", trustedEnv: { DEV_QUEUE_ORG_ID: "the-staging-org" } },
+            { spawn, repoRoot: "/repo", trustedEnv: { DEV_QUEUE_ORG_ID: "the-staging-org" }, trustedEnvSource: NO_SOURCE },
         );
         expect(malformed.ok).toBe(false);
         expect(malformed.error).toBe(RECONCILIATION_REFUSALS.CONTEXT_INVALID);

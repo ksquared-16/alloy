@@ -21,6 +21,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -32,6 +33,38 @@ import {
 /** Parse whatever structured counts the runner printed, without inventing any. */
 /** A canonical organization id. Anything else is ambiguity, and ambiguity is refused. */
 const ORG_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/*
+ * READ ONE NAMED VALUE OUT OF THE TRUSTED ENVIRONMENT FILE.
+ *
+ * The control plane designates exactly one file as the trusted server environment
+ * (`ALLOY_SERVER_ENV_SOURCE`), and `DEV_QUEUE_ORG_ID` lives there — which is why the
+ * parent process's own env does not have it and never did. `vac-qa-access-assign`
+ * resolves its organization from the same file for the same reason.
+ *
+ * Only the names the registry declared are read. The file is not loaded into the
+ * child's environment and nothing else in it is looked at, so a file that also holds
+ * a service-role key cannot leak through this path.
+ */
+function readTrustedEnvValue(sourcePath, name) {
+  if (!sourcePath || !existsSync(sourcePath)) return null;
+  let text;
+  try { text = readFileSync(sourcePath, "utf8"); } catch { return null; }
+  for (const line of text.split(String.fromCharCode(10))) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq < 1) continue;
+    const key = trimmed.slice(0, eq).replace(/^export\s+/, "").trim();
+    if (key !== name) continue;
+    let value = trimmed.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    return value.trim() || null;
+  }
+  return null;
+}
 
 /** Best-effort provenance. A checkout that cannot answer is reported as null, never guessed. */
 function gitValue(args, cwd) {
@@ -87,14 +120,31 @@ export function runRegisteredReconciliation(inputs = {}, deps = {}) {
    * rather than becoming a runner failure, because "nobody configured the
    * staging org" and "the reconciliation ran and failed" need different people.
    */
+  const envSource = deps.trustedEnvSource ?? process.env.ALLOY_SERVER_ENV_SOURCE ?? null;
   const context = {};
+  const contextSources = {};
   for (const [runnerVar, sourceVar] of Object.entries(entry.required_context ?? {})) {
     const trusted = deps.trustedEnv ?? {};
-    const value = String(trusted[sourceVar] ?? process.env[sourceVar] ?? "").trim();
-    const where = { repo_root: repoRoot, working_directory: workingDirectory, runner: entry.runner };
+    /*
+     * Nearest first, and each step is a place the CONTROL PLANE put the value —
+     * never the caller. The env-source file is where it actually lives on the
+     * trusted host, so leaving it out made this refuse for everyone in exactly
+     * the configuration the platform ships.
+     */
+    let value = String(trusted[sourceVar] ?? "").trim();
+    let from = value ? "trusted_env" : null;
+    if (!value) {
+      const fromFile = readTrustedEnvValue(envSource, sourceVar);
+      if (fromFile) { value = String(fromFile).trim(); from = "trusted_env_source"; }
+    }
+    if (!value) {
+      const fromProcess = String(process.env[sourceVar] ?? "").trim();
+      if (fromProcess) { value = fromProcess; from = "host_env"; }
+    }
+    const where = { repo_root: repoRoot, working_directory: workingDirectory, runner: entry.runner, trusted_env_source: envSource };
     if (!value) {
       return { ok: false, error: RECONCILIATION_REFUSALS.CONTEXT_UNRESOLVED,
-        detail: entry.key + " requires " + runnerVar + ", resolved from " + sourceVar + ", which is not set in the trusted environment.",
+        detail: entry.key + " requires " + runnerVar + ", resolved from " + sourceVar + ", which is set neither in the trusted environment nor in " + (envSource || "an unconfigured trusted env source") + ".",
         provenance: where };
     }
     if (runnerVar === "ORG_ID" && !ORG_LIKE.test(value)) {
@@ -105,6 +155,7 @@ export function runRegisteredReconciliation(inputs = {}, deps = {}) {
     // Registry-resolved, and written last so nothing a request carried shadows it.
     runnerEnv[runnerVar] = value;
     context[runnerVar] = value;
+    contextSources[runnerVar] = from;
   }
 
   const provenance = {
@@ -116,6 +167,11 @@ export function runRegisteredReconciliation(inputs = {}, deps = {}) {
     target_environment: resolved.normalized.target_environment,
     dry_run: resolved.normalized.dry_run,
     resolved_context: Object.keys(context),
+    // WHERE each value came from, never what it was. An operator debugging a
+    // reconciliation needs to know the org was read from the env-source file
+    // rather than inherited from whatever shell started the Gateway.
+    context_sources: contextSources,
+    trusted_env_source: envSource,
   };
 
   const child = spawn("npm", ["run", "--silent", entry.runner], {

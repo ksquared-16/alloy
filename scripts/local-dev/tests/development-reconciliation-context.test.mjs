@@ -13,6 +13,9 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const R = await import("../lib/vacilando/trusted-host-reconciliation.mjs");
 const REG = await import("../lib/vacilando/reconciliation-registry.mjs");
@@ -140,3 +143,70 @@ await test("RC13 — provenance names the context without printing secrets", () 
   assert.ok(!blob.includes("super-secret"), "no credential material in a failure result");
 });
 
+
+/*
+ * ── AND THEN IT STILL REFUSED ON THE REAL HOST ──
+ *
+ * Resolving only from the trusted env the fulfil handler passes, or from the
+ * Gateway's own process env, refuses in exactly the configuration the platform
+ * ships: DEV_QUEUE_ORG_ID lives in the file named by ALLOY_SERVER_ENV_SOURCE,
+ * which is why nothing in memory ever had it. `vac-qa-access-assign` reads the
+ * same name out of the same file.
+ */
+await test("RC14 — required context resolves from the trusted env SOURCE FILE", () => {
+  const dir = mkdtempSync(join(tmpdir(), "alloy-recon-env-"));
+  const envFile = join(dir, ".env.local");
+  writeFileSync(envFile, [
+    "# a real one has a great deal more in it than this",
+    "NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54421",
+    'DEV_QUEUE_ORG_ID="' + ORG + '"',
+    "SUPABASE_SERVICE_ROLE_KEY=sb-secret-do-not-leak",
+  ].join(NL) + NL);
+
+  const { spawn, seen } = spawnStub();
+  const out = R.runRegisteredReconciliation(BASE, { spawn, repoRoot: "/tmp", trustedEnv: {}, trustedEnvSource: envFile });
+  assert.equal(out.ok, true, JSON.stringify(out));
+  assert.equal(seen.opts.env.ORG_ID, ORG);
+  assert.equal(out.provenance.context_sources.ORG_ID, "trusted_env_source");
+
+  // Only the declared names are read. Nothing else in that file reaches the child
+  // through this path, and no value of any kind reaches the result.
+  assert.equal(seen.opts.env.SUPABASE_SERVICE_ROLE_KEY, undefined);
+  assert.ok(!JSON.stringify(out).includes("sb-secret-do-not-leak"));
+  assert.ok(!JSON.stringify(out).includes(ORG));
+  rmSync(dir, { recursive: true, force: true });
+});
+
+await test("RC15 — the trusted env passed in still wins over the file", () => {
+  const dir = mkdtempSync(join(tmpdir(), "alloy-recon-env-"));
+  const envFile = join(dir, ".env.local");
+  writeFileSync(envFile, "DEV_QUEUE_ORG_ID=22222222-2222-4222-8222-222222222222" + NL);
+  const { spawn, seen } = spawnStub();
+  const out = R.runRegisteredReconciliation(BASE, { spawn, repoRoot: "/tmp", trustedEnv: TRUSTED, trustedEnvSource: envFile });
+  assert.equal(seen.opts.env.ORG_ID, ORG);
+  assert.equal(out.provenance.context_sources.ORG_ID, "trusted_env");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+await test("RC16 — a missing or unreadable env source refuses rather than throwing", () => {
+  const { spawn } = spawnStub();
+  const out = R.runRegisteredReconciliation(BASE, {
+    spawn, repoRoot: "/tmp", trustedEnv: {}, trustedEnvSource: "/nowhere/at/all/.env.local",
+  });
+  assert.equal(out.ok, false);
+  assert.equal(out.error, REG.RECONCILIATION_REFUSALS.CONTEXT_UNRESOLVED);
+  // The refusal names the file an operator has to go and fix.
+  assert.match(out.detail, /\/nowhere\/at\/all\/\.env\.local/);
+  assert.equal(out.provenance.trusted_env_source, "/nowhere/at/all/.env.local");
+});
+
+await test("RC17 — a commented-out org is not a configured org", () => {
+  const dir = mkdtempSync(join(tmpdir(), "alloy-recon-env-"));
+  const envFile = join(dir, ".env.local");
+  writeFileSync(envFile, "# DEV_QUEUE_ORG_ID=" + ORG + NL + "DEV_QUEUE_ORG_IDENTIFIER=" + ORG + NL);
+  const { spawn } = spawnStub();
+  const out = R.runRegisteredReconciliation(BASE, { spawn, repoRoot: "/tmp", trustedEnv: {}, trustedEnvSource: envFile });
+  assert.equal(out.ok, false, "neither a comment nor a longer name is DEV_QUEUE_ORG_ID");
+  assert.equal(out.error, REG.RECONCILIATION_REFUSALS.CONTEXT_UNRESOLVED);
+  rmSync(dir, { recursive: true, force: true });
+});

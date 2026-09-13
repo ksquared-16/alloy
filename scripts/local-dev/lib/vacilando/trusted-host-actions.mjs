@@ -1224,13 +1224,28 @@ function payloadHasSecrets(value) {
   return /postgresql:\/\/|postgres:\/\/|DATABASE_URL|ghp_[A-Za-z0-9]|github_pat_/i.test(text);
 }
 
-function failTrustedAction(action, code, detail, { nowMs } = {}) {
+function failTrustedAction(action, code, detail, { nowMs, extra = null } = {}) {
   action.state = "failed";
   action.executionState = "failed";
   action.failureReason = code;
   action.completed_at = iso(nowMs);
   action.updated_at = iso(nowMs);
   action.result = { ok: false, code, detail: redactSecrets(detail || code).slice(0, 400) };
+  /*
+   * A FAILURE IS A RESULT TOO.
+   *
+   * The detail is clamped to 400 characters and everything else was dropped, so a
+   * failed trusted-host action told an operator what went wrong and nothing about
+   * where. Structured extras (provenance, exit code) survive here; they go through
+   * the same redaction as the detail, and a bag that still contains a secret after
+   * that is discarded rather than recorded.
+   */
+  if (extra && typeof extra === "object") {
+    try {
+      const cleaned = JSON.parse(redactSecrets(JSON.stringify(extra)));
+      if (!payloadHasSecrets(cleaned)) Object.assign(action.result, cleaned);
+    } catch { /* a bag that will not serialise is simply not recorded */ }
+  }
   writeAction(action);
   return { ok: false, error: code, detail: action.result.detail, action };
 }
@@ -2247,6 +2262,13 @@ export function executeRegisteredReconciliationTrustedHostAction(action, { actor
      * from the script running and printing nothing.
      */
     repoRoot: resolveCanonicalRepoRoot(),
+    /*
+     * The file the control plane designates as the trusted environment. The runner
+     * reads the registry's declared context names out of it — `DEV_QUEUE_ORG_ID`
+     * lives there and not in this process's env, which is why resolving from
+     * process.env alone refused on the very host the platform ships.
+     */
+    trustedEnvSource: resolveTrustedServerEnvSource(),
     trustedEnv: {
       ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
       ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
@@ -2254,7 +2276,11 @@ export function executeRegisteredReconciliationTrustedHostAction(action, { actor
     },
   });
   if (!out.ok) {
-    return failTrustedAction(action, out.error || "reconciliation_failed", out.detail || "reconciliation refused", { nowMs });
+    // Provenance rides the FAILURE, which is the case that needs it most.
+    return failTrustedAction(action, out.error || "reconciliation_failed", out.detail || "reconciliation refused", {
+      nowMs,
+      extra: { provenance: out.provenance ?? null, exit_code: out.exit_code ?? null, dry_run: out.dry_run ?? null },
+    });
   }
   return completeTrustedAction(action, {
     reconciliation_key: out.reconciliation_key,
@@ -2262,6 +2288,8 @@ export function executeRegisteredReconciliationTrustedHostAction(action, { actor
     dry_run: out.dry_run,
     exit_code: out.exit_code,
     counts: out.counts,
+    // The executor computed this and the result threw it away.
+    provenance: out.provenance ?? null,
     stdout_tail: out.stdout_tail,
   }, { nowMs });
 }
