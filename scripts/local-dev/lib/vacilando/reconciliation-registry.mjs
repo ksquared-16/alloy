@@ -48,6 +48,22 @@ export const REGISTERED_RECONCILIATIONS = Object.freeze({
     runner: "dev:qa:converge-placement-waitlisted",
     supportsDryRun: true,
     /** DRY_RUN is the default, and the apply must ALSO carry an explicit opt-in of its own. */
+    /*
+     * The script requires ORG_ID and the caller may not supply it.
+     *
+     * This is the whole point of the frozen table: a caller names a key, an
+     * environment and a boolean, and everything the run actually needs is
+     * resolved here. An ORG_ID accepted from the request would be a free-form
+     * execution parameter aimed at a privileged_write, which is exactly what the
+     * action contract exists to prevent.
+     *
+     * `DEV_QUEUE_ORG_ID` is the already-established name for the seeded staging
+     * organization; `environment.assign_qa_identity_access` resolves its org the
+     * same way, from the same trusted server env source, and refuses ambiguity
+     * rather than guessing. This reuses that convention instead of inventing a
+     * second one.
+     */
+    required_context: Object.freeze({ ORG_ID: "DEV_QUEUE_ORG_ID" }),
     dry_run_env: Object.freeze({ DRY_RUN: "1" }),
     apply_env: Object.freeze({ DRY_RUN: "0", QA_CONVERGE_APPLY: "1" }),
     /** What a caller may expect back, so a result that does not fit is a failure rather than noise. */
@@ -65,6 +81,9 @@ export const RECONCILIATION_REFUSALS = Object.freeze({
   ENVIRONMENT_NOT_PERMITTED: "environment_not_permitted",
   DRY_RUN_NOT_SUPPORTED: "dry_run_not_supported",
   DRY_RUN_NOT_BOOLEAN: "dry_run_must_be_boolean",
+  CONTEXT_UNRESOLVED: "required_context_unresolved",
+  CONTEXT_INVALID: "required_context_invalid",
+  RUNNER_NOT_STARTED: "runner_not_started",
 });
 
 /**

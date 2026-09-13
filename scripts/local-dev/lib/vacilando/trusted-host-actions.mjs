@@ -2235,7 +2235,18 @@ export function executeRegisteredReconciliationTrustedHostAction(action, { actor
   writeAction(action);
 
   const out = runRegisteredReconciliation(action.inputs ?? {}, {
-    repoRoot: findRepoRoot(),
+    /*
+     * THE CANONICAL ROOT, not findRepoRoot().
+     *
+     * findRepoRoot() walks up from process.cwd(), which for the Gateway is
+     * wherever it happened to be started. A trusted-host action that executes
+     * REPOSITORY CONTENT must run from the checkout the platform calls canonical,
+     * not from a directory discovered by accident — and when that walk finds no
+     * repository it returns cwd/../.., so the spawn lands on a path with no web/
+     * and fails with no output at all. That is indistinguishable, in the result,
+     * from the script running and printing nothing.
+     */
+    repoRoot: resolveCanonicalRepoRoot(),
     trustedEnv: {
       ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
       ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
