@@ -223,27 +223,7 @@ export async function runStewardCycleWithHygiene({
 } = {}) {
   const steward = runStewardCycle({ root, nowMs, dryRun, groupAlive, exec, stopDevServer });
   try {
-    const stages = await asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene, hygieneOptions, recoveryStage, dispatchStage });
-    /*
-     * THE OPERATING REPORTS RIDE THIS LOOP.
-     *
-     * The host has one launchd entry and it is a KeepAlive daemon with no
-     * schedule, so there is no host timer to add a line to. This cycle is the
-     * periodic owner that already exists, and its own doctrine says the steward
-     * is wired into the timers the server owns "rather than a second scheduler".
-     *
-     * Five minutes against a thirty-minute window cannot miss it, and identity
-     * is derived from the window so repeated evaluation rewrites one file. The
-     * usual answer is NOT_DUE, which is an outcome and not a fault, and a
-     * failure here is attached rather than thrown: an end-of-day report that
-     * could not be written must never interrupt anybody's development.
-     */
-    let reports = null;
-    if (!dryRun) {
-      try { reports = await runOperatingReportStage({ root, nowMs }); }
-      catch (e) { reports = { ok: false, error: "report_stage_threw", detail: String(e?.message || e).slice(0, 300) }; }
-    }
-    return { ...stages, reports };
+    return await asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene, hygieneOptions, recoveryStage, dispatchStage });
   } catch (err) {
     // The server swallows this to stay up, which is right. Recording it is what
     // makes the difference between a protected process and a silent one.
@@ -382,13 +362,55 @@ async function asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene
     });
   }
   const dispatch = await dispatchStage({ root, nowMs, dryRun });
+  /*
+   * THE OPERATING REPORTS RIDE THIS LOOP, AND ARE RECORDED WITH IT.
+   *
+   * The host has one launchd entry and it is a KeepAlive daemon with no
+   * schedule, so there is no host timer to add a line to. This cycle is the
+   * periodic owner that already exists, and the steward's own doctrine is that
+   * it uses the timers this server owns "rather than a second scheduler".
+   *
+   * It runs HERE, inside the stage set, rather than in the wrapper around it:
+   * the wrapper runs after `recordStageOutcome`, so a report written, skipped
+   * or failed there left no trace in the state file at all. The cadence would
+   * have been correct and unobservable, which for a thing that runs once a day
+   * unattended is nearly the same as not working.
+   *
+   * NOT_DUE is the answer 287 cycles in 288, and is recorded as an outcome
+   * rather than a fault. A failure is attached, never thrown: an end-of-day
+   * report that could not be written must not interrupt anyone's development.
+   */
+  let reports = null;
+  if (!dryRun) {
+    try { reports = await runOperatingReportStage({ root, nowMs }); }
+    catch (e) { reports = { ok: false, error: "report_stage_threw", detail: String(e?.message || e).slice(0, 300) }; }
+  }
   if (!dryRun) {
     recordStageOutcome({ root, nowMs, outcome: {
       ok: true, recovery: recovery?.failure_class ?? null, hygiene: result?.ok === true ? "ran" : "failed",
       dispatch: dispatchSummary(dispatch),
+      reports: reportsSummary(reports),
     } });
   }
-  return { ...steward, recovery, hygiene: result, dispatch };
+  return { ...steward, recovery, hygiene: result, dispatch, reports };
+}
+
+/**
+ * What the state file keeps about a cadence evaluation.
+ *
+ * Bounded like `dispatchSummary` beside it: the reason and the report id, never
+ * the report. "not due" is the normal entry and must stay cheap to write.
+ */
+function reportsSummary(r) {
+  if (!r) return null;
+  if (r.ok === false) return { ok: false, error: r.error ?? null, detail: r.detail ?? null };
+  return {
+    ok: true,
+    results: (r.results || []).map((x) => ({
+      kind: x.kind, ran: Boolean(x.ran), reason: x.reason ?? null,
+      report_id: x.report_id ?? null, error: x.error ?? null,
+    })),
+  };
 }
 
 /** A bounded shape for the state file: counts and refusals, never whole records. */

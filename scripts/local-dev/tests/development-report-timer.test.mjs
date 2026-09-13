@@ -151,5 +151,26 @@ test("T10. the steward owns it, and no second scheduler was introduced", async (
   assert.doesNotMatch(src, /setInterval|setTimeout\(/, "the steward must not grow a timer of its own");
 });
 
+test("T11. THE GAP: the cadence is recorded, not just evaluated", async () => {
+  /*
+   * The report stage first ran in the WRAPPER around asyncStages - after
+   * `recordStageOutcome`. So a report written, skipped or failed left no trace
+   * in the state file at all. For something that runs once a day unattended,
+   * correct-and-unobservable is nearly the same as not working.
+   *
+   * It now runs inside the stage set, and its outcome is recorded beside
+   * recovery, hygiene and dispatch.
+   */
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../lib/vacilando/host-steward-run.mjs", import.meta.url), "utf8");
+  const staged = src.slice(src.indexOf("const dispatch = await dispatchStage"));
+  const recorded = staged.slice(0, staged.indexOf("return { ...steward"));
+  assert.match(recorded, /runOperatingReportStage/, "the stage runs before the record is written");
+  assert.match(recorded, /reports: reportsSummary\(reports\)/, "and its outcome is in the record");
+  // Bounded like its neighbour: a reason and an id, never the report itself.
+  assert.match(src, /function reportsSummary/);
+  assert.doesNotMatch(src, /reports: reports,/, "the whole report must not land in the state file");
+});
+
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
 process.exit(fail ? 1 : 0);
