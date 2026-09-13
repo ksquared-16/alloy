@@ -16,6 +16,7 @@ import {
 } from "@/tests/childcareOperational/mockOperationalEnrollmentSupabase";
 import { applyPaymentToCharge, recordChildcarePayment } from "@/lib/financials/childcarePaymentService";
 import { resolveEligibleTargetCharges } from "@/lib/financials/eligibleTargetCharges";
+import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 
 const HOUSEHOLD_A = "cust-A";
 const HOUSEHOLD_B = "cust-B";
@@ -43,9 +44,13 @@ function charge(over: Record<string, unknown> = {}): Record<string, unknown> {
     };
 }
 
-function setup(charges: Record<string, unknown>[]) {
+function setup(
+    charges: Record<string, unknown>[],
+    financial_charge_templates: Record<string, unknown>[] = [],
+) {
     const store = createOperationalEnrollmentMockStore({
         charges,
+        financial_charge_templates,
         child_enrollment_agreements: [
             { id: AGREEMENT_A, org_id: ORG_ID, customer_id: HOUSEHOLD_A, customer_member_id: "m-A" },
             { id: AGREEMENT_B, org_id: ORG_ID, customer_id: HOUSEHOLD_B, customer_member_id: "m-B" },
@@ -138,5 +143,46 @@ describe("eligible target charges", () => {
                 orgId: ORG_ID, paymentId: payment.id, chargeId: "charge-B1", amountCents: 10_000,
             }),
         ).rejects.toThrow(/different household/i);
+    });
+
+    /*
+     * A template-created charge carries no description, so the label falls back to the stored
+     * category. That value is a KEY. Mounted certification found the chooser showing
+     * `registration_fee` to the operator deciding where money goes.
+     */
+    it("never puts a stored category key in front of the operator", async () => {
+        const { supabase } = setup([
+            charge({ id: "charge-known", description: null, charge_category: "late_pickup" }),
+            // The category actually stored on the charge that exposed this is NOT in the vocabulary.
+            charge({ id: "charge-unknown", description: null, charge_category: "registration_fee",
+                     service_date: "2026-08-28" }),
+        ]);
+        const payment = await householdAPayment(supabase);
+        const targets = await resolveEligibleTargetCharges(supabase, { orgId: ORG_ID, paymentId: payment.id });
+        const label = (id: string) => targets.find((t) => t.chargeId === id)!.label;
+        expect(label("charge-known"), "a known category reads as its declared label")
+            .toBe(chargeCategoryLabel("late_pickup"));
+        expect(label("charge-unknown"), "an unknown one is still not a key").not.toBe("registration_fee");
+        expect(label("charge-unknown")).toBe("Registration fee");
+    });
+
+    /*
+     * `writeTemplateDraftCharge` stores the TEMPLATE KEY as a charge's description, so the stored
+     * description of a template-created charge is `registration_fee`. The card's read model resolves
+     * the tenant's configured label; this proves the chooser resolves the same one, because a
+     * mounted Move offered `registration_fee` as a destination while the card beside it said
+     * "Registration fee" for the very same charge.
+     */
+    it("names a template-created charge the way the tenant named the template", async () => {
+        const { supabase } = setup(
+            [charge({ id: "charge-T", charge_template_id: "tpl-1", description: "registration_fee" })],
+            [{ id: "tpl-1", org_id: ORG_ID, label: "Registration fee" }],
+        );
+        const payment = await householdAPayment(supabase);
+        const targets = await resolveEligibleTargetCharges(supabase, { orgId: ORG_ID, paymentId: payment.id });
+        expect(targets).toHaveLength(1);
+        expect(targets[0].label, "the stored template key must not reach the chooser")
+            .not.toBe("registration_fee");
+        expect(targets[0].label).toBe("Registration fee");
     });
 });
