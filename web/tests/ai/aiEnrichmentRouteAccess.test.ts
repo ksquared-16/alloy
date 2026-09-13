@@ -16,8 +16,10 @@ import {
     evaluateOrgPolicyForStubWorkflowAssistProposeRoute,
 } from "@/lib/ai/aiEnrichmentRouteGuards";
 
-const adminCtx = { ok: true as const, orgId: "org-1", role: "admin", userId: "u1" };
-const opsCtx = { ok: true as const, orgId: "org-1", role: "ops", userId: "u1" };
+// These carry no capabilities on purpose: the strict-mode tests below prove the grant is read
+// from the ACCESS context, so a capability here would let a false pass look like a real one.
+const adminCtx = { ok: true as const, orgId: "org-1", role: "admin", userId: "u1", permissionKeys: [] as string[] };
+const opsCtx = { ok: true as const, orgId: "org-1", role: "ops", userId: "u1", permissionKeys: [] as string[] };
 
 const accessBase = {
     ok: true as const,
@@ -52,7 +54,7 @@ describe("resolveAiEnrichmentPortalAccess", () => {
         const okOps = resolveAiEnrichmentPortalAccess({ ctx: opsCtx, access: accessBase });
         expect(okOps.ok).toBe(true);
         const badOther = resolveAiEnrichmentPortalAccess({
-            ctx: { ok: true as const, orgId: "org-1", role: "manager", userId: "u1" },
+            ctx: { ok: true as const, orgId: "org-1", role: "manager", userId: "u1", permissionKeys: [] },
             access: accessBase,
         });
         expect(badOther.ok).toBe(false);

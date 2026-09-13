@@ -9,7 +9,6 @@ export type WorkItemDraftPreviewModel = {
     dueLabel: string;
     assigneeLabel: string;
     priorityLabel: string;
-    waitingLabel: string | null;
     followOnLabel: string | null;
     checklistLabel: string;
     bosSummary: string;
@@ -28,7 +27,6 @@ export function mapWorkItemDraftPreview(draft: WorkItemDraftV1): WorkItemDraftPr
     const dueLabel = draft.due_at ? formatOperationalTaskDueDisplay(draft.due_at) : "Not set";
     const assigneeLabel = draft.assigned_to_user_id?.trim() ? "Assigned" : "Unassigned";
     const priorityLabel = draft.priority ?? "medium";
-    const waitingLabel = draft.waiting_on?.label?.trim() ?? null;
     const followOnCount = draft.follow_on?.length ?? 0;
     const followOnLabel = followOnCount > 0 ? `${followOnCount} follow-on rule(s)` : null;
     const detail = draft.description?.trim() || "No additional notes yet.";
@@ -42,7 +40,6 @@ export function mapWorkItemDraftPreview(draft: WorkItemDraftV1): WorkItemDraftPr
         dueLabel,
         assigneeLabel,
         priorityLabel: priorityLabel.replace(/\b\w/g, (c) => c.toUpperCase()),
-        waitingLabel,
         followOnLabel,
         checklistLabel: "Checklist available after Business Process link (deferred)",
         bosSummary,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { PROCESSING_DEV_CLEANUP, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
 import {
     PROCESSING_DEV_CLEANUP_CONFIRM_TOKEN,
@@ -26,7 +27,8 @@ export async function POST(request: NextRequest) {
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireProcessingCapability(ctx, PROCESSING_DEV_CLEANUP);
+    if (denied) return denied;
 
     const body = (await request.json().catch(() => ({}))) as {
         apply?: boolean;

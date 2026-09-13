@@ -16,6 +16,9 @@ import {
 } from "node:fs";
 import { join, dirname } from "node:path";
 import { spawnSync } from "node:child_process";
+
+import { assertGatewayHostMutationAllowed } from "./gateway-host-mutation.mjs";
+import { runRegisteredReconciliation } from "./trusted-host-reconciliation.mjs";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import {
@@ -318,14 +321,35 @@ export function requestTrustedHostAction({
   const dedupeKey = validated.normalized.dedupeKey
     || validated.normalized.queryHash
     || null;
-  // Dedupe in-flight / completed only — failed actions may be retried.
+  /*
+   * A COMPLETED ACTION IS NOT ALWAYS A REUSABLE ANSWER.
+   *
+   * Dedupe was written for censuses, where reuse is sound: a pinned query hash names the same
+   * question and the stored result IS the answer. Some actions are the opposite — their whole
+   * purpose is to produce a fresh artifact, and the stored result describes an artifact that has
+   * since expired.
+   *
+   * Measured: three `restore_deployed_qa_session` requests in one run all adopted the same
+   * completed action. Its `dedupeKey` is `restore_deployed_qa_session:<target>`, constant per
+   * target, so after the first mint every later request replayed that stored result — reporting
+   * `verified: true` with the ORIGINAL `verified_at`, while the browser's storage-state file was
+   * never rewritten and the session had long since expired. Each request recorded its own
+   * `execution_started_at`, so from the outside it looked like it ran.
+   *
+   * In-flight reuse is kept for every action: two concurrent requests must not both mint. Only the
+   * COMPLETED state is withheld, and only from definitions that say their result does not keep.
+   */
+  const REUSABLE_IN_FLIGHT_STATES = ["requested", "policy_review", "authorized", "executing", "retrying"];
+  const reusableStates = def.resultKeeps === false
+    ? REUSABLE_IN_FLIGHT_STATES
+    : [...REUSABLE_IN_FLIGHT_STATES, "completed"];
   const existing = listTrustedHostActions(missionId).find((a) =>
     a.actionType === actionType
     && sameActionOwnership(a, { executionSessionId, assignmentId, inputs: validated.normalized })
     && (dedupeKey
       ? (a.inputs?.dedupeKey === dedupeKey || a.inputs?.queryHash === dedupeKey)
       : a.inputs?.queryHash === validated.normalized.queryHash)
-    && ["requested", "policy_review", "authorized", "executing", "completed", "retrying"].includes(a.state));
+    && reusableStates.includes(a.state));
   if (existing) {
     return { ok: true, action: existing, deduped: true };
   }
@@ -688,10 +712,42 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
     return executeSetProviderCeilingTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType === ACTION_TYPES.HOST_INSTALL_TOOLKIT) {
+    /*
+     * THE HOLD THAT ALREADY EXISTED AND WAS NOT CONSULTED HERE.
+     *
+     * `gateway_host_mutation` is a capacity-1 exclusive resource on the ordinary
+     * governor, and `install-vacilando-gateway.sh` has honoured it since two
+     * lanes silently undid each other's Gateway installs. The GOVERNED action
+     * did not: `host.install_toolkit` relinks `toolkit/current` and converges
+     * the Gateway onto it without ever asking who holds the host.
+     *
+     * MEASURED. On 2026-09-12 at 03:42Z the Surfaces lane completed
+     * gar_338624523cda6d, moved `toolkit/current` from 14b0e01dcd06 to
+     * 5c7b100bcd64 and restarted the Gateway — invalidating an authoritative
+     * 24-hour Host Lifecycle soak another lane was in the middle of. No rule was
+     * broken, because nothing asked.
+     *
+     * This is not a new lock. It is the existing one, consulted by the path that
+     * most needs it. The holder's own run passes; every other run is refused
+     * with the holder named, which is what makes a convergence window
+     * expressible at all — and an unheld host installs exactly as before.
+     */
+    const allowed = assertGatewayHostMutationAllowed({ runId: action.runId || action.run_id || null });
+    if (!allowed.ok) {
+      action.state = "failed";
+      action.failureReason = allowed.error;
+      action.completed_at = iso(nowMs);
+      action.audit = buildAudit(action, { success: false, failureCode: allowed.error });
+      writeAction(action);
+      return { ok: false, error: allowed.error, detail: allowed.detail, holder: allowed.holder, action };
+    }
     return executeInstallToolkitTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType === ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION) {
     return executeLaneDispatchTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION) {
+    return executeRegisteredReconciliationTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
@@ -2152,6 +2208,49 @@ export function executeDeleteRemoteBranchTrustedHostAction(action, { actor = "di
 }
 
 
+/**
+ * Execute a REGISTERED reconciliation against a permitted environment.
+ *
+ * Distinct from `executeApplyReconciliationPlanTrustedHostAction` in every way that matters: that
+ * one applies Vacilando metadata from a plan it recomputes, this one runs a product data repair
+ * through the script that owns it. Sharing either would put product lifecycle writes inside a
+ * governance capability, or governance corrections inside a QA runner.
+ *
+ * The request cannot describe a command. The key, the environment and the boolean are all this
+ * accepts; the runner and its environment come from the frozen registry, re-resolved here so an
+ * edited action record cannot change what runs.
+ */
+export function executeRegisteredReconciliationTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const out = runRegisteredReconciliation(action.inputs ?? {}, {
+    repoRoot: findRepoRoot(),
+    trustedEnv: {
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+    },
+  });
+  if (!out.ok) {
+    return failTrustedAction(action, out.error || "reconciliation_failed", out.detail || "reconciliation refused", { nowMs });
+  }
+  return completeTrustedAction(action, {
+    reconciliation_key: out.reconciliation_key,
+    target_environment: out.target_environment,
+    dry_run: out.dry_run,
+    exit_code: out.exit_code,
+    counts: out.counts,
+    stdout_tail: out.stdout_tail,
+  }, { nowMs });
+}
+
 export function executeApplyReconciliationPlanTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
   const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
   if (!authz.ok) return authz;
@@ -2715,7 +2814,7 @@ export function executeLedgerRepairTrustedHostAction(action, { actor = "director
   action.updated_at = iso(nowMs);
   writeAction(action);
 
-  const run = (evidence.runSql || defaultRunLedgerRepairSql)({ sql: built.sql });
+  const run = (evidence.runSql || defaultRunLedgerRepairSql)({ sql: built.sql, target: inputs.target });
   if (!run?.ok) {
     return failTrustedAction(action, run?.code || "ledger_repair_failed",
       run?.detail || "The ledger repair transaction did not commit.", { nowMs });
@@ -2829,7 +2928,7 @@ function defaultLedgerRepairEvidence({ inputs = {}, nowMs = Date.now() } = {}) {
     : derived;
 }
 
-function defaultRunLedgerRepairSql({ sql }) {
+function defaultRunLedgerRepairSql({ sql, target }) {
   const tmpDir = join(storeDir(), "tmp");
   mkdirSync(tmpDir, { recursive: true });
   const file = join(tmpDir, `ledger-repair-${Date.now()}.sql`);
@@ -2837,7 +2936,18 @@ function defaultRunLedgerRepairSql({ sql }) {
   const errFile = `${file}.err`;
   writeFileSync(file, sql);
   try { chmodSync(APPLY_MIGRATION_SH, 0o755); } catch { /* */ }
-  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile], {
+  /*
+   * THE REPAIR OWES THE CHILD A TARGET LIKE EVERY OTHER CALLER.
+   *
+   * This path ran the same child with three arguments and no environment, from
+   * before the child had one to take. Now that the child resolves its database
+   * from that argument, an absent one is a hard refusal — so every ledger
+   * repair would have exited 45 without touching anything, silently, at exactly
+   * the moment a ledger disagreeing with its schema needed fixing. The apply
+   * path found this the loud way, after three failed production attempts; this
+   * one would have found it on the day it mattered most.
+   */
+  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile, String(target ?? "")], {
     env: {
       ...process.env,
       ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),

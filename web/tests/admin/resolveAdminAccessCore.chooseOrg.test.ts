@@ -215,16 +215,27 @@ describe("W-22 — I-25's clause, and why it currently has no subject", () => {
         expect(
             runtimeWrittenStores('const byUser = new Map<string, Access>();\nfunction f(){ byUser.set(k, v); }'),
         ).toEqual(["byUser"]);
-        // …acquits the constant it wrongly convicted first time…
+        // …acquits the constant it wrongly convicted first time. `PORTAL_ROLES` itself is gone —
+        // W-13 replaced the role literal with a capability read — but the SHAPE it got wrong is what
+        // this fixture is about, so the fixture keeps it rather than following the deletion.
         expect(runtimeWrittenStores('const PORTAL_ROLES = new Set(["admin", "ops"]);')).toEqual([]);
         // …and acquits request-scoped memoization, which is the mechanism relied on.
         expect(runtimeWrittenStores("const loadOnce = cache(async () => resolve());")).toEqual([]);
     });
 
     it("the constants it acquits are really there — the scan is looking at the right files", async () => {
-        // Without this, "no runtime-written stores" would be satisfied by files containing no
-        // module-level container at all, and the acquittal above would be arguing with nothing.
-        const src = await executableSource("lib/admin/resolveAdminAccessCore.ts");
-        expect(src).toMatch(/^const\s+PORTAL_ROLES\s*=\s*new\s+Set/m);
+        /*
+         * Without this, "no runtime-written stores" would be satisfied by files containing no
+         * module-level constant at all, and the acquittal above would be arguing with nothing.
+         *
+         * It named `PORTAL_ROLES` until W-13 deleted it. The non-vacuity claim is about the SCAN
+         * reaching a real file with real module-level state, not about that particular constant, so
+         * it moved to the two that survive rather than being dropped with it.
+         */
+        const resolver = await executableSource("lib/admin/resolveAdminAccessCore.ts");
+        expect(resolver).toMatch(/^export const\s+ABSENT_PROFILE_ENFORCEMENT\s*[:=]/m);
+
+        const admission = await executableSource("lib/admin/portalAdmission.ts");
+        expect(admission).toMatch(/^export const\s+PORTAL_ADMISSION_CAPABILITY\s*=/m);
     });
 });

@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
 import {
     recordResolutionDecision,
-    operatorErrorResponse,
-    resolveOperatorRoute,
 } from "@/lib/pos/processingIdentity/operator";
+import { operatorErrorResponse, resolveOperatorRoute } from "@/lib/pos/processingIdentity/operator/operatorRouteContext";
+import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +19,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { caseId } = await params;
     const resolved = await resolveOperatorRoute(caseId);
     if (resolved instanceof NextResponse) return resolved;
+    const denied = requireProcessingCapability(resolved.ctx, PROCESSING_OPERATE);
+    if (denied) return denied;
 
     const body = (await request.json().catch(() => null)) as {
         resolutionId?: string;

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { dbArchiveVersion, dbGetVersion } from "@/lib/admin/forms/formsAdminDb";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /** POST /api/admin/forms/[formId]/versions/[versionId]/archive — published → archived (admin only). */
 export async function POST(
@@ -11,7 +12,8 @@ export async function POST(
 ) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
 
     const { formId: rawForm, versionId: rawVer } = await params;
     const formId = parseUuidParam(rawForm, "formId");

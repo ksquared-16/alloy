@@ -47,6 +47,7 @@ import {
   assertProductionApplyPreconditions,
   evaluateProductionApplyOutcome,
   classifyApplyFailure,
+  resolveMigrationOutcome,
 } from "./trusted-host-production-migrate.mjs";
 
 /**
@@ -120,9 +121,48 @@ export const PRODUCTION_APPLY_FAILURES = Object.freeze({
   REQUIRED_SET_UNREADABLE: "candidate_required_set_unreadable",
   APPLY_FAILED: "migration_sql_failed",
   APPLY_AMBIGUOUS: "migration_outcome_ambiguous",
+  // Raised while the apply child is still choosing its database, before a
+  // connection exists. Named here so they can be surfaced verbatim rather than
+  // folded into "the SQL failed".
+  TARGET_UNREGISTERED: "target_resolution_failed",
+  TARGET_ENVIRONMENT_MISMATCH: "target_environment_mismatch",
+  HOST_DEPENDENCY_MISSING: "trusted_host_dependency_missing",
   VERIFICATION_FAILED: "post_apply_verification_failed",
+  /*
+   * APPLIED, BUT THE LEDGER DOES NOT SAY SO — and this is not a verification
+   * failure, however much it used to share that code.
+   *
+   * MEASURED TWICE. D2 (gar_792710a5f553ee) landed its schema and reported
+   * post_apply_verification_failed; the repair gar_db1d3588e3fac9 moved the
+   * ledger 405 → 412 and census gar_eefbd899c30b21 then confirmed parity. W-17
+   * repeated it, 412 → 413.
+   *
+   * The old code covered two OPPOSITE facts: the ledger could not be re-read at
+   * all (nobody knows whether the schema is there), and the ledger was read
+   * cleanly and lacks the versions (the schema IS there and the bookkeeping is
+   * not). Retrying the first wastes time; retrying the second applies a
+   * migration a second time. They cannot share a name.
+   */
+  APPLIED_LEDGER_INCOMPLETE: "migration_applied_ledger_incomplete",
   RESULT_CONTAINED_SECRETS: "result_contained_secrets",
 });
+
+/**
+ * No-effect failures worth naming to the caller as themselves.
+ *
+ * Not a second classifier. `classifyApplyFailure` has already decided the
+ * database was never touched; this only decides whether the operator is told
+ * WHY in the code, or told the generic thing and left to find the reason in a
+ * detail string. Each is raised before a connection exists, carries no
+ * credential material in its name, and has exactly one cause — which is what
+ * makes it both safe and useful to surface verbatim.
+ */
+const PRE_EXECUTION_SURFACED_CODES = new Set([
+  PRODUCTION_APPLY_FAILURES.TARGET_UNREGISTERED,
+  PRODUCTION_APPLY_FAILURES.TARGET_ENVIRONMENT_MISMATCH,
+  PRODUCTION_APPLY_FAILURES.CREDENTIAL_UNAVAILABLE,
+  PRODUCTION_APPLY_FAILURES.HOST_DEPENDENCY_MISSING,
+]);
 
 /** Every failure this executor can return. Used by tests to prove none is a catch-all. */
 export const PRODUCTION_APPLY_FAILURE_CODES = Object.freeze(Object.values(PRODUCTION_APPLY_FAILURES));
@@ -439,8 +479,18 @@ export function executeProductionMigrationApply({
     const classified = classifyApplyFailure({ applyResult });
     // A refusal that never reached the database and an execution that may have
     // half-run are different facts and must never share a code.
+    /*
+     * Among refusals that never reached the database, "the SQL failed" is its
+     * own kind of lie. So a no-effect refusal surfaces the reason it actually
+     * had: a target routing does not recognise says so and names the name; a
+     * missing credential says so. Only a no-effect failure with nothing more
+     * specific to say falls back to `migration_sql_failed`, which is then true —
+     * something reached the database and did not take.
+     */
     const code = classified.classification === "no_effect"
-      ? PRODUCTION_APPLY_FAILURES.APPLY_FAILED
+      ? (PRE_EXECUTION_SURFACED_CODES.has(classified.code)
+        ? classified.code
+        : PRODUCTION_APPLY_FAILURES.APPLY_FAILED)
       : PRODUCTION_APPLY_FAILURES.APPLY_AMBIGUOUS;
     return done(refuse(code, classified.detail, {
       migration_attempted: classified.classification !== "no_effect",
@@ -455,8 +505,14 @@ export function executeProductionMigrationApply({
   if (!after?.ok) {
     return done(refuse(
       PRODUCTION_APPLY_FAILURES.VERIFICATION_FAILED,
-      "Migrations applied, but hosted state could not be re-read to verify them. The outcome is not established.",
-      { migration_attempted: true, verified: false },
+      "Migrations applied, but hosted state could not be re-read to verify them. The outcome is not established; "
+      + "whether the schema landed is UNKNOWN and must be measured before anything is re-applied.",
+      {
+        migration_attempted: true, verified: false,
+        schema_applied: null, ledger_present: null,
+        retry_apply_allowed: false,
+        recommended_action: "verify_first",
+      },
     ));
   }
   const measuredAfter = (after.versions || []).map(String);
@@ -477,10 +533,39 @@ export function executeProductionMigrationApply({
 
   const versionsPresent = proofs.versions.every((v) => measuredAfter.includes(String(v)));
   if (!versionsPresent) {
+    const missing = proofs.versions.filter((v) => !measuredAfter.includes(String(v))).map(String);
+    /*
+     * The ledger WAS readable — `after.ok` is true above — so this is not an
+     * unknown outcome. The apply reported success and the identity is absent,
+     * which is a bookkeeping gap over schema that is already there. The
+     * resolution is a proof-backed ledger repair, never a second apply, and the
+     * result says so in the code rather than only in a detail string nobody
+     * parses.
+     */
+    const disposition = resolveMigrationOutcome({
+      state: outcome?.state ?? null,
+      applyStarted: true,
+      schemaApplied: true,
+      ledgerPresent: false,
+      versions: proofs.versions,
+    });
     return done(refuse(
-      PRODUCTION_APPLY_FAILURES.VERIFICATION_FAILED,
-      `Applied ${proofs.versions.join(", ")} but the hosted ledger does not report them. Two measurements disagree; this needs a person.`,
-      { migration_attempted: true, verified: false, outcome },
+      PRODUCTION_APPLY_FAILURES.APPLIED_LEDGER_INCOMPLETE,
+      `Applied ${proofs.versions.join(", ")} and the hosted ledger does not report ${missing.join(", ")}. `
+      + "The schema change is present; the ledger identity is not. Do NOT re-apply: repair the ledger after proving the effects.",
+      {
+        migration_attempted: true,
+        schema_applied: true,
+        ledger_present: false,
+        ledger_missing: missing,
+        hosted_head_before: headBefore,
+        hosted_head_after: headAfter,
+        verified: false,
+        outcome,
+        disposition,
+        retry_apply_allowed: false,
+        recommended_action: disposition.recommended_action,
+      },
     ));
   }
 
@@ -522,6 +607,22 @@ export function publicProductionApplyResult(result) {
     proof: result.proof || null,
     detail: result.ok === true ? null : (result.detail || null),
     migration_attempted: result.migration_attempted ?? null,
+    /*
+     * ENUMERATED, LIKE EVERY FIELD ABOVE IT — and that is why they are here.
+     * This projection is built by NAMING fields, so a field added to the refusal
+     * and not added here is computed, carried, and then silently dropped before
+     * any operator or recovery pass sees it. That is what already happened to
+     * the rich `outcome` during D2: it existed and never reached the reader.
+     *
+     * These are the fields that answer the only question that matters after a
+     * migration stops: is it safe to apply again?
+     */
+    schema_applied: result.schema_applied ?? null,
+    ledger_present: result.ledger_present ?? null,
+    ledger_missing: result.ledger_missing || null,
+    retry_apply_allowed: result.retry_apply_allowed ?? (result.ok === true ? false : null),
+    recommended_action: result.recommended_action || null,
+    disposition: result.disposition || null,
     audit: result.audit || null,
   };
 }

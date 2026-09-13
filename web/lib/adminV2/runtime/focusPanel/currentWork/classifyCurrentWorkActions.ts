@@ -194,7 +194,7 @@ export function classifyRecordHeaderActionsForCurrentWork(args: {
 }
 
 export function actionsFromConfigRefs(
-    refs: Array<{ action_ref: string; override_label?: string }> | null | undefined,
+    refs: Array<{ action_ref: string; override_label?: string; work_template_key?: string }> | null | undefined,
     lookup: ReadonlyMap<string, { key: string; label: string; description?: string | null }>,
     category: CurrentWorkActionCategory,
     placement: CurrentWorkActionPlacement,
@@ -232,6 +232,9 @@ export function actionsFromConfigRefs(
             placement,
             handlerKey: resolved.handlerKey,
             actionRef: resolved.actionRef,
+            // The configured work this action operates on, carried to the control the operator
+            // presses. An action that needs it and does not receive it refuses at the boundary.
+            ...(row.work_template_key?.trim() ? { workTemplateKey: row.work_template_key.trim() } : {}),
             resolved: null,
             relatedSubjectResolution: resolved.relatedSubjectResolution,
             requiresSubjectPicker: resolved.requiresSubjectPicker,

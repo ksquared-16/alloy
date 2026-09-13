@@ -4,13 +4,13 @@ This repository uses the Alloy **Managed Sprint Operations** workflow for implem
 
 ## Canonical root — check this first
 
-**The only sanctioned engineering root is `/Users/Kelly/Alloy`.**
+**`alloy-root` names the only sanctioned engineering root. Run it; do not assume a path.**
 
 ```bash
 alloy-root          # which root am I in, and is it sanctioned?
 ```
 
-`/Users/Kelly/Alloy-Claude` was **retired as an engineering root in July 2026**. Do not start work there, and do not build on what is there. If `alloy-root` says `retired`, `unmanaged`, or `outside`, **stop and re-bootstrap from the canonical repository** — nothing you do in an unsanctioned root can be trusted, no matter how correct it looks.
+The `Alloy-Claude` clone was **retired as an engineering root in July 2026**. Do not start work there, and do not build on what is there. If `alloy-root` says `retired`, `unmanaged`, or `outside`, **stop and re-bootstrap from the canonical repository** — nothing you do in an unsanctioned root can be trusted, no matter how correct it looks.
 
 This is not hypothetical. Two sprints of design work were done in a clone that was **1481 commits behind `origin/staging` and did not contain `scripts/local-dev` at all** — while a canonical governance doc said that clone was the right place for exactly that work. It has the same `git remote` as the canonical repo, so the remote proves nothing. **Being in the right repository is not being on the right base.**
 
@@ -26,13 +26,14 @@ Also respect:
 
 ## Bootstrap
 
-From `/Users/Kelly/Alloy`, use the installed toolkit:
+From the root `alloy-root` reports as canonical, use the installed toolkit:
 
 ```bash
 alloy-sprint-start <name> --provider claude [--slot auto|N] [--with-server|--without-server]
 ```
 
-Work **only** in the returned worktree. Permanent ports are **3011–3016**. Do not invent ports. Worktree-local dependencies only. Start localhost only when required.
+Work **only** in the returned worktree. Your port is assigned with your slot and recorded in the
+slot registry — use the one you were given and do not invent one. Worktree-local dependencies only. Start localhost only when required.
 
 ## Git / deploy
 

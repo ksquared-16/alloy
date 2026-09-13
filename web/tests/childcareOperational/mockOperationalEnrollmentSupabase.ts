@@ -459,13 +459,20 @@ function emulateReconcileConsumptionCorrection(
     }
 }
 
-type Filter = { col: string; op: "eq" | "neq" | "in"; value: unknown };
+type Filter = { col: string; op: "eq" | "neq" | "in" | "is"; value: unknown };
 
 function applyFilters(rows: Row[], filters: Filter[]): Row[] {
     return rows.filter((row) => {
         for (const f of filters) {
             if (f.op === "eq" && row[f.col] !== f.value) return false;
             if (f.op === "neq" && row[f.col] === f.value) return false;
+            /*
+             * `.is(col, null)` is NULL-matching, not equality — an absent key and
+             * an explicit null are the same answer to "is this null", and a fixture
+             * that simply omits the column must not be excluded by it.
+             */
+            if (f.op === "is" && f.value === null && row[f.col] != null) return false;
+            if (f.op === "is" && f.value !== null && row[f.col] !== f.value) return false;
             if (f.op === "in") {
                 const set = f.value as unknown[];
                 if (!set.includes(row[f.col])) return false;
@@ -565,6 +572,11 @@ export function createOperationalEnrollmentMockSupabase(
 
         chain.neq = vi.fn((col: string, value: unknown) => {
             filters.push({ col, op: "neq", value });
+            return chain;
+        });
+
+        chain.is = vi.fn((col: string, value: unknown) => {
+            filters.push({ col, op: "is", value });
             return chain;
         });
 

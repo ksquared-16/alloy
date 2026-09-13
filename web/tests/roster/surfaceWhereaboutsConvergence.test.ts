@@ -1,16 +1,18 @@
 /**
  * The Workspace and the Focus Panel must never disagree about where a child is.
  *
- * They still reach the answer by different code: the Workspace roster goes
- * through `resolveCurrentWhereabouts` → the certified `whereaboutsAt` fold, and
- * the Focus Panel goes through `buildChildAttendanceReadModel` →
- * `deriveCurrentPresence`. Both walk the day in time order, so they agree today.
+ * They no longer can. Thread 8 collapsed the two implementations: both surfaces
+ * now reach the answer through the certified `whereaboutsAt` fold — the Workspace
+ * via `resolveCurrentWhereabouts`, the Focus Panel via
+ * `buildChildAttendanceReadModel` → `deriveCurrentPresence`, which is now a
+ * translation of the fold's answer rather than a second reconstruction of it.
  *
- * Two implementations that agree today are still two implementations, and the
- * laxer one is the one that eventually drifts. Collapsing them is accepted Thread
- * 8 cleanup; until then this test is the thing that would catch the drift, so it
- * compares them on the scenarios where a naive implementation goes wrong rather
- * than on the easy path.
+ * Before that, the Focus Panel counted check-ins against check-outs for the day.
+ * Counting has no opinion about ORDER, which is why it was the laxer of the two
+ * and the one that would eventually drift. The ORDER cases below are the days
+ * where it actually gave a different answer from the Workspace; they are the
+ * regression guard for the collapse, and they fail against the counting
+ * implementation.
  */
 
 import { describe, expect, it } from "vitest";
@@ -144,6 +146,81 @@ describe("Workspace and Focus Panel agree on current whereabouts", () => {
         // The move never happened; she is still in her classroom.
         expect(workspace.locationId).toBe(TOD1);
         expect(focusPanel.roomLocationId).toBe(TOD1);
+    });
+
+    /**
+     * ORDER CASES — each of these produced a DIFFERENT answer on the two surfaces
+     * while the Focus Panel counted instead of folding. They are the evidence that
+     * the collapse changed behaviour rather than merely moving code.
+     */
+    describe("the last effective fact wins, on both surfaces", () => {
+        it("a day that ends in an absence is absent, not present", () => {
+            // Counting saw checkIns(1) > checkOuts(0) and said `present`, ignoring
+            // that the later fact retracted the arrival.
+            const events = [
+                ev({ id: "in6", room_location_id: TOD1 }),
+                ev({
+                    id: "abs2",
+                    event_kind: "absence",
+                    reason_key: "illness",
+                    event_at: `${DATE}T09:00:00.000Z`,
+                }),
+            ];
+            const { workspace, focusPanel } = bothSurfaces(events);
+            expect(workspace.state).toBe("absent");
+            expect(focusPanel.state).toBe("absent");
+            expect(focusPanel.roomLocationId).toBeNull();
+        });
+
+        it("a re-entry after checkout is present, not checked out", () => {
+            // Counting saw checkIns(1) === checkOuts(1) and said `checked_out`
+            // while the child was standing in a room.
+            const events = [
+                ev({ id: "out2", event_kind: "check_out", event_at: `${DATE}T12:00:00.000Z` }),
+                ev({ id: "in7", room_location_id: PLAY, event_at: `${DATE}T13:00:00.000Z` }),
+            ];
+            const { workspace, focusPanel } = bothSurfaces(events);
+            expect(workspace.state).toBe("present");
+            expect(focusPanel.state).toBe("present");
+            expect(workspace.locationId).toBe(PLAY);
+            expect(focusPanel.roomLocationId).toBe(PLAY);
+        });
+
+        it("an absence recorded after a checkout is absent, not checked out", () => {
+            const events = [
+                ev({ id: "in8", room_location_id: TOD1 }),
+                ev({ id: "out3", event_kind: "check_out", event_at: `${DATE}T11:00:00.000Z` }),
+                ev({
+                    id: "abs3",
+                    event_kind: "absence",
+                    reason_key: "illness",
+                    event_at: `${DATE}T11:30:00.000Z`,
+                }),
+            ];
+            const { workspace, focusPanel } = bothSurfaces(events);
+            expect(workspace.state).toBe("absent");
+            expect(focusPanel.state).toBe("absent");
+        });
+    });
+
+    it("does not let an earlier day leak into this one", () => {
+        // Day scope is the Focus Panel's own question ("how did this day end"),
+        // and the fold must not answer it with yesterday's un-closed check-in.
+        const events = [
+            ev({
+                id: "yesterday",
+                room_location_id: TOD1,
+                service_date: "2026-09-08",
+                event_at: "2026-09-08T08:00:00.000Z",
+            }),
+        ];
+        const focusPanel = buildChildAttendanceReadModel({
+            events,
+            expectedAttendance: [],
+            asOfDate: DATE,
+        }).currentPresenceState;
+        expect(focusPanel.state).toBe("no_record");
+        expect(focusPanel.roomLocationId).toBeNull();
     });
 
     it("agrees that a child with no facts is nowhere", () => {

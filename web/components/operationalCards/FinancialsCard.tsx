@@ -111,20 +111,59 @@ export default function FinancialsCard({
                             {period.funding.map((l) => (
                                 <Line key={l.label} label={l.label} value={l.value} />
                             ))}
-                            <Line label="Responsibility" value={period.familyResponsibility} emphasis />
-                            {/* The payer split, quiet and immediately beneath the total it divides.
-                                Rendered only when Processing has supplied an allocation — a split
-                                invented here would assign real money to real people on no record. */}
-                            {evidence.payers.some((p) => p.share) ? (
-                                <p className="alloy-os-billing__split">
-                                    {evidence.payers
-                                        .filter((p) => p.share)
-                                        .map((p) => `${p.name.split(" ")[0]} ${p.share}`)
-                                        .join(" · ")}
-                                </p>
+                            {/* ── THE NET OBLIGATION, CALLED THAT ────────────────────────────
+                                Gross plus discounts, funding and adjustments. It was labelled
+                                "Responsibility", which is also the word for the split immediately
+                                beneath it, so one amount stood for two concepts: what the family
+                                owes after reductions, and who owes it. */}
+                            <Line label="Net obligation" value={period.familyResponsibility} emphasis />
+                            {/* ── WHO OWES IT ────────────────────────────────────────────────
+                                Thread 6's persisted allocations, named and in cents. Rendered only
+                                when an allocation exists — a split invented here would assign real
+                                money to real people on no record.
+
+                                UNASSIGNED IS SHOWN, not folded into the household. Money nobody has
+                                been made responsible for is the most actionable fact on this card,
+                                and quietly attributing it is the behaviour the platform decided
+                                against. */}
+                            {period.responsibility ? (
+                                <>
+                                    <Group>Responsibility</Group>
+                                    {period.responsibility.parties.map((party) => (
+                                        <Line key={party.name} label={party.name} value={party.amount} />
+                                    ))}
+                                    {period.responsibility.unassigned ? (
+                                        <Line label="Unassigned" value={period.responsibility.unassigned} />
+                                    ) : null}
+                                </>
+                            ) : null}
+                            {/* ── EXPECTED, AND SAID SO ──────────────────────────────────────
+                                Funding that has not arrived is not a payment and reduces nothing
+                                owed. Stating it beside the figures — never inside a total — is what
+                                keeps a subsidy from reading as a discount. */}
+                            {period.expectedFunding.length ? (
+                                <>
+                                    <Group>Expected funding</Group>
+                                    {period.expectedFunding.map((f) => (
+                                        <Line
+                                            key={f.label}
+                                            label={f.label}
+                                            value={f.amount ?? "Amount not yet known"}
+                                        />
+                                    ))}
+                                    <p className="alloy-os-billing__split">Not yet received</p>
+                                </>
                             ) : null}
                             <Line label="Payments received" value={period.paymentsReceived} />
                             <Line label="Current balance" value={period.currentBalance} emphasis />
+                            {/* WHAT TO ACTUALLY ASK FOR. A submitted claim suppresses collection for
+                                the amount it attributed, so the balance and the amount to collect
+                                stop being the same number. Both are shown: the obligation has not
+                                shrunk. With nothing suppressed the line is absent rather than
+                                repeating the balance. */}
+                            {period.collectibleNow ? (
+                                <Line label="Collectible now" value={period.collectibleNow} />
+                            ) : null}
                         </div>
                         <p className="alloy-os-billing__due">{period.dueLabel}</p>
                         {/* "Add something that should be billed" is a Current Period intent, not a

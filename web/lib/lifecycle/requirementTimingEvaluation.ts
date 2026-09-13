@@ -39,10 +39,10 @@ import { parseRuleMetaV1, ruleMetaForRule } from "@/lib/lifecycle/requirementTim
 export type { PrimaryPersonSnapshot };
 
 function normalizeTimings(
-    timing: RequirementTiming | RequirementTiming[] | undefined,
+    timing: RequirementTiming | readonly RequirementTiming[] | undefined,
 ): RequirementTiming[] | null {
     if (timing == null) return null;
-    return Array.isArray(timing) ? timing : [timing];
+    return Array.isArray(timing) ? [...timing] : [timing as RequirementTiming];
 }
 
 function hasTiming(meta: RequirementRuleMetaV1 | undefined, target: RequirementTiming): boolean {
@@ -61,24 +61,54 @@ function transitionKeysForMoment(moment: Extract<RequirementEvaluationMoment, { 
     return [...keys];
 }
 
-/** Whether a stage_exit rule applies to the requested transition. */
-export function transitionMatchesRuleMeta(
-    meta: RequirementRuleMetaV1 | undefined,
+/**
+ * The transition-scoping vocabulary, independent of what carries it.
+ *
+ * Field rules carry it as `rule_meta_v1`; canonical `requirements_v1` rows carry the same four
+ * fields directly and readonly. Stating the shape once is what lets a work requirement be scoped
+ * to transitions by the SAME rules as a field rule instead of growing a second interpretation of
+ * `applies_to_transition_keys` that could drift from this one.
+ */
+export type TransitionScopedRequirement = {
+    readonly timing?: RequirementTiming | readonly RequirementTiming[];
+    readonly applies_to_transition_keys?: readonly string[];
+    readonly excluded_transition_keys?: readonly string[];
+};
+
+/**
+ * Whether a stage_exit requirement applies to the requested transition.
+ *
+ * Exclusion beats inclusion, and an explicit `stage_exit` with no filter means every transition
+ * except the excluded ones. That asymmetry is the reason a blanket "all required work blocks every
+ * exit" rule would be wrong: Lead → Waitlist is a legitimate move while Lead's own contact work is
+ * still required, and the only thing that can know it is the transition scoping authored here.
+ */
+export function requirementAppliesToTransition(
+    requirement: TransitionScopedRequirement | undefined,
     moment: Extract<RequirementEvaluationMoment, { kind: "transition" }>,
 ): boolean {
-    if (!hasTiming(meta, "stage_exit")) return false;
+    const timings = normalizeTimings(requirement?.timing);
+    if (!timings?.includes("stage_exit")) return false;
 
     const keys = transitionKeysForMoment(moment);
-    const excluded = meta?.excluded_transition_keys ?? [];
+    const excluded = requirement?.excluded_transition_keys ?? [];
     if (excluded.some((k) => keys.includes(k.trim()))) return false;
 
-    const appliesTo = meta?.applies_to_transition_keys;
+    const appliesTo = requirement?.applies_to_transition_keys;
     if (appliesTo?.length) {
         return appliesTo.some((k) => keys.includes(k.trim()));
     }
 
     // Explicit stage_exit with no transition filter → all transitions except excluded.
     return true;
+}
+
+/** Whether a stage_exit rule applies to the requested transition. */
+export function transitionMatchesRuleMeta(
+    meta: RequirementRuleMetaV1 | undefined,
+    moment: Extract<RequirementEvaluationMoment, { kind: "transition" }>,
+): boolean {
+    return requirementAppliesToTransition(meta, moment);
 }
 
 /** Pure rule selection for a lifecycle evaluation moment. */

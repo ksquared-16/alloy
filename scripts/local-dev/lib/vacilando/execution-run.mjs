@@ -6,7 +6,7 @@
  * not a resource scheduler.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -323,11 +323,86 @@ function atomicWrite(path, obj) {
   renameSync(tmp, path);
 }
 
+/*
+ * THE READ PATH IS MEMOIZED. THE WRITE PATH IS NOT.
+ *
+ * MEASURED, on live-sized state. One "cheap" Governor reconcile took 1016 ms
+ * (p95 1043 ms) against a <25 ms target, and did 127 large JSON.parse calls
+ * per pass — 517.7 MB of text, 488 ms of it inside JSON.parse alone. Every one
+ * of those was the same 4.15 MB runs.json, re-read and re-parsed because
+ * `getExecutionRun` reads the whole store to find ONE run and is called once
+ * per run per helper. That pass runs every 10 seconds: roughly a second of CPU
+ * every ten, with the GC churn on top. It is the `fs ReadFileUtf8 → UTF-8
+ * decode → JSON.parse → allocation → GC` hot path the September 11 sampler
+ * caught, and it is the residual burst that survived moving Engineering Health
+ * off this event loop.
+ *
+ * The file is still the authority. What changes is that re-parsing bytes we
+ * have already parsed, whose identity has not changed, is no longer mistaken
+ * for re-reading the truth.
+ *
+ * WHY THIS IS SAFE, precisely. Mutations do not come through here. They use
+ * `readStoreForMutation` → `readExecutionRunStoreGuarded`, which is deliberately
+ * left uncached: a write must always be computed from fresh bytes, and must
+ * still fail closed on an unreadable store. Only the LENIENT readers —
+ * `getExecutionRun`, `activeRunForLane`, `listExecutionRunsForLane` — share the
+ * memo, and every write invalidates it explicitly on the way out.
+ *
+ * Identity is (size, mtimeMs, inode), so a write from any other process — a
+ * worker's `vac run-status`, a test harness — misses the memo on the very next
+ * stat. `statSync` costs microseconds against ~8 ms of parse. The short max age
+ * is a backstop, not the mechanism: it bounds the blast radius if a read-only
+ * caller ever mutates what it was handed.
+ *
+ * NOT a cache in front of correctness. Nothing here decides anything, no
+ * reconciliation guarantee is skipped, and no timer interval was widened to
+ * hide the cost.
+ */
+const RUN_STORE_MEMO_MAX_AGE_MS = 2000;
+let runStoreMemo = null;
+
+function runStoreIdentity(path) {
+  try {
+    const st = statSync(path);
+    return { size: st.size, mtimeMs: st.mtimeMs, ino: st.ino };
+  } catch {
+    return null;
+  }
+}
+
+/** Every write drops the memo, so the next read re-parses what was just written. */
+function invalidateRunStoreMemo() {
+  runStoreMemo = null;
+}
+
+/** Test seam: a control must be able to prove the memo is not answering for the file. */
+export function resetExecutionRunStoreMemoForTests() {
+  invalidateRunStoreMemo();
+}
+
 export function readExecutionRunStore(root = runtimeRoot()) {
+  const path = executionRunStorePath(root);
+  const id = runStoreIdentity(path);
+  const now = Date.now();
+  if (runStoreMemo && id
+    && runStoreMemo.path === path
+    && runStoreMemo.size === id.size
+    && runStoreMemo.mtimeMs === id.mtimeMs
+    && runStoreMemo.ino === id.ino
+    && now - runStoreMemo.at < RUN_STORE_MEMO_MAX_AGE_MS) {
+    return runStoreMemo.store;
+  }
   const read = readExecutionRunStoreGuarded(root);
   // Readers stay lenient: a dashboard that cannot read the store should render
   // empty rather than throw. MUTATIONS must not, which is what the guarded form
   // below exists for.
+  //
+  // An UNREADABLE store is never memoized. Caching "I could not read it" would
+  // hold the empty answer for the whole max age and turn a transient
+  // mid-rename read into seconds of "no runs exist".
+  if (read.ok && id) {
+    runStoreMemo = { path, ...id, at: now, store: read.store };
+  }
   return read.store;
 }
 
@@ -403,6 +478,9 @@ function writeStore(store, root) {
     if (existsSync(path)) copyFileSync(path, `${path}.prev`);
   } catch { /* a missing backup must never block the write that keeps runs alive */ }
   atomicWrite(path, store);
+  // The bytes just changed. Drop the read memo rather than relying on the stat
+  // to notice — same-millisecond writes are exactly where identity is weakest.
+  invalidateRunStoreMemo();
   return store;
 }
 

@@ -219,7 +219,7 @@ describe.skipIf(!hasEnv)("W-5 — membership + access profile are atomic (integr
         expect((await createMembershipWithAccessProfile(supabase, { userId, orgId: orgId!, role: roles[0] })).ok).toBe(true);
 
         const target = roles[1] ?? roles[0];
-        const replaced = await replaceMembershipWithAccessProfile(supabase, { userId, orgId: orgId!, role: target });
+        const replaced = await replaceMembershipWithAccessProfile(supabase, { userId, orgId: orgId!, role: target , audit: { actorUserId: "test-actor", origin: "operator" as const, correlationId: "test-corr" }});
         expect(replaced.ok).toBe(true);
         if (!replaced.ok) return;
         expect(replaced.row.role).toBe(target);
@@ -228,7 +228,7 @@ describe.skipIf(!hasEnv)("W-5 — membership + access profile are atomic (integr
 
         // Replacing a pair that holds no membership is 404, not a silent create.
         const strangerId = await makeUser(supabase, "stranger");
-        const missing = await replaceMembershipWithAccessProfile(supabase, { userId: strangerId, orgId: orgId!, role: target });
+        const missing = await replaceMembershipWithAccessProfile(supabase, { userId: strangerId, orgId: orgId!, role: target , audit: { actorUserId: "test-actor", origin: "operator" as const, correlationId: "test-corr" }});
         expect(missing.ok).toBe(false);
         if (missing.ok) return;
         expect(missing.kind).toBe("not_found");

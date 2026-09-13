@@ -35,6 +35,12 @@ export default function FinancialsDetailCard({
     onPayment,
     onAddCharge,
     onManagePayment,
+    onMovePayment,
+    onAddAdjustment,
+    onReverseAdjustment,
+    onPostCharge,
+    onReverseCharge,
+    onApplyPayment,
 }: {
     evidence: FinancialsEvidence;
     periods: FinancialsLedgerPeriod[];
@@ -56,6 +62,16 @@ export default function FinancialsDetailCard({
     onPayment?: () => void;
     onAddCharge?: () => void;
     onManagePayment?: () => void;
+    /** Correct WHICH obligation a receipt answered. Absent in the lab, where controls are inert. */
+    onMovePayment?: (args: { paymentId: string; allocationId: string }) => void;
+    onAddAdjustment?: () => void;
+    onReverseAdjustment?: (args: { applicationId: string }) => void;
+    /** A draft the operator may post. The row says whether it qualifies; this decides nothing. */
+    onPostCharge?: (args: { chargeId: string; label: string }) => void;
+    /** A posted charge the operator may correct. Eligibility is the read model's answer. */
+    onReverseCharge?: (args: { chargeId: string; label: string }) => void;
+    /** Put already-received money against an obligation. */
+    onApplyPayment?: (args: { paymentId: string }) => void;
 }) {
     const payerFilters = ["All payers", ...evidence.payers.map((p) => (p.funding ? "Funding" : p.name.split(" ")[0]!))];
     const { period, pastDue } = evidence;
@@ -215,7 +231,42 @@ export default function FinancialsDetailCard({
                                                 {e.amount}
                                             </span>
                                             <span className="alloy-os-billingdetail__status">{e.status ?? "—"}</span>
-                                            <span className="alloy-os-billingdetail__source">{e.source ?? "—"}</span>
+                                            <span className="alloy-os-billingdetail__source">
+                                                {e.source ?? "—"}
+                                                {/*
+                                                  * THE TRANSITIONS THIS ROW ALREADY QUALIFIES FOR.
+                                                  *
+                                                  * Both are registered actions and both were already
+                                                  * decided by the read model — the card asks, it does
+                                                  * not work out the answer from a status string. They
+                                                  * are rendered here because this is the ledger the
+                                                  * operator actually reaches: the other copy of these
+                                                  * controls sits behind a condition that cannot be
+                                                  * true, so `charge.reverse` had no way in at all.
+                                                  */}
+                                                {e.chargeId && e.offersPost && onPostCharge ? (
+                                                    <button
+                                                        type="button"
+                                                        className="alloy-os-fdetail__rowaction"
+                                                        data-charge-command="charge.post"
+                                                        data-charge-id={e.chargeId}
+                                                        onClick={() => onPostCharge({ chargeId: e.chargeId!, label: e.label })}
+                                                    >
+                                                        Post
+                                                    </button>
+                                                ) : null}
+                                                {e.chargeId && e.offersReverse && onReverseCharge ? (
+                                                    <button
+                                                        type="button"
+                                                        className="alloy-os-fdetail__rowaction"
+                                                        data-charge-command="charge.reverse"
+                                                        data-charge-id={e.chargeId}
+                                                        onClick={() => onReverseCharge({ chargeId: e.chargeId!, label: e.label })}
+                                                    >
+                                                        Reverse
+                                                    </button>
+                                                ) : null}
+                                            </span>
                                         </div>
                                     ))}
                                 </div>
@@ -230,6 +281,140 @@ export default function FinancialsDetailCard({
                         guarantee.
                     </p>
                 </div>
+
+                {/*
+                  * THE RECEIPTS, AND WHAT EACH IS ANSWERING.
+                  *
+                  * Every figure is already formatted by the adapter from the account VM's canonical
+                  * numbers. Nothing here adds, differences or decides what "applied" means — the card
+                  * would otherwise become a second opinion about money, which is the one thing a
+                  * presentation layer must never be.
+                  */}
+                {evidence.payments.length ? (
+                    <div className="alloy-os-fdetail__payments">
+                        <SectionHead>Payments</SectionHead>
+                        {evidence.payments.map((p) => (
+                            <div key={p.paymentId} className="alloy-os-fdetail__payment" data-payment-id={p.paymentId}>
+                                <div className="alloy-os-fdetail__strip">
+                                    <Stat label="Received" value={p.receivedLabel} strong />
+                                    {/* Never a guessed name: an absent payer reads as unnamed. */}
+                                    <Stat label="From" value={p.payerLabel ?? "—"} />
+                                    <Stat label="Method" value={p.method ?? "—"} />
+                                    <Stat label="Applied" value={p.appliedLabel} />
+                                    <Stat label="Unapplied" value={p.unappliedLabel} tone={p.unappliedCents > 0 ? "due" : "ok"} />
+                                </div>
+                                {p.applications.map((a) => (
+                                    <div
+                                        key={a.allocationId}
+                                        className="alloy-os-fdetail__application"
+                                        data-application-id={a.allocationId}
+                                        data-application-status={a.status}
+                                    >
+                                        <span className="alloy-os-billing__line-label">{a.chargeLabel}</span>
+                                        <span className="alloy-os-billing__line-value">{a.amountLabel}</span>
+                                        <span className="alloy-os-fdetail__appstatus">
+                                            {a.status === "active" ? "Active" : "Reversed"}
+                                        </span>
+                                        {a.reversalReason ? (
+                                            <span className="alloy-os-fdetail__appreason">Reason: {a.reversalReason}</span>
+                                        ) : null}
+                                        {/*
+                                          * Only an ACTIVE application can be moved. A reversed row is
+                                          * history; offering to correct it again would imply the money
+                                          * is still there, and there is nothing to release.
+                                          */}
+                                        {a.status === "active" && onMovePayment ? (
+                                            <FooterAction
+                                                onClick={() =>
+                                                    onMovePayment({ paymentId: p.paymentId, allocationId: a.allocationId })
+                                                }
+                                            >
+                                                Move payment →
+                                            </FooterAction>
+                                        ) : null}
+                                    </div>
+                                ))}
+                                {/*
+                                  * Unapplied money is received money that is not answering anything —
+                                  * not a credit, not a refund. Whether it arrived that way or came back
+                                  * from a reversal, the operator's next move is the same.
+                                  */}
+                                {p.unappliedCents > 0 && onApplyPayment ? (
+                                    <div className="alloy-os-fdetail__unapplied">
+                                        <span className="alloy-os-billing__line-label">
+                                            {p.unappliedLabel} unapplied
+                                        </span>
+                                        <FooterAction onClick={() => onApplyPayment({ paymentId: p.paymentId })}>
+                                            Apply payment →
+                                        </FooterAction>
+                                    </div>
+                                ) : null}
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
+
+                {/*
+                  * WHAT SOMEBODY DECIDED BY HAND.
+                  *
+                  * The reconciliation already says what these came to. A total cannot be reversed and
+                  * cannot be explained, so the decisions themselves are listed: what it was, which way
+                  * it went, why, and whether it still stands. Only a reduction that has not already
+                  * been reversed offers a reversal — reversing twice would credit the family twice for
+                  * one decision, and the service refuses it anyway.
+                  */}
+                {evidence.adjustments.length || onAddAdjustment ? (
+                    <div className="alloy-os-fdetail__adjustments">
+                        <SectionHead>Adjustments</SectionHead>
+                        {evidence.adjustments.map((a) => (
+                            <div
+                                key={a.applicationId}
+                                className="alloy-os-fdetail__adjustment"
+                                data-adjustment-id={a.applicationId}
+                                data-adjustment-reversed={a.reversed ? "true" : "false"}
+                                data-adjustment-is-reversal={a.isReversal ? "true" : "false"}
+                            >
+                                <span className="alloy-os-billing__line-label">
+                                    {a.categoryLabel}
+                                    {a.subjectName ? ` · ${a.subjectName}` : ""}
+                                </span>
+                                <span className="alloy-os-billing__line-value">{a.amountLabel}</span>
+                                <span className="alloy-os-fdetail__adjmeta" data-adjustment-applied={a.applied ? "true" : "false"}>
+                                    {/*
+                                      * A manual reduction is written as a DRAFT charge, and a draft
+                                      * is not owed. Saying only "lowers what is owed" would tell the
+                                      * operator the money had already moved when it has not.
+                                      */}
+                                    {a.applied
+                                        ? a.reducesObligation ? "Lowers what is owed" : "Raises what is owed"
+                                        : a.reducesObligation
+                                            ? "Recorded — lowers what is owed once posted"
+                                            : "Recorded — raises what is owed once posted"}
+                                    {a.recordedOn ? ` · ${a.recordedOn}` : ""}
+                                </span>
+                                {a.reason ? (
+                                    <span className="alloy-os-fdetail__adjreason">Reason: {a.reason}</span>
+                                ) : null}
+                                {a.reversed ? (
+                                    <span className="alloy-os-fdetail__adjstatus">Reversed</span>
+                                ) : a.isReversal ? (
+                                    <span className="alloy-os-fdetail__adjstatus">Reversal</span>
+                                ) : onReverseAdjustment ? (
+                                    <FooterAction
+                                        onClick={() => onReverseAdjustment({ applicationId: a.applicationId })}
+                                    >
+                                        Reverse adjustment →
+                                    </FooterAction>
+                                ) : null}
+                            </div>
+                        ))}
+                        {onAddAdjustment ? (
+                            <div className="alloy-os-fdetail__adjustadd">
+                                <FooterAction onClick={() => onAddAdjustment()}>Add adjustment →</FooterAction>
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
 
                 <div className="alloy-os-fdetail__upcoming">
                     <SectionHead>Upcoming</SectionHead>

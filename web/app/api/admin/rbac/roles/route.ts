@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requirePortalOrUsersRolesManageAuth, requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
+import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { type RoleDefinitionRow } from "@/lib/admin/defaultRoleDefinitions";
 
 /**
@@ -77,14 +79,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Role key already exists in this org" }, { status: 409 });
     }
 
+    // D2 — role creation moved to a transaction owner so the role row and its audit event commit
+    // together. The route previously wrote a single statement, which is atomic alone and cannot be
+    // atomic WITH an event.
+    const audit = accessMutationAudit(auth.access);
     const { data: created, error } = await supabase
-        .from("role_definitions")
-        .insert({
-            org_id: orgId,
-            role_key,
-            role_label,
-            is_system: false,
-            is_active: true,
+        .rpc("create_role_definition_audited", {
+            p_org_id: orgId,
+            p_role_key: role_key,
+            p_role_label: role_label,
+            p_permission_keys: [],
+            p_actor_user_id: audit.actorUserId,
+            p_origin: audit.origin,
+            p_correlation_id: audit.correlationId,
         })
         .select("role_key, role_label, is_system, is_active, created_at")
         .single();
@@ -93,6 +100,15 @@ export async function POST(request: NextRequest) {
         const status = error.code === "23505" ? 409 : 400;
         return NextResponse.json({ error: error.message }, { status });
     }
+
+    /*
+     * A brand-new role has no members, so no resolved bundle is stale — and an exemption argued
+     * exactly that way is how the access-scope gap stayed invisible until D2's lock found it. The
+     * cost is one eviction on an administrator action taken a few times a day; the alternative is an
+     * exception list on a safety check, which this codebase has repeatedly recorded as a list of the
+     * failures it has agreed not to see.
+     */
+    invalidateAdminShellContextCache();
 
     return NextResponse.json(created);
 }

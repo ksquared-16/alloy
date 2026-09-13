@@ -35,6 +35,10 @@ import { measureDeployedRestoreGates } from "./deployed-qa-session-restore-actio
 import { measureLaneDispatchGates } from "./lane-dispatch.mjs";
 import { getDurableLane } from "./development-lane.mjs";
 import { activeRunForLane } from "./execution-run.mjs";
+// The census gates re-run the registry's own validator rather than reimplement
+// it. Importing the registry here is safe in both directions: the registry
+// imports no evidence, and this module already reaches governed-action-request.
+import { getActionDefinition } from "./trusted-host-action-registry.mjs";
 
 const PROTECTED = ["staging", "main", "master", "production"];
 
@@ -178,6 +182,68 @@ export function collectDirectorEvidence(rec, {
   // Repository housekeeping measures REAL GitHub state. Anything unreadable
   // stays null, and a null gate escalates — a cleanup that cannot be proven
   // safe is never a cleanup the Director performs.
+  // A PRIVILEGED READ, RE-MEASURED AT THE MOMENT OF DECISION.
+  //
+  // The census was the single largest source of Director interruption — 182
+  // approvals in the 23 days to 2026-09-11, 73 of them in the last 7, and not
+  // one denial in the whole window. It escalated because `alloy_deployed_primary`
+  // is an operator-only ENVIRONMENT, checked before any policy could be matched,
+  // so no gate ever got to answer the only question that matters here: is this
+  // actually a read, and is it the read it says it is.
+  //
+  // MEASURED BY THE REGISTRY'S OWN VALIDATOR, DELIBERATELY. Re-running
+  // `getActionDefinition(...).validateInputs` is not a second implementation of
+  // the rules — it IS the rule, the same code the trusted host runs before it
+  // executes. A gate that re-derived "is this SQL read-only" would be a fork of
+  // validateReadOnlySql, and the two would eventually disagree; the one that
+  // disagreed silently would be this one.
+  //
+  // RE-MEASURED, not remembered. The request passed this same validator when it
+  // was filed, but a decision taken now must rest on what is true now: the
+  // artifact is a file on disk and can change between filing and deciding.
+  //
+  // Every field is null on anything unreadable, and a null gate escalates, so a
+  // census that cannot be proven a read is still the operator's.
+  if (rec?.action_key === "database.read_census") {
+    evidence.census_target = rec?.target || null;
+    evidence.census_mode_read_only = rec?.requested_mode
+      ? String(rec.requested_mode) === "read_only"
+      : null;
+    // An explicitly pinned hash is what makes the artifact an identity rather
+    // than a filename. The validator will also ACCEPT a hash carried inside the
+    // JSON artifact itself, which proves the file is internally consistent and
+    // nothing about what the requester intended — so this gate asks the REQUEST
+    // to have named one.
+    const pinned = inputs.expectedQueryHash || inputs.expected_query_hash || null;
+    evidence.census_query_hash_pinned = Boolean(pinned);
+    try {
+      const def = getActionDefinition("database.read_census");
+      const validated = def?.validateInputs ? def.validateInputs({
+        ...inputs,
+        queryArtifactPath: (rec?.artifact_refs || [])[0] || inputs.queryArtifactPath || null,
+        databaseTarget: rec?.target || null,
+        ...(wt ? { worktreePath: wt, worktree_path: wt } : {}),
+      }) : null;
+      if (validated) {
+        evidence.census_artifact_validates = validated.ok === true;
+        evidence.census_sql_read_only = validated.ok === true
+          ? validated.normalized?.validation?.ok === true
+          : false;
+        // The target the executor will ACTUALLY use, not the one that was asked
+        // for. They are the same value today, and this gate exists so that they
+        // must still be the same value on the day a second target exists.
+        evidence.census_target_exact = validated.ok === true
+          ? String(validated.normalized?.databaseTarget || "") === String(rec?.target || "")
+          : false;
+        evidence.census_artifact_inside_worktree = validated.ok === true
+          ? Boolean(validated.normalized?.artifactRoot)
+          : false;
+        evidence.census_refusal_code = validated.ok === true ? null : (validated.code || "invalid");
+      }
+    } catch {
+      // Unreadable is not safe. Leaving these null escalates, which is correct.
+    }
+  }
   // Reconciliation metadata. Everything here is derived from the PLAN the
   // request carries; whether that plan still describes reality is re-checked by
   // the executor, and its fingerprint is a gate in its own right.
@@ -300,6 +366,10 @@ export function collectDirectorEvidence(rec, {
       Object.assign(evidence, measureHostedMigrationParity({
         repository,
         expectedHeadSha: sha,
+        // The branch being merged INTO is the promoted revision, and it is what
+        // the parity obligation is drawn from. Defaulted rather than assumed
+        // present: this action's target is already allowlisted to staging.
+        targetBranch: inputs.target_branch || inputs.targetBranch || inputs.base || "staging",
       }, {
         censusRequests,
         gate: migrationGate,

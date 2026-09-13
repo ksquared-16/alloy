@@ -11,7 +11,16 @@ import {
 import { join } from "node:path";
 import os from "node:os";
 
-const STATE_DIR = join(os.homedir(), ".local/state/alloy-dev/engineering-health");
+/*
+ * Overridable so a control can exercise this store without writing to the live
+ * host cache. It was not overridable, and a test of the provider-backoff record
+ * wrote a fabricated "Docker is down" entry into the real one — harmless only
+ * because a genuine collector run happened to overwrite it minutes later. A
+ * store that cannot be pointed somewhere else is a store whose tests mutate
+ * production.
+ */
+const STATE_DIR = process.env.ALLOY_ENGINEERING_HEALTH_DIR?.trim()
+  || join(os.homedir(), ".local/state/alloy-dev/engineering-health");
 const CACHE_PATH = join(STATE_DIR, "collector-cache.json");
 const HISTORY_PATH = join(STATE_DIR, "disk-history.jsonl");
 
@@ -79,4 +88,69 @@ export function readDiskHistory({ limit = 48 } = {}) {
   } catch {
     return [];
   }
+}
+
+/**
+ * AN OPTIONAL PROVIDER THAT IS ABSENT IS A STATE, NOT A PROBE TO REPEAT.
+ *
+ * THE DEFECT THIS CLOSES. Docker was not running on September 11. Every health
+ * cycle nonetheless re-ran `docker version` and `docker info`, each one failing
+ * to reach `~/.docker/run/docker.sock`, each one writing the same connection
+ * error to Gateway stderr. Expected unavailability was rediscovered from
+ * scratch, forever — the same shape as the stale-PID loop, in a different
+ * subsystem.
+ *
+ * Docker is OPTIONAL. Vacilando must be healthy without it, so "absent" has to
+ * be a cheap remembered fact rather than a subprocess and a log line.
+ *
+ * Backoff doubles from 1 minute to a 30-minute ceiling: a daemon someone starts
+ * is noticed within half an hour without being asked every cycle meanwhile. Two
+ * things still force an immediate probe — an explicit refresh, and any caller
+ * that genuinely needs the provider right now — so a provider-dependent
+ * operation is never answered from a stale "down".
+ */
+const PROVIDER_BACKOFF_FLOOR_MS = 60_000;
+const PROVIDER_BACKOFF_CEILING_MS = 30 * 60_000;
+
+export function readProviderHealth(name) {
+  const cache = readCache();
+  return cache.__providers?.[name] || null;
+}
+
+/** Should we spend a subprocess on this provider right now? */
+export function providerProbeDue(name, { nowMs = Date.now(), force = false } = {}) {
+  if (force) return true;
+  const rec = readProviderHealth(name);
+  if (!rec || rec.available !== false) return true;
+  const next = Date.parse(rec.next_probe_at || "") || 0;
+  return !next || nowMs >= next;
+}
+
+export function recordProviderHealth(name, { available, detail = null, nowMs = Date.now() } = {}) {
+  const cache = readCache();
+  cache.__providers = cache.__providers || {};
+  const prev = cache.__providers[name] || null;
+  if (available) {
+    cache.__providers[name] = {
+      provider: name, available: true, detail,
+      observed_at: new Date(nowMs).toISOString(),
+      consecutive_failures: 0, next_probe_at: null,
+      unavailable_since: null,
+    };
+  } else {
+    const failures = (prev?.available === false ? (prev.consecutive_failures || 0) : 0) + 1;
+    const backoff = Math.min(PROVIDER_BACKOFF_FLOOR_MS * (2 ** (failures - 1)), PROVIDER_BACKOFF_CEILING_MS);
+    cache.__providers[name] = {
+      provider: name, available: false, detail,
+      observed_at: new Date(nowMs).toISOString(),
+      consecutive_failures: failures,
+      backoff_ms: backoff,
+      next_probe_at: new Date(nowMs + backoff).toISOString(),
+      // Kept across failures so the operator can see how long it has been down,
+      // not merely that the last probe failed.
+      unavailable_since: prev?.unavailable_since || new Date(nowMs).toISOString(),
+    };
+  }
+  writeCache(cache);
+  return cache.__providers[name];
 }

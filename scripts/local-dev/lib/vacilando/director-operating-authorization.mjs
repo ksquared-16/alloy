@@ -31,6 +31,7 @@ import {
   SELF_EXPANSION_ACTION_KEYS,
   DIRECTOR_ELIGIBLE_ENVIRONMENTS,
   OPERATOR_ONLY_ENVIRONMENTS,
+  OPERATOR_ONLY_ENVIRONMENT_READ_EXEMPTIONS,
 } from "./director-authority.mjs";
 
 export const OPERATING_AUTHORIZATION_VERSION = "director_operating_authorization_v1";
@@ -314,13 +315,47 @@ export const ACTION_CLASS_INVENTORY = Object.freeze([
   Object.freeze({
     class_id: "database.read_census", surface: "data", action_key: "database.read_census", tier: B,
     executes_via: "trusted host",
-    why: "Read-only against a deployed database. Bounded because the query is the risk surface, not the read.",
-    bounds: "Allowlisted query artifact matching its expected hash.",
+    why: "Read-only against a deployed database. Bounded because the query is the risk surface, not the read. This row said tier B for a year while the evaluator treated it as operator-only, and the evaluator won: 182 approvals in 23 days and not one denial. allowlisted_read_only_census_v1 now makes the row true rather than aspirational.",
+    bounds: "Read-only mode, hash pinned by the REQUEST, artifact resolving inside the originating worktree and still matching its hash, SQL statically proven non-mutating, and the target exactly the one the executor will read — all re-measured at decision time by the registry's own validator, never remembered from filing.",
   }),
   Object.freeze({
     class_id: "database.apply_migration", surface: "data", action_key: "database.apply_migration", tier: C,
     executes_via: "operator only",
     why: "Schema change against a deployed environment. Reversibility depends on the migration's own content, which no generic gate can measure.",
+    bounds: null,
+  }),
+  /*
+   * THE TWO MIGRATION ACTIONS THAT WERE GOVERNED BUT NEVER FILED.
+   *
+   * Both shipped with `operatorApprovalRequired: true` and `delegable: false` on
+   * their registry definitions, and apply_promoted_migration was added to
+   * OPERATOR_OWNED_ACTION_KEYS — but neither got an inventory row. That is not
+   * cosmetic: the structural test "every operator-owned action key is tier C or
+   * D" has been FAILING on staging because of it, so the one test that keeps the
+   * document and the evaluator reconciled was red, and a red test explains
+   * nothing. Between them they took 28 Director clicks in the measured week.
+   *
+   * Both are filed tier C, which is what their own semantics say — a production
+   * database mutation. The approved policy for this mission allows an exact
+   * promoted migration to run without a second click when eight conditions hold;
+   * the eighth is that canonical refusal rules stay intact, and `delegable:
+   * false` on the action IS one of those rules. Overriding it here would not be
+   * classifying the action, it would be overruling it. Moving either of these to
+   * tier B is therefore a deliberate change to the registry contract and an
+   * operator decision, not a reclassification this mission can make on its own.
+   */
+  Object.freeze({
+    class_id: "database.apply_promoted_migration", surface: "data",
+    action_key: "database.apply_promoted_migration", tier: C,
+    executes_via: "operator only (trusted host, after an explicit decision)",
+    why: "Mutates the schema of the deployed primary. The action itself declares operatorApprovalRequired and delegable:false, and says why: production mutation is never satisfied by a policy gate, because no gate can measure whether THIS migration's content is reversible. Exactness of the artifact is necessary and is not sufficient.",
+    bounds: null,
+  }),
+  Object.freeze({
+    class_id: "database.repair_migration_ledger", surface: "data",
+    action_key: "database.repair_migration_ledger", tier: C,
+    executes_via: "operator only (trusted host, after an explicit decision)",
+    why: "Writes to the deployed primary's migration ledger. A ledger that disagrees with the schema is the thing every later migration decision is read from, so a wrong repair is not a wrong row — it is a wrong answer to every subsequent 'has this been applied'. Declares delegable:false for that reason.",
     bounds: null,
   }),
   Object.freeze({
@@ -432,6 +467,12 @@ export function buildOperatingAuthorization({
     environments: {
       director_eligible: [...DIRECTOR_ELIGIBLE_ENVIRONMENTS],
       operator_only: [...OPERATOR_ONLY_ENVIRONMENTS],
+      // The enumerated exceptions, surfaced rather than left to be discovered in
+      // the evaluator. "Production is never delegated" stopped being literally
+      // true the moment a read-only census was delegated against the deployed
+      // primary, and a governance document that states a rule the code no longer
+      // keeps is worse than one that states the exception.
+      operator_only_read_exemptions: OPERATOR_ONLY_ENVIRONMENT_READ_EXEMPTIONS.map((x) => ({ ...x })),
     },
     operator_owned_action_keys: [...OPERATOR_OWNED_ACTION_KEYS],
     self_expansion_action_keys: [...SELF_EXPANSION_ACTION_KEYS],

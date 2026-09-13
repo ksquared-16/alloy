@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
 import { replaceMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
+import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import {
     replacementRemovalRefusal,
     replacementRemovalRefusalMessage,
@@ -82,10 +84,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
     // W-5/G4: the replacement and the access profile are one transaction. This was
     // delete-then-insert as two statements, so a failed insert left the user with
     // no membership at all; the RPC either lands the replacement or moves nothing.
+    // D2 — W-17 is audited, not fixed: the transaction owner records the whole old role set and the
+    // whole new one, so a submit that discards other roles is legible as exactly that.
+    const audit = accessMutationAudit(access);
     const membership = await replaceMembershipWithAccessProfile(supabase, {
         userId,
         orgId: access.orgId,
         role,
+        audit,
     });
     if (!membership.ok) {
         if (membership.kind === "not_found") {
@@ -93,6 +99,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
         }
         return NextResponse.json({ error: membership.error }, { status: 500 });
     }
+
+    /*
+     * W-13 — this member's roles just changed, so the bundle cached against their user id is stale,
+     * and since W-13 that bundle carries ADMISSION. Per-user here, unlike the role-grant routes: a
+     * membership change has exactly one subject and the cache is keyed by exactly that.
+     */
+    invalidateAdminShellContextCache(userId);
 
     return NextResponse.json({
         ...membership.row,

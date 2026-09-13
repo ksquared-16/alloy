@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { PROCESSING_OPERATE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import type { RelatedRecordProposalDecision } from "@/lib/intake/proposals/decisions";
 import { normalizeProposalDecision } from "@/lib/intake/proposals/decisions";
@@ -33,6 +34,8 @@ function parseDecision(body: Body, proposalId: string): RelatedRecordProposalDec
 export async function POST(request: NextRequest, { params }: { params: Promise<{ caseId: string; proposalId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireProcessingCapability(ctx, PROCESSING_OPERATE);
+    if (denied) return denied;
     const { caseId: rawCaseId, proposalId } = await params;
     const caseId = parseUuidParam(rawCaseId, "caseId");
     if (caseId instanceof NextResponse) return caseId;

@@ -25,6 +25,7 @@ import "server-only";
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
 
 import {
     buildChildAttendanceReadModel,
@@ -401,14 +402,20 @@ async function siteRoomsFor(
     orgId: string,
     siteLocationId: string,
 ): Promise<Array<{ id: string; label: string }>> {
-    const { data } = await supabase
-        .from("locations")
-        .select("id, label")
-        .eq("org_id", orgId)
-        .eq("location_type", "unit")
-        .eq("parent_location_id", siteLocationId)
-        .order("label", { ascending: true });
-    return ((data ?? []) as Array<{ id: string; label: unknown }>)
-        .map((r) => ({ id: r.id, label: String(r.label ?? "").trim() }))
-        .filter((r) => r.label.length > 0);
+    // By ANCESTRY, through the canonical Room provider. `parent_location_id = site`
+    // silently dropped every operational group nested inside a physical space —
+    // the destination an operator most wants when a site has rooms-within-rooms.
+    // `includeInactive` preserves this list's long-standing behaviour of showing
+    // every unit and letting the label be the only filter.
+    //
+    // Every unit role belongs here, shared spaces included: attendance may name a
+    // playground (`isAttendanceLocatableRole`). Only PLACEMENT is restricted to
+    // operational groups, and this list does not place anyone.
+    const rooms = await resolveRoomsForLocation(supabase, orgId, siteLocationId, {
+        includeInactive: true,
+    });
+    return rooms
+        .map((r) => ({ id: r.id, label: String(r.name ?? "").trim() }))
+        .filter((r) => r.label.length > 0)
+        .sort((a, b) => a.label.localeCompare(b.label));
 }

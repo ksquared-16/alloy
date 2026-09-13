@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
 import { CalendarDays, MapPin } from "lucide-react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
@@ -191,8 +192,8 @@ export default function LocationsConfigurationPage({
     const selectedRooms = useMemo(
         () =>
             selectedSite ?
-                roomRows
-                    .filter((room) => room.parent_location_id === selectedSite.id)
+                rowsBelongingToSite(roomRows, selectedSite.id)
+                    .slice()
                     .sort((a, b) => String(a.label ?? "").localeCompare(String(b.label ?? "")))
             :   [],
         [roomRows, selectedSite],

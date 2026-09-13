@@ -69,7 +69,6 @@ async function verifyCurrentWork(opportunityId: string, orgId: string) {
         departmentMetadata,
         statusKey: String(opp?.status_key ?? ""),
         statusDefs,
-        workUnitMetadata: null,
     });
 
     const stage_work_runtime = await projectStageWorkRuntime({

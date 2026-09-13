@@ -15,8 +15,21 @@ import {
     type AdminContextSuccess,
 } from "@/lib/admin/getAdminContext";
 import { parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { hasProcessingCapability, PROCESSING_OPERATE } from "@/lib/access/processingAuthority";
 import { createExecutorPorts } from "../executor";
 import { OperatorServiceError, type OperatorReviewDeps } from "./operatorReviewService";
+
+/**
+ * The capability this shared context resolves — written as a literal, and checked against the
+ * canonical constant by the compiler.
+ *
+ * Seven routes derive their authority here rather than each asking for themselves, which is the
+ * right architecture and also the reason the route-capability lock cannot see it: that lock reads
+ * the helper's own module for the capability it claims to enforce, and a module that only passes a
+ * CONSTANT names nothing a reader or a scanner can check. `satisfies` makes this an assertion
+ * rather than a decoration — rename or repoint `PROCESSING_OPERATE` and this stops compiling.
+ */
+const OPERATOR_CAPABILITY = PROCESSING_OPERATE satisfies "processing.operate";
 
 export type ResolvedOperatorRoute = {
     deps: OperatorReviewDeps;
@@ -26,8 +39,19 @@ export type ResolvedOperatorRoute = {
 
 /**
  * Resolve `{ deps, caseId }` or a short-circuit `NextResponse` (401/403/400).
- * `actorAuthorized` reflects a privileged operator role (admin or ops) for
- * approval + execution; read/decision steps do not require it.
+ *
+ * `actorAuthorized` reflects the caller's `processing.operate` CAPABILITY for approval and
+ * execution; read/decision steps do not require it.
+ *
+ * It used to read `ctx.role === "admin" || ctx.role === "ops"` — one line, governing seven routes,
+ * and invisible to any scan that reads route files. That is what made it worth finding: the
+ * architecture was already right (one decision point, enforced deep in `operatorReviewService` and
+ * `plan/approval`), and only the QUESTION was wrong. An organization could not let someone work an
+ * identity queue without also calling them an administrator or an operations user.
+ *
+ * The compatibility grants give `processing.operate` to exactly `admin` and `ops`, so every
+ * principal authorized a moment before this change is authorized after it — and a custom role the
+ * organization defines can now hold the same authority under any name it likes.
  */
 export async function resolveOperatorRoute(
     rawCaseId: string | undefined,
@@ -39,7 +63,7 @@ export async function resolveOperatorRoute(
     if (caseId instanceof NextResponse) return caseId;
 
     const supabase = createAdminClient();
-    const actorAuthorized = ctx.role === "admin" || ctx.role === "ops";
+    const actorAuthorized = hasProcessingCapability(ctx, OPERATOR_CAPABILITY);
 
     return {
         ctx,

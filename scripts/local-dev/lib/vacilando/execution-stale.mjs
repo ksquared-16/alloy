@@ -73,6 +73,12 @@ import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
 import { statSync } from "node:fs";
 import { join } from "node:path";
 import { listResourceClaims } from "./resource-claims.mjs";
+import {
+  describeWait,
+  isDeclaredWaitReason,
+  reconcileWait,
+  waitStatus,
+} from "./run-wait.mjs";
 
 const OPEN_REQUEST = new Set(["REQUESTED", "QUEUED", "GRANTED"]);
 const IN_FLIGHT_CONTINUATION = new Set(["PENDING", "DELIVERING"]);
@@ -941,6 +947,136 @@ export function reconcileUndeliveredRuns({
     if (out.ok) failed.push(out.run);
   }
   return { ok: true, failed, count: failed.length };
+}
+
+/**
+ * The waiting states a run can rest in. Same set `vac health` uses to build its
+ * wait descriptors, so the check and the collector cannot disagree about which
+ * runs are even in scope.
+ */
+export const WAITING_RUN_STATES = Object.freeze(["QUEUED", "NEEDS_INPUT", "WAITING_RESOURCE", "RECOVERING"]);
+
+/** The wait reason for a run, by the same rules `vac health` applies. */
+/**
+ * THE SEMANTIC WAIT CODE — NEVER THE CAPTION.
+ *
+ * THE DEFECT THIS CLOSES, measured across the fleet: 21 runs in 6 lanes failed
+ * `unknown_wait_reason` and 3 more `missing_wait_reason`, and every one of them
+ * was healthy. This function returned `run.state_reason`, which
+ * `attachRunWait` sets to `presentationForGovernedAction(rec).wait_label` — a
+ * HUMAN CAPTION such as "Waiting on Director — branch push". `describeWait`
+ * looked that caption up in `WAIT_REASONS`, did not find it, returned
+ * `bound_policy: "invalid"`, and `reconcileWait` correctly failed an invalid
+ * descriptor. Every layer behaved as designed. The caption was being used as
+ * the key.
+ *
+ * The semantic code was there the whole time. The same `attachRunWait` call
+ * writes `resource_wait` from `waitProjection`, whose reason is
+ * `needs_operator_input` with policy `human_indefinite` — "hold for as long as
+ * it takes". erun_5a070693f25078fc carries exactly that descriptor and was
+ * killed anyway, because the caption won.
+ *
+ * ORDER OF TRUTH, and it is deliberate:
+ *   1. the run STATE, where it is unambiguous;
+ *   2. the semantic code the producer wrote into `resource_wait`;
+ *   3. `state_reason`, but ONLY when it is itself a declared code — some
+ *      producers legitimately set it to one;
+ *   4. otherwise nothing, which fails closed exactly as before.
+ *
+ * A caption can never be step 3, because `isDeclaredWaitReason` is an exact
+ * lookup in the same table the classifier uses. Undeclared prose is not
+ * reinterpreted, guessed at, or pattern-matched into a nearby code — it simply
+ * is not a key, and the run falls through to whatever the descriptor says.
+ */
+function waitReasonFor(run) {
+  if (run.state === "NEEDS_INPUT") return "needs_operator_input";
+  if (run.state === "RECOVERING") return "recovering";
+  const declared = run.resource_wait?.reason;
+  if (isDeclaredWaitReason(declared)) return declared;
+  if (isDeclaredWaitReason(run.state_reason)) return run.state_reason;
+  return null;
+}
+
+/**
+ * Fail every run whose declared wait has exceeded its own bound.
+ *
+ * THE GAP THIS CLOSES. `run-wait.mjs` already holds the whole decision: each
+ * wait reason declares an owner and a bound, `waitStatus` says whether it has
+ * expired, and `reconcileWait` returns the exact action — "fail, via the
+ * canonical failure path, because <reason>_bound_exceeded". It is documented as
+ * side-effect free because "the caller performs the transition". There was no
+ * caller. `vac health` computed the same descriptors, reported `runs.stale` as a
+ * PROBLEM saying the run "must become terminal", and nothing in the system could
+ * make it so.
+ *
+ * MEASURED: erun_8b6e580dde2b5967 sat QUEUED on `provider_provisioning` — a
+ * TEN MINUTE bound — for over thirteen hours. `reconcileUndeliveredRuns` skipped
+ * it because it only collects Cursor sends and EXECUTING runs, and
+ * `classifyExecutionRunStale` calls a non-EXECUTING run "active" by design. A
+ * run that never started was the one shape nothing owned.
+ *
+ * WHY IT REUSES THE TABLE RATHER THAN A NEW TIMEOUT. A second timeout would be a
+ * second opinion about when a wait is over, and the two would diverge the first
+ * time either moved. The bound comes from the reason's own policy, so
+ * `needs_operator_input` — the single deliberate human_indefinite reason — is
+ * held for ever here exactly as the table says, and never collected.
+ */
+export function reconcileExpiredRunWaits({
+  root,
+  nowMs = Date.now(),
+  apply = true,
+} = {}) {
+  const store = readExecutionRunStore(root);
+  const decided = [];
+  for (const id of Object.keys(store.lanes || {})) {
+    for (const run of store.lanes[id]?.runs || []) {
+      if (!run || isTerminalRunState(run.state)) continue;
+      if (!WAITING_RUN_STATES.includes(run.state)) continue;
+      const since = Date.parse(run.updated_at || run.created_at || "") || nowMs;
+      const rec = getDurableLane(run.lane_id, root);
+      const descriptor = describeWait({
+        reason: waitReasonFor(run),
+        resource_id: run.run_id,
+        waiting_since: since,
+        now: nowMs,
+        context: { no_session_binding: !rec?.binding?.worktree_path },
+      });
+      const status = waitStatus(descriptor, nowMs);
+      const decision = reconcileWait(descriptor, { now: nowMs });
+      if (decision.action !== "fail") continue;
+      const row = {
+        run_id: run.run_id,
+        lane_id: run.lane_id,
+        state: run.state,
+        reason: descriptor.reason,
+        status,
+        bound_policy: descriptor.bound_policy,
+        waiting_since: descriptor.waiting_since,
+        deadline: descriptor.deadline,
+        failure_reason: decision.failure_reason,
+        applied: false,
+      };
+      if (apply) {
+        const out = transitionExecutionRun(run.run_id, "FAILED", {
+          reason: decision.failure_reason,
+          origin: "governor",
+          nowMs,
+          root,
+          completion_report: {
+            summary: `The run waited on ${descriptor.reason} past its ${descriptor.bound_policy} bound and was collected by the governor. It never reached a provider.`,
+          },
+          // The wait descriptor travels onto the terminal run as evidence, so
+          // the reason it was collected outlives the sweep that collected it.
+          evidence: decision.evidence,
+          execution_failure: true,
+        });
+        row.applied = Boolean(out?.ok);
+        if (!out?.ok) row.error = out?.error || "transition_refused";
+      }
+      decided.push(row);
+    }
+  }
+  return { ok: true, collected: decided.filter((d) => d.applied).length, decided };
 }
 
 export function closeStaleExecutionRun(runId, {

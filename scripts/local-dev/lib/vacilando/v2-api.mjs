@@ -552,9 +552,12 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
   }
 
   if (path === "/api/v2/lane/governed-action" || path === "/api/v2/lanes/governed-action" || path === "/api/v2/governed-actions") {
-    const { requestGovernedAction } = await import("./governed-action-request.mjs");
+    // Through the preflight: a managed QA action needs its lane to hold a
+    // Development Slot before it can execute, and taking one safely is
+    // infrastructure scheduling, not a second governed decision.
+    const { fileGovernedActionWithQaSlotPreflight } = await import("./qa-slot-preflight.mjs");
     const laneId = v.lane_id || v.laneId || v.id;
-    const out = requestGovernedAction({
+    const out = await fileGovernedActionWithQaSlotPreflight({
       ...v,
       lane_id: laneId,
       mission_id: v.mission_id || v.missionId,
@@ -580,8 +583,29 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
       const out = await Promise.resolve(approveGovernedAction(id || pending?.request_id, {
         actor: actorDefault,
         expectedFingerprint: v.content_fingerprint || v.contentFingerprint || null,
+        // When the press happened, as the client saw it. Observability only —
+        // it is recorded next to the server's own stamps and authorises nothing,
+        // so a client that lies about it changes a metric and not a decision.
+        submittedAt: v.submitted_at || v.submittedAt || null,
+        // THE ONE CALLER WITH A BROWSER ON THE END OF IT.
+        //
+        // Every other caller of approveGovernedAction — the tick, the CLI, the
+        // certification fixtures — still waits for the result, which is what
+        // they want. This route answers a person, and a person cannot be asked
+        // to hold a request open through a 180 s census or a 600 s migration to
+        // learn that their press was heard.
+        awaitExecution: false,
       }));
-      return { status: out.ok ? 200 : 409, body: out };
+      // 202 IS A CLAIM ABOUT OWNERSHIP, NOT A SOFTER 200.
+      //
+      // It is used here only where the decision, the authority and the execution
+      // claim are already on disk, so it means exactly what it says: this is
+      // accepted, it is owned, and the outcome will arrive through the
+      // projection rather than through this response. A refusal is still 409 and
+      // a synchronous completion — which other callers can still produce — is
+      // still 200, so the status distinguishes three genuinely different things
+      // rather than decorating one.
+      return { status: out.ok ? (out.accepted ? 202 : 200) : 409, body: out };
     } catch (e) {
       return {
         status: 409,
@@ -1265,7 +1289,10 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
       const { controlMissionLocalServer } = await import("./mission-local-server.mjs");
       const mid = v.mission_id || v.missionId;
       const action = v.action || v.command || null;
-      const out = controlMissionLocalServer(mid, action);
+      // AWAITED. Starting a server can now acquire a Development Slot first,
+      // which is asynchronous; without this the body would be a Promise and
+      // every start would answer 409 with an empty result.
+      const out = await controlMissionLocalServer(mid, action);
       return { status: out.ok ? 200 : 409, body: out };
     } catch (e) {
       return { status: 400, body: { ok: false, error: String(e && e.message || e) } };

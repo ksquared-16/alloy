@@ -171,11 +171,31 @@ describe("W-57 / RL-52 — four levels, one page per role", () => {
     });
 
     it("no planned-only panel survives in the role editor", () => {
-        // `RL-52`'s first clause. The two tabs whose entire content was a planned sentence —
-        // Experience Access and History — left navigation rather than keeping a third of the bar.
+        /*
+         * `RL-52`'s first clause, and D2 is why it now reads this way.
+         *
+         * The rule was never "no history" — it was that a destination whose entire content is a
+         * planned sentence should not occupy navigation. This assertion originally spelled that as
+         * "no `access-role-history` testid", which was an accurate proxy for as long as the only
+         * possible history panel was an empty one.
+         *
+         * D2 gave the role editor real history: a CARD inside the existing workspace, fed by the
+         * same read model as the organization feed. So the clause is stated as what it always meant —
+         * a history surface must carry events, not a promise. A panel that reintroduced the placeholder
+         * fails here exactly as before.
+         */
         const src = executableSource(ROLE_EDITOR);
         expect(src).not.toContain("Experience Access");
-        expect(src).not.toMatch(/testId="access-role-history"/);
+
+        const historyPanel = /testId="access-role-history"/.test(src);
+        if (historyPanel) {
+            // It must be fed by the canonical history component, not by a sentence.
+            expect(src).toContain("AccessHistoryList");
+            expect(src).not.toMatch(/access-role-history[\s\S]{0,400}data-capability=\{?"?planned/);
+        }
+
+        // And it must still be a CARD in the workspace rather than a tab — W-57's actual finding.
+        expect(src).not.toMatch(/role="tablist"/);
     });
 
     it("planned capability is still MARKED where it exists — removal must not become concealment", () => {

@@ -1,10 +1,23 @@
 "use client";
 
+/**
+ * Create Work Item — centered dialog.
+ *
+ * A manual work item is subject CREATION, not an action against an already-selected subject, so it
+ * does not belong in the detail pane: the previous surface replaced the selected work item's detail
+ * with a two-column conversation/preview form, which cost the operator their place in the queue and
+ * read as "configure an operational task record" rather than "create a piece of work".
+ *
+ * The fields here are exactly the ones that survive `draftToOperationalTaskBody` into
+ * `operational_tasks`. Priority, tags, category, checklist, recurrence and follow-on exist on
+ * WorkItemDraftV1 but are never persisted by the commit adapter, so offering them would promise the
+ * operator state the platform then drops on the floor.
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 import OperationalWorkAssigneeSelect from "@/components/admin/opportunity/OperationalWorkAssigneeSelect";
-import WorkItemCreatePreviewPanel from "@/components/workItems/WorkItemCreatePreviewPanel";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
     minOperationalWorkDatetimeLocalValue,
@@ -17,8 +30,6 @@ import {
 } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 import {
-    applyConversationInput,
-    applyDraftMutation,
     beginWorkItemDraft,
     cancelWorkItemCreationSession,
     sessionCanCommit,
@@ -28,14 +39,10 @@ import {
     applyValidationToWorkItemDraft,
     mutateWorkItemDraft,
     type WorkItemDraftEntity,
+    type WorkItemDraftPatch,
     type WorkItemDraftSeed,
-    type WorkItemDraftV1,
 } from "@/lib/workItems/workItemDraftV1";
 import { validateWorkItemDraft } from "@/lib/workItems/validateWorkItemDraft";
-import {
-    buildClarificationChipsForDraft,
-    type WorkItemClarificationChip,
-} from "@/lib/workItems/resolveWorkItemConversation";
 
 export type WorkItemCreateModalProps = {
     open: boolean;
@@ -46,6 +53,10 @@ export type WorkItemCreateModalProps = {
     onCommit: (session: WorkItemCreationSession) => Promise<void>;
     onCancel: () => void;
 };
+
+const FIELD_LABEL = "block text-[11px] font-semibold text-alloy-midnight/62";
+const FIELD_INPUT =
+    "mt-1 w-full rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-[12px] text-alloy-midnight/88 shadow-sm placeholder:text-alloy-midnight/35 focus:border-alloy-juniper/45 focus:outline-none focus:ring-2 focus:ring-alloy-juniper/15";
 
 export default function WorkItemCreateModal({
     open,
@@ -58,22 +69,22 @@ export default function WorkItemCreateModal({
 }: WorkItemCreateModalProps) {
     const { userId } = useAdminAuth();
     const [session, setSession] = useState<WorkItemCreationSession | null>(null);
-    const [composerText, setComposerText] = useState("");
     const [recordQuery, setRecordQuery] = useState("");
     const [searchBusy, setSearchBusy] = useState(false);
     const [searchError, setSearchError] = useState<string | null>(null);
     const [candidates, setCandidates] = useState<TaskAssistEntitySearchCandidate[]>([]);
-    const composerRef = useRef<HTMLTextAreaElement>(null);
+    const [showIssues, setShowIssues] = useState(false);
+    const titleRef = useRef<HTMLInputElement>(null);
 
     const entitySingular = presentation.opportunityEntitySingular;
 
     useEffect(() => {
         if (!open) {
             setSession(null);
-            setComposerText("");
             setRecordQuery("");
             setCandidates([]);
             setSearchError(null);
+            setShowIssues(false);
             return;
         }
 
@@ -82,11 +93,11 @@ export default function WorkItemCreateModal({
             entity: contextPrefill,
         };
         setSession(beginWorkItemDraft({ seed, defaultAssigneeUserId: userId?.trim() || null }));
-        setComposerText("");
+        setRecordQuery(contextPrefill?.label ?? "");
     }, [contextPrefill, open, userId]);
 
     useEffect(() => {
-        if (open) composerRef.current?.focus();
+        if (open) titleRef.current?.focus();
     }, [open, session?.draft.draft_id]);
 
     const validation = useMemo(() => {
@@ -96,23 +107,15 @@ export default function WorkItemCreateModal({
 
     const canCommit = session ? sessionCanCommit(session) && !busy : false;
 
-    const refreshSessionDraft = useCallback(
-        (nextDraft: WorkItemDraftV1) => {
-            const validation = validateWorkItemDraft(nextDraft);
-            const draft = applyValidationToWorkItemDraft(nextDraft, validation.issues);
-            setSession((prev) =>
-                prev ?
-                    {
-                        ...prev,
-                        draft,
-                        chips: buildClarificationChipsForDraft(draft, userId),
-                    }
-                :   prev,
-            );
-        },
-        [userId],
-    );
-
+    /** Single write path for every field: patch → validate → stamp issues back onto the draft. */
+    const patchDraft = useCallback((patch: WorkItemDraftPatch) => {
+        setSession((prev) => {
+            if (!prev) return prev;
+            const next = mutateWorkItemDraft(prev.draft, patch);
+            const result = validateWorkItemDraft(next);
+            return { ...prev, draft: applyValidationToWorkItemDraft(next, result.issues) };
+        });
+    }, []);
 
     const runRecordSearch = useCallback(
         async (q: string) => {
@@ -149,41 +152,25 @@ export default function WorkItemCreateModal({
         [workspaceSiteId],
     );
 
+    const linked = session?.draft.link_mode === "linked";
+    const selectedEntityLabel = session?.draft.entity?.label ?? null;
+
     useEffect(() => {
-        if (!open || session?.draft.link_mode !== "linked") return;
+        if (!open || !linked) return;
+        // Once a record is chosen the query box holds its label; re-searching it would reopen the list.
+        if (selectedEntityLabel && recordQuery === selectedEntityLabel) return;
         const handle = window.setTimeout(() => void runRecordSearch(recordQuery), 300);
         return () => window.clearTimeout(handle);
-    }, [open, recordQuery, runRecordSearch, session?.draft.link_mode]);
-
-    const submitConversation = useCallback(() => {
-        if (!session) return;
-        const text = composerText.trim();
-        if (!text) return;
-        setSession((prev) => (prev ? applyConversationInput(prev, text, userId) : prev));
-        setComposerText("");
-    }, [composerText, session, userId]);
-
-    const applyChip = useCallback(
-        (chip: WorkItemClarificationChip) => {
-            setSession((prev) => (prev ? applyDraftMutation(prev, chip.mutation) : prev));
-        },
-        [],
-    );
+    }, [linked, open, recordQuery, runRecordSearch, selectedEntityLabel]);
 
     const selectRecord = useCallback((candidate: TaskAssistEntitySearchCandidate) => {
-        const entity: WorkItemDraftEntity = {
-            type: "opportunities",
-            id: candidate.entity_id,
-            label: candidate.label,
-        };
-        setSession((prev) => {
-            if (!prev) return prev;
-            const withEntity = applyDraftMutation(prev, { kind: "set_entity", entity });
-            return applyConversationInput(withEntity, `Link to ${candidate.label}`, userId);
+        // Canonical identity only — the label is display, `entity_id` is the link.
+        patchDraft({
+            entity: { type: "opportunities", id: candidate.entity_id, label: candidate.label },
         });
         setRecordQuery(candidate.label);
         setCandidates([]);
-    }, [userId]);
+    }, [patchDraft]);
 
     const handleCancel = useCallback(() => {
         setSession((prev) => (prev ? cancelWorkItemCreationSession(prev) : prev));
@@ -191,200 +178,228 @@ export default function WorkItemCreateModal({
     }, [onCancel]);
 
     const handleCommit = useCallback(async () => {
-        if (!session || !canCommit) return;
+        if (!session) return;
+        if (!canCommit) {
+            setShowIssues(true);
+            return;
+        }
         await onCommit(session);
     }, [canCommit, onCommit, session]);
 
+    useEffect(() => {
+        if (!open) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                e.stopPropagation();
+                handleCancel();
+            }
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [handleCancel, open]);
+
     if (!open || !session) return null;
 
-    const showRecordSearch = session.draft.link_mode === "linked";
+    const draft = session.draft;
+    const issueFor = (field: string) =>
+        showIssues ? validation.blockingIssues.find((i) => i.field === field)?.message ?? null : null;
 
     return (
         <div
-            className="flex min-h-0 flex-1 flex-col rounded-xl border border-alloy-stone/18 bg-white shadow-sm ring-1 ring-alloy-stone/[0.06]"
-            data-work-item-create-modal="true"
-            data-adminv2-create-task-form="true"
-            role="dialog"
-            aria-labelledby="work-item-create-title"
+            className="absolute inset-0 z-40 flex items-center justify-center p-4"
+            data-work-item-create-overlay="true"
         >
-            <header className="flex shrink-0 items-start justify-between gap-3 border-b border-alloy-stone/15 px-4 py-3">
-                <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Create work item</p>
+            <button
+                type="button"
+                aria-label="Cancel create work item"
+                tabIndex={-1}
+                className="absolute inset-0 cursor-default bg-alloy-midnight/25 backdrop-blur-[1px]"
+                onClick={handleCancel}
+            />
+            <div
+                className="relative flex max-h-full w-full max-w-[30rem] flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-white shadow-xl ring-1 ring-alloy-midnight/[0.06]"
+                data-work-item-create-modal="true"
+                data-adminv2-create-task-form="true"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="work-item-create-title"
+            >
+                <header className="flex shrink-0 items-center justify-between gap-3 border-b border-alloy-stone/15 px-5 py-3.5">
                     <h2 id="work-item-create-title" className="text-[14px] font-semibold text-alloy-midnight">
-                        Describe what needs to happen. BOS will help build it.
-                    </h2>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        disabled={!canCommit || busy}
-                        className="rounded-md bg-alloy-juniper px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-45"
-                        data-adminv2-create-task-submit="true"
-                        data-work-item-create-enabled={canCommit ? "true" : "false"}
-                        onClick={() => void handleCommit()}
-                    >
                         Create work item
-                    </button>
+                    </h2>
                     <button
                         type="button"
-                        className="rounded-md border border-alloy-stone/25 p-1.5 text-alloy-midnight/60 hover:bg-alloy-stone/[0.05]"
+                        className="-mr-1.5 rounded-md p-1.5 text-alloy-midnight/50 hover:bg-alloy-stone/[0.07] hover:text-alloy-midnight/80"
                         aria-label="Cancel create work item"
                         onClick={handleCancel}
                     >
                         <X className="h-4 w-4" aria-hidden />
                     </button>
-                </div>
-            </header>
+                </header>
 
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[2fr_3fr]">
-                <section
-                    className="flex min-h-0 flex-col border-b border-alloy-stone/15 lg:border-b-0 lg:border-r"
-                    data-work-item-create-conversation="true"
-                    aria-label="Work item creation conversation"
-                >
-                    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
-                        {session.turns.map((turn) => (
-                            <div
-                                key={turn.id}
-                                className={`rounded-lg px-3 py-2 text-[12px] leading-snug ${
-                                    turn.role === "operator" ?
-                                        "ml-6 bg-alloy-juniper/[0.08] text-alloy-midnight/85"
-                                    :   "mr-4 border border-alloy-stone/15 bg-alloy-stone/[0.03] text-alloy-midnight/72"
-                                }`}
-                                data-work-item-conversation-role={turn.role}
-                            >
-                                {turn.text}
-                            </div>
-                        ))}
-
-                        {session.chips.length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5" data-work-item-clarification-chips="true">
-                                {session.chips.map((chip) => (
-                                    <button
-                                        key={chip.id}
-                                        type="button"
-                                        className="rounded-full border border-alloy-stone/25 bg-white px-2.5 py-1 text-[10px] font-semibold text-alloy-juniper hover:bg-alloy-juniper/[0.06]"
-                                        onClick={() => applyChip(chip)}
-                                    >
-                                        {chip.label}
-                                    </button>
-                                ))}
-                            </div>
+                <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-5 py-4">
+                    <div>
+                        <label className={FIELD_LABEL} htmlFor="work-item-create-title-input">
+                            What needs to happen?
+                        </label>
+                        <input
+                            id="work-item-create-title-input"
+                            ref={titleRef}
+                            type="text"
+                            value={draft.title}
+                            placeholder="Call the Rivera family about the tour"
+                            className={FIELD_INPUT}
+                            data-work-item-create-field="title"
+                            onChange={(e) => patchDraft({ title: e.target.value })}
+                        />
+                        {issueFor("title") ? (
+                            <p className="mt-1 text-[10.5px] text-alloy-clay">{issueFor("title")}</p>
                         ) : null}
+                    </div>
 
-                        {showRecordSearch ? (
-                            <div className="space-y-2 rounded-lg border border-alloy-stone/15 bg-white p-3" data-adminv2-create-task-record-search="true">
-                                <label htmlFor="work-item-create-record-query" className="text-[11px] font-medium text-alloy-midnight/75">
-                                    Search {entitySingular.toLowerCase()}s to link
-                                </label>
+                    <div>
+                        <label className={FIELD_LABEL} htmlFor="work-item-create-record">
+                            Related {entitySingular.toLowerCase()}{" "}
+                            <span className="font-normal text-alloy-midnight/40">— optional</span>
+                        </label>
+                        {draft.entity?.id ? (
+                            <div
+                                className="mt-1 flex items-center justify-between gap-2 rounded-lg border border-alloy-juniper/25 bg-alloy-juniper/[0.05] px-3 py-2"
+                                data-work-item-create-linked-record="true"
+                            >
+                                <span className="truncate text-[12px] font-medium text-alloy-midnight/85">
+                                    {draft.entity.label ?? "Linked record"}
+                                </span>
+                                <button
+                                    type="button"
+                                    className="shrink-0 text-[11px] font-semibold text-alloy-juniper hover:underline"
+                                    onClick={() => {
+                                        patchDraft({ entity: null, link_mode: "general" });
+                                        setRecordQuery("");
+                                    }}
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        ) : (
+                            <>
                                 <input
-                                    id="work-item-create-record-query"
+                                    id="work-item-create-record"
                                     type="search"
                                     value={recordQuery}
+                                    placeholder="Search family, guardian, or child…"
+                                    className={FIELD_INPUT}
+                                    data-work-item-create-field="entity"
+                                    onFocus={() => {
+                                        if (draft.link_mode !== "linked") patchDraft({ link_mode: "linked" });
+                                    }}
                                     onChange={(e) => setRecordQuery(e.target.value)}
-                                    placeholder="Name, family, guardian, or child"
-                                    className="w-full rounded-lg border border-alloy-stone/25 px-2.5 py-2 text-[12px]"
-                                    autoComplete="off"
                                 />
-                                {searchBusy ? <p className="text-[10px] text-alloy-midnight/50">Searching…</p> : null}
+                                {searchBusy ? (
+                                    <p className="mt-1 text-[10.5px] text-alloy-midnight/45">Searching…</p>
+                                ) : null}
                                 {searchError ? (
-                                    <p className="text-[10px] text-red-700/85" role="alert">
-                                        {searchError}
-                                    </p>
+                                    <p className="mt-1 text-[10.5px] text-alloy-clay">{searchError}</p>
                                 ) : null}
-                                {session.draft.entity?.label ? (
-                                    <p className="rounded-lg border border-alloy-juniper/20 bg-alloy-juniper/[0.05] px-2.5 py-2 text-[10px] text-alloy-midnight/75">
-                                        Selected · <span className="font-medium">{session.draft.entity.label}</span>
-                                    </p>
-                                ) : null}
-                                {!session.draft.entity?.id && candidates.length > 0 ? (
-                                    <ul className="max-h-36 overflow-y-auto rounded-lg border border-alloy-stone/18" data-adminv2-create-task-record-results="true">
+                                {candidates.length > 0 ? (
+                                    <ul
+                                        className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-alloy-stone/20 bg-white shadow-sm"
+                                        data-work-item-create-candidates="true"
+                                    >
                                         {candidates.map((c) => (
                                             <li key={c.entity_id}>
                                                 <button
                                                     type="button"
-                                                    className="flex w-full flex-col items-start px-2.5 py-2 text-left hover:bg-alloy-stone/[0.04]"
+                                                    className="block w-full truncate px-3 py-2 text-left text-[12px] text-alloy-midnight/80 hover:bg-alloy-juniper/[0.06]"
                                                     onClick={() => selectRecord(c)}
                                                 >
-                                                    <span className="text-[11px] font-medium text-alloy-midnight/88">{c.label}</span>
-                                                    {c.subtitle ? (
-                                                        <span className="text-[10px] text-alloy-midnight/50">{c.subtitle}</span>
-                                                    ) : null}
+                                                    {c.label}
                                                 </button>
                                             </li>
                                         ))}
                                     </ul>
                                 ) : null}
-                            </div>
-                        ) : null}
+                            </>
+                        )}
+                    </div>
 
-                        <div className="grid gap-2 rounded-lg border border-alloy-stone/12 bg-alloy-stone/[0.02] p-3">
-                            <label htmlFor="work-item-create-due" className="text-[11px] font-medium text-alloy-midnight/75">
-                                Due date & time
+                    <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                        <div>
+                            <label className={FIELD_LABEL} htmlFor="work-item-create-assignee">
+                                Assignee
+                            </label>
+                            <div className="mt-1" data-work-item-create-field="assigned_to_user_id">
+                                <OperationalWorkAssigneeSelect
+                                    id="work-item-create-assignee"
+                                    value={draft.assigned_to_user_id ?? ""}
+                                    onChange={(next) => patchDraft({ assigned_to_user_id: next || null })}
+                                />
+                            </div>
+                            {issueFor("assigned_to_user_id") ? (
+                                <p className="mt-1 text-[10.5px] text-alloy-clay">
+                                    {issueFor("assigned_to_user_id")}
+                                </p>
+                            ) : null}
+                        </div>
+
+                        <div>
+                            <label className={FIELD_LABEL} htmlFor="work-item-create-due">
+                                Due
                             </label>
                             <input
                                 id="work-item-create-due"
                                 type="datetime-local"
-                                value={session.draft.due_at ? operationalWorkIsoToDatetimeLocal(session.draft.due_at) : ""}
+                                value={operationalWorkIsoToDatetimeLocal(draft.due_at ?? "")}
                                 min={minOperationalWorkDatetimeLocalValue()}
+                                className={FIELD_INPUT}
+                                data-work-item-create-field="due_at"
                                 onChange={(e) => {
-                                    const iso = e.target.value ? new Date(e.target.value).toISOString() : undefined;
-                                    refreshSessionDraft(mutateWorkItemDraft(session.draft, { due_at: iso }));
-                                }}
-                                className="w-full rounded-lg border border-alloy-stone/25 px-2.5 py-2 text-[12px]"
-                                data-adminv2-create-task-due="true"
-                            />
-                            <label htmlFor="work-item-create-assignee" className="text-[11px] font-medium text-alloy-midnight/75">
-                                Assigned to
-                            </label>
-                            <OperationalWorkAssigneeSelect
-                                id="work-item-create-assignee"
-                                value={session.draft.assigned_to_user_id ?? null}
-                                currentUserId={userId}
-                                disabled={busy}
-                                onChange={(next) => {
-                                    refreshSessionDraft(mutateWorkItemDraft(session.draft, { assigned_to_user_id: next }));
+                                    const v = e.target.value;
+                                    patchDraft({ due_at: v ? new Date(v).toISOString() : undefined });
                                 }}
                             />
+                            {issueFor("due_at") ? (
+                                <p className="mt-1 text-[10.5px] text-alloy-clay">{issueFor("due_at")}</p>
+                            ) : null}
                         </div>
                     </div>
 
-                    <footer className="shrink-0 border-t border-alloy-stone/15 px-4 py-3">
-                        <label htmlFor="work-item-create-composer" className="sr-only">
-                            Describe the work item
+                    <div>
+                        <label className={FIELD_LABEL} htmlFor="work-item-create-notes">
+                            Notes <span className="font-normal text-alloy-midnight/40">— optional</span>
                         </label>
                         <textarea
-                            ref={composerRef}
-                            id="work-item-create-composer"
-                            rows={2}
-                            value={composerText}
-                            onChange={(e) => setComposerText(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter" && !e.shiftKey) {
-                                    e.preventDefault();
-                                    submitConversation();
-                                }
-                            }}
-                            placeholder="Describe the work, due timing, or priority…"
-                            className="w-full resize-none rounded-lg border border-alloy-stone/25 px-3 py-2 text-[12px]"
-                            data-work-item-create-composer="true"
+                            id="work-item-create-notes"
+                            rows={3}
+                            value={draft.description ?? ""}
+                            placeholder="Anything the assignee needs to know."
+                            className={`${FIELD_INPUT} resize-none`}
+                            data-work-item-create-field="description"
+                            onChange={(e) => patchDraft({ description: e.target.value })}
                         />
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                            <p className="text-[10px] text-alloy-midnight/45">Enter to send · Shift+Enter for newline</p>
-                            <button
-                                type="button"
-                                className="rounded-md border border-alloy-stone/25 px-2.5 py-1 text-[10px] font-semibold text-alloy-juniper"
-                                onClick={submitConversation}
-                            >
-                                Update draft
-                            </button>
-                        </div>
-                    </footer>
-                </section>
+                    </div>
+                </div>
 
-                <section className="min-h-0 p-4" data-work-item-create-preview-pane="true" aria-label="Work item preview">
-                    <WorkItemCreatePreviewPanel draft={session.draft} validationIssues={validation.issues} />
-                </section>
+                <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-alloy-stone/15 bg-alloy-stone/[0.02] px-5 py-3">
+                    <button
+                        type="button"
+                        className="rounded-lg px-3 py-1.5 text-[11.5px] font-semibold text-alloy-midnight/60 hover:bg-alloy-stone/[0.07]"
+                        onClick={handleCancel}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        disabled={busy}
+                        className="rounded-lg bg-alloy-juniper px-4 py-1.5 text-[11.5px] font-semibold text-white shadow-sm hover:bg-alloy-juniper/92 disabled:opacity-45"
+                        data-adminv2-create-task-submit="true"
+                        data-work-item-create-enabled={canCommit ? "true" : "false"}
+                        onClick={() => void handleCommit()}
+                    >
+                        {busy ? "Creating…" : "Create work item"}
+                    </button>
+                </footer>
             </div>
         </div>
     );

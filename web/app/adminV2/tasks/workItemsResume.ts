@@ -16,6 +16,10 @@ import {
     WORK_ITEM_VIEW_DEFS,
     type WorkItemQueueScope,
 } from "@/lib/workItems/workItemQueueScope";
+import {
+    WORK_ITEMS_STUDIO_TABS,
+    WORK_ITEMS_WORK_TABS,
+} from "@/app/adminV2/tasks/workItemsSections";
 import type { StableWorkspacePosition } from "@/lib/runtime/workspaceResume";
 
 export const WORK_ITEMS_WORKSPACE_KEY = "work-items";
@@ -32,11 +36,23 @@ export const WORK_ITEMS_DEFAULT_POSITION = {
 // have to be remembered here to remain resumable.
 const FOLDERS = new Set(WORK_ITEM_FOLDER_DEFS.map((f) => f.key as string));
 const VIEWS = new Set(WORK_ITEM_VIEW_DEFS.map((v) => v.key as string));
-const SOURCES = new Set(WORK_ITEM_SOURCE_DEFS.map((v) => v.key as string));
+/*
+ * "all" is a real WorkItemSourceKey and the DEFAULT scope's source, but it is not in
+ * WORK_ITEM_SOURCE_DEFS — that list is the rail's SELECTABLE sources, not the key's domain. Deriving
+ * validity from it alone rejected the default position itself, so every saved Work Items position
+ * failed this gate and resume silently fell back to the default. The lesson the comment above
+ * teaches still holds; the set just has to span the key, not one rendering of it.
+ */
+const SOURCES = new Set<string>(["all", ...WORK_ITEM_SOURCE_DEFS.map((v) => v.key as string)]);
 const SORTS = new Set(["due_date", "title", "recently_updated"]);
+// Mode is part of stable navigation: an operator who left in Studio comes back to Studio.
+const WORK_VIEWS = new Set<string>([
+    ...WORK_ITEMS_WORK_TABS.map((t) => t.key as string),
+    ...WORK_ITEMS_STUDIO_TABS.map((t) => t.key as string),
+]);
 
 export function isValidWorkItemsPosition(position: StableWorkspacePosition): boolean {
-    if (position.workView !== "overview" && position.workView !== "queue") return false;
+    if (!WORK_VIEWS.has(position.workView)) return false;
     if (!FOLDERS.has(position.scopeFolder)) return false;
     if (!VIEWS.has(position.scopeView)) return false;
     if (!SOURCES.has(position.scopeSource)) return false;

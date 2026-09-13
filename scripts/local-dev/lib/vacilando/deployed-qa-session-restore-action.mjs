@@ -19,7 +19,7 @@
  * anything privileged runs — see `proveProjectBacking`.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -172,6 +172,22 @@ export function proveProjectBacking(validated, {
  * Supabase at all. `restored` is decided by the fresh-context verification against the DEPLOYED
  * host, never by the mint.
  */
+/**
+ * A comparable stamp for the file the deployed browser actually loads.
+ *
+ * Size joins mtime because a mint that rewrites within the same millisecond would otherwise look
+ * untouched. Unreadable is `null` — distinct from every real stamp, so a first write still reads as
+ * a change rather than as "unchanged".
+ */
+export function storageStamp(storagePath, { stat = statSync } = {}) {
+    try {
+        const st = stat(storagePath);
+        return `${st.mtimeMs}:${st.size}`;
+    } catch {
+        return null;
+    }
+}
+
 export function executeRestoreDeployedQaSessionSync({
     action,
     grant,
@@ -182,6 +198,7 @@ export function executeRestoreDeployedQaSessionSync({
     fetchJson = defaultFetchJson,
     mint = runDeployedMintSync,
     verify = verifyDeployedBrowserAuthSync,
+    stat = statSync,
     authRoot = defaultAuthRoot(),
 } = {}) {
     if (!grant) return safeDeployedFailure({ code: "grant_missing" });
@@ -230,27 +247,50 @@ export function executeRestoreDeployedQaSessionSync({
         return safeDeployedFailure({ code: backing.error, detail: backing.detail, target: validated.target_key });
     }
 
+    /*
+     * WHETHER THE BROWSER-CONSUMED ARTIFACT CHANGED IS MEASURED, NOT ASSERTED.
+     *
+     * `storage_written` was the literal `true` on every success path, so the field could never
+     * report the one failure it names. A mint that exits without rewriting the file — or that
+     * writes somewhere else entirely — still published `storage_written: true`, and the operator
+     * had no signal distinguishing a fresh session from a stale one.
+     *
+     * The stamp is read before and after the mint, off the exact path the deployed browser loads.
+     * An unreadable file is `null`, which differs from any real stamp, so a first write still reads
+     * as written.
+     */
+    const stampBefore = storageStamp(storagePath, { stat });
     const minted = mint(validated, { storagePath, envSource: backing.envSource });
     if (!minted.ok) {
         return safeDeployedFailure({
             code: minted.error, target: validated.target_key, identity: validated.expected_identity,
         });
     }
+    const stampAfter = storageStamp(storagePath, { stat });
+    const storageWritten = stampAfter != null && stampAfter !== stampBefore;
 
     const verified = verify(validated, { storagePath });
-    const ok = verified.ok === true;
+    /*
+     * A restore that did not refresh the artifact is NOT a restore, however healthy the session it
+     * verified against looks: verification can pass on a file this run never touched. Reporting the
+     * two together is what makes the success signal mean "the artifact the browser reads is
+     * current".
+     */
+    const ok = verified.ok === true && storageWritten;
     return {
         ok,
-        status: ok ? "restored" : "verification_failed",
+        status: ok ? "restored" : (storageWritten ? "verification_failed" : "storage_state_unchanged"),
         target_key: validated.target_key,
         environment: validated.environment,
         base_url: validated.base_url,
         registered_identity: validated.expected_identity,
         project_ref: backing.projectRef,
-        storage_written: true,
+        storage_written: storageWritten,
         verified: ok,
         verified_at: ok ? new Date(nowMs).toISOString() : null,
-        failure_code: ok ? null : (verified.state || "verification_failed"),
+        failure_code: ok
+            ? null
+            : (storageWritten ? (verified.state || "verification_failed") : "storage_state_unchanged"),
         failure_detail: ok ? null : (verified.detail == null ? null : redactAuthText(String(verified.detail)).slice(0, 120)),
     };
 }

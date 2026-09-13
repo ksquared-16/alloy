@@ -208,6 +208,7 @@ None of these requires a new navigation spine, a new "record module," or a new d
 10. **Every effective-dated operational object should preserve history.** Placement, schedule, billing, and similar objects keep their timeline.
 11. **Planning consumes operational facts.** Forecasts are built from real operational history, not from a parallel data store.
 12. **Analytics explains outcomes and predicts future state.** Measurement and modeling sit above execution; they read facts, they do not author them.
+13. **Layout must never hide a configured command.** A card shows whatever the published process configured, so its command row cannot assume how many commands there are or how long their labels run. It wraps and the card grows; it does not clip, and it does not scroll horizontally behind a hidden scrollbar — an operator who cannot see a command cannot learn it exists, which is principle 6 lost to geometry rather than to configuration. Measured cost of getting this wrong: a deployed Process card rendering 409px of commands into a 300px column, with a whole command outside the visible box and no indication of it.
 
 ---
 

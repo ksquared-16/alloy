@@ -195,7 +195,6 @@ async function loadOpportunityScope(
         departmentMetadata,
         statusKey: String(opp.status_key ?? ""),
         statusDefs,
-        workUnitMetadata: null,
     });
     const builderStageKey = lifecycleRail?.current_stage_key ?? null;
     const { plan, source } = resolveEffectiveStageOperatingPlan({

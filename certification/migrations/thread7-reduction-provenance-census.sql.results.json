@@ -1,0 +1,59 @@
+{
+  "trusted_host_action_id": "tha_12ee90661f1089",
+  "query_hash": "9b94fdab9c943d031b28162876daec419bf9a163e68b1ac17c71e8f045137661",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-11T16:14:33.061Z",
+    "question_ids": [
+      "totals",
+      "policy_lineage",
+      "manual_lineage",
+      "violations",
+      "column_present"
+    ],
+    "questions": {
+      "totals": {
+        "question_id": "totals",
+        "row_count": null,
+        "rows": [
+          "all ~ 0",
+          "policy ~ 0",
+          "manual ~ 0",
+          "other_kind ~ 0"
+        ]
+      },
+      "policy_lineage": {
+        "question_id": "policy_lineage",
+        "row_count": null,
+        "rows": [
+          "with_commercial ~ 0",
+          "without_commercial ~ 0",
+          "null_policy_kind ~ 0"
+        ]
+      },
+      "manual_lineage": {
+        "question_id": "manual_lineage",
+        "row_count": null,
+        "rows": [
+          "manual_with_commercial_policy ~ 0",
+          "manual_without_reason ~ 0"
+        ]
+      },
+      "violations": {
+        "question_id": "violations",
+        "row_count": null,
+        "rows": [
+          "policy_xor_violations ~ 0"
+        ]
+      },
+      "column_present": {
+        "question_id": "column_present",
+        "row_count": null,
+        "rows": [
+          false
+        ]
+      }
+    },
+    "row_count": 11
+  }
+}

@@ -35,6 +35,7 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "child.add",
     "enrollment.start",
     "enrollment.direct",
+    "stage_work.start",
     "employment.update",
     "employment.end",
     "staff_presence.record",
@@ -49,6 +50,10 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "attendance.withdraw_absence",
     "enrollment.pricing.accept",
     "enrollment.pricing.override",
+    // Drifted in with the requirement-exception actions: registered handlers with no capability row,
+    // which is exactly what this list exists to make impossible.
+    "enrollment.requirement_exception.grant",
+    "enrollment.requirement_exception.revoke",
     "billing.generate_tuition",
     "billing.apply_discounts",
     "billing.adjust_account",
@@ -73,6 +78,8 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "payment.record",
     "payment.refund",
     "payment.collect_card",
+    "payment.reverse_application",
+    "payment.apply_to_charge",
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
@@ -679,6 +686,48 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             + "pays by cash or check is representable without a provider.",
     }),
     def({
+        capabilityKey: "payment.apply_to_charge",
+        canonicalCommandKey: "payment.apply_to_charge",
+        operatorLabel: "Apply payment",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment.apply_to_charge",
+        implementationStatus: "production",
+        reason:
+            "Puts received money that is not yet allocated against an outstanding charge. The other half "
+            + "of a correction -- reversing an application leaves money unapplied, which is true but "
+            + "unfinished -- and also the ordinary path for money that arrived before anyone decided what "
+            + "it was for. Every bound belongs to the service: the unapplied remainder, over-payment, and "
+            + "the household boundary that refuses another family's charge.",
+    }),
+    def({
+        capabilityKey: "payment.reverse_application",
+        canonicalCommandKey: "payment.reverse_application",
+        operatorLabel: "Unapply payment",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment.reverse_application",
+        implementationStatus: "production",
+        reason:
+            "Corrects WHICH obligation a payment answered, without touching the payment. Money applied to "
+            + "the wrong charge previously had to be refunded to be moved, because reversing an application "
+            + "was only reachable from the refund path. This marks the application reversed, which returns "
+            + "the obligation to the charge and the money to unapplied in one write, since balance readers "
+            + "count only active applications. The receipt, its payer, its method, its date and its "
+            + "processor reference are untouched, no refund row is written and no processor is contacted — "
+            + "the organisation still holds the money.",
+    }),
+    def({
         capabilityKey: "payment.refund",
         canonicalCommandKey: "payment.refund",
         operatorLabel: "Refund payment",
@@ -901,6 +950,52 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         implementationStatus: "production",
         reason:
             "Enrollment Context Convergence. Begins the governed journey for a child that already exists. Creates ONE process_instance and never an opportunity: context is joined only when the household has a live episode, and a completed one is never reopened.",
+    }),
+    def({
+        capabilityKey: "enrollment.requirement_exception.grant",
+        canonicalCommandKey: "enrollment.requirement_exception.grant",
+        operatorLabel: "Grant requirement exception",
+        family: "enrollment",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["opportunity"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "enrollment.requirement_exception.grant",
+        implementationStatus: "production",
+        reason: "Makes one configured requirement non-blocking for one subject, with a reason on the record.",
+    }),
+    def({
+        capabilityKey: "enrollment.requirement_exception.revoke",
+        canonicalCommandKey: "enrollment.requirement_exception.revoke",
+        operatorLabel: "Revoke requirement exception",
+        family: "enrollment",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["opportunity"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "enrollment.requirement_exception.revoke",
+        implementationStatus: "production",
+        reason: "Puts a granted requirement exception back, so the requirement blocks again.",
+    }),
+    def({
+        capabilityKey: "stage_work.start",
+        canonicalCommandKey: "stage_work.start",
+        operatorLabel: "Start stage work",
+        family: "enrollment",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "stage_work.start",
+        implementationStatus: "production",
+        reason:
+            "Starts a work template the child's CURRENT stage already configures — the template is an input, not a hardcoded key, so Offer spot needs no capability of its own and the next startable template needs no second action. Starting work and recording its outcome are separate operator acts: this opens the work and moves no stage, touches no disposition and writes no placement status. Refusals come from configuration (template declared on that stage, stage is child-grain, child's own effective stage matches), and repeating it dedupes onto the open row.",
     }),
     def({
         capabilityKey: "enrollment.direct",

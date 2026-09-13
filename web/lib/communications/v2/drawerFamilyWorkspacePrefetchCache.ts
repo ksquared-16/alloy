@@ -5,6 +5,7 @@
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import type { ComposerChannel, FamilyCommunicationWorkspaceVM } from "@/lib/communications/v2/familyWorkspace/types";
 import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
+import { speculativeFetch } from "@/lib/adminV2/runtime/speculation/speculativeFetch";
 
 const CACHE_TTL_MS = 90_000;
 
@@ -111,7 +112,7 @@ async function fetchAndStore(
     });
     const fetchStarted = typeof performance !== "undefined" ? performance.now() : Date.now();
     try {
-        const res = await fetch(`/api/admin/communications/family-workspace?${qs}`, { credentials: "include" });
+        const res = await speculativeFetch(`/api/admin/communications/family-workspace?${qs}`, { credentials: "include" });
         const data = (await res.json().catch(() => ({}))) as {
             workspace?: FamilyCommunicationWorkspaceVM;
             error?: string;

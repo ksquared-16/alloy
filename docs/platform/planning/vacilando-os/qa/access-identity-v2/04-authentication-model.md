@@ -466,6 +466,22 @@ leg with a `portal.access` capability. `canReadAnalytics.ts:29-30` says so in a 
 > **`I-35`ᴮ (new).** An admission predicate MUST NOT satisfy a capability gate. Admission MAY deny entry;
 > it MUST NOT, on its own, authorize a command. Every gate MUST read a permission key.
 
+> **CLOSED, 2026-09-11 — both halves of `AD-22` have now happened.** `20260818170000` did the first:
+> the two gates where `portalEligible` conferred authority were converted to `settings.users_roles`
+> and `settings.users_roles.read`, which is `I-35`ᴮ. `20260911140000` did the second:
+> `PORTAL_ROLES = new Set(["admin", "ops"])` is deleted from both modules and admission resolves the
+> `portal.access` capability through one owner (`web/lib/admin/portalAdmission.ts`), which is `I-32`ᴮ.
+> The fifth layer is gone rather than renamed — the row in the §3.6 table that reads *"In the
+> catalog? **no**"* is now *yes*, `permission_definitions.key = 'portal.access'`, org-scoped in
+> `role_permission_grants` like every other capability and settable from the role editor.
+>
+> One correction to what this section assumed. It reads as though `portal.access` already existed —
+> `01…:364-369` and `canReadAnalytics.ts` both name it as the replacement. It did not: no migration
+> ever seeded it, the catalog held no row, and no role held it. It was a NAME for the intended
+> replacement, and `20260911140000` is where it became a key. The preservation grant went to `admin`
+> and `ops` only, because that is the set the literal admitted; `school_director` and `regional_lead`
+> remain outside the portal pending `D2`.
+
 ### 3.7 A2-9 — the Access surface is org-scoped; the credential commands under it are not *(reopen, 2026-08-06)*
 
 **This is the authentication side of the operator's "simplify the role editor" directive.** `02…§4.6`

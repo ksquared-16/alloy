@@ -27,6 +27,7 @@ import {
     resolveWorkspaceOpenPosition,
     writeWorkspaceResume,
 } from "@/lib/runtime/workspaceResume";
+import { clearProcessingRequestedCase, setProcessingRequestedCase } from "@/lib/pos/processingRequestedCase";
 
 export default function ProcessingModal({
     open,
@@ -72,8 +73,24 @@ export default function ProcessingModal({
         setWorkView("overview");
         setStudioFormId(null);
         setStudioFormName(null);
+        clearProcessingRequestedCase();
         onClose();
     }, [onClose]);
+
+    /*
+     * Publish the case Processing is showing, so the queue rail can guarantee it is actually ON the
+     * rail — resolved by id when it falls outside the loaded page, never collapsed away as a
+     * duplicate, and inside an opened folder.
+     *
+     * This is driven off `selectedCaseId` rather than off the deep-link intent so that EVERY way in
+     * gets the same guarantee: the open intent, the `adminv2:open-processing-case` event for an
+     * already-open modal, an Overview card, a fresh import, and a plain click in the rail. Wiring it
+     * to intent alone would have fixed the deep link and left the other four to drift.
+     */
+    useEffect(() => {
+        if (!open) return;
+        setProcessingRequestedCase(selectedCaseId);
+    }, [open, selectedCaseId]);
 
     useEffect(() => {
         writeWorkspaceResume(PROCESSING_WORKSPACE_KEY, { mode, workView, studioTab });

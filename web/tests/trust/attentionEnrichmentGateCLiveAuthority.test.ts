@@ -104,7 +104,14 @@ function suggestion(): AttentionSuggestionV1 {
     };
 }
 
-const ADMIN_CTX: AdminContextSuccess = { ok: true, orgId: ORG, role: "admin", userId: OPERATOR };
+const ADMIN_CTX: AdminContextSuccess = {
+    ok: true,
+    orgId: ORG,
+    role: "admin",
+    userId: OPERATOR,
+    // Gate C reads the ACCESS context for grants, never the admin context.
+    permissionKeys: [],
+};
 
 const ACCESS_WITH_GRANT: AdminAccessContextSuccess = {
     ok: true,

@@ -72,6 +72,7 @@ import type {
 export const REQUIREMENT_KINDS_V1 = [
     "field",
     "form",
+    "work",
     "document",
     "consent",
     "acknowledgment",
@@ -86,6 +87,10 @@ export type RequirementKindV1 = (typeof REQUIREMENT_KINDS_V1)[number];
  * `field` — the legacy path already resolves, evaluates and enforces rule ids.
  * `form`  — Forms owns published definitions, and `form_submissions` already proves
  *           satisfaction, so a form requirement is executable end to end today.
+ * `work`  — the stage work runtime owns work state and already reports `completed`
+ *           per template key for a subject, so "is this work done" has a canonical
+ *           answer that predates this requirement kind. Nothing new had to be built to
+ *           prove satisfaction, which is exactly the bar the other four fail.
  *
  * The other four are refused at authoring time and the reason is concrete rather than
  * "not implemented yet":
@@ -108,11 +113,12 @@ export type RequirementKindV1 = (typeof REQUIREMENT_KINDS_V1)[number];
 export const REQUIREMENT_KINDS_AUTHORABLE_V1: readonly RequirementKindV1[] = Object.freeze([
     "field",
     "form",
+    "work",
 ]);
 
 /** Why a declared kind cannot yet be authored. Surfaced to operators and to controls. */
 export const REQUIREMENT_KIND_UNSUPPORTED_REASON_V1: Readonly<
-    Record<Exclude<RequirementKindV1, "field" | "form">, string>
+    Record<Exclude<RequirementKindV1, "field" | "form" | "work">, string>
 > = Object.freeze({
     document:
         "No canonical document-requirement owner exists. Document evidence is bound to a form submission, so a document required outside a form has no owner that can prove it was satisfied.",
@@ -142,6 +148,15 @@ export function isAuthorableRequirementKind(kind: RequirementKindV1): boolean {
 export type RequirementRefV1 =
     | { readonly kind: "field"; readonly rule_id: string }
     | { readonly kind: "form"; readonly form_definition_id: string }
+    /**
+     * `work` references the stage's work TEMPLATE KEY, which is the identity the stage
+     * operating plan and the work runtime already share. Deliberately not a work id: a
+     * requirement is authored once against configuration and must survive every instance
+     * of that work, including one that has not been created yet. And deliberately not the
+     * work's operator-facing label — "Conduct Tour" is presentation, renameable at any
+     * time, and a requirement that pointed at it would break on a rename.
+     */
+    | { readonly kind: "work"; readonly work_template_key: string }
     | { readonly kind: "document"; readonly document_type_key: string }
     | { readonly kind: "consent"; readonly consent_key: string }
     | { readonly kind: "acknowledgment"; readonly acknowledgment_key: string }
@@ -231,6 +246,10 @@ function parseRef(kindRaw: unknown, row: Record<string, unknown>): RequirementRe
         case "form": {
             const form_definition_id = trimmedString(row.form_definition_id);
             return form_definition_id ? { kind, form_definition_id } : null;
+        }
+        case "work": {
+            const work_template_key = trimmedString(row.work_template_key);
+            return work_template_key ? { kind, work_template_key } : null;
         }
         case "document": {
             const document_type_key = trimmedString(row.document_type_key);
@@ -337,12 +356,37 @@ export function serializeStageRequirementsV1(value: StageRequirementsV1): Record
     };
 }
 
+/**
+ * The stage's authored requirements of every kind EXCEPT this one, in the wire shape.
+ *
+ * `set_stage_requirements` replaces a stage's whole authored section, which is correct — an author
+ * saving an empty set is saying "this stage requires nothing", and a merging writer could never
+ * express that. But it means an editor that knows about one kind and submits only its own rows
+ * silently deletes every other kind's. Two such editors on one stage delete each other's work in
+ * turn, and the operator sees requirements that keep disappearing with no error.
+ *
+ * So each editor submits its own rows PLUS whatever this returns, and the replace semantics stay
+ * intact while a kind-specific editor stops being destructive to kinds it cannot see.
+ */
+export function requirementsOfOtherKinds(
+    section: StageRequirementsV1 | null | undefined,
+    kind: RequirementKindV1,
+): Record<string, unknown>[] {
+    const requirements = section?.requirements ?? [];
+    const others = requirements.filter((r) => r.ref.kind !== kind);
+    if (!others.length) return [];
+    return serializeStageRequirementsV1({ version: 1, requirements: others })
+        .requirements as Record<string, unknown>[];
+}
+
 function refFields(ref: RequirementRefV1): Record<string, string> {
     switch (ref.kind) {
         case "field":
             return { rule_id: ref.rule_id };
         case "form":
             return { form_definition_id: ref.form_definition_id };
+        case "work":
+            return { work_template_key: ref.work_template_key };
         case "document":
             return { document_type_key: ref.document_type_key };
         case "consent":
@@ -352,6 +396,51 @@ function refFields(ref: RequirementRefV1): Record<string, string> {
         case "signature":
             return { signature_key: ref.signature_key };
     }
+}
+
+export type WorkReferenceRefusal = {
+    readonly requirement_id: string;
+    readonly work_template_key: string;
+    readonly code: "unknown_work_template";
+    readonly detail: string;
+};
+
+/**
+ * Validates work references against the work the STAGE ITSELF produces.
+ *
+ * Scoped to the stage rather than to the org's whole work vocabulary, because that is what makes
+ * the requirement satisfiable: the stage work runtime reports state for the template keys in this
+ * stage's operating plan, and a requirement naming anything else would be waiting on work that is
+ * never going to appear here. An operator would then meet a stage they cannot leave, with a blocker
+ * pointing at work with no button — the exact failure `no_published_version` exists to prevent for
+ * forms.
+ *
+ * Dependency-injected like its form sibling, so Business Process never grows a read path into the
+ * work runtime and the rule stays pure.
+ */
+export function validateWorkRequirementReferences(
+    requirements: readonly StageRequirementV1[],
+    stageWorkTemplateKeys: readonly string[],
+): readonly WorkReferenceRefusal[] {
+    const known = new Set(stageWorkTemplateKeys.map((k) => k.trim()).filter(Boolean));
+    const refusals: WorkReferenceRefusal[] = [];
+
+    for (const req of requirements) {
+        if (req.ref.kind !== "work") continue;
+        if (known.has(req.ref.work_template_key)) continue;
+        refusals.push({
+            requirement_id: req.requirement_id,
+            work_template_key: req.ref.work_template_key,
+            code: "unknown_work_template",
+            detail:
+                `This stage does not produce work "${req.ref.work_template_key}", so the requirement could never be satisfied here. ` +
+                (known.size ?
+                    `The work this stage produces is: ${[...known].sort().join(", ")}.`
+                :   "This stage has no work configured yet."),
+        });
+    }
+
+    return refusals;
 }
 
 /** One form definition as the authoring gate needs to see it. */
@@ -450,7 +539,7 @@ export function refuseUnauthorableRequirement(
     if (!isAuthorableRequirementKind(candidate.ref.kind)) {
         const reason =
             REQUIREMENT_KIND_UNSUPPORTED_REASON_V1[
-                candidate.ref.kind as Exclude<RequirementKindV1, "field" | "form">
+                candidate.ref.kind as Exclude<RequirementKindV1, "field" | "form" | "work">
             ];
         return { code: "unsupported_kind", detail: reason };
     }

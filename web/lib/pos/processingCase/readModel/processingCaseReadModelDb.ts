@@ -61,7 +61,10 @@ export function makeProcessingCaseReadDeps(supabase: SupabaseClient): Processing
             const sortKey = query.sortKey ?? "created_at";
             const ascending = (query.sortDir ?? "desc") === "asc";
 
+            if (query.caseIds && query.caseIds.length === 0) return [];
+
             let q = supabase.from("processing_cases").select(CASE_COLUMNS).eq("org_id", query.orgId);
+            if (query.caseIds && query.caseIds.length > 0) q = q.in("id", query.caseIds);
             if (query.statuses && query.statuses.length > 0) q = q.in("status", query.statuses);
             if (query.caseTypes && query.caseTypes.length > 0) q = q.in("case_type", query.caseTypes);
             if (query.receivedFrom) q = q.gte("created_at", query.receivedFrom);

@@ -31,9 +31,12 @@ import {
     postChildcareCharge,
 } from "@/lib/financials/childcareChargeService";
 import {
+    readPaymentUnappliedCents,
     recordAndApplyChildcarePayment,
     refundChildcarePayment,
+    reversePaymentApplication,
 } from "@/lib/financials/childcarePaymentService";
+import { resolveHouseholdPaymentViews } from "@/lib/financials/paymentApplicationView";
 import { buildFinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 import {
     presentPayment,
@@ -236,5 +239,86 @@ describeLive("Financials card projections — live", () => {
         expect(v.reconciliation.balanceCents).toBe(
             v.reconciliation.responsibilityCents - v.reconciliation.paymentsCents,
         );
+    });
+
+    /*
+     * ── THE JOIN, MEASURED RATHER THAN ARGUED ────────────────────────────────────────────────────
+     *
+     * The account VM now carries `unappliedCents` and `applications`, merged from the canonical
+     * composition by payment id. That merge was previously only typechecked: the composition is
+     * mutation-proven on its own, and the VM was known not to contradict it, which is not the same as
+     * knowing they agree.
+     *
+     * The assertion deliberately compares the VM against the CANONICAL READERS rather than against
+     * numbers written here. A hand-computed expectation would prove only that this test and the
+     * implementation were written by the same person on the same afternoon; comparing against
+     * `readPaymentUnappliedCents` and `resolveHouseholdPaymentViews` proves the surface an operator
+     * reads is the same answer the service gives.
+     */
+    it("T2-J — the card's payment row carries the canonical applications and unapplied amount", async () => {
+        const charge = await createChildcareDraftCharge(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: AGREEMENT,
+            chargeCategory: "tuition",
+            amountCents: 40_000,
+            serviceDate: today,
+            actorUserId: ACTOR,
+            description: `T2-J join ${Date.now()}`,
+        });
+        await postChildcareCharge(supabase, { orgId: ORG, chargeId: charge.id, actorUserId: ACTOR });
+
+        // More money than the charge needs, so the receipt carries a real unapplied remainder.
+        const { payment, allocation } = await recordAndApplyChildcarePayment(supabase, {
+            orgId: ORG,
+            // The charge's billable source becomes the payment's; RecordAndApplyInput omits both.
+            customerId: HOUSEHOLD,
+            chargeId: charge.id,
+            amountCents: 60_000,
+            applyAmountCents: 40_000,
+            paymentMethod: "check",
+            actorUserId: ACTOR,
+        });
+
+        const expectUnapplied = async () => {
+            const canonical = await readPaymentUnappliedCents(supabase, ORG, payment.id, payment.amount_cents);
+            const views = await resolveHouseholdPaymentViews(supabase, { orgId: ORG, customerId: HOUSEHOLD });
+            const view = views.find((v) => v.paymentId === payment.id);
+            expect(view, "the composition must know this receipt").toBeTruthy();
+
+            const v = await vm();
+            const row = v.payments.find((r) => r.paymentId === payment.id);
+            expect(row, "the card must carry the same receipt").toBeTruthy();
+
+            // receipt id -> composition row -> FinancialsPaymentRow, all one payment.
+            expect(row!.unappliedCents, "the card's unapplied is the canonical reader's").toBe(canonical);
+            expect(row!.unappliedCents).toBe(view!.unappliedCents);
+            expect(
+                row!.applications.map((a) => `${a.allocationId}:${a.status}:${a.appliedCents}`).sort(),
+                "the card's applications are the composition's",
+            ).toEqual(
+                view!.applications.map((a) => `${a.allocationId}:${a.status}:${a.appliedCents}`).sort(),
+            );
+            return row!;
+        };
+
+        const applied = await expectUnapplied();
+        expect(applied.applications.some((a) => a.allocationId === allocation?.id && a.status === "active")).toBe(true);
+        expect(applied.unappliedCents, "the remainder the receipt still carries").toBe(20_000);
+
+        /*
+         * And after a reversal, because that is the case the whole slice exists for: the reversed row
+         * must survive as history on the card while the money it released becomes unapplied.
+         */
+        await reversePaymentApplication(supabase, {
+            orgId: ORG,
+            allocationId: allocation!.id,
+            reason: "T2-J join proof",
+            actorUserId: ACTOR,
+        });
+        const reversed = await expectUnapplied();
+        const reversedRow = reversed.applications.find((a) => a.allocationId === allocation!.id);
+        expect(reversedRow?.status, "the application is still visible, as history").toBe("reversed");
+        expect(reversedRow?.reversalReason).toBe("T2-J join proof");
+        expect(reversed.unappliedCents, "and its money is available again").toBe(60_000);
     });
 });

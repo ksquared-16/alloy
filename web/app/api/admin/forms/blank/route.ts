@@ -12,6 +12,7 @@ import { createBlankSchema } from "@/lib/forms/formBuilderSchema";
 import { brandingMetadataPatch } from "@/lib/forms/processingFormBranding";
 import { applyDefaultLeadCaptureFormMetadata } from "@/lib/forms/intake/defaultLeadCaptureFormMetadata";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /**
  * POST /api/admin/forms/blank — atomically create form definition + initial draft version.
@@ -20,7 +21,8 @@ import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
 
     let body: Record<string, unknown>;
     try {

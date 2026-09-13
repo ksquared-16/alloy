@@ -336,6 +336,16 @@ export const FINANCIALS_CURRENT: FinancialsEvidence = {
         reductions: [{ label: "Sibling discount", value: "−$185" }],
         funding: [],
         familyResponsibility: "$1,665",
+        responsibility: {
+            allocated: "$1,665",
+            parties: [
+                { name: "Jordan Ellis", amount: "$1,165" },
+                { name: "Sam Ellis", amount: "$500" },
+            ],
+            unassigned: null,
+        },
+        expectedFunding: [],
+        collectibleNow: null,
         paymentsReceived: "−$1,665",
         currentBalance: "$0",
         dueLabel: "Next charge Sep 1",
@@ -354,6 +364,10 @@ export const FINANCIALS_CURRENT: FinancialsEvidence = {
     ],
     payment: { autopayLabel: "Autopay on", autopayHealthy: true, nextChargeLabel: "Sep 1 · $1,665" },
     historyLine: "Last payment · $1,665 · Aug 20",
+    // Lab specimens exercise layout, not money: no receipts unless a case is about them.
+    payments: [],
+        // No manual reductions in the lab fixtures: these specimens are about layout.
+        adjustments: [],
     upcoming: [
         { label: "Next period", value: "Sep 1 – Sep 30" },
         { label: "Scheduled charge", value: "$1,850 · Sep 1" },
@@ -375,6 +389,13 @@ export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
         reductions: [{ label: "Sibling discount", value: "−$185" }],
         funding: [{ label: "State subsidy", value: "−$600" }],
         familyResponsibility: "$1,180",
+        responsibility: {
+            allocated: "$770",
+            parties: [{ name: "Alex Rivera", amount: "$770" }],
+            unassigned: "$410",
+        },
+        expectedFunding: [{ label: "State child care subsidy", amount: "$620" }],
+        collectibleNow: "$560",
         paymentsReceived: "−$925",
         currentBalance: "$255",
         dueLabel: "Was due Aug 15",
@@ -404,6 +425,10 @@ export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
         nextChargeLabel: "Retry after payment method update",
     },
     historyLine: "Last payment · $925 · Aug 20",
+    // Lab specimens exercise layout, not money: no receipts unless a case is about them.
+    payments: [],
+        // No manual reductions in the lab fixtures: these specimens are about layout.
+        adjustments: [],
     upcoming: [
         { label: "Next period", value: "Sep 1 – Sep 30" },
         { label: "Scheduled charge", value: "$1,850 · Sep 1" },
@@ -424,6 +449,9 @@ export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
         ],
         funding: [{ label: "State subsidy", value: "−$600" }],
         familyResponsibility: "$965",
+        responsibility: null,
+        expectedFunding: [],
+        collectibleNow: null,
         paymentsReceived: "−$925",
         currentBalance: "$40",
         dueLabel: "Due Sep 1",
@@ -443,6 +471,10 @@ export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
     ],
     payment: { autopayLabel: "Autopay on", autopayHealthy: true, nextChargeLabel: "Sep 1 · $965" },
     historyLine: "Last payment · $925 · Aug 20",
+    // Lab specimens exercise layout, not money: no receipts unless a case is about them.
+    payments: [],
+        // No manual reductions in the lab fixtures: these specimens are about layout.
+        adjustments: [],
     upcoming: [
         { label: "Next period", value: "Sep 1 – Sep 30" },
         { label: "Scheduled charge", value: "$1,850 · Sep 1" },

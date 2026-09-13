@@ -6,6 +6,7 @@
  * UI-only.
  */
 
+import AccessHistoryList from "@/components/adminV2/settings/access/AccessHistoryList";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Search, UserRound } from "lucide-react";
@@ -42,6 +43,7 @@ import {
     type MemberAuthenticationProjection,
     type MemberLifecycleProjection,
     type ConfiguredScope,
+    type ConfiguredCaptureScope,
 } from "@/lib/access/memberIdentityProjection";
 import { UnknownValue } from "@/components/adminV2/settings/access/UnknownValue";
 import {
@@ -52,9 +54,7 @@ import {
 import type { AccessCommandKey } from "@/lib/access/accessChapterRoutes";
 import {
     heldRoleKeys,
-    replacementIsNoOp,
     roleAssignmentLabel,
-    rolesDiscardedByReplacement,
 } from "@/lib/access/memberRoleAssignment";
 import { buildPermissionGridRows } from "@/lib/admin/permissionGrid";
 import { areaAuthorityLabel } from "@/lib/access/roleAuthoritySummary";
@@ -87,6 +87,7 @@ type MemberRow = {
     effective_divergence_reason: string | null;
     department_ids: string[];
     site_location_ids: string[];
+    attendance_capture_scope: ConfiguredCaptureScope;
     lifecycle: MemberLifecycleProjection;
     authentication: MemberAuthenticationProjection;
 };
@@ -207,11 +208,15 @@ export default function AccessUsersConfigurationPage({
     const [editRole, setEditRole] = useState("");
     const [roleSaving, setRoleSaving] = useState(false);
     /**
+     * Bumped when THIS surface commits an access change, so the Access history card below the
+     * editors re-reads instead of keeping the answer it fetched before the change was made.
+     */
+    const [historyToken, setHistoryToken] = useState(0);
+    /**
      * `M2-17`. Acknowledgement that a replacement will delete the other roles this membership
      * holds. It starts false and is reset by any change of selection or of the target role, so an
      * acknowledgement can never outlive the statement it was given for.
      */
-    const [confirmRoleReplace, setConfirmRoleReplace] = useState(false);
 
     /**
      * W-47: the editor's scope state carries `unset` too. Prefilling `all` for a membership that
@@ -221,6 +226,7 @@ export default function AccessUsersConfigurationPage({
      */
     const [deptScope, setDeptScope] = useState<ConfiguredScope>("all");
     const [siteScope, setSiteScope] = useState<ConfiguredScope>("all");
+    const [captureScope, setCaptureScope] = useState<ConfiguredCaptureScope>("unset");
     const [selDeptIds, setSelDeptIds] = useState<string[]>([]);
     const [selSiteIds, setSelSiteIds] = useState<string[]>([]);
     const [accessSaving, setAccessSaving] = useState(false);
@@ -309,6 +315,26 @@ export default function AccessUsersConfigurationPage({
     /** The union this membership actually holds. Empty is a real answer and is rendered as one. */
     const selectedHeldRoles = useMemo(() => (selected ? heldRoleKeys(selected) : []), [selected]);
 
+    /**
+     * Roles this organization has active that this person does not already hold.
+     *
+     * Offering a role they already hold would make the control look like it does something when the
+     * write is a truthful no-op, so the picker narrows instead of the button lying.
+     */
+    const assignableRoles = useMemo(
+        () => activeRoles.filter((r) => !selectedHeldRoles.includes(r.role_key)),
+        [activeRoles, selectedHeldRoles],
+    );
+
+    /** Keep the picker on a role that is actually assignable as the held set changes beneath it. */
+    useEffect(() => {
+        setEditRole((current) =>
+            current && assignableRoles.some((r) => r.role_key === current)
+                ? current
+                : (assignableRoles[0]?.role_key ?? ""),
+        );
+    }, [assignableRoles]);
+
     const gridRows = useMemo(() => buildPermissionGridRows(permissions), [permissions]);
 
     /**
@@ -381,27 +407,29 @@ export default function AccessUsersConfigurationPage({
         [selected, siteLocations],
     );
 
-    const rolesLostBySave = useMemo(
-        () => (selected ? rolesDiscardedByReplacement(selected, editRole) : []),
-        [selected, editRole],
-    );
 
     useEffect(() => {
         if (!selected) {
             setEditRole("");
             setDeptScope("all");
             setSiteScope("all");
+            setCaptureScope("unset");
             setSelDeptIds([]);
             setSelSiteIds([]);
             return;
         }
-        setEditRole(selected.primary_role);
+        /*
+         * W-17 — the picker now ADDS a role, so it must open on one this person does not already
+         * hold. Defaulting to `primary_role` made the control open on a value whose only possible
+         * effect was a no-op, which is exactly how the old replace-shaped UI read.
+         */
+        setEditRole("");
         setDeptScope(selected.department_scope);
         setSiteScope(selected.site_scope);
+        setCaptureScope(selected.attendance_capture_scope);
         setSelDeptIds([...selected.department_ids]);
         setSelSiteIds([...selected.site_location_ids]);
         setConfirmRemove(false);
-        setConfirmRoleReplace(false);
         setActionsOpen(false);
     }, [selected]);
 
@@ -416,6 +444,10 @@ export default function AccessUsersConfigurationPage({
     const beginScopeConfiguration = () => {
         setDeptScope("restricted");
         setSiteScope("restricted");
+        // Deliberately NOT defaulted. `site` is the permissive answer and `assigned`
+        // is the one that can silently stop a teacher capturing anything, so this
+        // stays unchosen and the save below refuses until the operator picks.
+        setCaptureScope("unset");
         setSelDeptIds([]);
         setSelSiteIds([]);
     };
@@ -497,42 +529,57 @@ export default function AccessUsersConfigurationPage({
         }
     };
 
-    const saveRole = async () => {
-        if (!selected) return;
-        // M2-17, asserted rather than assumed. The button is already disabled in both cases, but a
-        // destructive replacement must not be reachable from a stale render or a programmatic
-        // click either — the guard that matters is the one in front of the write.
-        if (replacementIsNoOp(selected, editRole)) return;
-        if (rolesDiscardedByReplacement(selected, editRole).length > 0 && !confirmRoleReplace) return;
+    /**
+     * W-17 — add or remove ONE role, never rewrite the set.
+     *
+     * Both endpoints own their transaction and their D2 event, so the surface does not decide what
+     * history says; it reports what the server did. `reload()` re-reads the membership rather than
+     * patching local state, because the authority for "which roles are held" is the server's answer
+     * and a locally-assumed set is how the two models drifted apart in the first place.
+     */
+    const mutateRole = async (roleKey: string, mode: "assign" | "remove") => {
+        if (!selected || !roleKey) return;
         setRoleSaving(true);
         setMessage(null);
         setError(null);
         try {
-            const res = await fetch(`/api/admin/users/${encodeURIComponent(selected.user_id)}/role`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                /**
-                 * W-54 / `I-34`ᴬ. The set this surface actually rendered travels with the write, so
-                 * the route can tell an acknowledged replacement from one submitted against a
-                 * collapsed view. Sent from `heldRoleKeys(selected)` — the same predicate the screen
-                 * displayed and the confirmation itemized — rather than re-derived, or the
-                 * acknowledgement would attest to a set the operator was never shown.
-                 */
-                body: JSON.stringify({ role: editRole, expected_role_keys: heldRoleKeys(selected) }),
-            });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Role save failed");
-            setMessage("Role updated.");
-            setConfirmRoleReplace(false);
+            const base = `/api/admin/users/${encodeURIComponent(selected.user_id)}/roles`;
+            const res =
+                mode === "assign"
+                    ? await fetch(base, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ role: roleKey }),
+                      })
+                    : await fetch(`${base}/${encodeURIComponent(roleKey)}`, { method: "DELETE" });
+            const json = (await res.json().catch(() => ({}))) as { error?: string; changed?: boolean };
+            if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Role change failed");
+
+            const label = roleLabelFor(roleKey);
+            // A no-op says so. Claiming a change that did not happen is the same lie in miniature
+            // that this whole slice exists to remove.
+            setMessage(
+                json.changed === false
+                    ? mode === "assign"
+                        ? `${label} was already held.`
+                        : `${label} was not held.`
+                    : mode === "assign"
+                      ? `${label} added.`
+                      : `${label} removed.`,
+            );
+            setHistoryToken((n) => n + 1);
             await reload();
             /** Re-run settings layout server props so `AdminAuthProvider` roleKeys match fresh `user_roles`. */
             router.refresh();
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Role save failed.");
+            setError(err instanceof Error ? err.message : "Role change failed.");
         } finally {
             setRoleSaving(false);
         }
     };
+
+    const assignRole = (roleKey: string) => mutateRole(roleKey, "assign");
+    const removeRole = (roleKey: string) => mutateRole(roleKey, "remove");
 
     const saveAccess = async () => {
         if (!selected) return;
@@ -545,12 +592,16 @@ export default function AccessUsersConfigurationPage({
             if (deptScope === "unset" || siteScope === "unset") {
                 throw new Error("Choose a location and department scope before saving.");
             }
+            if (captureScope === "unset") {
+                throw new Error("Choose whose attendance this person can record before saving.");
+            }
             const res = await fetch(`/api/admin/users/${encodeURIComponent(selected.user_id)}/access-scope`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     department_scope: deptScope,
                     site_scope: siteScope,
+                    attendance_capture_scope: captureScope,
                     department_ids: deptScope === "restricted" ? selDeptIds : [],
                     site_location_ids: siteScope === "restricted" ? selSiteIds : [],
                 }),
@@ -558,6 +609,7 @@ export default function AccessUsersConfigurationPage({
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Access save failed");
             setMessage("Access updated.");
+            setHistoryToken((n) => n + 1);
             await reload();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Access save failed.");
@@ -1177,91 +1229,65 @@ export default function AccessUsersConfigurationPage({
                                                             {selectedHeldRoles.map((roleKey) => (
                                                                 <li
                                                                     key={roleKey}
-                                                                    className="rounded-full border border-alloy-stone/30 px-2 py-0.5 text-[12px] text-alloy-midnight/75"
+                                                                    className="flex items-center gap-1 rounded-full border border-alloy-stone/30 px-2 py-0.5 text-[12px] text-alloy-midnight/75"
                                                                     data-testid={`access-user-role-held-${roleKey}`}
                                                                 >
                                                                     {roleLabelFor(roleKey)}
+                                                                    {/*
+                                                                      * Each role leaves on its own. Removing the last one
+                                                                      * is not removing the person: the membership, its
+                                                                      * access profile and its scope remain, and the
+                                                                      * principal simply resolves to no capabilities.
+                                                                      */}
+                                                                    <button
+                                                                        type="button"
+                                                                        className="ml-0.5 rounded-full px-1 text-alloy-midnight/45 transition-colors hover:bg-alloy-stone/20 hover:text-alloy-midnight disabled:cursor-not-allowed disabled:opacity-50"
+                                                                        disabled={roleSaving}
+                                                                        aria-label={`Remove ${roleLabelFor(roleKey)}`}
+                                                                        onClick={() => void removeRole(roleKey)}
+                                                                        data-testid={`access-user-role-remove-${roleKey}`}
+                                                                    >
+                                                                        ×
+                                                                    </button>
                                                                 </li>
                                                             ))}
                                                         </ul>
                                                     }
                                                 </div>
+                                                {/*
+                                                  * W-17. This was a single "Replace with" picker and a Save that wrote
+                                                  * the whole set, so adding a role always meant discarding the rest —
+                                                  * the operator chose one value and the membership became that value.
+                                                  * Roles are held as a set, so the control is a set: each held role can
+                                                  * be taken away on its own, and a role can be added without naming the
+                                                  * others. Configuring what a role MAY DO stays in Roles; this card
+                                                  * only answers which roles this person holds.
+                                                  */}
                                                 <label className="mt-3 block max-w-sm">
-                                                    <span className="config-typo-field-label">Replace with</span>
+                                                    <span className="config-typo-field-label">Add a role</span>
                                                     <select
                                                         className="config-runtime-select mt-1"
                                                         value={editRole}
-                                                        onChange={(event) => {
-                                                            setEditRole(event.target.value);
-                                                            setConfirmRoleReplace(false);
-                                                        }}
+                                                        onChange={(event) => setEditRole(event.target.value)}
                                                         data-testid="access-user-role-select"
                                                     >
-                                                        {activeRoles.map((r) => (
-                                                            <option key={r.role_key} value={r.role_key}>
-                                                                {r.role_label}
-                                                            </option>
-                                                        ))}
+                                                        {assignableRoles.length === 0 ?
+                                                            <option value="">No further roles to add</option>
+                                                        :   assignableRoles.map((r) => (
+                                                                <option key={r.role_key} value={r.role_key}>
+                                                                    {r.role_label}
+                                                                </option>
+                                                            ))
+                                                        }
                                                     </select>
                                                 </label>
-                                                {/*
-                                                  * M2-17. `PATCH …/role` replaces every role row for the pair, so a
-                                                  * membership holding {admin, regional_lead} loses `regional_lead` the
-                                                  * moment the visible role changes. The loss was silent because the
-                                                  * screen never showed the second role. It is now named, itemized, and
-                                                  * requires a deliberate acknowledgement before the save can fire.
-                                                  * W-17 makes the write additive and retires this block.
-                                                  */}
-                                                {rolesLostBySave.length > 0 ?
-                                                    <div
-                                                        className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2.5 text-[13px] leading-5 text-amber-900"
-                                                        role="note"
-                                                        data-testid="access-user-role-replace-warning"
-                                                    >
-                                                        <p className="font-medium">
-                                                            Saving removes{" "}
-                                                            {rolesLostBySave.length === 1 ? "another role" : (
-                                                                `${rolesLostBySave.length} other roles`
-                                                            )}
-                                                            .
-                                                        </p>
-                                                        <p className="mt-1">
-                                                            This control replaces the whole assignment rather than adding
-                                                            to it. These would be removed:{" "}
-                                                            <span className="font-medium">
-                                                                {rolesLostBySave.map((key) => roleLabelFor(key)).join(", ")}
-                                                            </span>
-                                                            .
-                                                        </p>
-                                                        <label className="mt-2 flex items-start gap-2">
-                                                            <input
-                                                                type="checkbox"
-                                                                className="mt-0.5"
-                                                                checked={confirmRoleReplace}
-                                                                onChange={(event) =>
-                                                                    setConfirmRoleReplace(event.target.checked)
-                                                                }
-                                                                data-testid="access-user-role-replace-confirm"
-                                                            />
-                                                            <span>
-                                                                Remove{" "}
-                                                                {rolesLostBySave.map((key) => roleLabelFor(key)).join(", ")}{" "}
-                                                                and leave only {roleLabelFor(editRole)}.
-                                                            </span>
-                                                        </label>
-                                                    </div>
-                                                :   null}
                                                 <ConfigurationPrimaryButton
                                                     className="mt-3"
-                                                    disabled={
-                                                        roleSaving ||
-                                                        replacementIsNoOp(selected, editRole) ||
-                                                        (rolesLostBySave.length > 0 && !confirmRoleReplace)
-                                                    }
-                                                    onClick={() => void saveRole()}
+                                                    disabled={roleSaving || !editRole || assignableRoles.length === 0}
+                                                    onClick={() => void assignRole(editRole)}
                                                     data-testid="access-user-role-save"
                                                 >
-                                                    {roleSaving ? "Saving…" : "Save role"}
+                                                    {roleSaving ? "Saving…" : "Add role"}
                                                 </ConfigurationPrimaryButton>
                                             </ConfigWorkspaceCard>
                                             {!selected.has_access_profile ?
@@ -1301,6 +1327,75 @@ export default function AccessUsersConfigurationPage({
                                                     allLabel="All locations"
                                                     selectedLabel="Selected locations"
                                                 />
+                                            </ConfigWorkspaceCard>
+                                            {/*
+                                              * Attendance capture authority. This is enforced today —
+                                              * `attendancePermissions.ts` reads it on every capture — but
+                                              * until now nothing could read it back to an operator or set
+                                              * it, so every membership sat on the column default and the
+                                              * `assigned` mode was unreachable. It belongs here rather
+                                              * than in an Attendance screen: it is an authority a person
+                                              * holds, and Access already owns those.
+                                              *
+                                              * Both options are stated in terms of children, not of
+                                              * scope modes, because the question an administrator is
+                                              * actually asking is "whose attendance can this teacher
+                                              * record".
+                                              */}
+                                            <ConfigWorkspaceCard
+                                                testId="access-user-attendance-capture"
+                                                title="Attendance capture"
+                                            >
+                                                <fieldset className="border-0 p-0 m-0">
+                                                    <legend className="text-sm font-medium text-alloy-midnight">
+                                                        Whose attendance can this person record?
+                                                    </legend>
+                                                    {captureScope === "unset" ?
+                                                        <p
+                                                            className="mt-1 text-[12px] text-alloy-midnight/55"
+                                                            data-testid="access-user-attendance-capture-unset"
+                                                        >
+                                                            Not configured yet — choose one to save.
+                                                        </p>
+                                                    :   null}
+                                                    <label className="mt-3 flex items-start gap-2 text-sm text-alloy-midnight">
+                                                        <input
+                                                            type="radio"
+                                                            name="attendance-capture-scope"
+                                                            className="mt-1"
+                                                            checked={captureScope === "site"}
+                                                            onChange={() => setCaptureScope("site")}
+                                                            data-testid="access-user-attendance-capture-site"
+                                                        />
+                                                        <span>
+                                                            Any child at the locations above
+                                                            <span className="block text-[12px] text-alloy-midnight/55">
+                                                                Suits a director or a floating staff member who
+                                                                covers wherever they are needed.
+                                                            </span>
+                                                        </span>
+                                                    </label>
+                                                    <label className="mt-2 flex items-start gap-2 text-sm text-alloy-midnight">
+                                                        <input
+                                                            type="radio"
+                                                            name="attendance-capture-scope"
+                                                            className="mt-1"
+                                                            checked={captureScope === "assigned"}
+                                                            onChange={() => setCaptureScope("assigned")}
+                                                            data-testid="access-user-attendance-capture-assigned"
+                                                        />
+                                                        <span>
+                                                            Only children in the rooms and groups they are
+                                                            assigned to
+                                                            <span className="block text-[12px] text-alloy-midnight/55">
+                                                                Suits a classroom teacher. A person with no
+                                                                current assignment can record nobody, so this
+                                                                depends on their assignments being kept up to
+                                                                date.
+                                                            </span>
+                                                        </span>
+                                                    </label>
+                                                </fieldset>
                                             </ConfigWorkspaceCard>
                                             {/*
                                               * Departments are an ADVANCED restriction, not a second
@@ -1349,7 +1444,12 @@ export default function AccessUsersConfigurationPage({
                                                 </div>
                                             </details>
                                             <ConfigurationPrimaryButton
-                                                disabled={accessSaving || deptScope === "unset" || siteScope === "unset"}
+                                                disabled={
+                                                    accessSaving ||
+                                                    deptScope === "unset" ||
+                                                    siteScope === "unset" ||
+                                                    captureScope === "unset"
+                                                }
                                                 onClick={() => void saveAccess()}
                                                 data-testid="access-user-access-save"
                                             >
@@ -1448,6 +1548,26 @@ export default function AccessUsersConfigurationPage({
                                             </ConfigWorkspaceCard>
                                         </div>
                                     }
+                                    {/*
+                                      * D2 — user access history, as a CARD rather than the tab W-57
+                                      * removed. That tab cost a click to discover only "history
+                                      * planned"; the finding was that a history surface must earn its
+                                      * click, not that people never want history. Here it is beside
+                                      * the access it explains, filtered to this person.
+                                      */}
+                                    <ConfigWorkspaceCard
+                                        testId="access-user-history"
+                                        title="Access history"
+                                    >
+                                        <AccessHistoryList
+                                            testId="access-user-history-list"
+                                            subjectUserId={selectedUserId}
+                                            refreshToken={historyToken}
+                                            pageSize={5}
+                                            emptyMessage="No access changes have been recorded for this person yet."
+                                        />
+                                    </ConfigWorkspaceCard>
+
                                 </div>
                             }
                         </main>

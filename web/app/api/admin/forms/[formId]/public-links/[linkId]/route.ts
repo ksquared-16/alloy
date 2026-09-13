@@ -9,6 +9,7 @@ import {
 } from "@/lib/forms/intake/resolveOrgIntakeRoutingDefaults";
 import { readStoredOperationalIntent } from "@/lib/forms/operationalIntentTemplates";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 async function validatePinnedVersion(
     supabase: ReturnType<typeof createAdminClient>,
@@ -30,7 +31,8 @@ async function validatePinnedVersion(
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ formId: string; linkId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
 
     const { formId: rawFormId, linkId: rawLinkId } = await params;
     const formId = parseUuidParam(rawFormId, "formId");

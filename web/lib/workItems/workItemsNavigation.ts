@@ -63,6 +63,19 @@ export function dispatchOpenProcessingCase(caseId: string): void {
     if (typeof window === "undefined") return;
     const id = caseId.trim();
     if (!id) return;
-    dispatchAdminV2OpenProcessingModal();
+    /*
+     * The case travels as the modal's OPEN INTENT, not only as a follow-up event.
+     *
+     * ProcessingModal registers its `adminv2:open-processing-case` listener behind `if (!open)
+     * return`, so when the modal is still closed the listener does not exist yet — and this
+     * function dispatches that event synchronously, in the same tick as the open request. The
+     * event was therefore delivered to nobody and the operator landed on the Mailroom overview
+     * instead of the case they clicked. Intent has no such race: TopNavBar holds it in state and
+     * ProcessingModal applies it on mount, which is the same shape Communications already relies
+     * on via `setCommandCenterPendingSelection`.
+     *
+     * The event is still dispatched for the case where the modal is ALREADY open.
+     */
+    dispatchAdminV2OpenProcessingModal({ mode: "work", caseId: id });
     window.dispatchEvent(new CustomEvent(ADMIN_V2_OPEN_PROCESSING_CASE, { detail: { case_id: id } }));
 }

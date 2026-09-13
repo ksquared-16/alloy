@@ -6,13 +6,27 @@
 import { cache } from "react";
 import { NextResponse } from "next/server";
 import type { AdminAccessContextFailure } from "@/lib/admin/getAdminAccessContext";
+import { logPortalDenied } from "@/lib/admin/portalAdmission";
 import { loadAdminAccessBundleCached } from "@/lib/admin/getAdminAccessContext";
 import { compatibilityPortalRole } from "@/lib/admin/adminPortalRolePick";
 
 export type AdminContextSuccess = {
     ok: true;
     orgId: string;
+    /**
+     * Legacy compatibility projection of the role union. It is OUTPUT, never authority.
+     *
+     * `compatibilityPortalRole` answers `admin` or `ops` and nothing else, so it cannot describe a
+     * custom role at all. Any handler deciding what a caller MAY DO reads {@link permissionKeys}.
+     */
     role: string;
+    /**
+     * The caller's effective capabilities — the same union `portalEligible` was resolved from.
+     *
+     * Carried here so a handler can authorize without asking a second question and getting a second
+     * answer, and without a per-request permission query: the bundle already resolved this.
+     */
+    permissionKeys: string[];
     userId: string;
 };
 
@@ -36,6 +50,8 @@ async function loadAdminContext(): Promise<AdminContextResult> {
         }
 
         if (!bundle.portalEligible) {
+            // W-13 — see `loadAdminRouteGate`: reaching here means the grant read succeeded.
+            logPortalDenied("getAdminContext", bundle.userId, bundle.orgId, "no-capability");
             return { ok: false, status: 403 };
         }
 
@@ -50,6 +66,7 @@ async function loadAdminContext(): Promise<AdminContextResult> {
             ok: true,
             orgId: bundle.orgId,
             role: compatibilityPortalRole(bundle.roleKeys),
+            permissionKeys: bundle.permissionKeys,
             userId: bundle.userId,
         };
     } catch (e) {

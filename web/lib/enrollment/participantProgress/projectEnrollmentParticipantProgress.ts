@@ -37,6 +37,13 @@ export type RealizedSessionFormItem = {
 
 const UNSUPPORTED_KIND_REASON: Record<string, string> = {
     field: "Field requirement evidence has no canonical owner yet; Slice 2.4 owns unique-fact resolution.",
+    /*
+     * A participant PACKET cannot realize work. Work is resolved by an operator against the stage
+     * work runtime, not by the family filling something in, so a work requirement is genuinely
+     * outside this projection's subject rather than an unbuilt feature of it. Stage-exit evaluation
+     * owns it — see lib/lifecycle/workRequirementEvaluation.ts.
+     */
+    work: "Work is resolved by an operator through the stage work runtime, not by anything in a participant packet.",
     document: "No canonical document-requirement owner exists outside a form submission.",
     consent: "No canonical consent record exists in the platform.",
     acknowledgment: "No canonical acknowledgment record exists in the platform.",
@@ -49,6 +56,8 @@ function artifactIdFor(ref: StageRequirementV1["ref"]): string {
             return ref.rule_id;
         case "form":
             return ref.form_definition_id;
+        case "work":
+            return ref.work_template_key;
         case "document":
             return ref.document_type_key;
         case "consent":

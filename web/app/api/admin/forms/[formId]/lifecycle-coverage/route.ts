@@ -9,6 +9,7 @@ import {
     buildLifecycleUsageMetadataPatch,
 } from "@/lib/forms/lifecycle/formLifecycleUsageMetadata";
 import { loadFormLifecycleCoveragePayload } from "@/lib/forms/lifecycle/loadFormLifecycleCoveragePayload";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 function metaObject(raw: unknown): Record<string, unknown> {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
@@ -35,7 +36,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);

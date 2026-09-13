@@ -83,6 +83,34 @@ export type OutcomeCaseCloseDraft = {
  *
  * The rule this encodes: what the editor cannot express, it carries through untouched.
  */
+/**
+ * The candidate lifecycle states an outcome may write.
+ *
+ * Code-owned rather than tenant-configured: `StageOutcomeRuleTargetV1.candidate_status` is a closed
+ * union in `stageOperatingPlanV1.ts`, so this is the canonical vocabulary rather than a dropdown
+ * invented to finish a stage. Anything outside it would fail the parser, so offering more would be
+ * offering a choice that cannot be saved.
+ */
+export const OUTCOME_CANDIDATE_STATUS_VALUES = ["active", "paused", "withdrawn", "placed"] as const;
+
+export type OutcomeCandidateStatusValue = (typeof OUTCOME_CANDIDATE_STATUS_VALUES)[number];
+
+export type OutcomeCandidateStatusDraft = { candidate_status: OutcomeCandidateStatusValue };
+
+/** Operator-facing label for a candidate status. Never renders the raw key. */
+export function candidateStatusOperatorLabel(value: OutcomeCandidateStatusValue): string {
+    switch (value) {
+        case "active":
+            return "Active";
+        case "paused":
+            return "Paused";
+        case "withdrawn":
+            return "Withdrawn";
+        case "placed":
+            return "Placed";
+    }
+}
+
 export type ComposableOutcomeBehaviorDraft = {
     movement: "stay_in_stage" | "move_through_transition";
     transition_ref?: string;
@@ -90,6 +118,24 @@ export type ComposableOutcomeBehaviorDraft = {
     attention_items: OutcomeAttentionDraft[];
     /** `update_family_case_status` — durable case state, owned by the outcome. */
     case_status?: OutcomeCaseCloseDraft;
+    /**
+     * `update_child_enrollment_status` — the CHILD's durable enrollment state.
+     *
+     * A separate consequence from `movement`, never inferred from it. The per-child paths editor
+     * states the rule this follows: the operator picks the destination AND the resulting status,
+     * because the second is not derivable from the first. A child can move to Enrolling as
+     * `enrolling`, and could equally move somewhere with a different disposition; collapsing the two
+     * would silently pick one.
+     */
+    child_enrollment_status?: OutcomeCaseCloseDraft;
+    /**
+     * `update_candidate_status` — the placement candidate's own lifecycle state.
+     *
+     * Distinct again from both of the above: pausing a waitlist candidate changes neither the
+     * child's enrollment disposition nor the stage. It is the outcome that "Candidate paused" has,
+     * and without it that result can only be authored as a no-op that lies.
+     */
+    candidate_status?: OutcomeCandidateStatusDraft;
     /** `mark_stage_work_complete` — whether recording this outcome finishes the current work. */
     completes_stage_work: boolean;
     /** Target kinds this draft does not model, carried verbatim so an edit cannot drop them. */
@@ -109,6 +155,10 @@ const MODELLED_TARGET_KINDS: ReadonlySet<string> = new Set([
     "create_next_work",
     "create_needs_attention",
     "update_family_case_status",
+    // Promoted from `preserved_targets`, which is why existing configurations keep working: they
+    // were already carried verbatim, and are now READ into the draft instead of ridden through it.
+    "update_child_enrollment_status",
+    "update_candidate_status",
     "mark_stage_work_complete",
 ]);
 
@@ -431,6 +481,8 @@ export function readComposableOutcomeBehaviorDraft(
     const targets = behaviorRules.flatMap((rule) => rule.targets);
     const move = targets.find((target) => target.kind === "move_to_stage");
     const caseStatus = targets.find((target) => target.kind === "update_family_case_status");
+    const childStatus = targets.find((target) => target.kind === "update_child_enrollment_status");
+    const candidateStatus = targets.find((target) => target.kind === "update_candidate_status");
 
     return {
         movement: move ? "move_through_transition" : "stay_in_stage",
@@ -456,6 +508,22 @@ export function readComposableOutcomeBehaviorDraft(
                           : {}),
                   },
               }
+            : {}),
+        ...(childStatus && statusKeyFromTarget(childStatus)
+            ? {
+                  child_enrollment_status: {
+                      // `statusKeyFromTarget` reads `status_key` OR `disposition_key`: the platform
+                      // defaults author this target with `disposition_key`, so reading only the
+                      // first would show an empty control over a configuration that is actually set.
+                      status_key: statusKeyFromTarget(childStatus)!,
+                      ...(childStatus.close_reason_key
+                          ? { close_reason_key: childStatus.close_reason_key }
+                          : {}),
+                  },
+              }
+            : {}),
+        ...(candidateStatus?.candidate_status
+            ? { candidate_status: { candidate_status: candidateStatus.candidate_status } }
             : {}),
         completes_stage_work: targets.some((target) => target.kind === "mark_stage_work_complete"),
         preserved_targets: targets.filter((target) => !MODELLED_TARGET_KINDS.has(target.kind)),
@@ -485,6 +553,24 @@ export function upsertComposableOutcomeBehavior(
             kind: "update_family_case_status",
             status_key: draft.case_status.status_key.trim(),
             ...(closeReason ? { close_reason_key: closeReason } : {}),
+        });
+    }
+    // The child's durable enrollment state, emitted with `status_key` — the shape
+    // `statusKeyFromTarget` and the runtime executor both read, and the one the family-case target
+    // beside it already uses. Legacy `disposition_key` configurations still READ correctly; they are
+    // simply normalised on the next save rather than carrying two spellings forward.
+    if (draft.child_enrollment_status?.status_key?.trim()) {
+        const closeReason = trimKey(draft.child_enrollment_status.close_reason_key);
+        targets.push({
+            kind: "update_child_enrollment_status",
+            status_key: draft.child_enrollment_status.status_key.trim(),
+            ...(closeReason ? { close_reason_key: closeReason } : {}),
+        });
+    }
+    if (draft.candidate_status?.candidate_status) {
+        targets.push({
+            kind: "update_candidate_status",
+            candidate_status: draft.candidate_status.candidate_status,
         });
     }
     if (draft.completes_stage_work) targets.push({ kind: "mark_stage_work_complete" });
@@ -517,6 +603,8 @@ export function upsertComposableOutcomeBehavior(
     const hasContent =
         draft.movement === "move_through_transition" ||
         Boolean(draft.case_status?.status_key?.trim()) ||
+        Boolean(draft.child_enrollment_status?.status_key?.trim()) ||
+        Boolean(draft.candidate_status?.candidate_status) ||
         draft.completes_stage_work ||
         draft.follow_up_work.some((row) => trimKey(row.template_key)) ||
         draft.attention_items.length > 0 ||

@@ -604,6 +604,52 @@ alloy_guard_server_start() {
 # whose budget. Prints "allow normal <why>", "allow burst <why>" or
 # "refuse <why>". Fails closed: if the policy cannot be consulted we fall back
 # to the operator's normal budget alone rather than inventing headroom.
+# ── WHAT THE AGENT COLUMN USED TO SAY, AND WHY IT WAS WRONG ──────────────────
+#
+# `lifecycle` was read straight off the metadata record:
+#
+#     lifecycle="${ALLOY_WORKER_LIFECYCLE:-${ALLOY_AGENT_STATUS:-active}}"
+#
+# `ALLOY_AGENT_STATUS` is WRITTEN at sprint start and changed only by an explicit
+# command. Nothing reconciles it against reality, so the column headed AGENT was
+# reporting a stored declaration while reading like a liveness check.
+#
+# MEASURED on this host: twelve slotted records, eleven saying `active`, while
+# only seven worktrees had a live agent session. Five slots — 1, 7, 8, 9 and 12 —
+# read `active` with nobody working in them, and slot 3 read `closed` while its
+# agent was demonstrably live. The registry was wrong in BOTH directions, which
+# is why "stale" undersells it: a stale field drifts one way.
+#
+# The authoritative answer already exists and is already used by slot
+# reclamation: a lane is working when it has a run in flight, a live agent
+# session, or a held stack lease. This asks that owner rather than inventing a
+# second rule in shell — the shell cannot even compute it, because tmux session
+# names derive from LANE names and the shell only knows worktree names.
+#
+# ONE node call per status run, never one per row. Fails closed to the stored
+# value: if the owner cannot be consulted the table still renders, and says so.
+alloy_observed_agent_states() {
+  local node_bin out
+  node_bin="${NODE_BIN:-$(command -v node 2>/dev/null)}"
+  [[ -n "$node_bin" && -x "$node_bin" ]] || return 1
+  out="$("$node_bin" --input-type=module -e '
+    import { auditLaneWorktrees } from "'"${ALLOY_LOCAL_DEV_ROOT}"'/lib/vacilando/lane-worktree-lifecycle.mjs";
+    import { spawnSync } from "node:child_process";
+    const alive = (s) => {
+      if (!s || !/^[A-Za-z0-9._-]+$/.test(s)) return false;
+      const r = spawnSync("tmux", ["has-session", "-t", s], { timeout: 3000, stdio: "ignore" });
+      if (r.error) return r.error.code !== "ENOENT";
+      return r.status === 0;
+    };
+    for (const l of auditLaneWorktrees({}).lanes) {
+      if (!l.worktree_name) continue;
+      process.stdout.write(`${l.worktree_name}\t${alive(l.tmux_session) ? "live" : "idle"}\n`);
+    }
+  ' 2>/dev/null)" || return 1
+  [[ -n "$out" ]] || return 1
+  printf '%s\n' "$out"
+}
+
 alloy_server_admission_decision() {
   local running="$1" node_bin out
   node_bin="${NODE_BIN:-$(command -v node 2>/dev/null)}"
@@ -1038,6 +1084,12 @@ alloy_worker_status_table() {
   printf '%s\n' "$(printf '%.0s-' {1..160})"
 
   local i found name sprint prov branch git_state ahead behind lifecycle server port auth health path
+  local declared observed
+  # Asked once for the whole table. A per-row probe would spawn one node and up
+  # to twelve tmux calls per slot, turning a status read into a fleet scan.
+  local ALLOY_OBSERVED_STATES=""
+  local -a ALLOY_REGISTRY_DIVERGENCE=()
+  ALLOY_OBSERVED_STATES="$(alloy_observed_agent_states 2>/dev/null || true)"
   for ((i = 1; i <= ALLOY_MAX_AGENTS; i++)); do
     port="$(alloy_slot_to_port "$i")"
     if ! found="$(alloy_find_metadata_by_slot "$i" 2>/dev/null)"; then
@@ -1060,7 +1112,22 @@ alloy_worker_status_table() {
       ahead="?"
       behind="?"
     fi
-    lifecycle="${ALLOY_WORKER_LIFECYCLE:-${ALLOY_AGENT_STATUS:-active}}"
+    # OBSERVED, not declared. The stored value is kept so a divergence can be
+    # reported rather than silently overwritten — the registry being wrong is
+    # itself worth seeing.
+    declared="${ALLOY_WORKER_LIFECYCLE:-${ALLOY_AGENT_STATUS:-active}}"
+    lifecycle="$declared"
+    if [[ -n "${ALLOY_OBSERVED_STATES:-}" ]]; then
+      observed="$(printf '%s\n' "$ALLOY_OBSERVED_STATES" | awk -F'\t' -v n="$name" '$1==n{print $2; exit}')"
+      if [[ -n "$observed" ]]; then
+        lifecycle="$observed"
+        if [[ "$observed" == "idle" && "$declared" == "active" ]]; then
+          ALLOY_REGISTRY_DIVERGENCE+=("${i}:${name}:declared-active-observed-idle")
+        elif [[ "$observed" == "live" && "$declared" != "active" ]]; then
+          ALLOY_REGISTRY_DIVERGENCE+=("${i}:${name}:declared-${declared}-observed-live")
+        fi
+      fi
+    fi
     server="$(alloy_server_state_for "$name")"
     auth="n/a"
     if declare -F alloy_auth_state_status >/dev/null 2>&1; then
@@ -1089,6 +1156,26 @@ alloy_worker_status_table() {
       "$i" "$sprint" "$prov" "$stage" "$posture_s" "$name" "$git_state" "${ahead}/${behind}" \
       "$lifecycle" "$server" "$port" "$health"
   done
+
+  # THE REGISTRY BEING WRONG IS ITSELF WORTH SEEING.
+  #
+  # The AGENT column now reports what is OBSERVED, so a divergence would
+  # otherwise be silently corrected on screen and left uncorrected on disk. An
+  # operator who has to reclaim or adopt a slot needs to know the record is
+  # lying, not just that the lane is quiet.
+  if (( ${#ALLOY_REGISTRY_DIVERGENCE[@]} > 0 )); then
+    printf '\nregistry divergence — AGENT shows OBSERVED state; these records disagree:\n'
+    local d
+    for d in "${ALLOY_REGISTRY_DIVERGENCE[@]}"; do
+      printf '  slot %s\n' "${d//:/  }"
+    done
+    printf 'The record is not updated by closing a session or stopping a server.\n'
+    printf 'Reclaim a genuinely idle slot from the Gateway, or alloy-sprint-finish <slot> to return it to the pool.\n'
+  elif [[ -z "$ALLOY_OBSERVED_STATES" ]]; then
+    # Fail-closed and SAY SO. A silent fallback to the stored value is how this
+    # column came to be trusted in the first place.
+    printf '\nAGENT column is the DECLARED value: observed liveness could not be read.\n'
+  fi
 
   # A REGISTRATION WITH NO SLOT MUST STILL BE VISIBLE HERE.
   #

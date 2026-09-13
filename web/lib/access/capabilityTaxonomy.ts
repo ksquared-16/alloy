@@ -36,11 +36,43 @@ export type CapabilityArea = {
 };
 
 export const CAPABILITY_AREAS: readonly CapabilityArea[] = Object.freeze([
+    /*
+     * Portal is FIRST, and it is one row, because it is the question that comes before every other
+     * row on the page: can this person get in at all?
+     *
+     * W-13 — admission used to be a role literal (`PORTAL_ROLES = {admin, ops}`) that no
+     * administrator could see or change. It is a capability now, so it has to appear where every
+     * other capability appears. Presenting it anywhere but first would bury the switch that decides
+     * whether the rest of the matrix means anything for this role.
+     *
+     * It confers nothing inside the portal. `fin.read` and the rest stay independently enforced —
+     * the area below it is the proof, not the exception.
+     */
+    { key: "portal", label: "Portal", description: "Whether this role can enter the operator portal at all. Admission only — every surface inside still needs its own capability.", order: 5 },
     { key: "families", label: "Families", description: "Customer and family records.", order: 10 },
     { key: "inquiries", label: "Inquiries", description: "Opportunities and enrollment inquiries.", order: 20 },
     { key: "scheduling", label: "Scheduling", description: "Schedules and calendars.", order: 30 },
     { key: "communications", label: "Communications", description: "Messages to families and contacts.", order: 40 },
     { key: "documents", label: "Documents", description: "Documents and forms on a record.", order: 50 },
+    /*
+     * Forms is its OWN area, not a corner of Documents.
+     *
+     * The Documents area is about what is filed ON a record. Forms is the builder and the
+     * submissions that come back from it, and an area is the unit a preset applies to: granting
+     * someone Documents must not sweep along the authority to redesign the forms an organization
+     * sends to families. Health was separated from Families for exactly this reason.
+     */
+    { key: "forms", label: "Forms", description: "Form design, and the submissions people send back.", order: 52 },
+    /*
+     * Processing is its OWN area, and deliberately not a corner of Documents or Forms.
+     *
+     * It is the queue where a document that arrived becomes a record: classifying it, resolving who
+     * it is about, committing the records it proposes. Its authority overlaps both neighbours and
+     * belongs to neither — `documents.write` is held by ops in every organization and must not
+     * become a licence to delete a case, and `forms.author` legitimately covers the packet and
+     * form-draft authoring that Processing surfaces without covering the queue work itself.
+     */
+    { key: "processing", label: "Processing", description: "The queue where arriving documents become records.", order: 54 },
     /*
      * Health is its OWN area, not a corner of Families or Documents.
      *
@@ -100,11 +132,14 @@ export const UNMAPPED = "__unmapped__" as const;
  *   merged. This is the repetition the tranche was called to remove.
  */
 const GROUP_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
+    portal: "portal",
     billing: "billing",
     enrollment: "enrollment",
     financials: "financials",
     communications: "communications",
     documents: "documents",
+    forms: "forms",
+    processing: "processing",
     health: "health",
     reports: "reports",
     scheduling: "scheduling",

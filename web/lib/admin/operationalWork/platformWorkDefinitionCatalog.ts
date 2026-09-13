@@ -37,6 +37,36 @@ const PLATFORM_WORK_DEFINITIONS: PlatformWorkDefinition[] = [
         platform_enabled: true,
     },
     {
+        key: "review_waitlist_position",
+        display_name: "Review waitlist position",
+        description: "Review where a waitlisted child stands and decide whether to act on their place.",
+        outcome_intent: "The child's waitlist position has been reviewed and the next step decided.",
+        default_shape: "task",
+        category: "follow_up",
+        default_title: "Review waitlist position",
+        due_policy: { kind: "offset_from_create", days: 3 },
+        assignee_policy: { kind: "record_owner" },
+        allowed_subjects: [{ entity_type: "opportunities" }],
+        dedupe_policy: "definition_subject",
+        suggested_action_keys: ["create_task"],
+        platform_enabled: true,
+    },
+    {
+        key: "offer_spot",
+        display_name: "Offer spot",
+        description: "Offer a waitlisted child an available place and record the family's answer.",
+        outcome_intent: "The family has been offered a place and the answer is recorded.",
+        default_shape: "task",
+        category: "follow_up",
+        default_title: "Offer spot",
+        due_policy: { kind: "offset_from_create", days: 1 },
+        assignee_policy: { kind: "record_owner" },
+        allowed_subjects: [{ entity_type: "opportunities" }],
+        dedupe_policy: "definition_subject",
+        suggested_action_keys: ["create_task"],
+        platform_enabled: true,
+    },
+    {
         key: "follow_up_after_tour",
         display_name: "Follow up after tour",
         description: "Post-tour outreach while interest is fresh.",
@@ -123,6 +153,19 @@ export const PLATFORM_DEFAULT_WORK_DEFINITION_STAGE_BINDINGS: Record<string, Lif
     },
     enrollment: {
         available_definition_keys: ["manual_ad_hoc", "contact_family", "collect_missing_information"],
+    },
+    /*
+     * Waitlist had no binding at all, so its templates resolved through the fallback. Naming it
+     * makes the stage's two work kinds explicit and admits `offer_spot`, which cannot be started
+     * while it shares an identity with the review work beside it.
+     */
+    waitlist: {
+        available_definition_keys: [
+            "manual_ad_hoc",
+            "contact_family",
+            "review_waitlist_position",
+            "offer_spot",
+        ],
     },
 };
 

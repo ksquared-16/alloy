@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
 import {
     buildConfigurationDeliveryPlan,
     normalizeConfigurationTargets,
@@ -806,10 +807,18 @@ export async function resolveProgramTargetsSoft(input: {
                     || stringValue(row.key) === input.revision.programKey
                 ),
         );
-        const protectedResourceAssignmentCount = rooms.filter(
-            (room) =>
-                room.parent_location_id === locationId
-                && nullableString(recordValue(room.metadata).category) === input.revision.programKey,
+        // Rooms of this site by ancestry — a nested group carrying the program
+        // category is still a protected assignment, and counting only direct
+        // children under-reported what a publication change would disturb.
+        // `rooms` are untyped DbRows here, so the ancestry keys are projected out
+        // explicitly and the original row travels along for the metadata read.
+        const roomAncestry = rooms.map((room) => ({
+            id: stringValue(room.id),
+            parent_location_id: nullableString(room.parent_location_id),
+            row: room,
+        }));
+        const protectedResourceAssignmentCount = rowsBelongingToSite(roomAncestry, locationId).filter(
+            (room) => nullableString(recordValue(room.row.metadata).category) === input.revision.programKey,
         ).length;
 
         return {

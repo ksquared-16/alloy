@@ -15,6 +15,18 @@ import { GET as getSubmission } from "@/app/api/admin/forms/submissions/[submiss
 import { POST as confirmLinkage } from "@/app/api/admin/forms/submissions/[submissionId]/confirm-linkage/route";
 import { POST as manualLink } from "@/app/api/admin/forms/submissions/[submissionId]/manual-link/route";
 
+/**
+ * What the seeded roles actually hold, since Forms authority became a capability.
+ *
+ * These routes read `ctx.permissionKeys`, not `ctx.role`. A mock that carries only a role therefore
+ * describes a principal the product cannot authorize — which made the `admin` cases 403 and, worse,
+ * made the `ops` cases pass for the wrong reason: they were refused because the mock held NO
+ * capability, not because ops lacks `forms.author`.
+ */
+const ADMIN_FORMS_KEYS = ["forms.author", "forms.submissions", "forms.submissions.confirm"];
+/** ops holds exactly one Forms write — confirming a linkage the system proposed. */
+const OPS_FORMS_KEYS = ["forms.submissions.confirm"];
+
 const ORG = "11111111-1111-4111-8111-111111111111";
 const OTHER_ORG = "99999999-9999-4999-8999-999999999999";
 const USER = "22222222-2222-4222-8222-222222222222";
@@ -472,6 +484,7 @@ beforeEach(() => {
         orgId: ORG,
         userId: USER,
         role: "admin",
+        permissionKeys: ADMIN_FORMS_KEYS,
     });
 });
 
@@ -904,6 +917,7 @@ describe("Admin forms routes", () => {
             orgId: ORG,
             userId: USER,
             role: "ops",
+            permissionKeys: OPS_FORMS_KEYS,
         });
         const res = await createForm(
             new NextRequest("http://x", {
@@ -1246,6 +1260,7 @@ describe("Admin forms routes", () => {
             orgId: ORG,
             userId: USER,
             role: "ops",
+            permissionKeys: OPS_FORMS_KEYS,
         });
         const fid = crypto.randomUUID();
         storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
@@ -1315,6 +1330,7 @@ describe("Admin forms routes", () => {
             orgId: ORG,
             userId: USER,
             role: "ops",
+            permissionKeys: OPS_FORMS_KEYS,
         });
         const fid = crypto.randomUUID();
         const vid = crypto.randomUUID();
@@ -1460,6 +1476,7 @@ describe("Admin forms routes", () => {
             orgId: ORG,
             userId: USER,
             role: "ops",
+            permissionKeys: OPS_FORMS_KEYS,
         });
         const fid = crypto.randomUUID();
         const vid = crypto.randomUUID();

@@ -1,0 +1,34 @@
+{
+  "trusted_host_action_id": "tha_db6da9db78a229",
+  "query_hash": "cb7f69997e39fdd6e2711ff43f76e18027e80f52586789130a296411220c1d49",
+  "results": {
+    "totals": {
+      "placement_candidates": 37,
+      "waitlist_opportunities": 1
+    },
+    "candidate_identity_coverage": {
+      "rows": 37,
+      "with_customer_id": 37,
+      "with_customer_member_id": 37,
+      "with_opportunity_id": 37,
+      "with_ocm_id": 0,
+      "with_person_id": 4
+    },
+    "case_identity_coverage": {
+      "cases_behind_candidates": 2,
+      "with_customer_id": 2
+    },
+    "case_knows_candidate_does_not": 0,
+    "work_unit_keys": [
+      "finance_inbox",
+      "lifecycle_wu_decision",
+      "lifecycle_wu_enrolled",
+      "lifecycle_wu_enrolling",
+      "lifecycle_wu_lead",
+      "lifecycle_wu_qualification",
+      "lifecycle_wu_tour",
+      "lifecycle_wu_waitlist",
+      "ops_board"
+    ]
+  }
+}

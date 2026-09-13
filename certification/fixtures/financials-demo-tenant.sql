@@ -60,6 +60,25 @@
 -- funding attaches to a responsibility share — so subsidy work cannot exist without one.
 \set parent_c 'fd000000-0000-4000-8000-0000000b0001'
 
+-- ── THE HOUSEHOLD RESPONSIBILITY IS DECIDED ON ──────────────────────────────────────────────────
+--
+-- Alvarez carries real outstanding money and NO responsibility arrangement, which makes it the one
+-- account that proves the capability can be reached from nothing — the state every household in a
+-- new tenant is in, and the state Manage Responsibility was unusable in.
+--
+-- Two adults, because one adult cannot demonstrate a split, and the whole point of an arrangement
+-- is that an obligation can be divided. They hold DIFFERENT roles (`parent`, `guardian`) so the
+-- picker is proven to read the role vocabulary rather than one hard-coded value.
+--
+-- `child_a2` is a person carrying the `child` role on the household. Children are normally
+-- `customer_members` and have no person identity at all, so without this row the exclusion rule
+-- has nothing to exclude and the live certification would pass by absence. Some orgs do record a
+-- child as a person; this makes that case real, and a child who must never be offered the bill.
+\set parent_a1 'fd000000-0000-4000-8000-0000000b0002'
+\set parent_a2 'fd000000-0000-4000-8000-0000000b0003'
+\set child_a2  'fd000000-0000-4000-8000-0000000b0004'
+\set kid_a2    'fd000000-0000-4000-8000-0000000d0005'
+
 -- ── TEARDOWN ────────────────────────────────────────────────────────────────────────────────────
 set session_replication_role = replica;
 
@@ -125,11 +144,13 @@ delete from enrollment_pricing_terms where org_id = :'org'::uuid
 delete from child_enrollment_agreements
   where id in (:'agr_a'::uuid, :'agr_b'::uuid, :'agr_c'::uuid, :'agr_d'::uuid);
 delete from customer_members
-  where id in (:'kid_a'::uuid, :'kid_b'::uuid, :'kid_c'::uuid, :'kid_d'::uuid);
-delete from customer_persons where org_id = :'org'::uuid and person_id = :'parent_c'::uuid;
+  where id in (:'kid_a'::uuid, :'kid_b'::uuid, :'kid_c'::uuid, :'kid_d'::uuid, :'kid_a2'::uuid);
+delete from customer_persons where org_id = :'org'::uuid and person_id in
+  (:'parent_c'::uuid, :'parent_a1'::uuid, :'parent_a2'::uuid, :'child_a2'::uuid);
 delete from customers
   where id in (:'hh_a'::uuid, :'hh_b'::uuid, :'hh_c'::uuid, :'hh_d'::uuid);
-delete from persons where id = :'parent_c'::uuid;
+delete from persons where id in
+  (:'parent_c'::uuid, :'parent_a1'::uuid, :'parent_a2'::uuid, :'child_a2'::uuid);
 
 set session_replication_role = origin;
 
@@ -155,7 +176,12 @@ insert into customer_members
   (:'kid_a'::uuid, :'org'::uuid, :'hh_a'::uuid, 'Ana Alvarez',   'Ana',   'Alvarez', true),
   (:'kid_b'::uuid, :'org'::uuid, :'hh_b'::uuid, 'Ben Brennan',   'Ben',   'Brennan', true),
   (:'kid_c'::uuid, :'org'::uuid, :'hh_c'::uuid, 'Cai Chen',      'Cai',   'Chen',    true),
-  (:'kid_d'::uuid, :'org'::uuid, :'hh_d'::uuid, 'Obi Okafor',    'Obi',   'Okafor',  true);
+  (:'kid_d'::uuid, :'org'::uuid, :'hh_d'::uuid, 'Obi Okafor',    'Obi',   'Okafor',  true),
+  -- A SECOND CHILD ON ONE ACCOUNT. `billing.configure_responsibility` records an arrangement for a
+  -- HOUSEHOLD, and an account with one child cannot show the difference between "this family's
+  -- money" and "this child's money". Rio has no agreement and therefore no charges of their own —
+  -- the claim under test is the grain of the arrangement, not a second stream of billing.
+  (:'kid_a2'::uuid, :'org'::uuid, :'hh_a'::uuid, 'Rio Alvarez',   'Rio',   'Alvarez', true);
 
 -- ── THE ADULT WHO OWES ───────────────────────────────────────────────────────────────────────────
 --
@@ -166,8 +192,32 @@ insert into customer_members
 insert into persons (id, org_id, first_name, last_name, full_name, person_number, status_key) values
   (:'parent_c'::uuid, :'org'::uuid, 'Mei', 'Chen', 'Mei Chen', 900014, 'active');
 
-insert into customer_persons (org_id, customer_id, person_id, role_type, is_primary) values
-  (:'org'::uuid, :'hh_c'::uuid, :'parent_c'::uuid, 'parent', true);
+-- The 9009xx block, not 9000xx: 900015-900019 are already taken by other fixtures in this shared
+-- tenant, and a certification that cannot be re-seeded twice is not a certification.
+insert into persons (id, org_id, first_name, last_name, full_name, person_number, status_key) values
+  (:'parent_a1'::uuid, :'org'::uuid, 'Dana', 'Alvarez', 'Dana Alvarez', 900915, 'active'),
+  (:'parent_a2'::uuid, :'org'::uuid, 'Rosa', 'Alvarez', 'Rosa Alvarez', 900916, 'active'),
+  (:'child_a2'::uuid,  :'org'::uuid, 'Ana',  'Alvarez', 'Ana Alvarez',  900917, 'active');
+
+-- ── THE CANONICAL HOUSEHOLD EDGE ────────────────────────────────────────────────────────────────
+--
+-- `customer_persons` is how the product knows which people belong to an account: customer to
+-- person, with a role, a status and date bounds. It is the edge Manage Responsibility reads, and
+-- these rows are declared here rather than through `contacts` BECAUSE that is the defect — the
+-- picker read a table this tenant has zero rows in, so every household offered nobody.
+--
+-- The `child` row is deliberate and must stay: it is the only thing making "a child is never
+-- offered the bill" a live claim instead of a vacuous one.
+--
+-- `status` IS NULLABLE AND HAS NO DEFAULT. 1,800 rows in this tenant say 'active' and two say
+-- nothing at all, so Rosa's status is deliberately left unset: a read that filters on
+-- `status = 'active'` drops her, the account shows one adult instead of two, and nothing announces
+-- the loss. The certification must be able to see that happen.
+insert into customer_persons (org_id, customer_id, person_id, role_type, is_primary, status) values
+  (:'org'::uuid, :'hh_c'::uuid, :'parent_c'::uuid,  'parent',   true,  'active'),
+  (:'org'::uuid, :'hh_a'::uuid, :'parent_a1'::uuid, 'parent',   true,  'active'),
+  (:'org'::uuid, :'hh_a'::uuid, :'parent_a2'::uuid, 'guardian', false, null),
+  (:'org'::uuid, :'hh_a'::uuid, :'child_a2'::uuid,  'child',    false, 'active');
 
 -- ── AGREEMENTS, SPLIT ACROSS BOTH CAMPUSES ──────────────────────────────────────────────────────
 --

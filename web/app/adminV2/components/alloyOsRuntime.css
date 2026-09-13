@@ -1352,6 +1352,17 @@ html[data-alloy-os-runtime-split="true"] [data-alloy-os-focus-panel="true"] {
   background: color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 28%, #fff);
 }
 
+/*
+ * Attention chips say what is WAITING on the operator (Work: 2, Unread: 1), not what the record is.
+ * A faint fill separates load from identity at a glance while staying in the same chip row — the
+ * tone- rules above still carry the colour, so this only adds weight, never a second colour system.
+ */
+.alloy-os-fp-header-compact__context-chip--attention {
+  background: color-mix(in srgb, currentColor 7%, #fff);
+  border-color: color-mix(in srgb, currentColor 30%, var(--alloy-os-border, #e5e9ef));
+  font-variant-numeric: tabular-nums;
+}
+
 .alloy-os-fp-header-compact__context-chip--tone-ready {
   border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 35%, var(--alloy-os-border, #e5e9ef));
   color: var(--alloy-os-bend-pine, #00a283);

@@ -3,10 +3,12 @@
 /**
  * Access → Security (organization-level). Per-user password reset lives on the user's own
  * Security tab (Access → Users). This chapter is org-wide posture: authentication methods,
- * sign-in policies, sessions, and the access audit log — all Planned except Password today.
+ * sign-in policies, and the access audit log. The audit log is live (D2); the rest are Planned
+ * except Password today.
  */
 
 import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace";
+import AccessHistoryList from "@/components/adminV2/settings/access/AccessHistoryList";
 
 export default function AccessSecurityPage() {
     return (
@@ -61,11 +63,23 @@ export default function AccessSecurityPage() {
                 </p>
             </ConfigWorkspaceCard>
 
+            {/*
+              * D2 — this card said "planned" and now carries the events. The chapter description has
+              * claimed "and access auditing" since it was written, so this is the placement the IA
+              * already owned; nothing new was added beside Users and Roles to hold it.
+              *
+              * The old copy promised "no events are fabricated for display" — kept as a property
+              * rather than a sentence: every row below is a committed `mutation_events` record, and
+              * the card shows the truthful empty state when there are none.
+              */}
             <ConfigWorkspaceCard testId="access-security-audit-log" title="Audit Log">
-                <p className="text-sm text-alloy-midnight/55" data-capability="planned">
-                    A verified access audit log — sign-ins, role changes, and access-scope changes across
-                    every user — is planned. No events are fabricated for display.
+                <p className="mb-2 text-xs leading-snug text-alloy-midnight/55">
+                    Every change to who may do what in this organization, newest first.
                 </p>
+                <AccessHistoryList
+                    testId="access-security-audit-log-list"
+                    emptyMessage="No access changes have been recorded yet."
+                />
             </ConfigWorkspaceCard>
         </div>
     );

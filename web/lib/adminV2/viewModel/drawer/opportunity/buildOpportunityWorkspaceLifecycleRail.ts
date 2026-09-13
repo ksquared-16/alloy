@@ -6,7 +6,6 @@ import {
     activeStagesForProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import { stageKeyFromLifecycleWorkUnitMetadata } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 
 export type OpportunityWorkspaceLifecycleRail = {
     stages: Array<{
@@ -44,7 +43,6 @@ export function buildOpportunityWorkspaceLifecycleRail(params: {
     departmentMetadata: unknown;
     statusKey: string | null;
     statusDefs: StatusDefinitionRow[];
-    workUnitMetadata: unknown;
     /**
      * The record the annotations are ABOUT. Optional: a caller with no record still gets the rail,
      * just without supporting detail — the stages are configuration, the annotations are truth.
@@ -83,10 +81,25 @@ export function buildOpportunityWorkspaceLifecycleRail(params: {
         if (stage) currentStageKey = stage;
     }
 
-    if (!currentStageKey) {
-        const fromWu = stageKeyFromLifecycleWorkUnitMetadata(params.workUnitMetadata);
-        if (fromWu && stageKeys.includes(fromWu)) currentStageKey = fromWu;
-    }
+    /*
+     * ── THE LENS DOES NOT DECIDE WHAT STAGE A RECORD IS IN ──
+     *
+     * This used to fall back to the WORK UNIT's own declared stage when status resolved none. A
+     * work unit answers "what operational lens did I open?"; it cannot answer "what stage is this
+     * record actually in?", and treating it as though it could made the answer a property of the
+     * route.
+     *
+     * Measured on the deployed tenant: seventeen placement candidates opened from the Waitlist work
+     * unit every reported stage `waitlist`, while child process-instance membership — the
+     * authority, written only by `moveEnrollmentInstanceStageByScope` — stood at one. The Process
+     * card asserted membership nobody had granted, and no QA against that card could distinguish
+     * real membership from the lane it was viewed through.
+     *
+     * Resolving to NULL is the honest answer when the record's own status names no stage. The rail
+     * still renders its configured stages; it simply stops claiming to know which one this record
+     * occupies. Callers that hold the authority resolve it from the process instance, which is
+     * where `piEffectiveStageKey` and the Effective Process Position projection already read.
+     */
 
     return { stages, current_stage_key: currentStageKey, process_name: trimOrNull(process.name) };
 }

@@ -120,9 +120,21 @@ describe("applyEnrollmentStatusTransitionOutcomeEffects", () => {
         });
     });
 
+    /**
+     * The skip set exists because the manual transition already wrote the STATUS. It never wrote a
+     * stage — and for a child, the stage is the whole position. Skipping `move_to_stage` here left
+     * the child disposition-waitlisted with a placement candidate while its process instance stayed
+     * put: placement membership and process membership recording two halves of one decision.
+     *
+     * The status kinds stay skipped. Only the movement is restored, and only for a child.
+     */
     it("runs executeStageOperatingOutcome with skip flags for manual waitlist transition", async () => {
         mockExecuteStageOperatingOutcome.mockImplementationOnce(async (params) => {
-            expect(params.skipTargetKinds).toEqual(STAGE_OUTCOME_MANUAL_TRANSITION_SKIP_TARGET_KINDS);
+            expect(params.skipTargetKinds).toEqual(
+                STAGE_OUTCOME_MANUAL_TRANSITION_SKIP_TARGET_KINDS.filter((k) => k !== "move_to_stage"),
+            );
+            expect(params.skipTargetKinds).toContain("update_child_enrollment_status");
+            expect(params.skipTargetKinds).not.toContain("move_to_stage");
             expect(params.outcomeKey).toBe("waitlist");
             return {
                 applied_targets: [{ kind: "create_next_work", template_key: "follow_up_waitlist" }],

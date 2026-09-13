@@ -59,6 +59,16 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
+/**
+ * D2 — the canonical grant path refuses a change that names no actor. These fixtures stand in for
+ * real operator edits, so they name one rather than being exempted from the contract they certify.
+ */
+const LIVE_AUDIT = {
+    p_actor_user_id: "live-cert-actor",
+    p_origin: "operator",
+    p_correlation_id: "live-cert-personas",
+} as const;
+
 const ORG = "00000000-0000-4000-8000-000000000001";
 /** A second tenant, used only to prove that nothing crosses between them. */
 const OTHER_ORG = "aaaa1111-0000-4000-8000-000000000001";
@@ -166,6 +176,7 @@ describeLive("Access & Identity V2 personas — live", () => {
                 p_org_id: ORG,
                 p_role_key: roleKey,
                 p_permission_keys: keys,
+                ...LIVE_AUDIT,
             });
             expect(error, `${roleKey}: ${error?.message}`).toBeNull();
         }
@@ -383,6 +394,7 @@ describeLive("Access & Identity V2 personas — live", () => {
                 p_org_id: ORG,
                 p_role_key: CUSTOM_ROLES.viewer,
                 p_permission_keys: ["fin.read", "fin.write"],
+                ...LIVE_AUDIT,
             });
             expect(grantErr, grantErr?.message).toBeNull();
 
@@ -400,6 +412,7 @@ describeLive("Access & Identity V2 personas — live", () => {
                 p_org_id: ORG,
                 p_role_key: CUSTOM_ROLES.viewer,
                 p_permission_keys: ["fin.read"],
+                ...LIVE_AUDIT,
             });
             expect(revokeErr, revokeErr?.message).toBeNull();
 

@@ -196,7 +196,6 @@ export async function resolveSharedCanonicalDeps(
         departmentMetadata: deptMetadata,
         statusKey,
         statusDefs,
-        workUnitMetadata: wuData?.metadata ?? null,
         /*
          * The record the stage annotations are ABOUT.
          *

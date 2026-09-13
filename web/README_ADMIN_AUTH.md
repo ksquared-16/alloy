@@ -28,7 +28,9 @@ How **admin portal** auth works in `web/` today. Canonical product semantics:
 ## Runtime resolution — there is more than one resolver
 
 **There is not a single resolver.** Three functions independently compute `orgId`, `roleKeys` and
-`portalEligible`, each with its own `PORTAL_ROLES` membership test:
+`portalEligible`. Since `W-13` all three reach the last of those through **one** module —
+`lib/admin/portalAdmission.ts` — which resolves the `portal.access` capability. They still compute
+it three times; what they no longer do is decide it three different ways.
 
 | # | Resolution path | File | What it reads |
 |---|---|---|---|
@@ -36,7 +38,11 @@ How **admin portal** auth works in `web/` today. Canonical product semantics:
 | 2 | **`resolveAdminAccessDimensionsForOrgMember`** | `lib/admin/resolveAdminAccessCore.ts` | the **operator preview** behind Settings → Users & Roles. Recomputes rather than projects (`C11`) |
 | 3 | **`resolveAdminPortalOrgCore`** | `lib/admin/resolveAdminPortalOrgCore.ts` | the **light path** — org + role keys only, no grants and no scope. Carries its own copy of the legacy fallback (`M2-5`) |
 
-`PORTAL_ROLES` (`{admin, ops}`) is defined **twice** — once in path 1's module and once in path 3's.
+`PORTAL_ROLES` (`{admin, ops}`) **no longer exists.** It was defined twice — once in path 1's module
+and once in path 3's — and `W-13` deleted both, replacing the literal with a grant read for
+`portal.access` (`supabase/migrations/20260911140000_w13_portal_access_capability_admission.sql`
+seeds it to `admin` and `ops`, which is exactly the set the literal admitted).
+`web/tests/access/portalAdmissionIsCapability.test.ts` fails if either copy comes back.
 
 > **`M2-13`: two gates in one request can disagree about the same principal**, because they do not
 > all consult the same resolver. `W-41` is the workstream that reduces these to one resolution
@@ -70,11 +76,33 @@ built `roleKeys` raw while the preview built them trimmed: a row holding `"admin
 working portal administrator in Settings → Users & Roles while every runtime gate returned 401/403.
 An all-whitespace role key is **dropped**, not carried as an empty key.
 
-**Portal eligibility (`portalEligible`).** `true` when the normalized `roleKeys` include `admin` or
-`ops`. Users with only custom role keys and no legacy fallback do **not** get the admin shell.
+**Portal eligibility (`portalEligible`).** `true` when the principal's grant union for the resolved
+org contains **`portal.access`**. It is an ordinary capability row in `role_permission_grants`, so a
+custom role can hold it and an administrator can take it away from the role editor (Settings →
+Access → the **Portal** area). A role named `admin` with no such grant does **not** get the shell.
 
-> **`W-13` (open, needs a product decision):** portal admission is a **role literal test**, not a
-> capability. It is not `portal.access` and cannot currently be granted to a custom role.
+Three outcomes, not two — `lib/admin/portalAdmission.ts` keeps them apart:
+
+| Outcome | Means | Result |
+|---|---|---|
+| `admitted` | the grant union contains `portal.access` | shell |
+| `no-capability` | the grants were read, and it is not among them | 403 / redirect to `/login` |
+| `unresolved` | the grant read FAILED (`W-43`) | 403 / redirect, logged separately |
+
+Both refusals deny. They are logged distinctly (`[access-identity][W-13][portal-denied] reason=…`)
+because an operator debugging a lockout needs to know which one they are looking at, and an HTTP
+status cannot tell them. Nothing fails open.
+
+> **Admission is not authorization.** `portal.access` confers nothing inside the portal: every
+> surface and every action still resolves its own capability. `I-35`ᴮ states the converse rule —
+> an admission predicate must never satisfy a capability gate — and
+> `web/tests/access/admissionDoesNotAuthorize.test.ts` enforces it over the tree.
+
+> **`school_director` and `regional_lead` do not hold `portal.access`.** `W-13` changed HOW
+> admission is decided, not WHICH roles deserve it, so the preservation migration granted it to
+> exactly the roles the literal admitted. Whether those two belong in the operator portal is
+> decision `D2` (`docs/platform/planning/access-identity-v2/d2-i10-role-composition-decision.md`),
+> and it is the operator's.
 
 **Capabilities.** `permissionKeys` = union of `role_permission_grants.permission_key` where
 `allowed = true` for the resolved org's `role_key`s. Prefer checking `permissionKeys` (or helpers)
@@ -303,8 +331,8 @@ Server may also read `SUPABASE_URL` / `SUPABASE_ANON_KEY` if set.
 
 | Id | What is not true yet |
 |---|---|
-| `W-41` (`AD-12`) | Three resolvers, two `PORTAL_ROLES` sets, two copies of the legacy fallback. |
-| `W-13` | Portal admission is a role literal, not a `portal.access` capability. |
+| `W-41` (`AD-12`) | Three resolvers still COMPUTE admission separately, though all three now decide it through one module. |
+| `D2` | Whether `school_director` / `regional_lead` receive `portal.access`. Operator-owned; `W-13` deliberately did not answer it. |
 | `W-15` | Most handlers gate on admission, not capability; declarations are mostly `pending`. |
 | `W-7` (`M1`) | An absent access profile still resolves as `all`. |
 | `W-17` | The role write **replaces** a membership's role set rather than adding to it. |

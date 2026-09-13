@@ -1,0 +1,434 @@
+{
+  "waitlist_wide": {
+    "rowLeft": 777,
+    "rowRight": 1077,
+    "scrollWidth": 300,
+    "clientWidth": 300,
+    "items": [
+      {
+        "key": "tour",
+        "left": 906,
+        "right": 1077,
+        "top": 413,
+        "height": 30,
+        "label": "Tour awaiting outcome ▾"
+      },
+      {
+        "key": "add_family_member",
+        "left": 844,
+        "right": 987,
+        "top": 450,
+        "height": 30,
+        "label": "Add family member"
+      },
+      {
+        "key": "send_form",
+        "left": 993,
+        "right": 1077,
+        "top": 450,
+        "height": 30,
+        "label": "Send form"
+      }
+    ]
+  },
+  "waitlist_1680": {
+    "rowLeft": 910,
+    "rowRight": 1237,
+    "scrollWidth": 327,
+    "clientWidth": 327,
+    "items": [
+      {
+        "key": "tour",
+        "left": 918,
+        "right": 1088,
+        "top": 399,
+        "height": 30,
+        "label": "Tour awaiting outcome ▾"
+      },
+      {
+        "key": "add_family_member",
+        "left": 1094,
+        "right": 1237,
+        "top": 399,
+        "height": 30,
+        "label": "Add family member"
+      },
+      {
+        "key": "send_form",
+        "left": 1153,
+        "right": 1237,
+        "top": 436,
+        "height": 30,
+        "label": "Send form"
+      }
+    ]
+  },
+  "waitlist_1280": {
+    "rowLeft": 638,
+    "rowRight": 938,
+    "scrollWidth": 300,
+    "clientWidth": 300,
+    "items": [
+      {
+        "key": "tour",
+        "left": 767,
+        "right": 938,
+        "top": 390,
+        "height": 30,
+        "label": "Tour awaiting outcome ▾"
+      },
+      {
+        "key": "add_family_member",
+        "left": 705,
+        "right": 848,
+        "top": 426,
+        "height": 30,
+        "label": "Add family member"
+      },
+      {
+        "key": "send_form",
+        "left": 854,
+        "right": 938,
+        "top": 426,
+        "height": 30,
+        "label": "Send form"
+      }
+    ]
+  },
+  "waitlist_1100": {
+    "rowLeft": 518,
+    "rowRight": 818,
+    "scrollWidth": 300,
+    "clientWidth": 300,
+    "items": [
+      {
+        "key": "tour",
+        "left": 647,
+        "right": 818,
+        "top": 390,
+        "height": 30,
+        "label": "Tour awaiting outcome ▾"
+      },
+      {
+        "key": "add_family_member",
+        "left": 585,
+        "right": 728,
+        "top": 426,
+        "height": 30,
+        "label": "Add family member"
+      },
+      {
+        "key": "send_form",
+        "left": 734,
+        "right": 818,
+        "top": 426,
+        "height": 30,
+        "label": "Send form"
+      }
+    ]
+  },
+  "waitlist_980": {
+    "rowLeft": 613,
+    "rowRight": 913,
+    "scrollWidth": 300,
+    "clientWidth": 300,
+    "items": [
+      {
+        "key": "tour",
+        "left": 742,
+        "right": 913,
+        "top": 390,
+        "height": 30,
+        "label": "Tour awaiting outcome ▾"
+      },
+      {
+        "key": "add_family_member",
+        "left": 680,
+        "right": 823,
+        "top": 426,
+        "height": 30,
+        "label": "Add family member"
+      },
+      {
+        "key": "send_form",
+        "left": 829,
+        "right": 913,
+        "top": 426,
+        "height": 30,
+        "label": "Send form"
+      }
+    ]
+  },
+  "waitlist_860": {
+    "rowLeft": 493,
+    "rowRight": 793,
+    "scrollWidth": 300,
+    "clientWidth": 300,
+    "items": [
+      {
+        "key": "tour",
+        "left": 622,
+        "right": 793,
+        "top": 452,
+        "height": 30,
+        "label": "Tour awaiting outcome ▾"
+      },
+      {
+        "key": "add_family_member",
+        "left": 560,
+        "right": 703,
+        "top": 488,
+        "height": 30,
+        "label": "Add family member"
+      },
+      {
+        "key": "send_form",
+        "left": 709,
+        "right": 793,
+        "top": 488,
+        "height": 30,
+        "label": "Send form"
+      }
+    ]
+  },
+  "new_wide": {
+    "rowLeft": 777,
+    "rowRight": 1077,
+    "scrollWidth": 300,
+    "clientWidth": 300,
+    "items": [
+      {
+        "key": "quick_message",
+        "left": 897,
+        "right": 1013,
+        "top": 403,
+        "height": 30,
+        "label": "Contact Family"
+      },
+      {
+        "key": "tour",
+        "left": 1019,
+        "right": 1077,
+        "top": 403,
+        "height": 30,
+        "label": "Tour ▾"
+      },
+      {
+        "key": "waitlist_child",
+        "left": 872,
+        "right": 990,
+        "top": 439,
+        "height": 30,
+        "label": "Move to Waitlist"
+      },
+      {
+        "key": "add_child",
+        "left": 996,
+        "right": 1077,
+        "top": 439,
+        "height": 30,
+        "label": "Add Child"
+      }
+    ]
+  },
+  "new_1680": {
+    "rowLeft": 910,
+    "rowRight": 1237,
+    "scrollWidth": 327,
+    "clientWidth": 327,
+    "items": [
+      {
+        "key": "quick_message",
+        "left": 933,
+        "right": 1049,
+        "top": 403,
+        "height": 30,
+        "label": "Contact Family"
+      },
+      {
+        "key": "tour",
+        "left": 1055,
+        "right": 1113,
+        "top": 403,
+        "height": 30,
+        "label": "Tour ▾"
+      },
+      {
+        "key": "waitlist_child",
+        "left": 1119,
+        "right": 1237,
+        "top": 403,
+        "height": 30,
+        "label": "Move to Waitlist"
+      },
+      {
+        "key": "add_child",
+        "left": 1156,
+        "right": 1237,
+        "top": 439,
+        "height": 30,
+        "label": "Add Child"
+      }
+    ]
+  },
+  "new_1280": {
+    "rowLeft": 638,
+    "rowRight": 938,
+    "scrollWidth": 300,
+    "clientWidth": 300,
+    "items": [
+      {
+        "key": "quick_message",
+        "left": 758,
+        "right": 874,
+        "top": 379,
+        "height": 30,
+        "label": "Contact Family"
+      },
+      {
+        "key": "tour",
+        "left": 880,
+        "right": 938,
+        "top": 379,
+        "height": 30,
+        "label": "Tour ▾"
+      },
+      {
+        "key": "waitlist_child",
+        "left": 733,
+        "right": 851,
+        "top": 416,
+        "height": 30,
+        "label": "Move to Waitlist"
+      },
+      {
+        "key": "add_child",
+        "left": 857,
+        "right": 938,
+        "top": 416,
+        "height": 30,
+        "label": "Add Child"
+      }
+    ]
+  },
+  "new_1100": {
+    "rowLeft": 518,
+    "rowRight": 818,
+    "scrollWidth": 300,
+    "clientWidth": 300,
+    "items": [
+      {
+        "key": "quick_message",
+        "left": 638,
+        "right": 754,
+        "top": 379,
+        "height": 30,
+        "label": "Contact Family"
+      },
+      {
+        "key": "tour",
+        "left": 760,
+        "right": 818,
+        "top": 379,
+        "height": 30,
+        "label": "Tour ▾"
+      },
+      {
+        "key": "waitlist_child",
+        "left": 613,
+        "right": 731,
+        "top": 416,
+        "height": 30,
+        "label": "Move to Waitlist"
+      },
+      {
+        "key": "add_child",
+        "left": 737,
+        "right": 818,
+        "top": 416,
+        "height": 30,
+        "label": "Add Child"
+      }
+    ]
+  },
+  "new_980": {
+    "rowLeft": 613,
+    "rowRight": 913,
+    "scrollWidth": 300,
+    "clientWidth": 300,
+    "items": [
+      {
+        "key": "quick_message",
+        "left": 733,
+        "right": 849,
+        "top": 379,
+        "height": 30,
+        "label": "Contact Family"
+      },
+      {
+        "key": "tour",
+        "left": 855,
+        "right": 913,
+        "top": 379,
+        "height": 30,
+        "label": "Tour ▾"
+      },
+      {
+        "key": "waitlist_child",
+        "left": 708,
+        "right": 826,
+        "top": 416,
+        "height": 30,
+        "label": "Move to Waitlist"
+      },
+      {
+        "key": "add_child",
+        "left": 832,
+        "right": 913,
+        "top": 416,
+        "height": 30,
+        "label": "Add Child"
+      }
+    ]
+  },
+  "new_860": {
+    "rowLeft": 493,
+    "rowRight": 793,
+    "scrollWidth": 300,
+    "clientWidth": 300,
+    "items": [
+      {
+        "key": "quick_message",
+        "left": 613,
+        "right": 729,
+        "top": 441,
+        "height": 30,
+        "label": "Contact Family"
+      },
+      {
+        "key": "tour",
+        "left": 735,
+        "right": 793,
+        "top": 441,
+        "height": 30,
+        "label": "Tour ▾"
+      },
+      {
+        "key": "waitlist_child",
+        "left": 588,
+        "right": 706,
+        "top": 478,
+        "height": 30,
+        "label": "Move to Waitlist"
+      },
+      {
+        "key": "add_child",
+        "left": 712,
+        "right": 793,
+        "top": 478,
+        "height": 30,
+        "label": "Add Child"
+      }
+    ]
+  }
+}

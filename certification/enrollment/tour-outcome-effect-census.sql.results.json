@@ -1,0 +1,31 @@
+{
+  "trusted_host_action_id": "tha_cc84adf71284b7",
+  "query_hash": "b3e697b5c55122692aa243bd0208f48d3336623b663b43fb78ec04106c2e52d7",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-13T11:46:06.500Z",
+    "question_ids": [
+      "q1_opportunity",
+      "q2_tasks"
+    ],
+    "questions": {
+      "q1_opportunity": {
+        "question_id": "q1_opportunity",
+        "row_count": null,
+        "rows": [
+          "status_key=open | updated_at=2026-09-13T11:43:44.917552+00:00 | metadata={\"tour_date\": \"2026-09-14\", \"tour_time\": \"09:00\"}"
+        ]
+      },
+      "q2_tasks": {
+        "question_id": "q2_tasks",
+        "row_count": null,
+        "rows": [
+          "id=560a8c1c-1fe2-4489-9f14-58c78a06cb9d | title=Conduct Tour | status=open | stage=tour | template=work_3 | outcome=null | completed_at=null | updated_at=2026-09-13T11:43:42.392374+00:00",
+          "id=ce9cbf8d-5227-4da6-8831-8c40c6339783 | title=Contact Family | status=completed | stage=lead | template=contact_family | outcome=null | completed_at=null | updated_at=2026-09-13T02:32:23.317878+00:00",
+          "id=fe89be1a-e904-43ad-a646-7af2c7b1f72e | title=Review each child's path | status=open | stage=decision | template=review_child_paths | outcome=null | completed_at=null | updated_at=2026-09-13T11:43:44.354982+00:00"
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}

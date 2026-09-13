@@ -2,13 +2,13 @@
   "reviewed": "2026-09-10",
   "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
   "ratchet": {
-    "max_pending": 679,
-    "$comment": "Lowered 693 -> 679 by the Access & Identity V2 Financials slice: twelve financial record-data handlers converted to fin.read and two GL-account mutations to fin.write, plus two entries overturned from a reasoned `none` (see their `supersedes`). The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack."
+    "max_pending": 631,
+    "$comment": "Lowered 693 -> 679 by the Access & Identity V2 Financials slice: twelve financial record-data handlers converted to fin.read and two GL-account mutations to fin.write, plus two entries overturned from a reasoned `none` (see their `supersedes`). Lowered 679 -> 656 by the Forms authority cleanup: 23 handlers that were already enforcing authorization moved from pending to declared. The enforcement did not become stricter - it stopped being invisible to this table. Lowered 656 -> 655 by Attendance Productization V1 Thread 8: declaring the new pickup-authority handler against `attendance.read` made the burndown able to see that `app/api/admin/childcare-attendance/route.ts` GET already ran the same `assertAttendanceReadAllowed` gate while still marked pending, so it was drained rather than left claiming less than it enforces. Lowered again to 631 by the POS + Processing authority cleanup, which drained 24 net from the same 656 baseline: 25 handlers declared against forms.author and the four new processing.* keys, less one returned to pending - `processing/cases/[caseId]/identity/review` GET, which flows through the shared operator context but never required the old role gate, so declaring a capability there would have claimed an enforcement that does not exist and adding one would have tightened an open read. Attendance's reduction and this one are independent and both count: 656 - 1 - 24 = 631. The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack."
   },
   "inherited": {
     "$comment": "Handlers that entered web/app/api from OTHER programs while this branch was frozen, and are therefore not part of the Access backlog `ratchet.max_pending` bounds. The effective assertion is `pending - inherited <= max_pending`, so the program-owned backlog stays ratcheted at its committed ceiling and the ceiling is NOT raised. Every entry must still exist, still be exported, and still be `pending`: a deleted route, a removed method, or a handler that has since been classified `declared` or `none` FAILS until it is removed from this list. The list may only shrink. Nothing here asserts anything about a handler's authorization - these are W-15 backlog items awaiting OD-7 exactly like every other `pending` entry, and none of them is exempt from it. Shape follows the sibling gate scripts/checkServiceClientPrincipal.mjs, whose `baseline` list is the same idea for the same backlog. 2026-08-19, OD-2 reconciliation: merging current origin/staging brought five handlers this table had never seen. Three are participant token routes and took the settled `none` classification of their fourteen siblings rather than being seeded pending. The two on app/api/admin/communications/ingress-routes are Communications' and are enumerated here — gated by requireAdminOrgContextLight, an admission helper, consulting no catalog capability, exactly like the seventeen before them. The ceiling was NOT raised to absorb them. 2026-08-20, post-merge staging repair: the Communications lane merged app/api/communications/unsubscribe between this census's last run and the PR #475 merge, so staging's build failed on an undeclared route. Enumerated here rather than classified `none`: it is gated by an HMAC-signed recipient token, which is plausibly the same 'the credential is in the request' doctrine as the public-form family, but no sibling carries a settled review for signed unsubscribe tokens and this census does not assert another program's authorization model on inference. The ceiling was NOT raised.",
     "frozen": "2026-08-20",
-    "frozen_by": "Access & Identity V2 recovery onto current staging. The recovered W-14 table was authored against the route tree at merge-base 08e9dd878; 459 staging commits later 20 handlers exist that it had never seen. Audited one by one: NONE consults a catalog capability, so none can be `declared`; 10 are gated by requireAdminOrOps (membership + portal eligibility, not authorization), 7 are authenticated-only org context, 3 are public token routes whose closest siblings are themselves pending. Classifying any of them is the OD-7 conversion decision, which a recovery does not make.",
+    "frozen_by": "Access & Identity V2 recovery onto current staging. The recovered W-14 table was authored against the route tree at merge-base 08e9dd878; 459 staging commits later 20 handlers exist that it had never seen. Audited one by one: NONE consults a catalog capability, so none can be `declared`; 10 are gated by requireAdminOrOps (membership + portal admission, not authorization), 7 are authenticated-only org context, 3 are public token routes whose closest siblings are themselves pending. Classifying any of them is the OD-7 conversion decision, which a recovery does not make.",
     "handlers": [
       {
         "route": "app/api/admin/communications/bindings/route.ts",
@@ -143,11 +143,11 @@
     "policy": "OD-7: a non-capability gate converts to the canonical capability representing the operation it protects, and the conversion MUST NOT widen admission.",
     "reviewed": "2026-08-19",
     "access_owned": {
-      "total": 15,
-      "declared": 13,
+      "total": 17,
+      "declared": 15,
       "none": 1,
       "exceptions": 1,
-      "state": "EXHAUSTED. Every Access-owned handler is declared, reviewed `none`, or a recorded exception. OD-8 resolved the admin/users GET exception with deployed Q15 evidence, leaving ONE — send-password-reset POST, which is decision-gated for a reason other than OD-7."
+      "state": "EXHAUSTED. Every Access-owned handler is declared, reviewed `none`, or a recorded exception. OD-8 resolved the admin/users GET exception with deployed Q15 evidence, leaving ONE — send-password-reset POST, which is decision-gated for a reason other than OD-7. W-17 added the additive role-assignment pair — POST …/users/[userId]/roles and DELETE …/users/[userId]/roles/[roleKey] — both declared on settings.users_roles, the same gate the replacement route already used; adding a role is not a lesser authority than replacing the set."
     },
     "conversion_exceptions": [
       {
@@ -157,7 +157,7 @@
         "needs": "AD-15"
       }
     ],
-    "systemic_finding_blocking_the_remaining_backlog": "The 292 gate-helper handlers are NOT mechanically convertible under OD-7 alone, and the reason is structural rather than per-route. `requireAdminOrOps` resolves through getAdminOrgContextLight, which refuses unless `portalEligible` — it admits by ROLE, not by grant. So a pure capability swap admits capability holders who are not portal-eligible, which WIDENS (rule 6), while `portal AND capability` NARROWS for any portal principal whose org lacks the grant. Choosing between them, and proving which applies, needs per-org grant coverage from a real tenant — the same class of evidence the Q15 gate names, which the seeded certification tenant cannot supply because it defines only admin and ops.",
+    "systemic_finding_blocking_the_remaining_backlog": "The 292 gate-helper handlers are NOT mechanically convertible under OD-7 alone, and the reason is structural rather than per-route. `requireAdminOrOps` resolves through getAdminOrgContextLight, which refuses unless `portalEligible`. W-13 (20260911140000) changed WHAT that word means — it is now the `portal.access` grant, org-scoped, not a role literal — and that removes one horn of this dilemma without removing the finding. `portal AND capability` still NARROWS for any admitted principal whose org lacks the domain grant, so the per-org grant coverage this entry asks for is still the evidence the conversion needs. What is no longer true is the other horn: a capability swap can no longer admit a `portal.access` holder by accident, because admission is itself resolved from the same grant table the swap would read.",
     "remaining_by_ownership": "694 owned pending handlers across 142 route families — forms, communications, commercial, analytics, departments, processing, financials, jobs, opportunities, schedules, workflows and others. Every one carries another program's domain semantics, so the canonical capability for each is that domain's call, not Access's. OD-7 scopes this burndown to Access-owned sites and those are exhausted.",
     "resolved_exceptions": [
       {
@@ -305,6 +305,14 @@
     "app/api/admin/agent/v2/field-visibility/route.ts": {
       "POST": {
         "status": "pending"
+      }
+    },
+    "app/api/admin/access/history/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth",
+        "reason": "D2 Access Change Audit. Reading who changed access requires the authority to change it: this is the same gate every Access mutation route and every Access chapter already uses, so no separate audit-read capability was invented. Org is taken from the authenticated context and never from the query, so a forged subject id narrows the result rather than reaching another tenant."
       }
     },
     "app/api/admin/ai/config-layout-assist/capabilities/route.ts": {
@@ -527,6 +535,56 @@
         "reason": "Composed Attendance VM for one child. Gated by requireAdminOrOps with the org taken from the session; no attendance-specific catalog capability exists."
       }
     },
+    "app/api/admin/attendance/kiosk-devices/[deviceId]/route.ts": {
+      "DELETE": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      }
+    },
+    "app/api/admin/attendance/kiosk-devices/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      }
+    },
+    "app/api/admin/attendance/producers/[producerId]/route.ts": {
+      "DELETE": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      }
+    },
+    "app/api/admin/attendance/producers/[producerId]/sites/route.ts": {
+      "DELETE": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      }
+    },
+    "app/api/admin/attendance/producers/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      }
+    },
     "app/api/admin/business-process-layout-assignments/route.ts": {
       "GET": {
         "status": "pending"
@@ -606,7 +664,9 @@
     },
     "app/api/admin/childcare-attendance/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "attendance.read",
+        "helper": "assertAttendanceReadAllowed"
       },
       "POST": {
         "status": "pending"
@@ -617,6 +677,13 @@
         "status": "declared",
         "capability": "attendance.record",
         "helper": "authorServiceDayException"
+      }
+    },
+    "app/api/admin/children/[childId]/pickup-authority/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "attendance.read",
+        "helper": "assertAttendanceReadAllowed"
       }
     },
     "app/api/admin/commands/[commandKey]/route.ts": {
@@ -1669,12 +1736,33 @@
         "supersedes": "Superseded 2026-09-10 by the Access & Identity V2 Financials slice. The prior entry reasoned that \"fin.read is a Financials-workspace capability, not this projection's\" — but the key's own refusal says \"You don't have access to view financial information for this organization\", and the role editor now offers View Financials as a control an organization sets. Under that meaning a composed household financial card, and the amount and canonical payment id of a collection attempt, ARE financial information; leaving them on admission alone would make \"a role with no Financials access cannot read financial data\" false through a second door. Overturning a reasoned `none` is a decision, and this is the record of it."
       }
     },
+    "app/api/admin/financials/charge/[id]/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      }
+    },
     "app/api/admin/financials/collection-state/route.ts": {
       "GET": {
         "status": "declared",
         "capability": "fin.read",
         "helper": "assertFinancialsReadAllowed",
         "supersedes": "Superseded 2026-09-10 by the Access & Identity V2 Financials slice. The prior entry reasoned that \"fin.read is a Financials-workspace capability, not this projection's\" — but the key's own refusal says \"You don't have access to view financial information for this organization\", and the role editor now offers View Financials as a control an organization sets. Under that meaning a composed household financial card, and the amount and canonical payment id of a collection attempt, ARE financial information; leaving them on admission alone would make \"a role with no Financials access cannot read financial data\" false through a second door. Overturning a reasoned `none` is a decision, and this is the record of it."
+      }
+    },
+    "app/api/admin/financials/eligible-target-charges/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      }
+    },
+    "app/api/admin/financials/funding-sources/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
       }
     },
     "app/api/admin/financials/job/[id]/route.ts": {
@@ -1733,6 +1821,13 @@
         "helper": "assertFinancialsReadAllowed"
       }
     },
+    "app/api/admin/financials/responsibility-candidates/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      }
+    },
     "app/api/admin/financials/schedule/[id]/route.ts": {
       "GET": {
         "status": "declared",
@@ -1770,12 +1865,18 @@
     },
     "app/api/admin/forms/[formId]/archive/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/[formId]/duplicate/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/[formId]/lifecycle-coverage/route.ts": {
@@ -1783,7 +1884,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/[formId]/outcome-labels/route.ts": {
@@ -1793,7 +1897,10 @@
     },
     "app/api/admin/forms/[formId]/public-links/[linkId]/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/[formId]/public-links/route.ts": {
@@ -1801,28 +1908,43 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/[formId]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       },
       "GET": {
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/[formId]/versions/[versionId]/archive/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/[formId]/versions/[versionId]/publish/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/[formId]/versions/[versionId]/route.ts": {
@@ -1830,17 +1952,26 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/[formId]/versions/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/blank/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/crm-entity-search/route.ts": {
@@ -1850,7 +1981,10 @@
     },
     "app/api/admin/forms/packet-definitions/[packetDefId]/items/route.ts": {
       "PUT": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/packet-definitions/[packetDefId]/public-links/route.ts": {
@@ -1863,7 +1997,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/packet-definitions/route.ts": {
@@ -1871,12 +2008,18 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/packet-links/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.submissions",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Submission handling that changes records or reaches people - sending, submitting on behalf, setting a linkage by hand, generating a document. Replaced a literal `admin` role gate."
       }
     },
     "app/api/admin/forms/packet-sessions/[packetSessionId]/review-insight/route.ts": {
@@ -1914,22 +2057,34 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Form design and configuration. Replaced a literal `admin` role gate: an organization can now grant form authoring to any role it configures, and calling someone an administrator no longer implies it."
       }
     },
     "app/api/admin/forms/submissions/[submissionId]/confirm-linkage/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.submissions.confirm",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Confirming that a submission was matched to the right record; metadata only, no CRM mutation. Kept as its own capability because `ops` could already do exactly this and nothing broader, and folding it into `forms.submissions` would have granted six operations it never had."
       }
     },
     "app/api/admin/forms/submissions/[submissionId]/generate-document/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.submissions",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Submission handling that changes records or reaches people - sending, submitting on behalf, setting a linkage by hand, generating a document. Replaced a literal `admin` role gate."
       }
     },
     "app/api/admin/forms/submissions/[submissionId]/manual-link/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.submissions",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Submission handling that changes records or reaches people - sending, submitting on behalf, setting a linkage by hand, generating a document. Replaced a literal `admin` role gate."
       }
     },
     "app/api/admin/forms/submissions/[submissionId]/route.ts": {
@@ -1939,7 +2094,10 @@
     },
     "app/api/admin/forms/submissions/[submissionId]/submit/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.submissions",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Submission handling that changes records or reaches people - sending, submitting on behalf, setting a linkage by hand, generating a document. Replaced a literal `admin` role gate."
       }
     },
     "app/api/admin/forms/submissions/route.ts": {
@@ -1947,7 +2105,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.submissions",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Submission handling that changes records or reaches people - sending, submitting on behalf, setting a linkage by hand, generating a document. Replaced a literal `admin` role gate."
       }
     },
     "app/api/admin/global-search/route.ts": {
@@ -1988,90 +2149,12 @@
         "status": "pending"
       }
     },
-    "app/api/admin/integrations/applications/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "integrations.manage",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/capabilities/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "integrations.read",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/installations/[id]/activity/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "integrations.read",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/installations/[id]/credentials/[credentialId]/route.ts": {
-      "POST": {
-        "status": "declared",
-        "capability": "integrations.manage",
-        "helper": "requireIntegrationsAccess"
-      },
-      "DELETE": {
-        "status": "declared",
-        "capability": "integrations.manage",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/installations/[id]/credentials/route.ts": {
-      "POST": {
-        "status": "declared",
-        "capability": "integrations.manage",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/installations/[id]/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "integrations.read",
-        "helper": "requireIntegrationsAccess"
-      },
-      "PATCH": {
-        "status": "declared",
-        "capability": "integrations.manage",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/installations/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "integrations.read",
-        "helper": "authorizeIntegrationsAdmin"
-      },
-      "POST": {
-        "status": "declared",
-        "capability": "integrations.manage",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/locations/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "integrations.manage",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/openapi/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "integrations.read",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
     "app/api/admin/intelligence/operational/route.ts": {
       "GET": {
         "status": "declared",
         "capability": "reports.read",
         "helper": "requireAnalyticsReadAccess",
-        "note": "reports.write also satisfies; portal-eligible passes unconditionally (W-13)."
+        "note": "reports.write also satisfies. The `portal-eligible passes unconditionally` leg is GONE: 20260819120000 granted reports.read to ops and canReadAnalytics stopped accepting admission (I-35ᴮ), and W-13 (20260911140000) made admission itself a capability. Admission can still DENY upstream; it authorizes nothing here."
       }
     },
     "app/api/admin/job-statuses/route.ts": {
@@ -2353,7 +2436,7 @@
         "status": "declared",
         "capability": "reports.read",
         "helper": "requireAnalyticsReadAccess",
-        "note": "reports.write also satisfies; portal-eligible passes unconditionally (W-13)."
+        "note": "reports.write also satisfies. The `portal-eligible passes unconditionally` leg is GONE: 20260819120000 granted reports.read to ops and canReadAnalytics stopped accepting admission (I-35ᴮ), and W-13 (20260911140000) made admission itself a capability. Admission can still DENY upstream; it authorizes nothing here."
       }
     },
     "app/api/admin/metrics/snapshots/write/route.ts": {
@@ -2366,7 +2449,7 @@
         "status": "declared",
         "capability": "reports.read",
         "helper": "requireAnalyticsReadAccess",
-        "note": "reports.write also satisfies; portal-eligible passes unconditionally (W-13)."
+        "note": "reports.write also satisfies. The `portal-eligible passes unconditionally` leg is GONE: 20260819120000 granted reports.read to ops and canReadAnalytics stopped accepting admission (I-35ᴮ), and W-13 (20260911140000) made admission itself a capability. Admission can still DENY upstream; it authorizes nothing here."
       }
     },
     "app/api/admin/mutations/execute/route.ts": {
@@ -2496,7 +2579,10 @@
     },
     "app/api/admin/opportunities/[id]/form-send/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.submissions",
+        "helper": "requireFormsCapability",
+        "reason": "Forms authority cleanup. Submission handling that changes records or reaches people - sending, submitting on behalf, setting a linkage by hand, generating a document. Replaced a literal `admin` role gate."
       }
     },
     "app/api/admin/opportunities/[id]/intake-source/route.ts": {
@@ -2795,10 +2881,16 @@
     },
     "app/api/admin/pos/documents/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Destructive: deletes the document, the Processing case it opened and the stored file. Deliberately NOT documents.write, which ops holds in every organization and which would therefore have handed ops this deletion."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.documents.manage",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Renames a source document. Deliberately NOT documents.write, which ops holds in every organization."
       }
     },
     "app/api/admin/pos/documents/route.ts": {
@@ -2808,27 +2900,42 @@
     },
     "app/api/admin/pos/packets/[packetDefinitionId]/projection/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/pos/packets/compose/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/pos/packets/from-template/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/pos/packets/preview/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/pos/packets/requirements/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/pos/packets/roster/route.ts": {
@@ -2843,7 +2950,10 @@
     },
     "app/api/admin/pos/packets/sessions/[sessionId]/participant-projection/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/pricing-dimension-values/[id]/route.ts": {
@@ -2940,27 +3050,42 @@
     },
     "app/api/admin/processing/cases/[caseId]/approve/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. TIGHTENING, not compatibility. This mutation flowed through the operator context but never actually required the old role gate — assertAuthorized is called by only two of the seven operator functions — so it was authorized by portal admission alone. The guard is explicit at the route because the capability is genuinely required here now."
       }
     },
     "app/api/admin/processing/cases/[caseId]/archive/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.archive",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Takes a case out of the queue. Its own key so that granting ops processing.operate does not also hand it an archive it has never had."
       }
     },
     "app/api/admin/processing/cases/[caseId]/classification/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. TIGHTENING, not compatibility: this mutation was previously authorized by portal admission alone, so any member who could reach the admin shell could commit it."
       }
     },
     "app/api/admin/processing/cases/[caseId]/form-draft/apply-discovery/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. TIGHTENING, not compatibility: this mutation was previously authorized by portal admission alone, so any member who could reach the admin shell could commit it."
       }
     },
     "app/api/admin/processing/cases/[caseId]/form-draft/create/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/processing/cases/[caseId]/form-draft/discovery-decisions/route.ts": {
@@ -2968,47 +3093,72 @@
         "status": "pending"
       },
       "PUT": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. TIGHTENING, not compatibility: this mutation was previously authorized by portal admission alone, so any member who could reach the admin shell could commit it."
       }
     },
     "app/api/admin/processing/cases/[caseId]/form-draft/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. TIGHTENING, not compatibility: this mutation was previously authorized by portal admission alone, so any member who could reach the admin shell could commit it."
       }
     },
     "app/api/admin/processing/cases/[caseId]/form-draft/save/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "POS + Processing authority cleanup. Packet and form-draft authoring the Forms platform already owns: these publish form versions, create packet definitions and items, or create a form from a case draft. Replaced a literal `admin` role gate; no new capability was invented for work forms.author already covers."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/approve/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. Guarded at the ROUTE so authority is decided before the request body is parsed — an empty body used to reach a 400 first, which meant an unauthorized caller learned the payload contract before being refused. The deep assertAuthorized in operatorReviewService stays as defence in depth: this is checked twice on purpose."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/correction/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. TIGHTENING, not compatibility. This mutation flowed through the operator context but never actually required the old role gate — assertAuthorized is called by only two of the seven operator functions — so it was authorized by portal admission alone. The guard is explicit at the route because the capability is genuinely required here now."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/execute/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. Guarded at the ROUTE so authority is decided before the request body is parsed — an empty body used to reach a 400 first, which meant an unauthorized caller learned the payload contract before being refused. The deep assertAuthorized in operatorReviewService stays as defence in depth: this is checked twice on purpose."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/plan/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. TIGHTENING, not compatibility. This mutation flowed through the operator context but never actually required the old role gate — assertAuthorized is called by only two of the seven operator functions — so it was authorized by portal admission alone. The guard is explicit at the route because the capability is genuinely required here now."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/resolution/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. TIGHTENING, not compatibility. This mutation flowed through the operator context but never actually required the old role gate — assertAuthorized is called by only two of the seven operator functions — so it was authorized by portal admission alone. The guard is explicit at the route because the capability is genuinely required here now."
       }
     },
     "app/api/admin/processing/cases/[caseId]/identity/review/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "pending",
+        "note": "Open read. It flows through the operator context but never required the old role gate, so declaring a capability here would claim an enforcement that does not exist — and adding one would tighten a read, which this slice was not approved to do."
       }
     },
     "app/api/admin/processing/cases/[caseId]/recommendation/route.ts": {
@@ -3018,12 +3168,18 @@
     },
     "app/api/admin/processing/cases/[caseId]/related-record-proposals/[proposalId]/commit/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. TIGHTENING, not compatibility: this mutation was previously authorized by portal admission alone, so any member who could reach the admin shell could commit it."
       }
     },
     "app/api/admin/processing/cases/[caseId]/related-record-proposals/[proposalId]/preview/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.operate",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Ordinary Processing work. TIGHTENING, not compatibility: this mutation was previously authorized by portal admission alone, so any member who could reach the admin shell could commit it."
       }
     },
     "app/api/admin/processing/cases/[caseId]/route.ts": {
@@ -3033,7 +3189,10 @@
     },
     "app/api/admin/processing/dev-cleanup/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "processing.dev_cleanup",
+        "helper": "requireProcessingCapability",
+        "reason": "POS + Processing authority cleanup. Test-data reset. The capability is necessary and not sufficient: the route and the planner both refuse in production through assertProcessingDevCleanupAllowed, independently of any grant."
       }
     },
     "app/api/admin/processing/queue/route.ts": {
@@ -4028,10 +4187,98 @@
         "reason": "The unscoped form of the same Twilio callback, verified against the global TWILIO_AUTH_TOKEN and failing closed identically."
       }
     },
-    "app/api/v1/oauth/token/route.ts": {
+    "app/api/admin/users/[userId]/roles/route.ts": {
       "POST": {
-        "status": "none",
-        "reason": "External token exchange. Admission IS the presented installation credential, resolved by hashed secret through resolveApplicationPrincipal, which reads the organization from the installation row. There is no org principal to hold a catalog capability: the caller is a non-human Application Principal, and Alloy's capability catalog describes what a MEMBER may do. External authority is the installation's granted_scopes, enforced at /api/v1 by requireScope, not a catalog key."
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth",
+        "reason": "W-17 Configurable Multi-Role Assignment. Adding or removing ONE role is the same authority as replacing the whole set, so it uses the gate every Access mutation route already uses rather than inventing an assignment capability. The target user comes from the path and the org from the authenticated context, so a forged user or a role belonging to another organization is refused rather than reaching another tenant."
+      }
+    },
+    "app/api/admin/users/[userId]/roles/[roleKey]/route.ts": {
+      "DELETE": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth",
+        "reason": "W-17 Configurable Multi-Role Assignment. Adding or removing ONE role is the same authority as replacing the whole set, so it uses the gate every Access mutation route already uses rather than inventing an assignment capability. The target user comes from the path and the org from the authenticated context, so a forged user or a role belonging to another organization is refused rather than reaching another tenant."
+      }
+    },
+    "app/api/admin/integrations/applications/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/capabilities/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/activity/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/credentials/[credentialId]/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      },
+      "DELETE": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/credentials/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
+      },
+      "PATCH": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "authorizeIntegrationsAdmin"
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/locations/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/openapi/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
       }
     },
     "app/api/v1/context/route.ts": {
@@ -4044,6 +4291,12 @@
       "GET": {
         "status": "none",
         "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope locations.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies — external scopes are a separate compatibility contract by design (see docs/api/developer-platform/03-authorization-scopes-boundaries.md). Tenancy and the installation location boundary are enforced inside public.list_external_locations."
+      }
+    },
+    "app/api/v1/oauth/token/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External token exchange. Admission IS the presented installation credential, resolved by hashed secret through resolveApplicationPrincipal, which reads the organization from the installation row. There is no org principal to hold a catalog capability: the caller is a non-human Application Principal, and Alloy's capability catalog describes what a MEMBER may do. External authority is the installation's granted_scopes, enforced at /api/v1 by requireScope, not a catalog key."
       }
     }
   }

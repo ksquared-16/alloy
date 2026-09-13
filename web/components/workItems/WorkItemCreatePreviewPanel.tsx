@@ -57,7 +57,6 @@ export default function WorkItemCreatePreviewPanel({ draft, validationIssues }: 
                         <PreviewField label="Process" value={preview.processLabel} />
                         <PreviewField label="Due" value={preview.dueLabel} />
                         <PreviewField label="Assignee" value={preview.assigneeLabel} />
-                        <PreviewField label="Waiting" value={preview.waitingLabel ?? "Not waiting"} />
                         <PreviewField label="Follow-on" value={preview.followOnLabel ?? "None yet"} />
                         <PreviewField label="Checklist" value={preview.checklistLabel} />
                         <PreviewField label="Provenance" value={preview.provenanceLabel} />

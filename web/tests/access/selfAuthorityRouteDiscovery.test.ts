@@ -125,8 +125,21 @@ const TABLE_WRITE = new RegExp(
     `from\\(\\s*["'\`](?:${AUTHORITY_TABLES.join("|")})["'\`]\\s*\\)\\s*(?:\\.\\s*\\w+\\([^)]*\\)\\s*)*?\\.\\s*(insert|upsert|update|delete)\\b`
 );
 
-/** The sanctioned atomic writers. Reaching one of these is an authority write too. */
-const AUTHORITY_RPCS = /create_membership_with_access_profile|replace_membership_with_access_profile/;
+/**
+ * The sanctioned atomic writers. Reaching one of these is an authority write too.
+ *
+ * D2 added two: removal and access-scope moved behind transaction owners so state and audit commit
+ * together. A discovery that knew only the table writes stopped seeing those routes entirely — the
+ * non-vacuity assertion caught it, which is the whole reason this file asserts its own subject
+ * before asserting anything about it.
+ *
+ * `create_role_definition_audited` is deliberately NOT here. This constant's subject is writes that
+ * carry `(principal, org)` authority, and creating an empty role definition grants nobody anything —
+ * there is no self-escalation in it. Adding it would widen the predicate past the thing the file
+ * says it is about, and the self-guard assertion would then demand a guard for a mutation with no
+ * subject to guard.
+ */
+const AUTHORITY_RPCS = /create_membership_with_access_profile|replace_membership_with_access_profile|remove_member_access_audited|replace_member_access_scope_audited/;
 
 function writesAuthorityDirectly(abs: string): boolean {
     const src = code(abs);

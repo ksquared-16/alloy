@@ -15,7 +15,16 @@ See `docs/sprints/archive/08_2026/work-items-v3-platform/14-communications-conve
 
 ## Fixture method
 
-Script: `web/scripts/createCommunicationsNeedsReplyQaFixture.ts`
+> **Historical — this script no longer exists.** `createCommunicationsNeedsReplyQaFixture.ts` was
+> deleted in the Work Items zero-debt hardening pass: it selected an existing thread and wrote
+> `attention_state` through a service-role client, so it could mutate real family correspondence.
+> The commands below are recorded as run at the time and must not be re-run.
+>
+> The safe replacement is `web/scripts/h2WorkItemsCommunicationsCertFixture.mjs`, which drives the
+> canonical inbound runtime with a synthetic sender on a reserved undeliverable domain. See
+> `certification/work-items-convergence/h2-communications-evidence.md`.
+
+Script: `web/scripts/createCommunicationsNeedsReplyQaFixture.ts` *(deleted)*
 
 ```bash
 cd web && node --import tsx scripts/createCommunicationsNeedsReplyQaFixture.ts

@@ -26,6 +26,7 @@ function fakeSupabase(tables: Tables) {
         const gte: Record<string, string> = {};
         const lte: Record<string, string> = {};
         let limit: number | null = null;
+        let range: { from: number; to: number } | null = null;
 
         const rows = () => {
             let out = [...(tables[table] ?? [])];
@@ -35,6 +36,12 @@ function fakeSupabase(tables: Tables) {
             for (const [col, val] of Object.entries(gte)) out = out.filter((r) => String(r[col]) >= val);
             for (const [col, val] of Object.entries(lte)) out = out.filter((r) => String(r[col]) <= val);
             if (limit !== null) out = out.slice(0, limit);
+            /*
+             * RANGE IS INCLUSIVE AT BOTH ENDS, like PostgREST's. Applied after the filters and the
+             * limit, because that is the order the server applies them in — a double that paged
+             * before filtering would let a paged read pass while the real one skipped rows.
+             */
+            if (range !== null) out = out.slice(range.from, range.to + 1);
             return out;
         };
 
@@ -63,6 +70,16 @@ function fakeSupabase(tables: Tables) {
             },
             limit(n: number) {
                 limit = n;
+                return api;
+            },
+            /*
+             * THE COHORT PAGES ITS CHARGE READ. PostgREST caps a response at `db-max-rows` — 1,000
+             * here — whatever `limit()` asked for, and answers no error, so the cohort requests
+             * successive ranges instead of trusting one limit. A double without `range` made every
+             * case in this file fail on a missing function rather than on anything it asserts.
+             */
+            range(from: number, to: number) {
+                range = { from, to };
                 return api;
             },
             then(resolve: (v: unknown) => unknown) {

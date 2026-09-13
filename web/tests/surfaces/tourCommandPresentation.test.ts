@@ -171,15 +171,77 @@ describe("a tour that has already happened states its status, not its date", () 
     it.each([
         ["confirmed" as const],
         ["rescheduled" as const],
-    ])("%s with an elapsed instant reads as awaiting its outcome", (statusKey) => {
+    ])("%s with an elapsed instant reads as awaiting its outcome WHERE IT CAN BE RECORDED", (statusKey) => {
+        const out = resolveTourCommandPresentation(
+            TOUR_SET,
+            signal({ scheduled: true, statusKey, startAt: PAST }),
+            { timeZone: "UTC", now: NOW, outcomeWorkAvailable: true },
+        );
+        expect(out.label).toBe("Tour awaiting outcome");
+        // The DURABLE state is untouched — only the label speaks differently.
+        expect(out.statusKey).toBe(statusKey);
+    });
+
+    /*
+     * "AWAITING OUTCOME" IS A CLAIM ABOUT THE CURRENT CONTEXT, NOT ABOUT THE BOOKING.
+     *
+     * Measured on the deployed tenant: the Waitlist Process card said "Tour awaiting outcome" while
+     * the Waitlist stage owned no Tour outcome work whatsoever — 2 work items, 0 outcomes, 0 ways
+     * out. Tour outcomes belong to the Tour stage's `conduct_tour` work, which the family had
+     * already left. The sentence was true about `tour_bookings` and unactionable where it printed.
+     */
+    it.each([
+        ["confirmed" as const],
+        ["rescheduled" as const],
+    ])("%s with an elapsed instant states no outcome when none can be recorded here", (statusKey) => {
         const out = resolveTourCommandPresentation(
             TOUR_SET,
             signal({ scheduled: true, statusKey, startAt: PAST }),
             { timeZone: "UTC", now: NOW },
         );
-        expect(out.label).toBe("Tour awaiting outcome");
-        // The DURABLE state is untouched — only the label speaks differently.
+        // Neither "awaiting outcome" (unactionable) nor "Tour scheduled" (false — it happened).
+        expect(out.label).toBe("Tour");
+        expect(out.label).not.toContain("awaiting outcome");
+        // The group and its commands are untouched; only the state claim is withdrawn.
+        expect(out.grouped).toBe(true);
         expect(out.statusKey).toBe(statusKey);
+        expect(out.tour.length).toBe(TOUR_SET.length);
+    });
+
+    it("a tour-domain outcome command in the group is itself a completion path", () => {
+        // The Tour stage may own completion through stage work (`outcomeWorkAvailable`), but a
+        // process that places `complete_tour` directly is equally able to resolve it. Neither form
+        // is privileged, and neither is identified by stage name.
+        const withComplete = [...TOUR_SET, { key: "complete_tour", handlerKey: "complete_tour" }];
+        const out = resolveTourCommandPresentation(
+            withComplete,
+            signal({ scheduled: true, statusKey: "confirmed", startAt: PAST }),
+            { timeZone: "UTC", now: NOW },
+        );
+        expect(out.label).toBe("Tour awaiting outcome");
+    });
+
+    it("a stale REQUESTED slot keeps its own stem — it is stale, not concluded", () => {
+        // `ELAPSED_STEM` deliberately omits `requested`, so the suppression above must not reach
+        // it. An earlier draft of the guard did, and this is what caught it.
+        const out = resolveTourCommandPresentation(
+            TOUR_SET,
+            signal({ scheduled: true, statusKey: "requested", startAt: PAST }),
+            { timeZone: "UTC", now: NOW },
+        );
+        expect(out.label).toBe("Tour requested");
+    });
+
+    it("the resolver still cannot fabricate a command", () => {
+        // Whatever it decides to say, the command set it returns is exactly what it was handed.
+        const out = resolveTourCommandPresentation(
+            TOUR_SET,
+            signal({ scheduled: true, statusKey: "confirmed", startAt: PAST }),
+            { timeZone: "UTC", now: NOW },
+        );
+        expect([...out.tour, ...out.rest].map((a) => a.key).sort()).toEqual(
+            TOUR_SET.map((a) => a.key).sort(),
+        );
     });
 
     it("prints no date once the instant is behind the operator", () => {

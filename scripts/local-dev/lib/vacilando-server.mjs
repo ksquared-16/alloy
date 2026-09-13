@@ -2726,22 +2726,66 @@ export function createVacilandoServer() {
   const worktreeDiskTimer = setInterval(() => { collectWorktreeDiskSizes({ force: false, trigger: "timer" }).catch(() => {}); }, WORKTREE_DISK_TICK_MS);
   worktreeDiskTimer.unref?.();
   setTimeout(() => { collectWorktreeDiskSizes({ force: false, trigger: "timer-first" }).catch(() => {}); }, WORKTREE_DISK_TICK_MS).unref?.();
-  // Engineering Health: observe/evaluate only (never executes cleanup).
-  // Heavy sync `du`/`ps` collectors — do NOT run on cold open (starves HTTP).
+  /*
+   * ENGINEERING HEALTH RUNS BESIDE THE GATEWAY, NOT INSIDE IT.
+   *
+   * THE DEFECT THIS CLOSES. This used to `import("./engineering-health/index.mjs")`
+   * and await `runEngineeringHealth` IN THIS PROCESS. Its collectors are
+   * `execFileSync`: `du -sk` over every worktree's node_modules, `docker version`,
+   * `ps`. Synchronous subprocesses on the event loop of the long-lived server.
+   *
+   * The previous comment conceded it — "Heavy sync du/ps collectors — do NOT run
+   * on cold open (starves HTTP)" — and the mitigation was only to delay the first
+   * run to ten minutes. That did not remove the stall, it scheduled it. It is the
+   * ~10-minute CPU burst the September 11 incident measured, with the sampler
+   * landing on child-process exit → fs ReadFileUtf8 → JSON.parse → GC.
+   *
+   * Engineering Health keeps ownership of WHAT is collected and of its own TTL
+   * cache. Only WHERE it executes changes: its existing `--json --quick` CLI, in
+   * a bounded child process, so the heavy work cannot touch this event loop.
+   * A run that overruns its window is killed and simply leaves the last report
+   * in place — observation is not worth a stalled control plane.
+   */
+  const ENG_HEALTH_TIMEOUT_MS = 4 * 60_000;
+  let engHealthInFlight = false;
   const engHealthTick = () => {
-    import("./engineering-health/index.mjs").then(({ runEngineeringHealth }) =>
-      runEngineeringHealth({ deep: false, refresh: false }).then((report) => {
-        lastEngHealth = {
-          overall: report.score?.overall,
-          potential_recovery_gb: report.potential_recovery_gb,
-          critical: (report.findings || []).filter((f) => f.severity === "critical").length,
-          warning: (report.findings || []).filter((f) => f.severity === "warning").length,
-          generated_at: report.generated_at,
-        };
-        if (lastEngHealth.critical > 0) {
-          console.warn(`[engineering-health] CRITICAL findings=${lastEngHealth.critical} overall=${lastEngHealth.overall}% — run alloy-engineering-doctor`);
-        }
-      })).catch(() => {});
+    if (engHealthInFlight) return;
+    engHealthInFlight = true;
+    const cli = new URL("./engineering-health/cli.mjs", import.meta.url).pathname;
+    execFile(process.execPath, [cli, "--json", "--quick"], {
+      timeout: ENG_HEALTH_TIMEOUT_MS,
+      maxBuffer: 8 * 1024 * 1024,
+      killSignal: "SIGKILL",
+    }, (err, stdout) => {
+      engHealthInFlight = false;
+      /*
+       * THE EXIT CODE IS A VERDICT, NOT A FAILURE.
+       *
+       * `cli.mjs` exits 2 on critical findings and 1 on warnings — so a healthy
+       * report exits 0 and an INTERESTING one does not. Discarding stdout
+       * whenever execFile reports an error would therefore throw away exactly
+       * the reports worth having, and the surface would show a stale score
+       * forever while the host degraded. Caught by running it: score 92, six
+       * findings, exit 1.
+       *
+       * The parse is the real test of whether a run produced anything. A
+       * timeout kill leaves no parseable JSON and falls through here silently,
+       * which is the correct outcome for an observation that did not finish.
+       */
+      let report;
+      try { report = JSON.parse(stdout); } catch { return; }
+      if (err && !report) return;
+      lastEngHealth = {
+        overall: report.score?.overall,
+        potential_recovery_gb: report.potential_recovery_gb,
+        critical: (report.findings || []).filter((f) => f.severity === "critical").length,
+        warning: (report.findings || []).filter((f) => f.severity === "warning").length,
+        generated_at: report.generated_at,
+      };
+      if (lastEngHealth.critical > 0) {
+        console.warn(`[engineering-health] CRITICAL findings=${lastEngHealth.critical} overall=${lastEngHealth.overall}% — run alloy-engineering-doctor`);
+      }
+    }).unref?.();
   };
   const engHealthTimer = setInterval(engHealthTick, 30 * 60 * 1000);
   engHealthTimer.unref?.();
@@ -3023,6 +3067,31 @@ export function createVacilandoServer() {
     reconcileGovernor({ reason: "periodic", depth: "targeted" }).catch(() => {});
   }, 30000);
   recoverTargetedTimer.unref?.();
+
+  /*
+   * THE OWNER OF ACCEPTED GOVERNED ACTIONS HAS TO ACTUALLY RUN.
+   *
+   * `tickGovernedActions` is the durable owner of every action the approval
+   * route answered "accepted" to, and of every request parked awaiting checks or
+   * a control-plane refresh. It was invoked at boot warm and from two
+   * request-driven paths, and NOWHERE ON A SCHEDULE — so a parked request waited
+   * for somebody to happen to touch a related endpoint. That was survivable
+   * while the approval route executed inline, because nothing depended on the
+   * tick to make progress. It is not survivable now: returning 202 without a
+   * running owner is how accepted work becomes lost work.
+   *
+   * Deliberately on the same 30 s recovery cadence as the governor rather than a
+   * new one. The immediate kick in scheduleAcceptedExecution is what makes an
+   * approval start promptly; this is what makes it start AT ALL after a restart,
+   * a thrown scheduler, or a process that died between acceptance and execution.
+   * `unref` so it never holds the process open.
+   */
+  const governedTickTimer = setInterval(() => {
+    import("./vacilando/governed-action-request.mjs")
+      .then(({ tickGovernedActions }) => tickGovernedActions())
+      .catch(() => {});
+  }, 30000);
+  governedTickTimer.unref?.();
   return {
     server,
     clients,
@@ -3038,6 +3107,7 @@ export function createVacilandoServer() {
       clearInterval(exclusiveTimer);
       clearInterval(recoverCheapTimer);
       clearInterval(recoverTargetedTimer);
+      clearInterval(governedTickTimer);
       stopAllOutputWatches();
       server.close();
       releaseControlPlaneOwnership();

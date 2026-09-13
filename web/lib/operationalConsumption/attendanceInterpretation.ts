@@ -14,6 +14,7 @@
  * Doctrine: docs/platform/modules/operational-consumption-platform.md
  */
 
+import type { VacationTreatment } from "@/lib/financials/policies/financialPolicyTypes";
 import type { AttendanceFactType, OperationalFactDto } from "@/lib/operationalConsumption/consumptionTypes";
 import type { ConsumptionDirective } from "@/lib/operationalConsumption/scheduleInterpretation";
 
@@ -55,7 +56,23 @@ function lateDirective(checkOut: string, threshold: string, minutesLate: number 
  * Interpret an attendance fact into zero-or-more obligation directives. Pure.
  * `attendanceFactType` defaults to "check_out" (the keystone late-pickup case).
  */
-export function interpretAttendance(fact: OperationalFactDto): AttendanceInterpretation {
+/**
+ * The commercial answers the interpreter cannot work out for itself.
+ *
+ * Resolved OUTSIDE and handed in, because this function is pure and policy lives
+ * in the database. The caller resolves `vacation_credit` through the ordinary
+ * `resolveFinancialPolicy` scope hierarchy and passes the winning treatment —
+ * `null` meaning no policy resolved, which is not the same as a policy saying
+ * `no_credit` even though both withhold money.
+ */
+export type AttendanceCommercialContext = {
+    vacationTreatment?: VacationTreatment | null;
+};
+
+export function interpretAttendance(
+    fact: OperationalFactDto,
+    commercial: AttendanceCommercialContext = {},
+): AttendanceInterpretation {
     const ft: AttendanceFactType = fact.attendanceFactType ?? "check_out";
 
     // D12a: a reversal produces ZERO positive directives — it only causes the prior
@@ -103,11 +120,35 @@ export function interpretAttendance(fact: OperationalFactDto): AttendanceInterpr
             // pipeline resolves it to a charge when a template exists, else suppresses it.
             return { attendanceFactType: ft, directives: [{ obligationKind: "no_show", eventKey: "attendance.no_show", scheduleBasis: null, draftable: true, reason: "No-show → a fee applies only if the org configured a no-show charge template." }], discardReason: null };
 
-        case "absence":
-            if (fact.vacationEligible) {
-                return { attendanceFactType: ft, directives: [{ obligationKind: "vacation_credit", eventKey: "attendance.vacation_credit", scheduleBasis: null, draftable: false, reason: "Absence with vacation-credit eligibility → a vacation credit (preview only; credits post downstream)." }], discardReason: null };
+        case "absence": {
+            /*
+             * WHO DECIDES A VACATION IS CREDITABLE.
+             *
+             * This used to read `fact.vacationEligible` — a boolean carried on the
+             * operational fact — which made the fact its own commercial authority.
+             * Two organisations with identical operational truth could not then
+             * reach different financial answers, because the answer arrived with
+             * the truth.
+             *
+             * Now the operational fact says only that the child was away, and the
+             * resolved `vacation_credit` policy says whether that is creditable
+             * here. Policy cannot invent the absence, and the absence cannot
+             * invent the credit.
+             *
+             * Absence of policy and an explicit `no_credit` policy both withhold
+             * money, and they are reported differently on purpose: one is a
+             * configuration an organisation has not made, the other is a decision
+             * it has. An operator debugging "why is there no credit" needs to know
+             * which.
+             */
+            if (commercial.vacationTreatment === "credit") {
+                return { attendanceFactType: ft, directives: [{ obligationKind: "vacation_credit", eventKey: "attendance.vacation_credit", scheduleBasis: null, draftable: false, reason: "Absence under a vacation-credit policy → a vacation credit (preview only; credits post downstream)." }], discardReason: null };
             }
-            return discard(ft, "Absence with no vacation-credit eligibility → no commercial impact.");
+            if (commercial.vacationTreatment === "no_credit") {
+                return discard(ft, "Absence under a vacation policy of no_credit → no commercial impact.");
+            }
+            return discard(ft, "Absence with no vacation-credit policy configured → no automatic credit.");
+        }
 
         case "excused_absence":
             return discard(ft, "Excused absence → no charge.");

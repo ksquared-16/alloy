@@ -6,6 +6,8 @@ import { existsSync, statSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
 
+import { providerProbeDue, readProviderHealth, recordProviderHealth } from "../cache.mjs";
+
 function run(cmd, args, { timeout = 20000 } = {}) {
   try {
     return {
@@ -72,17 +74,41 @@ function dockerRawInfo() {
   }
 }
 
-export function collectDocker() {
+export function collectDocker({ force = false } = {}) {
+  /*
+   * BOUNDED. A Docker that is known to be down is not probed again until its
+   * backoff expires — no subprocess, no socket attempt, no stderr line. The
+   * modelled state is returned instead, and it still says everything the
+   * unavailable branch below said.
+   */
+  if (!providerProbeDue("docker", { force })) {
+    const known = readProviderHealth("docker");
+    return {
+      ok: false,
+      collector: "docker",
+      available: false,
+      error: known?.detail || "docker unavailable",
+      provider_state: known,
+      probe_skipped: true,
+      raw_disk: dockerRawInfo(),
+    };
+  }
   const version = run("docker", ["version", "--format", "{{.Server.Version}}"]);
   if (!version.ok && /Cannot connect|Is the docker daemon|not found/i.test(version.err || "")) {
+    const state = recordProviderHealth("docker", {
+      available: false,
+      detail: String(version.err || "docker unavailable").split("\n")[0].slice(0, 200),
+    });
     return {
       ok: false,
       collector: "docker",
       available: false,
       error: version.err || "docker unavailable",
+      provider_state: state,
       raw_disk: dockerRawInfo(),
     };
   }
+  recordProviderHealth("docker", { available: true, detail: String(version.out || "").trim().slice(0, 60) });
 
   const df = run("docker", ["system", "df"]);
   const parsed = parseSystemDf(df.out);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { PROCESSING_DOCUMENTS_MANAGE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,8 @@ export const dynamic = "force-dynamic";
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireProcessingCapability(ctx, PROCESSING_DOCUMENTS_MANAGE);
+    if (denied) return denied;
 
     const { id: rawId } = await params;
     const documentId = parseUuidParam(rawId, "id");
@@ -38,7 +40,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 /**
  * DELETE /api/admin/pos/documents/[id] — POS-FP15.
  *
- * SAFE delete of an unprocessed / unused source document (e.g. a test upload). Admin-only,
+ * SAFE delete of an unprocessed / unused source document (e.g. a test upload). Requires
+ * `processing.documents.manage` — deliberately NOT `documents.write`, which `ops` holds in every
+ * organization and which would therefore have handed `ops` this deletion. See processingAuthority.
  * org-scoped, and GUARDED: it refuses if the document already produced an editable form
  * (a real template) or its Processing case is completed/archived — those are not throwaway.
  * Otherwise it discards the test artifact: the document's primary case-source link, the
@@ -48,7 +52,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireProcessingCapability(ctx, PROCESSING_DOCUMENTS_MANAGE);
+    if (denied) return denied;
 
     const { id: rawId } = await params;
     const documentId = parseUuidParam(rawId, "id");

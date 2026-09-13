@@ -162,13 +162,42 @@ export function buildFocusPanelContextLine(labels: Array<string | null | undefin
 
 export type FocusPanelStatusTone = "ready" | "blocked" | "at-risk" | "due" | "done" | "neutral";
 
-export type FocusPanelContextChipKind = "status" | "process" | "location";
+/*
+ * "attention" is what is WAITING on the operator for this record (outstanding work, unread
+ * messages), as opposed to what the record IS (status, process, location). It renders in the same
+ * chip row rather than as a second badge system, because the record header is already the one place
+ * an operator looks to size up a record.
+ */
+export type FocusPanelContextChipKind = "status" | "process" | "location" | "attention";
 
 export type FocusPanelContextChip = {
     label: string;
     kind: FocusPanelContextChipKind;
     tone?: FocusPanelStatusTone;
+    /** Attention chips only — the count behind the label, so consumers never parse it back out. */
+    count?: number;
 };
+
+/**
+ * Attention chips for a record: outstanding work and unread messages, kept SEPARATE.
+ *
+ * A combined number cannot be acted on — the two are resolved in different places by different
+ * people. A zero count produces no chip at all: an empty state is the absence of a chip, not a
+ * chip that says nothing is wrong.
+ */
+export function buildFocusPanelAttentionChips(counts: {
+    work?: number | null;
+    unread?: number | null;
+}): FocusPanelContextChip[] {
+    const chips: FocusPanelContextChip[] = [];
+    const work = typeof counts.work === "number" && counts.work > 0 ? counts.work : 0;
+    const unread = typeof counts.unread === "number" && counts.unread > 0 ? counts.unread : 0;
+    if (work > 0) chips.push({ label: `Work: ${work}`, kind: "attention", tone: "due", count: work });
+    if (unread > 0) {
+        chips.push({ label: `Unread: ${unread}`, kind: "attention", tone: "at-risk", count: unread });
+    }
+    return chips;
+}
 
 /** Map raw status keys to System 5 chip tone classes. */
 export function resolveFocusPanelStatusTone(statusKey: string | null | undefined): FocusPanelStatusTone {

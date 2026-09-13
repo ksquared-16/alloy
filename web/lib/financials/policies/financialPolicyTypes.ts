@@ -47,8 +47,31 @@ export const FINANCIAL_POLICY_TYPES = [
     "deposit",
     "refund",
     "posting_review",
+    /*
+     * The database has permitted this since `20260704120000_financial_policies.sql`
+     * and the application model never caught up: no entry here, no registry
+     * definition, no validator, so it could be neither created through the policy
+     * service nor resolved through `resolveFinancialPolicy`. The consumption path
+     * filled the gap by reading a boolean off the operational fact instead, which
+     * put commercial authority in the wrong place entirely. Adding the type is
+     * what lets policy answer the commercial question.
+     */
+    "vacation_credit",
 ] as const;
 export type FinancialPolicyType = (typeof FINANCIAL_POLICY_TYPES)[number];
+
+/**
+ * The closed commercial positions on a vacation absence. `no_credit` is stated
+ * explicitly rather than left to absence, so an organisation that has decided
+ * "tuition is flat regardless" can say so and have that survive a later default
+ * changing underneath it.
+ */
+export const VACATION_TREATMENTS = [
+    { value: "credit", label: "Credit the vacation" },
+    { value: "no_credit", label: "No credit" },
+] as const;
+
+export type VacationTreatment = (typeof VACATION_TREATMENTS)[number]["value"];
 
 const PRORATION_METHODS = [
     { value: "none", label: "No proration" },
@@ -119,6 +142,32 @@ export const POLICY_TYPE_REGISTRY: Record<FinancialPolicyType, PolicyTypeDef> = 
         label: "Posting review",
         description: "Whether draft charges require review before they can be posted.",
         fields: [{ key: "required", label: "Review required", control: "yesno" }],
+    },
+    /*
+     * WHAT THIS POLICY DECIDES, AND WHAT IT MUST NOT.
+     *
+     * It answers one commercial question: when a child is operationally away on
+     * approved vacation, does that condition carry a financial consequence here?
+     * It does NOT decide whether the absence was a vacation — that is operational
+     * truth, and a policy that could invent it would let commercial configuration
+     * rewrite what happened.
+     *
+     * `treatment` is a closed two-value select rather than a yes/no, because
+     * "credit" and "no_credit" are both DELIBERATE commercial positions an
+     * organisation states, and an operator reading a policy list should see which
+     * one was chosen rather than an unticked box. The absence of a policy is a
+     * third, different answer — see `resolveFinancialPolicy`, which reports
+     * `no_policy` — and it means no automatic credit.
+     *
+     * Amount is deliberately absent. What a credit is worth is a valuation
+     * question owned downstream; putting a number here would make this policy the
+     * second place money is decided.
+     */
+    vacation_credit: {
+        key: "vacation_credit",
+        label: "Vacation credit",
+        description: "Whether an approved vacation absence earns a credit. Absent policy means no automatic credit.",
+        fields: [{ key: "treatment", label: "Vacation treatment", control: "select", options: [...VACATION_TREATMENTS] }],
     },
 };
 

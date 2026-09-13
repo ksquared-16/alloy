@@ -78,7 +78,9 @@ UI verification (required for user-visible work):
 - Never expose cookies, tokens, or storage-state contents.
 - Stop browsers: alloy-agent-browser-stop <slot>
 
-Port map: slot N → 3010+N (3011–3016). Login: /login (Supabase email/password).
+Port map: slot N → 3010+N. The slot registry under `metadata/` is the authority for which slots
+and ports exist — it currently extends past the range this document used to restate. Do not invent a
+port; use the one your slot was assigned. Login: /login (Supabase email/password).
 ```
 
 ### Claude agent

@@ -1,0 +1,109 @@
+{
+  "workstream": "W-13",
+  "title": "Capability-based portal admission",
+  "certified_at": "2026-09-11",
+  "certified_against": {
+    "branch": "agent/access-identity",
+    "staging_base": "1531a2589",
+    "build_sha": "6b81436e7040b4eaa8346c0951e1cf4d7ae729c8",
+    "stack": "alloy-cert (local certification Supabase)",
+    "server": "http://localhost:3020 (production build, certification env)"
+  },
+
+  "premise_correction": {
+    "the_instruction_assumed": "Migration 20260818170000 already seeded portal.access grants.",
+    "discovery_found": "It did not. 20260818170000 seeds 'settings.users_roles' and 'settings.users_roles.read'. The catalog held zero rows for 'portal.access'; no role held it; the only mention in the migration tree was a comment in 20260819120000. docs/platform/governance/roles-and-permissions.md recorded the negative as settled: 'there is no portal.access key'.",
+    "why_the_repair_proceeded_anyway": "d2-i10-role-composition-decision.md is the plan of record and splits W-13 in two: 'ships behaviour-preserving without D2; needs D2 for the rest'. The behaviour-preserving half is catalogue the key, grant it to exactly the roles the literal admitted, switch the code. The rest — whether school_director and regional_lead also receive it — is D2 and is not answered here."
+  },
+
+  "old_authority": {
+    "predicate": "const PORTAL_ROLES = new Set([\"admin\", \"ops\"])",
+    "defined_in": ["web/lib/admin/resolveAdminAccessCore.ts:29", "web/lib/admin/resolveAdminPortalOrgCore.ts:7"],
+    "bound_at": ["resolveAdminAccessCore:357", "resolveAdminAccessDimensionsForOrgMember:472", "resolveAdminPortalOrgCore:50"],
+    "read_at": [
+      "web/lib/adminAuth.ts:52 (the shell)",
+      "web/lib/admin/adminRouteGate.ts:45 (admin API routes)",
+      "web/lib/admin/getAdminContext.ts:38",
+      "web/lib/admin/getAdminOrgContextLight.ts:51 (22 count/summary routes)",
+      "web/lib/admin/entityLabelsServer.ts:21"
+    ],
+    "authority_half_already_removed": "20260818170000 converted canManageUsersAndRoles and (via 20260819120000) canReadAnalytics to capability keys. No site authorized on admission before this change; all five sites above DENY on it, which I-35ᴮ permits."
+  },
+
+  "new_authority": {
+    "capability": "portal.access",
+    "owner_module": "web/lib/admin/portalAdmission.ts",
+    "outcomes": ["admitted", "no-capability", "unresolved"],
+    "fail_closed": "A failed grant read returns 'unresolved', which denies. resolveAdminAccessCore returns null on that failure (W-43) before a bundle exists.",
+    "org_scope": "Every read filters on org_id. There is no global variant and no role-name shortcut past it.",
+    "migration": "supabase/migrations/20260911140000_w13_portal_access_capability_admission.sql"
+  },
+
+  "who_receives_it": {
+    "admin": "granted — preserved, the literal admitted it",
+    "ops": "granted — preserved, the literal admitted it",
+    "school_director": "NOT granted — D2, operator-owned",
+    "regional_lead": "NOT granted — D2, operator-owned",
+    "custom_roles": "grantable and revocable from the role editor (Settings → Access → Portal area)",
+    "new_organizations": "seed_default_rbac enumerates it for admin and ops; orgs_seed_default_rbac fires on INSERT into public.orgs"
+  },
+
+  "mounted_matrix": {
+    "spec": "certification/playwright/w13-portal-admission.cert.spec.ts",
+    "result": "11/11 passed in 41.8s",
+    "personas": [
+      { "principal": "qa.operator@northwind.invalid", "role": "admin", "portal.access": true, "fin.read": true, "expected": "admitted, Financials opens", "observed": "admitted, Financials opens" },
+      { "principal": "cert.ops@northwind.invalid", "role": "ops", "portal.access": true, "fin.read": true, "expected": "admitted", "observed": "admitted" },
+      { "principal": "cert.portalfin@northwind.invalid", "role": "mcert_portal_finance (custom)", "portal.access": true, "fin.read": true, "expected": "admitted, Financials opens, no denial message", "observed": "admitted, Financials opens, no denial message" },
+      { "principal": "cert.portalonly@northwind.invalid", "role": "mcert_portal_only (custom)", "portal.access": true, "fin.read": false, "expected": "admitted, Financials NOT offered", "observed": "admitted, Financials NOT offered" },
+      { "principal": "cert.finviewer@northwind.invalid", "role": "mcert_fin_viewer (custom)", "portal.access": false, "fin.read": true, "expected": "refused", "observed": "refused (307 to /login)" },
+      { "principal": "cert.frontdesk@northwind.invalid", "role": "mcert_front_desk (custom)", "portal.access": false, "fin.read": false, "expected": "refused", "observed": "refused (307 to /login)" },
+      { "principal": "cert.director@northwind.invalid", "role": "school_director", "portal.access": false, "fin.read": true, "expected": "refused — D2 package gap", "observed": "refused (307 to /login)" },
+      { "principal": "cert.regional@northwind.invalid", "role": "regional_lead", "portal.access": false, "fin.read": true, "expected": "refused — D2 package gap", "observed": "refused (307 to /login)" }
+    ],
+    "grant": "PATCH /api/admin/rbac/roles/mcert_front_desk with portal.access → the same principal is admitted in a COLD context, and is still offered no Financials.",
+    "revoke": "the same endpoint without it → refused again.",
+    "self_escalation": "the same call from a principal holding portal.access but not settings.users_roles → 403.",
+    "role_editor": "the Portal area renders with the row 'Access operator portal' and shows no dotted key."
+  },
+
+  "how_admission_is_observed": {
+    "method": "a full document request to /workspace after sign-in",
+    "why_not_the_url": "A refused principal signs in, the login page pushes to /workspace, the shell redirects back to /login, and the login page — holding a valid session — pushes again. Sampling that loop returns whichever side the sample lands on: in one run cert.frontdesk sampled /login and cert.finviewer, whose grants are just as portal-less, sampled /workspace. Same refusal, two answers. page.goto is not part of the loop: the server either renders the shell or answers 307."
+  },
+
+  "revocation_latency": {
+    "finding": "adminShellContextCache holds a resolved bundle per user for 120s, and nothing in the product tree had ever called its own documented invalidate hook.",
+    "why_W13_made_it_matter": "The bundle now carries admission, so the staleness became revoked portal access that still opens the portal for up to two minutes.",
+    "fix": "The four authority-mutating routes invalidate: the two grant routes clear every user (a role's grants belong to every principal holding it), the two membership routes clear their own subject.",
+    "lock": "web/tests/access/authorityMutationInvalidatesShellCache.test.ts, stated over the discovered route set.",
+    "no_second_cache": "There is still exactly one access cache, asserted."
+  },
+
+  "regression": {
+    "vitest_access_and_admin": "2731 passed. 64 files / 136 tests fail — the SAME 64/136 fail on unmodified origin/staging, with zero new and zero fixed. 61 net new passing tests.",
+    "known_pre_existing": [
+      "catalogConsolidationLock (RL-7) × 2 — 20260909230000_attendance_capability.sql writes through deprecated catalog names; 20260909240000_financials_read_for_director_roles.sql writes grants without naming permission_definitions. Both from other lanes, both on staging.",
+      "resolveAdminAccessCore.absentProfileDenies × 5 — d0589a90e (attendance lane) added attendanceCaptureScope to resolveScopeAnswerFromProfile and did not update the test. On staging.",
+      "~57 admin UI/drawer/createLead files — all on staging, none touching admission."
+    ],
+    "mounted_parent_slice": "access-identity-financials-personas 8/8; access-role-editor-one-page 12/12.",
+    "flake_observed": "access-roles-page resolves to 2 elements during hydration on roughly one run in ten; the same spec passes on re-run. Pre-existing, not admission-related."
+  },
+
+  "validation": {
+    "typecheck": "rc=0 (tsconfig.build.json)",
+    "typecheck_tests": "rc=0 (tsconfig.json)",
+    "production_build": "rc=0",
+    "prebuild_guards": "module imports, service-client principal, unauthenticated side effects, route capabilities — all clean",
+    "route_capability_ratchet": "679, unchanged"
+  },
+
+  "cert_stack_drift_found": {
+    "key": "attendance.record.assigned_only",
+    "state": "active in permission_definitions on the shared certification database, granted to nobody, inserted at runtime 2026-09-10, seeded by NO migration in this tree.",
+    "evidence": "20260911110000_attendance_capture_scope_policy.sql records that the attendance lane deliberately did NOT put that capability in the catalog, because 'permissions are additive and union across roles, so a narrowing permission would make adding a role reduce authority'. It is residue from an approach they abandoned.",
+    "consequence": "A reproduced catalog-completeness guard aborts on it, and no edit to a migration can make it true. 20260911140000 therefore reproduces only the guards that read the FUNCTION; the guards that read the DATABASE stay with 20260910183000, which owns the completeness contract.",
+    "owner": "attendance lane"
+  }
+}

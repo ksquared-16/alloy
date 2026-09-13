@@ -31,6 +31,7 @@ function builder(data: unknown, error: { message: string } | null) {
     b.eq = () => b;
     b.in = () => b;
     b.order = () => b;
+    b.limit = () => b;
     b.maybeSingle = () => Promise.resolve({ data, error });
     b.then = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
         Promise.resolve({ data, error }).then(res, rej);
@@ -295,11 +296,50 @@ describe("W-20 — the third resolver lost its copy of the fallback too (M2-5)",
 
     it("the fixture is not vacuous — the same principal WITH a membership is still admitted", async () => {
         const r = await resolveAdminPortalOrgCore(
-            mockSupabase({ ...LEGACY, user_roles: [{ org_id: ORG, role: "admin" }] }),
+            mockSupabase({
+                ...LEGACY,
+                user_roles: [{ org_id: ORG, role: "admin" }],
+                // W-13 — a membership is still necessary and is no longer sufficient. This resolver
+                // reads one grant row now, so the fixture has to carry it; without the row the
+                // principal is a member of the org who cannot open the portal, which is a state the
+                // product can now express and previously could not.
+                grants: [{ permission_key: "portal.access" }],
+            }),
             USER,
         );
         expect(r?.orgId).toBe(ORG);
         expect(r?.portalEligible).toBe(true);
+        expect(r?.admission).toBe("admitted");
+    });
+
+    it("a membership whose role holds no portal.access is refused, and says which refusal it is", async () => {
+        /*
+         * The W-13 statement in one fixture: the role is named `admin`, the membership is real, and
+         * admission is still denied because the grant is absent. Under `PORTAL_ROLES` this principal
+         * was admitted on the strength of the name alone.
+         */
+        const r = await resolveAdminPortalOrgCore(
+            mockSupabase({
+                ...LEGACY,
+                user_roles: [{ org_id: ORG, role: "admin" }],
+                grants: [],
+            }),
+            USER,
+        );
+        expect(r?.portalEligible).toBe(false);
+        expect(r?.admission).toBe("no-capability");
+    });
+
+    it("a failed grant read is a THIRD answer, not the same refusal", async () => {
+        const r = await resolveAdminPortalOrgCore(
+            mockSupabase({ ...LEGACY, user_roles: [{ org_id: ORG, role: "admin" }] }, "role_permission_grants"),
+            USER,
+        );
+        expect(r?.portalEligible).toBe(false);
+        expect(r?.admission).toBe("unresolved");
+        expect(errorSpy).toHaveBeenCalledWith(
+            expect.stringContaining("[access-identity][W-43][read-failure]"),
+        );
     });
 
     it("user_roles error denies portal admission", async () => {

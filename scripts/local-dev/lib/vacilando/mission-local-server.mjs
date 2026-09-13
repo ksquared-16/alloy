@@ -228,7 +228,7 @@ export function missionLocalServerVm(missionId) {
 /**
  * Start or stop the mission's Alloy Next app via toolkit CLIs.
  */
-export function controlMissionLocalServer(missionId, action) {
+export async function controlMissionLocalServer(missionId, action) {
   const act = String(action || "").toLowerCase();
   if (act !== "start" && act !== "stop") {
     return { ok: false, error: "invalid_action", detail: "action must be start or stop" };
@@ -250,6 +250,35 @@ export function controlMissionLocalServer(missionId, action) {
   }
   if (act === "start" && vm.status === "running") {
     return { ok: true, already: true, ...vm, message: `Already running on :${vm.port}` };
+  }
+
+  /*
+   * A SLOTLESS LANE ASKED TO START A SERVER ACQUIRES ONE, RATHER THAN FAILING.
+   *
+   * A dev server needs the slot's deterministic port, so this is the moment a
+   * Development Slot is genuinely required — `alloy_load_worktree_metadata`
+   * refuses a slotless worktree with "metadata missing ALLOY_WORKTREE_SLOT",
+   * and until now an operator had to go and find capacity by hand.
+   *
+   * Every judgement is delegated: `ensureLaneSlot` prefers a free slot, then the
+   * highest-ranked SAFE candidate, and refuses rather than taking one from a
+   * working lane. Nothing is decided here.
+   */
+  let acquired = null;
+  if (act === "start") {
+    const { ensureLaneSlot } = await import("./lane-worktree-lifecycle.mjs");
+    const got = await ensureLaneSlot({ worktreeName: worktree });
+    if (!got.ok) {
+      // The instruction stays durable. Refusing to start is the correct outcome
+      // when the only slots left belong to lanes that are working.
+      return {
+        ok: false,
+        error: got.error === "no_safe_slot" ? "no_development_slot_available" : got.error,
+        detail: got.detail || "Could not acquire a Development Slot for this lane.",
+        ...vm,
+      };
+    }
+    if (got.acquired !== "already_held") acquired = got;
   }
   if (act === "stop" && vm.status !== "running") {
     return { ok: true, already: true, ...vm, message: "Server was already stopped" };
@@ -285,8 +314,14 @@ export function controlMissionLocalServer(missionId, action) {
     ok: true,
     action: act,
     worktree,
+    // Named so the operator learns a slot moved on their behalf, and from whom.
+    // A capacity change that happens silently is one nobody can audit.
+    ...(acquired ? { slot_acquired: acquired } : {}),
     message: act === "start"
-      ? `Starting Alloy Next for ${worktree} on :${next.port}…`
+      ? `Starting Alloy Next for ${worktree} on :${next.port}…${
+        acquired?.acquired === "reclaimed"
+          ? ` Slot ${acquired.slot} was reclaimed from ${acquired.donor?.lane_name || acquired.donor?.worktree} (${acquired.donor?.group}); that lane keeps running without one.`
+          : acquired?.acquired === "free" ? ` Took free slot ${acquired.slot}.` : ""}`
       : `Stopped Alloy Next for ${worktree}`,
     localServer: next,
   };

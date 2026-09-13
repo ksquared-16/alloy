@@ -6,6 +6,8 @@ import { existsSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
 
+import { providerProbeDue, readProviderHealth, recordProviderHealth } from "../cache.mjs";
+
 function tryCmd(cmd, args) {
   try {
     const out = execFileSync(cmd, args, { encoding: "utf8", timeout: 8000 });
@@ -15,8 +17,19 @@ function tryCmd(cmd, args) {
   }
 }
 
-export function collectServices() {
-  const docker = tryCmd("docker", ["info", "--format", "{{.ServerVersion}}"]);
+export function collectServices({ force = false } = {}) {
+  // The SAME provider-health record the docker collector keeps. Two collectors
+  // probing the same absent daemon on their own schedules is how one optional
+  // provider produced two streams of identical connection failures.
+  const docker = providerProbeDue("docker", { force })
+    ? tryCmd("docker", ["info", "--format", "{{.ServerVersion}}"])
+    : { ok: false, err: readProviderHealth("docker")?.detail || "docker unavailable", probe_skipped: true };
+  if (!docker.probe_skipped) {
+    recordProviderHealth("docker", {
+      available: docker.ok,
+      detail: docker.ok ? String(docker.out || "").slice(0, 60) : String(docker.err || "").split("\n")[0].slice(0, 200),
+    });
+  }
   let supabaseContainers = 0;
   if (docker.ok) {
     const ps = tryCmd("docker", ["ps", "--format", "{{.Names}}"]);

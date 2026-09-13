@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
 import { loadPacketProjection } from "@/lib/pos/packet/loadPacketProjection";
 import { isLaunchEntityType } from "@/lib/pos/packet/launchFromEntity";
@@ -20,7 +21,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export async function GET(request: NextRequest, { params }: { params: Promise<{ packetDefinitionId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_AUTHOR);
+    if (denied) return denied;
 
     const { packetDefinitionId } = await params;
     if (!UUID_RE.test(packetDefinitionId)) return jsonError("Invalid packet id", 400);

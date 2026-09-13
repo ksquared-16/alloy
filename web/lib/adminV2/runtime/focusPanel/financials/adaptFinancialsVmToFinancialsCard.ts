@@ -44,6 +44,7 @@ import type {
     FinancialsLedgerPeriod,
     FinancialsPayer,
 } from "@/lib/cardLab/cardLabTypes";
+import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 
 /** Reductions and funding are stored as their own categories, not as negative tuition. */
 const REDUCTION_CATEGORIES = new Set(["discount", "credit", "adjustment"]);
@@ -191,6 +192,47 @@ export function adaptFinancialsVmToFinancialsCard(input: {
             reductions,
             funding,
             familyResponsibility: money(reconciliation.responsibilityCents, currency),
+            /*
+             * THE SPLIT, FORMATTED AND NOTHING ELSE.
+             *
+             * Every figure here is already decided by Thread 6 and carried on the view model:
+             * `allocatedCents` is what named parties have been made responsible for and
+             * `unassignedCents` is what nobody has. This adapter turns cents into money and stops —
+             * it does not add the two up, does not check them against the obligation, and does not
+             * derive a party's share from a percentage. A presentation layer that reconciles is a
+             * second financial authority wearing a formatter's clothes.
+             *
+             * Null when there is no allocation at all, so the card renders no empty section rather
+             * than a heading over nothing.
+             */
+            responsibility:
+                vm.responsibility.parties.length > 0 || vm.responsibility.unassignedCents !== 0 ?
+                    {
+                        allocated: money(vm.responsibility.allocatedCents, currency),
+                        parties: vm.responsibility.parties.map((party) => ({
+                            name: party.name,
+                            amount: money(party.assignedCents, currency),
+                        })),
+                        unassigned:
+                            vm.responsibility.unassignedCents !== 0 ?
+                                money(vm.responsibility.unassignedCents, currency)
+                            :   null,
+                    }
+                :   null,
+            /*
+             * EXPECTED, and never counted. `expectedCents` may legitimately be absent — an
+             * authorization can name a funder before anyone knows the amount — and null here means
+             * exactly that rather than zero dollars.
+             */
+            expectedFunding: vm.expectedFunding.map((f) => ({
+                label: f.label,
+                amount: f.expectedCents != null ? money(f.expectedCents, currency) : null,
+            })),
+            /* The same conditional the compact zone already applies, for the same reason. */
+            collectibleNow:
+                vm.collectible.submittedClaimSuppressionCents > 0 ?
+                    money(vm.collectible.currentlyCollectibleCents, currency)
+                :   null,
             paymentsReceived: money(reconciliation.paymentsCents, currency),
             currentBalance: money(reconciliation.balanceCents, currency),
             dueLabel,
@@ -216,6 +258,66 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 `Payments received · ${money(reconciliation.paymentsCents, currency)}`
             :   `No payments recorded this period`,
         upcoming: [],
+        /*
+         * THE RECEIPTS, AND WHAT EACH IS ANSWERING.
+         *
+         * Formatting only. `appliedCents`, `unappliedCents` and the applications all arrive decided
+         * by the account VM, which takes them from the canonical readers — so the card cannot reach a
+         * different answer than the service, because it is not permitted to compute one.
+         *
+         * Refunds are excluded: an outbound row is money going back, not a receipt with obligations
+         * to answer, and listing it here would invite an operator to move it.
+         */
+        payments: vm.payments
+            .filter((p) => p.direction === "inbound")
+            .map((p) => ({
+                paymentId: p.paymentId,
+                receivedLabel: money(p.amountCents, p.currencyCode || currency),
+                payerLabel: p.payerLabel ?? null,
+                receivedOn: p.receivedAt,
+                method: p.method || null,
+                appliedLabel: money(p.appliedCents, p.currencyCode || currency),
+                unappliedLabel: money(p.unappliedCents, p.currencyCode || currency),
+                unappliedCents: p.unappliedCents,
+                applications: p.applications.map((a) => ({
+                    allocationId: a.allocationId,
+                    chargeId: a.chargeId,
+                    chargeLabel: a.chargeLabel,
+                    amountLabel: money(a.appliedCents, p.currencyCode || currency),
+                    status: a.status,
+                    reversalReason: a.reversalReason,
+                })),
+            })),
+
+        /*
+         * MANUAL REDUCTIONS, as records rather than as a total.
+         *
+         * Only `manual` rows are listed. A policy application lowers the same bucket, but undoing one
+         * by hand would leave the policy still saying the family qualifies and the next billing run
+         * would apply it again — so policy is not offered here at all, rather than offered and then
+         * refused.
+         *
+         * The sign is read from the stored amount, not inferred from the category: the schema's only
+         * constraint is that the amount is non-zero, and a category tells you which bucket a row
+         * lands in, not which way it went.
+         */
+        adjustments: vm.reductions
+            .filter((r) => r.kind === "manual")
+            .map((r) => ({
+                applicationId: r.applicationId,
+                categoryLabel: r.category ? chargeCategoryLabel(r.category) : "Adjustment",
+                amountLabel: money(r.amountCents, r.currencyCode || currency),
+                reducesObligation: r.amountCents < 0,
+                reason: r.reason,
+                periodLabel: r.periodKey,
+                recordedOn: r.createdAt ? r.createdAt.slice(0, 10) : null,
+                subjectName: r.customerMemberId
+                    ? vm.subjects.find((sub) => sub.customerMemberId === r.customerMemberId)?.displayName ?? null
+                    : null,
+                applied: r.chargeStatus === "posted",
+                reversed: r.reversedByApplicationId !== null,
+                isReversal: r.reversesApplicationId !== null,
+            })),
     };
 }
 
@@ -266,6 +368,13 @@ export function adaptFinancialsVmToLedgerPeriods(input: {
             kind: row.amountCents < 0 ? "credit" : "charge",
             status: row.lifecycleStatus,
             source: row.categoryLabel,
+            /*
+             * Identity and eligibility, both decided by the read model. The card asks whether a row
+             * offers a transition; it never works out the answer from a status string.
+             */
+            chargeId: row.chargeId,
+            offersPost: row.status === "draft",
+            offersReverse: row.offersReverse,
         })),
     }));
 }

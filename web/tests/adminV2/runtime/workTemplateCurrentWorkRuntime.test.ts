@@ -105,7 +105,7 @@ describe("Work Template Current Work runtime", () => {
         expect(vm.supportingActions.map((a) => a.key)).not.toContain("close_lead");
     });
 
-    it("explicit empty helpful actions produce no helpful actions", () => {
+    it("explicit empty helpful actions produce no WORK actions — the stage's own still compose", () => {
         const publishedStageInputs = resolvePublishedStageInputsForCurrentWork({
             departmentMetadata: enrollmentLeadPublishedDepartmentMetadata(),
             builderStageKey: "lead",
@@ -127,7 +127,23 @@ describe("Work Template Current Work runtime", () => {
                 },
             }),
         });
-        expect(vm.supportingActions).toEqual([]);
+        /*
+         * CONTRACT CHANGED DELIBERATELY. This asserted that an explicit empty work list suppressed
+         * everything, including the STAGE's own configured actions. It no longer does.
+         *
+         * The two scopes answer different questions — a work action is useful because of what is
+         * being done, a stage action because of where the subject is — so an empty work list says
+         * "this work needs no actions of its own", not "this stage has none". The old reading let a
+         * work template silently erase a control an operator had authored, validated and published
+         * against the stage.
+         *
+         * The legacy doctrine it is often confused with is untouched and still asserted in
+         * `processCardCommandConfigParity`: an explicit set never resurrects the LEGACY
+         * `supporting_actions` fallback, because a command the operator REMOVED must not come back.
+         * A default nobody chose and a control somebody configured are different things, and they
+         * now live in different fields.
+         */
+        expect(vm.supportingActions.map((a) => a.key)).toEqual(["schedule_tour"]);
     });
 
     it("never surfaces generic Change Enrollment Status on Current Work", () => {

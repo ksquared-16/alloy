@@ -8,32 +8,55 @@ const createModal = join(
     "../../components/workItems/WorkItemCreateModal.tsx",
 );
 const panel = join(dirname(fileURLToPath(import.meta.url)), "../../app/adminV2/components/MyTasksPanel.tsx");
-const preview = join(
+const detail = join(
     dirname(fileURLToPath(import.meta.url)),
-    "../../components/workItems/WorkItemCreatePreviewPanel.tsx",
+    "../../components/workItems/WorkItemDetailPanel.tsx",
 );
 
-describe("Work Item creation runtime UI contract", () => {
-    it("WorkItemCreateModal uses conversation + live preview", () => {
+describe("Create Work Item is a centered dialog", () => {
+    it("renders as an overlay dialog, not an inline pane", () => {
         const src = readFileSync(createModal, "utf8");
-        expect(src).toContain("data-work-item-create-conversation");
-        expect(src).toContain("WorkItemCreatePreviewPanel");
-        expect(src).toContain("data-work-item-create-composer");
+        expect(src).toContain("data-work-item-create-overlay");
+        expect(src).toContain('role="dialog"');
+        expect(src).toContain('aria-modal="true"');
+        // Centered card inside the overlay, capped so it always fits the viewport.
+        expect(src).toContain("items-center justify-center");
+        expect(src).toContain("max-h-full");
         expect(src).toContain("data-work-item-create-enabled");
-        expect(src).not.toContain("What is the task?");
     });
 
-    it("preview panel is read-only representation", () => {
-        const src = readFileSync(preview, "utf8");
-        expect(src).toContain("data-work-item-create-preview");
-        expect(src).toContain("BOS summary");
-        expect(src).not.toContain("onChange");
+    it("offers only fields the commit adapter actually persists", () => {
+        const src = readFileSync(createModal, "utf8");
+        for (const field of ["title", "entity", "assigned_to_user_id", "due_at", "description"]) {
+            expect(src).toContain(`data-work-item-create-field="${field}"`);
+        }
+        // Draft-only fields are never persisted by draftToOperationalTaskBody; offering them would
+        // promise the operator state the platform silently drops.
+        expect(src).not.toContain('data-work-item-create-field="priority"');
+        expect(src).not.toContain('data-work-item-create-field="checklist_items"');
+        expect(src).not.toContain('data-work-item-create-field="recurrence"');
     });
 
-    it("MyTasksPanel commits through canonical draft adapter", () => {
+    it("links a record by canonical identity, never a display string", () => {
+        const src = readFileSync(createModal, "utf8");
+        expect(src).toContain("candidate.entity_id");
+        expect(src).toContain('type: "opportunities"');
+    });
+
+    it("creation does not replace the selected work item's detail", () => {
+        const detailSrc = readFileSync(detail, "utf8");
+        expect(detailSrc).not.toContain("WorkItemCreateModal");
+        expect(detailSrc).not.toContain("createOpen");
+
+        // The overlay is owned by the workspace, which must be its positioning context.
+        const panelSrc = readFileSync(panel, "utf8");
+        expect(panelSrc).toContain("WorkItemCreateModal");
+        expect(panelSrc).toMatch(/className="relative flex min-h-0 flex-1 overflow-hidden bg-white"/);
+    });
+
+    it("MyTasksPanel commits through the canonical draft adapter", () => {
         const src = readFileSync(panel, "utf8");
         expect(src).toContain("draftToOperationalTaskBody");
-        expect(src).toContain("WorkItemCreateModal");
         expect(src).not.toContain("MyTasksCreateTaskCard");
         expect(src).not.toContain("buildOperationalTaskBody");
     });

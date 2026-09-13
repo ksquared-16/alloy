@@ -89,13 +89,14 @@ export default function FocusPanelSubjectIdentityBlock({
                                 className={[
                                     "alloy-os-fp-header-compact__context-chip",
                                     `alloy-os-fp-header-compact__context-chip--${chip.kind}`,
-                                    chip.kind === "status" && chip.tone ?
+                                    (chip.kind === "status" || chip.kind === "attention") && chip.tone ?
                                         `alloy-os-fp-header-compact__context-chip--tone-${chip.tone}`
                                     :   null,
                                 ]
                                     .filter(Boolean)
                                     .join(" ")}
                                 data-focus-panel-chip-kind={chip.kind}
+                                data-focus-panel-chip-count={chip.count ?? undefined}
                                 data-focus-panel-chip-tone={chip.tone ?? undefined}
                                 data-focus-panel-status-readonly={
                                     chip.kind === "status" ? "true" : undefined

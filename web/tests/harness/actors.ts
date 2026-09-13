@@ -58,7 +58,16 @@ export const LOW_PRIVILEGE_ACTORS: Actor[] = [ACTORS.orgAViewer, ACTORS.orgAStaf
 
 /** Build the `getAdminContextCached` return value for an actor. */
 export function adminContextFor(actor: Actor): AdminContextResult {
-    return { ok: true, orgId: actor.orgId, role: actor.role, userId: actor.userId };
+    // The actor already declares what it holds; passing it through means a route that reads
+    // `ctx.permissionKeys` sees this harness's capabilities rather than an empty list that
+    // would quietly make every capability-gated route refuse every actor.
+    return {
+        ok: true,
+        orgId: actor.orgId,
+        role: actor.role,
+        userId: actor.userId,
+        permissionKeys: actor.permissionKeys,
+    };
 }
 
 /** An unauthenticated caller. */

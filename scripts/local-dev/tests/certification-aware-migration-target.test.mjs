@@ -10,7 +10,7 @@
 
 import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { dirname, join } from "node:path";
@@ -23,6 +23,8 @@ import {
   describeConnection,
   resolveTrustedDatabaseTarget,
 } from "../lib/vacilando/trusted-host-database-target.mjs";
+import { PRODUCTION_APPLY_TARGETS } from "../lib/vacilando/trusted-host-production-migrate.mjs";
+import { LEDGER_REPAIR_TARGETS } from "../lib/vacilando/trusted-host-ledger-repair.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..", "..");
@@ -184,4 +186,113 @@ test("the child loads the certification credential from the host config, not jus
   assert.doesNotMatch(stderr, /trusted_credential_unavailable/,
     "the configured credential must be found rather than reported missing");
   assert.notEqual(status, 42, "must not refuse as unconfigured when the host config supplies the target");
+});
+
+// ── The contract that broke: governance and routing must share a vocabulary ──
+
+test("every target a governed action accepts is a target this registry resolves", () => {
+  /*
+   * THE INVARIANT, WRITTEN DOWN.
+   *
+   * `database.apply_promoted_migration` validated `alloy_deployed_primary`
+   * against PRODUCTION_APPLY_TARGETS, passed it down as the environment, and
+   * routing had never heard of it. Three governed production applies died at
+   * that seam having contacted no database at all, and two governed censuses
+   * were spent proving the deployed primary had not been touched. A name that
+   * clears governance and then fails to resolve is not a safety control; it is
+   * a broken contract, and it surfaces at the worst possible moment.
+   *
+   * Deliberately a test rather than an import: these lists answer different
+   * questions — which action may touch a database, versus which database a name
+   * means — and importing one into the other would be a cycle. It does not pin
+   * WHICH class a target resolves to; that is routing's decision. It pins that
+   * routing has an answer at all.
+   */
+  const governed = [...new Set([...PRODUCTION_APPLY_TARGETS, ...LEDGER_REPAIR_TARGETS])];
+  assert.ok(governed.length > 0, "there must be something to check");
+  for (const target of governed) {
+    const r = resolveTrustedDatabaseTarget(target);
+    assert.equal(r.ok, true, `${target} is accepted by a governed action but unknown to routing`);
+    assert.equal(r.expectedHostIsLocal, false, `${target} is deployed infrastructure`);
+  }
+});
+
+test("no unregistered name is ever handed a connection source", () => {
+  // The repair must not become "unknown target, use whatever we have".
+  for (const name of ["", "   ", "production", "prod", "bogus", "alloy_deployed_secondary"]) {
+    const r = resolveTrustedDatabaseTarget(name);
+    assert.equal(r.ok, false, `${JSON.stringify(name)} must not resolve`);
+    assert.equal(r.code, "target_resolution_failed");
+    assert.equal(r.connectionSourceKind, undefined);
+  }
+});
+
+test("the deployed primary reaches the database — the exact handoff that was broken", () => {
+  /*
+   * Proving routing knows the name is not enough: the name has to survive the
+   * handoff into the child and come out the other side as a connection attempt.
+   *
+   * So this drives the real child with the real governed target, and points the
+   * trusted env source at a throwaway file whose URL goes nowhere. "Connection
+   * refused" is the pass: routing succeeded, a credential was assigned, the host
+   * guard allowed it, and psql ran. Nothing real is touched — the canonical root
+   * is a temp directory, so the host's own env file cannot be picked up by
+   * accident.
+   */
+  const dir = mkdtempSync(join(tmpdir(), "alloy-deployed-seam-"));
+  const envFile = join(dir, "env");
+  const fakeRoot = join(dir, "root");
+  mkdirSync(fakeRoot, { recursive: true });
+  writeFileSync(envFile, "DATABASE_URL=postgresql://u:p@127.0.0.1:1/postgres\n");
+
+  let status = 0;
+  let stderr = "";
+  const errFile = join(dir, "err");
+  try {
+    execFileSync("bash", [CHILD, "/dev/null", join(dir, "out"), errFile, "alloy_deployed_primary"], {
+      env: {
+        ...process.env,
+        ALLOY_CANONICAL_ROOT: fakeRoot,
+        ALLOY_REPO: fakeRoot,
+        VACILANDO_CHECKOUT: REPO,
+        ALLOY_WORKTREE: REPO,
+        ALLOY_SERVER_ENV_SOURCE: envFile,
+      },
+      stdio: "ignore",
+    });
+  } catch (error) {
+    status = error.status ?? -1;
+  }
+  try { stderr = readFileSync(errFile, "utf8"); } catch { /* */ }
+
+  assert.doesNotMatch(stderr, /target_resolution_failed/, "the governed target must get past routing");
+  assert.doesNotMatch(stderr, /target_environment_mismatch/);
+  assert.notEqual(status, 45);
+  // It reached the client, which only happens once a credential was assigned.
+  assert.match(stderr, /psql: error: connection to server/);
+  // And the failure it reports names a host and a port, never a credential.
+  assert.doesNotMatch(stderr, /u:p@|password/i);
+});
+
+test("every caller of the apply child names a target", () => {
+  /*
+   * THE QUIET HALF OF THE SAME BUG.
+   *
+   * The ledger repair spawns this child too, and was still calling it with
+   * three arguments from before the child had a target to take. With an absent
+   * target now a hard refusal, every ledger repair would have exited 45 without
+   * touching anything — silently, at exactly the moment a ledger disagreeing
+   * with its schema needed fixing.
+   *
+   * A source-level check rather than a behavioural one, because the thing to
+   * prevent is a CALLER forgetting the argument, and a future caller will not be
+   * covered by a test written against today's two.
+   */
+  const source = readFileSync(join(HERE, "..", "lib", "vacilando", "trusted-host-actions.mjs"), "utf8");
+  const spawns = source.match(/spawnSync\(\s*"bash",\s*\[APPLY_MIGRATION_SH[^\]]*\]/g) || [];
+  assert.ok(spawns.length >= 2, "expected the apply child to have more than one caller");
+  for (const spawn of spawns) {
+    const args = spawn.slice(spawn.indexOf("[") + 1).split(",").map((a) => a.trim()).filter(Boolean);
+    assert.equal(args.length, 5, `a caller of the apply child omits its target: ${spawn}`);
+  }
 });

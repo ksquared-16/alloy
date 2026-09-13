@@ -287,6 +287,43 @@ export async function voidScheduledFinancialPolicy(
         (p) => p.id !== policy.id && sameLineage(p, policy) && compareIsoDates(p.effective_start, policy.effective_start) > 0,
     );
     if (hasLater) fail("invalid_state", "Cannot void a version that has a later version");
+
+    /*
+     * A POLICY THAT ALREADY DECIDED MONEY CANNOT BE DELETED.
+     *
+     * `financial_reduction_applications.financial_policy_id` records which policy
+     * authorised a historical reduction, and it is declared ON DELETE RESTRICT —
+     * so the database would refuse this delete anyway. It would refuse it as a
+     * foreign-key violation naming a constraint, which is an accurate answer to a
+     * question the operator did not ask.
+     *
+     * So the refusal is made here, in the domain's own words, BEFORE the delete
+     * is attempted. The FK stays exactly as it is: this preflight is the useful
+     * answer, and the constraint is the invariant for any caller that arrives by
+     * another route. Removing one because the other exists is how a guard becomes
+     * the only guard.
+     *
+     * Only REFERENCED policies are affected. An unused policy voids exactly as it
+     * always has — this adds a refusal, not a lifecycle.
+     */
+    const { data: usedBy, error: usedByError } = await supabase
+        .from("financial_reduction_applications")
+        .select("id")
+        .eq("org_id", input.orgId)
+        .eq("financial_policy_id", input.id)
+        .limit(1);
+    // A failed check is not permission to proceed: it is an unknown answer to
+    // "has this policy moved money", and deleting on an unknown is the one
+    // outcome that cannot be undone.
+    if (usedByError) fail("db_error", usedByError.message);
+    if ((usedBy ?? []).length > 0) {
+        fail(
+            "invalid_state",
+            "This policy has already been used for a financial reduction and cannot be deleted, "
+            + "because the record of why that money moved has to survive. Retire it instead — "
+            + "retiring ends it going forward and leaves the history intact.",
+        );
+    }
     const actor = trimOrNull(input.actorUserId);
 
     const supersedesId = asMetadata(policy.metadata).supersedes_id;

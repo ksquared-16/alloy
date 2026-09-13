@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 
 import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
+import { useRecordAttentionCounts } from "@/lib/adminV2/runtime/focusPanel/useRecordAttentionCounts";
 import { OpportunityDrawerHeaderControls } from "@/components/admin/opportunity/OpportunityDrawerHeaderControls";
 import {
     buildFocusPanelContextChips,
@@ -10,6 +11,7 @@ import {
     resolveFocusPanelEffectiveStageChip,
     resolveFocusPanelLocationChip,
     resolveFocusPanelProcessLabel,
+    buildFocusPanelAttentionChips,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 import { buildSubjectManageMenuFromResolvedActions } from "@/lib/admin/recordManage/buildSubjectManageMenuFromResolvedActions";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
@@ -98,6 +100,9 @@ export default function OpportunityFocusPanelHeader({
 
     const hasActiveTour = (displayVm.summaries.active_tour_bookings?.length ?? 0) > 0;
 
+    // What is WAITING on the operator for this record, read from the domains that own it.
+    const attention = useRecordAttentionCounts(opportunityId);
+
     const contextChips = useMemo(() => {
         const stageOrStatus = effectiveStageLabel ?? readOnlyStatusLabel;
         // Booked Tour is overlapping operational context — not a stage move. Surface it beside
@@ -108,13 +113,19 @@ export default function OpportunityFocusPanelHeader({
                 : hasActiveTour && !stageOrStatus
                   ? "Tour Scheduled"
                   : stageOrStatus;
-        return buildFocusPanelContextChips({
-            statusLabel: statusWithTour,
-            statusKey: currentStatusKey,
-            processLabel,
-            locationLabel,
-        });
+        return [
+            ...buildFocusPanelContextChips({
+                statusLabel: statusWithTour,
+                statusKey: currentStatusKey,
+                processLabel,
+                locationLabel,
+            }),
+            // Attention trails what the record IS — an operator reads identity first, then load.
+            ...buildFocusPanelAttentionChips({ work: attention.work, unread: attention.unread }),
+        ];
     }, [
+        attention.unread,
+        attention.work,
         currentStatusKey,
         effectiveStageLabel,
         hasActiveTour,

@@ -473,7 +473,25 @@ await test("successful send records latest instruction; failed send does not", (
   assert.match(queued, />You</);
   assert.match(queued, /resume closure/);
   assert.match(queued, /Queued/);
-  assert.match(gwSrc, /result\?\.ok && \(result\.status === "delivered" \|\| result\.status === "queued"\)/);
+  // THE GUARANTEE, NOT THE EXPRESSION THAT HAPPENED TO CARRY IT.
+  //
+  // This matched the literal condition `result?.ok && (result.status ===
+  // "delivered" || result.status === "queued")`. What it protects is that the
+  // client treats ONLY an accepted send as a success. When that condition was
+  // lifted into an `accepted` constant — and widened to admit the `accepted`
+  // status alongside the two it already had — the guarantee was untouched and
+  // the test failed anyway. Assert the set of statuses instead, which is the
+  // part that must not quietly grow.
+  const at = gwSrc.indexOf("const accepted = Boolean(result?.ok");
+  assert.ok(at > 0, "the client must decide acceptance in one named place");
+  const acceptedExpr = gwSrc.slice(at, at + 240);
+  for (const status of ["delivered", "queued", "accepted"]) {
+    assert.match(acceptedExpr, new RegExp(`"${status}"`), `${status} must count as accepted`);
+  }
+  assert.ok(
+    !/"failed"|"refused"|"error"/.test(acceptedExpr),
+    "a refusal must never be treated as an accepted send",
+  );
   assert.match(gwSrc, /last_instruction/);
 });
 

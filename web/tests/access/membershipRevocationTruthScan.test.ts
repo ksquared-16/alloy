@@ -145,11 +145,28 @@ function localImports(abs: string, root: string): string[] {
 
 /* --------------------------------------------------------- membership deletion sites */
 
-/** `from("user_roles") … .delete()` — the statement that revokes a membership. */
+/**
+ * `from("user_roles") … .delete()` — the statement that revokes a membership, OR the transaction
+ * owner it moved into.
+ *
+ * D2 moved the removal behind `remove_member_access_audited` so the revocation and the record of
+ * WHAT was revoked commit together. The revocation is the same revocation; only its owner changed,
+ * and this scan follows it rather than concluding the route stopped revoking.
+ */
 const MEMBERSHIP_DELETE = /from\(\s*["'`]user_roles["'`]\s*\)\s*(?:\.\s*\w+\([^)]*\)\s*)*?\.\s*delete\b/;
 
+/**
+ * The same revocation, through the transaction owner D2 gave it.
+ *
+ * `remove_member_access_audited` deletes the membership and records what was removed in one
+ * transaction. A scan that recognised only the inline statement concluded the removal route had
+ * stopped revoking — which is why the non-vacuity guard below exists and is why it fired.
+ */
+const MEMBERSHIP_DELETE_RPC = /rpc\(\s*["'`]remove_member_access_audited["'`]/;
+
 function deletesMembership(abs: string): boolean {
-    return MEMBERSHIP_DELETE.test(code(abs));
+    const src = code(abs);
+    return MEMBERSHIP_DELETE.test(src) || MEMBERSHIP_DELETE_RPC.test(src);
 }
 
 /** Every module reachable from a route that deletes a membership. */

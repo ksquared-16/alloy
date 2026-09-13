@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
 import {
     fetchOptionSetItemsBySetKey,
     mapOptionItemsToSelectOptions,
@@ -477,8 +478,10 @@ export function useLocationsConfigurationSettings(options?: {
 
     const roomCapacitySummaryForSite = useCallback(
         (siteId: string): number => {
-            return roomRows
-                .filter((r) => r.parent_location_id === siteId && r.is_active !== false)
+            // Capacity is a property of the site's rooms wherever they sit in the
+            // hierarchy; a direct-parent filter under-counted every nested group.
+            return rowsBelongingToSite(roomRows, siteId)
+                .filter((r) => r.is_active !== false)
                 .reduce((sum, room) => {
                     const md = room.metadata;
                     if (md == null || typeof md !== "object" || Array.isArray(md)) return sum;

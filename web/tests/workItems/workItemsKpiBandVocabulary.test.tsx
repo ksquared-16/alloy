@@ -89,8 +89,13 @@ describe("R14 — KPI band vocabulary and population", () => {
         const pairs = bandPairs(root);
         // 2 open assigned (mine + theirs); the completed one and the unassigned one are excluded.
         expect(pairs["Tasks assigned"]).toBe("2");
-        // Unassigned open work remains the band's `Waiting` bucket — unchanged by this item.
-        expect(pairs["Waiting"]).toBe("1");
+        /*
+         * COUNT PARITY. This bucket was labelled `Waiting` and counted exactly this: open work with
+         * no assignee. Same corpus, same 1 — only the label changed, so a reader can see the
+         * rename moved no number.
+         */
+        expect(pairs["Unassigned"]).toBe("1");
+        expect(Object.keys(pairs)).not.toContain("Waiting");
         // Summary-sourced metrics are untouched.
         expect(pairs["Due Soon"]).toBe("3");
         expect(pairs["Overdue"]).toBe("4");
@@ -100,6 +105,20 @@ describe("R14 — KPI band vocabulary and population", () => {
         openTasks.mockReturnValue([task("u1", null), task("u2", null)]);
         const root = await render();
         expect(bandPairs(root)["Tasks assigned"]).toBe("0");
+    });
+
+    /*
+     * THE VOCABULARY IS THE CONTRACT. `Waiting` named a state the model does not have, and the lens
+     * behind it returns `[]` unconditionally. Pinning the whole set — not just the one renamed tile
+     * — is what stops it coming back through a future tile, tooltip or aria label.
+     */
+    it("the health vocabulary is Assigned / Unassigned / Due Soon / Overdue, and never Waiting", async () => {
+        openTasks.mockReturnValue([task("a", "user-me"), task("b", null)]);
+        const root = await render();
+        const labels = Object.keys(bandPairs(root));
+        expect(labels).toEqual(["Tasks assigned", "Unassigned", "Due Soon", "Overdue"]);
+        expect(root.textContent ?? "").not.toMatch(/waiting/i);
+        expect(root.innerHTML).not.toMatch(/waiting/i);
     });
 
     it("12: the band exposes its meaning through visible text, and stays non-interactive", async () => {

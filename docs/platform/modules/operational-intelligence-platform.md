@@ -130,6 +130,52 @@ Writer: `web/lib/metrics/snapshots/writeOrgMetricSnapshots.ts` — resolves **li
 
 Reads on resolve API: `mode=snapshot` uses `readLatestMetricSnapshot()` (24h max age); falls back to live.
 
+### Live-only metrics (`snapshotPolicy`)
+
+A metric definition may declare `snapshotPolicy: "live_only"`, meaning **a stored
+value must never stand in for its current one**. Default is `"eligible"` — the
+behaviour every metric had before this existed.
+
+| Path | Behaviour for a live-only metric |
+|------|----------------------------------|
+| `resolveSingleMetric` | does not consult `metric_snapshots` even under `mode=snapshot`; `resolveMode` stays `live`, so source metadata is truthful |
+| `writeOrgMetricSnapshots` | does not persist it, and the exclusion applies to an explicitly supplied `metricKeys` list, not only the default |
+
+**Why a policy and not a shorter max age.** The 24h bound above is correct for a
+rolling 7- or 30-day metric, whose value moves slowly. It is meaningless for a
+current-state metric: attendance goes from zero to full and back inside one day,
+so a snapshot 23 hours old is inside the bound and still a wrong answer to "how
+many children are here now". No age is short enough, and any chosen value would
+be a guess about how fast the underlying state turns over.
+
+**Why not `snapshotSemantics`.** That flag means "bounded point-in-time or capped
+scan rather than exhaustive org truth" — a claim about COMPLETENESS. Metrics
+carry it today while being snapshotted quite correctly (`enrollment.active_leads`
+is both). Reusing one flag for two questions would make every later reader guess
+which meaning applied.
+
+**Why the writer must refuse too.** A persisted current-state row is
+indistinguishable afterwards from a legitimate historical one — same table, same
+shape, same `computed_at` — so anything reading `metric_snapshots` directly, or
+any later relaxation of the read guard, would serve it as a real point in a
+series. The row must not exist rather than merely go unread.
+
+Introduced by Attendance (Thread 9); the contract is platform-generic and belongs
+to any current-state metric.
+
+### Packs are not necessarily business processes
+
+`PACK_TO_BUSINESS_PROCESS` is a **partial** map, read through
+`businessProcessForMetricPack(pack)`, and `OperationalCalculation.businessProcess`
+is nullable. A metric pack may be a first-class measurement domain with no owning
+Business Process — Attendance is the first: it measures operational fact
+authoring on a roster, which no process owns. Surface Builder groups such a
+calculation under its **pack** label rather than under "Other".
+
+An exhaustive mapping previously forced the opposite conclusion, and the only
+ways to satisfy it were to invent a Business Process or to file the domain under
+an unrelated one. Both are ownership errors, so the coupling was relaxed instead.
+
 Indexes: `(org_id, metric_key, computed_at)`, `(org_id, metric_key, scope_type, scope_id)`, `(org_id, computed_at)`.
 
 RLS: org-scoped SELECT for authenticated; service_role for writes.

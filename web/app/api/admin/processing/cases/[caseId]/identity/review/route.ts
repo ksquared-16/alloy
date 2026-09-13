@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { jsonData } from "@/lib/admin/forms/formsAdminResponses";
 import {
     loadCaseReview,
-    operatorErrorResponse,
-    resolveOperatorRoute,
 } from "@/lib/pos/processingIdentity/operator";
+import { operatorErrorResponse, resolveOperatorRoute } from "@/lib/pos/processingIdentity/operator/operatorRouteContext";
 
 export const dynamic = "force-dynamic";
 

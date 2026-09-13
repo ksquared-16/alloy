@@ -98,6 +98,10 @@ export const ACCESS_SURFACE_DECLARATIONS: Record<AccessWorkspaceChapter, Surface
             // offers no capability editing, which stays in the role editor (`W-59`/`RM-6`).
             "app/api/admin/rbac/permissions/route.ts",
             "app/api/admin/rbac/grants/route.ts",
+            // D2 — the chapter renders the shared Access history card, which reads this route. It
+            // enforces the same `settings.users_roles` the chapter is admitted by, so the surface
+            // gate and the route gate are true for the same reason.
+            "app/api/admin/access/history/route.ts",
         ],
         divergentRoutes: [
             {
@@ -127,6 +131,10 @@ export const ACCESS_SURFACE_DECLARATIONS: Record<AccessWorkspaceChapter, Surface
             "app/api/admin/rbac/permissions/route.ts",
             "app/api/admin/rbac/grants/route.ts",
             "app/api/admin/settings/users-roles/members/route.ts",
+            // D2 — the chapter renders the shared Access history card, which reads this route. It
+            // enforces the same `settings.users_roles` the chapter is admitted by, so the surface
+            // gate and the route gate are true for the same reason.
+            "app/api/admin/access/history/route.ts",
         ],
     },
     security: {
@@ -134,13 +142,14 @@ export const ACCESS_SURFACE_DECLARATIONS: Record<AccessWorkspaceChapter, Surface
         label: ACCESS_WORKSPACE_CHAPTER_META.security.label,
         href: accessWorkspaceChapterHref("security"),
         capability: SETTINGS_USERS_ROLES_PERMISSION,
-        backingRoutes: [],
-        // Every row in this chapter is `Planned` except the Password line, and the one live
-        // password-reset command lives on the Users chapter. The chapter issues no request. It is
-        // still gated, because it is a chapter of a gated workspace — but it has nothing to join
-        // against, and saying so is more honest than borrowing another chapter's route.
-        noBackingRoutesReason:
-            "Chapter is entirely static posture (all rows Planned); the live reset command is on the Users chapter",
+        // D2 — the chapter issues its first request. The Audit Log card said `Planned` since it was
+        // written and now renders committed `mutation_events`, so the honest declaration is the route
+        // it reads rather than the note explaining that it read nothing.
+        //
+        // The route enforces `settings.users_roles`, which is this chapter's own declared capability:
+        // reading who changed access requires the authority to change it, so admission and the
+        // backing route are true for the same reason — which is what `05…§7.7` asks of a surface.
+        backingRoutes: ["app/api/admin/access/history/route.ts"],
     },
 };
 

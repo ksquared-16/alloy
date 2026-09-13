@@ -5,12 +5,14 @@ import { createGeneratedPdfForSubmission } from "@/lib/forms/pdf/createGenerated
 import { emitFormDocumentGeneratedSafe } from "@/lib/forms/workflow/formSubmissionEvents";
 import { dbGetSubmission } from "@/lib/admin/forms/formsAdminDb";
 import { jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { FORMS_SUBMISSIONS, requireFormsCapability } from "@/lib/access/formsAuthority";
 
 /** POST /api/admin/forms/submissions/[submissionId]/generate-document — stub PDF via pdf_mapping_json → documents + junction. */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ submissionId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireFormsCapability(ctx, FORMS_SUBMISSIONS);
+    if (denied) return denied;
 
     const { submissionId: raw } = await params;
     const submissionId = parseUuidParam(raw, "submissionId");

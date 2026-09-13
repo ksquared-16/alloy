@@ -2364,6 +2364,32 @@ function hide() {
   stopTelemetryPoll();
 }
 
+/**
+ * Put a refused send back where the operator left it.
+ *
+ * The one case this is careful about: the operator typed something NEW while the
+ * refusal was in flight. Pasting over that would be a second, worse data loss
+ * than the one this exists to prevent, so the snapshot is kept in the pending
+ * record and offered rather than forced.
+ */
+function restorePendingSendToComposer(laneId, pending) {
+  const restored = View.restorePendingSend(laneId, { currentDraft: getDraft(laneId) });
+  if (!restored?.text) return;
+  if (restored.composer_is_free) {
+    setDraft(laneId, restored.text);
+    const box = document.getElementById("gw-instruction");
+    if (box) {
+      box.value = restored.text;
+      autosizeInstruction(box);
+      syncSendEnabled(restored.text);
+    }
+  }
+  // When the composer is NOT free the text stays on the pending record, where
+  // the view renders it with an explicit way to recover it. Either way it is
+  // still on screen and still the operator's.
+  void pending;
+}
+
 async function sendCurrent() {
   const id = G.selected;
   const ta = document.getElementById("gw-instruction");
@@ -2385,6 +2411,29 @@ async function sendCurrent() {
   }
   G.sending = true;
   G.notice = { kind: "idle", text: "Sending…" };
+  // THE COMPOSER EMPTIES ON THE PRESS, NOT ON THE ANSWER.
+  //
+  // THE DEFECT. Everything here was already right except the sequencing: this
+  // sets G.sending, paints "Sending…" and guards re-entry, all before the fetch
+  // — and then left the operator's text sitting in an editable box until the
+  // POST resolved, because the clear lived in the success branch. A composer
+  // that still holds what you typed is the single strongest signal a UI can give
+  // that nothing happened, and it was overriding every other signal on screen.
+  //
+  // MEASURED across 163 real sends: median acknowledgement is 0 ms, so most of
+  // the time this was invisible — but p95 is 30.2 SECONDS and the worst was 201
+  // seconds. 26 sends held the composer for over half a second and 21 for over
+  // five. The operator was not imagining it; they were seeing the tail.
+  //
+  // WHY THIS IS SAFE TO DO BEFORE THE SERVER ANSWERS. The text is not thrown
+  // away, it is MOVED: `pending_send` holds the exact snapshot, and the failure
+  // paths below put it back in the box. Nothing is lost on refusal, on network
+  // failure, or on a refusal that arrives after the operator has started typing
+  // something else — in that last case the snapshot is offered rather than
+  // pasted over what they are writing.
+  const pending = View.beginPendingSend(id, instruction, { attachments: G.attachments || [] });
+  setDraft(id, "");
+  if (ta) { ta.value = ""; autosizeInstruction(ta); syncSendEnabled(""); }
   paint();
   let result;
   try {
@@ -2399,16 +2448,28 @@ async function sendCurrent() {
     result = await r.json();
   } catch {
     G.sending = false;
-    G.notice = { kind: "err", text: "Network error. Instruction was not retried. Check output before sending again." };
+    // NOT ACCEPTED ANYWHERE. The request never got an answer, so nothing can be
+    // assumed to have been queued — the text goes back where the operator left
+    // it, and it is theirs again.
+    restorePendingSendToComposer(id, pending);
+    G.notice = { kind: "err", text: "Network error. Instruction was not retried. Your message is back in the composer." };
     paint();
     return;
   }
   G.sending = false;
+  const accepted = Boolean(result?.ok
+    && (result.status === "delivered" || result.status === "queued" || result.status === "accepted"));
+  if (!accepted) {
+    // A REFUSAL BEFORE DURABLE ACCEPTANCE MUST NOT COST THE OPERATOR THEIR WORDS.
+    //
+    // `current_run_active`, `send_in_progress`, `provider_prompt_not_ready` and
+    // every validation refusal all mean the instruction was never accepted, so
+    // the snapshot is restored and the refusal keeps its own explanation.
+    restorePendingSendToComposer(id, pending);
+  }
   G.notice = View.deliveryNotice(result);
-  if (result?.ok && (result.status === "delivered" || result.status === "queued")) {
-    setDraft(id, "");
-    const box = document.getElementById("gw-instruction");
-    if (box) box.value = "";
+  if (accepted) {
+    View.settlePendingSend(id, result);
     // The images are now the run's, not the draft's.
     G.attachments = [];
     G.attachmentError = null;
@@ -2881,6 +2942,25 @@ document.addEventListener("click", async (e) => {
     paint();
     return;
   }
+  const recoverSend = e.target?.closest?.("[data-gw-pending-send-recover]");
+  if (recoverSend) {
+    e.preventDefault();
+    e.stopPropagation();
+    const laneId = recoverSend.getAttribute("data-lane-id") || G.selected;
+    const held = View.pendingSendFor(laneId);
+    if (held?.text) {
+      // The operator asked for it explicitly, so the newer draft is appended
+      // rather than replaced — neither piece of their writing is thrown away.
+      const existing = getDraft(laneId);
+      const merged = existing ? `${held.text}\n\n${existing}` : held.text;
+      setDraft(laneId, merged);
+      const box = document.getElementById("gw-instruction");
+      if (box) { box.value = merged; autosizeInstruction(box); syncSendEnabled(merged); }
+    }
+    View.clearPendingSend(laneId);
+    paint();
+    return;
+  }
   const governedApprove = e.target?.closest?.("[data-gw-governed-approve]");
   const governedDeny = e.target?.closest?.("[data-gw-governed-deny]");
   if (governedApprove || governedDeny) {
@@ -2894,7 +2974,25 @@ document.addEventListener("click", async (e) => {
     const requestId = btn.getAttribute("data-request-id") || ga?.request_id;
     const row = (G.approvals || []).find((a) => a && a.request_id === requestId) || null;
     if (!requestId) return;
-    btn.disabled = true;
+    // ONE PRESS, ACKNOWLEDGED BEFORE THE NETWORK IS TOUCHED.
+    //
+    // `btn.disabled = true` on its own was not enough and could not be: it lives
+    // on a DOM node the next repaint replaces from a template that knows nothing
+    // about a decision in flight. A poll tick landing mid-request re-armed the
+    // button under an approval that was still running. The decision state now
+    // lives in the view module, so every repaint between here and the settled
+    // state redraws the control as submitting rather than as ready.
+    //
+    // The guard below is the in-flight check the DOM one only approximated: a
+    // second press on the same request, from ANY of the three approval surfaces,
+    // returns without issuing a second mutation.
+    const inFlight = View.governedDecisionStateFor(requestId)?.state;
+    if (inFlight === "submitting" || inFlight === "denying") return;
+    const submittedAt = new Date().toISOString();
+    View.setGovernedDecisionState(requestId, governedApprove ? "submitting" : "denying");
+    // Paint FIRST. The operator sees the press land in this frame, not after a
+    // round trip whose duration nothing on screen accounts for.
+    paint();
     try {
       const path = governedApprove ? "/api/v2/governed-actions/approve" : "/api/v2/governed-actions/deny";
       const r = await gwFetch(path, {
@@ -2905,6 +3003,9 @@ document.addEventListener("click", async (e) => {
           // What the operator actually read. The server refuses the decision if
           // the request has moved on since this card was drawn.
           content_fingerprint: btn.getAttribute("data-content-fingerprint") || null,
+          // When the press happened. The server cannot observe this and the
+          // audit could not answer "how long did the operator wait" without it.
+          submitted_at: submittedAt,
         }),
       });
       const out = await r.json().catch(() => ({}));
@@ -2918,13 +3019,50 @@ document.addEventListener("click", async (e) => {
         title: row ? View.governedActionLabel(row) : (ga ? View.governedActionLabel(ga) : null),
         approveLabel: row?.approve_label || ga?.approve_label,
       });
+      if (out.ok) {
+        // ACCEPTED IS NOT COMPLETE, AND THE CONTROL MUST NOT CLAIM OTHERWISE.
+        //
+        // The route now answers 202 as soon as the decision, the authority and
+        // the execution claim are durable — before the trusted-host action runs.
+        // Labelling that "Approved" would be true and still misleading: the
+        // operator would read a finished action where there is a started one.
+        // The projection advances it to executing and on to its terminal state,
+        // and the lane's governed-wait surface carries that; this control only
+        // has to say honestly which of the two it is looking at.
+        //
+        // `already` is a success, not a failure: the server converged us onto a
+        // decision that stands. Saying so is the whole point — the alternative
+        // is an error for something that did in fact happen.
+        View.setGovernedDecisionState(requestId, "settled", {
+          label: governedApprove
+            ? (out.already ? "Already approved" : (out.accepted ? "Accepted" : "Approved"))
+            : "Denied",
+        });
+      } else {
+        // Visible, named, and retryable. No silent no-op and no spinner that
+        // never ends: the control comes back as "Try again" with the reason.
+        View.setGovernedDecisionState(requestId, "failed", {
+          error: View.governedDecisionFailureCopy(out.error),
+        });
+      }
+      // Show the outcome now; converge on server truth immediately after. The
+      // three refreshes below used to run BEFORE the first repaint, so the
+      // operator waited out all of them with nothing on screen having changed.
+      paint();
       const laneId = G.selected || G.lane?.lane_id;
       await refreshApprovals();
       await fetchLanes();
       if (laneId) await fetchLane(laneId);
+      // The projection is authoritative once it has caught up. Dropping the
+      // local state here is what stops a settled decision outliving the request
+      // it settled — and a stale response can no longer regress a newer state,
+      // because what is drawn from here on is the server's.
+      View.clearGovernedDecisionState(requestId);
       paint();
     } catch {
-      btn.disabled = false;
+      View.setGovernedDecisionState(requestId, "failed", {
+        error: "Vacilando could not be reached. Nothing was sent.",
+      });
       G.notice = View.governedDecisionNotice({
         approve: Boolean(governedApprove),
         error: "unreachable",

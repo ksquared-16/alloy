@@ -59,7 +59,7 @@ export default function FinancialsWorkspace({
         case "accounts":
             return <FinancialsAccounts position={position} scopeLabel={scopeLabel} />;
         case "charges":
-            return <FinancialsCharges queue={queue} scopeLabel={scopeLabel} siteSelected={siteSelected} />;
+            return <FinancialsCharges queue={queue} position={position} scopeLabel={scopeLabel} siteSelected={siteSelected} />;
         case "payments":
             return <FinancialsPayments flow={flow} scopeLabel={scopeLabel} />;
         case "subsidy":

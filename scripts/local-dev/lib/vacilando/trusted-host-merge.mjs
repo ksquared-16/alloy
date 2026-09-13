@@ -5,8 +5,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
-  migrationMergeGate,
-  provenHostedHeadFromCensusRecords,
+  hostedEvidenceFreshness,
+  hostedMigrationEvidence,
+  promotionParityGate,
   requiredVersionsFromFilenames,
 } from "./migration-parity.mjs";
 import { spawnSync } from "node:child_process";
@@ -506,34 +507,85 @@ function rollupFrom(pr = {}) {
 // locates it. Deliberately a local copy rather than an import: this file is
 // already imported BY governed-action-request.mjs, so importing its path helper
 // would close a cycle for the sake of one join().
+/*
+ * THE GATEWAY STATE ROOT IS NESTED, AND READING THE PARENT READS NOTHING.
+ *
+ * MEASURED on the running toolkit. `ALLOY_RUNTIME_ROOT` is set by the shipped
+ * config to `~/.local/state/alloy-dev`, but the governed-action store lives one
+ * level deeper, under `.../alloy-dev/gateway/vacilando/governed-actions`. This
+ * function returned the parent, so `governedActionRequestsPath()` named a file
+ * that does not exist, `existsSync` was false, and the parity gate evaluated
+ * against ZERO census records — for every merge, permanently.
+ *
+ * The failure mode is the cruel one: not a crash, but `unknown`, "no census has
+ * positively established the hosted migration head". Running a fresh census
+ * could never clear it, because no census was ever read. PR #848 was denied by
+ * this while a completed census sat in the store 42 minutes old.
+ *
+ * `canonicalGatewayRuntimeRoot()` is already imported into this file and already
+ * knows the right answer. The fix is to stop keeping a second, wrong copy of it:
+ * an explicit root is honoured, and when it names the parent of a real gateway
+ * store, the store is where it actually is.
+ */
 function runtimeRoot() {
-  return process.env.ALLOY_RUNTIME_ROOT?.trim()
-    || join(homedir(), ".local", "state", "alloy-dev");
+  const explicit = process.env.ALLOY_RUNTIME_ROOT?.trim();
+  if (!explicit) return canonicalGatewayRuntimeRoot();
+  if (existsSync(join(explicit, "vacilando", "governed-actions"))) return explicit;
+  const nested = join(explicit, "gateway");
+  if (existsSync(join(nested, "vacilando", "governed-actions"))) return nested;
+  return explicit;
 }
 
 function governedActionRequestsPath(root = runtimeRoot()) {
   return join(root, "vacilando", "governed-actions", "requests.json");
 }
 
+/**
+ * WHICH REVISION OWES THE DEPLOYED PRIMARY ITS SCHEMA?
+ *
+ * CURRENT PROMOTED STAGING — the branch this candidate is merging INTO, read at
+ * evaluation time. Not the candidate. The candidate's own migrations are an
+ * obligation that begins the moment it lands; requiring them beforehand asks the
+ * merge to have already happened, and that cycle made every migration-bearing PR
+ * unpromotable (see migration-parity.mjs for the measured shape).
+ *
+ * Both revisions are read, because the candidate set is still worth REPORTING:
+ * `candidate_only_migrations` is what becomes due after this merge, and a train
+ * needs to know it even though no gate may demand it yet.
+ */
 export function measureMergeMigrationParity(n, { gh = defaultGh, nowMs = Date.now(), censusRequests = null } = {}) {
   try {
-    const res = gh(["api", `repos/${n.repository}/contents/supabase/migrations?ref=${n.expectedHeadSha}`,
-      "--jq", "[.[].name]"]);
-    if (res.status !== 0) {
-      return { status: "unknown", promote: false, measured: false, reason: "could not read the promoted revision's migration set" };
+    const listAt = (ref) => {
+      const res = gh(["api", `repos/${n.repository}/contents/supabase/migrations?ref=${ref}`, "--jq", "[.[].name]"]);
+      if (res.status !== 0) return null;
+      const names = parseJson(res.stdout);
+      return Array.isArray(names) ? requiredVersionsFromFilenames(names) : null;
+    };
+
+    // THE EXPECTED SET. The target branch is the promoted revision by definition:
+    // validateMergeInputs has already bounded it to `staging`.
+    const expectedRevision = n.targetBranch || ALLOWED_TARGET_BRANCHES[0];
+    const expected = listAt(expectedRevision);
+    if (!expected) {
+      return {
+        gate: "hosted_migration_parity",
+        status: "unknown",
+        promote: false,
+        measured: false,
+        expected_revision: expectedRevision,
+        expected_revision_kind: "promoted_staging",
+        reason: "could not read the promoted revision's migration set",
+      };
     }
-    const names = parseJson(res.stdout);
-    if (!Array.isArray(names)) {
-      return { status: "unknown", promote: false, measured: false, reason: "unparseable migration listing for the promoted revision" };
+
+    // Reported, never required. A failure to read it must not block a merge that
+    // the promoted-staging comparison already answered.
+    const candidate = listAt(n.expectedHeadSha);
+
+    if (!expected.length) {
+      return promotionParityGate({ expected, candidate, expectedRevision, nowMs });
     }
-    const required = requiredVersionsFromFilenames(names);
-    // A revision that requires no migrations needs no proof, so do not go and
-    // read one. This is not only a saved file read: it keeps the answer for
-    // "this promotion has no schema requirement" independent of whether any
-    // census has ever run.
-    if (!required.length) {
-      return migrationMergeGate({ requiredHead: null, requiredCount: 0, nowMs });
-    }
+
     let records = censusRequests;
     if (!Array.isArray(records)) {
       records = [];
@@ -545,18 +597,17 @@ export function measureMergeMigrationParity(n, { gh = defaultGh, nowMs = Date.no
         }
       } catch { /* unreadable proof -> UNKNOWN below */ }
     }
-    const proven = provenHostedHeadFromCensusRecords(records, {
-      artifactPath: "hosted-migration-identity-census.sql",
-    });
-    return migrationMergeGate({
-      requiredHead: required.length ? required[required.length - 1] : null,
-      requiredCount: required.length,
-      provenHead: proven?.head || null,
-      provenAtMs: proven?.atMs || null,
-      nowMs,
-    });
+    const evidence = hostedMigrationEvidence(records, { artifactPath: "hosted-migration-identity-census.sql" });
+    const freshness = hostedEvidenceFreshness(evidence, { requests: records, nowMs });
+    return promotionParityGate({ expected, candidate, evidence, freshness, expectedRevision, nowMs });
   } catch (err) {
-    return { status: "unknown", promote: false, measured: false, reason: String(err?.message || err).slice(0, 200) };
+    return {
+      gate: "hosted_migration_parity",
+      status: "unknown",
+      promote: false,
+      measured: false,
+      reason: String(err?.message || err).slice(0, 200),
+    };
   }
 }
 
@@ -668,11 +719,22 @@ export function evaluateMergeReadiness(inspected) {
   // UNKNOWN refuses on the same footing as BEHIND. "I could not establish it"
   // is not evidence of safety, and treating it as one is the fail-open this
   // exists to close.
+  //
+  // STALE IS ITS OWN REFUSAL. It blocks exactly as hard, and it says something
+  // different: the measurement is real but has been overtaken, so the action is
+  // "measure again", not "go and deploy something". Reporting stale evidence as
+  // `hosted_migration_behind` would send a Director to apply a migration the
+  // database may already carry — and, because that refusal code is what grants
+  // pre-merge production apply authority, would hand out that authority on the
+  // strength of a document that stopped describing the database.
   const parity = inspected.migration_parity || null;
   if (!parity || parity.status !== "ok") {
+    const code = parity?.status === "blocked" ? "hosted_migration_behind"
+      : parity?.status === "stale" ? "hosted_migration_evidence_stale"
+        : "hosted_migration_parity_unknown";
     return {
       ok: false,
-      code: parity?.status === "blocked" ? "hosted_migration_behind" : "hosted_migration_parity_unknown",
+      code,
       detail: parity?.reason
         || "hosted migration parity could not be established for this promotion",
       migration_parity: parity,

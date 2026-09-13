@@ -174,3 +174,82 @@ test("REGRESSION CONTROL: the old broad dedupe would adopt the foreign action", 
         && sameActionOwnership(a, { executionSessionId: RUN, assignmentId: RUN, inputs: { laneId: LANE } }));
     assert.equal(ownershipMatch, undefined, "the ownership-safe predicate must refuse it");
 });
+
+/*
+ * A COMPLETED ACTION IS NOT ALWAYS A REUSABLE ANSWER.
+ *
+ * Dedupe was written for censuses, where reuse is sound: a pinned query hash names the same question
+ * and the stored result IS the answer. A session mint is the opposite — its purpose is to produce a
+ * fresh artifact, and its result describes one that expires in about an hour.
+ *
+ * Measured on staging: three `restore_deployed_qa_session` requests in one run all adopted the same
+ * completed action, because its dedupeKey is `restore_deployed_qa_session:<target>` — constant per
+ * target. Every later request replayed the stored result, reporting `verified: true` with the
+ * ORIGINAL `verified_at`, while the storage-state file the browser reads was never rewritten and the
+ * session had long since expired. Each request recorded its own `execution_started_at`, so from the
+ * outside it looked like it had run. Two hours of live certification were lost to it.
+ */
+const { getActionDefinition } = await import("../lib/vacilando/trusted-host-action-registry.mjs");
+const { listTrustedHostActions: listActions } = await import("../lib/vacilando/trusted-host-actions.mjs");
+const { readFileSync: readJson, writeFileSync: writeJson, readdirSync } = await import("node:fs");
+
+const DEPLOYED_TYPE = ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION;
+const deployedReq = (run) => requestTrustedHostAction({
+    missionId: MISSION,
+    assignmentId: run,
+    executionSessionId: run,
+    requestedBy: "director",
+    actionType: DEPLOYED_TYPE,
+    inputs: { deployed_target: "alloy_staging_web" },
+    nowMs: Date.now(),
+});
+
+/** Drive a stored action to a terminal state without running it. */
+function markState(actionId, state) {
+    const dir = join(ISOLATED, "vacilando", "trusted-host-actions");
+    const file = readdirSync(dir).find((f) => f === `${actionId}.json`);
+    assert.ok(file, `stored action ${actionId} should exist under ${dir}`);
+    const p = join(dir, file);
+    const rec = JSON.parse(readJson(p, "utf8"));
+    rec.state = state;
+    writeJson(p, JSON.stringify(rec, null, 2));
+}
+
+test("the deployed session restore declares that its result does not keep", () => {
+    assert.equal(getActionDefinition(DEPLOYED_TYPE).resultKeeps, false);
+});
+
+test("a COMPLETED session mint is not reused — the regression, in one case", () => {
+    const RUN_A = "erun_sessionmint00000001";
+    const first = deployedReq(RUN_A);
+    assert.equal(first.ok, true);
+    markState(first.action.id, "completed");
+
+    const second = deployedReq(RUN_A);
+    assert.equal(second.ok, true);
+    assert.notEqual(second.deduped, true, "a completed mint must not be replayed as a fresh one");
+    assert.notEqual(second.action.id, first.action.id, "a new mint needs its own action");
+});
+
+test("an IN-FLIGHT session mint is still reused, so two requests cannot both mint", () => {
+    const RUN_B = "erun_sessionmint00000002";
+    const first = deployedReq(RUN_B);
+    assert.equal(first.ok, true);
+    // Left in its as-created state: requested.
+    const second = deployedReq(RUN_B);
+    assert.equal(second.deduped, true, "concurrent requests must share one in-flight mint");
+    assert.equal(second.action.id, first.action.id);
+});
+
+test("an action whose result DOES keep still reuses its completed answer", () => {
+    // The census contract is unchanged — this is the behaviour the narrowing must not disturb.
+    const RUN_C = "erun_sessionmint00000003";
+    const first = req({ assignmentId: RUN_C, executionSessionId: RUN_C });
+    assert.equal(first.ok, true);
+    assert.notEqual(getActionDefinition(TYPE).resultKeeps, false);
+    markState(first.action.id, "completed");
+
+    const second = req({ assignmentId: RUN_C, executionSessionId: RUN_C });
+    assert.equal(second.deduped, true, "a keeping result must still dedupe when completed");
+    assert.equal(second.action.id, first.action.id);
+});

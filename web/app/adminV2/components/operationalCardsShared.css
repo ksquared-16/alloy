@@ -179,48 +179,54 @@
  * The approved specimen sizes each action to its own label and right-aligns the set. Overriding the
  * inherited grid here rather than in the platform rule keeps What's Next unchanged; wrapping rather
  * than scrolling means a fifth action costs a line, never a truncated word.
+ *
+ * That last sentence was true of this comment and false of the rule beneath it for a while — the
+ * rule had been changed to scroll without the paragraph following. It wraps again now, and the
+ * rule below says why.
  */
 .alloy-os-process__work-actions .alloy-os-currentwork__helpful-row {
   display: flex;
   /*
-   * ONE ROW, ALWAYS.
+   * THE ROW WRAPS. IT DOES NOT SCROLL.
    *
-   * Wrapping was the earlier answer — "a fifth action costs a line, never a truncated word" — and
-   * it costs something the line did not buy: the command row stops reading as one rail. With three
-   * commands in the work band's `minmax(300px, 0.9fr)` column, Send form dropped beneath Tour and
-   * Add family member and read as a separate, lesser group.
+   * This replaces a deliberate "ONE ROW, ALWAYS" rule, so the reason it lost is worth recording.
+   * That rule set `flex-wrap: nowrap` with `overflow-x: auto` and a hidden scrollbar, reasoning that
+   * a wrapped command reads as a separate, lesser group. What it produced instead was a command
+   * cut off at the card edge with nothing to indicate it existed: measured on a deployed Waitlist
+   * card, `scrollWidth 409` against `clientWidth 300`, so 109px of the set — the whole of "Send
+   * form" — sat outside the visible box. A five-command card was worse, at 518 against 300.
    *
-   * The set stays on one line and keeps whole labels. When the row genuinely cannot fit its
-   * commands it scrolls along that line rather than folding: a command may be out of view and
-   * reachable, never restacked into a second row that changes what the set looks like.
+   * A horizontal rail is only honest when the operator can tell it scrolls. With `scrollbar-width:
+   * none` there was no such signal, and on a card this narrow the set will exceed the column
+   * routinely rather than exceptionally — every one of six cards sampled across four work units was
+   * clipped. So the failure was not an edge case being handled ungracefully; it was the normal case.
+   *
+   * Wrapping costs vertical space the card can afford and keeps every configured command reachable
+   * without a gesture nobody is prompted to make.
    */
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   /*
-   * `safe` IS LOAD-BEARING, NOT DECORATION.
+   * `safe` IS STILL LOAD-BEARING.
    *
-   * Plain `flex-end` aligns the set to the right, and when the set is wider than the column the
-   * overflow goes past the START edge. Leftward overflow in a left-to-right row is not scrollable
-   * -- the browser does not count it in `scrollWidth`, so `overflow-x: auto` never produces a
-   * scroll position that can reach it. Measured on a Work Unit: the row's box was x=910..1237 while
-   * "Contact Family" rendered at x=719, entirely outside its own container, with
-   * `scrollWidth === clientWidth`. The PRIMARY command was invisible and unreachable at every
-   * viewport width, which is the exact opposite of what the paragraph above promises.
-   *
-   * `safe flex-end` keeps the right alignment whenever the set fits and falls back to start
-   * alignment only when it would otherwise overflow the unreachable end, so the overflow lands on
-   * the scrollable side and the promise holds. The unprefixed declaration stays first as the
-   * fallback for engines that do not parse the keyword.
+   * Plain `flex-end` pushes overflow past the START edge, which is unreachable in a left-to-right
+   * row. Wrapping makes that far less likely, but a single command wider than the column can still
+   * do it, so the guard stays: `safe flex-end` keeps the right alignment whenever the line fits and
+   * falls back to start alignment when it would otherwise overflow the unreachable end. The
+   * unprefixed declaration stays first as the fallback for engines that do not parse the keyword.
    */
   justify-content: flex-end;
   justify-content: safe flex-end;
   grid-template-columns: none;
-  overflow-x: auto;
-  /* The row is a rail, not a scroll region to look at — no gutter, no chained scrolling. */
-  scrollbar-width: none;
-  overscroll-behavior-x: contain;
-}
-.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row::-webkit-scrollbar {
-  display: none;
+  /*
+   * Wrapped lines need their own rhythm. `row-gap` is set explicitly rather than inherited so a
+   * second line sits clear of the first instead of touching it.
+   */
+  row-gap: 6px;
+  /*
+   * No `overflow-x`. A row that wraps has nothing to scroll, and leaving `auto` here would let a
+   * single over-wide command re-introduce a silent hidden region.
+   */
+  overflow-x: visible;
 }
 
 .alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__helpful-action,
@@ -228,8 +234,23 @@
 .alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > [data-work-tour-grouped="true"] {
   width: auto;
   min-width: 0;
-  /* Keep its own label whole; never absorb a neighbour's overflow by shrinking to nothing. */
+  /*
+   * Size to content, and never shrink. `0 0 auto` is what keeps a command's own label whole instead
+   * of absorbing a neighbour's overflow — the behaviour that produced "hange lead locatio". A
+   * command too wide for the line now takes a line of its own rather than being compressed.
+   */
   flex: 0 0 auto;
+  /*
+   * THE LAST RESORT, AND ONLY THAT.
+   *
+   * A single command whose label is wider than the entire card cannot be made to fit by wrapping,
+   * and it must still not render outside the card. `max-width: 100%` bounds it to the container and
+   * the ellipsis is what that bound costs. This engages only when one label exceeds the whole row,
+   * which no configured command does today; every ordinary set wraps with its labels intact.
+   */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   /* One line per action. A wrapped label reads as two actions on a rail of many. */
   white-space: nowrap;
 }
@@ -2024,4 +2045,187 @@
   font-size: 0.66rem;
   font-variant-numeric: tabular-nums;
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * RECEIPTS, AND MOVING THE MONEY ON THEM (Financials Slice 6).
+ *
+ * The markup for the payments section and the Move / Apply panel shipped without any styles at all.
+ * That was not merely cosmetic: the panel is a sibling of the detail card, the detail card is
+ * absolutely positioned at z-index 60 when the card is expanded, and an unstyled panel has no
+ * stacking context of its own — so it rendered UNDERNEATH the card the operator is looking at and
+ * computed `pointer-events: none`. Mounted certification found Move openable and then unusable: the
+ * click landed on the card sitting on top of it.
+ *
+ * The panel therefore sits one layer above the expanded card. Everything else here is ordinary
+ * layout for rows that were inheriting whatever surrounded them.
+ * ────────────────────────────────────────────────────────────────────────────── */
+
+.alloy-os-fdetail__payments {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.alloy-os-fdetail__payment {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 12%, transparent));
+  border-radius: 10px;
+}
+
+.alloy-os-fdetail__application {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 2px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+}
+
+.alloy-os-fdetail__appstatus,
+.alloy-os-fdetail__appreason {
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 60%, #64748b);
+}
+
+/* A reversed application is history: it must read as quieter than the one that counts. */
+.alloy-os-fdetail__application[data-application-status="reversed"] {
+  opacity: 0.72;
+}
+
+.alloy-os-fdetail__unapplied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.alloy-os-fdetail__movenotice,
+.alloy-os-fdetail__movepanel {
+  /*
+   * The layer that makes this reachable at all — see the note above. `pointer-events: auto` is the
+   * other half and is not redundant: raising a card makes the layer behind it inert, that inertness
+   * INHERITS, and the panel renders in that layer. With the z-index alone the panel is drawn in the
+   * right place and still cannot be clicked. The raised card opts back in the same way.
+   */
+  position: relative;
+  z-index: 61;
+  pointer-events: auto;
+  background: var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff));
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 14%, transparent));
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.alloy-os-fdetail__moveheader {
+  font-weight: 600;
+}
+
+.alloy-os-fdetail__movefield {
+  display: grid;
+  gap: 4px;
+}
+
+.alloy-os-fdetail__movefield select,
+.alloy-os-fdetail__movefield input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 18%, transparent));
+  border-radius: 8px;
+  background: var(--alloy-os-surface, #fff);
+  color: inherit;
+}
+
+.alloy-os-fdetail__movepreview {
+  display: grid;
+  gap: 2px;
+  font-size: 0.78rem;
+}
+
+.alloy-os-fdetail__moveerror {
+  font-size: 0.78rem;
+  color: var(--alloy-os-danger, #b3261e);
+}
+
+.alloy-os-fdetail__moveactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.alloy-os-fdetail__moveactions button {
+  padding: 5px 10px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 18%, transparent));
+  border-radius: 8px;
+  background: var(--alloy-os-surface, #fff);
+  color: inherit;
+  cursor: pointer;
+}
+
+.alloy-os-fdetail__moveactions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * WHAT SOMEBODY DECIDED BY HAND (Financials Slice 5C).
+ *
+ * The Add adjustment and Reverse panels deliberately reuse `__movepanel`, so they inherit the layer
+ * and the pointer-events opt-in that made Move reachable — the same trap would otherwise be waiting
+ * here, for the same reason.
+ * ────────────────────────────────────────────────────────────────────────────── */
+
+.alloy-os-fdetail__adjustments {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.alloy-os-fdetail__adjustment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  border-left: 2px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+}
+
+/* A reversed decision is history; it must read quieter than the one that stands. */
+.alloy-os-fdetail__adjustment[data-adjustment-reversed="true"] {
+  opacity: 0.72;
+}
+
+.alloy-os-fdetail__adjmeta,
+.alloy-os-fdetail__adjreason,
+.alloy-os-fdetail__adjstatus {
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 60%, #64748b);
+}
+
+.alloy-os-fdetail__adjustadd {
+  display: flex;
+  gap: 8px;
+}
+
+/* A transition offered on a ledger row — Post a draft, Reverse a posted charge. */
+.alloy-os-fdetail__rowaction {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 18%, transparent));
+  border-radius: 6px;
+  background: var(--alloy-os-surface, #fff);
+  color: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.alloy-os-fdetail__rowaction:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

@@ -195,6 +195,13 @@ function checklistFromStageRuntime(runtime: StageWorkRuntimeProjection | null): 
     return items.map((item) => {
         const status =
             item.state === "completed" ? ("complete" as const) : ("missing" as const);
+        /*
+         * The runtime already knows which work is primary. This surface used to drop that, so a
+         * stage with two open work items presented them as peers and gave the operator no way to
+         * tell which one the stage is actually about. Carried, never inferred from position or
+         * label — `additional` is an ordering, `role` is the statement.
+         */
+        const workRole = item.role === "secondary" ? ("secondary" as const) : ("primary" as const);
         // Stage-work rows carry no field-rule entity — they are WORK, not a data requirement.
         // No label-regex owner inference (that heuristic was the Slice E debt); a work item has
         // no data-owning card, so ownership is left unset rather than guessed from the label.
@@ -209,6 +216,7 @@ function checklistFromStageRuntime(runtime: StageWorkRuntimeProjection | null): 
             actionRef: null,
             description: item.description?.trim() || null,
             handoffItemId: item.work_id ?? item.template_key,
+            workRole,
         };
     });
 }
@@ -287,12 +295,33 @@ function checklistFromReadiness(readiness: ReadinessResult | null | undefined): 
     return rows;
 }
 
+/**
+ * The work "Record outcome" acts on.
+ *
+ * ROLE BEFORE POSITION. This took the first open item in `[primary, ...additional]`, which is the
+ * primary only by accident of ordering: the moment a secondary work item is open and the primary is
+ * not, the unqualified control silently starts acting on the secondary one. An operator pressing
+ * "Record outcome" on a stage whose primary work is Review waitlist position must not find
+ * themselves recording an Offer spot outcome.
+ *
+ * So the stage's PRIMARY work answers first, and a secondary item is reached only when the primary
+ * has nothing open — and then explicitly, through its own row.
+ */
 function pickPrimaryOpenItem(runtime: StageWorkRuntimeProjection | null): StageWorkItemProjection | null {
     if (!runtime) return null;
     const items = [runtime.primary, ...runtime.additional].filter(
         (item): item is StageWorkItemProjection => item != null,
     );
-    return items.find((item) => item.state === "open") ?? items.find((item) => item.state === "planned") ?? null;
+    const byRole = (role: "primary" | "secondary", state: "open" | "planned") =>
+        items.find((item) => (item.role ?? "primary") === role && item.state === state) ?? null;
+
+    return (
+        byRole("primary", "open")
+        ?? byRole("primary", "planned")
+        ?? byRole("secondary", "open")
+        ?? byRole("secondary", "planned")
+        ?? null
+    );
 }
 
 function findOpenItemForTemplate(
@@ -692,12 +721,33 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         ? checklistFromConfig(templateConfig, configCompletedKeys, checklistTruthByKey)
         : [];
     const readinessChecklist = checklistFromReadiness(readinessProjection);
-    const checklist =
+    /*
+     * REQUIREMENTS AND WORK ARE DIFFERENT KINDS, NOT COMPETING SOURCES.
+     *
+     * `stageChecklist` is the only source that carries the stage's WORK rows, and it used to be
+     * reached only when both requirement sources were empty. So the moment a stage authored any
+     * requirement, every work row vanished from the checklist — and with them the only record that
+     * a second work item was open.
+     *
+     * Measured on staging: an offer work was started and live (a repeat invocation deduped onto the
+     * same work id), and it appeared in no checklist, so no surface could offer its outcomes. The
+     * Waitlist stage has four authored field requirements, which is all it took.
+     *
+     * The requirement SOURCE selection is unchanged — config still wins over readiness, and an
+     * authored empty set still means empty. Work rows are then composed in, because a data
+     * requirement and a piece of work are not two answers to one question. `classifyChecklistItems`
+     * and the progress denominator already separate the two kinds, so nothing downstream had to be
+     * taught that they coexist; it was only this selection that assumed they could not.
+     */
+    const requirementChecklist =
         configChecklist.length > 0
             ? mergeChecklists(configChecklist, readinessChecklist)
-            : readinessChecklist.length > 0
-              ? readinessChecklist
-              : stageChecklist;
+            : readinessChecklist;
+    const requirementKeys = new Set(requirementChecklist.map((item) => item.key));
+    const checklist = [
+        ...requirementChecklist,
+        ...stageChecklist.filter((item) => !requirementKeys.has(item.key)),
+    ];
 
     // Requirement progress only — work items must not inflate the denominator.
     const requirementItems = checklist.filter((item) => item.kind !== "stage_work");
@@ -913,3 +963,12 @@ export function handoffOwnerCardForChecklistScope(scope?: string): FocusPanelCar
             return null;
     }
 }
+
+/**
+ * The two pure derivations the secondary-work contract rests on.
+ *
+ * Exported for test rather than re-implemented there: a test that restated "which item does Record
+ * outcome act on" could pass while the real picker regressed, which is the failure mode that let the
+ * role be dropped in the first place.
+ */
+export const __testing = { checklistFromStageRuntime, pickPrimaryOpenItem };

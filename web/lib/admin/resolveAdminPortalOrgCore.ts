@@ -3,13 +3,29 @@ import {
     chooseOrgAndRoleKeysFromMembershipRows,
     type ResolvedAdminAccessCore,
 } from "@/lib/admin/resolveAdminAccessCore";
+import { fetchPortalAdmission, isPortalAdmitted, type PortalAdmission } from "@/lib/admin/portalAdmission";
 
-const PORTAL_ROLES = new Set(["admin", "ops"]);
+/*
+ * `PORTAL_ROLES` STOOD HERE TOO, byte-for-byte, and that is the reason W-13 states its removal over
+ * every module rather than over the file where the literal was first written. `M2-5` is the
+ * precedent: `W-20` deleted the legacy fallback from `resolveAdminAccessCore` and this module's
+ * re-implementation went on serving `requireAdminOrOps`. A second copy of an admission predicate is
+ * not a duplicate — it is a second admission policy that nobody is watching.
+ */
 
 export type ResolvedAdminPortalOrgCore = Pick<
     ResolvedAdminAccessCore,
     "orgId" | "roleKeys" | "portalEligible"
->;
+> & {
+    /**
+     * Why `portalEligible` is false, preserved for the caller's diagnostics.
+     *
+     * `no-capability` and `unresolved` are both refusals and must not be collapsed: one is a
+     * decision about this principal's grants, the other is a failure to find out. The gate treats
+     * them the same — it must — and the log does not.
+     */
+    admission: PortalAdmission;
+};
 
 /**
  * Portal org + role_keys only — skips permission grants and department/site scope tables.
@@ -47,6 +63,26 @@ export async function resolveAdminPortalOrgCore(
     const picked = chooseOrgAndRoleKeysFromMembershipRows(rows);
     if (!picked) return null;
 
-    const portalEligible = picked.roleKeys.some((r) => PORTAL_ROLES.has(r));
-    return { orgId: picked.orgId, roleKeys: picked.roleKeys, portalEligible };
+    /*
+     * W-13 — the one place this resolver's "light" contract had to give.
+     *
+     * It skips the grant union and the scope tables deliberately: 22 count/summary routes pay for
+     * this call, and the union fetch is the expensive half. Capability admission needs a grant row
+     * nonetheless, so it reads ONE — a single indexed lookup for `portal.access` — rather than
+     * resolving the union it exists to avoid. The alternative was to leave this path on the role
+     * literal, which would make admission mean two different things in one product.
+     */
+    const admission = await fetchPortalAdmission(
+        supabase,
+        picked.orgId,
+        picked.roleKeys,
+        "resolveAdminPortalOrgCore",
+        userId
+    );
+    return {
+        orgId: picked.orgId,
+        roleKeys: picked.roleKeys,
+        portalEligible: isPortalAdmitted(admission),
+        admission,
+    };
 }

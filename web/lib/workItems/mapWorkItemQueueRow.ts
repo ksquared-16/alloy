@@ -43,7 +43,6 @@ export type WorkspaceQueueRowModel = {
     assigneeInitials?: string;
     trailingMeta?: string;
     urgency: WorkspaceQueueRowUrgency;
-    isWaiting: boolean;
     completed: boolean;
 };
 
@@ -130,7 +129,6 @@ export function mapWorkItemQueueRow(
     const isCommunications = isCommunicationsProjectedWorkItem(task);
     const isBpWork = !isProcessing && !isCommunications && isBusinessProcessStageWorkTaskRow(task);
     const source = task.source.trim().toLowerCase();
-    const isWaiting = !isBpWork && task.status.trim().toLowerCase() === "open" && source === "task_assist";
 
     return {
         id: task.id,
@@ -143,7 +141,6 @@ export function mapWorkItemQueueRow(
         assigneeInitials: assigneeInitials(task.assignee_label),
         trailingMeta: isProcessing ? "Needs review" : isCommunications ? "Needs reply" : isBpWork ? "Business Process" : formatOperationalTaskSourceLabel(task.source),
         urgency,
-        isWaiting,
         completed: isCompleted,
     };
 }

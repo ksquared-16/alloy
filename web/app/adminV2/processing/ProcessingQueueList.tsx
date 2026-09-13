@@ -10,13 +10,20 @@
  * intentional empty / loading / error states. Read-only; selection is controlled.
  */
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { MoreHorizontal } from "lucide-react";
 import type { ProcessingCaseQueueRow, ProcessingCaseStatus } from "@/lib/pos/processingCase/readModel/types";
 import RecommendationBadge from "@/app/adminV2/pos/RecommendationBadge";
 import ProcessingConfirmDialog from "@/app/adminV2/pos/ProcessingConfirmDialog";
 import ProcessingRenameDocumentDialog from "@/app/adminV2/pos/ProcessingRenameDocumentDialog";
 import { useProcessingQueueWarm } from "@/lib/pos/useProcessingQueueWarm";
+import {
+    getProcessingRequestedCase,
+    mergeRequestedCaseIntoRows,
+    resolveProcessingRequestedCase,
+    subscribeProcessingRequestedCase,
+    type ProcessingRequestedCaseState,
+} from "@/lib/pos/processingRequestedCase";
 import { prefetchProcessingCase, prefetchProcessingCases } from "@/lib/pos/processingCasePrefetch";
 import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
 import { caseMatchesCategoryFolder } from "@/lib/pos/processingFolderConfig";
@@ -121,11 +128,29 @@ function formatAge(iso: string | null): string {
 
 type QueueDisplayRow = ProcessingCaseQueueRow & { duplicateCount?: number };
 
-function collapseDuplicateDocumentRows(rows: ProcessingCaseQueueRow[]): QueueDisplayRow[] {
+/** Stable server snapshot — `useSyncExternalStore` requires a constant reference during SSR. */
+const REQUESTED_CASE_SERVER_SNAPSHOT: ProcessingRequestedCaseState = {
+    caseId: null,
+    row: null,
+    resolving: false,
+};
+
+/**
+ * `protectedCaseId` is never collapsed away.
+ *
+ * Grouping same-titled document rows is right for browsing and wrong for a REQUESTED case: two
+ * scans of "Enrollment Packet.pdf" collapse to whichever was loaded first, so asking for the second
+ * one put a DIFFERENT case's row on screen in its place. A case the operator explicitly asked for
+ * is not a duplicate of anything.
+ */
+function collapseDuplicateDocumentRows(
+    rows: ProcessingCaseQueueRow[],
+    protectedCaseId?: string | null,
+): QueueDisplayRow[] {
     const seen = new Map<string, QueueDisplayRow>();
     const out: QueueDisplayRow[] = [];
     for (const row of rows) {
-        if (row.primarySource?.kind !== "document") {
+        if (row.primarySource?.kind !== "document" || (protectedCaseId && row.id === protectedCaseId)) {
             out.push(row);
             continue;
         }
@@ -165,7 +190,28 @@ export default function ProcessingQueueList({
     headerAction?: ReactNode;
 }) {
     const { data, loading, error, refresh } = useProcessingQueueWarm();
-    const rows = data?.rows ?? [];
+    const pageRows = data?.rows ?? [];
+
+    /*
+     * THE REQUESTED SUBJECT WINS OVER DEFAULT-LANE MEMBERSHIP.
+     *
+     * `pageRows` is a recency page. A case the operator explicitly asked for may not be on it, and
+     * the rail used to have no way to say so — it rendered the page, highlighted nothing, and the
+     * requested case was simply missing from the surface opened to show it. Resolving the case by
+     * id and carrying it into the rail is what makes an explicit ask outrank an arbitrary window.
+     */
+    const requested = useSyncExternalStore(
+        subscribeProcessingRequestedCase,
+        getProcessingRequestedCase,
+        () => REQUESTED_CASE_SERVER_SNAPSHOT,
+    );
+    const requestedCaseId = requested.caseId;
+    const requestedIsOffPage = Boolean(requestedCaseId) && !pageRows.some((r) => r.id === requestedCaseId);
+    useEffect(() => {
+        if (requestedIsOffPage && requestedCaseId) void resolveProcessingRequestedCase(requestedCaseId);
+    }, [requestedIsOffPage, requestedCaseId]);
+
+    const rows = mergeRequestedCaseIntoRows(pageRows, requested);
     // Warm the leading rows as soon as the queue paints, so opening the top item is instant even
     // without a hover (keyboard, deep link, or a straight click off the list).
     const warmRowIds = rows.slice(0, 6).map((r) => r.id).join(",");
@@ -191,6 +237,31 @@ export default function ProcessingQueueList({
     const [renameTarget, setRenameTarget] = useState<QueueDisplayRow | null>(null);
     const [deleting, setDeleting] = useState(false);
     const [deleteErr, setDeleteErr] = useState<string | null>(null);
+    /*
+     * A requested case inside a COLLAPSED folder is still invisible — the same defect in a second
+     * costume. Every folder starts closed by design (the operator chooses what to open), so carrying
+     * the case into the rail only half-honours the ask: its row exists but renders nowhere. Opening
+     * the section that holds it is the other half.
+     */
+    const requestedRow = requestedCaseId ? rows.find((r) => r.id === requestedCaseId) ?? null : null;
+    /*
+     * EXACTLY ONE folder, not every folder that contains the case.
+     *
+     * Folders are overlapping filter layers: an Incoming case that also matches a category renders
+     * in BOTH sections. Opening both put two copies of the requested row on screen, both marked
+     * `aria-current` — caught in the browser, where the rail showed the case twice. The most
+     * specific section wins, so the operator gets one row in the place that describes it best.
+     */
+    const requestedFolder = requestedRow
+        ? deriveWorkLane(requestedRow) === "completed"
+            ? "completed"
+            : categoryFolders.find((f) => caseMatchesCategoryFolder(requestedRow, f.id))?.id ?? "incoming"
+        : "";
+    useEffect(() => {
+        if (!requestedFolder) return;
+        setOpenFolders((prev) => (prev[requestedFolder] ? prev : { ...prev, [requestedFolder]: true }));
+    }, [requestedFolder]);
+
     const load = refresh;
 
     const total = rows.length;
@@ -243,7 +314,7 @@ export default function ProcessingQueueList({
         );
     }
 
-    const visibleRows = collapseDuplicateDocumentRows(rows);
+    const visibleRows = collapseDuplicateDocumentRows(rows, requestedCaseId);
     const incomingRows = visibleRows.filter((r) => deriveWorkLane(r) !== "completed");
     const completedRows = visibleRows.filter((r) => deriveWorkLane(r) === "completed");
 

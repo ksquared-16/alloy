@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { PROCESSING_ARCHIVE, requireProcessingCapability } from "@/lib/access/processingAuthority";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { archiveProcessingCaseForAdmin } from "@/lib/pos/processingCase/archiveProcessingCaseForAdmin";
 
@@ -10,7 +11,8 @@ export const dynamic = "force-dynamic";
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+    const denied = requireProcessingCapability(ctx, PROCESSING_ARCHIVE);
+    if (denied) return denied;
 
     const { caseId: rawId } = await params;
     const caseId = parseUuidParam(rawId, "caseId");

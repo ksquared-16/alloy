@@ -23,7 +23,6 @@ export type AttendanceFactTranslationInput = {
     checkOutTime?: string | null;
     lateThresholdTime?: string | null;
     hours?: number | null;
-    vacationEligible?: boolean | null;
     /** Whether the presence was NOT on the child's schedule (drives unexpected vs expected). */
     unexpected?: boolean | null;
 };
@@ -50,8 +49,9 @@ export function deriveAttendanceFactType(input: AttendanceFactTranslationInput):
         }
 
         case "absence":
-            // The consumption interpreter decides vacation_credit from vacationEligible;
-            // the raw fact type is simply "absence" either way.
+            // An absence is an absence. Whether it is a CREDITABLE vacation is a
+            // commercial question the `vacation_credit` policy answers downstream,
+            // and translation has no business anticipating it.
             return "absence";
 
         case "present":

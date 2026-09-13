@@ -100,6 +100,23 @@ export function billingPeriodForDate(ymd: string): BillingPeriod {
     return billingPeriodFromKey(ymd.slice(0, 7));
 }
 
+/**
+ * How many days the period contains, inclusive of both ends.
+ *
+ * Here rather than at each call site for the reason `reductionPeriod` already
+ * gives about month bounds: "the resolver, the applier and the certification
+ * must agree about what September is, and three copies of 'last day of the
+ * month' is how they stop agreeing." A period's LENGTH is the same kind of fact,
+ * and it is the denominator of every prorated amount — so a second opinion about
+ * it is a second opinion about money.
+ */
+export function billingPeriodDays(period: BillingPeriod): number {
+    const a = Date.parse(`${period.start}T00:00:00Z`);
+    const b = Date.parse(`${period.end}T00:00:00Z`);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+    return Math.round((b - a) / 86_400_000) + 1;
+}
+
 /** Newest first — the order every period-grouped surface reads in. */
 export function sortBillingPeriodKeysDescending(keys: Iterable<BillingPeriodKey>): BillingPeriodKey[] {
     return [...new Set(keys)].sort((a, b) => b.localeCompare(a));

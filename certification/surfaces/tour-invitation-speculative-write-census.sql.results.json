@@ -1,0 +1,39 @@
+{
+  "trusted_host_action_id": "tha_c6283fda0d9a24",
+  "query_hash": "71750b7e862a5fdb04562c7c68040c7d79250dcd87ccd2c6a6e178fd860ab09f",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-13T13:28:19.350Z",
+    "question_ids": [
+      "q1_total_invitations",
+      "q2_by_opportunity",
+      "q3_public_booking_links"
+    ],
+    "questions": {
+      "q1_total_invitations": {
+        "question_id": "q1_total_invitations",
+        "row_count": null,
+        "rows": [
+          1881
+        ]
+      },
+      "q2_by_opportunity": {
+        "question_id": "q2_by_opportunity",
+        "row_count": null,
+        "rows": [
+          "opportunity=8baf8418-654d-41dc-9779-1c8c44198e41 | count=6 | first=2026-09-13T02:31:27.033502+00:00 | last=2026-09-13T02:37:04.259174+00:00",
+          "opportunity=d097e1a8-c3c0-4c51-a113-2275b009b9a9 | count=1872 | first=2026-08-08T23:01:59.346232+00:00 | last=2026-09-12T18:24:29.469341+00:00",
+          "opportunity=eb5394c7-5810-49ae-a1d0-074a29dc0390 | count=3 | first=2026-09-13T12:17:49.443004+00:00 | last=2026-09-13T12:20:08.605741+00:00"
+        ]
+      },
+      "q3_public_booking_links": {
+        "question_id": "q3_public_booking_links",
+        "row_count": null,
+        "rows": [
+          5654
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}
