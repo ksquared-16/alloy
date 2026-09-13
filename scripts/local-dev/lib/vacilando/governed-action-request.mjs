@@ -64,6 +64,7 @@ import {
   fulfillPromotedMigrationForMission,
   fulfillLedgerRepairForMission,
   fulfillSetProviderCeilingForMission,
+  fulfillRegisterDeveloperApplicationForMission,
   fulfillInstallToolkitForMission,
   fulfillLaneDispatchForMission,
   previewTrustedHostAuthorization,
@@ -1790,6 +1791,10 @@ function defaultModeForAction(actionKey, requested) {
   if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) return "other";
   if (actionKey === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) return "other";
   if (actionKey === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) return "other";
+  // A catalog write against a named database. It is not a promotion and not a
+  // migration — no schema changes — so it takes the same "other" home as the
+  // environment actions rather than widening the mode vocabulary for one action.
+  if (actionKey === ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION) return "other";
   if (actionKey === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) return "other";
   if (actionKey === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) return "other";
   if (actionKey === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) return "other";
@@ -3155,6 +3160,18 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
   }
   if (rec.action_key === ACTION_TYPES.HOST_INSTALL_TOOLKIT) {
     return fulfillInstallToolkitForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION) {
+    return fulfillRegisterDeveloperApplicationForMission(scope, {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: rec.inputs || {},

@@ -33,6 +33,43 @@ second mechanism for "our own apps" is how a platform acquires a bypass.
 Ownership modes for V1: `tenant_private`, `alloy_managed`, `partner_managed`.
 `public_marketplace` is reserved and **not built**.
 
+### Registration authority (added 2026-09-13, V1)
+
+The sentence above names the ownership modes the SCHEMA admits. It is not the
+list a caller may register, and for a year there was no such list because there
+was no way to create an application at all: `developer_applications` shipped with
+readers, an installation API, a credential API and a chooser, and no writer. The
+deployed catalog therefore held zero rows, and the half of the Integrations
+surface that begins at "an installation exists" could not be certified.
+
+**Developer applications are global platform software identities.** The table
+carries no `org_id`, RLS is forced with no policy, and the chooser that reads it
+calls itself "a chooser, not tenant CRUD".
+
+**V1 registration authority is platform-operated.** It is the governed action
+`platform.register_developer_application`, executing on the trusted host against
+a named database, over the single write owner
+`public.register_developer_application`. There is deliberately no HTTP route and
+no tenant-facing path.
+
+**V1 registers `alloy_managed` only.** `tenant_private` and `partner_managed`
+remain schema vocabulary and are **refused by name**, not ignored, until Alloy
+has an explicit publisher/application ownership model. The reason is structural
+rather than a matter of effort: `tenant_private` has to answer *whose* private
+application this is, and nothing in the schema can. There is no owner column, and
+an installation — the only thing that binds an application to an organization —
+cannot exist before the application does. Registering one today would invent an
+ownership semantics by accident and record the wrong provenance permanently.
+
+**Tenants install applications; tenants do not create application identities.**
+Installation, credential issuance, rotation and revocation are unchanged and
+remain the tenant operator's own flows.
+
+Registration creates an identity and nothing else — no installation, no
+credential, no tenant relationship — and writes one `app_security_audit` row with
+`event_type = 'application.registered'`, `org_id` and `installation_id` NULL,
+because a global identity honestly belongs to no organization.
+
 ## The decisive prior art
 
 Alloy already has a non-human principal type:
