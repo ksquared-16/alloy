@@ -179,6 +179,28 @@ export const NEAR_DEADLINE_FRACTION = 0.8;
  * silently-unbounded one: a wait nobody defined is a defect to surface, not a
  * state to keep alive.
  */
+/**
+ * IS THIS A DECLARED SEMANTIC WAIT CODE?
+ *
+ * The single exact lookup that separates a machine key from a human caption.
+ * Exact, never fuzzy: no prefix match, no normalisation, no "close enough".
+ * A caption like "Waiting on Director — branch push" is not a near-miss for
+ * `needs_operator_input`; it is a different kind of thing, and pretending
+ * otherwise is how a presentation string became a classification key.
+ *
+ * Callers use this to decide whether a value may be USED as a key at all, so
+ * unknown values stay unknown and keep failing closed rather than being
+ * silently reinterpreted.
+ */
+export function isDeclaredWaitReason(reason, policyTable = WAIT_REASONS) {
+  return typeof reason === "string" && Object.hasOwn(policyTable, reason);
+}
+
+/** Every declared code, for producers and controls that must enumerate them. */
+export function declaredWaitReasons(policyTable = WAIT_REASONS) {
+  return Object.keys(policyTable);
+}
+
 export function describeWait({
   reason,
   resource_id = null,
