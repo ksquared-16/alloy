@@ -142,3 +142,8 @@ jobs:
       - name: Operator polish (copy, cadence, retention)
         working-directory: .
         run: node scripts/local-dev/tests/development-tonight-polish.test.mjs
+      # The reports ride the steward's existing timer. The guard that matters is
+      # the last one: the steward must never grow a scheduler of its own.
+      - name: Operating report timer wiring
+        working-directory: .
+        run: node scripts/local-dev/tests/development-report-timer.test.mjs

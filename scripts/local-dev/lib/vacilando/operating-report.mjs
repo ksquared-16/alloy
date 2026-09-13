@@ -365,16 +365,106 @@ export const OPERATING_REPORT_SCHEDULE = Object.freeze({
  * Duplication is prevented by identity, not by timing — `reportId` is derived
  * from the window, so a second run rewrites the same file.
  */
-export function reportIsDue(kind, at = new Date(), { graceMinutes = 30 } = {}) {
+/**
+ * WHICH CLOCK THE CADENCE IS ON, AND WHY IT IS NOT THE HOST'S.
+ *
+ * The platform has no canonical timezone setting - I looked, in the alloy-dev
+ * config and across the library, and there is none. Defaulting to the host's
+ * timezone would quietly make "wherever this Mac happens to be" a product
+ * contract, and the first time the fleet moves or a second host appears, the
+ * reports would silently change which day they describe.
+ *
+ * So it is REQUIRED and explicit. Unset is not an error and not an operator
+ * obligation - it is simply a cadence that cannot run yet, reported as such.
+ */
+export function resolveReportTimezone(env = process.env) {
+  const tz = String(env?.VACILANDO_REPORT_TIMEZONE ?? "").trim();
+  return tz || null;
+}
+
+/** The local wall-clock parts of an instant, in a named zone. */
+function wallClockIn(at, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone, hour12: false, weekday: "short", hour: "2-digit", minute: "2-digit",
+  }).formatToParts(at);
+  const get = (t) => parts.find((p) => p.type === t)?.value;
+  const DAYS = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return {
+    day: DAYS[get("weekday")] ?? null,
+    minutes: Number(get("hour")) * 60 + Number(get("minute")),
+  };
+}
+
+export function reportIsDue(kind, at = new Date(), { graceMinutes = 30, timeZone = undefined } = {}) {
   const spec = OPERATING_REPORT_SCHEDULE[kind];
   if (!spec) return { due: false, reason: "unknown_kind" };
-  if (Array.isArray(spec.days) && !spec.days.includes(at.getDay())) {
-    return { due: false, reason: "not_a_scheduled_day" };
+  const tz = timeZone === undefined ? resolveReportTimezone() : timeZone;
+  if (!tz) {
+    /*
+     * NOT A FAILURE. Nothing is broken, nothing is owed by anyone, and no
+     * report is missing - the schedule simply has no clock to be on yet.
+     */
+    return { due: false, reason: "timezone_not_configured", setting: "VACILANDO_REPORT_TIMEZONE" };
   }
-  const minutesNow = at.getHours() * 60 + at.getMinutes();
+  let wall;
+  try { wall = wallClockIn(at, tz); }
+  catch { return { due: false, reason: "timezone_invalid", setting: "VACILANDO_REPORT_TIMEZONE", timezone: tz }; }
+  if (Array.isArray(spec.days) && !spec.days.includes(wall.day)) {
+    return { due: false, reason: "not_a_scheduled_day", timezone: tz };
+  }
+  const minutesNow = wall.minutes;
   const target = spec.hour * 60 + spec.minute;
   const delta = minutesNow - target;
-  if (delta < 0) return { due: false, reason: "before_window", minutes_until: -delta };
-  if (delta > graceMinutes) return { due: false, reason: "after_window", minutes_late: delta };
-  return { due: true, reason: "in_window", minutes_late: delta };
+  if (delta < 0) return { due: false, reason: "before_window", minutes_until: -delta, timezone: tz };
+  if (delta > graceMinutes) return { due: false, reason: "after_window", minutes_late: delta, timezone: tz };
+  return { due: true, reason: "in_window", minutes_late: delta, timezone: tz };
+}
+
+/**
+ * RUN THE REPORTS THAT ARE DUE. THE STEWARD'S TIMER OWNS THIS, NOT A NEW ONE.
+ *
+ * The host has exactly one launchd entry and it is a KeepAlive daemon with no
+ * schedule — there is no host timer to add a line to. The periodic owner that
+ * does exist is the steward, running every five minutes inside the Gateway, and
+ * its own comment says it is "deliberately wired into the timers this server
+ * already owns rather than a second scheduler". This rides that loop.
+ *
+ * A five-minute cadence against a thirty-minute window cannot miss, and cannot
+ * double-write: identity is derived from the WINDOW, so every evaluation inside
+ * one day resolves to the same report and rewrites the same file.
+ *
+ * NOT_DUE IS THE NORMAL ANSWER — 287 of every 288 cycles. It is reported as an
+ * outcome, never as a failure, and a reporting failure is recorded rather than
+ * raised: an end-of-day report that could not be written is not a reason to
+ * interrupt anybody's development.
+ */
+export async function runDueOperatingReports({
+  now = new Date(),
+  write = null,
+  build = null,
+  kinds = ["daily", "weekly"],
+  // Undefined means "resolve from the setting", which is what production does.
+  // Passing one explicitly is how a test states the clock it is reasoning about.
+  timeZone = undefined,
+} = {}) {
+  const results = [];
+  for (const kind of kinds) {
+    const verdict = reportIsDue(kind, now, { timeZone });
+    if (!verdict.due) {
+      results.push({ kind, ran: false, ...verdict });
+      continue;
+    }
+    try {
+      const report = typeof build === "function" ? await build(kind, now) : null;
+      const path = report && typeof write === "function" ? await write(report) : null;
+      results.push({ kind, ran: true, report_id: report?.report_id ?? null, path, ...verdict });
+    } catch (err) {
+      // Recorded and diagnosable. Never fatal, never an operator obligation.
+      results.push({
+        kind, ran: false, error: "report_failed",
+        detail: String(err?.message || err).slice(0, 300), ...verdict,
+      });
+    }
+  }
+  return { schema_version: OPERATING_REPORT_SCHEMA, evaluated_at: now.toISOString(), results };
 }
