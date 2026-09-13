@@ -44,6 +44,7 @@ import type {
     FinancialsLedgerPeriod,
     FinancialsPayer,
 } from "@/lib/cardLab/cardLabTypes";
+import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 
 /** Reductions and funding are stored as their own categories, not as negative tuition. */
 const REDUCTION_CATEGORIES = new Set(["discount", "credit", "adjustment"]);
@@ -286,6 +287,36 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                     status: a.status,
                     reversalReason: a.reversalReason,
                 })),
+            })),
+
+        /*
+         * MANUAL REDUCTIONS, as records rather than as a total.
+         *
+         * Only `manual` rows are listed. A policy application lowers the same bucket, but undoing one
+         * by hand would leave the policy still saying the family qualifies and the next billing run
+         * would apply it again — so policy is not offered here at all, rather than offered and then
+         * refused.
+         *
+         * The sign is read from the stored amount, not inferred from the category: the schema's only
+         * constraint is that the amount is non-zero, and a category tells you which bucket a row
+         * lands in, not which way it went.
+         */
+        adjustments: vm.reductions
+            .filter((r) => r.kind === "manual")
+            .map((r) => ({
+                applicationId: r.applicationId,
+                categoryLabel: r.category ? chargeCategoryLabel(r.category) : "Adjustment",
+                amountLabel: money(r.amountCents, r.currencyCode || currency),
+                reducesObligation: r.amountCents < 0,
+                reason: r.reason,
+                periodLabel: r.periodKey,
+                recordedOn: r.createdAt ? r.createdAt.slice(0, 10) : null,
+                subjectName: r.customerMemberId
+                    ? vm.subjects.find((sub) => sub.customerMemberId === r.customerMemberId)?.displayName ?? null
+                    : null,
+                applied: r.chargeStatus === "posted",
+                reversed: r.reversedByApplicationId !== null,
+                isReversal: r.reversesApplicationId !== null,
             })),
     };
 }

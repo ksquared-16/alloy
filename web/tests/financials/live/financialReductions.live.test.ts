@@ -18,6 +18,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { applyFinancialReductions } from "@/lib/financials/reductions/applyFinancialReductions";
 import { applyManualReduction, reverseManualReduction } from "@/lib/financials/reductions/manualReductionService";
+import { readAccountReductions } from "@/lib/financials/reductions/readAccountReductions";
 import { generateTuitionCharges } from "@/lib/financials/tuitionGeneration/generateTuitionCharges";
 import { postChildcareCharge } from "@/lib/financials/childcareChargeService";
 import { resolveHouseholdEligibility } from "@/lib/financials/reductions/resolveReductionEligibility";
@@ -229,6 +230,19 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
 
             const agreementId = `${R}00000000a00${index + 1}`;
             const termId = `${R}00000000b00${index + 1}`;
+            /*
+             * The uniqueness this collides with is (org, member, site) — not the id. Deleting only
+             * this suite's own id leaves an agreement created under ANOTHER id for the same child
+             * and site in place, and the insert below then fails on a constraint the seed never
+             * names. A run that died before its cleanup is enough to cause it, and the shared cert
+             * tenant makes that ordinary rather than rare.
+             */
+            await supabase
+                .from("child_enrollment_agreements")
+                .delete()
+                .eq("org_id", ORG)
+                .eq("customer_member_id", member.id)
+                .eq("site_location_id", siteLocationId);
             await supabase.from("child_enrollment_agreements").delete().eq("id", agreementId);
             const { error: agreementError } = await supabase.from("child_enrollment_agreements").insert({
                 id: agreementId,
@@ -329,14 +343,33 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
     }, 180_000);
 
     it("retires the reduction when the sibling's enrolment no longer covers the period, while the draft is still a draft", async () => {
-        // The second child's enrolment ends before the period — they are no longer concurrent.
-        await supabase.from("child_enrollment_agreements").update({ end_date: "2029-01-31" }).eq("id", kids[1]!.agreementId);
+        /*
+         * The second child's enrolment ends before the period — they are no longer concurrent.
+         *
+         * EVERY agreement that child holds has to end, not just this suite's own. The resolver reads
+         * agreements and keeps any that covers the period, and the shared certification tenant holds
+         * rows other suites created for the same member at other sites: ending one of several leaves
+         * the child concurrent through a row this test never mentions, and the assertion then fails
+         * for a reason that has nothing to do with the rule being tested.
+         */
+        const { data: heldRows } = await supabase
+            .from("child_enrollment_agreements")
+            .select("id, end_date")
+            .eq("org_id", ORG)
+            .eq("customer_member_id", kids[1]!.memberId);
+        const held = (heldRows ?? []) as Array<{ id: string; end_date: string | null }>;
+        for (const a of held) {
+            await supabase.from("child_enrollment_agreements").update({ end_date: "2029-01-31" }).eq("id", a.id);
+        }
         const facts = await resolveHouseholdEligibility(supabase, {
             orgId: ORG, customerId, periodStart: PERIOD_START, periodEnd: "2029-04-30",
         });
         expect(facts.byMember.get(kids[1]!.memberId), "an ended enrolment is not a concurrent sibling").toBeUndefined();
 
-        await supabase.from("child_enrollment_agreements").update({ end_date: null }).eq("id", kids[1]!.agreementId);
+        // Restore each one to exactly what it was, rather than blanking them all to null.
+        for (const a of held) {
+            await supabase.from("child_enrollment_agreements").update({ end_date: a.end_date }).eq("id", a.id);
+        }
     }, 120_000);
 
     // ── 2 · EMPLOYEE ELIGIBILITY, FROM THE CANONICAL EMPLOYMENT FACT ────────────────────────
@@ -760,5 +793,215 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
         }
 
         await supabase.from("financial_policies").delete().eq("org_id", ORG).eq("policy_type", "vacation_credit");
+    }, 120_000);
+
+    // ── 8 · SLICE 5C: THE SCENARIOS THE OPERATOR SURFACE RESTS ON ───────────────────────────
+
+    /*
+     * B — AN ADJUSTMENT CAN GO THE OTHER WAY. `credit` only ever lowers an obligation, but
+     * `adjustment` is the category that corrects in either direction, and a positive amount is how
+     * the canonical model says "owed again". Proving it here is what lets the panel offer a
+     * direction at all rather than guessing.
+     */
+    it("records an adjustment that RAISES what is owed, and says so in its sign", async () => {
+        await clearReductions();
+        const raised = await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "adjustment",
+            amountCents: 4_200,
+            reason: "Correcting a credit that was applied twice",
+            effectiveDate: PERIOD_START,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-raise",
+        });
+        const apps = await applications();
+        expect(apps).toHaveLength(1);
+        expect(Number(apps[0]!.amount_cents), "a positive amount is money owed again").toBe(4_200);
+        expect(apps[0]!.reduction_kind).toBe("manual");
+        expect(raised.amountCents).toBe(4_200);
+    }, 180_000);
+
+    /* D — ONE REVERSAL. A second would credit the family twice for one decision. */
+    it("refuses a second reversal of the same adjustment", async () => {
+        await clearReductions();
+        const original = await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -3_000,
+            reason: "Goodwill for a closure day",
+            effectiveDate: PERIOD_START,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-once",
+        });
+        await reverseManualReduction(supabase, {
+            orgId: ORG,
+            applicationId: original.applicationId,
+            reason: "Recorded against the wrong enrolment",
+            actorUserId: ACTOR,
+        });
+        await expect(
+            reverseManualReduction(supabase, {
+                orgId: ORG,
+                applicationId: original.applicationId,
+                reason: "Trying again",
+                actorUserId: ACTOR,
+            }),
+        ).rejects.toThrow(/already been reversed/i);
+
+        // And the ledger still holds exactly two rows: the decision and its opposite.
+        const apps = await applications();
+        expect(apps).toHaveLength(2);
+    }, 240_000);
+
+    /* H — another organisation's reduction is not this one's to reverse. */
+    it("will not reverse a reduction that belongs to another organisation", async () => {
+        await clearReductions();
+        const mine = await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -1_500,
+            reason: "Goodwill",
+            effectiveDate: PERIOD_START,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-crossorg",
+        });
+        await expect(
+            reverseManualReduction(supabase, {
+                orgId: "00000000-0000-4000-8000-0000000000ff",
+                applicationId: mine.applicationId,
+                reason: "Reaching across a tenant boundary",
+                actorUserId: ACTOR,
+            }),
+        ).rejects.toThrow(/no such reduction/i);
+
+        // Absent, not forbidden — and nothing moved.
+        const apps = await applications();
+        expect(apps).toHaveLength(1);
+        expect(apps[0]!.reversed_by_id, "it was not reversed").toBeNull();
+    }, 180_000);
+
+    /*
+     * E / F / G — ISOLATION. A decision about what a family owes is not a movement of money. It
+     * writes no receipt, no refund and nothing a payment processor would hear about.
+     */
+    it("touches no receipt, no refund and no processor", async () => {
+        await clearReductions();
+        const before = await supabase
+            .from("payments")
+            .select("id, amount_cents, status, direction, processor, processor_transaction_id, refunds_payment_id")
+            .eq("org_id", ORG);
+        const beforeRows = JSON.stringify((before.data ?? []).slice().sort());
+
+        const credit = await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -2_500,
+            reason: "Goodwill for a closure day",
+            effectiveDate: PERIOD_START,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-isolation",
+        });
+        await reverseManualReduction(supabase, {
+            orgId: ORG,
+            applicationId: credit.applicationId,
+            reason: "Reversing to prove isolation",
+            actorUserId: ACTOR,
+        });
+
+        const after = await supabase
+            .from("payments")
+            .select("id, amount_cents, status, direction, processor, processor_transaction_id, refunds_payment_id")
+            .eq("org_id", ORG);
+        expect(JSON.stringify((after.data ?? []).slice().sort()), "payments are untouched").toBe(beforeRows);
+
+        const { data: allocations } = await supabase
+            .from("payment_allocations")
+            .select("id")
+            .eq("org_id", ORG)
+            .eq("status", "active");
+        expect(Array.isArray(allocations), "allocations are still readable").toBe(true);
+    }, 240_000);
+
+    /*
+     * I — COLD REREAD, through the reader the operator surface actually uses. The card must be able
+     * to reconstruct both the decision and its reversal from persistence alone, with the lineage
+     * that tells them apart — otherwise it cannot offer a reversal, or know one already happened.
+     */
+    it("reads back both the decision and its reversal, with lineage", async () => {
+        await clearReductions();
+        const original = await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -6_000,
+            reason: "Closure week goodwill",
+            effectiveDate: PERIOD_START,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-reread",
+        });
+
+        const before = await readAccountReductions(supabase, {
+            orgId: ORG,
+            agreementIds: [kids[0]!.agreementId],
+        });
+        expect(before, "the decision is readable on its own").toHaveLength(1);
+        expect(before[0]!.applicationId).toBe(original.applicationId);
+        expect(before[0]!.kind).toBe("manual");
+        expect(before[0]!.category, "the category comes from the charge it wrote").toBe("credit");
+        expect(before[0]!.amountCents).toBe(-6_000);
+        expect(before[0]!.reason).toContain("Closure week");
+        expect(before[0]!.reversedByApplicationId, "not yet reversed").toBeNull();
+
+        const reversal = await reverseManualReduction(supabase, {
+            orgId: ORG,
+            applicationId: original.applicationId,
+            reason: "Applied against the wrong enrolment",
+            actorUserId: ACTOR,
+        });
+
+        const after = await readAccountReductions(supabase, {
+            orgId: ORG,
+            agreementIds: [kids[0]!.agreementId],
+        });
+        expect(after, "both rows survive — nothing is edited away").toHaveLength(2);
+        const originalAfter = after.find((r) => r.applicationId === original.applicationId)!;
+        const reversalAfter = after.find((r) => r.applicationId === reversal.applicationId)!;
+
+        expect(originalAfter.amountCents, "the original is exactly as it was").toBe(-6_000);
+        expect(originalAfter.reversedByApplicationId, "and now points at its reversal")
+            .toBe(reversal.applicationId);
+        expect(reversalAfter.amountCents, "the opposite was appended").toBe(6_000);
+        expect(reversalAfter.reversesApplicationId, "and names what it undoes").toBe(original.applicationId);
+        expect(reversalAfter.category, "a reversal is recorded as an adjustment").toBe("adjustment");
+
+        // The two net to zero: what the family owes is back where it started.
+        expect(after.reduce((n, r) => n + r.amountCents, 0)).toBe(0);
+    }, 300_000);
+
+    /* Only manual decisions are offered for reversal; authored policy is not anybody's to undo. */
+    it("reads policy applications for context but never as manual decisions", async () => {
+        const rows = await readAccountReductions(supabase, {
+            orgId: ORG,
+            agreementIds: kids.map((k) => k.agreementId),
+        });
+        for (const r of rows) {
+            expect(["manual", "policy"]).toContain(r.kind);
+        }
+        expect(rows.every((r) => r.agreementId !== null), "every row names the enrolment it is against")
+            .toBe(true);
     }, 120_000);
 });

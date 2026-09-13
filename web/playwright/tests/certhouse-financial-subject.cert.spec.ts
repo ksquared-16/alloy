@@ -196,52 +196,36 @@ test.describe("Certhouse financial subject", () => {
     });
 
     /**
-     * PHASE 16 — WHAT "TAKE PAYMENT" ACTUALLY DEPENDS ON.
+     * WHAT THE COMMANDS DEPEND ON — CORRECTED.
      *
-     * Certhouse offers Add charge and not Take payment. That is only acceptable if the reason is
-     * financial rather than lifecycle: taking money against a household that owes nothing is not a
-     * thing to offer. This measures both households instead of asserting a belief — the control owes
-     * money and is offered the command, Certhouse owes nothing and is not, and the certified
-     * contract's own requirement (Add charge stays available) holds for both.
+     * An earlier version of this proof claimed the Take payment affordance tracks whether the
+     * household owes anything, inferred from two households that happened to differ in both. A later
+     * run falsified it: Certhouse owed nothing and was offered the command anyway. The card renders
+     * it whenever it is given a pay handler, and there is no balance condition in it.
+     *
+     * So the claim is withdrawn rather than restated more carefully, and what remains is what this
+     * thread actually certified and can defend: a canonical customer is financially addressable
+     * whatever its lifecycle stage, and Add charge is available on both — one household enrolled,
+     * one on the waitlist. Nothing here asserts a rule about Take payment, because the product does
+     * not have the one that was assumed.
      */
-    test("PROOF 7 · taking payment tracks what is owed, not the lifecycle stage", async ({ page }) => {
+    test("PROOF 7 · both households are addressable and chargeable, at different lifecycle stages", async ({ page }) => {
         test.setTimeout(420_000);
         const readCard = async (lane: string, subjectId: string) => {
             await open(page, lane, subjectId);
             await expect(financialsCard(page)).toBeVisible({ timeout: 60_000 });
-            const text = (await financialsCard(page).innerText()).replace(/\s+/g, " ");
-            const owed = /NET OBLIGATION \$([\d,]+\.\d\d)/i.exec(text)?.[1] ?? null;
-            return { text, owedCents: owed === null ? null : Math.round(Number(owed.replace(/,/g, "")) * 100) };
+            return (await financialsCard(page).innerText()).replace(/\s+/g, " ");
         };
 
         const certhouse = await readCard(ENROLLED_LANE, CERTHOUSE_SUBJECT);
         const control = await readCard(KURZMAN_LANE, KURZMAN_SUBJECT);
 
-        expect(certhouse.owedCents, "Certhouse's obligation is readable").not.toBeNull();
-        expect(control.owedCents, "the control's obligation is readable").not.toBeNull();
-
-        // Add charge is the command the certified contract requires, and both have it.
-        expect(certhouse.text, "Certhouse can still be charged").toMatch(/Add charge/i);
-        expect(control.text, "so can the control").toMatch(/Add charge/i);
-
-        const offersPayment = (t: string) => /Take payment/i.test(t);
-        if (certhouse.owedCents === 0) {
-            expect(
-                offersPayment(certhouse.text),
-                "a household that owes nothing is not offered a payment to take",
-            ).toBe(false);
+        for (const [label, text] of [["Certhouse (enrolled)", certhouse], ["the control (waitlist)", control]] as const) {
+            expect(text, `${label} states a balance rather than an absence`).toMatch(/CURRENT BALANCE/i);
+            expect(text, `${label} can still be charged`).toMatch(/Add charge/i);
+            for (const terminal of TERMINAL) {
+                expect(text, `${label} must not settle on "${terminal}"`).not.toContain(terminal);
+            }
         }
-        if ((control.owedCents ?? 0) > 0) {
-            expect(
-                offersPayment(control.text),
-                "a household that owes something is offered the command — so the absence above is "
-                    + "about the balance, not about being enrolled",
-            ).toBe(true);
-        }
-        // The two together are the claim: the affordance follows the money, not the stage.
-        expect(
-            certhouse.owedCents === control.owedCents,
-            "this proof is only meaningful while the two households differ in what they owe",
-        ).toBe(false);
     });
 });

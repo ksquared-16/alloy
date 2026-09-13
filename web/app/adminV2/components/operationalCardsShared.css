@@ -2172,3 +2172,43 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * WHAT SOMEBODY DECIDED BY HAND (Financials Slice 5C).
+ *
+ * The Add adjustment and Reverse panels deliberately reuse `__movepanel`, so they inherit the layer
+ * and the pointer-events opt-in that made Move reachable — the same trap would otherwise be waiting
+ * here, for the same reason.
+ * ────────────────────────────────────────────────────────────────────────────── */
+
+.alloy-os-fdetail__adjustments {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.alloy-os-fdetail__adjustment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  border-left: 2px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+}
+
+/* A reversed decision is history; it must read quieter than the one that stands. */
+.alloy-os-fdetail__adjustment[data-adjustment-reversed="true"] {
+  opacity: 0.72;
+}
+
+.alloy-os-fdetail__adjmeta,
+.alloy-os-fdetail__adjreason,
+.alloy-os-fdetail__adjstatus {
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 60%, #64748b);
+}
+
+.alloy-os-fdetail__adjustadd {
+  display: flex;
+  gap: 8px;
+}
