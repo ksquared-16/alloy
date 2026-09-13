@@ -40,6 +40,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { firstMeaningfulLine } from "./trusted-host-push.mjs";
 
 /** Where the canonical layout lives. Mirrors alloy-toolkit's own defaults. */
 export const TOOLKIT_ROOT = process.env.ALLOY_TOOLKIT_ROOT
@@ -115,7 +116,7 @@ function run(cmd, args, { cwd = undefined } = {}) {
   try {
     return { ok: true, out: String(execFileSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim() };
   } catch (e) {
-    return { ok: false, out: "", err: String(e?.stderr || e?.message || "").split("\n")[0].slice(0, 200) };
+    return { ok: false, out: "", err: firstMeaningfulLine(String(e?.stderr || e?.message || ""), "toolkit command failed").slice(0, 200) };
   }
 }
 
@@ -595,7 +596,7 @@ export function executeToolkitInstall({
     return {
       ok: false,
       error: "install_command_failed",
-      detail: String(e?.stderr || e?.message || "").split("\n")[0].slice(0, 300),
+      detail: firstMeaningfulLine(String(e?.stderr || e?.message || ""), "toolkit install failed").slice(0, 300),
       previous_sha: before,
     };
   }

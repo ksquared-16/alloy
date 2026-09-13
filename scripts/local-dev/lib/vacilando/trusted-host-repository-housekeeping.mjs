@@ -12,6 +12,7 @@
  * consequences and are not reachable from here.
  */
 import { spawnSync } from "node:child_process";
+import { firstMeaningfulLine } from "./trusted-host-push.mjs";
 
 const FULL_SHA = /^[0-9a-f]{40}$/i;
 
@@ -118,7 +119,7 @@ export function measureClosePullRequestGates(n, { gh = defaultGh } = {}) {
   const out = gh(["api", `repos/${n.repository}/pulls/${n.pullRequestNumber}`,
     "--jq", "{state:.state,merged:.merged,head_sha:.head.sha,head_ref:.head.ref,base_ref:.base.ref,head_repo:.head.repo.full_name,draft:.draft}"]);
   if (out.status !== 0) {
-    return { pull_request_readable: false, detail: String(out.stderr || "").split("\n")[0].slice(0, 200) };
+    return { pull_request_readable: false, detail: firstMeaningfulLine(String(out.stderr || ""), "pull request unreadable").slice(0, 200) };
   }
   const pr = parseJson(out.stdout);
   if (!pr) return { pull_request_readable: false, detail: "unparseable pull request response" };
@@ -153,7 +154,7 @@ export function measureMergePullRequestGates(n, { gh = defaultGh } = {}) {
     "--jq", "{state:.state,merged:.merged,draft:.draft,mergeable:.mergeable,mergeable_state:.mergeable_state,"
       + "head_sha:.head.sha,head_ref:.head.ref,base_ref:.base.ref,head_repo:.head.repo.full_name}"]);
   if (out.status !== 0) {
-    return { pull_request_readable: false, detail: String(out.stderr || "").split("\n")[0].slice(0, 200) };
+    return { pull_request_readable: false, detail: firstMeaningfulLine(String(out.stderr || ""), "pull request unreadable").slice(0, 200) };
   }
   const pr = parseJson(out.stdout);
   if (!pr) return { pull_request_readable: false, detail: "unparseable pull request response" };
@@ -288,7 +289,7 @@ export function measureDeleteRemoteBranchGates(n, { gh = defaultGh } = {}) {
   const ref = gh(["api", `repos/${n.repository}/git/ref/heads/${n.branch}`, "--jq", ".object.sha"]);
   if (ref.status !== 0) {
     ev.branch_exists_remotely = false;
-    ev.detail = String(ref.stderr || "").split("\n")[0].slice(0, 200);
+    ev.detail = firstMeaningfulLine(String(ref.stderr || ""), "ref read failed").slice(0, 200);
     return ev;
   }
   const sha = norm(ref.stdout);
@@ -340,7 +341,7 @@ export function closePullRequest(inputs = {}, { gh = defaultGh } = {}) {
   const out = gh(["pr", "close", String(n.pullRequestNumber), "--repo", n.repository,
     ...(inputs.comment ? ["--comment", String(inputs.comment).slice(0, 500)] : [])]);
   if (out.status !== 0) {
-    return { ok: false, code: "close_pr_failed", detail: String(out.stderr || "gh pr close failed").split("\n")[0].slice(0, 200) };
+    return { ok: false, code: "close_pr_failed", detail: firstMeaningfulLine(String(out.stderr || ""), "gh pr close failed").slice(0, 200) };
   }
   const after = measureClosePullRequestGates(n, { gh });
   // Proving the outcome, not assuming the command worked.
@@ -371,7 +372,7 @@ export function deleteRemoteBranch(inputs = {}, { gh = defaultGh } = {}) {
 
   const out = gh(["api", "-X", "DELETE", `repos/${n.repository}/git/refs/heads/${n.branch}`]);
   if (out.status !== 0) {
-    return { ok: false, code: "delete_branch_failed", detail: String(out.stderr || "gh api delete failed").split("\n")[0].slice(0, 200) };
+    return { ok: false, code: "delete_branch_failed", detail: firstMeaningfulLine(String(out.stderr || ""), "gh api delete failed").slice(0, 200) };
   }
   const after = measureDeleteRemoteBranchGates(n, { gh });
   if (after.branch_exists_remotely) return { ok: false, code: "delete_not_observed", detail: "the branch is still on the remote" };

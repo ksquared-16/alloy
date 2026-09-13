@@ -109,7 +109,7 @@ export function findOpenPullRequest(n, { gh = defaultGh, matchBase = true } = {}
     "--json", "number,headRefOid,baseRefName,headRefName,url,title,state",
   ]);
   if (out.status !== 0) {
-    return { ok: false, code: "pr_lookup_failed", detail: String(out.stderr || "gh pr list failed").split("\n")[0].slice(0, 200) };
+    return { ok: false, code: "pr_lookup_failed", detail: firstMeaningfulLine(String(out.stderr || ""), "gh pr list failed").slice(0, 200) };
   }
   const list = parseJson(out.stdout) || [];
   const match = list.find((p) => p.headRefName === n.headBranch
