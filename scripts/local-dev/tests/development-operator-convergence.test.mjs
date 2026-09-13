@@ -27,7 +27,7 @@
  */
 import assert from "node:assert/strict";
 
-import { checkLaneBootstrap } from "../lib/vacilando/health.mjs";
+import { checkLaneBootstrap, checkLaneFreshness } from "../lib/vacilando/health.mjs";
 
 let pass = 0, fail = 0;
 function test(name, fn) {
@@ -95,6 +95,56 @@ test("C6. `unresolved` still counts every gap, blocking or not", () => {
   assert.equal(out.measurements.unresolved, 2);
   assert.equal(out.measurements.blocking, 1);
   assert.equal(out.measurements.self_resolving, 1);
+});
+
+/* ── THE SAME FACT, ONE LAYER UP ─────────────────────────────────────────── */
+
+const frow = (name, over) => ({ lane_id: `lane_${name}`, name, state: "UNRESOLVED_BOOTSTRAP", ...over });
+
+test("C7. freshness must not re-report what bootstrap stopped reporting", () => {
+  /*
+   * Fixing one check and not the other moves the false alarm rather than
+   * removing it: lane.freshness was calling the identical three lanes a problem
+   * in its own vocabulary while lane.bootstrap had stopped.
+   */
+  const out = checkLaneFreshness({
+    inventory: {
+      rows: [
+        frow("Surfaces", { reason: "bootstrap_unresolved", unresolved: ["branch:drift"] }),
+        frow("Troubleshooting", { reason: "lane_slot_unregistered" }),
+      ],
+    },
+  });
+  assert.notEqual(out.severity, "problem");
+  assert.equal(out.measurements.blocking, 0);
+  assert.equal(out.measurements.self_resolving, 2);
+  assert.match(out.evidence.join(" "), /SELF_HEALING/);
+  assert.match(out.evidence.join(" "), /IDLE_BY_DESIGN/);
+});
+
+test("C8. a real freshness gap is still a problem, and still wins", () => {
+  const out = checkLaneFreshness({
+    inventory: {
+      rows: [
+        frow("Surfaces", { reason: "bootstrap_unresolved", unresolved: ["branch:drift"] }),
+        frow("Access & Identity", { reason: "qa_capability_missing" }),
+      ],
+    },
+  });
+  assert.equal(out.severity, "problem");
+  assert.equal(out.measurements.blocking, 1);
+  assert.match(out.evidence.join(" "), /qa_capability_missing/);
+});
+
+test("C9. a row with a real gap ALONGSIDE a self-healing one still blocks", () => {
+  // All-or-nothing per row: one reason a person must act on is enough.
+  const out = checkLaneFreshness({
+    inventory: {
+      rows: [frow("Mixed", { reason: "bootstrap_unresolved", unresolved: ["branch:drift", "instruction_pack:missing"] })],
+    },
+  });
+  assert.equal(out.severity, "problem");
+  assert.equal(out.measurements.blocking, 1);
 });
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
