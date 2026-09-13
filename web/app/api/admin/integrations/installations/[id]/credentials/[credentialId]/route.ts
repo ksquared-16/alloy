@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireIntegrationsAccess } from "../../../../_guard";
 import { withAdministrativeAudit } from "@/lib/platform/admin/administrativeAudit";
-import { rotateCredential, revokeCredential } from "@/lib/platform/principal/applicationCredential";
+import { rotateCredential, revokeCredential, credentialBusinessRefusal } from "@/lib/platform/principal/applicationCredential";
 import { getInstallation } from "@/lib/platform/admin/integrationsService";
 
 /** How long the outgoing secret keeps working. Bounded, and stated to the operator. */
@@ -27,6 +27,38 @@ async function ownedCredential(supabase: Parameters<typeof getInstallation>[0], 
         .maybeSingle();
     if (!data) return { ok: false as const, status: 404 as const, message: "That credential does not exist." };
     return { ok: true as const, installation: owned.installation };
+}
+
+/**
+ * Turn a failed administrative outcome into a response.
+ *
+ * `withAdministrativeAudit` reports every non-audit failure as `action_failed`
+ * and carries the domain's reason in `message`, so this route used to answer 500
+ * for all of them. That told a client presenting a revoked credential that Alloy
+ * had broken, when what had actually happened is that the rule worked.
+ *
+ * The reason is matched against the credential module's stated business rules. A
+ * match answers with that rule's status and keeps the machine-readable reason in
+ * `code`, which is what a client should branch on. Anything else is a genuine
+ * failure and still answers 500.
+ *
+ * An unmatched reason does NOT reach the client. It is a Postgres message or a
+ * thrown error, it is already recorded on the audit row, and a constraint
+ * violation can quote the offending value — which on this table would be a
+ * secret digest. The client gets a stable sentence instead.
+ */
+function credentialFailureResponse(outcome: { code: string; message: string; auditId?: string }) {
+    if (outcome.code === "audit_unavailable") {
+        return NextResponse.json({ error: outcome.message, code: outcome.code }, { status: 503 });
+    }
+    const refusal = credentialBusinessRefusal(outcome.message);
+    if (refusal) {
+        return NextResponse.json({ error: refusal.message, code: refusal.code }, { status: refusal.status });
+    }
+    return NextResponse.json(
+        { error: "That could not be completed.", code: "INTERNAL" },
+        { status: 500 },
+    );
 }
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string; credentialId: string }> }) {
@@ -56,10 +88,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         },
     );
 
-    if (!outcome.ok) {
-        const status = outcome.code === "audit_unavailable" ? 503 : 500;
-        return NextResponse.json({ error: outcome.message, code: outcome.code }, { status });
-    }
+    if (!outcome.ok) return credentialFailureResponse(outcome);
 
     return NextResponse.json({
         clientSecret: outcome.result.clientSecret,
@@ -94,10 +123,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
         },
     );
 
-    if (!outcome.ok) {
-        const status = outcome.code === "audit_unavailable" ? 503 : 500;
-        return NextResponse.json({ error: outcome.message, code: outcome.code }, { status });
-    }
+    if (!outcome.ok) return credentialFailureResponse(outcome);
 
     return NextResponse.json({ revoked: true, auditId: outcome.auditId });
 }
