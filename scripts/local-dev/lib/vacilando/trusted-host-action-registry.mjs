@@ -775,6 +775,16 @@ function defineEnvironmentRestoreDeployedQaSession() {
     requiredCapability: "trusted_host.environment.restore_deployed_qa_session",
     riskClass: "privileged_write",
     alwaysRequiresOperatorApproval: true,
+    /*
+     * THE RESULT DOES NOT KEEP.
+     *
+     * A census result is an answer to a pinned question and stays true; this action's result
+     * describes a browser session that expires in about an hour. Reusing a completed one replayed
+     * `verified: true` with a stale `verified_at` while the storage-state file the browser reads
+     * was never rewritten — success reported against an artifact that no longer existed. In-flight
+     * reuse is unaffected, so two concurrent requests still cannot both mint.
+     */
+    resultKeeps: false,
     timeoutMs: 300_000,
     retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
     // One key. Not a URL, not a project, not a cookie domain, not an account.
