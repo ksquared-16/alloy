@@ -358,6 +358,16 @@ function defineRetireWorktree() {
     actionType: ACTION_TYPES.VACILANDO_RETIRE_WORKTREE,
     version: 1,
     title: "Retire a Vacilando worktree through Git",
+    /*
+     * THIS ACTION REMOVES SOMETHING.
+     *
+     * Declared, so the framework can refuse to replay a finished one that
+     * cannot say what it acted on, and so a control can ask the registry which
+     * actions carry that weight instead of inferring it from a title.
+     * `riskClass: privileged_write` is shared with every action that writes a
+     * row; deleting a checkout is not the same kind of write.
+     */
+    destructive: true,
     requiredCapability: "trusted_host.vacilando.retire_worktree",
     riskClass: "privileged_write",
     timeoutMs: 120_000,
@@ -390,6 +400,26 @@ function defineRetireWorktree() {
       return {
         ok: true,
         normalized: {
+          /*
+           * THE SEMANTIC IDENTITY OF ONE RETIREMENT.
+           *
+           * Without this the dedupe predicate in requestTrustedHostAction
+           * collapsed to `undefined === undefined`, and sameActionOwnership
+           * compares only session, assignment and lane — never the worktree. So
+           * ANY completed retirement satisfied ANY later retirement request.
+           *
+           * MEASURED 2026-09-13: thirteen retirements, thirteen distinct content
+           * fingerprints, two trusted-host actions. Eleven requests returned
+           * wt-branch-fix's result verbatim — including
+           * `filesystem_path_absent: true` — for worktrees still on disk.
+           *
+           * Keyed the way `apply_reconciliation_plan` is: the thing being acted
+           * on, plus the content the decision was made against. A different
+           * worktree, a moved branch or a restated safety fingerprint is a
+           * different retirement and gets its own action. Only an identical
+           * re-request of the same intent may dedupe.
+           */
+          dedupeKey: `retire_worktree:${worktree}@${headSha.slice(0, 12)}#${fingerprint.slice(0, 12)}`,
           repository: String(inputs.repository).trim(),
           worktree, branch, headSha, safetyFingerprint: fingerprint,
           s7State: String(inputs.s7State).trim(),
