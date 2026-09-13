@@ -90,17 +90,56 @@ export async function preflightStageTransitionReconciliation(params: {
     });
     if (!departmentId) return empty;
 
-    const [{ data: dept }, { data: opp }, previousStatusMetadata, nextStatusMetadata] = await Promise.all([
-        params.supabase.from("departments").select("metadata").eq("id", departmentId).eq("org_id", orgId).maybeSingle(),
-        params.supabase.from("opportunities").select("metadata").eq("id", opportunityId).eq("org_id", orgId).maybeSingle(),
-        loadStatusMetadata(params.supabase, orgId, previousStatusKey),
-        loadStatusMetadata(params.supabase, orgId, nextStatusKey),
-    ]);
+    const [{ data: dept }, { data: opp }, previousStatusMetadata, nextStatusMetadata, openRowsResult] =
+        await Promise.all([
+            params.supabase.from("departments").select("metadata").eq("id", departmentId).eq("org_id", orgId).maybeSingle(),
+            params.supabase.from("opportunities").select("metadata").eq("id", opportunityId).eq("org_id", orgId).maybeSingle(),
+            loadStatusMetadata(params.supabase, orgId, previousStatusKey),
+            loadStatusMetadata(params.supabase, orgId, nextStatusKey),
+            // Hoisted: this was already loaded further down to LIST conflicting work. It also names
+            // the stage the record is departing, which has to be known before the transition is
+            // detected — otherwise the departure stage is inferred from a status key that need not
+            // name a stage at all.
+            params.supabase
+                .from("operational_tasks")
+                .select("id, title, due_at, status, source, metadata")
+                .eq("org_id", orgId)
+                .eq("entity_type", "opportunities")
+                .eq("entity_id", opportunityId)
+                .eq("status", "open")
+                .order("due_at", { ascending: true })
+                .limit(48),
+        ]);
 
     const departmentMetadata =
         dept?.metadata != null && typeof dept.metadata === "object" && !Array.isArray(dept.metadata)
             ? (dept.metadata as Record<string, unknown>)
             : {};
+
+    /*
+     * THE STAGE THE RECORD IS ACTUALLY IN, FROM ITS OWN STAGE WORK.
+     *
+     * Stage work carries `lifecycle_stage_key` — it is the same durable stage the Process Card, the
+     * queue projection and the work's own subject fingerprint read. The opportunity's `status_key`
+     * is a rollup and need not name a stage: measured on staging, a case sat at `tour` with
+     * `status_key: "open"`, its metadata held only tour_date/tour_time, and the org had no
+     * status_definitions rows — so the departure stage resolved to null, no Tour requirement was
+     * ever loaded, and a BLOCKING work requirement scoped to `tour_transition_2` let the exit
+     * through. The requirement runtime was correct; it was being asked about the wrong stage.
+     *
+     * Only OPEN stage work is consulted, and only to name the stage — never to decide the outcome.
+     * If several stages have open work, the record is departing the one the status does not name,
+     * so a status-derived stage still wins when it resolves.
+     */
+    const openStageWorkRows = (openRowsResult.data ?? []).filter((row) =>
+        isBusinessProcessStageWorkTaskRow(row as { metadata?: Record<string, unknown>; source?: string }),
+    );
+    const stageKeysFromOpenWork = openStageWorkRows
+        .map((row) => {
+            const md = ((row as { metadata?: Record<string, unknown> }).metadata ?? {}) as Record<string, unknown>;
+            return trimOrNull(md.lifecycle_stage_key);
+        })
+        .filter((key): key is string => key != null);
 
     const transition = detectBuilderStageTransition({
         previousStatusKey,
@@ -108,6 +147,7 @@ export async function preflightStageTransitionReconciliation(params: {
         departmentMetadata,
         previousStatusMetadata,
         nextStatusMetadata,
+        currentBuilderStageKey: stageKeysFromOpenWork[0] ?? null,
     });
 
     const nextStageLabel = stageLabelForKey(departmentMetadata, transition.nextBuilderStageKey);
@@ -147,15 +187,7 @@ export async function preflightStageTransitionReconciliation(params: {
         };
     }
 
-    const { data: openRows, error } = await params.supabase
-        .from("operational_tasks")
-        .select("id, title, due_at, status, source, metadata")
-        .eq("org_id", orgId)
-        .eq("entity_type", "opportunities")
-        .eq("entity_id", opportunityId)
-        .eq("status", "open")
-        .order("due_at", { ascending: true })
-        .limit(48);
+    const { data: openRows, error } = openRowsResult;
 
     if (error) {
         const blocking = requirementPreflight.blockingRequirements;
