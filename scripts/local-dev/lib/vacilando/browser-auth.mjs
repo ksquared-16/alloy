@@ -664,7 +664,14 @@ export async function beginBrowserAuthCapture(validated, {
   const cmd = loginCommand || join(stateRootToolkit(), "alloy-agent-login");
   const run = spawn || defaultSpawn;
   try {
-    const out = await run(cmd, [String(slot)], { timeoutMs });
+    // Cancellation ends the child; it never just stops waiting for it. Without
+    // this a cancelled capture left a browser running that nothing owned.
+    const out = await run(cmd, [String(slot)], {
+      timeoutMs,
+      onChild: (child) => {
+        record.cancel = () => { try { child.kill("SIGTERM"); } catch { /* already gone */ } };
+      },
+    });
     if (out.cancelled) return { ok: false, state: BROWSER_AUTH_STATES.CANCELLED, slot };
     if (out.timedOut) return { ok: false, state: BROWSER_AUTH_STATES.TIMED_OUT, slot, waited_ms: timeoutMs };
     if (!out.ok) {
@@ -680,20 +687,47 @@ function stateRootToolkit() {
   return join(homedir(), ".local", "share", "alloy", "toolkit", "current");
 }
 
-function defaultSpawn(cmd, argv, { timeoutMs }) {
+/**
+ * THE WRAPPER OWNS THIS CHILD FOR THE WHOLE OPERATION.
+ *
+ * THE DEFECT THIS CLOSES. This called `child.unref()`. `unref` removes a child
+ * from the event loop's reference count — correct for a process deliberately
+ * outliving its launcher, and exactly wrong for one the caller is AWAITING.
+ * With the child unreferenced and nothing else pending, Node considered the
+ * loop empty and exited while `await run(...)` was still outstanding:
+ *
+ *     Detected unsettled top-level await at vac-browser-auth.mjs:274
+ *
+ * The browser often survived, which is what made it look like it half worked.
+ * It did not: the promise never settled, so post-capture VERIFICATION never
+ * ran, slot verification was never recorded, and no structured outcome was ever
+ * emitted. Success depended on a process that had been orphaned on purpose.
+ *
+ * The child is now referenced for as long as the wrapper needs it, and bounded
+ * by `execFile`'s own timeout rather than by luck. The returned handle lets the
+ * caller cancel deterministically instead of leaving a browser behind.
+ */
+function defaultSpawn(cmd, argv, { timeoutMs, onChild = null }) {
   return new Promise((resolveP) => {
-    const child = execFile(cmd, argv, { timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, encoding: "utf8" },
-      (err, stdout, stderr) => {
-        resolveP({
-          ok: !err,
-          timedOut: Boolean(err && err.killed && err.signal === "SIGTERM"),
-          cancelled: false,
-          stdout: String(stdout || ""),
-          stderr: String(stderr || ""),
-          error: err ? String(err.message || err) : null,
-        });
+    const child = execFile(cmd, argv, {
+      timeout: timeoutMs,
+      maxBuffer: 8 * 1024 * 1024,
+      encoding: "utf8",
+      killSignal: "SIGTERM",
+    },
+    (err, stdout, stderr) => {
+      resolveP({
+        ok: !err,
+        timedOut: Boolean(err && err.killed && err.signal === "SIGTERM"),
+        cancelled: false,
+        stdout: String(stdout || ""),
+        stderr: String(stderr || ""),
+        error: err ? String(err.message || err) : null,
       });
-    if (child) child.unref?.();
+    });
+    // Deliberately NOT unref'd. Handed to the caller so cancellation can end
+    // the child rather than abandon it.
+    if (child && typeof onChild === "function") onChild(child);
   });
 }
 

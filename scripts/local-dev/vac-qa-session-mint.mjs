@@ -29,6 +29,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
 import { resolveCanonicalRepoRoot } from "./lib/vacilando/trusted-host-action-registry.mjs";
+import { authCookieNameForUrl } from "./lib/vacilando/auth-cookie-identity.mjs";
 
 function fail(code, detail) {
     process.stdout.write(`${JSON.stringify({ ok: false, error: code, detail: detail ? String(detail).slice(0, 300) : null })}\n`);
@@ -174,8 +175,19 @@ if (otp?.error) fail("redeem_failed", otp.error.message);
 const session = otp?.data?.session;
 if (!session) fail("redeem_failed", "no session established");
 
-const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
-const cookieName = `sb-${projectRef}-auth-token`;
+/*
+ * THE COOKIE NAME COMES FROM THE CANONICAL RULE, NOT FROM THIS FILE.
+ *
+ * This derived `sb-${projectRef}-auth-token` unconditionally. Against the
+ * certification project at 127.0.0.1:54421 the ref is "127", so it wrote
+ * `sb-127-auth-token` while the running app reads `sb-alloy-local-auth` — the
+ * name `authCookieNameFor()` pins for every loopback runtime. Measured A/B with
+ * the SAME session value: the derived name got 307 /login, the canonical name
+ * got 200 authenticated. The session was valid the whole time; it was filed
+ * under a name nothing was looking for.
+ */
+const cookieName = authCookieNameForUrl(supabaseUrl);
+if (!cookieName) fail("cookie_identity_unresolved", `no auth cookie identity for ${supabaseUrl}`);
 const encoded = `base64-${stringToBase64URL(JSON.stringify(session))}`;
 // The library decides whether this is one cookie or several; we do not guess a threshold.
 const parts = createChunks(cookieName, encoded);
