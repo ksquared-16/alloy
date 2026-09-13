@@ -332,7 +332,7 @@ describeLive("developer platform attendance ingestion — live", () => {
         }));
         expect(out.disposition, JSON.stringify(out)).toBe("rejected");
         expect(out.code).toBe("unknown_correction_target");
-        expect(out.attendanceEventId).toBeFalsy();
+        expect("attendanceEventId" in out ? out.attendanceEventId : null).toBeFalsy();
     }, 120_000);
 
     // ── M — the correlated subject must be a CHILD, not merely a row ───────
@@ -363,7 +363,8 @@ describeLive("developer platform attendance ingestion — live", () => {
          */
         expect(out.disposition, JSON.stringify(out)).toBe("rejected");
         expect(out.code).toBe("member_not_a_child");
-        expect(out.attendanceEventId).toBeFalsy();
+        // `denied` is a different shape and carries no fact id at all.
+        expect("attendanceEventId" in out ? out.attendanceEventId : null).toBeFalsy();
 
         // And nothing was written anywhere in the Attendance ledger for them.
         const { data } = await supabase
