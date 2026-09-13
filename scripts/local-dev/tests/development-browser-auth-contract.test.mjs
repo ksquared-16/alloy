@@ -69,8 +69,31 @@ test("A4. the mint consumes the rule and no longer derives its own", () => {
 });
 
 test("A5. THE DRIFT GUARD: the app and the helper cannot disagree again", () => {
-  // Parsed from the application's own file. If either side moves, this fails.
-  const app = src("../../../web/lib/supabase/browserTransport.ts");
+  /*
+   * Parsed from the application's own file. If either side moves, this fails.
+   *
+   * The toolkit ships scripts/local-dev only, so when this runs from an
+   * INSTALLED toolkit the app source is genuinely absent. That is stated and
+   * skipped rather than failed — but never silently: the control asserts it is
+   * really in an installed layout before it declines, so a missing file in a
+   * repo checkout still fails loudly.
+   */
+  const candidates = [
+    "../../../web/lib/supabase/browserTransport.ts",
+    "../../../../web/lib/supabase/browserTransport.ts",
+  ];
+  let app = null;
+  for (const c of candidates) {
+    try { app = src(c); break; } catch { /* try the next layout */ }
+  }
+  if (app === null) {
+    let repoHere = true;
+    try { src("../../../web/package.json"); } catch { repoHere = false; }
+    assert.equal(repoHere, false,
+      "the app source is missing from a checkout that DOES have web/ — that is a real failure, not a layout difference");
+    process.stdout.write("      (installed toolkit: app source not shipped; guard runs in the repo)\n");
+    return;
+  }
   const appConst = app.match(/LOCAL_AUTH_COOKIE_NAME\s*=\s*"([^"]+)"/)?.[1];
   assert.equal(appConst, C.LOCAL_AUTH_COOKIE_NAME,
     `app pins ${appConst}, helper pins ${C.LOCAL_AUTH_COOKIE_NAME}`);
