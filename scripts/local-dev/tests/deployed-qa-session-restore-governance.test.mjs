@@ -45,6 +45,23 @@ function recordingMint() {
     fn.calls = calls;
     return fn;
 }
+/*
+ * A MINT THAT MODELS ACTUALLY WRITING THE ARTIFACT.
+ *
+ * `recordingMint` reports `{ok: true}` and touches no filesystem, which is right for the cases that
+ * only need to know the mint was reached. It is NOT enough for the cases that assert a restore
+ * succeeded: success now requires that the storage-state file the browser reads actually changed,
+ * because reporting success against an unchanged artifact is the defect that let three live restores
+ * replay a stale session. So those cases pair the mint with a `stat` whose stamp moves once the mint
+ * has run — the same observation the real executor makes, without a real file.
+ */
+function writingMint() {
+    const mint = recordingMint();
+    const stat = () => (mint.calls.length > 0
+        ? { mtimeMs: 2_000, size: 200 }
+        : { mtimeMs: 1_000, size: 100 });
+    return { mint, stat };
+}
 const grantAll = () => ({ ok: true });
 const envRead = (ref) => () => `NEXT_PUBLIC_SUPABASE_URL=https://${ref}.supabase.co\n`;
 const fetchRef = (ref) => () => ({ ok: true, json: { supabaseProjectRef: ref } });
@@ -206,10 +223,10 @@ test("the matching identity, reported by the application, is what verifies", () 
 });
 
 test("a failed verification after a successful mint is NOT restored", () => {
-    const mint = recordingMint();
+    const { mint, stat } = writingMint();
     const out = executeRestoreDeployedQaSessionSync({
         action: action(), grant: { id: "g" }, grantCheck: grantAll,
-        read: envRead(REF), fetchJson: fetchRef(REF), mint,
+        read: envRead(REF), fetchJson: fetchRef(REF), mint, stat,
         verify: () => ({ ok: false, state: "wrong_identity", detail: "different account" }),
         authRoot: "/x/auth",
     });
@@ -229,11 +246,11 @@ test("an APPROVED action executes from the normalized inputs the layer stored", 
     // the layer's own object as `unexpected_input`, surfacing as `execution_failed` on an approval
     // the operator had already granted. The local sibling survives the same path only because its
     // normalized key happens to be in its accepted list.
-    const mint = recordingMint();
+    const { mint, stat } = writingMint();
     const out = executeRestoreDeployedQaSessionSync({
         action: { id: "tha_test", inputs: { targetKey: TARGET, dedupeKey: `restore_deployed_qa_session:${TARGET}` } },
         grant: { id: "g" }, grantCheck: grantAll,
-        read: envRead(REF), fetchJson: fetchRef(REF), mint,
+        read: envRead(REF), fetchJson: fetchRef(REF), mint, stat,
         verify: () => ({ ok: true }), authRoot: "/x/auth",
     });
     assert.equal(mint.calls.length, 1, "the normalized shape must reach the mint, not be refused before it");
@@ -329,4 +346,58 @@ test("the env source is a POINTER resolved from the target, never a caller value
 
 test("an unreadable env source yields null, which the match then refuses", () => {
     assert.equal(envProjectRef("/definitely/not/a/file"), null);
+});
+
+/* ── The success signal must mean the browser's artifact is current ──────── */
+
+/*
+ * `storage_written` was the literal `true` on every success path, so the one failure it names could
+ * never be reported. Measured live: three restores returned ok/verified while
+ * `storage-state.json` kept its original mtime and the browser stayed signed out. Verification alone
+ * cannot catch this — it can pass against a file this run never touched.
+ */
+test("a mint that writes nothing is not a restore, however well it verifies", () => {
+    const mint = recordingMint();
+    const out = executeRestoreDeployedQaSessionSync({
+        action: action(), grant: { id: "g" }, grantCheck: grantAll,
+        read: envRead(REF), fetchJson: fetchRef(REF), mint,
+        // Verification says the session is healthy — against an artifact nothing refreshed.
+        verify: () => ({ ok: true }),
+        stat: () => ({ mtimeMs: 1_000, size: 100 }),
+        authRoot: "/x/auth",
+    });
+    assert.equal(mint.calls.length, 1, "the mint must be reached, or this proves nothing");
+    assert.equal(out.ok, false, "an unchanged artifact cannot be reported as restored");
+    assert.equal(out.status, "storage_state_unchanged");
+    assert.equal(out.storage_written, false);
+    assert.equal(out.verified, false);
+    assert.equal(out.verified_at, null);
+});
+
+test("storage_written is measured off the file, not asserted", () => {
+    const { mint, stat } = writingMint();
+    const out = executeRestoreDeployedQaSessionSync({
+        action: action(), grant: { id: "g" }, grantCheck: grantAll,
+        read: envRead(REF), fetchJson: fetchRef(REF), mint, stat,
+        verify: () => ({ ok: true }), authRoot: "/x/auth",
+    });
+    assert.equal(out.storage_written, true);
+    assert.equal(out.ok, true);
+    assert.equal(out.status, "restored");
+});
+
+test("an artifact that appears where there was none counts as written", () => {
+    // First mint on a clean host: unreadable before, present after. `null` must differ from a real
+    // stamp, or the very first restore would report itself unchanged.
+    const mint = recordingMint();
+    let minted = false;
+    const out = executeRestoreDeployedQaSessionSync({
+        action: action(), grant: { id: "g" }, grantCheck: grantAll,
+        read: envRead(REF), fetchJson: fetchRef(REF),
+        mint: (...args) => { minted = true; return mint(...args); },
+        stat: () => { if (!minted) throw new Error("ENOENT"); return { mtimeMs: 5, size: 5 }; },
+        verify: () => ({ ok: true }), authRoot: "/x/auth",
+    });
+    assert.equal(out.storage_written, true);
+    assert.equal(out.ok, true);
 });

@@ -321,14 +321,35 @@ export function requestTrustedHostAction({
   const dedupeKey = validated.normalized.dedupeKey
     || validated.normalized.queryHash
     || null;
-  // Dedupe in-flight / completed only — failed actions may be retried.
+  /*
+   * A COMPLETED ACTION IS NOT ALWAYS A REUSABLE ANSWER.
+   *
+   * Dedupe was written for censuses, where reuse is sound: a pinned query hash names the same
+   * question and the stored result IS the answer. Some actions are the opposite — their whole
+   * purpose is to produce a fresh artifact, and the stored result describes an artifact that has
+   * since expired.
+   *
+   * Measured: three `restore_deployed_qa_session` requests in one run all adopted the same
+   * completed action. Its `dedupeKey` is `restore_deployed_qa_session:<target>`, constant per
+   * target, so after the first mint every later request replayed that stored result — reporting
+   * `verified: true` with the ORIGINAL `verified_at`, while the browser's storage-state file was
+   * never rewritten and the session had long since expired. Each request recorded its own
+   * `execution_started_at`, so from the outside it looked like it ran.
+   *
+   * In-flight reuse is kept for every action: two concurrent requests must not both mint. Only the
+   * COMPLETED state is withheld, and only from definitions that say their result does not keep.
+   */
+  const REUSABLE_IN_FLIGHT_STATES = ["requested", "policy_review", "authorized", "executing", "retrying"];
+  const reusableStates = def.resultKeeps === false
+    ? REUSABLE_IN_FLIGHT_STATES
+    : [...REUSABLE_IN_FLIGHT_STATES, "completed"];
   const existing = listTrustedHostActions(missionId).find((a) =>
     a.actionType === actionType
     && sameActionOwnership(a, { executionSessionId, assignmentId, inputs: validated.normalized })
     && (dedupeKey
       ? (a.inputs?.dedupeKey === dedupeKey || a.inputs?.queryHash === dedupeKey)
       : a.inputs?.queryHash === validated.normalized.queryHash)
-    && ["requested", "policy_review", "authorized", "executing", "completed", "retrying"].includes(a.state));
+    && reusableStates.includes(a.state));
   if (existing) {
     return { ok: true, action: existing, deduped: true };
   }
