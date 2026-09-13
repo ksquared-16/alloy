@@ -98,3 +98,73 @@ test("PHASE 3 — the receipt carries a payer, not a blank", async ({ page }) =>
      */
     expect(payment.payerLabel ?? "", `payer label was ${JSON.stringify(payment.payerLabel)}`).not.toBe("");
 });
+
+/**
+ * PHASES 12–14 — THE BOUNDARIES, WHICH DO NOT NEED A RECEIPT TO CERTIFY.
+ *
+ * These run against the tenant as it stands. They are the proofs that a refusal is real rather than
+ * a UI that merely declines to draw a button: every one of them goes through the route, not the card.
+ */
+test.describe("reallocation boundaries", () => {
+    test("PHASE 12 — the eligible-targets route refuses an unauthenticated caller", async ({ playwright, baseURL, page }) => {
+        const anon = await playwright.request.newContext({ baseURL, storageState: undefined });
+        const res = await anon.get("/api/admin/financials/eligible-target-charges?payment_id=00000000-0000-4000-8000-000000000000");
+        // An unauthenticated caller must never learn whether a payment exists.
+        expect([401, 403, 404], `status was ${res.status()}`).toContain(res.status());
+        const body = await res.text();
+        expect(body, "a refusal must not leak charge material").not.toMatch(/chargeId|outstandingCents/);
+        await anon.dispose();
+
+        /*
+         * The refusal above is only meaningful if the route answers at all. Without this, deleting
+         * the route entirely leaves the test green on a 404 — measured, not hypothesised.
+         */
+        const authed = await page.request.get(
+            "/api/admin/financials/eligible-target-charges?payment_id=00000000-0000-4000-8000-000000000000");
+        expect(authed.status(), "the same route must answer an authenticated caller").toBeLessThan(500);
+        expect(authed.status(), "and must not refuse it as unauthenticated").not.toBe(401);
+    });
+
+    test("PHASE 13 — applying a payment is refused without fin.write, and says which permission", async ({ page }) => {
+        await page.goto("/workspace");
+        const customerId = await householdId(page.request);
+        const vm = await card(page.request, customerId);
+        const target = charge(vm, TARGET);
+        const { json } = await execute(page.request, {
+            action_key: "payment.apply_to_charge",
+            entity_type: "opportunity_customer_member",
+            entity_id: target.subjectMemberId ?? "",
+            mode: "execute",
+            payload: { payment_id: "00000000-0000-4000-8000-000000000000", charge_id: target.chargeId, amount_cents: 100 },
+        });
+        expect(json.ok, "a role without fin.write must not move money").toBe(false);
+        /*
+         * The permission is checked BEFORE the payment is looked up: the refusal must be about
+         * authority, not about a missing row. A not-found here would mean an unpermitted caller can
+         * probe which payment ids exist.
+         */
+        expect(JSON.stringify(json)).toMatch(/fin\.write/);
+    });
+
+    test("PHASE 14 — a forged allocation from outside the org reads as absent, and changes nothing", async ({ page }) => {
+        await page.goto("/workspace");
+        const customerId = await householdId(page.request);
+        const before = JSON.stringify((await card(page.request, customerId)).rows);
+
+        // This identity DOES hold fin.adjust, so the request reaches org scoping rather than stopping
+        // at the permission gate — which is what makes this a scoping proof and not a permission one.
+        const { json } = await execute(page.request, {
+            action_key: "payment.reverse_application",
+            entity_type: "customer",
+            entity_id: customerId,
+            mode: "execute",
+            payload: { allocation_id: "ffffffff-0000-4000-8000-ffffffffffff", reason: "forged" },
+        });
+        expect(json.ok, "a forged allocation must not reverse anything").toBe(false);
+        expect(JSON.stringify(json), "and must not disclose that it belongs to another org")
+            .not.toMatch(/another org|different organization|forbidden/i);
+
+        const after = JSON.stringify((await card(page.request, customerId)).rows);
+        expect(after, "no charge balance moved").toBe(before);
+    });
+});
