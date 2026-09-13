@@ -111,3 +111,10 @@ jobs:
       - name: Governed wait resume ownership
         working-directory: .
         run: node scripts/local-dev/tests/development-governed-resume-owner.test.mjs
+      # A health check that contradicts promoted doctrine trains its reader to
+      # ignore it. Branch drift is repaired at dispatch and a slotless managed
+      # lane is dispatchable by design; neither may be reported as an operator
+      # problem, and a real baseline gap still must be.
+      - name: Operator convergence signal quality
+        working-directory: .
+        run: node scripts/local-dev/tests/development-operator-convergence.test.mjs

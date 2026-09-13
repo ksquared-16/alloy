@@ -232,6 +232,20 @@ function stampDecisionTiming(rec, field) {
 }
 
 /**
+ * Stamp a moment that can only happen once.
+ *
+ * `projection_visible_at` is now reachable from two places — the terminal write
+ * and the resume — and the question it answers is "when did this first become
+ * readable", not "when was it last touched". Overwriting would silently report
+ * the later of the two and make the measured latency look worse than it was.
+ */
+function stampDecisionTimingOnce(rec, field) {
+  if (!rec) return;
+  if (rec.decision_timing?.[field]) return;
+  stampDecisionTiming(rec, field);
+}
+
+/**
  * THE canonical location of the governed-action request store.
  *
  * Exported because a Director evidence collector hand-joined this path, missed
@@ -1549,6 +1563,15 @@ function releaseRunAfterGovernedFailure(rec, { nowMs, root } = {}) {
   }
   patchRunFields(rec.run_id, { governed_action: pub }, { nowMs, root });
   patchRunResourceWait(rec.run_id, null, root);
+  /*
+   * A REFUSAL IS A SETTLEMENT, AND `failRequest` says so a few lines below about
+   * its own timing. The projection stamp did not agree: every one of the twenty
+   * failed governed actions measured carried no `projection_visible_at`, so the
+   * convergence of a failure was the one thing the metric could never report —
+   * and a failure is what an operator most needs to see quickly.
+   */
+  stampDecisionTimingOnce(rec, "projection_visible_at");
+  saveRequest(rec, root);
 }
 
 function failRequest(rec, code, reason, { nowMs, root, skipResume = false } = {}) {
@@ -3452,6 +3475,28 @@ function applyExecuteResult(rec, out, { nowMs, root, actor } = {}) {
     try {
       const run = getExecutionRun(rec.run_id, root);
       if (!run || run.state !== "WAITING_RESOURCE") patchRunResourceWait(rec.run_id, null, root);
+      /*
+       * THE PROJECTION IS WRITTEN WHERE THE TRUTH IS, NOT ONLY WHERE A RUN
+       * HAPPENS TO BE WAITING.
+       *
+       * `run.governed_action` was patched in exactly two places — attachRunWait
+       * and the resume — so a completion that did not resume a waiting run
+       * never reached the run at all. MEASURED: 18 runs projected a governed
+       * action that was not their most recent one, and 89 of 157 completed
+       * actions attached to a run carried no `projection_visible_at` at all.
+       * An operator reading those runs saw an older action's state than reality,
+       * and the platform's own convergence metric could not see it either.
+       *
+       * This is the authoritative terminal write, so it is the honest place to
+       * say the outcome is readable. The resume still stamps when it resumes,
+       * and the field records the FIRST of the two — the question is when this
+       * became readable, not when it was last touched.
+       */
+      if (run) {
+        patchRunFields(rec.run_id, { governed_action: publicGovernedAction(rec) }, { nowMs, root });
+        stampDecisionTimingOnce(rec, "projection_visible_at");
+        saveRequest(rec, root);
+      }
     } catch { /* the run may be gone */ }
   }
   emitNotification("governed_action_complete", rec, {
@@ -5418,7 +5463,7 @@ export async function resumeLaneAfterGovernedAction(requestId, {
       // reading the projection. It is not the moment a pixel changed in the
       // operator's browser — the server cannot observe that, and inventing a
       // stamp for it would be worse than admitting the series ends here.
-      stampDecisionTiming(rec, "projection_visible_at");
+      stampDecisionTimingOnce(rec, "projection_visible_at");
       saveRequest(rec, root);
       patchRunFields(rec.run_id, { governed_action: publicGovernedAction(rec) }, { nowMs, root });
       patchRunResourceWait(rec.run_id, null, root);
