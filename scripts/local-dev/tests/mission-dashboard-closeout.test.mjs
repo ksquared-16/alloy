@@ -39,7 +39,10 @@ function assert(cond, msg) {
 
 const brief = {
   title: "Access & Identity V2",
-  objective: "Closeout validation",
+  // Under 24 characters the compiler refuses the brief as ambiguous_objective,
+  // approve returns not_compiled, and no assignments exist - which surfaced here
+  // as asgs[1] being undefined rather than as the refusal it actually was.
+  objective: "Validate mission closeout end to end",
   plan: [
     { phaseId: "p1", order: 1, title: "Authority Path Inventory", objective: "Inventory", requiredOutputs: ["a.md"], acceptanceCriteriaIds: ["AC1"] },
     { phaseId: "p2", order: 2, title: "Canonical Authority Model", objective: "Model", requiredOutputs: ["b.md"], dependencies: ["p1"], acceptanceCriteriaIds: ["AC2"] },

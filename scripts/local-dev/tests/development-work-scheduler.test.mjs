@@ -223,14 +223,21 @@ await test("L1 — completed provider output after the last view shows the lane 
     const v = V.laneAttentionView({ laneId: "l1", notifications: [note()], runState: "COMPLETE" });
     assert.equal(v.has_unread_output, true);
     assert.equal(v.unread_count, 1);
-    assert.equal(v.label, "Completed · New");
+    /*
+     * CANONICAL VOCABULARY. The label comes from laneOperatorState, whose states
+     * are NEEDS_YOU / WORKING / WAITING / BLOCKED / FAILED / READY - there is no
+     * "Completed" state: a finished run is READY, meaning ready for you. The old
+     * labelForRunState that returned "Completed" is still in the file and is
+     * called by nothing.
+     */
+    assert.equal(v.label, "Ready · New");
     assert.equal(v.treatment.colour_only, false, "colour alone is not a treatment");
 });
 
 await test("L2 — acknowledging through the canonical mechanism clears the unread state", () => {
     const v = V.laneAttentionView({ laneId: "l1", notifications: [note({ seen_at: "2026-09-06T20:05:00Z" })], runState: "COMPLETE" });
     assert.equal(v.has_unread_output, false);
-    assert.equal(v.label, "Completed");
+    assert.equal(v.label, "Ready");
     assert.equal(v.treatment, null);
     // And the clearing mechanism is the existing owner's, not a new one.
     assert.equal(typeof N.markLaneNotificationsSeen, "function");
@@ -250,13 +257,24 @@ await test("L4 — NEEDS_ANSWER stays independently visible, and unread is not a
     assert.equal(completed.requires_director, false, "unread must not imply an obligation");
 
     // Needs input: unread AND an obligation, reported as two separate facts.
-    const asking = V.laneAttentionView({ laneId: "l1", notifications: [note({ event_type: "needs_input" })], runState: "NEEDS_INPUT" });
+    /*
+     * THE OBLIGATION COMES FROM A GOVERNED REQUEST, NOT FROM THE RUN STATE.
+     * This passed no requests and relied on NEEDS_INPUT meaning "needs you" -
+     * the behaviour the module deliberately removed, because a run enters
+     * NEEDS_INPUT when a governed action FAILS, which asks the operator nothing.
+     * 34 runs entered NEEDS_INPUT and 10 asked for nothing. So the fixture now
+     * supplies what an actual obligation looks like: a request awaiting the
+     * operator with no decision recorded.
+     */
+    const awaitingOperator = { request_id: "g1", lane_id: "l1", status: "awaiting_operator" };
+    const asking = V.laneAttentionView({ laneId: "l1", notifications: [note({ event_type: "needs_input" })], runState: "NEEDS_INPUT", requests: [awaitingOperator] });
     assert.equal(asking.has_unread_output, true);
     assert.equal(asking.director_category, "needs_answer");
     assert.equal(asking.requires_director, true);
 
     // An obligation whose output has been read is still an obligation.
-    const readButOwed = V.laneAttentionView({ laneId: "l1", notifications: [note({ event_type: "needs_input", seen_at: "x" })], runState: "NEEDS_INPUT" });
+    // Same reason as above: the obligation is the request, not the run state.
+    const readButOwed = V.laneAttentionView({ laneId: "l1", notifications: [note({ event_type: "needs_input", seen_at: "x" })], runState: "NEEDS_INPUT", requests: [awaitingOperator] });
     assert.equal(readButOwed.has_unread_output, false);
     assert.equal(readButOwed.requires_director, true);
 });
@@ -292,7 +310,9 @@ await test("only completed provider output counts as unread, not every event", (
 await test("the rollup separates unread from obligation", () => {
     const views = [
         V.laneAttentionView({ laneId: "a", notifications: [note({ lane_id: "a" })], runState: "COMPLETE" }),
-        V.laneAttentionView({ laneId: "b", notifications: [note({ lane_id: "b", event_type: "needs_input" })], runState: "NEEDS_INPUT" }),
+        // Lane b is the one that actually owes the operator something, and what
+        // makes that true is the awaiting_operator request - not the run state.
+        V.laneAttentionView({ laneId: "b", notifications: [note({ lane_id: "b", event_type: "needs_input" })], runState: "NEEDS_INPUT", requests: [{ request_id: "g2", lane_id: "b", status: "awaiting_operator" }] }),
         V.laneAttentionView({ laneId: "c", notifications: [], runState: null }),
     ];
     const r = V.attentionRollup(views);

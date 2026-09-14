@@ -2,10 +2,39 @@
  * Mission posture — single operator-facing truth.
  */
 import assert from "node:assert/strict";
-import { deriveMissionPosture } from "../lib/vacilando/mission-posture.mjs";
-import { missionListCardVm, listNeedsYou, missionDashboardVm } from "../lib/vacilando/presentation/operator-views.mjs";
+import os from "node:os";
+import { join } from "node:path";
+import { mkdtempSync } from "node:fs";
 
-const mid = "msn_2d054741a54698fa4c";
+/*
+ * SEED THE MISSION THIS TEST MEASURES.
+ *
+ * It used a hard-coded mission id and read whatever the ambient runtime store
+ * happened to contain. On this host that mission no longer exists, so
+ * missionDashboardVm returned a record with a null summary and the test died on
+ * a TypeError; on a clean runner it could never have passed at all. The posture
+ * assertions above it still passed, because an unknown mission gets a default
+ * posture - so the file reported a crash rather than the absence it had found.
+ *
+ * Dispatch stays off: approving a mission schedules real work otherwise.
+ */
+process.env.VACILANDO_AUTO_DISPATCH = "0";
+process.env.ALLOY_RUNTIME_ROOT = mkdtempSync(join(os.tmpdir(), "vac-posture-"));
+
+const { deriveMissionPosture } = await import("../lib/vacilando/mission-posture.mjs");
+const { missionListCardVm, listNeedsYou, missionDashboardVm } = await import("../lib/vacilando/presentation/operator-views.mjs");
+const { ingestMissionBrief, approveMissionExecution } = await import("../lib/vacilando/mission-kickoff.mjs");
+
+const ingested = ingestMissionBrief({
+  title: "Posture fixture",
+  // At least 24 characters, or the compiler refuses the brief as ambiguous.
+  objective: "Prove posture and dashboard agree",
+  plan: [{ phaseId: "p1", order: 1, title: "Work", objective: "Do the work", requiredOutputs: ["code"], acceptanceCriteriaIds: ["AC1"] }],
+  acceptanceCriteria: [{ id: "AC1", statement: "It works" }],
+  executionPreferences: { mergeTarget: "staging", maxConcurrentWorkers: 1 },
+}, { slot: 6, actor: "operator" });
+approveMissionExecution(ingested.brief.missionId, ingested.brief.version, { slot: 6, actor: "operator" });
+const mid = ingested.brief.missionId;
 
 const posture = deriveMissionPosture(mid);
 assert.ok(posture?.id, "posture has id");
