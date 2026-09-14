@@ -315,7 +315,10 @@ function defineRepositoryPush() {
     timeoutMs: 180_000,
     retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
     inputSchema: {
-      required: ["repository", "branch", "expectedHeadSha", "worktreePath"],
+      // base_ref and expected_commits are advertised as required so a lane
+      // reading `--contract repository.push` is told what a candidate must
+      // declare, rather than discovering it from a refusal.
+      required: ["repository", "branch", "expectedHeadSha", "worktreePath", "base_ref", "expected_commits"],
     },
     outputSchema: { pushedSha: "string", remoteRef: "string" },
     evidenceSchema: ["repository", "branch", "expected_head_sha", "remote_ref", "execution_audit"],

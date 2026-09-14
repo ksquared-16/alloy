@@ -54,15 +54,30 @@ function gitStub({ head = OWNED, branch = "runtime/mission", range = [OWNED], re
   };
 }
 
-function candidate(inputs = {}) {
-  const v = validatePushInputs({
+function rawValidate(inputs = {}) {
+  return validatePushInputs({
     repository: "ksquared-16/alloy",
     branch: "runtime/mission",
     expected_head_sha: OWNED,
     worktreePath: WT,
-    base_ref: BASE,
     ...inputs,
   });
+}
+
+/**
+ * Readiness for an inputs object, normalised first. Enforcement lives at the
+ * pre-mutation gate rather than in input parsing, because `validatePushInputs`
+ * is also called by fixtures, previews and contract checks that never push.
+ */
+function readiness(inputs = {}, stub = gitStub({})) {
+  const v = rawValidate(inputs);
+  assert.ok(v.ok, `inputs rejected before the gate: ${v.code || ""}`);
+  return evaluatePushReadiness(v.normalized, { gitImpl: stub });
+}
+
+/** A declared candidate: the shape every promotion must now arrive in. */
+function candidate(inputs = {}) {
+  const v = rawValidate({ base_ref: BASE, expected_commits: [OWNED], ...inputs });
   assert.ok(v.ok, `inputs rejected: ${v.code || ""} ${v.detail || ""}`);
   return v.normalized;
 }
@@ -107,17 +122,84 @@ test("4 — foreign work is REPORTED, never reset or discarded", () => {
     "a contaminated candidate is refused, not repaired");
 });
 
-test("5 — an UNDECLARED candidate is currently trusted (the gap that let it through)", () => {
+test("5 — an UNDECLARED promotion is REFUSED before anything else is checked", () => {
   /*
-   * This is not an endorsement. Both incidents pushed with no declared commit
-   * set, so this branch is the one that was actually taken, and it passes
-   * anything. Asserted so the permissive default is visible and so making
-   * declaration mandatory shows up here as a deliberate change rather than a
-   * silent one.
+   * This case used to pin the opposite. The guard existed, and was skipped when
+   * nothing was declared, so an undeclared candidate was trusted by default -
+   * which is the branch both contaminated promotions actually took. Declaration
+   * is now mandatory for promotion, and the refusal names what is missing
+   * rather than degrading to a generic denial.
    */
-  const r = evaluatePushReadiness(candidate({}), { gitImpl: gitStub({ range: [OWNED, FOREIGN] }) });
-  assert.notEqual(r.code, "commit_scope_expanded",
-    "if this now refuses, declaration became mandatory - update this test and the callers together");
+  const v = readiness({});
+  assert.equal(v.ok, false);
+  assert.equal(v.code, "candidate_scope_undeclared");
+  assert.deepEqual(v.missing, ["base_ref", "expected_commits"]);
+  assert.equal(v.candidate, OWNED, "the refusal must name the candidate it refused");
+  assert.equal(v.branch, "runtime/mission");
+  assert.match(v.remedy, /rev-list/, "and must say how to satisfy it");
+});
+
+test("5a — base_ref alone is not a declaration", () => {
+  const v = readiness({ base_ref: BASE });
+  assert.equal(v.code, "candidate_scope_undeclared");
+  assert.deepEqual(v.missing, ["expected_commits"]);
+});
+
+test("5b — expected_commits alone is not a declaration", () => {
+  const v = readiness({ expected_commits: [OWNED] });
+  assert.equal(v.code, "candidate_scope_undeclared");
+  assert.deepEqual(v.missing, ["base_ref"]);
+});
+
+test("5c — DECLARED EMPTY is accepted and is not the same as undeclared", () => {
+  // The distinction that stops the hole reopening: [] is an answer, absent is not.
+  const declaredEmpty = readiness({ base_ref: BASE, expected_commits: [] }, gitStub({ range: [] }));
+  assert.notEqual(declaredEmpty.code, "candidate_scope_undeclared",
+    "a candidate may declare that it owns nothing");
+  assert.equal(rawValidate({ base_ref: BASE, expected_commits: [] }).normalized.candidateDeclared, true);
+  const undeclared = readiness({ base_ref: BASE });
+  assert.equal(undeclared.ok, false, "saying nothing is still a refusal");
+  assert.equal(undeclared.code, "candidate_scope_undeclared");
+});
+
+test("5d — a declared-empty candidate is still COMPARED, not waved through", () => {
+  // Gating the comparison on length rather than on declaration would let an
+  // empty declaration accept every commit in the range without checking.
+  const r = evaluatePushReadiness(
+    candidate({ expected_commits: [] }),
+    { gitImpl: gitStub({ range: [FOREIGN] }) },
+  );
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "commit_scope_expanded");
+});
+
+test("5e — a NON-promotion push keeps the existing permissive behaviour", () => {
+  /*
+   * Deliberately narrow. This is a safety fix for promotion candidates, not a
+   * repository-wide contract change, so a caller that explicitly declares
+   * another governed mode is unaffected.
+   */
+  const v = readiness({ requested_mode: "other" });
+  assert.notEqual(v.code, "candidate_scope_undeclared",
+    "a non-promotion push must not be forced to declare a candidate");
+  assert.equal(rawValidate({ requested_mode: "other" }).normalized.isPromotion, false);
+});
+
+test("5f — omitting the mode means PROMOTION, so the unsafe case needs the argument", () => {
+  const v = readiness({});
+  assert.equal(v.code, "candidate_scope_undeclared",
+    "if a missing mode ever defaults to permissive again, the hole is back");
+});
+
+test("5g — a declared commit missing from the candidate is refused", () => {
+  const r = evaluatePushReadiness(
+    candidate({ expected_commits: [OWNED, "dddddddddddddddddddddddddddddddddddddddd"] }),
+    { gitImpl: gitStub({ range: [OWNED] }) },
+  );
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "commit_scope_missing");
+  assert.ok(r.missing.some((c) => c.startsWith("dddddddddddd")),
+    "the reviewed thing is not the pushed thing, and it must say which commit vanished");
 });
 
 test("6 — a candidate that moved after certification is refused as head drift", () => {
@@ -153,6 +235,23 @@ test("8 — what is pushed is the exact certified SHA, not whatever the branch b
     "the push must name the commit, not the local branch");
 });
 
+
+test("9 — a declared baseline git cannot resolve is REFUSED, not skipped", () => {
+  /*
+   * Otherwise a typo in base_ref satisfies the declaration and verifies
+   * nothing: rev-list fails, the comparison is skipped, and every commit in the
+   * range is accepted. Declared-but-unverifiable is not verified.
+   */
+  const failingRevList = (args) => {
+    const a = args.join(" ");
+    if (a.startsWith("rev-list")) return { status: 128, stdout: "", stderr: "unknown revision" };
+    return gitStub({})(args);
+  };
+  const r = evaluatePushReadiness(candidate({ base_ref: "origin/typo" }), { gitImpl: failingRevList });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "candidate_base_unresolvable");
+  assert.equal(r.base, "origin/typo", "the refusal must name the ref that failed");
+});
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
 process.exit(fail ? 1 : 0);

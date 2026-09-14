@@ -89,6 +89,10 @@ await test("PD8 — a refused push still reports through pushBranch, with the ca
     branch: "recovery/x",
     expectedHeadSha: "f".repeat(40),
     worktreePath: "/tmp",
+    // A promotion candidate declares what it owns. The stub resolves rev-list,
+    // so the declaration is compared rather than skipped.
+    base_ref: "HEAD",
+    expected_commits: [],
   }, { git });
   assert.equal(out.ok, false, JSON.stringify(out));
   assert.ok(out.detail && out.detail !== "Push failed",
