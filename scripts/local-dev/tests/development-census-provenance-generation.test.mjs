@@ -20,7 +20,8 @@
  */
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   censusEvidenceEnvelope,
   censusEvidenceGeneration,
@@ -133,7 +134,16 @@ test("8b — an artifact written whole has one generation by construction", () =
 
 /* ── A5: the committed artifacts, held where they are ─────────────────────── */
 
-const MIGRATIONS = "certification/migrations";
+/*
+ * RESOLVED FROM THIS FILE. Tier 2 runs from scripts/local-dev/tests, where
+ * "certification/migrations" does not exist - and the first version of this
+ * gate SKIPPED its only real case there and reported 14 passed, 0 failed. A
+ * gate that reports green by doing nothing is the exact defect family this
+ * suite exists to police, so the skip is gone: if the directory cannot be
+ * found, that is a failure, not a pass.
+ */
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const MIGRATIONS = join(ROOT, "certification", "migrations");
 
 /*
  * The known-mixed set now lives in a MANIFEST, not in this file.
@@ -155,7 +165,8 @@ function manifestEntries() {
 const KNOWN_MIXED = manifestEntries().map((e) => e.artifact);
 
 test("A5 — no NEW committed census artifact may be mixed-generation", () => {
-  if (!existsSync(MIGRATIONS)) { process.stdout.write("    (no certification/migrations here; skipped)\n"); return; }
+  assert.ok(existsSync(MIGRATIONS),
+    `certification/migrations not found at ${MIGRATIONS}; this gate must never pass by skipping`);
   const found = [];
   for (const f of readdirSync(MIGRATIONS).filter((n) => n.endsWith(".results.json"))) {
     let d; try { d = JSON.parse(readFileSync(join(MIGRATIONS, f), "utf8")); } catch { continue; }
@@ -167,7 +178,7 @@ test("A5 — no NEW committed census artifact may be mixed-generation", () => {
 });
 
 test("A5a — the known-mixed list may only shrink", () => {
-  if (!existsSync(MIGRATIONS)) return;
+  assert.ok(existsSync(MIGRATIONS), "resolved migrations directory must exist");
   const stillMixed = KNOWN_MIXED.filter((f) => {
     const p = join(MIGRATIONS, f);
     if (!existsSync(p)) return false;
