@@ -690,7 +690,12 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
 
   let staleClosed = false;
   try {
-    const rec = reconcileLaneBeforeSend(laneId, { root, nowMs });
+    // AWAITED. `reconcileLaneBeforeSend` became async when it started asking the
+    // lifecycle module whether a run is genuinely stale. Without the await,
+    // `rec` is a Promise, `rec.stale_run_closed` is undefined, and the notice
+    // silently reports "not stale" for every send — a failure that looks like
+    // the fix working.
+    const rec = await reconcileLaneBeforeSend(laneId, { root, nowMs });
     staleClosed = Boolean(rec.stale_run_closed);
   } catch { /* send still proceeds; active-run check below is authoritative */ }
 

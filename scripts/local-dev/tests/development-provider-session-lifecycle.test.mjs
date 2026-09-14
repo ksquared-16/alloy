@@ -51,6 +51,7 @@ import {
   actionableOperatorInputForRun,
   reconcileNeedsInputWithoutInput,
 } from "../lib/vacilando/operator-input.mjs";
+const { GOVERNOR_GRACE_MS } = await import("../lib/vacilando/run-lifecycle.mjs");
 import { WAIT_REASONS } from "../lib/vacilando/run-wait.mjs";
 
 const ROOT = mkdtempSync(join(tmpdir(), "vac-psl-"));
@@ -255,7 +256,17 @@ await test("REGRESSION: provider prose alone cannot manufacture NEEDS_INPUT", as
     root: ROOT,
   });
   assert.equal(actionableOperatorInputForRun(getExecutionRun(run.run.run_id, ROOT), { root: ROOT }), null);
-  const out = reconcileNeedsInputWithoutInput({ root: ROOT });
+  /*
+   * PAST THE GOVERNOR'S GRACE.
+   *
+   * Collection is no longer instantaneous. It used to fire the moment a run had
+   * no modelled input, which collected a run 2.4 seconds into NEEDS_INPUT while
+   * its worker was still acting — eleven of eighteen abandonments in the store.
+   * The invariant this case asserts is unchanged: an unresolvable operator
+   * state IS still collected. What changed is that the run gets a window first,
+   * so the clock is advanced rather than the assertion weakened.
+   */
+  const out = reconcileNeedsInputWithoutInput({ root: ROOT, nowMs: Date.now() + GOVERNOR_GRACE_MS + 1000 });
   assert.equal(out.reconciled.length, 1, "an unresolvable operator state must be reconciled");
   const after = getExecutionRun(run.run.run_id, ROOT);
   assert.notEqual(after.state, "NEEDS_INPUT");
@@ -300,7 +311,7 @@ await test("an answered question no longer strands the run", async () => {
   patchRunFields(run.run.run_id, {
     agent_report: { type: "progress", report_id: "arep_2", message: "continuing" },
   }, { root: ROOT });
-  const out = reconcileNeedsInputWithoutInput({ root: ROOT });
+  const out = reconcileNeedsInputWithoutInput({ root: ROOT, nowMs: Date.now() + GOVERNOR_GRACE_MS + 1000 });
   assert.equal(out.reconciled.length, 1, "a stale/answered input cannot hold NEEDS_INPUT");
   assert.notEqual(getExecutionRun(run.run.run_id, ROOT).state, "NEEDS_INPUT");
 });
@@ -311,7 +322,7 @@ await test("a malformed input record cannot leave a run in NEEDS_INPUT", async (
   transitionExecutionRun(run.run.run_id, "EXECUTING", { reason: "d", origin: "system", root: ROOT });
   transitionExecutionRun(run.run.run_id, "NEEDS_INPUT", { reason: "asked", origin: "agent", root: ROOT });
   patchRunFields(run.run.run_id, { agent_report: { type: "needs_input_typo", report_id: null } }, { root: ROOT });
-  const out = reconcileNeedsInputWithoutInput({ root: ROOT });
+  const out = reconcileNeedsInputWithoutInput({ root: ROOT, nowMs: Date.now() + GOVERNOR_GRACE_MS + 1000 });
   assert.equal(out.reconciled.length, 1);
   assert.notEqual(getExecutionRun(run.run.run_id, ROOT).state, "NEEDS_INPUT");
 });
