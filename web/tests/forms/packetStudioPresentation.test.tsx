@@ -35,22 +35,28 @@ describe("the packet workspace says true things", () => {
         expect(LAYOUT).not.toContain('title="Distribution"');
     });
 
-    it("presents order as confirm/reorder rather than rebuilding the packet", () => {
-        expect(LAYOUT).toContain('title="Confirm order"');
-        expect(LAYOUT).toMatch(/Processing already chose the forms/);
-        expect(LAYOUT).not.toContain('title="Step composition"');
-        expect(LAYOUT).not.toContain("Build the ordered intake flow");
+    it("describes obligations, not a list of forms", () => {
+        /*
+         * "Included forms" and "Confirm order" were replaced, not renamed for taste. This packet
+         * holds one Form, one document to read and one document to send in; calling all three
+         * "forms" was the reason an administrator could not tell what a family would meet.
+         */
+        expect(LAYOUT).toContain('title="What families complete"');
+        expect(LAYOUT_CODE).not.toContain('title="Included forms"');
+        expect(LAYOUT_CODE).not.toContain('title="Confirm order"');
+        expect(LAYOUT_CODE).not.toMatch(/the order a family meets them, and the order they are reviewed in/);
     });
 
-    it("keeps Included forms and says why the order matters", () => {
-        expect(LAYOUT).toContain('title="Included forms"');
-        expect(LAYOUT).toMatch(/the order a family meets them, and the order they are reviewed in/);
-        expect(LAYOUT).not.toContain('title="Saved pipeline"');
+    it("leads with the experience the configuration produces", () => {
+        expect(LAYOUT).toContain("<PacketExperienceOverview");
     });
 
-    it("keeps the session inbox as the review surface for both routes in", () => {
+    it("keeps the session inbox and direct send, but below the configuration", () => {
+        // Both capabilities survive; neither competes with what the screen is for.
         expect(LAYOUT).toContain('title="Sessions & review"');
         expect(LAYOUT).toMatch(/whether it was sent directly or launched by a process/);
+        expect(LAYOUT).toMatch(/Direct distribution and session history/);
+        expect(LAYOUT).toContain("<details");
     });
 });
 
