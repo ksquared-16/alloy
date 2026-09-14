@@ -159,3 +159,10 @@ jobs:
       - name: Cross-layer propagation contracts
         working-directory: .
         run: node scripts/local-dev/tests/development-propagation-contracts.test.mjs
+
+      # One definition of the operator's day. "Today" was computed independently
+      # in six places; two were a UTC date standing in for a zoned one, and both
+      # reset seven hours early. These lock the semantics, not the arithmetic.
+      - name: Canonical civil-day semantics
+        working-directory: .
+        run: node scripts/local-dev/tests/development-civil-day.test.mjs

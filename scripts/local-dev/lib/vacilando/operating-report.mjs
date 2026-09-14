@@ -22,6 +22,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { resolveOperatorTimezone, resolveCivilDayWindow } from "./civil-day.mjs";
 
 export const OPERATING_REPORT_SCHEMA = "vacilando.operating_report.v1";
 
@@ -387,8 +388,9 @@ export const OPERATING_REPORT_SCHEDULE = Object.freeze({
  * obligation - it is simply a cadence that cannot run yet, reported as such.
  */
 export function resolveReportTimezone(env = process.env) {
-  const tz = String(env?.VACILANDO_REPORT_TIMEZONE ?? "").trim();
-  return tz || null;
+  // Delegated: the report's zone and the operator's day are the same setting,
+  // read in one place so they cannot diverge. See civil-day.mjs.
+  return resolveOperatorTimezone(env);
 }
 
 /** The local wall-clock parts of an instant, in a named zone. */
@@ -449,46 +451,9 @@ export function reportIsDue(kind, at = new Date(), { graceMinutes = 30, timeZone
  * moved.
  */
 
-/** The civil date ("YYYY-MM-DD") at an instant, in a named zone. */
-function civilDateIn(at, timeZone) {
-  // en-CA renders ISO-shaped civil dates, which is the whole reason it is here.
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(at);
-}
 
-/** Zone offset in ms at a given instant (positive east of UTC). */
-function offsetMsAt(at, timeZone) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone, hour12: false, year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-  }).formatToParts(at);
-  const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
-  const asIfUtc = Date.UTC(
-    Number(p.year), Number(p.month) - 1, Number(p.day),
-    Number(p.hour) % 24, Number(p.minute), Number(p.second),
-  );
-  return asIfUtc - at.getTime();
-}
 
-/** Civil-date arithmetic, with no zone and therefore no DST to get wrong. */
-function shiftDayKey(dayKey, deltaDays) {
-  const [y, m, d] = dayKey.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d + deltaDays)).toISOString().slice(0, 10);
-}
 
-/**
- * The UTC instant of local midnight beginning `dayKey` in `timeZone`.
- * Two passes because the offset that applies is the offset AT the answer, not
- * at the guess - one pass is wrong by an hour across a DST boundary.
- */
-function zonedDayStart(dayKey, timeZone) {
-  const [y, m, d] = dayKey.split("-").map(Number);
-  const civilMs = Date.UTC(y, m - 1, d, 0, 0, 0);
-  let ms = civilMs - offsetMsAt(new Date(civilMs), timeZone);
-  ms = civilMs - offsetMsAt(new Date(ms), timeZone);
-  return new Date(ms);
-}
 
 /**
  * Resolve the reporting window for `kind` at instant `at`.
@@ -500,22 +465,16 @@ function zonedDayStart(dayKey, timeZone) {
  * `dayKey` may be supplied to report a specific past day (the CLI's --date).
  */
 export function operatingReportWindow(kind, at = new Date(), { timeZone = undefined, dayKey = null } = {}) {
-  const tz = timeZone === undefined ? resolveReportTimezone() : timeZone;
-  if (!tz) return null;
-  let day;
-  try { day = dayKey || civilDateIn(at, tz); }
-  catch { return null; }
-  const startKey = kind === "weekly" ? shiftDayKey(day, -6) : day;
-  const start = zonedDayStart(startKey, tz);
-  // End is the start of the NEXT civil day, not start + 24h: a DST day is 23
-  // or 25 hours long, and a fixed 24 would clip or double-count that hour.
-  const end = zonedDayStart(shiftDayKey(day, 1), tz);
-  return {
-    day,
-    timezone: tz,
-    windowStart: start.toISOString(),
-    windowEnd: end.toISOString(),
-  };
+  /*
+   * Delegated to the shared primitive. The report keeps its own contract -
+   * null when the day cannot be named, because the cadence has already
+   * refused by then and a window with no clock is not a window - but the
+   * arithmetic has ONE owner, so the dashboard and the report cannot disagree
+   * about which day it is.
+   */
+  const w = resolveCivilDayWindow({ at, timeZone, dayKey, spanDays: kind === "weekly" ? 7 : 1 });
+  if (!w.ok) return null;
+  return { day: w.day, timezone: w.timezone, windowStart: w.start, windowEnd: w.end };
 }
 
 /**

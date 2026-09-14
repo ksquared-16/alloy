@@ -51,9 +51,10 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { composeSnapshot } from "./vacilando/compose.mjs";
+import { resolveCivilDayWindow } from "./vacilando/civil-day.mjs";
 import { runCommand } from "./vacilando/commands/executor.mjs";
 import { listCommands } from "./vacilando/commands/registry.mjs";
-import { readAuditEvents } from "./vacilando/commands/audit.mjs";
+import { readAuditEvents, countAuditEventsInWindow } from "./vacilando/commands/audit.mjs";
 import { collectResources, collectWorktreeDiskSizes, peekWorktreeDiskCache } from "./vacilando/resources.mjs";
 import { getOrchestrationMetrics, invalidateRawCache, noteStatusRequest, RAW_TTL_MS as SOURCE_RAW_TTL_MS } from "./vacilando/sources.mjs";
 import { workerOutputs, evidenceFilePath } from "./vacilando/outputs.mjs";
@@ -77,7 +78,7 @@ import {
   getControlPlaneHealth,
 } from "./vacilando/control-plane-health.mjs";
 import { schedule } from "./vacilando/scheduler.mjs";
-import { readReviews } from "./vacilando/commands/review.mjs";
+import { readReviews, countReviewsInWindow } from "./vacilando/commands/review.mjs";
 import { readMissions, getMission, recoverMissions } from "./vacilando/commands/missions.mjs";
 import { getPackage } from "./vacilando/commands/mission-packages.mjs";
 import { readMissionOutputs, readTurnOutput, liveMissionIds } from "./vacilando/mission-executor.mjs";
@@ -1994,25 +1995,63 @@ export function createVacilandoServer() {
       // Dashboard must never block on the provider probe or the resource scan.
       const [snap, resrcC] = await Promise.all([snapshotSafe(), swr("resources", () => collectResources(), { ttlMs: RESOURCES_TTL_MS })]);
       const resrc = resrcC.data || { workers: [], overall: {} };
-      const usage = collectUsage();
-      const provider_runtime = (await swr("providers", async () => getProviderRuntime(providerRuntimeInputs(await snapshotSafe(), collectUsage())), { ttlMs: 25000 })).data
+      // Resolved once, shared by every "today" in this response. See civil-day.mjs.
+      const civilDay = resolveCivilDayWindow();
+      const usage = collectUsage({ civilDay });
+      const provider_runtime = (await swr("providers", async () => getProviderRuntime(providerRuntimeInputs(await snapshotSafe(), collectUsage({ civilDay }))), { ttlMs: 25000 })).data
         || { providers: [], pending: true };
       const sched = schedule(snap, resrc);
-      const audit = readAuditEvents(300);
-      const today = new Date().toISOString().slice(0, 10);
-      const isToday = (e) => (e.occurred_at || "").slice(0, 10) === today;
-      const reviews = readReviews(200);
+      /*
+       * ONE CIVIL DAY PER RESPONSE.
+       *
+       * These counters used a UTC date, so from 17:00 Pacific they reset and
+       * counted the evening as tomorrow: measured at 17:40 PDT the dashboard
+       * said 193 commands "today" for a Pacific day that had 2333.
+       *
+       * The window is resolved ONCE here and every *_today value below is
+       * filtered by it, so two counters in one payload cannot disagree about
+       * which day they mean - which is what five independent Date.now() calls
+       * around midnight would eventually produce.
+       *
+       * If the day cannot be named, the counts are null with the reason
+       * attached. Never zero, and never a UTC day wearing the operator's label.
+       */
+      const dayKnown = civilDay.ok === true;
+      const countedToday = (n) => (dayKnown ? n : null);
+      const civil_day = dayKnown
+        ? { day: civilDay.day, timezone: civilDay.timezone, window_start: civilDay.start, window_end: civilDay.end }
+        : { day: null, timezone: null, reason: civilDay.reason, setting: "VACILANDO_REPORT_TIMEZONE" };
+      /*
+       * COUNTED OVER THE DAY, not over the last 300 events.
+       *
+       * These counters used to filter a 300-event tail, so `commands_today`
+       * saturated at 300 and reported it as a day total - on a day with 2333
+       * audit events it would have said 300 and looked entirely plausible.
+       * Correcting only the timezone would have left that: a right window over
+       * a truncated read is still the wrong number.
+       */
+      const auditToday = dayKnown
+        ? countAuditEventsInWindow({ startMs: civilDay.startMs, endMs: civilDay.endMs })
+        : null;
+      const reviewsToday = dayKnown
+        ? countReviewsInWindow({ startMs: civilDay.startMs, endMs: civilDay.endMs })
+        : null;
       const throughput = {
-        commands_today: audit.filter(isToday).length,
-        succeeded_today: audit.filter((e) => isToday(e) && e.outcome === "succeeded").length,
-        failed_today: audit.filter((e) => isToday(e) && e.outcome === "failed").length,
-        reviews_resolved_today: reviews.filter((r) => (r.occurred_at || "").slice(0, 10) === today).length,
+        civil_day,
+        commands_today: countedToday(auditToday?.total),
+        succeeded_today: countedToday(auditToday?.succeeded),
+        failed_today: countedToday(auditToday?.failed),
+        reviews_resolved_today: countedToday(reviewsToday?.total),
         provider_round_trips_today: usage.total_calls_today,
+        // A count that hit its scan bound says so, rather than presenting a
+        // floor as a total. True is the ordinary answer.
+        counts_complete: dayKnown ? ((auditToday?.complete ?? false) && (reviewsToday?.complete ?? false)) : null,
       };
       // Kelly-Minutes foundation: we can count human command interactions from the
       // audit; elapsed human minutes are not yet instrumented → marked unavailable.
       const operator_load = {
-        interventions_today: audit.filter(isToday).length,
+        civil_day,
+        interventions_today: countedToday(auditToday?.total),
         decisions_escalated: (snap.approvals?.total ?? 0),
         human_minutes: { value: null, kind: "unavailable", note: "Elapsed human time is not yet instrumented; event foundation (audit) is in place." },
       };

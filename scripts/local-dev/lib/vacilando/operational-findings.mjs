@@ -25,6 +25,7 @@
  * registry, run registry, health system or scheduler.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { civilDayInZone, isValidTimezone, resolveOperatorTimezone } from "./civil-day.mjs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -184,8 +185,24 @@ function slug(v) {
   return String(v ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
 }
 
+/*
+ * The day a finding was last seen, as the OPERATOR reckons days.
+ *
+ * This was a UTC date, so a finding observed at 18:00 Pacific was stamped
+ * tomorrow - which is how the same defect read on the dashboard and in the
+ * daily report. Nothing else reads this field, so correcting it changes no
+ * contract; existing stamps are left exactly as written, because rewriting
+ * history to match a new definition would be a different and worse mistake.
+ *
+ * With no configured zone there is no operator day to name, so this stays the
+ * UTC date it has always been. That is stated rather than silent: a stamp is
+ * structurally required here, unlike a counter, which can honestly be null.
+ */
 function today(nowMs) {
-  return new Date(nowMs ?? Date.now()).toISOString().slice(0, 10);
+  const at = new Date(nowMs ?? Date.now());
+  const tz = resolveOperatorTimezone();
+  if (tz && isValidTimezone(tz)) return civilDayInZone(at, tz);
+  return at.toISOString().slice(0, 10);
 }
 
 /**

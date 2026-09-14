@@ -465,6 +465,15 @@ export function isTerminalPhase(phase) {
 export function openMaintenanceWindow({ root, nowMs = Date.now(), generation = null, toolkit = null, id = null } = {}) {
   const window = {
     schema: MAINTENANCE_SCHEMA,
+    /*
+     * DELIBERATELY A UTC DATE, and not the operator's civil day.
+     *
+     * This is an identity token, not a day: it carries a random suffix, it is
+     * compared for equality between a reboot request and the window that owns
+     * it, and nothing parses the date back out of it. Re-pointing it at the
+     * configured zone would change an identity for cosmetic reasons and buy
+     * nothing, so the civil-day work deliberately left it alone.
+     */
     maintenance_id: id || `maint_${new Date(nowMs).toISOString().slice(0, 10)}_${Math.random().toString(36).slice(2, 8)}`,
     phase: PHASE.MAINTENANCE_PENDING,
     requested_at: new Date(nowMs).toISOString(),
