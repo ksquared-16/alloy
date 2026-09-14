@@ -10,6 +10,18 @@ import { join } from "node:path";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
+/*
+ * Dispatch is not part of this test's contract.
+ *
+ * `approveMissionExecution` schedules a REAL `dispatchReadyAssignments` on a
+ * ~10ms timer, which on this host discovers actual lanes and providers. The
+ * assertions below finish first, so the symptom was a passing transcript
+ * attached to a process that never exits - 12m52s in one measured case.
+ * Verified: with this off the assertions are unchanged and the process exits.
+ */
+process.env.VACILANDO_AUTO_DISPATCH = "0";
+
+
 process.env.ALLOY_RUNTIME_ROOT = mkdtempSync(join(os.tmpdir(), "vac-test-"));
 process.env.VACILANDO_SEED_FIXTURES = "1"; // this suite relies on the Access & Roles seed fixture
 
