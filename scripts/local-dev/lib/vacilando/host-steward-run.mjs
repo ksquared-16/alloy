@@ -292,38 +292,43 @@ async function asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene
   }
   const recoveryBlocking = recovery?.failure_class && recovery.failure_class !== "HEALTHY" && !recovery.verified;
 
-  if (!hygiene || !root) return { ...steward, recovery, hygiene: null };
+  /*
+   * THE REPORT CADENCE SITS ABOVE EVERY GATE THAT IS NOT ITS OWN.
+   *
+   * I have now put this stage in the wrong place twice. First outside
+   * `recordStageOutcome`, so it left no evidence. Then behind the hygiene-due
+   * branch, so it ran every six hours instead of every five minutes. Both times
+   * the stage existed, was imported, and was tested.
+   *
+   * Two more gates sat above it: `hygiene: false`, and a control plane that is
+   * not healthy. §13 gates hygiene and scheduling for a good reason - they hand
+   * out work and mutate the host, and a broken control plane must not do
+   * either. A daily report does neither. It is a clock comparison, and once a
+   * day a read-only derivation of state that is already written down.
+   *
+   * An operator wants the report MOST on the day the control plane was unwell.
+   * Gating it on health would have made it disappear exactly then.
+   *
+   * Its own contract needs a runtime root and nothing else, so that is the only
+   * thing it is gated on.
+   */
+  let reports = null;
+  if (root && !dryRun) {
+    try { reports = await runOperatingReportStage({ root, nowMs }); }
+    catch (e) { reports = { ok: false, error: "report_stage_threw", detail: String(e?.message || e).slice(0, 300) }; }
+  }
+
+  if (!hygiene || !root) return { ...steward, recovery, hygiene: null, reports };
   if (recoveryBlocking) {
     // §13: recovery outranks ordinary work. Hygiene and scheduling wait for a
     // control plane that is not currently broken.
     if (!dryRun) {
       recordStageOutcome({ root, nowMs, outcome: {
         ok: true, recovery: recovery.failure_class, hygiene: "skipped_control_plane_not_healthy", dispatch: null,
+        reports: reportsSummary(reports),
       } });
     }
-    return { ...steward, recovery, hygiene: { skipped: "control_plane_not_healthy", failure_class: recovery.failure_class } };
-  }
-
-  /*
-   * THE REPORT CADENCE IS NOT ON HYGIENE'S CADENCE EITHER.
-   *
-   * I put this stage on the hygiene-due path, which is the exact defect the
-   * comment below already describes for scheduling: hygiene is due every six
-   * hours, so an 18:30 report evaluated on that branch would usually not be
-   * evaluated at all. Watching the state file is what caught it - three
-   * consecutive cycles recorded `reports: null` while `hygiene: not_due`.
-   *
-   * Building the stage is not the same as reaching it, which is written
-   * directly above the line I should have read.
-   *
-   * Evaluating is cheap - a clock comparison, and on 287 of 288 cycles it is
-   * only that - so it happens every tick, before the branch, and both paths
-   * record it.
-   */
-  let reports = null;
-  if (!dryRun) {
-    try { reports = await runOperatingReportStage({ root, nowMs }); }
-    catch (e) { reports = { ok: false, error: "report_stage_threw", detail: String(e?.message || e).slice(0, 300) }; }
+    return { ...steward, recovery, hygiene: { skipped: "control_plane_not_healthy", failure_class: recovery.failure_class }, reports };
   }
 
   const due = forceHygiene ? { due: true, reason: "forced" } : hygieneDue({ root, nowMs });
