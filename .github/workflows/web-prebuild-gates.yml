@@ -191,3 +191,37 @@ jobs:
       - name: Test dispatch safety
         working-directory: .
         run: node scripts/local-dev/tests/development-dispatch-safety.test.mjs
+
+      # G5 — PROMOTED MIGRATION PHYSICAL/LEDGER CONVERGENCE.
+      #
+      # A governed migration can physically succeed and leave the Vacilando
+      # ledger without the corresponding identity. The runtime distinguishes the
+      # two opposite facts (ledger unreadable vs ledger readable and missing the
+      # version), refuses to re-apply, and has a registered recovery action -
+      # database.repair_migration_ledger - that writes the ledger only when the
+      # approved source, the physical census and the measured gap all agree.
+      #
+      # None of that was covered by any required gate. A regression here
+      # reintroduces physical/governance divergence on a DEPLOYED database, so it
+      # does not belong in a nightly suite - and the nightly cannot run anyway
+      # until Tier 2 reaches the default branch.
+      #
+      # Run under `node --test`: several of these gate assertions on the test
+      # runner context and silently report false failures as a plain script.
+      #
+      # production-apply-executor is deliberately NOT here. It resolves
+      # origin/staging at module load, and a CI checkout has no remote-tracking
+      # refs - "fatal: ambiguous argument 'origin/staging'". It is repo-state
+      # dependent, so it is Tier 3 host integration rather than a runner-safe
+      # gate. CI caught that classification error on this gate's first run,
+      # which is exactly what a required gate is for.
+      - name: Migration ledger convergence (G5)
+        working-directory: .
+        run: |
+          node --test \
+            scripts/local-dev/tests/development-ledger-repair.test.mjs \
+            scripts/local-dev/tests/development-ledger-repair-executor.test.mjs \
+            scripts/local-dev/tests/migration-execution-outcome.test.mjs \
+            scripts/local-dev/tests/development-reconciliation-apply.test.mjs \
+            scripts/local-dev/tests/development-migration-parity.test.mjs \
+            scripts/local-dev/tests/certification-aware-migration-target.test.mjs
