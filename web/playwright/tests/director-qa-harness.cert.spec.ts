@@ -13,7 +13,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 const STORAGE = "/Users/vacilando/.local/state/alloy-dev/gateway/auth/deployed/alloy_staging_web/storage-state.json";
-const ROUTE = "/admin/system/qa/core-financials";
+const ROUTE = "/workspace/qa/core-financials";
 const API = "/api/admin/qa/financials-director";
 const HOUSEHOLD = "fd000000-0000-4000-8000-0000000c0001";
 
