@@ -325,3 +325,53 @@ this error does not arise.
 
 **Waitlist behaviour is unaffected in the meantime**: the stage editor renders, *Review waitlist
 position* and *Offer spot* are both present, and no capability error is shown to an operator.
+
+---
+
+## Publication, 2026-09-14 — revision 32, and two deltas that should not have ridden along
+
+Revision 32 was published at 2026-09-14T21:22:56Z from draft 81. The authorized change is live and
+correct:
+
+```
+Enrolling → requirements_v1.requirements = [ONE row]
+  kind: packet · packet_definition_id: c03425c9… (Enrollment Paperwork 2026–2027)
+  level: required · enforcement: blocking · scope: record · timing: stage_exit
+```
+
+Packet resolves 3 obligations; Configuration Health is green over those real obligations
+("3 forms a family must complete in this stage"), not over an empty list; Packet Studio **Used by**
+reports the requirement as published.
+
+### What else went live, unauthorized
+
+Diffing revision 31 against the published payload shows the packet requirement **plus two deltas
+that were not part of the authorization**:
+
+| Delta | Origin |
+| --- | --- |
+| `stages[enrolled].description = "Enrolled and attending."` added | my own unrelated-save regression probe, 2026-09-14 |
+| `stages[waitlist].action_catalog_v1.candidate_actions[0].work_template_key = "offer_spot"` **removed** | the same probe |
+
+The first is cosmetic. **The second is a live regression.**
+
+`work_template_key` binds the Waitlist `stage_work.start` action to the work it starts. The runtime
+resolver says so in as many words — *"Carried, not dropped: an action configured to operate on one of
+this stage's work templates needs that key at invoke time, and this is the only place it can
+travel."* Live Waitlist now has `{action_key: "stage_work.start", recommendation: "ready"}` and no
+binding, so the configured start no longer names *Offer spot*. Both work templates still exist.
+
+### How it happened — the same defect, in a different section
+
+The probe saved an unrelated stage description **through the pre-rebase build**, which did not know
+`work_template_key` (it arrived with `stage_work.start` on 2026-09-11/12, after this lane's base).
+The save was a whole-document write serialized from what that build could parse, so the field it did
+not understand was dropped — exactly the skip-on-read/whole-write mechanism closed for requirement
+rows, still open for the action catalog.
+
+The lane is now on staging and parses the field correctly, so re-authoring it will persist. That is
+a configuration change and a second publication, so it is **not** done here.
+
+**Recommended, pending Kelly's authorization:** restore `work_template_key: "offer_spot"` on the
+Waitlist candidate action and publish revision 33. Separately, `stageActionCatalogV1` should carry
+rows it cannot fully read, the way `stageRequirementsV1` now does.
