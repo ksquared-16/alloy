@@ -5,6 +5,12 @@
  * Drives the Action Evaluator: which actions are Recommended vs Ready for a stage.
  */
 
+import {
+    captureUnknownFields,
+    serializeWithUnknownFields,
+    withUnknownFields,
+} from "@/lib/config/preserveUnknownFields";
+
 export type StageActionRecommendation =
     | "recommended"      // Expected next step; shown prominently
     | "ready"            // Available but not the highlighted next step
@@ -40,7 +46,22 @@ export type StageActionCatalogV1 = {
     version: 1;
     /** Ordered list of configured candidate actions for this stage. */
     candidate_actions: StageCandidateAction[];
+    /**
+     * Rows this parser could not read, kept verbatim so a save cannot destroy them.
+     *
+     * Same rule the requirement vocabulary now follows, and for the same measured reason: this
+     * parser is an allowlist reconstructor and every writer persists the WHOLE document, so a row
+     * it skipped was deleted by the next unrelated save. Nothing interprets these and no action
+     * becomes executable because of them — an unreadable row is carried, not obeyed.
+     */
+    unreadable_actions?: readonly unknown[];
 };
+
+/** What this branch owns on the catalog itself; anything else is residue. */
+const CATALOG_OWNED_KEYS = ["version", "candidate_actions"] as const;
+
+/** What this branch owns on one candidate action row. */
+const ACTION_OWNED_KEYS = ["action_key", "recommendation", "override_label", "work_template_key"] as const;
 
 export function parseStageActionCatalogV1(raw: unknown): StageActionCatalogV1 | null {
     if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
@@ -49,11 +70,19 @@ export function parseStageActionCatalogV1(raw: unknown): StageActionCatalogV1 | 
     if (!Array.isArray(o.candidate_actions)) return null;
 
     const candidate_actions: StageCandidateAction[] = [];
+    const unreadable_actions: unknown[] = [];
     for (const item of o.candidate_actions) {
-        if (item == null || typeof item !== "object" || Array.isArray(item)) continue;
+        // A row this branch cannot read is KEPT, not skipped-and-lost. See `unreadable_actions`.
+        if (item == null || typeof item !== "object" || Array.isArray(item)) {
+            unreadable_actions.push(item);
+            continue;
+        }
         const row = item as Record<string, unknown>;
         const action_key = typeof row.action_key === "string" ? row.action_key.trim() : "";
-        if (!action_key) continue;
+        if (!action_key) {
+            unreadable_actions.push(item);
+            continue;
+        }
         const rec = row.recommendation;
         const recommendation: StageActionRecommendation =
             rec === "recommended" || rec === "ready" || rec === "context_dependent"
@@ -67,15 +96,49 @@ export function parseStageActionCatalogV1(raw: unknown): StageActionCatalogV1 | 
             typeof row.work_template_key === "string" && row.work_template_key.trim()
                 ? row.work_template_key.trim()
                 : undefined;
-        candidate_actions.push({
-            action_key,
-            recommendation,
-            ...(override_label ? { override_label } : {}),
-            ...(work_template_key ? { work_template_key } : {}),
-        });
+        // Residue rides on the parsed row so a newer writer's field survives this branch's save.
+        candidate_actions.push(
+            withUnknownFields(
+                {
+                    action_key,
+                    recommendation,
+                    ...(override_label ? { override_label } : {}),
+                    ...(work_template_key ? { work_template_key } : {}),
+                },
+                captureUnknownFields(row, ACTION_OWNED_KEYS),
+            ),
+        );
     }
 
-    return { version: 1, candidate_actions };
+    const parsed: StageActionCatalogV1 = {
+        version: 1,
+        candidate_actions,
+        ...(unreadable_actions.length ? { unreadable_actions } : {}),
+    };
+    return withUnknownFields(parsed, captureUnknownFields(o, CATALOG_OWNED_KEYS));
+}
+
+/**
+ * Back to storable JSON, losslessly.
+ *
+ * Needed for the same reason `serializeStageRequirementsV1` is: the parsed catalog is a narrowed
+ * reconstruction whose residue lives on a symbol, and `JSON.stringify` drops symbols. Emitting the
+ * parsed object directly would therefore persist exactly the fields this branch happens to know —
+ * which is how `work_template_key: "offer_spot"` was removed from live Waitlist configuration by a
+ * save that had nothing to do with it.
+ *
+ * Unreadable rows are re-emitted last, unchanged. Order is not significant to any consumer; rows are
+ * addressed by `action_key`.
+ */
+export function serializeStageActionCatalogV1(value: StageActionCatalogV1): Record<string, unknown> {
+    const { unreadable_actions, ...owned } = value;
+    return serializeWithUnknownFields({
+        ...owned,
+        candidate_actions: [
+            ...value.candidate_actions.map((row) => serializeWithUnknownFields(row)),
+            ...(unreadable_actions ?? []),
+        ],
+    } as StageActionCatalogV1);
 }
 
 export type CandidateActionWorkTemplateRefusal = {

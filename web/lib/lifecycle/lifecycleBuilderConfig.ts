@@ -25,7 +25,7 @@ import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1"
 import type { EnrollmentManualTransitionPolicyV1 } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionPolicy";
 import { parseEnrollmentManualTransitionPolicy } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionPolicy";
 import { parseStatusRollupV1, type StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
-import { parseStageActionCatalogV1, type StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
+import { parseStageActionCatalogV1, serializeStageActionCatalogV1, type StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import {
     parseStageRequirementsV1,
     serializeStageRequirementsV1,
@@ -390,6 +390,14 @@ export function serializeLifecycleBuilderV1(config: LifecycleBuilderV1): Record<
             // canonical authority back to the legacy projection (D-90).
             if (stage.requirements_v1 !== undefined) {
                 out.requirements_v1 = serializeStageRequirementsV1(stage.requirements_v1);
+            }
+            // `action_catalog_v1` is the same shape of problem, found the expensive way: its rows are
+            // narrowed reconstructions carrying their residue on a symbol, and `JSON.stringify` drops
+            // symbols — so emitting the parsed object persisted only the fields this branch knows.
+            // That is how `work_template_key: "offer_spot"` left live Waitlist configuration during a
+            // save about a different stage entirely.
+            if (stage.action_catalog_v1 !== undefined) {
+                out.action_catalog_v1 = serializeStageActionCatalogV1(stage.action_catalog_v1);
             }
             return out;
         });
