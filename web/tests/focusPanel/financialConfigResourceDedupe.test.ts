@@ -11,7 +11,8 @@ import {
 
 /**
  * Three consumers wanted the opportunity financial config and each issued its own fetch:
- * `useFinancialConfig` (no dedupe), `SchedulingCard`, `AssignmentProposalControls`. Two mounting
+ * `useFinancialConfig` (no dedupe) and `SchedulingCard`. (`AssignmentProposalControls` was a third
+ * consumer until it was deleted as unreachable.) Two mounting
  * together produced a byte-identical GET twice — observed on Firefly's family subject while
  * opening the Focus Panel edit path.
  *
@@ -80,7 +81,6 @@ describe("financial config — one request per opportunity", () => {
         for (const rel of [
             "lib/adminV2/runtime/focusPanel/financialConfig/useFinancialConfig.ts",
             "components/admin/focusPanel/cards/SchedulingCard.tsx",
-            "components/admin/focusPanel/cards/AssignmentProposalControls.tsx",
         ]) {
             const code = readFileSync(join(__dirname, "..", "..", rel), "utf8")
                 .replace(/\/\*[\s\S]*?\*\//g, "")

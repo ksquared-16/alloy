@@ -96,7 +96,6 @@ const LEDGER: Readonly<Record<string, number>> = {
     "components/admin/fields/DataModelRelationshipCreateRow.tsx": 1,
     "components/admin/fields/FieldDefinitionEditModal.tsx": 2,
     "components/admin/fields/FieldRequiredInlineCell.tsx": 1,
-    "components/admin/focusPanel/cards/AssignmentProposalControls.tsx": 1,
     "components/admin/focusPanel/cards/CurrentWorkParticipantDecisionsPanel.tsx": 1,
     "components/admin/focusPanel/cards/FormDeliverySurface.tsx": 1,
     "components/admin/focusPanel/cards/SchedulingCard.tsx": 1,

@@ -8,7 +8,7 @@
  * That difference cost this repository two merge-and-deploy cycles. Three components all looked
  * like "Current Work":
  *
- *   CurrentWorkWorkspace.tsx        legacy; imported by NO product code
+ *   CurrentWorkWorkspace.tsx        legacy; imported by NO product code — since DELETED
  *   CurrentWorkCard -> SummaryBody  superseded wherever the Process Card owns the region
  *   CurrentWorkFocusedSurface       what the focused workspace actually renders
  *
@@ -64,8 +64,10 @@ describe("the false positive, reproduced", () => {
  * A focus-panel card that no product code imports cannot certify anything.
  *
  * `CurrentWorkWorkspace.tsx` was 644 lines whose only importer in the entire repository was the
- * test that certified it. A component in that state will keep satisfying source guards forever
- * while the product renders something else entirely, and nothing in CI notices.
+ * test that certified it. A component in that state keeps satisfying source guards forever while
+ * the product renders something else entirely, and nothing in CI notices. It has since been
+ * deleted, along with `AssignmentCardSections` and `AssignmentProposalControls`; this check is what
+ * keeps the next one from lasting as long.
  *
  * Scoped to focus-panel cards on purpose: this is the surface where the confusion actually
  * happened, and a repo-wide version would be a different, much noisier test.
@@ -122,17 +124,19 @@ describe("a focus-panel card that nothing renders cannot certify anything", () =
      * but it is recorded as unreachable so that the list cannot grow silently. A card that becomes
      * dead later fails this test; a card that is revived can simply be removed from this set.
      */
-    const KNOWN_UNREACHABLE = new Set([
-        // 644 lines whose only importer in the repository is the test that certifies it. It still
-        // contains a complete-looking secondary-work implementation, which is exactly what made the
-        // source guards against it green while the operator saw nothing.
-        "CurrentWorkWorkspace",
-        // No reference anywhere outside its own file.
-        "AssignmentCardSections",
-        // Referenced only by prose in two comments and by a path string in an adoption ledger; no
-        // module imports it.
-        "AssignmentProposalControls",
-    ]);
+    /*
+     * EMPTY, AND THAT IS THE POINT.
+     *
+     * This began as a three-name graveyard: CurrentWorkWorkspace (644 lines whose only importer was
+     * a test), AssignmentCardSections and AssignmentProposalControls. All three are now deleted, so
+     * the exception list costs nothing to keep at zero.
+     *
+     * It stays as a mechanism rather than being removed with its entries, because the failure it
+     * catches is not "these three files" — it is a card drifting out of the runtime while its
+     * markup keeps satisfying certification. A new name appearing here should be a deliberate,
+     * explained decision, not a quiet default.
+     */
+    const KNOWN_UNREACHABLE = new Set<string>([]);
 
     it.each(cards)("%s is imported by product code, or is a known-unreachable card", (card) => {
         const importers = productImportersOf(card);
@@ -150,11 +154,20 @@ describe("a focus-panel card that nothing renders cannot certify anything", () =
         ).toBeGreaterThan(0);
     });
 
-    it("the dead card still carries markup a source guard would happily accept", () => {
-        // This is why the invariant above is needed rather than trusting review: the file still
-        // looks exactly like a correct implementation of the secondary-work contract.
-        const dead = readFileSync(resolve(CARDS, "CurrentWorkWorkspace.tsx"), "utf8");
-        expect(dead).toContain('data-work-section="also-in-progress"');
-        expect(productImportersOf("CurrentWorkWorkspace")).toEqual([]);
+    it("the graveyard is empty — an exception must be argued for, not inherited", () => {
+        /*
+         * If this fails, a card became unreachable and someone listed it instead of deleting or
+         * mounting it. That may well be right — but it is a decision, and this is where it has to
+         * be defended. The three original entries were deleted rather than kept, which is the
+         * outcome this list exists to push toward.
+         */
+        expect([...KNOWN_UNREACHABLE]).toEqual([]);
+    });
+
+    it("the components that caused the false positives are gone, not merely unlisted", () => {
+        const gone = ["CurrentWorkWorkspace", "AssignmentCardSections", "AssignmentProposalControls"];
+        for (const name of gone) {
+            expect(cards, `${name} was deleted as unreachable and must not return unnoticed`).not.toContain(name);
+        }
     });
 });

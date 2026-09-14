@@ -72,14 +72,25 @@ test("D — approval stability: the expected SHA is not re-read from origin/stag
   const r = assertRepositoryIdentity({ actionType: RECON, provenance: prov(laterStagingHead), expectedRepoHead: PROMOTED });
   assert.equal(r.ok, false, "the approved SHA wins over whatever staging is now");
   /*
-   * EXECUTABLE TEXT ONLY. The first version of this assertion scanned the whole
-   * file and tripped on the module's own comment explaining that it must not
-   * read a live ref — the prose describing the rule failing the rule.
+   * AIMED AT THE COMPARATOR, NOT AT THE MODULE.
+   *
+   * Two earlier versions of this assertion were wrong in opposite directions.
+   * The first scanned the whole file and tripped on the comment explaining the
+   * rule — prose failing the rule it describes. The second scanned executable
+   * text and went red when the FILING resolver moved into this module, which is
+   * a legitimate reader of the promoted ref: reading it once, at filing, is the
+   * whole design. What must never read it is the thing that compares at
+   * execution time, so that is what is checked.
    */
-  const src = readFileSync(`${LIB}/repository-execution-authority.mjs`, "utf8")
+  const src = readFileSync(`${LIB}/repository-execution-authority.mjs`, "utf8");
+  const comparator = src.slice(src.indexOf("export function assertRepositoryIdentity"));
+  const body = comparator.slice(0, comparator.indexOf("\n}") + 2)
     .split("\n").map((l) => l.replace(/\/\/.*$/, "")).filter((l) => !/^\s*[*/]/.test(l)).join("\n");
-  assert.doesNotMatch(src, /origin\/staging|rev-parse[^\]]*origin/,
-    "the module must not resolve its own expectation from a live ref");
+  assert.doesNotMatch(body, /origin\/staging|rev-parse|resolveFilingRepositoryAuthority/,
+    "the comparator must be given its expectation, never resolve one");
+  // And the executor is the place it must never happen at all.
+  const exec = readFileSync(`${LIB}/trusted-host-reconciliation.mjs`, "utf8");
+  assert.doesNotMatch(exec, /origin\/staging|resolveFilingRepositoryAuthority/);
 });
 
 /* ── E/F: everything else is untouched ────────────────────────────────────── */
