@@ -175,3 +175,56 @@ export function assertRepositoryIdentity({ actionType, provenance, expectedRepoH
   }
   return { ok: true, provenance: prov };
 }
+
+/** The promoted ref this host treats as release truth. */
+export const PROMOTED_REF = "origin/staging";
+
+/**
+ * The repository SHA a request is being DECIDED AGAINST, read once at filing.
+ *
+ * A REF READ, NOT A FETCH AND NOT A WORKING-TREE READ. Filing must not reach the
+ * network, and it must not ask the canonical checkout what it currently holds —
+ * that checkout is the thing being guarded, so believing it would make the guard
+ * agree with whatever it found.
+ *
+ * If nobody has fetched recently this is what the host BELIEVED promoted truth
+ * was at filing time, which is the honest answer to "what was this decided
+ * against". A later divergence surfaces at execution as a refusal rather than as
+ * a silent retarget.
+ */
+export function resolveFilingRepositoryAuthority({ canonicalRoot, ref = PROMOTED_REF, readRef = null } = {}) {
+  const read = readRef || ((root, r) => git(root, ["rev-parse", "--verify", `${r}^{commit}`]));
+  const sha = read(canonicalRoot, ref);
+  if (!sha || !/^[0-9a-f]{40}$/i.test(String(sha).trim())) {
+    return { ok: false, code: "repository_authority_unresolvable", detail: `cannot resolve ${ref} in ${canonicalRoot}` };
+  }
+  return { ok: true, expected_repo_head: String(sha).trim(), ref };
+}
+
+/**
+ * Stamp the authority onto a request at the filing boundary.
+ *
+ * Content-executing actions FAIL CLOSED when no authority can be resolved:
+ * "we could not tell which bytes this was decided against" is not a licence to
+ * run whatever is on disk. Metadata-only and no-repo actions are left entirely
+ * alone — a requirement invented for them would be noise that teaches people to
+ * work around the field.
+ *
+ * A value already present is never overwritten. That is what makes the
+ * stability contract hold: the SHA travels with the request, and nothing later
+ * re-reads a live ref to replace it.
+ */
+export function stampRepositoryAuthority({ actionKey, inputs = {}, canonicalRoot, readRef = null } = {}) {
+  if (!isContentExecuting(actionKey)) return { ok: true, inputs, skipped: "not content-executing" };
+  const existing = inputs.expected_repo_head || inputs.expectedRepoHead;
+  if (existing) return { ok: true, inputs: { ...inputs, expected_repo_head: existing }, carried: true };
+  const resolved = resolveFilingRepositoryAuthority({ canonicalRoot, readRef });
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      code: "repository_authority_unresolvable",
+      detail: `${actionKey} executes repository content and no promoted authority could be resolved: ${resolved.detail}`,
+    };
+  }
+  return { ok: true, inputs: { ...inputs, expected_repo_head: resolved.expected_repo_head }, stamped: true };
+}

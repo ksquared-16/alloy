@@ -8,6 +8,7 @@
  * This is not a parallel orchestrator: it sits on execution runs, mission
  * decisions, and trusted-host actions.
  */
+import { stampRepositoryAuthority } from "./repository-execution-authority.mjs";
 import { createHash, randomBytes } from "node:crypto";
 import { measureMergePullRequestGates } from "./trusted-host-repository-housekeeping.mjs";
 import { describeWait } from "./run-wait.mjs";
@@ -30,6 +31,7 @@ import {
   artifactContractFor,
   classifyActionAvailability,
   getActionDefinition,
+  resolveCanonicalRepoRoot,
 } from "./trusted-host-action-registry.mjs";
 import {
   classifyGovernedActionFailure,
@@ -2607,6 +2609,32 @@ export function requestGovernedAction(input = {}, {
     return processGovernedAction(failedMatch.request_id, { nowMs, root: storeRoot, actor: "director" });
   }
 
+  /*
+   * THE REPOSITORY AUTHORITY IS DECIDED HERE, ONCE, AND TRAVELS WITH THE REQUEST.
+   *
+   * This is the first point that has both the governed action identity and a
+   * resolvable promoted authority, so it is where "the SHA this was decided
+   * against" is fixed. Nothing downstream re-reads a live ref to replace it;
+   * that is the whole stability contract, and re-resolving at execution would
+   * silently retarget an approved request onto whatever staging became.
+   *
+   * Stamped AFTER the dedupe lookups above deliberately: those compare the
+   * caller's inputs, and folding a moving SHA into them would stop two
+   * genuinely identical filings from deduping.
+   *
+   * Content-executing actions only. A requirement invented for metadata-only
+   * actions would be noise, and noise is what teaches people to work around a
+   * field.
+   */
+  const repoAuthority = stampRepositoryAuthority({
+    actionKey: shape.actionKey,
+    inputs: shape.inputs || {},
+    canonicalRoot: resolveCanonicalRepoRoot(),
+  });
+  if (!repoAuthority.ok) {
+    return { ok: false, error: repoAuthority.code, detail: repoAuthority.detail, failure_code: repoAuthority.code };
+  }
+
   const rec = {
     schema_version: GOVERNED_ACTION_SCHEMA,
     request_id: newRequestId(),
@@ -2636,7 +2664,7 @@ export function requestGovernedAction(input = {}, {
     decision_id: null,
     execution_started_at: null,
     execution_ended_at: null,
-    inputs: shape.inputs || {},
+    inputs: repoAuthority.inputs,
     continuation_plan: shape.continuationPlan || null,
     continuation_intent: bound(input.continuation_intent || input.continuationIntent, 500)
       || (shape.actionKey === ACTION_TYPES.DATABASE_READ_CENSUS

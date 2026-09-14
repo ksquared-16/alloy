@@ -10,6 +10,9 @@
 
 import { config as loadEnv } from "dotenv";
 import { execFileSync } from "node:child_process";
+// Plain ESM helper shared with the governed runner: there is deliberately only
+// ONE postgres client resolver in this repository.
+import { POSTGRES_CLIENT_MISSING_DETAIL, resolvePostgresClient } from "./lib/resolvePostgresClient.mjs";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -36,14 +39,41 @@ function resolveDatabaseUrl(): string {
     return url.toString();
 }
 
+/*
+ * RESOLVED, NOT ASSUMED — the same repair the governed fixture runner needed.
+ *
+ * Homebrew's libpq is keg-only, so this host has a working psql that `command -v
+ * psql` cannot see. Spawning a bare "psql" is what made the first hosted
+ * execution of the registered fixture die as `spawnSync psql ENOENT`, thirteen
+ * milliseconds in, with a message naming the probe rather than the client. This
+ * script carries the identical defect and would fail the identical way.
+ *
+ * Reusing the existing resolver rather than writing a second one: two resolvers
+ * would drift, and the one that drifts is the one nobody is testing.
+ */
+const resolvedClient = resolvePostgresClient();
+if (!resolvedClient) {
+    console.error(`postgres_client_missing: ${POSTGRES_CLIENT_MISSING_DETAIL}`);
+    process.exit(1);
+}
+/*
+ * NARROWED ONCE, HERE.
+ *
+ * `process.exit` returns never, but that narrowing does not reach INSIDE the
+ * functions below — module-scope control flow is not carried into a closure, so
+ * both call sites read as possibly-null. Binding the path once is the honest
+ * fix; a non-null assertion would silence the checker rather than answer it.
+ */
+const psqlBin: string = resolvedClient.path;
+
 function psql(sql: string): string {
-    return execFileSync("psql", [resolveDatabaseUrl(), "-v", "ON_ERROR_STOP=1", "-c", sql], {
+    return execFileSync(psqlBin, [resolveDatabaseUrl(), "-v", "ON_ERROR_STOP=1", "-c", sql], {
         encoding: "utf8",
     });
 }
 
 function psqlFile(relPath: string): void {
-    execFileSync("psql", [resolveDatabaseUrl(), "-v", "ON_ERROR_STOP=1", "-f", relPath], {
+    execFileSync(psqlBin, [resolveDatabaseUrl(), "-v", "ON_ERROR_STOP=1", "-f", relPath], {
         stdio: "inherit",
     });
 }
