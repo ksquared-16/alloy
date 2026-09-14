@@ -337,3 +337,14 @@ jobs:
       - name: Hosted fixture portability and atomicity
         working-directory: .
         run: node scripts/local-dev/tests/development-hosted-fixture-portability.test.mjs
+
+      # The first hosted execution of the governed fixture died in 13ms as
+      # `organization_probe_failed: spawnSync psql ENOENT`. Nothing was wrong
+      # with the fixture, the organization or the credential -- Homebrew's libpq
+      # is keg-only, so a host can have a working psql that PATH cannot see. The
+      # trusted-host SQL child had already met this and written it down; the seed
+      # runner one layer up spawned a bare psql anyway. This pins the resolution
+      # order, and that the runner does not go back to trusting PATH.
+      - name: Governed runner resolves its postgres client
+        working-directory: .
+        run: node scripts/local-dev/tests/development-runner-psql-resolution.test.mjs

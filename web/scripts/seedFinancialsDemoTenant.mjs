@@ -28,6 +28,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { POSTGRES_CLIENT_MISSING_DETAIL, resolvePostgresClient } from "./lib/resolvePostgresClient.mjs";
 import { fileURLToPath } from "node:url";
 
 /** Frozen. Never an argument, never an environment variable. */
@@ -91,7 +92,18 @@ function databaseIdentity(urlString) {
   } catch { return null; }
 }
 
-const psql = (args) => execFileSync("psql", [databaseUrl, "-v", "ON_ERROR_STOP=1", ...args], {
+/*
+ * RESOLVED, NOT ASSUMED. Homebrew's libpq is keg-only, so a host can have a
+ * working psql that `command -v psql` cannot see. Spawning a bare "psql" made
+ * the first hosted execution of this fixture die as
+ * `organization_probe_failed: spawnSync psql ENOENT` -- a message naming the
+ * probe rather than the missing client. The trusted-host SQL child already
+ * resolves the same way, for the same reason.
+ */
+const client = resolvePostgresClient();
+if (!client) fail("postgres_client_missing", POSTGRES_CLIENT_MISSING_DETAIL);
+
+const psql = (args) => execFileSync(client.path, [databaseUrl, "-v", "ON_ERROR_STOP=1", ...args], {
   encoding: "utf8", maxBuffer: 16 * 1024 * 1024,
 });
 
@@ -102,6 +114,10 @@ try {
   const out = psql(["-tAc", `select 1 from orgs where id = '${orgId}'::uuid`]);
   orgExists = out.trim() === "1";
 } catch (e) {
+  // A missing or unusable client is not a failed probe. Classifying it as one is
+  // exactly how this cost a hosted execution: the code named the question, not
+  // the reason it could not be asked.
+  if (e?.code === "ENOENT") fail("postgres_client_missing", POSTGRES_CLIENT_MISSING_DETAIL);
   fail("organization_probe_failed", firstLine(e));
 }
 if (!orgExists) fail("organization_not_found", `organization ${orgId} does not exist on this target`);
@@ -125,6 +141,8 @@ process.stdout.write(`${JSON.stringify({
   organization_source: "registered_context",
   target_database_identity: databaseIdentity(databaseUrl),
   trusted_env_source: process.env.ALLOY_SERVER_ENV_SOURCE ?? null,
+  // How the client was found, never where the database is.
+  postgres_client_source: client.source,
   started_at: started.toISOString(),
   finished_at: finished.toISOString(),
   duration_ms: finished - started,
