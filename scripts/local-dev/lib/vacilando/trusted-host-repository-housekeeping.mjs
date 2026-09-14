@@ -13,6 +13,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { firstMeaningfulLine } from "./trusted-host-push.mjs";
+import { liveRemoteMutationPermitted } from "./trusted-host-remote-guard.mjs";
 
 const FULL_SHA = /^[0-9a-f]{40}$/i;
 
@@ -338,6 +339,27 @@ export function closePullRequest(inputs = {}, { gh = defaultGh } = {}) {
   if (!before.head_sha_matches) return { ok: false, code: "head_drift", detail: `head is ${before.observed?.head_sha}, expected ${n.expectedHeadSha}` };
   if (!before.head_branch_matches) return { ok: false, code: "head_branch_mismatch", detail: `head branch is ${before.observed?.head_ref}` };
 
+
+  /*
+   * THE GUARD THE OTHER REMOTE VERBS HAVE HAD ALL ALONG.
+   *
+   * Five modules import liveRemoteMutationPermitted - push, merge, open_pr, the
+   * dispatcher and the promotion gate contract. This one did not, so closing a
+   * pull request and DELETING A REMOTE BRANCH were the two remote mutations
+   * nothing stopped from running outside the Gateway runtime root, or from a
+   * test runner.
+   *
+   * It compounded with the dispatch wrapper passing `{}` instead of a client:
+   * with no injection seam there was no way to exercise these paths without
+   * reaching real GitHub, and no guard to refuse if something did. Found by
+   * building the wrapper coverage rather than by an incident.
+   *
+   * Placed exactly where push places it: after every read, immediately before
+   * the first statement that leaves the machine.
+   */
+  const permitted = liveRemoteMutationPermitted({ injectedGh: gh !== defaultGh, operation: "pull request close" });
+  if (!permitted.ok) return { ok: false, code: permitted.code, detail: permitted.detail };
+
   const out = gh(["pr", "close", String(n.pullRequestNumber), "--repo", n.repository,
     ...(inputs.comment ? ["--comment", String(inputs.comment).slice(0, 500)] : [])]);
   if (out.status !== 0) {
@@ -369,6 +391,9 @@ export function deleteRemoteBranch(inputs = {}, { gh = defaultGh } = {}) {
   if (before.no_open_pull_request_depends !== true) {
     return { ok: false, code: "open_pull_request_depends", detail: JSON.stringify(before.dependent_pull_requests || []).slice(0, 200) };
   }
+
+  const permitted = liveRemoteMutationPermitted({ injectedGh: gh !== defaultGh, operation: "remote branch deletion" });
+  if (!permitted.ok) return { ok: false, code: permitted.code, detail: permitted.detail };
 
   const out = gh(["api", "-X", "DELETE", `repos/${n.repository}/git/refs/heads/${n.branch}`]);
   if (out.status !== 0) {

@@ -1327,12 +1327,22 @@ let mergeGhForTests = null;
 // test that forgets one is refused rather than reaching the real remote.
 let pushGitForTests = null;
 let openPrGhForTests = null;
+/*
+ * The housekeeping verbs had no seam at all: the dispatch wrapper called them
+ * with `{}`, so `gh` always resolved to the real client and there was no way to
+ * drive close-PR or branch-deletion through the real dispatcher without
+ * reaching GitHub. That is why both sat in the uncovered pin.
+ */
+let housekeepingGhForTests = null;
 
 export function setPushGitForTests(fn) {
   pushGitForTests = typeof fn === "function" ? fn : null;
 }
 export function setOpenPrGhForTests(fn) {
   openPrGhForTests = typeof fn === "function" ? fn : null;
+}
+export function setRepositoryHousekeepingGhForTests(fn) {
+  housekeepingGhForTests = typeof fn === "function" ? fn : null;
 }
 
 let migrationRunnersForTests = null;
@@ -2442,7 +2452,7 @@ export function executeClosePullRequestTrustedHostAction(action, { actor = "dire
   action.started_at = action.started_at || iso(nowMs);
   action.updated_at = iso(nowMs);
   writeAction(action);
-  const out = closePullRequest(action.inputs, {});
+  const out = closePullRequest(action.inputs, housekeepingGhForTests ? { gh: housekeepingGhForTests } : {});
   if (payloadHasSecrets(out)) {
     return failTrustedAction(action, "result_contained_secrets", "Result contained secrets and was discarded.", { nowMs });
   }
@@ -2463,7 +2473,7 @@ export function executeDeleteRemoteBranchTrustedHostAction(action, { actor = "di
   action.started_at = action.started_at || iso(nowMs);
   action.updated_at = iso(nowMs);
   writeAction(action);
-  const out = deleteRemoteBranch(action.inputs, {});
+  const out = deleteRemoteBranch(action.inputs, housekeepingGhForTests ? { gh: housekeepingGhForTests } : {});
   if (payloadHasSecrets(out)) {
     return failTrustedAction(action, "result_contained_secrets", "Result contained secrets and was discarded.", { nowMs });
   }

@@ -283,3 +283,13 @@ jobs:
       - name: Dispatch wrapper coverage ratchet
         working-directory: .
         run: node scripts/local-dev/tests/development-dispatch-wrapper-coverage.test.mjs
+
+      # The four repository-state actions, driven through the wrapper live
+      # governed execution uses. Writing this found two defects in the
+      # housekeeping pair: the dispatch wrapper passed no client at all, so they
+      # could not be exercised without reaching real GitHub, and their module
+      # never imported liveRemoteMutationPermitted - the guard the other four
+      # remote verbs have always had.
+      - name: Repository action dispatch contract
+        working-directory: .
+        run: node scripts/local-dev/tests/development-repository-dispatch-contract.test.mjs

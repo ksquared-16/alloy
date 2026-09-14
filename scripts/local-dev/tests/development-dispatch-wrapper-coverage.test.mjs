@@ -74,10 +74,6 @@ const UNCOVERED = Object.freeze([
   "environment.restore_qa_session",
   "lane.dispatch_measurement_instruction",
   "platform.register_developer_application",
-  "promotion.open_pr",
-  "repository.close_pull_request",
-  "repository.delete_remote_branch",
-  "repository.push",
   "vacilando.apply_reconciliation_plan",
   "vacilando.retire_worktree",
 ]);
