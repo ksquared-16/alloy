@@ -231,3 +231,53 @@ derived now, and on this host resolves both `prj_alloy` and `prj_vacilando`.
 `CANONICAL_REPOSITORY_EXECUTION_ROOT_DRIFT` is **untouched**. S3 clarifies which
 root is which; it implements no automatic owner for execution-checkout
 convergence, so the drift defect stands.
+
+---
+
+# S3A — governed cross-project file transfer
+
+S4 has to seed Vacilando's own source into the Vacilando repository, and until
+now the only way to do that was `cp` in a terminal — outside governance, outside
+evidence, outside anything that could refuse. `repository.transfer_files` is the
+missing product capability, and it is deliberately small: **it executes an
+approved plan.** It does not decide ownership and does not discover what should
+move.
+
+| | |
+|---|---|
+| action key | `repository.transfer_files` (privileged_write) |
+| capability | `scripts/local-dev/lib/vacilando/repository-transfer.mjs` |
+| UI | Projects → a project → **Transfer files in…** (preview only) |
+| preview route | `POST /api/repositories/transfer/preview` (read-only) |
+| mission leg | `fulfillTransferFilesForMission` — same runtime, second placement |
+
+## How S4 consumes a manifest
+
+The independence boundary artifacts remain the authority for *what* moves. A
+Director mission produces an explicit manifest from those classifications; this
+capability executes it. Nothing here infers ownership from a filename, a
+directory, an import, a comment or Git history, and a pattern is refused as
+`entry_is_a_pattern_not_a_path` — "move all the Vacilando files" is not
+expressible and cannot become so.
+
+## The rules
+
+- **Copy only.** The sequence freezes Alloy's copy before retiring it, so
+  deletion from the source is a separately governed operation in **S6**. The
+  capability calls no removal primitive at all.
+- **Silence never overwrites.** Absent → COPY; byte-identical → UNCHANGED (which
+  is what makes replay safe); **different → REFUSE** unless the approved plan
+  said, per path, that it may be replaced.
+- **All or nothing.** One refusal stops the whole transfer. A half-applied seed
+  is the state nobody can reason about.
+- **Both projects are governed inputs.** The destination is where bytes land and
+  is not necessarily the repository hosting the running Vacilando code, so
+  authorizing against "the current repository" would authorize the wrong thing.
+- **Preview writes nothing**, and the suite fails if a write primitive ever
+  appears in its path.
+
+## Remaining manual step for S4
+
+None for the transfer itself. Committing, certifying and promoting the seeded
+content stay with ordinary lane workflows, which is where they belong — file
+transfer owns file transfer.
