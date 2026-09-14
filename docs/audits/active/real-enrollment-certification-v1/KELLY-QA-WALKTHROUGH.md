@@ -57,12 +57,16 @@ rows. Read down the list and check each one:
 > the three green rows under it are green for the wrong reason (they pass over an empty list).
 >
 > The stage edit that made Enrolling require **Enrollment Paperwork 2026–2027** instead of three
-> separate forms was **saved but never published**. The builder shows it — you will see it yourself
-> in A5 — because the builder reads your draft. Configuration Health and the participant runtime
-> read the *published* copy, which does not have it yet.
+> separate forms is **no longer in the configuration at all**. On 2026-09-11 it was present in the
+> builder draft and missing only from the publication; on 2026-09-14 it is in neither — the
+> Enrolling stage now carries no paperwork requirement of any kind, and Packet Studio's **Used by**
+> panel says so too.
 >
-> The fix is to **publish the Enrollment Business Process**, which changes what real families are
-> asked for, so it is being left to you rather than done for you. Full write-up:
+> So this is no longer "publish it and the row goes green". The requirement has to be **re-authored**
+> on the Enrolling stage first (A4–A6 is where), and then published.
+>
+> Re-authoring and publishing a stage requirement changes what real families are asked for, so it is
+> being left to you rather than done for you. Full write-up:
 > `docs/audits/active/real-enrollment-certification-v1/PACKET-AS-REQUIREMENT-AUDIT.md`.
 >
 > **STOP** only if a row *other* than "Families have paperwork to complete" is not **Ready**.
@@ -101,121 +105,106 @@ changes the packet and not the process, and listing **Steps, in order**:
 
 ---
 
-# PART B — The one packet
+# PART B — What the family completes
 
-These first steps are deliberately mechanical. If any of them needs interpretation, that is the
-finding.
+These steps are deliberately mechanical. If any of them needs interpretation, that is the finding.
 
 **B1. DO** — Open **http://127.0.0.1:3014/workspace**.
 **EXPECT** — The workspace, already signed in.
 
-**B2. DO** — In the far-left icon rail, click **Processing** (tooltip: *intake, documents, and
-forms*).
-**EXPECT** — A panel titled **Digital Mailroom** with **Work** and **Studio**.
+**B2. DO** — In the far-left icon rail, click **Processing**.
+**B3. DO** — Click **Studio**, then click **Packets**.
+**EXPECT** — **One packet card, and only one**: *Enrollment Paperwork 2026–2027*, **3 steps · Active**,
+and beneath it *Admissions Information · Family Handbook · Immunization record*.
 
-**B3. DO** — Click **Studio**.
-**EXPECT** — A tab row: **Forms · Packets · Fields · Branding**.
+> **STOP** if you see **Cert Packet…**, **Cert Handoff…**, **Handbook probe**, **Mo500…**, or
+> **Enrollment — enrolling**. Those are retired certification leftovers.
 
-**B4. DO** — Click **Packets**.
-**EXPECT** — **One packet card, and only one**:
+**B4. DO** — Click **Enrollment Paperwork 2026–2027**.
+**EXPECT** — Before anything else, a **Family experience** panel that tells you what a family does,
+in order, in plain words:
 
-- **Enrollment Paperwork 2026–2027**
-- **3 steps** · **Active**
-- underneath, the obligations by name: *Admissions Information · Family Handbook · Immunization record*
+1. Alloy collects Admissions Information, reusing information it already knows where it can.
+2. The family reads and acknowledges Family Handbook, and signs it.
+3. The family uploads Immunization record.
 
-> This is the step that was worth fixing. You should not have to know which packet is "ours".
+Then: *Alloy guides the family through these conversationally… That behaviour is managed by Alloy*,
+and *When they finish, the completed packet arrives for staff review in Processing › Work…*
+
+> This is the panel that answers your question. You are configuring **obligations**; Alloy works out
+> the conversation from them. There is no prompt here to write, and there should not be.
+
+**B5. DO** — Read the **Ready to use** panel beside it.
+**EXPECT** — Three ticks: *Admissions Information published*, *…Family Handbook available*,
+*Immunization record identified*.
+
+**B6. DO** — Read **Used by**.
+**EXPECT** — Today it says **no business process requires this packet yet**.
+
+> **THIS IS A REAL FINDING, ALREADY DIAGNOSED — see Part A.** The Enrolling stage's requirement for
+> this packet is gone from the configuration; it is not merely unpublished. When it is restored, this
+> panel names the process and stage, and says whether it has been published.
+
+**B7. DO** — Scroll to **What families complete**.
+**EXPECT** — Three obligation cards. Each says what it is, then what actually happens:
+
+| # | Card | Says |
+|---|------|------|
+| 1 | **Admissions Information** — Collect information | **80 questions · 4 connected to Alloy · 76 stored with the form only · 65 required**, then *Alloy confirms information it already knows and asks the family for what is missing…* |
+| 2 | **Family Handbook** — Read & acknowledge | the real document's name, **Acknowledgment required · Signature required**, and a **View document** link |
+| 3 | **Immunization record** — Upload a document | **Family sends in a document · Filed as Immunization record**, then *…They are not asked to type its contents…* |
+
+> Step 3 is the sentence to read twice. We ask the parent to **send in** their immunization record.
+> We do **not** ask them to retype the Oregon vaccine grid. That is correct for this version.
 >
-> **STOP** if you see **Cert Packet…**, **Cert Handoff…**, **Handbook probe**, **Mo500…**,
-> **Enrollment — enrolling**, or **Enrollment Packet — Firefly V1**. Those are certification and
-> test leftovers; they still exist for audit, but they are retired and must not appear here.
+> **STOP** if any card names a *form* for steps 2 or 3, or if the words **Included forms** appear
+> anywhere on this screen.
 
-**B5. DO** — Click **Enrollment Paperwork 2026–2027**.
-**EXPECT** — The packet opens on exactly **three obligations**, in order:
-
-| # | Heading | What it says |
-|---|---------|--------------|
-| 1 | **Collect information** | a **Form** dropdown set to *Admissions Information* |
-| 2 | **Read & acknowledge** | *Family Handbook* — “Reads 26 27 Family Handbook …, and signs” |
-| 3 | **Upload a document** | *Immunization record* — “Filed as Immunization record” |
-
-> **STOP** if steps 2 or 3 show a **Form** dropdown. They are not forms, and offering to swap one in
-> would be the product lying about what it is doing.
-
-**B6. DO** — Open the **Form** dropdown on step 1 and read the list. Do **not** choose anything.
-**EXPECT** — Your real forms. **Family Handbook** and **Immunization record** must **NOT** appear as
-options you can choose.
-
-> **STOP** if you can see *Family Handbook* in that dropdown. Alloy builds a hidden one-question form
-> behind each document step so uploads, filing and evidence all work the way they already do — but
-> that is plumbing, and it must never be offered to you as something to pick.
-
-**B7. DO** — Press **Escape** to close the dropdown, then click **Add step**.
-**EXPECT** — A small menu headed **What do you need from the family?** with exactly three choices,
-each written as something a *family* does:
-
-- **Collect information** — Ask questions and store the answers…
-- **Upload a document** — Ask the family to send in a document…
-- **Read & acknowledge** — Give the family something to read, and record that they agreed to it.
-
-> **STOP** if this menu shows technical words like *form_definition*, *adapter*, *document_upload*,
-> or asks you to pick a form before it asks you what you need.
-
-**B8. DO** — Click **Cancel**. Nothing should be added.
-**EXPECT** — Three steps still, unchanged.
+**B8. DO** — Look for **Direct distribution and session history**.
+**EXPECT** — One collapsed row near the bottom. Sending links by hand and the session inbox still
+exist; they are not what you opened this screen to do, so they no longer compete with it.
 
 ---
 
-# PART C — One Form editor
+# PART C — Where you decide what is asked
 
-**Structure** and **Paperwork** are gone, and so is the fake **Runtime** button. You told us they
-were the same thing to you, and you were right: they were two pictures of one Form, and neither was
-the thing you wanted to click on. There is now one editor.
+**C1. DO** — On the **Admissions Information** card, click **Manage information**.
+**EXPECT** — The Form editor, with exactly two buttons: **✎ Edit** and **▷ Preview**.
 
-**C1. DO** — Go to **Studio › Forms**.
-**EXPECT** — Your real forms only. **Published** reads **1**.
+**C2. DO** — Look down the form without clicking anything.
+**EXPECT** — Every question carries **Required** or **Optional**, and the four questions Alloy already
+knows carry a blue **Alloy** mark.
 
-> **STOP** if you see **Northwind…**, **Cert Enrollment…**, **Cert Consent…**, **Proving Journey…**
-> or **Firefly Enrollment…**. Those are retired fixtures.
->
-> You should also **not** see *Family Handbook* or *Immunization record* here. They are obligations
-> in the packet, not forms you edit — the one-question forms behind them are plumbing.
+> That is questions 5 and 6 of your list answered without a single click.
 
-**C2. DO** — Click **Admissions Information**.
-**EXPECT** — The form opens on its own editable canvas, with exactly two buttons at the top:
-**✎ Edit** and **▷ Preview**.
+**C3. DO** — Click a question marked **Alloy** — for example *Date of birth*.
+**EXPECT** — The right inspector shows the question's settings, and under **Store answer in**:
+> **Alloy already knows this when available**
+> Date of birth — the family is asked only if it is missing, can correct it, and the answer updates
+> the record.
 
-> **STOP** if you see **Structure**, **Paperwork**, or **Runtime** anywhere in that header.
+**C4. DO** — Now click a question with no **Alloy** mark.
+**EXPECT** —
+> **Stored with this form**
+> Not written to the child or family record. The family is always asked for it.
 
-**C3. DO** — Click any visible question on the form — for example **Student Date of Birth**.
-**EXPECT** — Two things at once:
-
-- the question you clicked becomes the selected one on the canvas, and
-- the **right-hand inspector** switches from *Form configuration* to **Question · Back to form** and
-  shows that question's settings: its **label**, whether it is **required**, its input type, and
-  **Store answer in** (its canonical mapping).
-
-> This is the whole point of the change. You click the thing you want to configure, on something
-> that looks like the form, and the right side tells you what it means. There is no second view to
-> translate into.
->
-> **STOP** if clicking a question does nothing, or if the inspector does not change.
-
-**C4. DO** — Change the question's **label**, then click away.
-**EXPECT** — The canvas updates to the new label. You are editing a draft; nothing is published yet.
+> **This is where you decide both things**: the **Required / Optional** toggle decides what a family
+> must answer, and **Store answer in** decides whether the answer becomes Alloy data or stays with
+> the form. Change either here.
 
 **C5. DO** — Click **▷ Preview**.
-**EXPECT** — *Preview — what families complete*: the form as a family will see it.
+**EXPECT** — *Form preview — how this information appears when presented as a form.*
 
-> Admissions Information was built from a web form, not a PDF, so its canvas **is** the form. A
-> form that came from a real document behaves the same way, except the canvas is that document: the
-> boxes Alloy fills are clickable on the page itself, and clicking one selects the same question and
-> opens the same inspector. Your 2026–2027 package has no source-document form yet — that is the
-> next pass, with your real Oregon immunization form and Family Handbook.
+> Note the wording. This is the Form as a form. It is **not** the guided conversation Alloy runs a
+> family through — that is assembled from the packet's three obligations and is not previewable here.
+>
+> Admissions Information came from your Formsite export, so it has no source PDF and its native
+> canvas is the right editor for now. Using your real documents is the next pass.
 
-**C6. DO** — Click **✎ Edit** to go back, then **← Forms** to exit.
-**EXPECT** — The forms list, unchanged.
+**C6. DO** — Click **← Forms** to exit.
 
 ---
+
 
 # PART D — Open the QA child, then launch the parent experience
 

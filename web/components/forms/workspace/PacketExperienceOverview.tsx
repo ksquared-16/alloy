@@ -54,6 +54,15 @@ export function PacketExperienceOverview({ vm }: { vm: PacketExperienceVM | null
                     Alloy guides the family through these conversationally, reuses what it already knows, lets them
                     correct it, and asks them to review before they finish. That behaviour is managed by Alloy.
                 </p>
+                {/*
+                 * "And then what?" is the last question this screen used to leave unanswered — the
+                 * answer existed only inside the collapsed operational section, which is the wrong
+                 * place for the end of the experience it is describing.
+                 */}
+                <p className={clsx("mt-2", opMutedMeta)} data-testid="packet-after-submit">
+                    When they finish, the completed packet arrives for staff review in Processing &rsaquo; Work, with
+                    the answers, the signed acknowledgment and the uploaded document attached.
+                </p>
             </section>
 
             <div className="space-y-4">

@@ -140,3 +140,30 @@ changed no participant or canonical-return behaviour.
 **Do not "fix" this in the checker.** Teaching `participantPaperworkReadiness` to read the draft
 would make Configuration Health report on a configuration that is not the one running, which is the
 opposite of what that panel is for.
+
+### Update, 2026-09-14 — the requirement is now gone from the draft too
+
+The 2026-09-11 finding above said the packet requirement existed in the Business Process **draft**
+and was missing only from the published projection. That is no longer the situation.
+
+Measured again on 2026-09-14, against the same department (`3933ac47…`, Enrollment):
+
+- the draft loads (`readDraft` returns a payload, six stages parse);
+- its stages carry **only `field` requirements** — nine of them, and no `packet` ref at all;
+- `"kind":"packet"`, `packet_definition_id` and the packet's own id each appear **zero** times in
+  the department's lifecycle-builder payload;
+- Packet Studio's new **Used by** panel, which reads the draft *and* the publication, reports the
+  packet as required by nothing.
+
+So the Enrolling stage currently carries no paperwork requirement of any kind. Publishing would not
+restore it — there is nothing to publish. It has to be re-authored on the stage, then published.
+
+**Not done here.** Authoring a stage requirement decides what real families are asked for, and this
+slice was explicitly scoped to the admin configuration experience with the process change left in
+draft for Kelly's approval. Re-creating a requirement that disappeared between two sessions is a
+decision for Kelly, not a repair to make quietly — particularly since *why* it disappeared is not
+yet established.
+
+**Still open:** what removed it. The candidates are a draft discard/reset, a re-seed from the
+publication (which never had the requirement), or another lane writing the same department's draft.
+Nothing in this lane's commits touches stage requirements.
