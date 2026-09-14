@@ -53,7 +53,9 @@ export function promoteRepositoryMetadata(inputs = {}, { git, cwd, nowMs = Date.
     // Even a refusal says what main was, so a reader never has to guess whether
     // the branch moved underneath the attempt.
     main_before: extra.main_before ?? null,
-    main_after: extra.main_before ?? null,
+    // NOT a copy of main_before. Two fields that cannot disagree prove nothing;
+    // the pair is only evidence if main_after can report a value of its own.
+    main_after: extra.main_after ?? extra.main_before ?? null,
     product_files_changed: false,
     ...extra,
   });
@@ -112,7 +114,29 @@ export function promoteRepositoryMetadata(inputs = {}, { git, cwd, nowMs = Date.
    * enter: files are named one at a time and each is re-checked against the
    * allowlist here, so even a validator regression cannot widen this step.
    */
-  const idx = `${cwd}/.git/metadata-promote-index`;
+  /*
+   * THE ALTERNATE INDEX GOES IN THE REAL GIT DIR, WHICH IS NOT `<cwd>/.git`.
+   *
+   * In a linked worktree - which is what every lane and every promotion
+   * candidate actually lives in - `.git` is a FILE containing
+   * "gitdir: /.../worktrees/<name>", so `<cwd>/.git/metadata-promote-index` is a
+   * path inside a regular file and cannot be created. read-tree then fails and
+   * the whole promotion refuses metadata_tree_build_failed.
+   *
+   * This was hidden behind the env defect: while GIT_INDEX_FILE was being
+   * dropped, the build quietly used the worktree's own index and "worked".
+   * Fixing that one exposed this one - the mask and the fault were in the same
+   * two lines.
+   *
+   * `git rev-parse --absolute-git-dir` answers correctly for a main checkout and
+   * a linked worktree alike, so ask git rather than construct the path.
+   */
+  const gitDir = git(["rev-parse", "--absolute-git-dir"], cwd);
+  if (gitDir.status !== 0) {
+    return refuse(METADATA_PROMOTION_FAILURES.TREE_BUILD_FAILED,
+      `could not resolve the git directory for ${cwd}`, { main_before: currentMain });
+  }
+  const idx = `${String(gitDir.stdout || "").trim()}/metadata-promote-index`;
   const withIndex = (args) => git(args, cwd, { env: { GIT_INDEX_FILE: idx } });
   const readTree = withIndex(["read-tree", approvedBefore]);
   if (readTree.status !== 0) {

@@ -43,6 +43,7 @@ export const REPOSITORY_METADATA_TARGET = "main";
 
 const SHA_RE = /^[a-f0-9]{7,40}$/;
 const normSha = (v) => String(v || "").trim().toLowerCase();
+const shortSha = (v) => normSha(v).slice(0, 12);
 
 export function isRepositoryMetadataPath(path) {
   const p = String(path || "").trim();
@@ -56,12 +57,30 @@ export function isRepositoryMetadataPath(path) {
  * Fails closed on every axis: destination, declaration, and path scope.
  */
 export function validateRepositoryMetadataInputs(inputs = {}) {
+  /*
+   * READS ITS OWN OUTPUT.
+   *
+   * This validator runs TWICE on the live path: once at request time, and again
+   * inside the executor at mutation time - and the second time its input is the
+   * `normalized` object the first run produced, because that object IS the
+   * action's stored inputs. So every read below accepts the normalized spelling
+   * (`target`, `candidate`) alongside the request spelling (`target_branch`,
+   * `candidate_sha`). Without that, revalidation refuses its own well-formed
+   * output: measured as `metadata_target_not_allowed` on a candidate that had
+   * just validated cleanly.
+   *
+   * Idempotency is not a nicety here. Revalidating at mutation time is the whole
+   * safety argument for this class - an approval can sit for minutes while the
+   * candidate, the declaration and main all move. A revalidation that cannot
+   * parse what it is given does not fail open, but it does make the one path
+   * that writes main unreachable, which is how a safety check becomes an outage.
+   */
   const repository = String(inputs.repository || "").trim();
   if (!repository) {
     return { ok: false, code: "missing_repository", detail: "repository is required" };
   }
 
-  const target = String(inputs.target_branch || inputs.targetBranch || "").trim();
+  const target = String(inputs.target_branch || inputs.targetBranch || inputs.target || "").trim();
   if (target !== REPOSITORY_METADATA_TARGET) {
     return {
       ok: false,
@@ -71,7 +90,7 @@ export function validateRepositoryMetadataInputs(inputs = {}) {
     };
   }
 
-  const candidate = normSha(inputs.candidate_sha || inputs.candidateSha || inputs.expected_head_sha);
+  const candidate = normSha(inputs.candidate_sha || inputs.candidateSha || inputs.expected_head_sha || inputs.candidate);
   if (!SHA_RE.test(candidate)) {
     return { ok: false, code: "missing_candidate_sha", detail: "an exact candidate SHA is required; HEAD is not a candidate" };
   }
@@ -146,6 +165,43 @@ export function validateRepositoryMetadataInputs(inputs = {}) {
       // executor has already compare-and-swapped against the real remote head.
       destinationRef: String(inputs.destination_ref || inputs.destinationRef || inputs.main_before || inputs.mainBefore || "").trim() || null,
       remote: String(inputs.remote || "origin").trim(),
+      /*
+       * CARRIED BECAUSE THE EXECUTOR READS THEM FROM HERE.
+       *
+       * `normalized` IS the action's inputs - requestTrustedHostAction stores
+       * `validated.normalized` and the executor later reads `action.inputs`.
+       * So a field this object does not carry does not exist by the time the
+       * promotion runs, no matter how carefully the filer supplied it.
+       *
+       * Measured: the first live promotion request refused with
+       * `worktree_path_missing` having been filed WITH a worktree path, and
+       * would have refused next on `main_before is required` having been filed
+       * WITH main_before. Both were dropped right here. The executor's own
+       * eighteen cases all passed because every one of them called
+       * promoteRepositoryMetadata with RAW inputs - the seam between the
+       * validator and the executor was the one place nothing looked.
+       *
+       * This is the defect class this action was written to police, found in
+       * the action itself: produced correctly, dropped at an intermediate
+       * boundary, consumed as though it never existed.
+       */
+      worktreePath: String(inputs.worktree_path || inputs.worktreePath || "").trim() || null,
+      mainBefore: String(inputs.main_before || inputs.mainBefore || "").trim() || null,
+      /*
+       * A PRIVILEGED WRITE MUST SAY WHAT IT ACTED ON.
+       *
+       * Dedupe reads `normalized.dedupeKey || normalized.queryHash || null`, and
+       * an action declaring neither is keyless: `undefined === undefined`, so any
+       * completed action of this type could satisfy a later request in the same
+       * scope. That is how eleven worktree retirements returned a twelfth's
+       * result. A write to the release branch is the last place to inherit it,
+       * so the key names both halves of the decision - which candidate, onto
+       * which main. Two different promotions can never collide; the same
+       * promotion re-requested is the same promotion.
+       */
+      dedupeKey: `repository_promote_metadata:${target}:${shortSha(candidate)}:${shortSha(
+        inputs.main_before || inputs.mainBefore || "",
+      )}`,
     },
   };
 }
@@ -164,7 +220,7 @@ export function evaluateRepositoryMetadataCandidate(normalized, { gitImpl, cwd }
       `the declared baseline ${normalized.baseRef} could not be resolved`,
       { base: normalized.baseRef });
   }
-  const short = (c) => normSha(c).slice(0, 12);
+  const short = shortSha;
   const actualCommits = String(range.stdout || "").split("\n").map(normSha).filter(Boolean);
   const want = new Set(normalized.expectedCommits.map(short));
   const have = new Set(actualCommits.map(short));

@@ -726,6 +726,10 @@ function defineRepositoryPromoteMetadata() {
       required: [
         "repository", "target_branch", "candidate_sha",
         "base_ref", "expected_commits", "expected_files", "main_before",
+        // The executor cannot find the certified candidate without it, and a
+        // missing path must be a refusal the FILER sees, not one discovered
+        // after an operator has already approved the write.
+        "worktree_path",
       ],
     },
     outputSchema: {
@@ -745,6 +749,13 @@ function defineRepositoryPromoteMetadata() {
       if (!String(inputs.main_before || inputs.mainBefore || "").trim()) {
         return { ok: false, code: "missing_main_before",
           detail: "a metadata promotion is approved ONTO a specific main; main_before is required" };
+      }
+      // Checked at REQUEST time for the same reason: an operator approving a
+      // write to the release branch should not be the one to discover that the
+      // worktree holding the candidate was never named.
+      if (!String(inputs.worktree_path || inputs.worktreePath || "").trim()) {
+        return { ok: false, code: "missing_worktree_path",
+          detail: "name the worktree holding the certified candidate; the executor resolves the candidate there" };
       }
       return { ok: true, normalized: v.normalized };
     },
