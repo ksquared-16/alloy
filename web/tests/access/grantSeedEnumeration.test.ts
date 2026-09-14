@@ -62,7 +62,7 @@ const M6 = "20260807170000_w12_seed_default_rbac_enumerated_grants.sql";
  * capability a NEW organization never receives — the cliff `20260910183000` was written to end.
  * Forms moved it here.
  */
-const LIVE_SEED = "20260914114000_scheduling_jobs_default_seed.sql";
+const LIVE_SEED = "20260914184000_configuration_authority_default_seed.sql";
 
 /**
  * The migration that owns the COMPLETENESS contract — the admin-is-the-whole-catalog rule, the nine
@@ -152,6 +152,16 @@ const OPS_WITHHELD = [
     "scheduling.write",
     "ops.jobs.write",
     "fin.post",
+    /*
+     * Deleting configuration, and layout version lifecycle. Ops keeps option_sets.manage,
+     * layouts.manage and fields.manage — it has held them all along and exercises them through
+     * Config Layout Assist, which is the whole basis for converging the ordinary routes. What it has
+     * never had is deletion or publishing, and all six of those operations answered ops with 403
+     * before this program touched anything.
+     */
+    "option_sets.delete",
+    "layouts.lifecycle",
+    "fields.delete",
 ];
 
 const statements = discoverGrantStatements();

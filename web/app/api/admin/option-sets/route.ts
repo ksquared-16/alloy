@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { OPTION_SETS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { normalizeOptionSetConfig, validateOptionSetConfig } from "@/lib/fields/optionSetConfig";
 
@@ -84,9 +85,8 @@ export async function POST(request: NextRequest) {
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, OPTION_SETS_MANAGE);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try {

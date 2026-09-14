@@ -2,7 +2,7 @@
   "reviewed": "2026-09-10",
   "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
   "ratchet": {
-    "max_pending": 617,
+    "max_pending": 602,
     "$comment": "Lowered 693 -> 679 by the Access & Identity V2 Financials slice: twelve financial record-data handlers converted to fin.read and two GL-account mutations to fin.write, plus two entries overturned from a reasoned `none` (see their `supersedes`). Lowered 679 -> 656 by the Forms authority cleanup: 23 handlers that were already enforcing authorization moved from pending to declared. The enforcement did not become stricter - it stopped being invisible to this table. Lowered 656 -> 655 by Attendance Productization V1 Thread 8: declaring the new pickup-authority handler against `attendance.read` made the burndown able to see that `app/api/admin/childcare-attendance/route.ts` GET already ran the same `assertAttendanceReadAllowed` gate while still marked pending, so it was drained rather than left claiming less than it enforces. Lowered again to 631 by the POS + Processing authority cleanup, which drained 24 net from the same 656 baseline: 25 handlers declared against forms.author and the four new processing.* keys, less one returned to pending - `processing/cases/[caseId]/identity/review` GET, which flows through the shared operator context but never required the old role gate, so declaring a capability there would have claimed an enforcement that does not exist and adding one would have tightened an open read. Attendance's reduction and this one are independent and both count: 656 - 1 - 24 = 631. The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack."
   },
   "inherited": {
@@ -1487,28 +1487,41 @@
     },
     "app/api/admin/entity-layouts/[id]/duplicate/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.lifecycle",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Duplicating a layout has NO equivalent Config Layout Assist operation — its thirteen operation kinds contain no delete and no layout version lifecycle — so folding it into the manage key would have handed ops authority it has never held. Lifecycle, not placement."
       }
     },
     "app/api/admin/entity-layouts/[id]/publish/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.lifecycle",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Publishing a layout has NO equivalent Config Layout Assist operation — its thirteen operation kinds contain no delete and no layout version lifecycle — so folding it into the manage key would have handed ops authority it has never held. Folding this into layouts.manage would let an operator publish by being granted edit."
       }
     },
     "app/api/admin/entity-layouts/[id]/rollback/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.lifecycle",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Rolling back a layout has NO equivalent Config Layout Assist operation — its thirteen operation kinds contain no delete and no layout version lifecycle — so folding it into the manage key would have handed ops authority it has never held. Lifecycle, not placement."
       }
     },
     "app/api/admin/entity-layouts/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "pending",
+        "note": "MODEL_CONTRACT_DEFECT, not an authorization gap. This file's header states published rows are immutable and that a new version should be published instead, yet the handler deletes published rows and busts the `fps:` config read when it does. Giving a contradiction a capability would make it look sanctioned, so it keeps its role gate and is no more reachable than before. Owner: configuration/platform model. See docs/platform/planning/access-identity-v2/entity-layout-delete-model-contract.md"
       },
       "GET": {
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "AUTHORITY_PATH_CONVERGENCE. The direct route asked what the caller is CALLED while Config Layout Assist asked what they can DO, over the same configuration — an ops user could change this through the assisted path and was refused here. Parity proven against the assisted operation kinds, so converging is compatibility alignment, not an expansion."
       }
     },
     "app/api/admin/entity-layouts/effective/route.ts": {
@@ -1531,7 +1544,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.lifecycle",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Creating a layout has NO equivalent Config Layout Assist operation — its thirteen operation kinds contain no delete and no layout version lifecycle — so folding it into the manage key would have handed ops authority it has never held. A version state machine is not editing inside a layout."
       }
     },
     "app/api/admin/entity/[type]/[id]/route.ts": {
@@ -1546,18 +1562,27 @@
     },
     "app/api/admin/field-definitions/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fields.delete",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Deleting a field definition has NO equivalent Config Layout Assist operation — its thirteen operation kinds contain no delete and no layout version lifecycle — so folding it into the manage key would have handed ops authority it has never held. Its own key, never implied by manage."
       },
       "GET": {
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fields.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "AUTHORITY_PATH_CONVERGENCE. The direct route asked what the caller is CALLED while Config Layout Assist asked what they can DO, over the same configuration — an ops user could change this through the assisted path and was refused here. Parity proven against the assisted operation kinds, so converging is compatibility alignment, not an expansion. ALLOWED_PATCH_KEYS excludes field_type, so no schema authority hides here."
       }
     },
     "app/api/admin/field-definitions/batch-placement/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fields.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "AUTHORITY_PATH_CONVERGENCE. The direct route asked what the caller is CALLED while Config Layout Assist asked what they can DO, over the same configuration — an ops user could change this through the assisted path and was refused here. Parity proven against the assisted operation kinds, so converging is compatibility alignment, not an expansion."
       }
     },
     "app/api/admin/field-definitions/ensure-platform-field/route.ts": {
@@ -1565,7 +1590,8 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "pending",
+        "note": "PLATFORM_AUTHORITY_DELEGABILITY_UNRESOLVED. Installs is_system=true rows the organization can then never delete (DELETE refuses them) nor re-identify (PATCH freezes org_id, entity_type, field_key, field_type, is_system). Whether that one-way platform authority may be delegated to an arbitrary custom role has no doctrine behind it, so it keeps its role gate rather than being guessed into a key. See docs/platform/planning/access-identity-v2/platform-field-authority-delegability.md"
       }
     },
     "app/api/admin/field-definitions/route.ts": {
@@ -1573,7 +1599,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fields.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "AUTHORITY_PATH_CONVERGENCE. The direct route asked what the caller is CALLED while Config Layout Assist asked what they can DO, over the same configuration — an ops user could change this through the assisted path and was refused here. Parity proven against the assisted operation kinds, so converging is compatibility alignment, not an expansion."
       }
     },
     "app/api/admin/field-sections/[id]/route.ts": {
@@ -2622,26 +2651,41 @@
     },
     "app/api/admin/option-sets/[setKey]/items/[itemId]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "option_sets.delete",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Deleting an option-set item has NO equivalent Config Layout Assist operation — its thirteen operation kinds contain no delete and no layout version lifecycle — so folding it into the manage key would have handed ops authority it has never held. Its own key, never implied by manage."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "option_sets.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "AUTHORITY_PATH_CONVERGENCE. The direct route asked what the caller is CALLED while Config Layout Assist asked what they can DO, over the same configuration — an ops user could change this through the assisted path and was refused here. Parity proven against the assisted operation kinds, so converging is compatibility alignment, not an expansion."
       }
     },
     "app/api/admin/option-sets/[setKey]/items/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "option_sets.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "AUTHORITY_PATH_CONVERGENCE. The direct route asked what the caller is CALLED while Config Layout Assist asked what they can DO, over the same configuration — an ops user could change this through the assisted path and was refused here. Parity proven against the assisted operation kinds, so converging is compatibility alignment, not an expansion."
       }
     },
     "app/api/admin/option-sets/[setKey]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "option_sets.delete",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Deleting an option set has NO equivalent Config Layout Assist operation — its thirteen operation kinds contain no delete and no layout version lifecycle — so folding it into the manage key would have handed ops authority it has never held. Its own key, never implied by manage."
       },
       "GET": {
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "option_sets.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "AUTHORITY_PATH_CONVERGENCE. The direct route asked what the caller is CALLED while Config Layout Assist asked what they can DO, over the same configuration — an ops user could change this through the assisted path and was refused here. Parity proven against the assisted operation kinds, so converging is compatibility alignment, not an expansion."
       }
     },
     "app/api/admin/option-sets/route.ts": {
@@ -2649,7 +2693,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "option_sets.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Creating an option set starts no lifecycle and no version state machine, so it is ordinary configuration in the same domain as editing one. Approved under the manage key."
       }
     },
     "app/api/admin/org-settings/route.ts": {

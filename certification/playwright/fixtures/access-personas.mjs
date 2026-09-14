@@ -139,6 +139,21 @@ export const CUSTOM = {
     sjPoster: "mcert_sj_poster",
     sjTitular: "mcert_sj_titular",
     sjFinWrite: "mcert_sj_finwrite",
+
+    /*
+     * ── CONFIGURATION: THE SENSITIVITY SPLIT ──
+     *
+     * Six roles, one capability each, because the point of the split is what each one CANNOT do. A
+     * manage key must not delete, and it must not publish. `cfgTitular` is labelled "Admin" and
+     * holds nothing.
+     */
+    cfgOptionManager: "mcert_cfg_option_manager",
+    cfgOptionDeleter: "mcert_cfg_option_deleter",
+    cfgLayoutManager: "mcert_cfg_layout_manager",
+    cfgLayoutLifecycle: "mcert_cfg_layout_lifecycle",
+    cfgFieldManager: "mcert_cfg_field_manager",
+    cfgFieldDeleter: "mcert_cfg_field_deleter",
+    cfgTitular: "mcert_cfg_titular",
 };
 
 export const P = {
@@ -173,6 +188,14 @@ export const P = {
     sjPoster:       { id: "c0000000-0000-4000-8000-00000000d026", email: "cert.sjposter@northwind.invalid",      role: CUSTOM.sjPoster },
     sjTitular:      { id: "c0000000-0000-4000-8000-00000000d027", email: "cert.sjtitular@northwind.invalid",     role: CUSTOM.sjTitular },
     sjFinWrite:     { id: "c0000000-0000-4000-8000-00000000d028", email: "cert.sjfinwrite@northwind.invalid",    role: CUSTOM.sjFinWrite },
+
+    cfgOptionManager:   { id: "c0000000-0000-4000-8000-00000000d029", email: "cert.cfgoptmgr@northwind.invalid",   role: CUSTOM.cfgOptionManager },
+    cfgOptionDeleter:   { id: "c0000000-0000-4000-8000-00000000d030", email: "cert.cfgoptdel@northwind.invalid",   role: CUSTOM.cfgOptionDeleter },
+    cfgLayoutManager:   { id: "c0000000-0000-4000-8000-00000000d031", email: "cert.cfglaymgr@northwind.invalid",   role: CUSTOM.cfgLayoutManager },
+    cfgLayoutLifecycle: { id: "c0000000-0000-4000-8000-00000000d032", email: "cert.cfglaylife@northwind.invalid",  role: CUSTOM.cfgLayoutLifecycle },
+    cfgFieldManager:    { id: "c0000000-0000-4000-8000-00000000d033", email: "cert.cfgfldmgr@northwind.invalid",   role: CUSTOM.cfgFieldManager },
+    cfgFieldDeleter:    { id: "c0000000-0000-4000-8000-00000000d034", email: "cert.cfgflddel@northwind.invalid",   role: CUSTOM.cfgFieldDeleter },
+    cfgTitular:         { id: "c0000000-0000-4000-8000-00000000d035", email: "cert.cfgtitular@northwind.invalid",  role: CUSTOM.cfgTitular },
 };
 
 async function principal(p) {
@@ -230,6 +253,15 @@ export async function setup() {
         /* The label is the trap. It holds nothing. */
         { org_id: ORG, role_key: CUSTOM.sjTitular,   role_label: "Admin",                description: "Named Admin, granted no schedule, job or posting authority.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.sjFinWrite,  role_label: "Financials manager",   description: "Holds fin.write, as ops does. Not a posting authority.",      is_system: false, is_active: true },
+
+        { org_id: ORG, role_key: CUSTOM.cfgOptionManager,   role_label: "Option set editor",   description: "Edits option sets. Deletes none.",                    is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.cfgOptionDeleter,   role_label: "Option set remover",  description: "Deletes option sets. Edits none.",                    is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.cfgLayoutManager,   role_label: "Layout editor",       description: "Edits a draft layout. Publishes nothing.",            is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.cfgLayoutLifecycle, role_label: "Layout publisher",    description: "Creates, duplicates, publishes, rolls back layouts.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.cfgFieldManager,    role_label: "Field editor",        description: "Configures fields. Deletes none.",                    is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.cfgFieldDeleter,    role_label: "Field remover",       description: "Deletes field definitions. Configures none.",         is_system: false, is_active: true },
+        /* The label is the trap. It holds nothing. */
+        { org_id: ORG, role_key: CUSTOM.cfgTitular,         role_label: "Admin",               description: "Named Admin, granted no configuration authority.",    is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
 
@@ -261,6 +293,14 @@ export async function setup() {
         [CUSTOM.sjPoster, ["portal.access", "fin.post"]],
         [CUSTOM.sjTitular, ["portal.access"]],
         [CUSTOM.sjFinWrite, ["portal.access", "fin.write", "fin.read"]],
+
+        [CUSTOM.cfgOptionManager, ["portal.access", "option_sets.manage"]],
+        [CUSTOM.cfgOptionDeleter, ["portal.access", "option_sets.delete"]],
+        [CUSTOM.cfgLayoutManager, ["portal.access", "layouts.manage"]],
+        [CUSTOM.cfgLayoutLifecycle, ["portal.access", "layouts.lifecycle"]],
+        [CUSTOM.cfgFieldManager, ["portal.access", "fields.manage"]],
+        [CUSTOM.cfgFieldDeleter, ["portal.access", "fields.delete"]],
+        [CUSTOM.cfgTitular, ["portal.access"]],
     ]) {
         const { error } = await sb.rpc("replace_role_permission_grants", {
             p_org_id: ORG,

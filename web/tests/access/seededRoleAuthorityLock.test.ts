@@ -65,6 +65,38 @@ const ACCESS_OWNED = [
     join(webRoot, "app", "api", "admin", "schedules"),
     join(webRoot, "app", "api", "admin", "jobs"),
     join(webRoot, "lib", "access", "schedulingJobsAuthority.ts"),
+    /*
+     * The configuration authorization surface — option sets, entity layouts, field definitions.
+     *
+     * TWO ROUTES IN THESE TREES KEEP A ROLE GATE ON PURPOSE, and the lock must not be read as
+     * having missed them. `entity-layouts/[id]` DELETE is a MODEL_CONTRACT_DEFECT: its own file
+     * says published rows are immutable while the handler deletes them. `ensure-platform-field`
+     * installs is_system rows the organization can never remove, and whether that may be delegated
+     * is an unresolved product decision. Minting a capability for either would make it MORE
+     * reachable — a key can be granted to a custom role, a role literal cannot — so both keep the
+     * gate they already had and are recorded as debt rather than migrated. They are named in
+     * KNOWN_ROLE_GATED below so this lock stays green on exactly those two and nothing else.
+     */
+    join(webRoot, "app", "api", "admin", "option-sets"),
+    join(webRoot, "app", "api", "admin", "entity-layouts"),
+    join(webRoot, "app", "api", "admin", "field-definitions"),
+    join(webRoot, "lib", "access", "configurationAuthority.ts"),
+];
+
+/**
+ * The only files in the Access-owned surface allowed to still decide from a role key, each with a
+ * recorded reason and an owner. The list may only SHRINK: a new entry is a new defect, and removing
+ * one means the underlying product question was answered.
+ */
+const KNOWN_ROLE_GATED: { suffix: string; why: string }[] = [
+    {
+        suffix: join("entity-layouts", "[id]", "route.ts"),
+        why: "MODEL_CONTRACT_DEFECT — deletes rows the model calls immutable; see entity-layout-delete-model-contract.md",
+    },
+    {
+        suffix: join("field-definitions", "ensure-platform-field", "route.ts"),
+        why: "PLATFORM_AUTHORITY_DELEGABILITY_UNRESOLVED — installs unremovable is_system rows; see platform-field-authority-delegability.md",
+    },
 ];
 
 /**
@@ -195,7 +227,45 @@ describe("W-17 — a seeded role key is not authority inside Access", () => {
                 }
             }
         }
-        expect(offenders, "authorization here must derive from capabilities and scope, not from a role title").toEqual([]);
+        /*
+         * The two recorded exceptions are removed here rather than excluded from the scan, so the
+         * scan still SEES them: if either file loses its role gate the entry becomes stale, and the
+         * non-vacuity test below fails until someone deletes it.
+         */
+        const remaining = offenders.filter(
+            (o) => !KNOWN_ROLE_GATED.some((k) => o.startsWith(k.suffix) || o.includes(k.suffix)),
+        );
+        expect(remaining, "authorization here must derive from capabilities and scope, not from a role title").toEqual([]);
+    });
+
+    it("every recorded role-gated exception is still real, and the list only shrinks", () => {
+        /*
+         * A named exception that has since been fixed is a lie the next reader inherits. Each entry
+         * must still correspond to a file that genuinely still decides from a role key.
+         */
+        for (const known of KNOWN_ROLE_GATED) {
+            const file = scanned.find((f) => f.endsWith(known.suffix));
+            expect(file, `${known.suffix} is recorded as role-gated but is no longer scanned`).toBeTruthy();
+            const src = stripComments(readFileSync(file as string, "utf8"));
+            const stillGated = AUTHORITY_SHAPES.some((shape) =>
+                src.split("\n").some((line) => shape.re.test(line)),
+            );
+            expect(
+                stillGated,
+                `${known.suffix} no longer decides from a role key — delete its KNOWN_ROLE_GATED entry (${known.why})`,
+            ).toBe(true);
+        }
+        expect(KNOWN_ROLE_GATED.length, "the exception list may only shrink").toBeLessThanOrEqual(2);
+    });
+
+    it("actually scanned the configuration authorization surface", () => {
+        const cfg = scanned.filter(
+            (f) =>
+                f.includes(`${sep}option-sets${sep}`) ||
+                f.includes(`${sep}entity-layouts${sep}`) ||
+                f.includes(`${sep}field-definitions${sep}`),
+        );
+        expect(cfg.length, "the configuration authorization surface was not scanned").toBeGreaterThan(8);
     });
 
     it("bites: the shapes it forbids are actually recognised", () => {
