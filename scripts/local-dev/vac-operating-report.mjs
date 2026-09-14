@@ -12,7 +12,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { buildOperatingReport, renderOperatingReport, reportIsDue } from "./lib/vacilando/operating-report.mjs";
+import { buildOperatingReport, renderOperatingReport, reportIsDue, operatingReportWindow } from "./lib/vacilando/operating-report.mjs";
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback = null) => {
@@ -35,12 +35,20 @@ function readJson(path, fallback) {
   catch { return fallback; }
 }
 
-const day = flag("date", new Date().toISOString().slice(0, 10));
-const start = new Date(`${day}T00:00:00.000Z`);
-const windowStart = kind === "weekly"
-  ? new Date(start.getTime() - 6 * 24 * 3600 * 1000).toISOString()
-  : start.toISOString();
-const windowEnd = new Date(start.getTime() + 24 * 3600 * 1000).toISOString();
+/*
+ * Same window the steward reports on, from the same owner, in the configured
+ * zone. --date still names a specific civil day; it is now a day IN THAT ZONE
+ * rather than a UTC one, which is what anyone typing a date meant.
+ */
+const win = operatingReportWindow(kind, new Date(), { dayKey: flag("date", null) });
+if (!win) {
+  console.error(JSON.stringify({
+    ok: false, error: "timezone_not_configured", setting: "VACILANDO_REPORT_TIMEZONE",
+    detail: "A report window has no meaning without the zone its day is measured in.",
+  }, null, 2));
+  process.exit(2);
+}
+const { windowStart, windowEnd, timezone, day } = win;
 
 const requests = readJson(join(base, "governed-actions", "requests.json"), { requests: [] }).requests || [];
 const runStore = readJson(join(base, "execution-runs", "runs.json"), { lanes: {} }).lanes || {};
@@ -92,7 +100,7 @@ if (has("due")) {
   process.exit(verdict.due ? 0 : 3);
 }
 
-const report = buildOperatingReport({ kind, windowStart, windowEnd, requests, runs, lanes, notifications, health, runtime });
+const report = buildOperatingReport({ kind, windowStart, windowEnd, timezone, day, requests, runs, lanes, notifications, health, runtime });
 
 if (has("write")) {
   const dir = join(base, "operating-reports");

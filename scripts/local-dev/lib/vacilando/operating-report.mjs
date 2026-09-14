@@ -82,6 +82,12 @@ export function buildOperatingReport({
   kind = "daily",
   windowStart,
   windowEnd,
+  // The zone and civil day the window was resolved in. Carried so the ARTIFACT
+  // can say which day it describes: "07:00Z → 07:00Z" is readable as neither
+  // the 13th nor the 14th, and an operator should not have to do the offset
+  // arithmetic to find out which day their report is about.
+  timezone = null,
+  day = null,
   requests = [],
   runs = [],
   lanes = [],
@@ -225,7 +231,7 @@ export function buildOperatingReport({
     schema_version: OPERATING_REPORT_SCHEMA,
     kind,
     report_id: reportId({ kind, windowStart, windowEnd }),
-    window: { start: windowStart, end: windowEnd },
+    window: { start: windowStart, end: windowEnd, timezone, day },
     generated_at: generatedAt,
     today: {
       staging_sha: runtime?.staging ?? null,
@@ -296,7 +302,10 @@ export function buildOperatingReport({
 export function renderOperatingReport(r) {
   const d = (x) => (x && x.n ? `P50 ${x.p50}s  P95 ${x.p95}s  max ${x.max}s  (n=${x.n})` : "no samples");
   const L = [];
-  L.push(`${r.kind === "weekly" ? "WEEK" : "DAY"}  ${r.window.start} → ${r.window.end}`);
+  const label = r.window.day
+    ? `${r.window.day}${r.window.timezone ? ` ${r.window.timezone}` : ""}`
+    : `${r.window.start} → ${r.window.end}`;
+  L.push(`${r.kind === "weekly" ? "WEEK ending" : "DAY"}  ${label}`);
   L.push(`report ${r.report_id}`);
   L.push("");
   L.push(`staging ${r.today.staging_sha || "—"} · toolkit ${r.today.installed_toolkit || "—"} · gateway ${r.today.running_gateway || "—"}${r.today.converged === false ? " (NOT CONVERGED)" : ""}`);
@@ -418,6 +427,95 @@ export function reportIsDue(kind, at = new Date(), { graceMinutes = 30, timeZone
   if (delta < 0) return { due: false, reason: "before_window", minutes_until: -delta, timezone: tz };
   if (delta > graceMinutes) return { due: false, reason: "after_window", minutes_late: delta, timezone: tz };
   return { due: true, reason: "in_window", minutes_late: delta, timezone: tz };
+}
+
+/**
+ * THE WINDOW A REPORT DESCRIBES, IN THE ZONE THE CADENCE IS ON.
+ *
+ * This exists because the zone was resolved correctly and then not carried.
+ * `reportIsDue` has honoured VACILANDO_REPORT_TIMEZONE from the start, so the
+ * daily report FIRED at 18:30 Pacific exactly as intended - but both callers
+ * derived the window themselves, from `new Date().toISOString().slice(0, 10)`,
+ * which at 18:30 Pacific is already TOMORROW in UTC. The report was keyed to
+ * the wrong day and covered 17:00-17:00 Pacific: about ninety minutes of real
+ * data, presented as a day, with no symptom anywhere except a suspiciously
+ * quiet fleet.
+ *
+ * Computing the day key in the zone is necessary and not sufficient: midnight
+ * of a Pacific day key is not `${day}T00:00:00.000Z`, which is 17:00 the
+ * PREVIOUS day. The start INSTANT has to be resolved in the zone too. So the
+ * window gets one owner here, beside the cadence that already knows the zone,
+ * rather than two copies in two callers that would drift the first time either
+ * moved.
+ */
+
+/** The civil date ("YYYY-MM-DD") at an instant, in a named zone. */
+function civilDateIn(at, timeZone) {
+  // en-CA renders ISO-shaped civil dates, which is the whole reason it is here.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(at);
+}
+
+/** Zone offset in ms at a given instant (positive east of UTC). */
+function offsetMsAt(at, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone, hour12: false, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(at);
+  const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
+  const asIfUtc = Date.UTC(
+    Number(p.year), Number(p.month) - 1, Number(p.day),
+    Number(p.hour) % 24, Number(p.minute), Number(p.second),
+  );
+  return asIfUtc - at.getTime();
+}
+
+/** Civil-date arithmetic, with no zone and therefore no DST to get wrong. */
+function shiftDayKey(dayKey, deltaDays) {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + deltaDays)).toISOString().slice(0, 10);
+}
+
+/**
+ * The UTC instant of local midnight beginning `dayKey` in `timeZone`.
+ * Two passes because the offset that applies is the offset AT the answer, not
+ * at the guess - one pass is wrong by an hour across a DST boundary.
+ */
+function zonedDayStart(dayKey, timeZone) {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  const civilMs = Date.UTC(y, m - 1, d, 0, 0, 0);
+  let ms = civilMs - offsetMsAt(new Date(civilMs), timeZone);
+  ms = civilMs - offsetMsAt(new Date(ms), timeZone);
+  return new Date(ms);
+}
+
+/**
+ * Resolve the reporting window for `kind` at instant `at`.
+ *
+ * Returns null when no zone is configured - the same non-failure the cadence
+ * reports, because a window with no clock is not a window. Callers that only
+ * run when the cadence said due will never see null.
+ *
+ * `dayKey` may be supplied to report a specific past day (the CLI's --date).
+ */
+export function operatingReportWindow(kind, at = new Date(), { timeZone = undefined, dayKey = null } = {}) {
+  const tz = timeZone === undefined ? resolveReportTimezone() : timeZone;
+  if (!tz) return null;
+  let day;
+  try { day = dayKey || civilDateIn(at, tz); }
+  catch { return null; }
+  const startKey = kind === "weekly" ? shiftDayKey(day, -6) : day;
+  const start = zonedDayStart(startKey, tz);
+  // End is the start of the NEXT civil day, not start + 24h: a DST day is 23
+  // or 25 hours long, and a fixed 24 would clip or double-count that hour.
+  const end = zonedDayStart(shiftDayKey(day, 1), tz);
+  return {
+    day,
+    timezone: tz,
+    windowStart: start.toISOString(),
+    windowEnd: end.toISOString(),
+  };
 }
 
 /**
