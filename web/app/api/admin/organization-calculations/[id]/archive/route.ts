@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { archiveOrganizationCalculation } from "@/lib/organizationCalculations/persist";
+import { requireAnalyticsManageAccess } from "@/lib/admin/canReadAnalytics";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +15,8 @@ export async function POST(_req: Request, { params }: RouteParams) {
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Admin role required" }, { status: 403 });
-    }
+    const denied = await requireAnalyticsManageAccess();
+    if (!denied.ok) return denied.response;
     const { id } = await params;
     try {
         const supabase = createAdminClient();

@@ -84,6 +84,13 @@ const ACCESS_OWNED = [
      * carrying `metadata` is the org-wide attention/SLA write, which has no truthful capability yet
      * and must not borrow a process key to get one. It is recorded below, and the same handler's
      * column-field branch is capability-gated, so the exception is a write shape, not a route.
+     *
+     * THE OPERATIONAL INTELLIGENCE TREES join with the reports.write convergence. Ten mutation
+     * handlers under `organization-calculations/` and `metrics/` asked for the admin role while
+     * `reports.write` sat in the catalog describing exactly those operations and enforcing nothing.
+     * They derive authority from it now, and the ops default package was corrected in the same
+     * slice so activating the key could not hand ops ten mutations it had never performed. No new
+     * exception is recorded: the bounded area reaches zero.
      */
     join(webRoot, "app", "api", "admin", "option-sets"),
     join(webRoot, "app", "api", "admin", "entity-layouts"),
@@ -92,6 +99,9 @@ const ACCESS_OWNED = [
     join(webRoot, "app", "api", "admin", "departments"),
     join(webRoot, "app", "api", "admin", "business-process"),
     join(webRoot, "lib", "access", "businessProcessAuthority.ts"),
+    join(webRoot, "app", "api", "admin", "organization-calculations"),
+    join(webRoot, "app", "api", "admin", "metrics"),
+    join(webRoot, "lib", "admin", "canReadAnalytics.ts"),
 ];
 
 /**

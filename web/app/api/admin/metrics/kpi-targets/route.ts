@@ -9,6 +9,7 @@ import {
 } from "@/lib/metrics/kpiRegistry";
 import type { OipKpiKey } from "@/lib/metrics/types";
 import { formatKpiTargetDisplay } from "@/lib/metrics/kpiTargetFormatting";
+import { requireAnalyticsManageAccess } from "@/lib/admin/canReadAnalytics";
 
 export const dynamic = "force-dynamic";
 
@@ -74,9 +75,8 @@ export async function PATCH(request: NextRequest) {
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = await requireAnalyticsManageAccess();
+    if (!denied.ok) return denied.response;
 
     let body: unknown = {};
     try {
