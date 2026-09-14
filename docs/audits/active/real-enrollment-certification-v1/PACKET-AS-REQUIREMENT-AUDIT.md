@@ -430,3 +430,46 @@ Enrolled children (2), and Enrolling is entered transiently. From the live confi
 
 Moving a real waitlisted child is an operator act on live data and part of Kelly's D-flow, so the
 process-launched session proof is deferred to it rather than manufactured here.
+
+---
+
+## Obligation configuration, 2026-09-14 — and two things driving it found
+
+Packet Studio explained each obligation but could not show where any of it was decided. Every step
+now has **Configure**, and the 15 admin questions are answerable from visible UI (verified 16/16,
+including the Forms list explaining its own scope).
+
+Language follows the model rather than the storage: the packet reports **1 Form and 2 document
+obligations**, each card carries its type (*Form*, *Document acknowledgment*, *Document upload*), and
+the Forms list says in one sentence why the other two are not in it.
+
+### A real defect, found only by driving the creation path
+
+`PacketAddStepChooser` listed `docsLoading` as a dependency of the effect that sets it. The first run
+started the document fetch and immediately re-ran; the re-run's cleanup set `cancelled = true` on the
+only request in flight, and every branch after it was guarded by `!cancelled`. **A read-and-acknowledge
+step could not be authored at all** — the response arrived 200 (180 documents) and was discarded while
+the picker sat at "Loading…". Fixed by keying the effect on the step kind alone.
+
+This was invisible to inspection. It only appeared when the packet was built from nothing.
+
+### The creation path has a real gap, not fixed here
+
+`+ Add step` authors all three obligation kinds correctly — proven end to end on a temporary packet,
+which was then retired so Kelly still sees one packet. But **Packets Studio's "New packet" does not
+create a packet definition**: it opens the per-record composer, which posts
+`/api/admin/pos/packets/compose` with `form_definition_ids` — the pick-some-Forms model this whole
+thread has been removing, anchored to a record.
+
+So the honest answer to *"could an administrator create the configuration Kelly is looking at?"* is:
+**the obligations yes, the container no.** The temporary packet's shell had to be created through the
+API. Building a definition-creation flow is a product decision with its own surface — naming, key,
+first step — and is recorded here rather than improvised at the end of this slice.
+
+### One thing I did and undid
+
+Verifying Configure against the live packet wrote participant instructions onto two live steps,
+including a Handbook line asserting "23 pages" — a page count Alloy does not store and I had already
+reported as unverified. Both were restored to empty and re-checked; signature is still required and
+the three obligations are intact. The verification script now takes the packet by name so the live
+one is not the default target.
