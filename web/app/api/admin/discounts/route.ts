@@ -6,6 +6,7 @@ import {
     validateDiscountProgramPayload,
 } from "@/lib/admin/discountProgramAdmin";
 import { NextRequest, NextResponse } from "next/server";
+import { OPS_JOBS_WRITE, requireSchedulingJobsCapability } from "@/lib/access/schedulingJobsAuthority";
 
 /** GET: list discount programs (discount_programs_admin_v). */
 export async function GET() {
@@ -21,9 +22,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireSchedulingJobsCapability(ctx, OPS_JOBS_WRITE);
+    if (denied) return denied;
 
     let body: unknown;
     try {

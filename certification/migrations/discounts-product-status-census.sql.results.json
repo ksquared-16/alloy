@@ -1,0 +1,97 @@
+{
+  "trusted_host_action_id": "tha_70d753a0e21d9c",
+  "query_hash": "51b7321894e2f296582fd4438a2148d6fdc8294ff48a5198ba3c5bb510507beb",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T21:39:39.458Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_70d753a0e21d9c",
+    "query_hash": "51b7321894e2f296582fd4438a2148d6fdc8294ff48a5198ba3c5bb510507beb",
+    "authorization_id": "grnt_fcde52a1e66e4b84",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T21:39:40.709Z",
+    "question_ids": [
+      "programs",
+      "migrated_from_codes",
+      "supporting_rows",
+      "applications",
+      "application_targets",
+      "canonical_peer",
+      "legacy_codes",
+      "not_null_probe",
+      "nonvacuity"
+    ],
+    "questions": {
+      "programs": {
+        "question_id": "programs",
+        "row_count": null,
+        "rows": [
+          "rows=2 orgs=1 first=2026-01-28 last_created=2026-03-19 last_updated=2026-03-28"
+        ]
+      },
+      "migrated_from_codes": {
+        "question_id": "migrated_from_codes",
+        "row_count": null,
+        "rows": [
+          "with_legacy_discount_code_id=1 authored_fresh=1"
+        ]
+      },
+      "supporting_rows": {
+        "question_id": "supporting_rows",
+        "row_count": null,
+        "rows": [
+          "benefits=2 qualifiers=1 commitment_rules=1"
+        ]
+      },
+      "applications": {
+        "question_id": "applications",
+        "row_count": null,
+        "rows": [
+          "rows=0 orgs=0 first=none last=none distinct_programs_applied=0"
+        ]
+      },
+      "application_targets": {
+        "question_id": "application_targets",
+        "row_count": null,
+        "rows": [
+          "with_job=0 with_opportunity=0 with_customer=0 with_subscription=0"
+        ]
+      },
+      "canonical_peer": {
+        "question_id": "canonical_peer",
+        "row_count": null,
+        "rows": [
+          "commercial_policies=0 financial_reduction_applications=44"
+        ]
+      },
+      "legacy_codes": {
+        "question_id": "legacy_codes",
+        "row_count": null,
+        "rows": [
+          "discount_codes=1"
+        ]
+      },
+      "not_null_probe": {
+        "question_id": "not_null_probe",
+        "row_count": null,
+        "rows": [
+          "discount_applications.discount_program_id=NO ~ discount_commitments.discount_program_id=NO ~ discount_program_benefits.discount_program_id=NO ~ discount_program_commitment_rules.discount_program_id=NO ~ discount_program_qualifiers.discount_program_id=NO ~ discount_redemptions.discount_program_id=YES ~ discount_redemptions.discount_code_id=YES ~ jobs.discount_program_id=YES ~ jobs.discount_code_id=YES ~ opportunities.discount_code_id=YES ~ opportunities.discount_program_id=YES"
+        ]
+      },
+      "nonvacuity": {
+        "question_id": "nonvacuity",
+        "row_count": null,
+        "rows": [
+          "programs_table=true applications_table=true orgs=3 jobs=0"
+        ]
+      }
+    },
+    "row_count": 9
+  }
+}
