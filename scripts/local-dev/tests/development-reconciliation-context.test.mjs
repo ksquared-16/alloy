@@ -47,12 +47,30 @@ await test("RC2 — ORG_ID reaches the runner, resolved by the registry", () => 
 });
 
 await test("RC3 — a caller cannot supply or override ORG_ID", () => {
+  /*
+   * THE CONTRACT GOT STRONGER, AND THIS CASE RECORDS WHICH.
+   *
+   * It used to assert that a caller-supplied ORG_ID was IGNORED and the registry
+   * value won. That was safe and dishonest: a caller who sends ORG_ID believes
+   * something will use it, and silence lets them keep believing. The resolver now
+   * REFUSES the request outright, which is strictly stronger — the run does not
+   * happen at all rather than happening differently than the caller thought.
+   */
   const { spawn, seen } = spawnStub();
   const out = R.runRegisteredReconciliation(
     { ...BASE, ORG_ID: "11111111-1111-4111-8111-111111111111", org_id: "nope", env: { ORG_ID: "nope" } },
     { spawn, repoRoot: "/tmp", trustedEnv: TRUSTED });
+  assert.equal(out.ok, false, "an override attempt must refuse, not be quietly dropped");
+  assert.equal(out.error, "caller_field_not_permitted");
+  assert.equal(seen.cmd, undefined, "and nothing may be spawned");
+});
+
+await test("RC3a — with no override offered, the registry value is what reaches the runner", () => {
+  // The property RC3 used to prove, kept: the registry supplies the context.
+  const { spawn, seen } = spawnStub();
+  const out = R.runRegisteredReconciliation(BASE, { spawn, repoRoot: "/tmp", trustedEnv: TRUSTED });
   assert.equal(out.ok, true);
-  assert.equal(seen.opts.env.ORG_ID, ORG, "the registry value wins, always");
+  assert.equal(seen.opts.env.ORG_ID, ORG);
 });
 
 await test("RC4 — unresolved context refuses BEFORE the spawn", () => {
@@ -88,9 +106,18 @@ await test("RC7 — apply carries its own opt-in, and only when asked", () => {
   assert.equal(seen.opts.env.ORG_ID, ORG);
 });
 
-await test("RC8 — the runner stays frozen; the caller never names it", () => {
+await test("RC8 — the runner stays frozen; a caller naming one is refused", () => {
+  // Also strengthened from "ignored" to "refused", for the same reason as RC3.
   const { spawn, seen } = spawnStub();
-  R.runRegisteredReconciliation({ ...BASE, runner: "rm -rf /" }, { spawn, repoRoot: "/tmp", trustedEnv: TRUSTED });
+  const out = R.runRegisteredReconciliation({ ...BASE, runner: "rm -rf /" }, { spawn, repoRoot: "/tmp", trustedEnv: TRUSTED });
+  assert.equal(out.ok, false);
+  assert.equal(out.error, "caller_field_not_permitted");
+  assert.equal(seen.cmd, undefined, "nothing spawned");
+});
+
+await test("RC8a — and the frozen runner is the one actually spawned", () => {
+  const { spawn, seen } = spawnStub();
+  R.runRegisteredReconciliation(BASE, { spawn, repoRoot: "/tmp", trustedEnv: TRUSTED });
   assert.equal(seen.cmd, "npm");
   assert.deepEqual(seen.args, ["run", "--silent", "dev:qa:converge-placement-waitlisted"]);
 });

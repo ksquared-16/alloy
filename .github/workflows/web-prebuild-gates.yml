@@ -307,3 +307,20 @@ jobs:
       - name: Execution run continuation lineage
         working-directory: .
         run: node scripts/local-dev/tests/development-continuation-lineage.test.mjs
+
+      # A hosted certification fixture may only destroy what it owns. Six subsidy
+      # teardown statements were scoped by organization alone and ran with
+      # replication triggers suspended; they are now constrained through the
+      # fixture's own program and agency, and this pins them there.
+      - name: Hosted fixture destructive safety
+        working-directory: .
+        run: node scripts/local-dev/tests/development-hosted-fixture-safety.test.mjs
+
+      # The registered reconciliation, driven through the same dispatcher live
+      # execution uses. Building it found four defects: a validator that refused
+      # its own normalized output, frozen context that never reached the runner,
+      # audit truth dropped at two boundaries, and a missing secret screen that
+      # every sibling wrapper already had.
+      - name: Hosted fixture dispatch contract
+        working-directory: .
+        run: node scripts/local-dev/tests/development-hosted-fixture-dispatch.test.mjs

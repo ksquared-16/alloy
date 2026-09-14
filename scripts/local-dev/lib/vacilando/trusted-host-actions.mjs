@@ -1334,6 +1334,13 @@ let openPrGhForTests = null;
  * reaching GitHub. That is why both sat in the uncovered pin.
  */
 let housekeepingGhForTests = null;
+/*
+ * The reconciliation dispatch wrapper spawns a repository runner. Without a seam
+ * here the only way to exercise the wrapper is to run the real npm script
+ * against a real database, which is precisely what must never happen in CI - so
+ * the action sat in the uncovered pin for want of four lines.
+ */
+let reconciliationSpawnForTests = null;
 
 export function setPushGitForTests(fn) {
   pushGitForTests = typeof fn === "function" ? fn : null;
@@ -1343,6 +1350,9 @@ export function setOpenPrGhForTests(fn) {
 }
 export function setRepositoryHousekeepingGhForTests(fn) {
   housekeepingGhForTests = typeof fn === "function" ? fn : null;
+}
+export function setReconciliationSpawnForTests(fn) {
+  reconciliationSpawnForTests = typeof fn === "function" ? fn : null;
 }
 
 let migrationRunnersForTests = null;
@@ -2509,6 +2519,7 @@ export function executeRegisteredReconciliationTrustedHostAction(action, { actor
   writeAction(action);
 
   const out = runRegisteredReconciliation(action.inputs ?? {}, {
+    ...(reconciliationSpawnForTests ? { spawn: reconciliationSpawnForTests } : {}),
     /*
      * THE CANONICAL ROOT, not findRepoRoot().
      *
@@ -2534,6 +2545,26 @@ export function executeRegisteredReconciliationTrustedHostAction(action, { actor
       ALLOY_REPO: resolveCanonicalRepoRoot(),
     },
   });
+  /*
+   * THE SCREEN ITS SIBLINGS HAVE HAD ALL ALONG.
+   *
+   * push, open_pr and close_pr each call payloadHasSecrets before completing.
+   * This wrapper did not, and it is the one that needs it most: its runner
+   * resolves a database URL server-side, so a careless diagnostic line is the
+   * likeliest place a credential would ever surface. Measured while building the
+   * wrapper contract — a planted
+   * `postgres://user:SPECIMEN_PASSWORD@host/db` reached the operator result
+   * intact.
+   *
+   * BOTH PATHS, because a failure diagnostic is if anything more likely to quote
+   * a connection string than a success result is. Canonical semantics: the
+   * unsafe payload is DISCARDED rather than masked, so nothing partially
+   * redacted is published in its place.
+   */
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets",
+      "Reconciliation result contained credential-shaped material and was discarded.", { nowMs });
+  }
   if (!out.ok) {
     // Provenance rides the FAILURE, which is the case that needs it most.
     return failTrustedAction(action, out.error || "reconciliation_failed", out.detail || "reconciliation refused", {
@@ -2549,6 +2580,16 @@ export function executeRegisteredReconciliationTrustedHostAction(action, { actor
     counts: out.counts,
     // The executor computed this and the result threw it away.
     provenance: out.provenance ?? null,
+    /*
+     * AND THE SAME THING ONE BOUNDARY ALONG.
+     *
+     * This is an explicit allowlist, so a field the runner computes exists only
+     * if it is named here. The hosted fixture's audit - which bytes ran, against
+     * which database, for which organization, and where that organization came
+     * from - is exactly what an operator needs and exactly what an allowlist
+     * drops by saying nothing.
+     */
+    fixture_audit: out.fixture_audit ?? null,
     stdout_tail: out.stdout_tail,
   }, { nowMs });
 }
