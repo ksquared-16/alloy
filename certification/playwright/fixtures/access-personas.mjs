@@ -154,6 +154,19 @@ export const CUSTOM = {
     cfgFieldManager: "mcert_cfg_field_manager",
     cfgFieldDeleter: "mcert_cfg_field_deleter",
     cfgTitular: "mcert_cfg_titular",
+
+    /*
+     * DEPARTMENT PRODUCT RETIREMENT + BUSINESS PROCESS AUTHORITY CONVERGENCE V1.
+     *
+     * The four roles that prove the split is real. `bpConfigurer` may design a process and may not
+     * switch the tenant onto it; `bpActivator` is the mirror; `bpComposed` holds both, which is how
+     * an organization reconstructs the old admin-only behaviour out of capabilities; and `bpTitular`
+     * is LABELLED Admin and holds nothing, which is the claim the whole program rests on.
+     */
+    bpConfigurer: "mcert_bp_configurer",
+    bpActivator: "mcert_bp_activator",
+    bpComposed: "mcert_bp_composed",
+    bpTitular: "mcert_bp_titular",
 };
 
 export const P = {
@@ -196,6 +209,10 @@ export const P = {
     cfgFieldManager:    { id: "c0000000-0000-4000-8000-00000000d033", email: "cert.cfgfldmgr@northwind.invalid",   role: CUSTOM.cfgFieldManager },
     cfgFieldDeleter:    { id: "c0000000-0000-4000-8000-00000000d034", email: "cert.cfgflddel@northwind.invalid",   role: CUSTOM.cfgFieldDeleter },
     cfgTitular:         { id: "c0000000-0000-4000-8000-00000000d035", email: "cert.cfgtitular@northwind.invalid",  role: CUSTOM.cfgTitular },
+    bpConfigurer:       { id: "c0000000-0000-4000-8000-00000000d036", email: "cert.bpconfig@northwind.invalid",    role: CUSTOM.bpConfigurer },
+    bpActivator:        { id: "c0000000-0000-4000-8000-00000000d037", email: "cert.bpactivate@northwind.invalid",  role: CUSTOM.bpActivator },
+    bpComposed:         { id: "c0000000-0000-4000-8000-00000000d038", email: "cert.bpowner@northwind.invalid",     role: CUSTOM.bpComposed },
+    bpTitular:          { id: "c0000000-0000-4000-8000-00000000d039", email: "cert.bptitular@northwind.invalid",   role: CUSTOM.bpTitular },
 };
 
 async function principal(p) {
@@ -262,6 +279,12 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.cfgFieldDeleter,    role_label: "Field remover",       description: "Deletes field definitions. Configures none.",         is_system: false, is_active: true },
         /* The label is the trap. It holds nothing. */
         { org_id: ORG, role_key: CUSTOM.cfgTitular,         role_label: "Admin",               description: "Named Admin, granted no configuration authority.",    is_system: false, is_active: true },
+
+        { org_id: ORG, role_key: CUSTOM.bpConfigurer, role_label: "Process designer",   description: "Designs business processes. Activates none of them.",      is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.bpActivator,  role_label: "Process activator",  description: "Switches a process on and off. Designs none of them.",      is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.bpComposed,   role_label: "Process owner",      description: "Designs and activates. The old admin behaviour, composed.", is_system: false, is_active: true },
+        /* The label is the trap. It holds nothing. */
+        { org_id: ORG, role_key: CUSTOM.bpTitular,    role_label: "Admin",              description: "Named Admin, granted no Business Process capability.",      is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
 
@@ -301,6 +324,10 @@ export async function setup() {
         [CUSTOM.cfgFieldManager, ["portal.access", "fields.manage"]],
         [CUSTOM.cfgFieldDeleter, ["portal.access", "fields.delete"]],
         [CUSTOM.cfgTitular, ["portal.access"]],
+        [CUSTOM.bpConfigurer, ["portal.access", "business_process.configure"]],
+        [CUSTOM.bpActivator, ["portal.access", "business_process.activate"]],
+        [CUSTOM.bpComposed, ["portal.access", "business_process.configure", "business_process.activate"]],
+        [CUSTOM.bpTitular, ["portal.access"]],
     ]) {
         const { error } = await sb.rpc("replace_role_permission_grants", {
             p_org_id: ORG,
