@@ -1,9 +1,9 @@
 {
-  "trusted_host_action_id": "tha_62a0bc1ab313f7",
+  "trusted_host_action_id": "tha_b916b8ea803a19",
   "query_hash": "3528e048c8ca3d3f0a076019ec817f67bcb2814027692a25a2f466cc09747dc6",
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-12T16:21:08.115Z",
+    "census_run_at": "2026-09-14T17:10:13.465Z",
     "question_ids": [
       "ledger",
       "ledger_head",
@@ -75,12 +75,19 @@
           20260910120000,
           20260910130000,
           20260910183000,
+          20260910190000,
+          20260910200000,
+          20260910210000,
           20260911100000,
           20260911110000,
           20260911120000,
           20260911130000,
           20260911140000,
+          20260911150000,
+          20260911160000,
           20260911170000,
+          20260911180000,
+          20260911190000,
           20260911200000,
           20260911210000,
           20260911220000,
@@ -88,40 +95,47 @@
           20260911240000,
           20260911250000,
           20260911260000,
+          20260912000000,
           20260912010000,
           20260912020000,
           20260912030000,
           20260912040000,
           20260912113000,
           20260912114000,
-          20260912150000
+          20260912150000,
+          20260913030000,
+          20260913160000,
+          20260913161000,
+          20260913173000,
+          20260914113000,
+          20260914114000
         ]
       },
       "ledger_head": {
         "question_id": "ledger_head",
         "row_count": null,
         "rows": [
-          20260912150000
+          20260914114000
         ]
       },
       "ledger_total": {
         "question_id": "ledger_total",
         "row_count": null,
         "rows": [
-          419
+          433
         ]
       }
     },
-    "row_count": 83
+    "row_count": 97
   },
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-09-12T16:21:07.148Z",
+    "executed_at": "2026-09-14T17:10:12.248Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_02c7feeb72f587",
-    "authorization_id": "grnt_afe531925317443b",
+    "trusted_host_action_id": "tha_b916b8ea803a19",
     "query_hash": "3528e048c8ca3d3f0a076019ec817f67bcb2814027692a25a2f466cc09747dc6",
+    "authorization_id": "grnt_15fa9b840c5f414a",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null

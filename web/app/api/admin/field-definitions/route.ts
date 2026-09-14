@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { FIELDS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 import { ADMIN_FIELD_TYPES } from "@/lib/fields/adminFieldTypeList";
 import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
 import { mergeFieldDefinitionPoliciesFromBody } from "@/lib/fields/fieldDefinitionPolicyWrite";
@@ -92,9 +93,8 @@ export async function POST(request: NextRequest) {
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, FIELDS_MANAGE);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try {

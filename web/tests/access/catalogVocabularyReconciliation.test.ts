@@ -82,6 +82,12 @@ const APPROVED_ADDITIONS: Record<string, string> = {
         "20260912113000 — taking a case out of the queue; its own key so that granting `ops` processing.operate does not also hand it an archive it never had",
     "processing.documents.manage":
         "20260912113000 — renaming a source document, and deleting one with the case it opened and the stored file; deliberately NOT `documents.write`, which `ops` holds in every organization",
+    "option_sets.delete":
+        "20260914183000 — deleting an option set or one of its items; its own key because Config Layout Assist has no delete operation of any kind, so folding deletion into option_sets.manage would have handed ops an authority it has never held",
+    "layouts.lifecycle":
+        "20260914183000 — creating, duplicating, publishing and rolling back layout versions; a version state machine is not editing inside a layout, and hiding it in layouts.manage would let an operator publish by being granted edit",
+    "fields.delete":
+        "20260914183000 — deleting a field definition; separated from fields.manage for the same reason as option_sets.delete",
     "fin.post":
         "20260914113000 — posting a financial consequence that arises from operational work: a customer receipt, a vendor payout, a completion journal entry, a manual receivable charge. Financials-owned though enforced from under schedules/ and jobs/, because authority follows the business consequence rather than the URL folder",
     "processing.dev_cleanup":
