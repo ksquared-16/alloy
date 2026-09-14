@@ -107,10 +107,25 @@ test("8 — and every statement in that window is fixture-owned", () => {
 });
 
 test("9 — an INSERT smuggled into the window fails the contract", () => {
+  /*
+   * THE MUTATION IS ANCHORED TO THE FILE, NOT TO A SPELLING OF IT.
+   *
+   * This pinned the literal `set session_replication_role = replica;`. Making
+   * the fixture atomic changed that line to `SET LOCAL`, the replace matched
+   * nothing, and the "mutated" text was the original — so the case was
+   * asserting that an unmutated fixture fails, which is a planted defect that
+   * was never planted. It failed loudly here rather than passing for the wrong
+   * reason, which is the only acceptable version of that mistake; the opener is
+   * now taken from the file itself, and the mutation is proven to have landed
+   * before anything is concluded from it.
+   */
+  const opener = SQL.match(/^[ \t]*set\s+(?:local\s+)?session_replication_role\s*=\s*replica\s*;/im);
+  assert.ok(opener, "the fixture must open a replica window for this case to mean anything");
   const mutated = SQL.replace(
-    "set session_replication_role = replica;",
-    "set session_replication_role = replica;\ninsert into charges (id) values (:'agr_a'::uuid);",
+    opener[0],
+    `${opener[0]}\ninsert into charges (id) values (:'agr_a'::uuid);`,
   );
+  assert.notEqual(mutated, SQL, "the planted INSERT must actually be planted");
   assert.notDeepEqual(auditHostedFixture(mutated).replica_window_non_delete, []);
 });
 

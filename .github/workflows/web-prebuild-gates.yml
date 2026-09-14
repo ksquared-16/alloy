@@ -324,3 +324,16 @@ jobs:
       - name: Hosted fixture dispatch contract
         working-directory: .
         run: node scripts/local-dev/tests/development-hosted-fixture-dispatch.test.mjs
+
+      # A fixture written for one database is not a hosted fixture. This one
+      # assigned itself the LOCAL cert tenant with a `\set org` that overrode the
+      # governed runner's `-v`, and named two campus `locations` by uuid that
+      # exist on no other database -- so the audit reported a frozen organization
+      # the writes never reached, and the apply could not have written the
+      # agreements anywhere else. It also ran under psql's autocommit, so a
+      # foreign key refusing halfway through committed the teardown and left
+      # partial fixture rows in a tenant holding real money. Organization,
+      # campuses and atomicity are now contract, with each defect re-plantable.
+      - name: Hosted fixture portability and atomicity
+        working-directory: .
+        run: node scripts/local-dev/tests/development-hosted-fixture-portability.test.mjs
