@@ -7,9 +7,30 @@ supersedes: []
 
 # Alloy Developer Platform — ratified V1 architecture
 
-**Thread 4 of the Documentation & APIs program.** This is a specification, not an
-implementation. Nothing here is built yet; every document states what V1 **is**,
-not what it might be.
+**Thread 4 of the Documentation & APIs program.** These documents state what V1
+**is**, not what it might be.
+
+> **Status, corrected 2026-09-14.** This section was written before the platform
+> was built, and said "nothing here is built yet". That is no longer true and
+> leaving it would mislead a reader into treating implemented behaviour as a
+> proposal. Threads 5 and 6 built, promoted and certified the trust foundation,
+> the external boundary, the Location resource and the Organization → Integrations
+> product. What remains unbuilt is named per document, and the two reader-facing
+> artifacts below carry the current, verified truth:
+>
+> - **External developers and partners:**
+>   [`external/alloy-developer-platform-specification.md`](external/alloy-developer-platform-specification.md)
+>   — the implementation-backed technical specification, verified against a
+>   staging SHA and certified over HTTP. `PARTNER_READY`.
+> - **Classroom Coach:**
+>   [`partners/classroom-coach-integration-readiness.md`](partners/classroom-coach-integration-readiness.md)
+>   and its
+>   [technical discovery request](partners/classroom-coach-technical-discovery-request.md).
+>   No provider behaviour is claimed in either.
+>
+> The architecture documents in this directory remain the canonical owner of
+> doctrine. The specification is the canonical owner of the **external contract**
+> and does not restate doctrine.
 
 ## The question this answers
 
