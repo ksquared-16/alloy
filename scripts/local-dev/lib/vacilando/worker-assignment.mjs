@@ -649,22 +649,13 @@ export function validateAssignmentCompletion(missionId, assignmentId, { actor = 
   return { ok: true, validation, assignment: getAssignment(missionId, assignmentId) };
 }
 
-function unlockDependents(missionId, completedId, { nowMs } = {}) {
-  const store = readStore(missionId);
-  for (const a of store.assignments) {
-    if (a.status !== "waiting") continue;
-    const deps = a.dependencies || [];
-    const allDone = deps.every((d) => {
-      const dep = store.assignments.find((x) => x.assignmentId === d);
-      return dep && dep.status === "complete";
-    });
-    if (allDone) {
-      a.status = "ready";
-      a.updated_at = iso(nowMs);
-    }
-  }
-  writeStore(store);
-}
+/*
+ * unlockDependents lived here and was called by nothing. The live one is in
+ * deliverable-review, where a dependent unlocks on REVIEW ACCEPTANCE - work is
+ * reviewed before its dependents start. Keeping a second, uncalled copy here
+ * invited someone to "fix" a failing test by wiring it in, which would have
+ * bypassed the review gate. Removed rather than left as a trap.
+ */
 
 export function pauseAssignments(missionId, assignmentIds, { reason = null, decisionId = null, nowMs } = {}) {
   const ids = new Set(assignmentIds || []);

@@ -38,7 +38,17 @@ function assert(cond, msg) {
 }
 
 const brief = {
-  title: "Access & Identity V2",
+  /*
+   * A TITLE THAT DOES NOT COLLIDE WITH A CANONICAL TEMPLATE.
+   *
+   * "Access & Identity V2" matches a hardcoded 12-phase plan the compiler
+   * substitutes for whatever the brief declares, so this two-phase fixture
+   * silently became twelve phases and then collapsed into a single synthetic
+   * p_reuse_only assignment once their deliverables resolved to files that
+   * already exist. None of that is what this file is testing: it is testing
+   * mission dashboard closeout, and it needs its own declared plan to survive.
+   */
+  title: "Dashboard Closeout Fixture",
   // Under 24 characters the compiler refuses the brief as ambiguous_objective,
   // approve returns not_compiled, and no assignments exist - which surfaced here
   // as asgs[1] being undefined rather than as the refusal it actually was.
