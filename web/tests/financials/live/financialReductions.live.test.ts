@@ -19,9 +19,21 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { applyFinancialReductions } from "@/lib/financials/reductions/applyFinancialReductions";
 import { applyManualReduction, reverseManualReduction } from "@/lib/financials/reductions/manualReductionService";
 import { readAccountReductions } from "@/lib/financials/reductions/readAccountReductions";
+import { configureResponsibilityArrangement } from "@/lib/financials/responsibility/arrangementService";
+import { configureExpectedFunding } from "@/lib/financials/responsibility/expectedFundingService";
+import { readAccountArrangement } from "@/lib/financials/responsibility/readAccountArrangement";
+import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
 import { resolveAllocatableNet } from "@/lib/financials/responsibility/resolveAllocatableNet";
 import { generateTuitionCharges } from "@/lib/financials/tuitionGeneration/generateTuitionCharges";
-import { postChildcareCharge } from "@/lib/financials/childcareChargeService";
+import { createChildcareDraftCharge, postChildcareCharge } from "@/lib/financials/childcareChargeService";
+import {
+    applyPaymentToCharge,
+    readChargeBalance,
+    readPaymentRefundedCents,
+    readPaymentUnappliedCents,
+    recordChildcarePayment,
+    refundChildcarePayment,
+} from "@/lib/financials/childcarePaymentService";
 import { resolveHouseholdEligibility } from "@/lib/financials/reductions/resolveReductionEligibility";
 
 function certEnv(): { url: string; serviceKey: string } | null {
@@ -92,6 +104,12 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
             await supabase.from("consumption_events").delete().in("id", ids);
         }
         await supabase.from("charges").delete().eq("org_id", ORG).eq("charge_category", "tuition").eq("status", "draft");
+        /*
+         * A POSTED tuition charge left behind cannot be cleaned up here: it cannot be deleted while
+         * its payment applications exist, and a posted childcare charge cannot be voided in place —
+         * both are deliberate immutability, and attempting either silently changes nothing. The
+         * only safe rule is therefore not to CREATE one from a case that does not need it.
+         */
     }
 
     async function authorPolicy(id: string, policyType: string, value: Record<string, unknown>, over: Record<string, unknown> = {}) {
@@ -307,7 +325,18 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
         await authorPolicy(POLICY_SIBLING, "sibling_discount", { basis: "percentage", value: 15, label: "Sibling discount" });
 
         const generated = await generateGross();
-        expect(generated.counts.generated, JSON.stringify(generated.outcomes)).toBe(2);
+        /*
+         * BOTH CHILDREN ARE BILLED FOR THE PERIOD — generated now, or already billed by a case that
+         * could not clean up after itself. A posted childcare charge is immutable by design: it
+         * cannot be voided in place, cannot be deleted, and its payment applications cannot be
+         * deleted either, so a term billed once stays billed for the life of the fixture. What this
+         * case is about is which child gets the discount, not which call created the charge, so the
+         * setup asserts the OUTCOME it needs rather than the path taken to it.
+         */
+        expect(
+            generated.counts.generated + (generated.counts.alreadyPosted ?? 0),
+            JSON.stringify(generated.outcomes),
+        ).toBe(2);
         const gross = await grossCharges();
         expect(gross).toHaveLength(2);
 
@@ -1240,4 +1269,324 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
             }),
         ).rejects.toThrow(/larger than what the charge still holds/i);
     }, 420_000);
+
+    // ── 10 · CORE CLOSURE: RESPONSIBILITY, EXPECTED FUNDING, REFUND ─────────────────────────
+
+    /**
+     * These three are the remaining non-subsidy checkpoints. They run against the same clean
+     * fixture the reduction cases use — reseeded per case — because the last false diagnosis in this
+     * thread came from a household that had quietly accumulated state across runs.
+     *
+     * Every figure is read back from the canonical reader that owns it. Nothing here recomputes a
+     * balance: an oracle that did would just be a second opinion about money.
+     */
+
+    /**
+     * A household with no responsibility decisions on it.
+     *
+     * These cases each author an arrangement effective on the same day, and the service rightly
+     * refuses to supersede an arrangement that starts on or after the date being asked for. Without
+     * a reset the second case fails on the first case's leftovers — the accumulation that produced a
+     * false diagnosis earlier in this thread, in miniature.
+     */
+    async function clearArrangements() {
+        const { data: arrangementRows } = await supabase
+            .from("financial_responsibility_arrangements")
+            .select("id")
+            .eq("org_id", ORG)
+            .eq("customer_id", customerId);
+        const arrangementIds = ((arrangementRows ?? []) as Array<{ id: string }>).map((r) => r.id);
+        if (arrangementIds.length === 0) return;
+
+        const { data: shareRows } = await supabase
+            .from("financial_responsibility_shares")
+            .select("id")
+            .eq("org_id", ORG)
+            .in("arrangement_id", arrangementIds);
+        const shareIds = ((shareRows ?? []) as Array<{ id: string }>).map((r) => r.id);
+
+        if (shareIds.length > 0) {
+            await supabase.from("financial_expected_funding").delete().eq("org_id", ORG).in("share_id", shareIds);
+        }
+        await supabase.from("financial_responsibility_allocations").delete().eq("org_id", ORG).in("arrangement_id", arrangementIds);
+        await supabase.from("financial_responsibility_shares").delete().eq("org_id", ORG).in("arrangement_id", arrangementIds);
+        await supabase.from("financial_responsibility_arrangements").delete().eq("org_id", ORG).in("id", arrangementIds);
+    }
+
+    /** A person on this household, which is what a responsible party is. */
+    async function aResponsibleParty(): Promise<string> {
+        const { data } = await supabase
+            .from("customer_persons")
+            .select("person_id")
+            .eq("org_id", ORG)
+            .eq("customer_id", customerId)
+            .limit(2);
+        const rows = (data ?? []) as Array<{ person_id: string }>;
+        expect(rows.length, "the household needs a person to be responsible").toBeGreaterThan(0);
+        return rows[0]!.person_id;
+    }
+
+    it("RESPONSIBILITY · says who owes, and moves no money doing it", async () => {
+        await clearArrangements();
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const charge = (await grossCharges())[0]!;
+        const gross = Number(charge.amount_cents);
+        const party = await aResponsibleParty();
+
+        const before = {
+            net: (await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: charge.id })).netCents,
+            balance: (await readChargeBalance(supabase, ORG, charge.id)).outstandingCents,
+        };
+
+        const half = Math.floor(gross / 2);
+        await configureResponsibilityArrangement(supabase, {
+            orgId: ORG,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            effectiveStart: PERIOD_START,
+            shares: [{ responsiblePartyId: party, method: "fixed", amountCents: half }],
+            actorUserId: ACTOR,
+        });
+
+        const arrangement = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        expect(arrangement, "the arrangement is readable").toBeTruthy();
+        expect(arrangement!.shares.length, "it carries the party it was given").toBeGreaterThan(0);
+        const share = arrangement!.shares.find((sh) => sh.responsiblePartyId === party)!;
+        expect(share, "and that party is on it").toBeTruthy();
+        expect(share.amountCents, "with the cents it was given").toBe(half);
+
+        /*
+         * RESPONSIBILITY ANSWERS WHO OWES. It is not a payment, not a reduction, and not a change to
+         * what is owed — so nothing about the money may have moved because of it.
+         */
+        expect(
+            (await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: charge.id })).netCents,
+            "the obligation is untouched by deciding who owes it",
+        ).toBe(before.net);
+        expect(
+            (await readChargeBalance(supabase, ORG, charge.id)).outstandingCents,
+            "and so is the balance",
+        ).toBe(before.balance);
+    }, 420_000);
+
+    it("RESPONSIBILITY · a later arrangement supersedes rather than doubling", async () => {
+        await clearArrangements();
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const party = await aResponsibleParty();
+
+        await configureResponsibilityArrangement(supabase, {
+            orgId: ORG, customerId, customerMemberId: kids[0]!.memberId,
+            effectiveStart: PERIOD_START,
+            shares: [{ responsiblePartyId: party, method: "fixed", amountCents: 60_000 }],
+            actorUserId: ACTOR,
+        });
+        await configureResponsibilityArrangement(supabase, {
+            orgId: ORG, customerId, customerMemberId: kids[0]!.memberId,
+            effectiveStart: "2029-04-15",
+            shares: [{ responsiblePartyId: party, method: "fixed", amountCents: 40_000 }],
+            actorUserId: ACTOR,
+        });
+
+        const current = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        expect(current, "there is a current arrangement").toBeTruthy();
+        const amounts = current!.shares.map((sh) => sh.amountCents);
+        expect(amounts, "the later decision is the one in force").toContain(40_000);
+        expect(
+            amounts.reduce((n, v) => (n ?? 0) + (v ?? 0), 0),
+            "and the earlier one is history, not an addition to it",
+        ).toBe(40_000);
+
+        // The predecessor still exists as a record of what was decided before.
+        const { data: all } = await supabase
+            .from("financial_responsibility_arrangements")
+            .select("id, effective_start, effective_end")
+            .eq("org_id", ORG)
+            .eq("customer_id", customerId);
+        expect((all ?? []).length, "the earlier arrangement is not deleted").toBeGreaterThan(1);
+    }, 420_000);
+
+    /**
+     * EXPECTED FUNDING IS NOT SUBSIDY, AND NOT MONEY.
+     *
+     * It is exercised here with an employer sponsorship precisely to show it needs no subsidy
+     * authorization, claim or remittance: it is an expectation attached to a responsibility share.
+     * It must not move a balance, and must not make anything less collectible merely by existing.
+     */
+    it("EXPECTED FUNDING · is an expectation, not a receipt, and suppresses nothing", async () => {
+        await clearArrangements();
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const charge = (await grossCharges())[0]!;
+        const party = await aResponsibleParty();
+
+        const arrangementId = (await configureResponsibilityArrangement(supabase, {
+            orgId: ORG, customerId, customerMemberId: kids[0]!.memberId,
+            effectiveStart: PERIOD_START,
+            shares: [{ responsiblePartyId: party, method: "fixed", amountCents: 100_000 }],
+            actorUserId: ACTOR,
+        })) as unknown as { id?: string };
+
+        const before = {
+            net: (await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: charge.id })).netCents,
+            outstanding: (await readChargeBalance(supabase, ORG, charge.id)).outstandingCents,
+            collectible: (await resolveFamilyCollectible(supabase, { orgId: ORG, chargeId: charge.id })),
+        };
+
+        const arrangement = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        const shareId = arrangement!.shares.find((sh) => sh.responsiblePartyId === party)!.id;
+
+        await configureExpectedFunding(supabase, {
+            orgId: ORG,
+            shareId,
+            arrangementId: arrangement!.id ?? (arrangementId?.id ?? null),
+            fundingSourceType: "employer_sponsorship",
+            fundingSourceLabel: "Certification Employer Sponsorship",
+            basis: "fixed_amount",
+            expectedAmountCents: 75_000,
+            effectiveStart: PERIOD_START,
+            idempotencyKey: "fred:funding:cert-expected",
+            actorUserId: ACTOR,
+        });
+
+        const withFunding = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        const funded = withFunding!.shares.find((sh) => sh.responsiblePartyId === party)!;
+        expect(funded.expectedFunding.length, "the expectation is recorded on the share").toBeGreaterThan(0);
+
+        // EXPECTED is not RECEIVED, and not a suppression.
+        expect(
+            (await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: charge.id })).netCents,
+            "expecting money from somebody else does not reduce the obligation",
+        ).toBe(before.net);
+        expect(
+            (await readChargeBalance(supabase, ORG, charge.id)).outstandingCents,
+            "nor what is outstanding",
+        ).toBe(before.outstanding);
+        const after = await resolveFamilyCollectible(supabase, { orgId: ORG, chargeId: charge.id });
+        expect(
+            after.currentlyCollectibleCents,
+            "and an expectation alone suppresses nothing",
+        ).toBe(before.collectible.currentlyCollectibleCents);
+    }, 420_000);
+
+    it("EXPECTED FUNDING · a correction supersedes rather than adding", async () => {
+        await clearArrangements();
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const party = await aResponsibleParty();
+        await configureResponsibilityArrangement(supabase, {
+            orgId: ORG, customerId, customerMemberId: kids[0]!.memberId,
+            effectiveStart: PERIOD_START,
+            shares: [{ responsiblePartyId: party, method: "fixed", amountCents: 100_000 }],
+            actorUserId: ACTOR,
+        });
+        const arrangement = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        const shareId = arrangement!.shares.find((sh) => sh.responsiblePartyId === party)!.id;
+
+        for (const [amount, key] of [[75_000, "a"], [70_000, "b"]] as const) {
+            await configureExpectedFunding(supabase, {
+                orgId: ORG, shareId, arrangementId: arrangement!.id,
+                fundingSourceType: "employer_sponsorship",
+                fundingSourceLabel: "Certification Employer Sponsorship",
+                basis: "fixed_amount",
+                expectedAmountCents: amount,
+                effectiveStart: PERIOD_START,
+                idempotencyKey: `fred:funding:cert-supersede-${key}`,
+                actorUserId: ACTOR,
+            });
+        }
+
+        const after = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        const share = after!.shares.find((sh) => sh.responsiblePartyId === party)!;
+        const total = share.expectedFunding.reduce((n, f) => n + (f.expectedAmountCents ?? 0), 0);
+        expect(total, "the correction replaces the expectation rather than stacking on it").toBe(70_000);
+    }, 420_000);
+
+    /**
+     * REFUND IS A NEW OUTBOUND PAYMENT, and the receipt it refunds is never touched.
+     */
+    it("REFUND · gives money back without rewriting what was received", async () => {
+        await clearArrangements();
+        await clearReductions();
+        /*
+         * ITS OWN OBLIGATION, not one of the shared tuition charges. Refunding requires posting and
+         * settling a charge, and a posted charge cannot be cleaned up afterwards — so using the
+         * tuition cohort would leave a settled charge behind that makes every later generation case
+         * report `already_posted`. That is precisely the accumulation this thread has been bitten by.
+         */
+        const gross = 100_000;
+        const draft = await createChildcareDraftCharge(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            chargeCategory: "fee",
+            amountCents: gross,
+            serviceDate: PERIOD_START,
+            description: `Refund certification ${Date.now()}`,
+            actorUserId: ACTOR,
+        } as never);
+        const charge = { id: (draft as { id: string }).id };
+        await postChildcareCharge(supabase, { orgId: ORG, chargeId: charge.id, actorUserId: ACTOR } as never);
+
+        const { payment } = await recordChildcarePayment(supabase, {
+            orgId: ORG,
+            billableSourceType: "enrollment_agreement",
+            billableSourceId: kids[0]!.agreementId,
+            customerId,
+            amountCents: gross,
+            paymentMethod: "check",
+            actorUserId: ACTOR,
+        });
+        await applyPaymentToCharge(supabase, {
+            orgId: ORG, paymentId: payment.id, chargeId: charge.id, amountCents: gross,
+        });
+        expect((await readChargeBalance(supabase, ORG, charge.id)).outstandingCents, "settled").toBe(0);
+
+        const receiptBefore = await supabase
+            .from("payments").select("amount_cents, direction, status, payment_method, received_at")
+            .eq("org_id", ORG).eq("id", payment.id).maybeSingle();
+
+        const refundResult = await refundChildcarePayment(supabase, {
+            orgId: ORG, paymentId: payment.id, amountCents: gross,
+            reason: "Certification refund", actorUserId: ACTOR,
+            /*
+             * KEYED TO THE RECEIPT, not to the case. A constant key is idempotent across RUNS as
+             * well as within one, so the second run's refund silently returned the first run's and
+             * asserted against a payment that no longer had anything to do with it. One refund
+             * decision per receipt is the honest identity.
+             */
+            idempotencyKey: `fred:refund:cert-core:${payment.id}`,
+        });
+
+        const receiptAfter = await supabase
+            .from("payments").select("amount_cents, direction, status, payment_method, received_at")
+            .eq("org_id", ORG).eq("id", payment.id).maybeSingle();
+        expect(JSON.stringify(receiptAfter.data), "the receipt reads exactly as it was received")
+            .toBe(JSON.stringify(receiptBefore.data));
+
+        const { data: refunds } = await supabase
+            .from("payments").select("id, amount_cents, direction, reversal_origin")
+            .eq("org_id", ORG).eq("refunds_payment_id", payment.id);
+        expect((refunds ?? []).length, "exactly one outbound refund row").toBe(1);
+        expect(refundResult.alreadyRefunded, "and it was made by this run, not returned from a past one")
+            .toBe(false);
+        expect((refunds as Array<{ direction: string }>)[0]!.direction).toBe("outbound");
+
+        expect(
+            await readPaymentRefundedCents(supabase, ORG, payment.id),
+            "the refunded figure is what was given back",
+        ).toBe(gross);
+        expect(
+            (await readChargeBalance(supabase, ORG, charge.id)).outstandingCents,
+            "and the obligation is owed again, because the money went back",
+        ).toBe(gross);
+        expect(
+            await readPaymentUnappliedCents(supabase, ORG, payment.id, gross),
+            "refunded money is not unapplied money waiting to be used",
+        ).toBe(0);
+    }, 600_000);
 });
