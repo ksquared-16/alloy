@@ -180,6 +180,61 @@ export function globMatches(glob, path) {
 }
 
 /**
+ * The JOBS a workflow declares, which is what CI actually shows.
+ *
+ * THE MISTAKE THIS CLOSES. The tool reported workflow names; a check run lists
+ * JOB names. `web-typecheck.yml` is called "Web typecheck" and contributes two
+ * checks — "Production graph" and "Full graph (tests + scripts)". Comparing a
+ * predicted workflow against an observed job made a correct prediction look
+ * like a miss, and that false conclusion was carried into a mission report.
+ *
+ * READ FROM THE YAML, never from what CI happened to run last time: a job that
+ * was added today has no history, and history is exactly what a prediction is
+ * supposed to replace.
+ *
+ * NOT A GITHUB ACTIONS INTERPRETER. Indentation-scoped scanning of the `jobs:`
+ * block is enough for the shape this repository writes. Where a job's inclusion
+ * depends on a runtime expression the honest answer is CONDITIONAL, and it says
+ * so rather than guessing.
+ */
+export function workflowJobs(text) {
+  const lines = String(text).split("\n");
+  const start = lines.findIndex((l) => /^jobs:\s*$/.test(l));
+  if (start < 0) return [];
+  const out = [];
+  let current = null;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!line.trim() || /^\s*#/.test(line)) continue;
+    // A non-indented line ends the jobs block.
+    if (/^\S/.test(line)) break;
+    const jobId = line.match(/^ {2}([A-Za-z_][\w-]*):\s*$/);
+    if (jobId) {
+      current = { id: jobId[1], name: jobId[1], conditional: false, matrix: false, condition: null };
+      out.push(current);
+      continue;
+    }
+    if (!current) continue;
+    const name = line.match(/^ {4}name:\s*(.+?)\s*$/);
+    if (name) {
+      // A job's display name is what the check is called. Quotes are the YAML's,
+      // not part of the name.
+      current.name = name[1].replace(/^['"]|['"]$/g, "");
+      continue;
+    }
+    const cond = line.match(/^ {4}if:\s*(.+?)\s*$/);
+    if (cond) {
+      current.conditional = true;
+      current.condition = cond[1];
+      continue;
+    }
+    if (/^ {4}strategy:\s*$/.test(line)) current.matrix = null;
+    if (current.matrix === null && /^ {6,}matrix:\s*$/.test(line)) current.matrix = true;
+  }
+  return out.map((j) => ({ ...j, matrix: j.matrix === true }));
+}
+
+/**
  * Which workflows a candidate will actually trigger.
  *
  * Read from the workflow rather than remembered. A workflow with NO `paths:`
@@ -194,7 +249,7 @@ export function expectedCheckClasses(repoRoot, changedPaths, { dir = ".github/wo
     const text = readFileSync(join(abs, f), "utf8");
     const name = (text.match(/^name:\s*(.+)$/m) || [])[1]?.trim() || f;
     if (!/^\s*pull_request:/m.test(text)) {
-      out.push({ workflow: f, name, triggers: false, why: "not a pull_request workflow", matched: [] });
+      out.push({ workflow: f, name, triggers: false, why: "not a pull_request workflow", matched: [], jobs: [] });
       continue;
     }
     const block = text.match(/^\s{2}pull_request:[\s\S]*?(?=^\s{2}\S|^\S)/m)?.[0] || "";
@@ -202,7 +257,7 @@ export function expectedCheckClasses(repoRoot, changedPaths, { dir = ".github/wo
       .map((m) => m[1].trim())
       .filter((g) => g.includes("/") || g.includes("*"));
     if (!globs.length) {
-      out.push({ workflow: f, name, triggers: true, why: "no path filter — runs on every pull request", matched: [] });
+      out.push({ workflow: f, name, triggers: true, why: "no path filter — runs on every pull request", matched: [], jobs: workflowJobs(text) });
       continue;
     }
     const matched = changedPaths.filter((p) => globs.some((g) => globMatches(g, p)));
@@ -214,6 +269,7 @@ export function expectedCheckClasses(repoRoot, changedPaths, { dir = ".github/wo
         ? `path filter matched ${matched.length} changed file(s)`
         : "no changed file matched its path filter",
       matched,
+      jobs: matched.length ? workflowJobs(text) : [],
     });
   }
   return out;
@@ -239,9 +295,24 @@ export function discoverImpact(repoRoot, { baseRef, headRef = "HEAD", paths = nu
    */
   const uncovered = changed.filter((c) => !isTestFile(c)
     && !surface.some((s) => s.reasons.some((r) => r.because === c)));
+  /*
+   * EXPECTED_JOBS is the list to compare against a check run. Each row carries
+   * the workflow it came from, so a prediction and an observation can be lined
+   * up without anyone having to remember which file declares which check.
+   */
+  const jobs = [];
+  for (const c of checks) {
+    if (!c.triggers) continue;
+    for (const j of (c.jobs || [])) {
+      jobs.push({ workflow: c.workflow, workflow_name: c.name, job_id: j.id, check_name: j.name,
+        conditional: j.conditional, condition: j.condition, matrix: j.matrix });
+    }
+  }
   return {
     changed_files: changed,
     expected_test_surface: surface,
+    expected_workflows: checks.filter((c) => c.triggers).map((c) => c.name),
+    expected_jobs: jobs,
     expected_check_classes: checks,
     test_kinds: byKind,
     changed_without_test_reference: uncovered,
