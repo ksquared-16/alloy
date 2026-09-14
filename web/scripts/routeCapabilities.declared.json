@@ -559,32 +559,6 @@
         "helper": "requireUsersRolesManageAuth"
       }
     },
-    "app/api/admin/attendance/producers/[producerId]/route.ts": {
-      "DELETE": {
-        "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
-      }
-    },
-    "app/api/admin/attendance/producers/[producerId]/sites/route.ts": {
-      "DELETE": {
-        "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
-      },
-      "POST": {
-        "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
-      }
-    },
-    "app/api/admin/attendance/producers/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
-      }
-    },
     "app/api/admin/business-process-layout-assignments/route.ts": {
       "GET": {
         "status": "pending"
@@ -1749,6 +1723,13 @@
         "capability": "fin.read",
         "helper": "assertFinancialsReadAllowed",
         "supersedes": "Superseded 2026-09-10 by the Access & Identity V2 Financials slice. The prior entry reasoned that \"fin.read is a Financials-workspace capability, not this projection's\" — but the key's own refusal says \"You don't have access to view financial information for this organization\", and the role editor now offers View Financials as a control an organization sets. Under that meaning a composed household financial card, and the amount and canonical payment id of a collection attempt, ARE financial information; leaving them on admission alone would make \"a role with no Financials access cannot read financial data\" false through a second door. Overturning a reasoned `none` is a decision, and this is the record of it."
+      }
+    },
+    "app/api/admin/financials/eligible-target-charges/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
       }
     },
     "app/api/admin/financials/funding-sources/route.ts": {
@@ -4194,6 +4175,102 @@
         "capability": "settings.users_roles",
         "helper": "requireUsersRolesManageAuth",
         "reason": "W-17 Configurable Multi-Role Assignment. Adding or removing ONE role is the same authority as replacing the whole set, so it uses the gate every Access mutation route already uses rather than inventing an assignment capability. The target user comes from the path and the org from the authenticated context, so a forged user or a role belonging to another organization is refused rather than reaching another tenant."
+      }
+    },
+    "app/api/admin/integrations/applications/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/capabilities/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/activity/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/credentials/[credentialId]/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      },
+      "DELETE": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/credentials/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
+      },
+      "PATCH": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "authorizeIntegrationsAdmin"
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/locations/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/openapi/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/v1/context/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External read of the caller's own installation context, admitted by a bearer access token resolved through resolveAccessTokenPrincipal. Same reasoning as the token route: the principal is a non-human application, not an org member, so no catalog capability applies. It returns only the caller's own application, installation, organization id, granted scopes and resource boundary — no domain data, so no domain capability is implicated."
+      }
+    },
+    "app/api/v1/locations/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope locations.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies — external scopes are a separate compatibility contract by design (see docs/api/developer-platform/03-authorization-scopes-boundaries.md). Tenancy and the installation location boundary are enforced inside public.list_external_locations."
+      }
+    },
+    "app/api/v1/oauth/token/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External token exchange. Admission IS the presented installation credential, resolved by hashed secret through resolveApplicationPrincipal, which reads the organization from the installation row. There is no org principal to hold a catalog capability: the caller is a non-human Application Principal, and Alloy's capability catalog describes what a MEMBER may do. External authority is the installation's granted_scopes, enforced at /api/v1 by requireScope, not a catalog key."
       }
     }
   }

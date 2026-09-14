@@ -6,6 +6,7 @@
  * subject selector renders synchronously and re-verifies in the background. Same contract as tour /
  * form-delivery / communications warm caches: TTL + in-flight de-dup, errors never cached, browser-only.
  */
+import { speculativeFetch } from "@/lib/adminV2/runtime/speculation/speculativeFetch";
 
 export type WarmEligibleEnrollmentChild = { id: string; label: string };
 
@@ -30,7 +31,7 @@ function isFresh(entry: Entry, now: number): boolean {
 }
 
 async function fetchEligible(opportunityId: string): Promise<WarmEligibleEnrollmentChildren | null> {
-    const res = await fetch(
+    const res = await speculativeFetch(
         `/api/admin/opportunities/${encodeURIComponent(opportunityId)}/eligible-enrollment-children`,
         { credentials: "include" },
     );

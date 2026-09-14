@@ -1,0 +1,54 @@
+{
+  "schema_version": "vacilando.census_artifact_provenance.v1",
+  "purpose": "These artifacts were written before the census evidence envelope was made one generation. Their TOP-LEVEL trusted_host_action_id names an older observation than the results beside it. They are preserved unmodified as historical evidence; this manifest is the supersession record that keeps a reader from treating the stated action id as the source of these results.",
+  "rule": "For any artifact listed here, the authoritative provenance is execution.trusted_host_action_id, not the top-level trusted_host_action_id. Artifacts NOT listed here must be coherent; a new mixed-generation artifact fails the required census provenance gate.",
+  "do_not_rewrite": "Correcting the stated id in place would rewrite historical evidence. That is an operator decision, not an automatic repair.",
+  "generated_from": "censusEvidenceGeneration() over certification/migrations/*.results.json",
+  "entries": [
+    {
+      "artifact": "d2-candidate-physical-state-census.sql.results.json",
+      "status": "HISTORICAL_MIXED_GENERATION",
+      "stated_trusted_host_action_id": "tha_7150f21a65f12e",
+      "authoritative_trusted_host_action_id": "tha_21faa429b2750b",
+      "query_hash_agrees": true,
+      "results_census_run_at": "2026-09-11T23:34:57.000Z",
+      "execution_executed_at": "2026-09-11T23:34:56.198Z"
+    },
+    {
+      "artifact": "hosted-migration-identity-census.sql.results.json",
+      "status": "HISTORICAL_MIXED_GENERATION",
+      "stated_trusted_host_action_id": "tha_62a0bc1ab313f7",
+      "authoritative_trusted_host_action_id": "tha_02c7feeb72f587",
+      "query_hash_agrees": true,
+      "results_census_run_at": "2026-09-12T16:21:08.115Z",
+      "execution_executed_at": "2026-09-12T16:21:07.148Z"
+    },
+    {
+      "artifact": "thread7-apply-outcome-census.sql.results.json",
+      "status": "HISTORICAL_MIXED_GENERATION",
+      "stated_trusted_host_action_id": "tha_d871c5a4913fcf",
+      "authoritative_trusted_host_action_id": "tha_78b9a0c5f57f65",
+      "query_hash_agrees": true,
+      "results_census_run_at": "2026-09-11T18:38:12.277Z",
+      "execution_executed_at": "2026-09-11T18:38:11.542Z"
+    },
+    {
+      "artifact": "thread7-post-apply-verification-census.sql.results.json",
+      "status": "HISTORICAL_MIXED_GENERATION",
+      "stated_trusted_host_action_id": "tha_e08f579b686d40",
+      "authoritative_trusted_host_action_id": "tha_dc0bf775c0f38e",
+      "query_hash_agrees": true,
+      "results_census_run_at": "2026-09-11T18:54:17.979Z",
+      "execution_executed_at": "2026-09-11T18:54:16.361Z"
+    },
+    {
+      "artifact": "w13-portal-access-ledger-repair-census.sql.results.json",
+      "status": "HISTORICAL_MIXED_GENERATION",
+      "stated_trusted_host_action_id": "tha_e249692839a6f9",
+      "authoritative_trusted_host_action_id": "tha_adb96b47e3f397",
+      "query_hash_agrees": true,
+      "results_census_run_at": "2026-09-11T18:42:04.459Z",
+      "execution_executed_at": "2026-09-11T18:42:03.435Z"
+    }
+  ]
+}

@@ -10,6 +10,7 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 
 import { worktreePathForName } from "./workspace-facts.mjs";
+import { firstMeaningfulLine } from "./trusted-host-push.mjs";
 
 function gh(args, cwd, timeout = 12000) {
   return new Promise((res) => {
@@ -28,7 +29,7 @@ export async function prForWorktree(worktree, branch) {
   if (!r.ok) {
     // gh exits non-zero when there is no PR for the branch — authoritative "no PR".
     if (/no pull requests found|no default remote|could not resolve/i.test(r.err)) return { available: true, pr: null, branch };
-    return { available: false, reason: (r.err || "gh error").split("\n")[0].slice(0, 160), branch };
+    return { available: false, reason: firstMeaningfulLine(String(r.err || ""), "gh error").slice(0, 160), branch };
   }
   let j;
   try { j = JSON.parse(r.out); } catch { return { available: false, reason: "unparseable gh output", branch }; }

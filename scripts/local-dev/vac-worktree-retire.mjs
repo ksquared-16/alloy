@@ -103,6 +103,23 @@ if (chosen.state !== "candidate") {
   for (const g of chosen.gates.filter((x) => !x.passed)) {
     process.stdout.write(`   gate ${g.gate}: ${g.measured ? "FAILED" : "not measured"} ${JSON.stringify(g.evidence)}\n`);
   }
+  /*
+   * SAY WHAT THE STATE MEANS, WHERE THE OPERATOR MEETS IT.
+   *
+   * No governance document mentions `operator_review`, and an operator who
+   * reads only "operator_review" reasonably concludes that their approval is
+   * what unblocks it. It is not: the executor re-derives safety and requires
+   * `candidate`, so an approval given here would be solicited, granted, and
+   * then refused `not_retirable_now`. Filing nothing is the correct behaviour;
+   * saying why is the missing half.
+   */
+  if (chosen.state === "operator_review") {
+    process.stdout.write("\n  operator_review is not 'approve to proceed'. The executor requires\n"
+      + "  state=candidate and re-derives it at execution, so approving a retirement\n"
+      + "  in this state would be refused as not_retirable_now.\n"
+      + "  Land, abandon or otherwise dispose of the branch first; the worktree\n"
+      + "  becomes a candidate once its work is no longer only here.\n");
+  }
   process.stdout.write(`\nNo governed request filed.\n`);
   process.exit(1);
 }

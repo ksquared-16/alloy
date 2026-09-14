@@ -33,6 +33,7 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 import { readWorktreeGitState, snapshotPathSet } from "./git-worktree-state.mjs";
+import { firstMeaningfulLine } from "./trusted-host-push.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -114,7 +115,9 @@ async function git(args, cwd, { timeout = 30_000 } = {}) {
     });
     return { ok: true, stdout: String(stdout) };
   } catch (err) {
-    return { ok: false, error: String(err?.stderr || err?.message || err).split("\n")[0].slice(0, 300) };
+    // A checkpoint that fails with a blank reason is a commit an agent cannot
+    // diagnose. git opens with an empty line often enough to matter.
+    return { ok: false, error: firstMeaningfulLine(String(err?.stderr || err?.message || err), "checkpoint failed").slice(0, 300) };
   }
 }
 

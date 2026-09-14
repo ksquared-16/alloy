@@ -2046,3 +2046,186 @@
   font-variant-numeric: tabular-nums;
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
 }
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * RECEIPTS, AND MOVING THE MONEY ON THEM (Financials Slice 6).
+ *
+ * The markup for the payments section and the Move / Apply panel shipped without any styles at all.
+ * That was not merely cosmetic: the panel is a sibling of the detail card, the detail card is
+ * absolutely positioned at z-index 60 when the card is expanded, and an unstyled panel has no
+ * stacking context of its own — so it rendered UNDERNEATH the card the operator is looking at and
+ * computed `pointer-events: none`. Mounted certification found Move openable and then unusable: the
+ * click landed on the card sitting on top of it.
+ *
+ * The panel therefore sits one layer above the expanded card. Everything else here is ordinary
+ * layout for rows that were inheriting whatever surrounded them.
+ * ────────────────────────────────────────────────────────────────────────────── */
+
+.alloy-os-fdetail__payments {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.alloy-os-fdetail__payment {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 12%, transparent));
+  border-radius: 10px;
+}
+
+.alloy-os-fdetail__application {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 2px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+}
+
+.alloy-os-fdetail__appstatus,
+.alloy-os-fdetail__appreason {
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 60%, #64748b);
+}
+
+/* A reversed application is history: it must read as quieter than the one that counts. */
+.alloy-os-fdetail__application[data-application-status="reversed"] {
+  opacity: 0.72;
+}
+
+.alloy-os-fdetail__unapplied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.alloy-os-fdetail__movenotice,
+.alloy-os-fdetail__movepanel {
+  /*
+   * The layer that makes this reachable at all — see the note above. `pointer-events: auto` is the
+   * other half and is not redundant: raising a card makes the layer behind it inert, that inertness
+   * INHERITS, and the panel renders in that layer. With the z-index alone the panel is drawn in the
+   * right place and still cannot be clicked. The raised card opts back in the same way.
+   */
+  position: relative;
+  z-index: 61;
+  pointer-events: auto;
+  background: var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff));
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 14%, transparent));
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.alloy-os-fdetail__moveheader {
+  font-weight: 600;
+}
+
+.alloy-os-fdetail__movefield {
+  display: grid;
+  gap: 4px;
+}
+
+.alloy-os-fdetail__movefield select,
+.alloy-os-fdetail__movefield input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 18%, transparent));
+  border-radius: 8px;
+  background: var(--alloy-os-surface, #fff);
+  color: inherit;
+}
+
+.alloy-os-fdetail__movepreview {
+  display: grid;
+  gap: 2px;
+  font-size: 0.78rem;
+}
+
+.alloy-os-fdetail__moveerror {
+  font-size: 0.78rem;
+  color: var(--alloy-os-danger, #b3261e);
+}
+
+.alloy-os-fdetail__moveactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.alloy-os-fdetail__moveactions button {
+  padding: 5px 10px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 18%, transparent));
+  border-radius: 8px;
+  background: var(--alloy-os-surface, #fff);
+  color: inherit;
+  cursor: pointer;
+}
+
+.alloy-os-fdetail__moveactions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * WHAT SOMEBODY DECIDED BY HAND (Financials Slice 5C).
+ *
+ * The Add adjustment and Reverse panels deliberately reuse `__movepanel`, so they inherit the layer
+ * and the pointer-events opt-in that made Move reachable — the same trap would otherwise be waiting
+ * here, for the same reason.
+ * ────────────────────────────────────────────────────────────────────────────── */
+
+.alloy-os-fdetail__adjustments {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.alloy-os-fdetail__adjustment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  border-left: 2px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+}
+
+/* A reversed decision is history; it must read quieter than the one that stands. */
+.alloy-os-fdetail__adjustment[data-adjustment-reversed="true"] {
+  opacity: 0.72;
+}
+
+.alloy-os-fdetail__adjmeta,
+.alloy-os-fdetail__adjreason,
+.alloy-os-fdetail__adjstatus {
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 60%, #64748b);
+}
+
+.alloy-os-fdetail__adjustadd {
+  display: flex;
+  gap: 8px;
+}
+
+/* A transition offered on a ledger row — Post a draft, Reverse a posted charge. */
+.alloy-os-fdetail__rowaction {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 18%, transparent));
+  border-radius: 6px;
+  background: var(--alloy-os-surface, #fff);
+  color: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.alloy-os-fdetail__rowaction:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

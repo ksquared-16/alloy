@@ -18,8 +18,22 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { applyFinancialReductions } from "@/lib/financials/reductions/applyFinancialReductions";
 import { applyManualReduction, reverseManualReduction } from "@/lib/financials/reductions/manualReductionService";
+import { readAccountReductions } from "@/lib/financials/reductions/readAccountReductions";
+import { configureResponsibilityArrangement } from "@/lib/financials/responsibility/arrangementService";
+import { configureExpectedFunding } from "@/lib/financials/responsibility/expectedFundingService";
+import { readAccountArrangement } from "@/lib/financials/responsibility/readAccountArrangement";
+import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
+import { resolveAllocatableNet } from "@/lib/financials/responsibility/resolveAllocatableNet";
 import { generateTuitionCharges } from "@/lib/financials/tuitionGeneration/generateTuitionCharges";
-import { postChildcareCharge } from "@/lib/financials/childcareChargeService";
+import { createChildcareDraftCharge, postChildcareCharge } from "@/lib/financials/childcareChargeService";
+import {
+    applyPaymentToCharge,
+    readChargeBalance,
+    readPaymentRefundedCents,
+    readPaymentUnappliedCents,
+    recordChildcarePayment,
+    refundChildcarePayment,
+} from "@/lib/financials/childcarePaymentService";
 import { resolveHouseholdEligibility } from "@/lib/financials/reductions/resolveReductionEligibility";
 
 function certEnv(): { url: string; serviceKey: string } | null {
@@ -90,6 +104,12 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
             await supabase.from("consumption_events").delete().in("id", ids);
         }
         await supabase.from("charges").delete().eq("org_id", ORG).eq("charge_category", "tuition").eq("status", "draft");
+        /*
+         * A POSTED tuition charge left behind cannot be cleaned up here: it cannot be deleted while
+         * its payment applications exist, and a posted childcare charge cannot be voided in place —
+         * both are deliberate immutability, and attempting either silently changes nothing. The
+         * only safe rule is therefore not to CREATE one from a case that does not need it.
+         */
     }
 
     async function authorPolicy(id: string, policyType: string, value: Record<string, unknown>, over: Record<string, unknown> = {}) {
@@ -229,6 +249,19 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
 
             const agreementId = `${R}00000000a00${index + 1}`;
             const termId = `${R}00000000b00${index + 1}`;
+            /*
+             * The uniqueness this collides with is (org, member, site) — not the id. Deleting only
+             * this suite's own id leaves an agreement created under ANOTHER id for the same child
+             * and site in place, and the insert below then fails on a constraint the seed never
+             * names. A run that died before its cleanup is enough to cause it, and the shared cert
+             * tenant makes that ordinary rather than rare.
+             */
+            await supabase
+                .from("child_enrollment_agreements")
+                .delete()
+                .eq("org_id", ORG)
+                .eq("customer_member_id", member.id)
+                .eq("site_location_id", siteLocationId);
             await supabase.from("child_enrollment_agreements").delete().eq("id", agreementId);
             const { error: agreementError } = await supabase.from("child_enrollment_agreements").insert({
                 id: agreementId,
@@ -292,7 +325,18 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
         await authorPolicy(POLICY_SIBLING, "sibling_discount", { basis: "percentage", value: 15, label: "Sibling discount" });
 
         const generated = await generateGross();
-        expect(generated.counts.generated, JSON.stringify(generated.outcomes)).toBe(2);
+        /*
+         * BOTH CHILDREN ARE BILLED FOR THE PERIOD — generated now, or already billed by a case that
+         * could not clean up after itself. A posted childcare charge is immutable by design: it
+         * cannot be voided in place, cannot be deleted, and its payment applications cannot be
+         * deleted either, so a term billed once stays billed for the life of the fixture. What this
+         * case is about is which child gets the discount, not which call created the charge, so the
+         * setup asserts the OUTCOME it needs rather than the path taken to it.
+         */
+        expect(
+            generated.counts.generated + (generated.counts.alreadyPosted ?? 0),
+            JSON.stringify(generated.outcomes),
+        ).toBe(2);
         const gross = await grossCharges();
         expect(gross).toHaveLength(2);
 
@@ -329,14 +373,33 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
     }, 180_000);
 
     it("retires the reduction when the sibling's enrolment no longer covers the period, while the draft is still a draft", async () => {
-        // The second child's enrolment ends before the period — they are no longer concurrent.
-        await supabase.from("child_enrollment_agreements").update({ end_date: "2029-01-31" }).eq("id", kids[1]!.agreementId);
+        /*
+         * The second child's enrolment ends before the period — they are no longer concurrent.
+         *
+         * EVERY agreement that child holds has to end, not just this suite's own. The resolver reads
+         * agreements and keeps any that covers the period, and the shared certification tenant holds
+         * rows other suites created for the same member at other sites: ending one of several leaves
+         * the child concurrent through a row this test never mentions, and the assertion then fails
+         * for a reason that has nothing to do with the rule being tested.
+         */
+        const { data: heldRows } = await supabase
+            .from("child_enrollment_agreements")
+            .select("id, end_date")
+            .eq("org_id", ORG)
+            .eq("customer_member_id", kids[1]!.memberId);
+        const held = (heldRows ?? []) as Array<{ id: string; end_date: string | null }>;
+        for (const a of held) {
+            await supabase.from("child_enrollment_agreements").update({ end_date: "2029-01-31" }).eq("id", a.id);
+        }
         const facts = await resolveHouseholdEligibility(supabase, {
             orgId: ORG, customerId, periodStart: PERIOD_START, periodEnd: "2029-04-30",
         });
         expect(facts.byMember.get(kids[1]!.memberId), "an ended enrolment is not a concurrent sibling").toBeUndefined();
 
-        await supabase.from("child_enrollment_agreements").update({ end_date: null }).eq("id", kids[1]!.agreementId);
+        // Restore each one to exactly what it was, rather than blanking them all to null.
+        for (const a of held) {
+            await supabase.from("child_enrollment_agreements").update({ end_date: a.end_date }).eq("id", a.id);
+        }
     }, 120_000);
 
     // ── 2 · EMPLOYEE ELIGIBILITY, FROM THE CANONICAL EMPLOYMENT FACT ────────────────────────
@@ -761,4 +824,769 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
 
         await supabase.from("financial_policies").delete().eq("org_id", ORG).eq("policy_type", "vacation_credit");
     }, 120_000);
+
+    // ── 8 · SLICE 5C: THE SCENARIOS THE OPERATOR SURFACE RESTS ON ───────────────────────────
+
+    /*
+     * B — AN ADJUSTMENT CAN GO THE OTHER WAY. `credit` only ever lowers an obligation, but
+     * `adjustment` is the category that corrects in either direction, and a positive amount is how
+     * the canonical model says "owed again". Proving it here is what lets the panel offer a
+     * direction at all rather than guessing.
+     */
+    it("records an adjustment that RAISES what is owed, and says so in its sign", async () => {
+        await clearReductions();
+        const raised = await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "adjustment",
+            amountCents: 4_200,
+            reason: "Correcting a credit that was applied twice",
+            effectiveDate: PERIOD_START,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-raise",
+        });
+        const apps = await applications();
+        expect(apps).toHaveLength(1);
+        expect(Number(apps[0]!.amount_cents), "a positive amount is money owed again").toBe(4_200);
+        expect(apps[0]!.reduction_kind).toBe("manual");
+        expect(raised.amountCents).toBe(4_200);
+    }, 180_000);
+
+    /* D — ONE REVERSAL. A second would credit the family twice for one decision. */
+    it("refuses a second reversal of the same adjustment", async () => {
+        await clearReductions();
+        const original = await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -3_000,
+            reason: "Goodwill for a closure day",
+            effectiveDate: PERIOD_START,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-once",
+        });
+        await reverseManualReduction(supabase, {
+            orgId: ORG,
+            applicationId: original.applicationId,
+            reason: "Recorded against the wrong enrolment",
+            actorUserId: ACTOR,
+        });
+        await expect(
+            reverseManualReduction(supabase, {
+                orgId: ORG,
+                applicationId: original.applicationId,
+                reason: "Trying again",
+                actorUserId: ACTOR,
+            }),
+        ).rejects.toThrow(/already been reversed/i);
+
+        // And the ledger still holds exactly two rows: the decision and its opposite.
+        const apps = await applications();
+        expect(apps).toHaveLength(2);
+    }, 240_000);
+
+    /* H — another organisation's reduction is not this one's to reverse. */
+    it("will not reverse a reduction that belongs to another organisation", async () => {
+        await clearReductions();
+        const mine = await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -1_500,
+            reason: "Goodwill",
+            effectiveDate: PERIOD_START,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-crossorg",
+        });
+        await expect(
+            reverseManualReduction(supabase, {
+                orgId: "00000000-0000-4000-8000-0000000000ff",
+                applicationId: mine.applicationId,
+                reason: "Reaching across a tenant boundary",
+                actorUserId: ACTOR,
+            }),
+        ).rejects.toThrow(/no such reduction/i);
+
+        // Absent, not forbidden — and nothing moved.
+        const apps = await applications();
+        expect(apps).toHaveLength(1);
+        expect(apps[0]!.reversed_by_id, "it was not reversed").toBeNull();
+    }, 180_000);
+
+    /*
+     * E / F / G — ISOLATION. A decision about what a family owes is not a movement of money. It
+     * writes no receipt, no refund and nothing a payment processor would hear about.
+     */
+    it("touches no receipt, no refund and no processor", async () => {
+        await clearReductions();
+        const before = await supabase
+            .from("payments")
+            .select("id, amount_cents, status, direction, processor, processor_transaction_id, refunds_payment_id")
+            .eq("org_id", ORG);
+        const beforeRows = JSON.stringify((before.data ?? []).slice().sort());
+
+        const credit = await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -2_500,
+            reason: "Goodwill for a closure day",
+            effectiveDate: PERIOD_START,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-isolation",
+        });
+        await reverseManualReduction(supabase, {
+            orgId: ORG,
+            applicationId: credit.applicationId,
+            reason: "Reversing to prove isolation",
+            actorUserId: ACTOR,
+        });
+
+        const after = await supabase
+            .from("payments")
+            .select("id, amount_cents, status, direction, processor, processor_transaction_id, refunds_payment_id")
+            .eq("org_id", ORG);
+        expect(JSON.stringify((after.data ?? []).slice().sort()), "payments are untouched").toBe(beforeRows);
+
+        const { data: allocations } = await supabase
+            .from("payment_allocations")
+            .select("id")
+            .eq("org_id", ORG)
+            .eq("status", "active");
+        expect(Array.isArray(allocations), "allocations are still readable").toBe(true);
+    }, 240_000);
+
+    /*
+     * I — COLD REREAD, through the reader the operator surface actually uses. The card must be able
+     * to reconstruct both the decision and its reversal from persistence alone, with the lineage
+     * that tells them apart — otherwise it cannot offer a reversal, or know one already happened.
+     */
+    it("reads back both the decision and its reversal, with lineage", async () => {
+        await clearReductions();
+        const original = await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -6_000,
+            reason: "Closure week goodwill",
+            effectiveDate: PERIOD_START,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-reread",
+        });
+
+        const before = await readAccountReductions(supabase, {
+            orgId: ORG,
+            agreementIds: [kids[0]!.agreementId],
+        });
+        expect(before, "the decision is readable on its own").toHaveLength(1);
+        expect(before[0]!.applicationId).toBe(original.applicationId);
+        expect(before[0]!.kind).toBe("manual");
+        expect(before[0]!.category, "the category comes from the charge it wrote").toBe("credit");
+        expect(before[0]!.amountCents).toBe(-6_000);
+        expect(before[0]!.reason).toContain("Closure week");
+        expect(before[0]!.reversedByApplicationId, "not yet reversed").toBeNull();
+
+        const reversal = await reverseManualReduction(supabase, {
+            orgId: ORG,
+            applicationId: original.applicationId,
+            reason: "Applied against the wrong enrolment",
+            actorUserId: ACTOR,
+        });
+
+        const after = await readAccountReductions(supabase, {
+            orgId: ORG,
+            agreementIds: [kids[0]!.agreementId],
+        });
+        expect(after, "both rows survive — nothing is edited away").toHaveLength(2);
+        const originalAfter = after.find((r) => r.applicationId === original.applicationId)!;
+        const reversalAfter = after.find((r) => r.applicationId === reversal.applicationId)!;
+
+        expect(originalAfter.amountCents, "the original is exactly as it was").toBe(-6_000);
+        expect(originalAfter.reversedByApplicationId, "and now points at its reversal")
+            .toBe(reversal.applicationId);
+        expect(reversalAfter.amountCents, "the opposite was appended").toBe(6_000);
+        expect(reversalAfter.reversesApplicationId, "and names what it undoes").toBe(original.applicationId);
+        expect(reversalAfter.category, "a reversal is recorded as an adjustment").toBe("adjustment");
+
+        // The two net to zero: what the family owes is back where it started.
+        expect(after.reduce((n, r) => n + r.amountCents, 0)).toBe(0);
+    }, 300_000);
+
+    /* Only manual decisions are offered for reversal; authored policy is not anybody's to undo. */
+    it("reads policy applications for context but never as manual decisions", async () => {
+        const rows = await readAccountReductions(supabase, {
+            orgId: ORG,
+            agreementIds: kids.map((k) => k.agreementId),
+        });
+        for (const r of rows) {
+            expect(["manual", "policy"]).toContain(r.kind);
+        }
+        expect(rows.every((r) => r.agreementId !== null), "every row names the enrolment it is against")
+            .toBe(true);
+    }, 120_000);
+
+    /**
+     * A CREDIT THAT NAMES NOTHING REDUCES NOTHING.
+     *
+     * `resolveAllocatableNet` nets a charge as its amount plus the reductions whose
+     * `source_charge_id` names it. A manual reduction written without one still appears as a credit
+     * row — so the card's signed reconciliation nets it and the family looks like they owe less —
+     * while the obligation it was meant to reduce is untouched, and every authority that asks "what
+     * is still collectible on this charge" answers the full amount.
+     *
+     * Two readings of the same household, and only one of them can be right. This pins the
+     * difference so the surface cannot quietly go back to writing unattached credits.
+     */
+    it("only reduces an obligation when the reduction names the charge it reduces", async () => {
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const charges = await grossCharges();
+        const target = charges[0]!;
+        const grossCents = Number(target.amount_cents);
+
+        const before = await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id });
+        expect(before.netCents, "the charge starts at its full amount").toBe(grossCents);
+
+        // Unattached: the shape the manual panel produced.
+        await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -5_000,
+            reason: "Goodwill that names no charge",
+            effectiveDate: PERIOD_START,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-unattached",
+        });
+        const afterFloating = await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id });
+        expect(
+            afterFloating.netCents,
+            "a credit that names no charge leaves every obligation exactly as it was",
+        ).toBe(grossCents);
+
+        // Attached: the same decision, against the charge it is about.
+        await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -5_000,
+            reason: "Goodwill against the tuition it concerns",
+            effectiveDate: PERIOD_START,
+            sourceChargeId: target.id,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-attached",
+        });
+        const afterAttached = await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id });
+        expect(
+            afterAttached.netCents,
+            "naming the charge is what makes the credit reduce it",
+        ).toBe(grossCents - 5_000);
+    }, 300_000);
+
+    /**
+     * AND REVERSING AN ATTACHED CREDIT MUST GIVE THE OBLIGATION BACK.
+     *
+     * `reverseManualReduction` appends the opposite with `sourceChargeId` set to the ORIGINAL
+     * REDUCTION'S OWN charge — not to the obligation the reduction was against. If that is what
+     * reaches `financial_reduction_applications.source_charge_id`, the reversal names the credit
+     * rather than the charge, `resolveAllocatableNet` never sees it, and the obligation stays
+     * reduced after the operator has undone the reduction.
+     */
+    it("gives the obligation back when an attached credit is reversed", async () => {
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const target = (await grossCharges())[0]!;
+        const grossCents = Number(target.amount_cents);
+
+        const credit = await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -5_000,
+            reason: "Goodwill against this tuition",
+            effectiveDate: PERIOD_START,
+            sourceChargeId: target.id,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-attached-reverse",
+        });
+        expect((await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id })).netCents)
+            .toBe(grossCents - 5_000);
+
+        await reverseManualReduction(supabase, {
+            orgId: ORG,
+            applicationId: credit.applicationId,
+            reason: "Reversing the goodwill",
+            actorUserId: ACTOR,
+        });
+
+        expect(
+            (await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id })).netCents,
+            "undoing the reduction must restore the obligation it reduced",
+        ).toBe(grossCents);
+    }, 300_000);
+
+    // ── 9 · REDUCTION / COLLECTIBILITY CONVERGENCE ──────────────────────────────────────────
+
+    /**
+     * A CREDIT AND ITS REVERSAL MUST BE A NO-OP, AND MUST BE ONE EVERY TIME.
+     *
+     * Driven on a clean obligation rather than on a shared tenant's history, because the question is
+     * whether the cycle nets — and a fixture that earlier runs have already driven below zero cannot
+     * answer it. Read back through `resolveAllocatableNet`, which is the net every authority that
+     * asks "what does this charge still owe" is composed from.
+     */
+    it("nets a credit and its reversal to nothing, repeatedly, on one obligation", async () => {
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const target = (await grossCharges())[0]!;
+        const gross = Number(target.amount_cents);
+
+        const net = async () =>
+            (await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id })).netCents;
+
+        expect(await net(), "the obligation starts whole").toBe(gross);
+
+        for (const cycle of [1, 2, 3]) {
+            const credit = await applyManualReduction(supabase, {
+                orgId: ORG,
+                enrollmentAgreementId: kids[0]!.agreementId,
+                customerId,
+                customerMemberId: kids[0]!.memberId,
+                chargeCategory: "credit",
+                amountCents: -5_000,
+                reason: `Goodwill, cycle ${cycle}`,
+                effectiveDate: PERIOD_START,
+                sourceChargeId: target.id,
+                actorUserId: ACTOR,
+                idempotencyKey: `fred:manual:cert-cycle-${cycle}`,
+            });
+            expect(await net(), `cycle ${cycle}: the credit reduces the obligation once`)
+                .toBe(gross - 5_000);
+
+            await reverseManualReduction(supabase, {
+                orgId: ORG,
+                applicationId: credit.applicationId,
+                reason: `Undoing cycle ${cycle}`,
+                actorUserId: ACTOR,
+            });
+            expect(await net(), `cycle ${cycle}: undoing it restores the obligation exactly`)
+                .toBe(gross);
+        }
+
+        // Three complete cycles, and the obligation is exactly where it started. No ratchet.
+        expect(await net(), "no drift across repeated cycles").toBe(gross);
+    }, 420_000);
+
+    /**
+     * THE BOUNDARY: a reduction may not take more than the obligation holds.
+     *
+     * `resolveAllocatableNet` refuses to net an obligation below zero, and says that state is
+     * unreachable because the policy path clamps. The manual path did not clamp or bound, so an
+     * operator could write a credit larger than the charge it names and leave that obligation in a
+     * state one authority refuses to read while others carried on reporting it. The writer now holds
+     * the same bound, so the refusal is genuinely unreachable rather than merely undocumented.
+     */
+    it("refuses a manual reduction larger than the obligation it names", async () => {
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const target = (await grossCharges())[0]!;
+        const gross = Number(target.amount_cents);
+
+        await expect(
+            applyManualReduction(supabase, {
+                orgId: ORG,
+                enrollmentAgreementId: kids[0]!.agreementId,
+                customerId,
+                customerMemberId: kids[0]!.memberId,
+                chargeCategory: "credit",
+                amountCents: -(gross + 1_000),
+                reason: "More goodwill than there was obligation",
+                effectiveDate: PERIOD_START,
+                sourceChargeId: target.id,
+                actorUserId: ACTOR,
+                idempotencyKey: "fred:manual:cert-overreduce",
+            }),
+            "the writer refuses rather than leaving an obligation nobody can read",
+        ).rejects.toThrow(/larger than what the charge still holds/i);
+
+        // Nothing was written, and the obligation is still readable and whole.
+        expect((await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id })).netCents)
+            .toBe(gross);
+
+        // Reducing it exactly to zero is allowed — the bound is "not below", not "not to".
+        await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -gross,
+            reason: "Forgiving the whole charge",
+            effectiveDate: PERIOD_START,
+            sourceChargeId: target.id,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-exact",
+        });
+        expect(
+            (await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id })).netCents,
+            "an obligation reduced to exactly nothing is still readable",
+        ).toBe(0);
+
+        // And one more cent is refused, now that nothing remains.
+        await expect(
+            applyManualReduction(supabase, {
+                orgId: ORG,
+                enrollmentAgreementId: kids[0]!.agreementId,
+                customerId,
+                customerMemberId: kids[0]!.memberId,
+                chargeCategory: "credit",
+                amountCents: -1,
+                reason: "One cent past nothing",
+                effectiveDate: PERIOD_START,
+                sourceChargeId: target.id,
+                actorUserId: ACTOR,
+                idempotencyKey: "fred:manual:cert-onemore",
+            }),
+        ).rejects.toThrow(/larger than what the charge still holds/i);
+    }, 420_000);
+
+    // ── 10 · CORE CLOSURE: RESPONSIBILITY, EXPECTED FUNDING, REFUND ─────────────────────────
+
+    /**
+     * These three are the remaining non-subsidy checkpoints. They run against the same clean
+     * fixture the reduction cases use — reseeded per case — because the last false diagnosis in this
+     * thread came from a household that had quietly accumulated state across runs.
+     *
+     * Every figure is read back from the canonical reader that owns it. Nothing here recomputes a
+     * balance: an oracle that did would just be a second opinion about money.
+     */
+
+    /**
+     * A household with no responsibility decisions on it.
+     *
+     * These cases each author an arrangement effective on the same day, and the service rightly
+     * refuses to supersede an arrangement that starts on or after the date being asked for. Without
+     * a reset the second case fails on the first case's leftovers — the accumulation that produced a
+     * false diagnosis earlier in this thread, in miniature.
+     */
+    async function clearArrangements() {
+        const { data: arrangementRows } = await supabase
+            .from("financial_responsibility_arrangements")
+            .select("id")
+            .eq("org_id", ORG)
+            .eq("customer_id", customerId);
+        const arrangementIds = ((arrangementRows ?? []) as Array<{ id: string }>).map((r) => r.id);
+        if (arrangementIds.length === 0) return;
+
+        const { data: shareRows } = await supabase
+            .from("financial_responsibility_shares")
+            .select("id")
+            .eq("org_id", ORG)
+            .in("arrangement_id", arrangementIds);
+        const shareIds = ((shareRows ?? []) as Array<{ id: string }>).map((r) => r.id);
+
+        if (shareIds.length > 0) {
+            await supabase.from("financial_expected_funding").delete().eq("org_id", ORG).in("share_id", shareIds);
+        }
+        await supabase.from("financial_responsibility_allocations").delete().eq("org_id", ORG).in("arrangement_id", arrangementIds);
+        await supabase.from("financial_responsibility_shares").delete().eq("org_id", ORG).in("arrangement_id", arrangementIds);
+        await supabase.from("financial_responsibility_arrangements").delete().eq("org_id", ORG).in("id", arrangementIds);
+    }
+
+    /** A person on this household, which is what a responsible party is. */
+    async function aResponsibleParty(): Promise<string> {
+        const { data } = await supabase
+            .from("customer_persons")
+            .select("person_id")
+            .eq("org_id", ORG)
+            .eq("customer_id", customerId)
+            .limit(2);
+        const rows = (data ?? []) as Array<{ person_id: string }>;
+        expect(rows.length, "the household needs a person to be responsible").toBeGreaterThan(0);
+        return rows[0]!.person_id;
+    }
+
+    it("RESPONSIBILITY · says who owes, and moves no money doing it", async () => {
+        await clearArrangements();
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const charge = (await grossCharges())[0]!;
+        const gross = Number(charge.amount_cents);
+        const party = await aResponsibleParty();
+
+        const before = {
+            net: (await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: charge.id })).netCents,
+            balance: (await readChargeBalance(supabase, ORG, charge.id)).outstandingCents,
+        };
+
+        const half = Math.floor(gross / 2);
+        await configureResponsibilityArrangement(supabase, {
+            orgId: ORG,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            effectiveStart: PERIOD_START,
+            shares: [{ responsiblePartyId: party, method: "fixed", amountCents: half }],
+            actorUserId: ACTOR,
+        });
+
+        const arrangement = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        expect(arrangement, "the arrangement is readable").toBeTruthy();
+        expect(arrangement!.shares.length, "it carries the party it was given").toBeGreaterThan(0);
+        const share = arrangement!.shares.find((sh) => sh.responsiblePartyId === party)!;
+        expect(share, "and that party is on it").toBeTruthy();
+        expect(share.amountCents, "with the cents it was given").toBe(half);
+
+        /*
+         * RESPONSIBILITY ANSWERS WHO OWES. It is not a payment, not a reduction, and not a change to
+         * what is owed — so nothing about the money may have moved because of it.
+         */
+        expect(
+            (await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: charge.id })).netCents,
+            "the obligation is untouched by deciding who owes it",
+        ).toBe(before.net);
+        expect(
+            (await readChargeBalance(supabase, ORG, charge.id)).outstandingCents,
+            "and so is the balance",
+        ).toBe(before.balance);
+    }, 420_000);
+
+    it("RESPONSIBILITY · a later arrangement supersedes rather than doubling", async () => {
+        await clearArrangements();
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const party = await aResponsibleParty();
+
+        await configureResponsibilityArrangement(supabase, {
+            orgId: ORG, customerId, customerMemberId: kids[0]!.memberId,
+            effectiveStart: PERIOD_START,
+            shares: [{ responsiblePartyId: party, method: "fixed", amountCents: 60_000 }],
+            actorUserId: ACTOR,
+        });
+        await configureResponsibilityArrangement(supabase, {
+            orgId: ORG, customerId, customerMemberId: kids[0]!.memberId,
+            effectiveStart: "2029-04-15",
+            shares: [{ responsiblePartyId: party, method: "fixed", amountCents: 40_000 }],
+            actorUserId: ACTOR,
+        });
+
+        const current = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        expect(current, "there is a current arrangement").toBeTruthy();
+        const amounts = current!.shares.map((sh) => sh.amountCents);
+        expect(amounts, "the later decision is the one in force").toContain(40_000);
+        expect(
+            amounts.reduce((n, v) => (n ?? 0) + (v ?? 0), 0),
+            "and the earlier one is history, not an addition to it",
+        ).toBe(40_000);
+
+        // The predecessor still exists as a record of what was decided before.
+        const { data: all } = await supabase
+            .from("financial_responsibility_arrangements")
+            .select("id, effective_start, effective_end")
+            .eq("org_id", ORG)
+            .eq("customer_id", customerId);
+        expect((all ?? []).length, "the earlier arrangement is not deleted").toBeGreaterThan(1);
+    }, 420_000);
+
+    /**
+     * EXPECTED FUNDING IS NOT SUBSIDY, AND NOT MONEY.
+     *
+     * It is exercised here with an employer sponsorship precisely to show it needs no subsidy
+     * authorization, claim or remittance: it is an expectation attached to a responsibility share.
+     * It must not move a balance, and must not make anything less collectible merely by existing.
+     */
+    it("EXPECTED FUNDING · is an expectation, not a receipt, and suppresses nothing", async () => {
+        await clearArrangements();
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const charge = (await grossCharges())[0]!;
+        const party = await aResponsibleParty();
+
+        const arrangementId = (await configureResponsibilityArrangement(supabase, {
+            orgId: ORG, customerId, customerMemberId: kids[0]!.memberId,
+            effectiveStart: PERIOD_START,
+            shares: [{ responsiblePartyId: party, method: "fixed", amountCents: 100_000 }],
+            actorUserId: ACTOR,
+        })) as unknown as { id?: string };
+
+        const before = {
+            net: (await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: charge.id })).netCents,
+            outstanding: (await readChargeBalance(supabase, ORG, charge.id)).outstandingCents,
+            collectible: (await resolveFamilyCollectible(supabase, { orgId: ORG, chargeId: charge.id })),
+        };
+
+        const arrangement = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        const shareId = arrangement!.shares.find((sh) => sh.responsiblePartyId === party)!.id;
+
+        await configureExpectedFunding(supabase, {
+            orgId: ORG,
+            shareId,
+            arrangementId: arrangement!.id ?? (arrangementId?.id ?? null),
+            fundingSourceType: "employer_sponsorship",
+            fundingSourceLabel: "Certification Employer Sponsorship",
+            basis: "fixed_amount",
+            expectedAmountCents: 75_000,
+            effectiveStart: PERIOD_START,
+            idempotencyKey: "fred:funding:cert-expected",
+            actorUserId: ACTOR,
+        });
+
+        const withFunding = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        const funded = withFunding!.shares.find((sh) => sh.responsiblePartyId === party)!;
+        expect(funded.expectedFunding.length, "the expectation is recorded on the share").toBeGreaterThan(0);
+
+        // EXPECTED is not RECEIVED, and not a suppression.
+        expect(
+            (await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: charge.id })).netCents,
+            "expecting money from somebody else does not reduce the obligation",
+        ).toBe(before.net);
+        expect(
+            (await readChargeBalance(supabase, ORG, charge.id)).outstandingCents,
+            "nor what is outstanding",
+        ).toBe(before.outstanding);
+        const after = await resolveFamilyCollectible(supabase, { orgId: ORG, chargeId: charge.id });
+        expect(
+            after.currentlyCollectibleCents,
+            "and an expectation alone suppresses nothing",
+        ).toBe(before.collectible.currentlyCollectibleCents);
+    }, 420_000);
+
+    it("EXPECTED FUNDING · a correction supersedes rather than adding", async () => {
+        await clearArrangements();
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const party = await aResponsibleParty();
+        await configureResponsibilityArrangement(supabase, {
+            orgId: ORG, customerId, customerMemberId: kids[0]!.memberId,
+            effectiveStart: PERIOD_START,
+            shares: [{ responsiblePartyId: party, method: "fixed", amountCents: 100_000 }],
+            actorUserId: ACTOR,
+        });
+        const arrangement = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        const shareId = arrangement!.shares.find((sh) => sh.responsiblePartyId === party)!.id;
+
+        for (const [amount, key] of [[75_000, "a"], [70_000, "b"]] as const) {
+            await configureExpectedFunding(supabase, {
+                orgId: ORG, shareId, arrangementId: arrangement!.id,
+                fundingSourceType: "employer_sponsorship",
+                fundingSourceLabel: "Certification Employer Sponsorship",
+                basis: "fixed_amount",
+                expectedAmountCents: amount,
+                effectiveStart: PERIOD_START,
+                idempotencyKey: `fred:funding:cert-supersede-${key}`,
+                actorUserId: ACTOR,
+            });
+        }
+
+        const after = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        const share = after!.shares.find((sh) => sh.responsiblePartyId === party)!;
+        const total = share.expectedFunding.reduce((n, f) => n + (f.expectedAmountCents ?? 0), 0);
+        expect(total, "the correction replaces the expectation rather than stacking on it").toBe(70_000);
+    }, 420_000);
+
+    /**
+     * REFUND IS A NEW OUTBOUND PAYMENT, and the receipt it refunds is never touched.
+     */
+    it("REFUND · gives money back without rewriting what was received", async () => {
+        await clearArrangements();
+        await clearReductions();
+        /*
+         * ITS OWN OBLIGATION, not one of the shared tuition charges. Refunding requires posting and
+         * settling a charge, and a posted charge cannot be cleaned up afterwards — so using the
+         * tuition cohort would leave a settled charge behind that makes every later generation case
+         * report `already_posted`. That is precisely the accumulation this thread has been bitten by.
+         */
+        const gross = 100_000;
+        const draft = await createChildcareDraftCharge(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            chargeCategory: "fee",
+            amountCents: gross,
+            serviceDate: PERIOD_START,
+            description: `Refund certification ${Date.now()}`,
+            actorUserId: ACTOR,
+        } as never);
+        const charge = { id: (draft as { id: string }).id };
+        await postChildcareCharge(supabase, { orgId: ORG, chargeId: charge.id, actorUserId: ACTOR } as never);
+
+        const { payment } = await recordChildcarePayment(supabase, {
+            orgId: ORG,
+            billableSourceType: "enrollment_agreement",
+            billableSourceId: kids[0]!.agreementId,
+            customerId,
+            amountCents: gross,
+            paymentMethod: "check",
+            actorUserId: ACTOR,
+        });
+        await applyPaymentToCharge(supabase, {
+            orgId: ORG, paymentId: payment.id, chargeId: charge.id, amountCents: gross,
+        });
+        expect((await readChargeBalance(supabase, ORG, charge.id)).outstandingCents, "settled").toBe(0);
+
+        const receiptBefore = await supabase
+            .from("payments").select("amount_cents, direction, status, payment_method, received_at")
+            .eq("org_id", ORG).eq("id", payment.id).maybeSingle();
+
+        const refundResult = await refundChildcarePayment(supabase, {
+            orgId: ORG, paymentId: payment.id, amountCents: gross,
+            reason: "Certification refund", actorUserId: ACTOR,
+            /*
+             * KEYED TO THE RECEIPT, not to the case. A constant key is idempotent across RUNS as
+             * well as within one, so the second run's refund silently returned the first run's and
+             * asserted against a payment that no longer had anything to do with it. One refund
+             * decision per receipt is the honest identity.
+             */
+            idempotencyKey: `fred:refund:cert-core:${payment.id}`,
+        });
+
+        const receiptAfter = await supabase
+            .from("payments").select("amount_cents, direction, status, payment_method, received_at")
+            .eq("org_id", ORG).eq("id", payment.id).maybeSingle();
+        expect(JSON.stringify(receiptAfter.data), "the receipt reads exactly as it was received")
+            .toBe(JSON.stringify(receiptBefore.data));
+
+        const { data: refunds } = await supabase
+            .from("payments").select("id, amount_cents, direction, reversal_origin")
+            .eq("org_id", ORG).eq("refunds_payment_id", payment.id);
+        expect((refunds ?? []).length, "exactly one outbound refund row").toBe(1);
+        expect(refundResult.alreadyRefunded, "and it was made by this run, not returned from a past one")
+            .toBe(false);
+        expect((refunds as Array<{ direction: string }>)[0]!.direction).toBe("outbound");
+
+        expect(
+            await readPaymentRefundedCents(supabase, ORG, payment.id),
+            "the refunded figure is what was given back",
+        ).toBe(gross);
+        expect(
+            (await readChargeBalance(supabase, ORG, charge.id)).outstandingCents,
+            "and the obligation is owed again, because the money went back",
+        ).toBe(gross);
+        expect(
+            await readPaymentUnappliedCents(supabase, ORG, payment.id, gross),
+            "refunded money is not unapplied money waiting to be used",
+        ).toBe(0);
+    }, 600_000);
 });

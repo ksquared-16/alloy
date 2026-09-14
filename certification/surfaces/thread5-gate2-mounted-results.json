@@ -1,0 +1,155 @@
+{
+  "staging": "3792e4be2",
+  "results": [
+    {
+      "id": "G2-D1",
+      "goal": "operator discovers Integrations in settings nav",
+      "expected": "nav item present",
+      "actual": "config-mode-nav-integrations present",
+      "status": "PASS",
+      "evidence": null
+    },
+    {
+      "id": "G2-D2",
+      "goal": "direct route loads for an authorized operator",
+      "expected": "surface root renders",
+      "actual": "organization-integrations rendered",
+      "status": "PASS",
+      "evidence": null
+    },
+    {
+      "id": "G2-L1",
+      "goal": "list or intentional empty state (never a blank page)",
+      "expected": "exactly one of list/empty",
+      "actual": "list=0 empty=1",
+      "status": "PASS",
+      "evidence": null
+    },
+    {
+      "id": "G2-L2",
+      "goal": "installations render recognizable identity/state",
+      "expected": "row + state per installation",
+      "actual": "rows=0 ids=[]",
+      "status": "PASS",
+      "evidence": null
+    },
+    {
+      "id": "G2-M1",
+      "goal": "surface consumes only canonical integration APIs",
+      "expected": "only /api/admin/integrations/*",
+      "actual": "[\"200 GET /api/admin/integrations/installations\"]",
+      "status": "PASS",
+      "evidence": null
+    },
+    {
+      "id": "G2-P1",
+      "goal": "no retired producer-era vocabulary on the surface",
+      "expected": "zero 'producer' mentions",
+      "actual": "producer mentions = 0",
+      "status": "PASS",
+      "evidence": null
+    },
+    {
+      "id": "G2-A1",
+      "goal": "operator can launch the add-integration flow",
+      "expected": "wizard opens",
+      "actual": "add-integration-wizard opened",
+      "status": "PASS",
+      "evidence": null
+    },
+    {
+      "id": "G2-A2",
+      "goal": "available applications resolve from canonical model",
+      "expected": "apps listed or explicit none-state",
+      "actual": "applications=0 no-applications-state=1",
+      "status": "PASS",
+      "evidence": null
+    },
+    {
+      "id": "G2-A3",
+      "goal": "validation prevents advancing without a selection",
+      "expected": "Next disabled until chosen",
+      "actual": "wizard-next disabled=true",
+      "status": "PASS",
+      "evidence": null
+    },
+    {
+      "id": "G2-T1",
+      "goal": "detail governed by canonical installation id",
+      "expected": "requires an existing installation",
+      "actual": "no installation present in this org",
+      "status": "BLOCKED",
+      "evidence": null
+    },
+    {
+      "id": "G2-T2",
+      "goal": "no producer identifiers in detail",
+      "expected": "requires an existing installation",
+      "actual": "no installation present in this org",
+      "status": "BLOCKED",
+      "evidence": null
+    },
+    {
+      "id": "G2-T3",
+      "goal": "health/state presented",
+      "expected": "requires an existing installation",
+      "actual": "no installation present in this org",
+      "status": "BLOCKED",
+      "evidence": null
+    },
+    {
+      "id": "G2-X1",
+      "goal": "access region reachable",
+      "expected": "requires an existing installation",
+      "actual": "no installation present in this org",
+      "status": "BLOCKED",
+      "evidence": null
+    },
+    {
+      "id": "G2-X2",
+      "goal": "capability editor loads",
+      "expected": "requires an existing installation",
+      "actual": "no installation present in this org",
+      "status": "BLOCKED",
+      "evidence": null
+    },
+    {
+      "id": "G2-C1",
+      "goal": "no secret before reveal",
+      "expected": "requires an existing installation",
+      "actual": "no installation present in this org",
+      "status": "BLOCKED",
+      "evidence": null
+    },
+    {
+      "id": "G2-C2",
+      "goal": "no raw secret leak",
+      "expected": "requires an existing installation",
+      "actual": "no installation present in this org",
+      "status": "BLOCKED",
+      "evidence": null
+    },
+    {
+      "id": "G2-N1",
+      "goal": "refresh retains state",
+      "expected": "requires an existing installation",
+      "actual": "no installation present in this org",
+      "status": "BLOCKED",
+      "evidence": null
+    },
+    {
+      "id": "G2-N2",
+      "goal": "back returns to list",
+      "expected": "requires an existing installation",
+      "actual": "no installation present in this org",
+      "status": "BLOCKED",
+      "evidence": null
+    }
+  ],
+  "network": [
+    "200 GET /api/admin/integrations/installations",
+    "200 GET /api/admin/integrations/capabilities",
+    "200 GET /api/admin/integrations/applications",
+    "200 GET /api/admin/integrations/locations"
+  ]
+}

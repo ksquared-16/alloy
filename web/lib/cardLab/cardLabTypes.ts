@@ -226,6 +226,17 @@ export type LedgerEntry = {
     kind: "charge" | "credit";
     status?: string | null;
     source?: string | null;
+    /**
+     * The charge this row IS, so the surface can offer the transitions it already qualifies for.
+     *
+     * Carried rather than displayed. Without it the ledger can describe a posted charge and cannot
+     * act on it, which is how `charge.reverse` ended up with no reachable operator path at all.
+     */
+    chargeId?: string | null;
+    /** Server-decided, never re-derived here: a draft that may be posted. */
+    offersPost?: boolean;
+    /** Server-decided: posted, not void, not already reversed, not itself a correction. */
+    offersReverse?: boolean;
 };
 
 export type FinancialsPayer = {
@@ -322,6 +333,70 @@ export type FinancialsEvidence = {
     historyLine: string;
     /** Detail-only: forward-looking facts, and only where authoritative. */
     upcoming: { label: string; value: string; unowned?: boolean }[];
+    /**
+     * Detail-only: the receipts themselves, and what each one is currently answering.
+     *
+     * Every figure here arrives already formatted from canonical truth. The card must not add them
+     * up, difference them, or decide what "applied" means — a receipt's applied and unapplied money
+     * are the account VM's answers, which are the service's answers.
+     */
+    payments: FinancialsEvidencePayment[];
+    /** Manual reductions recorded against this account, newest first. Formatting only. */
+    adjustments: FinancialsEvidenceAdjustment[];
+};
+
+/**
+ * A manual reduction, as the operator reads it.
+ *
+ * `appliedById` is the application id the reversal action addresses. It is carried rather than
+ * displayed: reversing needs it, and an operator cannot be asked to know it.
+ */
+export type FinancialsEvidenceAdjustment = {
+    applicationId: string;
+    /** credit / adjustment / discount, in the operator's words. */
+    categoryLabel: string;
+    /** Signed money, already formatted — e.g. "−$25.00". */
+    amountLabel: string;
+    /** True when this lowers what the family owes. The card asks; it does not infer from a string. */
+    reducesObligation: boolean;
+    reason: string | null;
+    periodLabel: string | null;
+    recordedOn: string | null;
+    /** Which child's enrolment it was recorded against, when the account has more than one. */
+    subjectName: string | null;
+    /**
+     * True once the reduction's charge is posted. A draft is recorded but NOT yet owed — the money
+     * has not moved, and the card must not imply that it has.
+     */
+    applied: boolean;
+    /** A reduction already reversed cannot be reversed again. */
+    reversed: boolean;
+    /** True when this row IS a reversal of an earlier one. */
+    isReversal: boolean;
+};
+
+export type FinancialsEvidencePayment = {
+    paymentId: string;
+    receivedLabel: string;
+    /** The household the receipt was taken against. Null when canonical data cannot name it. */
+    payerLabel: string | null;
+    receivedOn: string | null;
+    method: string | null;
+    appliedLabel: string;
+    unappliedLabel: string;
+    /** Raw cents, so the card can ASK whether there is money to apply without doing arithmetic. */
+    unappliedCents: number;
+    applications: FinancialsEvidenceApplication[];
+};
+
+export type FinancialsEvidenceApplication = {
+    allocationId: string;
+    chargeId: string | null;
+    chargeLabel: string;
+    amountLabel: string;
+    /** `active` is answering an obligation now; `reversed` is history that no longer counts. */
+    status: string;
+    reversalReason: string | null;
 };
 
 /**

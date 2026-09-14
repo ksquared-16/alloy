@@ -296,6 +296,16 @@ const nextConfig: NextConfig = {
        */
       { source: "/organization/staff", destination: "/adminV2/settings/organization/staff" },
       { source: "/organization/staff/:path*", destination: "/adminV2/settings/organization/staff/:path*" },
+      /**
+       * Organization Integrations — approved external software and what it may
+       * access. The product noun is Organization; `/adminV2/settings/*` stays the
+       * implementation shell. Must precede the exact `/organization` rewrite.
+       */
+      { source: "/organization/integrations", destination: "/adminV2/settings/organization/integrations" },
+      {
+        source: "/organization/integrations/:path*",
+        destination: "/adminV2/settings/organization/integrations/:path*",
+      },
       { source: "/organization/access", destination: "/adminV2/settings/organization/access" },
       { source: "/organization/access/:path*", destination: "/adminV2/settings/organization/access/:path*" },
       { source: "/organization/processes", destination: "/adminV2/settings/organization/processes" },

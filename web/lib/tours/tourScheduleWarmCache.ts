@@ -19,6 +19,7 @@ import {
     tourSlotWindowBoundsUtc,
 } from "@/lib/tours/availability/tourSlotWindowPagination";
 import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
+import { speculativeFetch } from "@/lib/adminV2/runtime/speculation/speculativeFetch";
 
 const WARM_TTL_MS = 45_000;
 
@@ -47,7 +48,7 @@ function isFresh(entry: Entry, now: number): boolean {
 }
 
 async function fetchActiveBookings(opportunityId: string): Promise<TourBookingRow[]> {
-    const res = await fetch(`/api/admin/tours/opportunities/${encodeURIComponent(opportunityId)}/bookings`, {
+    const res = await speculativeFetch(`/api/admin/tours/opportunities/${encodeURIComponent(opportunityId)}/bookings`, {
         credentials: "include",
     });
     if (!res.ok) throw new Error(`bookings HTTP ${res.status}`);
@@ -57,14 +58,14 @@ async function fetchActiveBookings(opportunityId: string): Promise<TourBookingRo
 
 async function fetchSlots(locationId: string, fromIso: string, toIso: string): Promise<AvailableTourSlot[]> {
     const qs = new URLSearchParams({ location_id: locationId, from: fromIso, to: toIso });
-    const res = await fetch(`/api/admin/tours/slots?${qs.toString()}`, { credentials: "include" });
+    const res = await speculativeFetch(`/api/admin/tours/slots?${qs.toString()}`, { credentials: "include" });
     if (!res.ok) throw new Error(`slots HTTP ${res.status}`);
     const j = (await res.json()) as { slots?: AvailableTourSlot[] };
     return j.slots ?? [];
 }
 
 async function fetchRules(locationId: string): Promise<Record<string, TourApprovalRule>> {
-    const res = await fetch(`/api/admin/tours/availability-rules?location_id=${encodeURIComponent(locationId)}`, {
+    const res = await speculativeFetch(`/api/admin/tours/availability-rules?location_id=${encodeURIComponent(locationId)}`, {
         credentials: "include",
     });
     if (!res.ok) return {};

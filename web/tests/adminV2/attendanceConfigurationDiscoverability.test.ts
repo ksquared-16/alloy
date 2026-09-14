@@ -30,10 +30,15 @@ describe("Attendance configuration is discoverable from the configuration hub", 
         expect(entry?.domain).toBe("organization");
     });
 
-    it("registers connected systems", () => {
-        const entry = item("attendance-integrations");
-        expect(entry).toBeDefined();
-        expect(entry?.domain).toBe("organization");
+    it("no longer registers the retired producer surface", () => {
+        /*
+         * "Connected systems" administered `attendance_integration_producers`.
+         * That model was retired in the producer/bridge retirement slice, and the
+         * external integration surface an operator reaches now is
+         * Organization → Integrations, which administers installations.
+         * A hub entry pointing at a deleted page is worse than no entry.
+         */
+        expect(item("attendance-integrations")).toBeUndefined();
     });
 
     it("registers where expected absence and closures are managed, under Operations", () => {
@@ -54,7 +59,7 @@ describe("the entries speak operator language", () => {
             "expectation_type",
             "grain",
         ];
-        for (const fragment of ["attendance-devices", "attendance-integrations", "attendance-expectations"]) {
+        for (const fragment of ["attendance-devices", "attendance-expectations"]) {
             const entry = item(fragment);
             const text = `${entry?.label ?? ""} ${entry?.description ?? ""}`.toLowerCase();
             for (const word of forbidden) {
@@ -64,7 +69,7 @@ describe("the entries speak operator language", () => {
     });
 
     it("gives each entry a description, so the hub explains rather than lists", () => {
-        for (const fragment of ["attendance-devices", "attendance-integrations", "attendance-expectations"]) {
+        for (const fragment of ["attendance-devices", "attendance-expectations"]) {
             expect(item(fragment)?.description ?? "").not.toBe("");
         }
     });

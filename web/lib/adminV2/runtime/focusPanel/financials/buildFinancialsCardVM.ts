@@ -33,11 +33,13 @@
  */
 
 import { readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
+import { resolveHouseholdPaymentViews } from "@/lib/financials/paymentApplicationView";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
+import { readAccountReductions, type AccountReduction } from "@/lib/financials/reductions/readAccountReductions";
 import {
     billingPeriodForDate,
     billingPeriodFromKey,
@@ -87,8 +89,38 @@ export type FinancialsPaymentRow = {
     postedAt: string | null;
     /** Active applications on this payment, summed. Zero for a payment sitting on the account. */
     appliedCents: number;
+    /**
+     * Received money not currently answering any obligation. NOT a credit and NOT a refund: the
+     * organisation holds it and it can still be applied. Canonical — `readPaymentUnappliedCents`.
+     */
+    unappliedCents: number;
+    /**
+     * The household the receipt was taken against, named. Null when canonical data cannot name it —
+     * an absent label is never replaced with a guess, because the wrong family on a payment is worse
+     * than no family at all.
+     */
+    payerLabel: string | null;
+    /**
+     * The applications themselves, active and reversed. The summed `appliedCents` above says HOW MUCH
+     * is doing something; this says WHICH obligations, and which were undone — the difference between
+     * a balance and an explanation, and the thing an operator needs before moving money.
+     */
+    applications: FinancialsPaymentApplication[];
     reference: string | null;
     notes: string | null;
+};
+
+export type FinancialsPaymentApplication = {
+    allocationId: string;
+    chargeId: string | null;
+    chargeLabel: string;
+    chargeServiceDate: string | null;
+    appliedCents: number;
+    /** `active` answers an obligation now; `reversed` is history that no longer counts. */
+    status: string;
+    allocatedAt: string | null;
+    reversedAt: string | null;
+    reversalReason: string | null;
 };
 
 export type FinancialsSubject = {
@@ -222,6 +254,14 @@ export type FinancialsCardVM = {
     account: { customerId: string | null; label: string | null } | null;
     period: BillingPeriod;
     subjects: FinancialsSubject[];
+    /**
+     * The manual reductions recorded against this account, newest first.
+     *
+     * The reconciliation already says what they came to. A total cannot be reversed, and reversing
+     * one needs its application id — which an operator cannot be expected to know — so the records
+     * themselves reach the surface.
+     */
+    reductions: AccountReduction[];
     /** Every row across every period, already placed and presented. */
     rows: FinancialsLedgerRow[];
     /** The CURRENT period only. */
@@ -375,6 +415,7 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
             currentlyCollectibleCents: 0,
         },
         subjects: [],
+        reductions: [],
         rows: [],
         reconciliation: emptyReconciliation(),
         reconciliationBySubject: {},
@@ -692,6 +733,11 @@ async function readAccountPayments(
             receivedAt: t(raw.received_at) || null,
             postedAt: t(raw.posted_at) || null,
             appliedCents: appliedByPaymentId.get(id) ?? 0,
+            // Enriched below from the canonical application composition; a payment read that never
+            // reaches it still renders, with no applications rather than invented ones.
+            unappliedCents: 0,
+            payerLabel: null,
+            applications: [],
             reference: t(raw.reference_number) || null,
             notes: t(raw.notes) || null,
         };
@@ -779,6 +825,21 @@ export async function buildFinancialsCardVM(
         displayName: nameByMember.get(a.customer_member_id) ?? "Child",
         agreementStatus: a.status,
     }));
+
+    /*
+     * Scoped by the agreements resolved just above rather than by customer id, which is nullable on
+     * these rows — so there is one answer to whose account this is, not two.
+     */
+    try {
+        vm.reductions = await readAccountReductions(supabase, {
+            orgId: args.orgId,
+            agreementIds: agreements.map((a) => a.id),
+        });
+    } catch {
+        // A reduction read that fails must not take the whole account down with it: the balance
+        // above is still true, and an empty history is the honest presentation of "not loaded".
+        vm.reductions = [];
+    }
 
     const memberByAgreement = new Map(agreements.map((a) => [a.id, a.customer_member_id]));
     /*
@@ -1008,6 +1069,34 @@ export async function buildFinancialsCardVM(
         );
         vm.payments = received.payments;
         appliedByChargeId = received.appliedByChargeId;
+
+        /*
+         * ONE COMPOSITION OWNS APPLICATIONS AND UNAPPLIED MONEY.
+         *
+         * `readAccountPayments` sums active allocations and then discards them, which is all a balance
+         * needs. Rendering "which charge, and was it undone" needs the rows themselves plus the
+         * reversed history it deliberately filters out. Rather than widen that query and grow a second
+         * place where applied money is decided, the canonical composition is asked and merged in by
+         * payment id. It is the same authority the service uses, so the two cannot disagree.
+         */
+        const household = t(args.customerId) || null;
+        if (household) {
+            const views = await resolveHouseholdPaymentViews(supabase, {
+                orgId: args.orgId,
+                customerId: household,
+            });
+            const byPaymentId = new Map(views.map((v) => [v.paymentId, v]));
+            vm.payments = vm.payments.map((row) => {
+                const view = byPaymentId.get(row.paymentId);
+                if (!view) return row;
+                return {
+                    ...row,
+                    unappliedCents: view.unappliedCents,
+                    payerLabel: view.payerLabel,
+                    applications: view.applications,
+                };
+            });
+        }
     } catch (e) {
         /*
          * A payments read that fails must not become "nothing has been paid" — that would show a

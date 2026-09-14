@@ -12,7 +12,7 @@ describe("metric packs registry", () => {
         expect(validateMetricPackRegistry()).toEqual([]);
     });
 
-    it("lists six available packs with metrics", () => {
+    it("lists seven available packs with metrics", () => {
         const available = listAvailableMetricPacks();
         expect(available.map((p) => p.key)).toEqual([
             "operational_health",
@@ -22,6 +22,9 @@ describe("metric packs registry", () => {
             // Governed reasoning execution. A presentation grouping, not a
             // Business Process — see PACK_TO_BUSINESS_PROCESS.
             "trust",
+            // Who is expected, who is here, who is unaccounted for. Activated by
+            // Thread 9; a measurement domain with no Business Process owner.
+            "attendance",
             // Money. Was the empty `billing` placeholder promising "receivables"; it is now
             // the Financials pack, and every key in it quotes a Financials thread.
             "financials",
@@ -30,8 +33,15 @@ describe("metric packs registry", () => {
 
     it("includes coming-soon packs without metrics", () => {
         const soon = listMetricPacks().filter((p) => p.domainStatus === "coming_soon");
-        // capacity, attendance, staffing. `billing` left this list by becoming `financials`.
-        expect(soon.length).toBeGreaterThanOrEqual(3);
+        /*
+         * capacity and staffing. `billing` left by becoming `financials`;
+         * `attendance` left by being activated in Thread 9.
+         *
+         * staffing stays empty by DECISION, not by backlog: supervision grouping
+         * has no canonical owner, staff supply is never supplied to the ratio
+         * model, and a ratio metric would measure an absent denominator.
+         */
+        expect(soon.length).toBeGreaterThanOrEqual(2);
         expect(soon.every((p) => p.metricKeys.length === 0)).toBe(true);
     });
 

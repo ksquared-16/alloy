@@ -194,7 +194,13 @@ await test("NC8 — a symbolic */HEAD ref is skipped", () => {
   const w = world();
   // origin/HEAD is symbolic; make it exist and point at staging.
   try { g(["remote", "set-head", "origin", "staging"], w.repo); } catch { /* not fatal */ }
-  const src = M.assertShaReachableForEnvironment.toString();
+  /*
+   * READ THE MODULE, NOT ONE FUNCTION'S toString(). The enumeration moved into
+   * its own helper, so stringifying assertShaReachableForEnvironment stopped
+   * containing this check while the behaviour was never lost - a refactor read
+   * as a regression.
+   */
+  const src = readFileSync(new URL("../lib/vacilando/trusted-host-migrate.mjs", import.meta.url), "utf8");
   assert.ok(/endsWith\("\/HEAD"\)/.test(src), "the enumeration must skip symbolic HEAD refs");
   // And a non-sanctioned commit still fails with origin/HEAD present.
   assert.equal(reach(w.featureTip, "certification", w).ok, false);
@@ -205,7 +211,7 @@ await test("NC9 — only remote-tracking refs are ever consulted", () => {
   for (const glob of M.CERTIFICATION_SANCTIONED_REF_GLOBS) {
     assert.ok(glob.startsWith("refs/remotes/"), `${glob} must be remote-tracking`);
   }
-  const src = M.assertShaReachableForEnvironment.toString();
+  const src = readFileSync(new URL("../lib/vacilando/trusted-host-migrate.mjs", import.meta.url), "utf8");
   assert.ok(/startsWith\("refs\/remotes\/"\)/.test(src), "the enumeration must assert remote-tracking, not just filter by pattern");
 });
 

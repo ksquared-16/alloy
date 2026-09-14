@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { validateReadOnlySql } from "./trusted-host-sql-readonly.mjs";
 import { validateMergeInputs } from "./trusted-host-merge.mjs";
 import { validatePushInputs } from "./trusted-host-push.mjs";
+import { validateRepositoryMetadataInputs } from "./trusted-host-repository-metadata.mjs";
 import { validateOpenPrInputs } from "./trusted-host-open-pr.mjs";
 import { validateProductionMigrationInputs } from "./trusted-host-production-migrate.mjs";
 import { validateLedgerRepairInputs } from "./trusted-host-ledger-repair.mjs";
@@ -28,6 +29,7 @@ import {
 import { validateInstallToolkitInputs, CONVERGENCE_REF } from "./toolkit-convergence.mjs";
 import { ALLOWED_ENVIRONMENTS } from "./trusted-host-migrate.mjs";
 import { validateLaneDispatchInputs, DISPATCH_PURPOSES } from "./lane-dispatch.mjs";
+import { validateRegisterDeveloperApplicationInputs } from "./trusted-host-register-application.mjs";
 
 export const ACTION_TYPES = Object.freeze({
   DATABASE_READ_CENSUS: "database.read_census",
@@ -37,6 +39,7 @@ export const ACTION_TYPES = Object.freeze({
   DATABASE_APPLY_MIGRATION: "database.apply_migration",
   DATABASE_APPLY_PROMOTED_MIGRATION: "database.apply_promoted_migration",
   DATABASE_REPAIR_MIGRATION_LEDGER: "database.repair_migration_ledger",
+  REPOSITORY_PROMOTE_METADATA: "repository.promote_metadata",
   ENVIRONMENT_RESTORE_QA_SESSION: "environment.restore_qa_session",
   ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION: "environment.restore_deployed_qa_session",
   ENVIRONMENT_PROVISION_QA_IDENTITY: "environment.provision_qa_identity",
@@ -49,6 +52,7 @@ export const ACTION_TYPES = Object.freeze({
   HOST_INSTALL_TOOLKIT: "host.install_toolkit",
   LANE_DISPATCH_MEASUREMENT_INSTRUCTION: "lane.dispatch_measurement_instruction",
   ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION: "environment.execute_registered_reconciliation",
+  PLATFORM_REGISTER_DEVELOPER_APPLICATION: "platform.register_developer_application",
 });
 
 /**
@@ -313,7 +317,10 @@ function defineRepositoryPush() {
     timeoutMs: 180_000,
     retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
     inputSchema: {
-      required: ["repository", "branch", "expectedHeadSha", "worktreePath"],
+      // base_ref and expected_commits are advertised as required so a lane
+      // reading `--contract repository.push` is told what a candidate must
+      // declare, rather than discovering it from a refusal.
+      required: ["repository", "branch", "expectedHeadSha", "worktreePath", "base_ref", "expected_commits"],
     },
     outputSchema: { pushedSha: "string", remoteRef: "string" },
     evidenceSchema: ["repository", "branch", "expected_head_sha", "remote_ref", "execution_audit"],
@@ -356,6 +363,16 @@ function defineRetireWorktree() {
     actionType: ACTION_TYPES.VACILANDO_RETIRE_WORKTREE,
     version: 1,
     title: "Retire a Vacilando worktree through Git",
+    /*
+     * THIS ACTION REMOVES SOMETHING.
+     *
+     * Declared, so the framework can refuse to replay a finished one that
+     * cannot say what it acted on, and so a control can ask the registry which
+     * actions carry that weight instead of inferring it from a title.
+     * `riskClass: privileged_write` is shared with every action that writes a
+     * row; deleting a checkout is not the same kind of write.
+     */
+    destructive: true,
     requiredCapability: "trusted_host.vacilando.retire_worktree",
     riskClass: "privileged_write",
     timeoutMs: 120_000,
@@ -388,6 +405,26 @@ function defineRetireWorktree() {
       return {
         ok: true,
         normalized: {
+          /*
+           * THE SEMANTIC IDENTITY OF ONE RETIREMENT.
+           *
+           * Without this the dedupe predicate in requestTrustedHostAction
+           * collapsed to `undefined === undefined`, and sameActionOwnership
+           * compares only session, assignment and lane — never the worktree. So
+           * ANY completed retirement satisfied ANY later retirement request.
+           *
+           * MEASURED 2026-09-13: thirteen retirements, thirteen distinct content
+           * fingerprints, two trusted-host actions. Eleven requests returned
+           * wt-branch-fix's result verbatim — including
+           * `filesystem_path_absent: true` — for worktrees still on disk.
+           *
+           * Keyed the way `apply_reconciliation_plan` is: the thing being acted
+           * on, plus the content the decision was made against. A different
+           * worktree, a moved branch or a restated safety fingerprint is a
+           * different retirement and gets its own action. Only an identical
+           * re-request of the same intent may dedupe.
+           */
+          dedupeKey: `retire_worktree:${worktree}@${headSha.slice(0, 12)}#${fingerprint.slice(0, 12)}`,
           repository: String(inputs.repository).trim(),
           worktree, branch, headSha, safetyFingerprint: fingerprint,
           s7State: String(inputs.s7State).trim(),
@@ -659,6 +696,72 @@ function defineLaneDispatchMeasurementInstruction() {
  * parity gap and a physical-state census — already proves the effects present
  * and matching. It applies nothing, creates nothing, and accepts no SQL.
  */
+/**
+ * THE ONLY ACTION THAT WRITES main, AND IT IS NOT A PRODUCT RELEASE.
+ *
+ * repository.push, promotion.open_pr and repository.merge_pull_request all
+ * refuse main deliberately, and none of that changes. This exists because
+ * GitHub resolves scheduled workflows from the DEFAULT branch only, so a
+ * workflow definition has to reach main for the scheduler to see it at all -
+ * while the code it tests stays on staging.
+ *
+ * Operator approval is required and delegation is off. It writes the release
+ * branch; that is not something to delegate in a first version, whatever the
+ * file size.
+ */
+function defineRepositoryPromoteMetadata() {
+  return {
+    actionType: ACTION_TYPES.REPOSITORY_PROMOTE_METADATA,
+    version: 1,
+    title: "Promote repository-operational metadata to main (no product release)",
+    requiredCapability: "trusted_host.repository.promote_metadata",
+    riskClass: "privileged_write",
+    operatorApprovalRequired: true,
+    delegable: false,
+    timeoutMs: 120_000,
+    // One attempt. The mutation is compare-and-swapped against an approved main;
+    // a retry that cannot see why it failed would be re-running a decision.
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: [
+        "repository", "target_branch", "candidate_sha",
+        "base_ref", "expected_commits", "expected_files", "main_before",
+        // The executor cannot find the certified candidate without it, and a
+        // missing path must be a refusal the FILER sees, not one discovered
+        // after an operator has already approved the write.
+        "worktree_path",
+      ],
+    },
+    outputSchema: {
+      main_before: "string", main_after: "string", commit: "string",
+      files: "array", product_files_changed: "boolean",
+    },
+    evidenceSchema: [
+      "main_before", "main_after", "candidate", "expected_files",
+      "actual_files", "promotion_class", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      const v = validateRepositoryMetadataInputs(inputs);
+      if (!v.ok) return v;
+      // main_before is the compare-and-swap anchor and is required here rather
+      // than only at mutation time, so an operator never approves a promotion
+      // that does not say which main it is promoting onto.
+      if (!String(inputs.main_before || inputs.mainBefore || "").trim()) {
+        return { ok: false, code: "missing_main_before",
+          detail: "a metadata promotion is approved ONTO a specific main; main_before is required" };
+      }
+      // Checked at REQUEST time for the same reason: an operator approving a
+      // write to the release branch should not be the one to discover that the
+      // worktree holding the candidate was never named.
+      if (!String(inputs.worktree_path || inputs.worktreePath || "").trim()) {
+        return { ok: false, code: "missing_worktree_path",
+          detail: "name the worktree holding the certified candidate; the executor resolves the candidate there" };
+      }
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
 function defineDatabaseRepairMigrationLedger() {
   return {
     actionType: ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER,
@@ -775,6 +878,16 @@ function defineEnvironmentRestoreDeployedQaSession() {
     requiredCapability: "trusted_host.environment.restore_deployed_qa_session",
     riskClass: "privileged_write",
     alwaysRequiresOperatorApproval: true,
+    /*
+     * THE RESULT DOES NOT KEEP.
+     *
+     * A census result is an answer to a pinned question and stays true; this action's result
+     * describes a browser session that expires in about an hour. Reusing a completed one replayed
+     * `verified: true` with a stale `verified_at` while the storage-state file the browser reads
+     * was never rewritten — success reported against an artifact that no longer existed. In-flight
+     * reuse is unaffected, so two concurrent requests still cannot both mint.
+     */
+    resultKeeps: false,
     timeoutMs: 300_000,
     retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
     // One key. Not a URL, not a project, not a cookie domain, not an account.
@@ -860,8 +973,40 @@ function defineEnvironmentAssignQaIdentityAccess() {
   };
 }
 
+function definePlatformRegisterDeveloperApplication() {
+  return {
+    actionType: ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION,
+    version: 1,
+    title: "Register one platform developer application",
+    requiredCapability: "trusted_host.database.write",
+    riskClass: "privileged_write",
+    timeoutMs: 120_000,
+    // NOT retried automatically. The function is duplicate-safe — a retry that
+    // asks for the state already on disk succeeds and says `duplicate` — but a
+    // registration is a catalog identity, and re-running one without a person
+    // seeing the first outcome is how two near-identical applications appear.
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["slug", "name", "publisher", "databaseTarget"],
+    },
+    // No artifact. The caller supplies values from closed vocabularies; the
+    // executor owns the statement. There is nothing to hash and no path to any
+    // other table.
+    requiresArtifactRef: false,
+    outputSchema: { resultJson: "object" },
+    evidenceSchema: [
+      "application_id", "application_key", "application_status", "ownership_mode",
+      "application_environment", "distribution_mode", "audit_id", "duplicate", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      return validateRegisterDeveloperApplicationInputs(inputs);
+    },
+  };
+}
+
 const REGISTRY = new Map([
   [ACTION_TYPES.DATABASE_READ_CENSUS, defineDatabaseReadCensus()],
+  [ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION, definePlatformRegisterDeveloperApplication()],
   [ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION, defineEnvironmentRestoreQaSession()],
   [ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION, defineEnvironmentRestoreDeployedQaSession()],
   [ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY, defineEnvironmentProvisionQaIdentity()],
@@ -876,6 +1021,7 @@ const REGISTRY = new Map([
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
   [ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION, defineDatabaseApplyPromotedMigration()],
   [ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER, defineDatabaseRepairMigrationLedger()],
+  [ACTION_TYPES.REPOSITORY_PROMOTE_METADATA, defineRepositoryPromoteMetadata()],
   [ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING, defineCapacitySetProviderCeiling()],
   [ACTION_TYPES.HOST_INSTALL_TOOLKIT, defineHostInstallToolkit()],
   [ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION, defineLaneDispatchMeasurementInstruction()],

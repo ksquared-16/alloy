@@ -155,3 +155,75 @@ describe("Current Work — secondary work", () => {
         expect(outstandingSecondary).toEqual([]);
     });
 });
+
+
+/**
+ * SECONDARY WORK MUST BE REACHABLE FROM THE CARD, NOT ONLY THE EXPANDED VIEW.
+ *
+ * `Record outcome` acts on the PRIMARY work — correctly. The consequence, measured on staging, was
+ * that a second open work item could not be resolved from the surface an operator is actually
+ * looking at: an `offer_spot` work was started, was live in the runtime, and its outcomes were
+ * reachable from nowhere, because the only place listing secondary work was the expanded workspace.
+ *
+ * Both surfaces now derive it identically, so they cannot disagree about what counts as secondary.
+ */
+describe("secondary work is reachable from the summary card", () => {
+    const card = () => readFileSync(resolve(__dirname, "../..", "components/admin/focusPanel/cards/CurrentWorkCard.tsx"), "utf8");
+
+    it("the summary card lists the stage's other open work", () => {
+        const src = card();
+        expect(src).toContain('data-work-section="also-in-progress"');
+        expect(src).toContain("data-work-secondary-item");
+    });
+
+    it("uses the same derivation as the workspace section", () => {
+        // One rule for "what is secondary", so the two surfaces cannot drift apart.
+        expect(card()).toContain('item.kind === "stage_work" && item.workRole === "secondary" && item.status !== "complete"');
+    });
+
+    it("selects through the same handler, so a row opens its own outcome context", () => {
+        expect(card()).toContain("onClick={() => onChecklistItem(item)}");
+    });
+
+    it("names no work key — it is whatever the stage configured", () => {
+        const code = card()
+            .split("\n")
+            .filter((l) => !l.trim().startsWith("*") && !l.trim().startsWith("//") && !l.includes("/*"))
+            .join("\n");
+        expect(code).not.toContain("offer_spot");
+    });
+});
+
+
+/**
+ * A REQUIREMENT AND A PIECE OF WORK ARE NOT TWO ANSWERS TO ONE QUESTION.
+ *
+ * `stageChecklist` is the only source carrying the stage's WORK rows, and it was reached only when
+ * both requirement sources were empty. So the moment a stage authored any requirement, every work
+ * row vanished from the checklist — and with them the only record that a second work item was open.
+ *
+ * Measured on staging: an offer work was started and live (a repeat invocation deduped onto the same
+ * work id), and it appeared in no checklist, so no surface could offer its outcomes. Four authored
+ * field requirements on the Waitlist stage were all it took.
+ */
+describe("work rows compose with requirement rows", () => {
+    const vm = () =>
+        readFileSync(resolve(__dirname, "../..", "lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkSurfaceVM.ts"), "utf8");
+
+    it("work rows are no longer gated behind an empty requirement set", () => {
+        const src = vm();
+        // The old shape returned stageChecklist only as a final fallback.
+        expect(src).not.toMatch(/:\s*stageChecklist;/);
+        expect(src).toContain("...stageChecklist.filter((item) => !requirementKeys.has(item.key))");
+    });
+
+    it("requirement source precedence is unchanged", () => {
+        // config still wins over readiness; an authored empty set still means empty.
+        expect(vm()).toContain("configChecklist.length > 0\n            ? mergeChecklists(configChecklist, readinessChecklist)\n            : readinessChecklist;");
+    });
+
+    it("a requirement key still wins over a work row of the same key", () => {
+        // Dedupe keeps the requirement's richer projection rather than shadowing it with work.
+        expect(vm()).toContain("requirementKeys.has(item.key)");
+    });
+});

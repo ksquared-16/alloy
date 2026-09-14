@@ -73,7 +73,12 @@ import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
 import { statSync } from "node:fs";
 import { join } from "node:path";
 import { listResourceClaims } from "./resource-claims.mjs";
-import { describeWait, reconcileWait, waitStatus } from "./run-wait.mjs";
+import {
+  describeWait,
+  isDeclaredWaitReason,
+  reconcileWait,
+  waitStatus,
+} from "./run-wait.mjs";
 
 const OPEN_REQUEST = new Set(["REQUESTED", "QUEUED", "GRANTED"]);
 const IN_FLIGHT_CONTINUATION = new Set(["PENDING", "DELIVERING"]);
@@ -952,10 +957,83 @@ export function reconcileUndeliveredRuns({
 export const WAITING_RUN_STATES = Object.freeze(["QUEUED", "NEEDS_INPUT", "WAITING_RESOURCE", "RECOVERING"]);
 
 /** The wait reason for a run, by the same rules `vac health` applies. */
-function waitReasonFor(run) {
+/**
+ * THE SEMANTIC WAIT CODE — NEVER THE CAPTION.
+ *
+ * THE DEFECT THIS CLOSES, measured across the fleet: 21 runs in 6 lanes failed
+ * `unknown_wait_reason` and 3 more `missing_wait_reason`, and every one of them
+ * was healthy. This function returned `run.state_reason`, which
+ * `attachRunWait` sets to `presentationForGovernedAction(rec).wait_label` — a
+ * HUMAN CAPTION such as "Waiting on Director — branch push". `describeWait`
+ * looked that caption up in `WAIT_REASONS`, did not find it, returned
+ * `bound_policy: "invalid"`, and `reconcileWait` correctly failed an invalid
+ * descriptor. Every layer behaved as designed. The caption was being used as
+ * the key.
+ *
+ * The semantic code was there the whole time. The same `attachRunWait` call
+ * writes `resource_wait` from `waitProjection`, whose reason is
+ * `needs_operator_input` with policy `human_indefinite` — "hold for as long as
+ * it takes". erun_5a070693f25078fc carries exactly that descriptor and was
+ * killed anyway, because the caption won.
+ *
+ * ORDER OF TRUTH, and it is deliberate:
+ *   1. the run STATE, where it is unambiguous;
+ *   2. the semantic code the producer wrote into `resource_wait`;
+ *   3. `state_reason`, but ONLY when it is itself a declared code — some
+ *      producers legitimately set it to one;
+ *   4. otherwise nothing, which fails closed exactly as before.
+ *
+ * A caption can never be step 3, because `isDeclaredWaitReason` is an exact
+ * lookup in the same table the classifier uses. Undeclared prose is not
+ * reinterpreted, guessed at, or pattern-matched into a nearby code — it simply
+ * is not a key, and the run falls through to whatever the descriptor says.
+ */
+/*
+ * EXPORTED SO SOMETHING CAN ACTUALLY CALL IT. This classifier decides whether a
+ * live run is collected by the governor, and it was reachable only through a
+ * sweep that reads the real run store - so the one decision that kills runs had
+ * no direct test.
+ */
+export function waitReasonFor(run) {
   if (run.state === "NEEDS_INPUT") return "needs_operator_input";
   if (run.state === "RECOVERING") return "recovering";
-  return run.state_reason || null;
+  const declared = run.resource_wait?.reason;
+  if (isDeclaredWaitReason(declared)) return declared;
+  if (isDeclaredWaitReason(run.state_reason)) return run.state_reason;
+
+  /*
+   * A RUN THAT HAS JUST BEEN QUEUED IS NOT A WAIT WITHOUT A REASON.
+   *
+   * QUEUED is in WAITING_RUN_STATES on purpose - a run that never started was
+   * the one shape nothing collected, and one sat QUEUED on
+   * `provider_provisioning` for over thirteen hours. But a run is QUEUED from
+   * the instant it is created, BEFORE any writer could declare anything, and
+   * for that window `waitReasonFor` returned null. `describeWait(null)` is
+   * `bound_policy: "invalid"`, `reconcileWait` fails an invalid descriptor
+   * IMMEDIATELY - there is no bound to exceed - and the governor killed a
+   * perfectly healthy run on its first sweep.
+   *
+   * MEASURED across 181 runs in the store: 4 runs in 3 lanes died this way, at
+   * 0.239s, 0.374s, 0.627s and one at -0.041s - failed before its own QUEUED
+   * transition timestamp. Every one had `resource_wait: null`, every one had
+   * `delivery.acknowledged: true`, and every one was told "The run waited
+   * longer than allowed and was stopped. It never reached a provider." Nothing
+   * waited and the provider had acknowledged it. The most recent is the run
+   * that was executing this very repair.
+   *
+   * The honest classification already exists in the table: the send IS in
+   * progress. `send_in_progress` is bounded at five minutes and owned by
+   * execution-run-send, so a send that genuinely never lands is still collected
+   * - the thirteen-hour case stays closed - while a run in the normal
+   * milliseconds-long admission window is simply within its bound.
+   *
+   * This is a DERIVED reason, not a parsed caption: it comes from the run's
+   * state, not from any human text. It also removes the race the sweep was
+   * losing, because the classification no longer depends on a writer winning
+   * against the governor.
+   */
+  if (run.state === "QUEUED") return "send_in_progress";
+  return null;
 }
 
 /**
@@ -982,6 +1060,29 @@ function waitReasonFor(run) {
  * `needs_operator_input` — the single deliberate human_indefinite reason — is
  * held for ever here exactly as the table says, and never collected.
  */
+/**
+ * What to tell a person when the governor collected a wait.
+ *
+ * A reason nobody declared is not named in operator copy - "waited on null" is
+ * worse than saying nothing, because it looks like a value rather than a gap.
+ */
+export function waitCollectionSummary(descriptor = {}) {
+  const OWNERS = {
+    needs_operator_input: "an operator decision",
+    waiting_for_agent_session: "a provider session",
+    waiting_for_provider_capacity: "provider capacity",
+    waiting_for_execution_capacity: "execution capacity",
+    waiting_for_validation_capacity: "validation capacity",
+    provider_provisioning: "a provider starting up",
+    provider_prompt_block: "a provider prompt only a person can clear",
+    recovering: "session recovery",
+  };
+  const what = OWNERS[String(descriptor?.reason || "")] || null;
+  return what
+    ? `The run waited on ${what} for longer than allowed and was stopped. It never reached a provider.`
+    : "The run waited longer than allowed and was stopped. It never reached a provider.";
+}
+
 export function reconcileExpiredRunWaits({
   root,
   nowMs = Date.now(),
@@ -1024,7 +1125,18 @@ export function reconcileExpiredRunWaits({
           nowMs,
           root,
           completion_report: {
-            summary: `The run waited on ${descriptor.reason} past its ${descriptor.bound_policy} bound and was collected by the governor. It never reached a provider.`,
+            /*
+             * OPERATOR COPY, NOT THE STATE MACHINE TALKING TO ITSELF.
+             *
+             * This interpolated `descriptor.reason` raw. When the reason was
+             * missing it reached the operator as "The run waited on null", and
+             * when it was a caption, "The run waited on Waiting on Director...".
+             * Both were shown as a completed lane's CURRENT summary.
+             *
+             * It now says what happened in words a person can act on, and the
+             * machine detail stays in the evidence travelling beside it.
+             */
+            summary: waitCollectionSummary(descriptor),
           },
           // The wait descriptor travels onto the terminal run as evidence, so
           // the reason it was collected outlives the sweep that collected it.

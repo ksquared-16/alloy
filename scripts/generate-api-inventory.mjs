@@ -75,6 +75,11 @@ function detectAuth(src) {
   if (/verifyTwilio|TWILIO_AUTH_TOKEN|svix|verifyWebhook|Webhook\(/.test(src)) labels.push("provider-signature");
   if (/x-cron-token|CRON_TOKEN|INTERNAL_.*TOKEN/.test(src)) labels.push("cron-token");
   if (/ALLOY_PUBLIC_ORG_ID|resolvePublicOrg|publicOrgId/.test(src)) labels.push("public-org");
+  // Thread 5 — the external application principal. Not a session, not a person:
+  // a credential or bearer token resolved to exactly one installation, which is
+  // where the organization comes from.
+  if (/resolveApplicationPrincipal|resolveAccessTokenPrincipal|requireExternalPrincipal/.test(src))
+    labels.push("application-principal");
   if (/\btoken\b/.test(src) && /\/(public|action|forms|tour-booking)\//.test(src)) labels.push("token");
   // Generic scoped gate helpers not matched above (e.g. require*Auth, load*AdminContext, forbidUnless*).
   if (

@@ -4,7 +4,7 @@ import type {
     OipMetricKey,
     ResolvedMetricValue,
 } from "@/lib/metrics/types";
-import { getMetricDefinition } from "@/lib/metrics/registry";
+import { getMetricDefinition, isLiveOnlyMetric } from "@/lib/metrics/registry";
 import { kpiForMetric } from "@/lib/metrics/kpiRegistry";
 import { evaluateKpiForMetric } from "@/lib/metrics/kpiEvaluator";
 import { readLatestMetricSnapshot } from "@/lib/metrics/snapshots/readMetricSnapshot";
@@ -47,6 +47,20 @@ import {
     resolveFinancialsUnappliedPaymentsAmount,
     resolveFinancialsUnresolvedSubsidyVarianceAmount,
 } from "@/lib/metrics/resolvers/financialsMetrics";
+import { resolveAttendanceOccupancyCount } from "@/lib/metrics/resolvers/attendanceOccupancyMetrics";
+import {
+    resolveAttendanceConsequenceReviewCount,
+    resolveAttendanceCorrectionRate,
+    resolveAttendanceUnmappedEventCount,
+} from "@/lib/metrics/resolvers/attendanceHealthMetrics";
+import {
+    resolveAttendanceCheckedOutCount,
+    resolveAttendanceExpectedCount,
+    resolveAttendanceHereNowCount,
+    resolveAttendanceKnownAwayCount,
+    resolveAttendanceNotArrivedCount,
+    resolveAttendanceUnknownStateCount,
+} from "@/lib/metrics/resolvers/attendanceServiceDayMetrics";
 import {
     resolveTrustDeterministicResolutionRate,
     resolveTrustEscalatedDecisionCount,
@@ -62,6 +76,26 @@ import {
 
 async function resolveLiveMetric(ctx: MetricResolveContext, key: OipMetricKey): Promise<ResolvedMetricValue> {
     switch (key) {
+        case "attendance.correction_rate":
+            return resolveAttendanceCorrectionRate(ctx);
+        case "attendance.unmapped_event_count":
+            return resolveAttendanceUnmappedEventCount(ctx);
+        case "attendance.consequence_review_count":
+            return resolveAttendanceConsequenceReviewCount(ctx);
+        case "attendance.occupancy_count":
+            return resolveAttendanceOccupancyCount(ctx);
+        case "attendance.expected_count":
+            return resolveAttendanceExpectedCount(ctx);
+        case "attendance.here_now_count":
+            return resolveAttendanceHereNowCount(ctx);
+        case "attendance.not_arrived_count":
+            return resolveAttendanceNotArrivedCount(ctx);
+        case "attendance.checked_out_count":
+            return resolveAttendanceCheckedOutCount(ctx);
+        case "attendance.known_away_count":
+            return resolveAttendanceKnownAwayCount(ctx);
+        case "attendance.unknown_state_count":
+            return resolveAttendanceUnknownStateCount(ctx);
         case "enrollment.time_to_schedule_tour":
             return resolveEnrollmentTimeToScheduleTour(ctx);
         case "enrollment.tour_conversion_rate":
@@ -189,7 +223,24 @@ async function resolveFromSnapshotIfAvailable(
 }
 
 export async function resolveSingleMetric(ctx: MetricResolveContext, key: OipMetricKey): Promise<ResolvedMetricValue> {
-    if (ctx.mode === "snapshot") {
+    /*
+     * A live-only metric is never satisfied from storage, even when the caller
+     * asked for snapshot resolution.
+     *
+     * The snapshot read below applies a freshness bound (24h by default) and
+     * stamps what it returns `resolveMode: "snapshot"` with the snapshot's own
+     * `computed_at`. For a windowed metric that is exactly right. For "how many
+     * children are here right now" it is meaningless: a count from 23 hours ago
+     * is inside the bound and is still the wrong answer, because attendance
+     * turns over completely within a day. No age is short enough, so the policy
+     * lives on the metric rather than on the clock.
+     *
+     * Refusing here rather than at the surface means every consumer — API, BOS
+     * read, workspace card, a future one nobody has written — inherits the
+     * guarantee, and `resolveMode` stays honest because the value really was
+     * resolved live.
+     */
+    if (ctx.mode === "snapshot" && !isLiveOnlyMetric(key)) {
         const snap = await resolveFromSnapshotIfAvailable(ctx, key);
         if (snap) return snap;
     }

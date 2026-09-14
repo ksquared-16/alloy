@@ -30,11 +30,23 @@
 -- session's teardown ONLY, and is restored before a single row is written, so every write below
 -- faces the same invariants an operator's would.
 -- =============================================================================
-\set org       '00000000-0000-4000-8000-000000000001'
--- The tenant's two real campuses. Not invented: a demo that ships its own sites proves nothing
--- about the site semantics the product actually enforces.
-\set riverside '00000000-0000-4000-8000-000000000010'
-\set lakeside  '00000000-0000-4000-8000-000000000011'
+-- ── THE TENANT IS THE GOVERNED RUNNER'S, NEVER THIS FILE'S ──────────────────────────────────────
+--
+-- This line used to read `\set org '00000000-0000-4000-8000-000000000001'`, which is the LOCAL
+-- cert tenant. psql applies `-v org=...` at startup and then reads this file, so a `\set` here
+-- wins: the registered reconciliation froze one organization, the runner reported that
+-- organization in `fixture_audit`, and every statement below ran against a different one. On
+-- deployed staging that organization does not exist at all, and the audit would have named a
+-- tenant the writes never reached.
+--
+-- So the fixture now chooses no tenant. An absent `org` refuses here rather than defaulting to
+-- somebody's database.
+\if :{?org}
+\else
+do $$ begin
+  raise exception 'this fixture is applied to a governed organization: psql -v org=<uuid>. It does not choose a tenant for itself.';
+end $$;
+\endif
 
 -- Four households, four children, four agreements. `fd0…` is this fixture's own namespace, distinct
 -- from the charge-spine fixture (`fc5…`) and the thread proofs (`6f0…`, `7c0…`), so the two can
@@ -79,8 +91,70 @@
 \set child_a2  'fd000000-0000-4000-8000-0000000b0004'
 \set kid_a2    'fd000000-0000-4000-8000-0000000d0005'
 
+-- ── ONE TRANSACTION, OR NONE ────────────────────────────────────────────────────────────────────
+--
+-- psql -f is autocommit: every statement stood alone, so a foreign key that refused halfway
+-- through left the statements before it committed. Against the shared local stack that was
+-- survivable; against a hosted tenant holding real charges and journal entries it is not. The
+-- whole fixture -- preconditions, teardown and declaration -- is now one transaction. It succeeds
+-- completely or the database is untouched.
+--
+-- The preconditions are inside it deliberately: the sites resolved below and the rows written
+-- against them are then read and written in ONE snapshot, so a site cannot be retired between the
+-- lookup and the insert that depends on it.
+begin;
+
+-- ── PRECONDITIONS, BEFORE ANY MUTATION ──────────────────────────────────────────────────────────
+--
+-- The governed runner already probes the organization. It is probed again here because THIS file
+-- is what the transaction protects, and a fixture that trusts its caller's checks is a fixture
+-- with no checks.
+select count(*) = 1 as org_present from orgs where id = :'org'::uuid
+\gset
+\if :org_present
+\else
+do $$ begin
+  raise exception 'the governed organization does not exist on this target; a fixture seeds INTO a tenant and does not create one';
+end $$;
+\endif
+
+-- ── THE CAMPUSES ARE RESOLVED FROM THE TENANT, NOT NAMED BY THIS FILE ───────────────────────────
+--
+-- Two agreements at one campus and two at another is what makes the site filter a real proof: a
+-- site selection must change WHICH households appear. That needs two DIFFERENT sites -- it does
+-- not need two PARTICULAR ones, and naming particular ones is what made this fixture run in
+-- exactly one database. The previous constants were the local stack's Riverside and Lakeside;
+-- deployed staging has neither, and `child_enrollment_agreements.site_location_id` is NOT NULL
+-- REFERENCES locations(id), so the agreements simply could not be written there.
+--
+-- `order by id` rather than by name or creation time: a certification fixture must pick the same
+-- two campuses on every rerun, and id is the only ordering this schema guarantees is total and
+-- immutable. `location_type = 'site'` is the agreement's own consistency trigger restated --
+-- a child is enrolled at a campus, not at an address.
+select
+  (select l.id from locations l
+    where l.org_id = :'org'::uuid and l.location_type = 'site' and l.is_active
+    order by l.id limit 1) as site_1,
+  (select l.id from locations l
+    where l.org_id = :'org'::uuid and l.location_type = 'site' and l.is_active
+    order by l.id offset 1 limit 1) as site_2,
+  (select count(*) >= 2 from locations l
+    where l.org_id = :'org'::uuid and l.location_type = 'site' and l.is_active) as sites_ok
+\gset
+\if :sites_ok
+\else
+do $$ begin
+  raise exception 'this tenant has fewer than two active site locations; the fixture proves a site filter and cannot invent a campus to prove it with';
+end $$;
+\endif
+
 -- ── TEARDOWN ────────────────────────────────────────────────────────────────────────────────────
-set session_replication_role = replica;
+--
+-- SET LOCAL, not SET: the suspension is bounded by this transaction and is restored by COMMIT or
+-- ROLLBACK whichever happens, so a failure cannot leave a session with its triggers off. The
+-- explicit restore below still stands, because the writes must face the real invariants and that
+-- should be visible in the file rather than inferred from transaction semantics.
+set local session_replication_role = replica;
 
 -- Attributions hang off an ALLOCATION, not a payment: they record which responsible party's share
 -- a particular application met.
@@ -121,12 +195,56 @@ delete from charges where org_id = :'org'::uuid
   and billable_source_id in (:'agr_a'::uuid, :'agr_b'::uuid, :'agr_c'::uuid, :'agr_d'::uuid,
                              :'hh_a'::uuid, :'hh_b'::uuid, :'hh_c'::uuid, :'hh_d'::uuid);
 
-delete from financial_subsidy_variances where org_id = :'org'::uuid;
-delete from financial_subsidy_remittance_lines where org_id = :'org'::uuid;
-delete from financial_subsidy_remittances where org_id = :'org'::uuid;
-delete from financial_subsidy_claim_lines where org_id = :'org'::uuid;
-delete from financial_subsidy_claims where org_id = :'org'::uuid;
-delete from financial_subsidy_authorizations where org_id = :'org'::uuid;
+-- ── SUBSIDY TEARDOWN, NARROWED TO THIS FIXTURE'S OWN CHAIN ──
+--
+-- These six were `where org_id = :'org'` — every subsidy claim, remittance,
+-- authorization and variance in the tenant, whoever created them, deleted with
+-- the protective triggers suspended. On the shared local cert stack that was
+-- defensible: the tenant is disposable and other sessions reset it anyway. This
+-- fixture is now reachable through a governed action against HOSTED staging,
+-- where it is not, and where unrelated subsidy data may exist tomorrow even if
+-- none exists today.
+--
+-- Every row this fixture creates in the chain descends from its own program and
+-- agency, so the whole teardown is derivable from two fixture-owned ids:
+--
+--   authorizations   .program_id   -> :program
+--   claims           .program_id   -> :program   (and .agency_id -> :agency)
+--   claim_lines      .claim_id     -> those claims
+--   remittances      .agency_id    -> :agency
+--   remittance_lines .remittance_id-> those remittances
+--   variances        .claim_line_id-> those claim lines
+--
+-- Innermost outward, so a foreign key never blocks its own cleanup. Emptiness of
+-- these tables today is NOT the safety argument — the predicates are.
+delete from financial_subsidy_variances
+  where org_id = :'org'::uuid
+    and claim_line_id in (
+      select cl.id from financial_subsidy_claim_lines cl
+        join financial_subsidy_claims c on c.id = cl.claim_id
+       where c.org_id = :'org'::uuid and c.program_id = :'program'::uuid);
+
+delete from financial_subsidy_remittance_lines
+  where org_id = :'org'::uuid
+    and remittance_id in (
+      select r.id from financial_subsidy_remittances r
+       where r.org_id = :'org'::uuid and r.agency_id = :'agency'::uuid);
+
+delete from financial_subsidy_remittances
+  where org_id = :'org'::uuid and agency_id = :'agency'::uuid;
+
+delete from financial_subsidy_claim_lines
+  where org_id = :'org'::uuid
+    and claim_id in (
+      select c.id from financial_subsidy_claims c
+       where c.org_id = :'org'::uuid and c.program_id = :'program'::uuid);
+
+delete from financial_subsidy_claims
+  where org_id = :'org'::uuid and program_id = :'program'::uuid;
+
+delete from financial_subsidy_authorizations
+  where org_id = :'org'::uuid and program_id = :'program'::uuid;
+
 delete from financial_subsidy_programs where id = :'program'::uuid;
 delete from financial_funding_agencies where id = :'agency'::uuid;
 
@@ -152,7 +270,7 @@ delete from customers
 delete from persons where id in
   (:'parent_c'::uuid, :'parent_a1'::uuid, :'parent_a2'::uuid, :'child_a2'::uuid);
 
-set session_replication_role = origin;
+set local session_replication_role = origin;
 
 -- ── HOUSEHOLDS ──────────────────────────────────────────────────────────────────────────────────
 --
@@ -231,13 +349,13 @@ insert into customer_persons (org_id, customer_id, person_id, role_type, is_prim
 -- child is enrolled at a campus, not at an address.
 insert into child_enrollment_agreements
   (id, org_id, customer_member_id, customer_id, site_location_id, status, start_date, source_key) values
-  (:'agr_a'::uuid, :'org'::uuid, :'kid_a'::uuid, :'hh_a'::uuid, :'riverside'::uuid, 'active',
+  (:'agr_a'::uuid, :'org'::uuid, :'kid_a'::uuid, :'hh_a'::uuid, :'site_1'::uuid, 'active',
    current_date - 120, 'demo_tenant'),
-  (:'agr_b'::uuid, :'org'::uuid, :'kid_b'::uuid, :'hh_b'::uuid, :'lakeside'::uuid,  'active',
+  (:'agr_b'::uuid, :'org'::uuid, :'kid_b'::uuid, :'hh_b'::uuid, :'site_2'::uuid,  'active',
    current_date - 120, 'demo_tenant'),
-  (:'agr_c'::uuid, :'org'::uuid, :'kid_c'::uuid, :'hh_c'::uuid, :'riverside'::uuid, 'active',
+  (:'agr_c'::uuid, :'org'::uuid, :'kid_c'::uuid, :'hh_c'::uuid, :'site_1'::uuid, 'active',
    current_date - 120, 'demo_tenant'),
-  (:'agr_d'::uuid, :'org'::uuid, :'kid_d'::uuid, :'hh_d'::uuid, :'lakeside'::uuid,  'active',
+  (:'agr_d'::uuid, :'org'::uuid, :'kid_d'::uuid, :'hh_d'::uuid, :'site_2'::uuid,  'active',
    current_date - 120, 'demo_tenant');
 
 -- ── AN AGENCY AND A PROGRAM ─────────────────────────────────────────────────────────────────────
@@ -264,3 +382,6 @@ insert into financial_subsidy_authorizations
    authorized_amount_cents, family_copay_cents, state, source_key) values
   ('fd000000-0000-4000-8000-0000000f0003'::uuid, :'org'::uuid, :'program'::uuid, :'hh_c'::uuid,
    :'kid_c'::uuid, current_date - 90, current_date + 180, 90000, 15000, 'active', 'demo_tenant');
+
+-- All of it, or none of it.
+commit;

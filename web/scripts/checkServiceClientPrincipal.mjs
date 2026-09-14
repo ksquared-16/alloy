@@ -89,6 +89,18 @@ const NON_HUMAN_PRINCIPAL_RESOLVERS = new Set([
     // unreadable, and returns the org/site from the row rather than the request.
     // web/lib/childcareOperational/attendance/kiosk/kioskDeviceAuthority.ts
     "resolveKioskDevice",
+    // Resolves an external application by hashed credential; refuses malformed,
+    // unknown, revoked and expired, refuses a suspended installation or a
+    // disabled application, and returns the organization from the installation
+    // row rather than the request. Fails closed on every path, including a
+    // failed lookup.
+    // web/lib/platform/principal/resolveApplicationPrincipal.ts
+    "resolveApplicationPrincipal",
+    // Resolves a short-lived bearer token to the same principal, re-reading
+    // credential, installation and application state on every call so a
+    // revocation takes effect on the next request.
+    // web/lib/platform/principal/accessToken.ts
+    "resolveAccessTokenPrincipal",
 ]);
 
 const RESOLVE_EXTENSIONS = [".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx"];

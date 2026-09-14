@@ -1132,8 +1132,34 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
       live: false, stale: false,
     };
   }
-  if (cap.state === "NEEDS_INPUT" || run?.state === "NEEDS_INPUT") {
+  /*
+   * THE API DECIDES WHETHER THE OPERATOR IS NEEDED. THIS MAPS IT.
+   *
+   * This read `run?.state === "NEEDS_INPUT"` and called it "Needs input". But a
+   * run is parked in NEEDS_INPUT when a governed action FAILS, which asks nobody
+   * anything - measured, 10 of 34 NEEDS_INPUT entries got there that way. Each
+   * one put a lane in the needs_input band with nothing for the operator to do,
+   * discoverable only by opening it.
+   *
+   * `lane.needs_you` comes from laneOperatorState, which reads the one store
+   * that knows: a request awaiting_operator with no decision recorded. When the
+   * payload carries that field it is the answer. A parked run with nothing
+   * outstanding is BLOCKED - "this stopped, you may want to look" - which is a
+   * different sentence from "it cannot continue until you answer".
+   *
+   * The old inference survives only for a payload that predates the field, so an
+   * older Gateway still renders something sensible.
+   */
+  const apiSaysNeedsYou = typeof lane?.needs_you === "boolean" ? lane.needs_you : null;
+  const inferredNeedsInput = cap.state === "NEEDS_INPUT" || run?.state === "NEEDS_INPUT";
+  if (apiSaysNeedsYou === true || (apiSaysNeedsYou === null && inferredNeedsInput)) {
     return { key: "needs_input", label: "Needs input", group: "needs_input", tone: "needs", mark: "!", hint: cap.hint || "Needs input", headline: "Needs input", live: false, stale: false };
+  }
+  if (apiSaysNeedsYou === false && inferredNeedsInput) {
+    // Parked with nothing outstanding. Still surfaced, still in the band that
+    // gets looked at — but not claiming the operator owes an answer.
+    const why = lane?.secondary_status || run?.state_reason || "Stopped and waiting to be looked at";
+    return { key: "blocked", label: "Blocked", group: "needs_input", tone: "failed", mark: "!", hint: why, headline: "Blocked", live: false, stale: false };
   }
   if (cap.state === "FAILED" || run?.state === "FAILED") {
     return { key: "failed", label: "Failed", group: "completed", tone: "failed", mark: "×", hint: "Failed", headline: "Failed", live: false, stale: false };
@@ -1198,12 +1224,38 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
       // Finalizing is the truthful name for that gap: the agent has stopped
       // producing, the run has not finished recording. It is not idle, so it is
       // not Ready; no one is being asked anything, so it is not Needs you.
+      /*
+       * THE SAME GAP HAPPENS AT BOTH ENDS OF A TURN.
+       *
+       * "Finalizing" is truthful after the last token. At the START of a turn -
+       * the run open, the provider not yet producing - it reads as though the
+       * previous work is ending, which is the opposite of what is happening.
+       *
+       * The distinguishing fact is whether this run has produced ANYTHING yet.
+       * When both timestamps are readable the answer is unambiguous. When
+       * either is missing the label stays "Finalizing", because that is the
+       * cautious half: it tells an operator not to send yet, and being early
+       * with that warning costs less than being late.
+       *
+       * PRESENTATION ONLY. The state, its group, tone and source are unchanged.
+       */
+      const runStartedAt = Date.parse(run?.started_at || run?.created_at || "");
+      const lastOutputAt = output?.captured_at
+        ? Date.parse(output.captured_at)
+        : Number(lane?.last_activity_ms);
+      const producedThisRun = Number.isFinite(runStartedAt) && Number.isFinite(lastOutputAt)
+        ? lastOutputAt > runStartedAt
+        : null;
+      const starting = producedThisRun === false;
       return {
-        key: "finalizing", label: "Finalizing", group: "active", tone: "run", mark: "◷",
-        hint: `${who} idle · run still finalizing`,
-        headline: `Finalizing · ${who}`,
+        key: "finalizing",
+        label: starting ? "Starting" : "Finalizing",
+        group: "active", tone: "run", mark: "◷",
+        hint: starting ? `${who} starting this turn` : `${who} idle · run still finalizing`,
+        headline: starting ? `Starting · ${who}` : `Finalizing · ${who}`,
         live: false, stale: false,
         source: "agent_idle_run_open",
+        turn_phase: starting ? "starting" : (producedThisRun === true ? "finalizing" : "unknown"),
       };
     }
     const quiet = quietWorkerNote(lane, nowMs);
@@ -3057,14 +3109,36 @@ export function governedDecisionNotice({
   }
   if (already) return { kind: "ok", text: "Already resolved." };
   if (!approve) return { kind: "ok", text: "Denied." };
-  const what = approveLabel
-    ? String(approveLabel).replace(/^Authorize\s+/i, "")
-    : (actionKey === "repository.push" ? "Push"
-      : actionKey === "repository.merge_pull_request" ? "Merge"
-      : actionKey === "promotion.open_pr" ? "Pull request"
-      : actionKey === "database.read_census" ? "Census"
-      : (title || "Action"));
-  return { kind: "ok", text: `${what} authorized. Director is executing.` };
+  /*
+   * "AUTHORIZE AUTHORIZED."
+   *
+   * The label is the BUTTON's words - "Authorize merge", or just "Authorize"
+   * when the action has no noun of its own. This stripped a leading
+   * "Authorize " and used the rest, so the bare label kept its verb and came
+   * out as "Authorize authorized. Director is executing.", and a label that did
+   * strip produced "merge authorized" in lower case mid-sentence.
+   *
+   * The sentence needs the NOUN of what was decided, so a label that is only a
+   * verb yields nothing and the action key answers instead.
+   */
+  const fromLabel = String(approveLabel || "").replace(/^authoriz\w*\s*/i, "").trim();
+  const ACTION_NOUNS = {
+    "repository.push": "Push",
+    "repository.merge_pull_request": "Merge",
+    "promotion.open_pr": "Pull request",
+    "database.read_census": "Census",
+    "vacilando.retire_worktree": "Worktree retirement",
+    "platform.register_developer_application": "Application registration",
+    "host.install_toolkit": "Toolkit install",
+    "environment.execute_registered_reconciliation": "Reconciliation",
+    "database.apply_migration": "Migration",
+    "database.apply_promoted_migration": "Migration",
+  };
+  const noun = fromLabel || ACTION_NOUNS[actionKey] || title || "Action";
+  const what = noun.charAt(0).toUpperCase() + noun.slice(1);
+  // "approved" rather than "authorized": it is what the button did, and it does
+  // not repeat the verb the button already said.
+  return { kind: "ok", text: `${what} approved. Director is executing.` };
 }
 
 /**

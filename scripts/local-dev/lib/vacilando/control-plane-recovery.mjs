@@ -27,6 +27,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { firstMeaningfulLine } from "./trusted-host-push.mjs";
 
 export const CONTROL_PLANE_RECOVERY_SCHEMA = "vacilando.control_plane_recovery.v1";
 
@@ -122,7 +123,7 @@ export function restartGatewayForConvergence({
     run("launchctl", ["kickstart", "-k", `gui/${id}/${label}`]);
     return { ok: true, action: "launchd_kickstart", label, from: runningSha, to: installedSha, verified_by: "next_cycle_observation" };
   } catch (e) {
-    return { ok: false, error: "kickstart_failed", detail: String(e?.stderr || e?.message || e).split("\n")[0].slice(0, 200) };
+    return { ok: false, error: "kickstart_failed", detail: firstMeaningfulLine(String(e?.stderr || e?.message || e), "kickstart failed").slice(0, 200) };
   }
 }
 

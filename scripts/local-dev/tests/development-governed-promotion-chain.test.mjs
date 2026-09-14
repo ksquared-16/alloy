@@ -31,6 +31,13 @@ const {
 const {
   validateOpenPrInputs, openPullRequest,
 } = await import("../lib/vacilando/trusted-host-open-pr.mjs");
+
+/*
+ * These fixtures drive the real pushBranch, so they are promotion callers and
+ * must declare what the candidate owns. HEAD is a baseline git can resolve in a
+ * throwaway repository, so the declaration is compared rather than skipped.
+ */
+const BASE_DECL = "HEAD";
 const {
   liveRemoteMutationPermitted, canonicalGatewayRuntimeRoot,
 } = await import("../lib/vacilando/trusted-host-remote-guard.mjs");
@@ -159,7 +166,7 @@ await test("both actions are in the canonical registry with their capabilities",
   assert.equal(getActionDefinition("promotion.open_pr").requiredCapability, "trusted_host.promotion.open_pr");
   // Discovery must also say what to supply, or a lane can only guess.
   const push = listRegisteredActions().find((a) => a.actionType === "repository.push");
-  assert.deepEqual(push.requiredInputs, ["repository", "branch", "expectedHeadSha", "worktreePath"]);
+  assert.deepEqual(push.requiredInputs, ["repository", "branch", "expectedHeadSha", "worktreePath", "base_ref", "expected_commits"]);
 });
 
 // -------------------------------------------------------------- push guards
@@ -194,7 +201,7 @@ await test("a push refuses head drift", () => {
   assert.equal(ready.ok, false);
   assert.equal(ready.code, "head_drift");
   // POSITIVE CONTROL: at the actual head it is ready.
-  const good = validatePushInputs({ repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir });
+  const good = validatePushInputs({ repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir, base_ref: wt.baseSha, expected_commits: [wt.head] });
   assert.equal(evaluatePushReadiness(good.normalized, { gitImpl: fakeGit() }).ok, true);
 });
 
@@ -213,7 +220,7 @@ await test("a push refuses commits beyond what was reviewed", () => {
 await test("a push refuses a non-fast-forward instead of forcing", () => {
   const wt = makeWorktree();
   // The remote carries a commit this push does not contain.
-  const v = validatePushInputs({ repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir });
+  const v = validatePushInputs({ repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir, base_ref: wt.baseSha, expected_commits: [wt.head] });
   const ready = evaluatePushReadiness(v.normalized, { gitImpl: fakeGit({ remoteSha: wt.baseSha === wt.head ? OTHER : OTHER }) });
   assert.equal(ready.ok, false);
   assert.equal(ready.code, "non_fast_forward");
@@ -223,7 +230,7 @@ await test("a push is idempotent when the remote already has the commit", () => 
   const wt = makeWorktree();
   const g = fakeGit({ remoteSha: wt.head });
   const out = pushBranch(
-    { repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir },
+    { base_ref: BASE_DECL, expected_commits: [], repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir },
     { git: g },
   );
   assert.equal(out.ok, true, out.detail || out.code);
@@ -239,7 +246,7 @@ await test("a retry is idempotent even after the lane has moved on", () => {
   const wt = makeWorktree({ extraCommits: 2 });
   const g = fakeGit({ remoteSha: wt.head });
   const out = pushBranch(
-    { repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir },
+    { base_ref: BASE_DECL, expected_commits: [], repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir },
     { git: g },
   );
   assert.equal(out.ok, true, out.code || out.detail);
@@ -249,7 +256,7 @@ await test("a retry is idempotent even after the lane has moved on", () => {
   // POSITIVE CONTROL: with the commit NOT on the remote, a moved branch is
   // still refused as drift.
   const drifted = pushBranch(
-    { repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir },
+    { base_ref: BASE_DECL, expected_commits: [], repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir },
     { git: fakeGit() },
   );
   assert.equal(drifted.ok, false);
@@ -260,7 +267,7 @@ await test("a push publishes exactly the approved commit to exactly one ref", ()
   const wt = makeWorktree();
   const g = fakeGit();
   const out = pushBranch(
-    { repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir },
+    { base_ref: BASE_DECL, expected_commits: [], repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir },
     { git: g },
   );
   assert.equal(out.ok, true, out.detail || out.code);
@@ -274,7 +281,7 @@ await test("a push publishes exactly the approved commit to exactly one ref", ()
 await test("a failed push reports the reason and publishes nothing", () => {
   const wt = makeWorktree();
   const out = pushBranch(
-    { repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir },
+    { base_ref: BASE_DECL, expected_commits: [], repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir },
     { git: fakeGit({ pushOk: false }) },
   );
   assert.equal(out.ok, false);

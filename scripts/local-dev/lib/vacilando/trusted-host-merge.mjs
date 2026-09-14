@@ -14,6 +14,7 @@ import { spawnSync } from "node:child_process";
 // The remote-mutation guard is shared: merging is not the only thing here that
 // leaves this machine, and one guard in one place is the point.
 import { canonicalGatewayRuntimeRoot, liveMergePermitted } from "./trusted-host-remote-guard.mjs";
+import { firstMeaningfulLine } from "./trusted-host-push.mjs";
 
 export { canonicalGatewayRuntimeRoot, liveMergePermitted };
 
@@ -624,7 +625,9 @@ export function inspectPullRequest(inputs, { gh = defaultGh, censusRequests = nu
     return {
       ok: false,
       code: "pr_lookup_failed",
-      detail: String(view.stderr || view.stdout || "gh pr view failed").split("\n")[0].slice(0, 200),
+      // Line zero is often blank from `gh`. Same defect already closed on the
+      // merge and push paths; this is the read-back call the same promotion makes.
+      detail: firstMeaningfulLine(String(view.stderr || view.stdout || ""), "gh pr view failed").slice(0, 200),
     };
   }
   const pr = parseJson(view.stdout);
@@ -869,7 +872,11 @@ export function mergePullRequest(inputs, { gh = defaultGh } = {}) {
         credentialsExposed: false,
       };
     }
-    return { ok: false, code: "merge_failed", detail: err.split("\n")[0].slice(0, 240) };
+    // LINE ZERO IS OFTEN BLANK. `gh` and `git` open with an empty line often
+    // enough that this reported "" for real, named failures — the same defect
+    // already closed on the push path, on the two calls a promotion makes every
+    // single time. firstMeaningfulLine is the canonical primitive for it.
+    return { ok: false, code: "merge_failed", detail: firstMeaningfulLine(err, "merge_failed").slice(0, 240) };
   }
   const after = inspectPullRequest(inputs, { gh });
   const mergeSha = after.pr?.mergeCommitSha || after.pr?.headRefOid || n.expectedHeadSha;

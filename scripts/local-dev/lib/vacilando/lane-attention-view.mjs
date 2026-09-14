@@ -36,6 +36,8 @@ import {
   listNotifications,
 } from "./lane-notifications.mjs";
 
+import { laneOperatorState } from "./lane-operator-state.mjs";
+
 export const ATTENTION_VIEW_SCHEMA = "vacilando.lane_attention_view.v1";
 
 /**
@@ -70,14 +72,27 @@ export function laneAttentionView({
   laneId = null,
   notifications = [],
   runState = null,
+  requests = [],
 } = {}) {
   const forLane = notifications.filter((n) => !laneId || n.lane_id === laneId);
   const outputs = forLane.filter((n) => OUTPUT_EVENT_TYPES.includes(String(n.event_type || "")));
   const unread = outputs.filter(isUnseen);
 
-  // The obligation, computed from the run state through the existing owner —
-  // NOT from whether anything is unread.
-  const category = directorCategoryForRunState(runState);
+  /*
+   * THE OBLIGATION COMES FROM THE GOVERNED ACTION STORE, NOT THE RUN STATE.
+   *
+   * This used `directorCategoryForRunState`, so NEEDS_INPUT meant "Needs you".
+   * But a run is put into NEEDS_INPUT when a governed action FAILS, which asks
+   * the operator nothing. Measured: 34 runs entered NEEDS_INPUT, 10 of them
+   * because an action failed - each one a lane saying "Needs you" with nothing
+   * to do, discoverable only by opening it.
+   *
+   * `laneOperatorState` owns the question now and answers it from the only
+   * source that knows: a request that is awaiting_operator with no decision
+   * recorded against it. Run state still decides what the lane is DOING.
+   */
+  const operator = laneOperatorState({ laneId, runState, requests });
+  const category = operator.actionable ? "needs_answer" : directorCategoryForRunState(runState);
 
   return {
     schema_version: ATTENTION_VIEW_SCHEMA,
@@ -91,24 +106,29 @@ export function laneAttentionView({
     // Independent, and returned alongside so a surface cannot accidentally
     // derive one from the other.
     director_category: category,
-    requires_director: category === "needs_answer" || category === "stuck",
+    // Actionable and "worth a look" are different facts, returned separately so
+    // a surface cannot derive one from the other by accident.
+    requires_director: operator.actionable || category === "stuck",
+    needs_you_count: operator.needs_you_count,
+    operator_state: operator.state,
+    operator_tone: operator.tone,
+    operator_secondary: operator.secondary,
     treatment: unread.length ? UNREAD_TREATMENT : null,
     // The presentation label a lane list can render directly.
+    // One vocabulary. The list, the header and the card all read this.
     label: unread.length
-      ? `${labelForRunState(runState)} · ${UNREAD_TREATMENT.label_suffix}`
-      : labelForRunState(runState),
+      ? `${operator.label} · ${UNREAD_TREATMENT.label_suffix}`
+      : operator.label,
   };
 }
 
-function labelForRunState(runState) {
-  const s = String(runState || "").toUpperCase();
-  if (s === "EXECUTING") return "Working";
-  if (s === "NEEDS_INPUT") return "Needs you";
-  if (s === "COMPLETE") return "Completed";
-  if (s === "FAILED" || s === "ABANDONED") return "Stopped";
-  if (s === "VALIDATING") return "Validating";
-  return "Ready";
-}
+/*
+ * labelForRunState lived here and returned "Completed" for a COMPLETE run. The
+ * label now comes from laneOperatorState, whose canonical states are
+ * NEEDS_YOU/WORKING/WAITING/BLOCKED/FAILED/READY - there is no "Completed"
+ * state, a finished run is READY. Nothing called this; it survived only to
+ * contradict the canonical vocabulary in a grep. Removed.
+ */
 
 /**
  * The view for every lane, from one read of the store.

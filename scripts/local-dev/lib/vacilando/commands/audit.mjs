@@ -95,3 +95,45 @@ export function readAuditEvents(limit = 50) {
     return [];
   }
 }
+
+/**
+ * COUNT A CIVIL DAY, RATHER THAN COUNTING A TAIL AND CALLING IT A DAY.
+ *
+ * `readAuditEvents(300)` returns the last 300 events. Filtering that for
+ * "today" gives a number that saturates at 300 and is presented as a day
+ * total: on a day with 2333 audit events the dashboard would report 300 and
+ * look entirely plausible. Fixing only the timezone would have left this -
+ * a correct window over a truncated read is still the wrong number.
+ *
+ * The file is append-ordered, so this scans BACKWARDS and stops at the first
+ * event older than the window: the work is bounded by the length of the day,
+ * not by the length of history.
+ *
+ * `scanned_cap` is the last-resort bound. If it is reached the counts are
+ * returned with `complete: false`, because a partial count that cannot say it
+ * is partial is the same defect wearing a different hat.
+ */
+export function countAuditEventsInWindow({ startMs, endMs, scanCap = 100000 } = {}) {
+  const empty = { total: 0, succeeded: 0, failed: 0, complete: true, scanned: 0 };
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return { ...empty, complete: false };
+  let lines;
+  try { lines = readFileSync(auditPath(), "utf8").split("\n"); }
+  catch { return empty; }
+  let total = 0, succeeded = 0, failed = 0, scanned = 0, complete = true;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (!line) continue;
+    if (scanned >= scanCap) { complete = false; break; }
+    scanned += 1;
+    let e; try { e = JSON.parse(line); } catch { continue; }
+    const t = Date.parse(e?.occurred_at || "");
+    if (Number.isNaN(t)) continue;
+    // Append-ordered: once we are before the window, everything earlier is too.
+    if (t < startMs) break;
+    if (t >= endMs) continue;
+    total += 1;
+    if (e.outcome === "succeeded") succeeded += 1;
+    else if (e.outcome === "failed") failed += 1;
+  }
+  return { total, succeeded, failed, complete, scanned };
+}

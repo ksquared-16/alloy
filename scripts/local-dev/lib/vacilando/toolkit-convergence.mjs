@@ -40,6 +40,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { firstMeaningfulLine } from "./trusted-host-push.mjs";
 
 /** Where the canonical layout lives. Mirrors alloy-toolkit's own defaults. */
 export const TOOLKIT_ROOT = process.env.ALLOY_TOOLKIT_ROOT
@@ -115,7 +116,7 @@ function run(cmd, args, { cwd = undefined } = {}) {
   try {
     return { ok: true, out: String(execFileSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim() };
   } catch (e) {
-    return { ok: false, out: "", err: String(e?.stderr || e?.message || "").split("\n")[0].slice(0, 200) };
+    return { ok: false, out: "", err: firstMeaningfulLine(String(e?.stderr || e?.message || ""), "toolkit command failed").slice(0, 200) };
   }
 }
 
@@ -595,7 +596,7 @@ export function executeToolkitInstall({
     return {
       ok: false,
       error: "install_command_failed",
-      detail: String(e?.stderr || e?.message || "").split("\n")[0].slice(0, 300),
+      detail: firstMeaningfulLine(String(e?.stderr || e?.message || ""), "toolkit install failed").slice(0, 300),
       previous_sha: before,
     };
   }
@@ -612,6 +613,34 @@ export function executeToolkitInstall({
   }
 
   const gw = observeGatewayExecution({ toolkitRoot });
+  const restartRequired = gw.executing_sha !== after;
+  /*
+   * "RESTART REQUIRED" DOES NOT MEAN "REQUIRED OF YOU".
+   *
+   * `gateway_restart_required: true` is a true statement about the Gateway and a
+   * misleading one about the operator. The restart is already owned: the drift
+   * raises a TOOLKIT_DRIFT episode and `converge_toolkit_then_restart` performs
+   * it automatically, measured at 77s and 291-308s. An operator reading the raw
+   * flag has no way to tell that from "nothing is going to happen unless you do
+   * it", and inferring that a convergence owner is missing is exactly the wrong
+   * conclusion.
+   *
+   * So the result also says, in words, which of the three it is. The flag stays
+   * for every existing reader; nothing about the lifecycle or its cadence moves.
+   */
+  const convergence = restartRequired
+    ? {
+      state: "CONVERGENCE_SCHEDULED",
+      owner: "control-plane TOOLKIT_DRIFT episode",
+      operator_action_required: false,
+      detail: "The installed toolkit differs from the running Gateway. Convergence is scheduled automatically and typically completes within a few minutes; no operator action is needed.",
+    }
+    : {
+      state: "CONVERGED",
+      owner: null,
+      operator_action_required: false,
+      detail: "The running Gateway is already executing the installed toolkit.",
+    };
   return {
     ok: true,
     previous_sha: before,
@@ -620,6 +649,7 @@ export function executeToolkitInstall({
     readback_verified: Boolean(want) && after === want,
     rollback_target: before,
     gateway_executing_sha: gw.executing_sha,
-    gateway_restart_required: gw.executing_sha !== after,
+    gateway_restart_required: restartRequired,
+    convergence,
   };
 }

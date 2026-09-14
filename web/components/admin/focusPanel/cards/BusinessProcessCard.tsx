@@ -26,6 +26,8 @@ import {
     logProcessCardCommandProjection,
 } from "@/lib/adminV2/runtime/diagnostics/processCardCommandDiagnostics";
 import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
+import { executeCommandSurfaceAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCommandSurfaceAction";
+import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { warmCurrentWorkCapabilityOnIntent } from "@/lib/adminV2/runtime/focusPanel/currentWork/warmCurrentWorkCapabilities";
 import ProcessCard from "@/components/operationalCards/ProcessCard";
 import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
@@ -201,6 +203,61 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
                         return;
                     }
                     coordination?.openCurrentWorkWorkspace?.({ kind: "action", actionKey: command.key });
+                    return;
+                }
+                case "command_surface": {
+                    /*
+                     * Nothing left to collect: the card already shows the subject and configuration
+                     * bound the inputs, so the command runs here rather than being carried to a
+                     * workspace that would only ask again — or, as it did, report that the action
+                     * "cannot be run from What's Next" for a command no other host carries.
+                     *
+                     * The subject is the one THIS card is about. Falling back to the enclosing
+                     * opportunity would run the command against the wrong record, which is worse
+                     * than not running it, so an unresolved subject refuses inside the host.
+                     */
+                    /*
+                     * THE CHILD, FROM THE ONE CARRIER THAT NAMES IT.
+                     *
+                     * `participantScope.customerMemberId` is the durable child the operator is
+                     * currently concerned with, and it is the identity `stage_work.start` resolves
+                     * a track from. Read from that carrier rather than re-derived here, because
+                     * every card that re-resolves a child from whatever it can reach drifts from
+                     * the others.
+                     *
+                     * ABSENT MEANS ABSENT. The carrier's own rule is that a wrong child is worse
+                     * than no child, since the operator cannot see that the command acted on
+                     * someone else — so there is deliberately no fallback, and the host refuses.
+                     */
+                    const childId = context.participantScope?.customerMemberId?.trim() ?? "";
+                    void executeCommandSurfaceAction({
+                        actionKey: plan.action.handlerKey ?? plan.action.key,
+                        entityType: "child",
+                        entityId: childId,
+                        ...(plan.action.workTemplateKey
+                            ? { payload: { template_key: plan.action.workTemplateKey } }
+                            : {}),
+                        surface: "focus_panel",
+                    }).then((result) => {
+                        /*
+                         * One canonical operational refresh — the same scoped update every other
+                         * command dispatches, keyed on the opportunity the drawer is open on even
+                         * though the command ran against the child, because that is the scope the
+                         * Focus Panel and queue listen on.
+                         *
+                         * A refusal deliberately triggers nothing: the command did not run, so
+                         * refreshing would only redraw the same state and imply something happened.
+                         */
+                        // The case this panel is open on — the scope the Focus Panel and queue
+                        // listen on, even though the command ran against the child.
+                        const drawerOpportunityId = context.subject?.id?.trim();
+                        if (result.ok && drawerOpportunityId) {
+                            dispatchOpportunityDrawerScopedUpdate(drawerOpportunityId, command.key, [
+                                "activity",
+                                "header_actions",
+                            ]);
+                        }
+                    });
                     return;
                 }
                 default:

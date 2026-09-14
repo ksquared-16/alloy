@@ -23,6 +23,7 @@ import { spawnSync } from "node:child_process";
 import { isAllowlistedRepository, normalizeRepositorySlug, repositoryRefusalDetail, ALLOWED_TARGET_BRANCHES } from "./trusted-host-merge.mjs";
 import { BRANCH_RE, PROTECTED_REFS, SHA_RE } from "./trusted-host-push.mjs";
 import { liveRemoteMutationPermitted } from "./trusted-host-remote-guard.mjs";
+import { firstMeaningfulLine } from "./trusted-host-push.mjs";
 
 export const PR_TITLE_MAX = 200;
 export const PR_BODY_MAX = 60_000;
@@ -108,7 +109,7 @@ export function findOpenPullRequest(n, { gh = defaultGh, matchBase = true } = {}
     "--json", "number,headRefOid,baseRefName,headRefName,url,title,state",
   ]);
   if (out.status !== 0) {
-    return { ok: false, code: "pr_lookup_failed", detail: String(out.stderr || "gh pr list failed").split("\n")[0].slice(0, 200) };
+    return { ok: false, code: "pr_lookup_failed", detail: firstMeaningfulLine(String(out.stderr || ""), "gh pr list failed").slice(0, 200) };
   }
   const list = parseJson(out.stdout) || [];
   const match = list.find((p) => p.headRefName === n.headBranch
@@ -207,7 +208,11 @@ export function openPullRequest(inputs, { gh = defaultGh } = {}) {
         };
       }
     }
-    return { ok: false, code: "open_pr_failed", detail: err.split("\n")[0].slice(0, 240) };
+    // LINE ZERO IS OFTEN BLANK. `gh` and `git` open with an empty line often
+    // enough that this reported "" for real, named failures — the same defect
+    // already closed on the push path, on the two calls a promotion makes every
+    // single time. firstMeaningfulLine is the canonical primitive for it.
+    return { ok: false, code: "open_pr_failed", detail: firstMeaningfulLine(err, "open_pr_failed").slice(0, 240) };
   }
 
   // Read it back rather than parsing the URL out of stdout: the record is the

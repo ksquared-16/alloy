@@ -7,6 +7,10 @@ import CurrentWorkActionPanel from "@/components/admin/focusPanel/cards/CurrentW
 import CurrentWorkParticipantDecisionsPanel from "@/components/admin/focusPanel/cards/CurrentWorkParticipantDecisionsPanel";
 import { resolveParticipantDecisionScope } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveParticipantDecisionScope";
 import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import {
+    workIntentProjectionForStageWorkItem,
+    type StageWorkItemProjection,
+} from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import CurrentWorkActivityPreview, {
     CurrentWorkActivityKindIcon,
     type CurrentWorkActivityPreviewItem,
@@ -25,6 +29,7 @@ import {
     type CurrentWorkRequirementOwner,
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkRequirementOwner";
 import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
+import { executeCommandSurfaceAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCommandSurfaceAction";
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
 import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
 import CurrentWorkTourGroupedActions from "@/components/admin/focusPanel/cards/CurrentWorkTourGroupedActions";
@@ -182,12 +187,55 @@ export default function CurrentWorkCard({
         setActivityPreviewOpen(false);
     }, []);
 
+    /*
+     * THE STAGE'S OTHER OPEN WORK, AND THE WORK THE OPERATOR HAS SELECTED.
+     *
+     * `pickPrimaryOpenItem` already says a secondary item "is reached only when the primary has
+     * nothing open — and then explicitly, through its own row". That row did not exist, so on a
+     * stage whose primary work is open, secondary work could be started and never resolved: the
+     * offer work on Waitlist was live in the runtime, deduped correctly on repeat invocation, and
+     * its outcomes were reachable from no surface at all.
+     *
+     * Selection is by TEMPLATE KEY against the runtime, re-resolved on every render, so a work item
+     * that closes underneath the operator falls back to the primary rather than leaving a stale
+     * projection selected. Null means "the stage's primary work", which is the unchanged default.
+     */
+    const stageWorkItems = useMemo<StageWorkItemProjection[]>(() => {
+        const runtime = surface.runtime;
+        if (!runtime) return [];
+        return [runtime.primary, ...runtime.additional].filter(
+            (item): item is StageWorkItemProjection => item != null,
+        );
+    }, [surface.runtime]);
+    const secondaryOpenWork = useMemo(
+        () =>
+            stageWorkItems.filter(
+                (item) => (item.role ?? "primary") === "secondary" && item.state === "open",
+            ),
+        [stageWorkItems],
+    );
+    const [selectedWorkKey, setSelectedWorkKey] = useState<string | null>(null);
+    const selectedWorkItem =
+        selectedWorkKey ?
+            stageWorkItems.find(
+                (item) => item.template_key === selectedWorkKey && item.state === "open",
+            ) ?? null
+        :   null;
+    /** The work every outcome control acts on — the selected item, else the stage's primary. */
+    const activeWorkItem = selectedWorkItem ?? vm.primaryWorkItem;
+    const activeProjection =
+        selectedWorkItem && surface.runtime ?
+            workIntentProjectionForStageWorkItem(surface.runtime, selectedWorkItem)
+        :   vm.primaryProjection;
+    const activeOutcomes = selectedWorkItem ? selectedWorkItem.outcomes : vm.completionOutcomes;
+
     const pendingOutcome =
-        vm.completionOutcomes.find((row) => row.outcome_key === pendingOutcomeKey) ?? null;
+        activeOutcomes.find((row) => row.outcome_key === pendingOutcomeKey) ?? null;
 
     const resetCompletion = useCallback(() => {
         setCompletionPhase("working");
         setPendingOutcomeKey(null);
+        setSelectedWorkKey(null);
         setCompletionSummary(null);
         clearError();
     }, [clearError]);
@@ -325,6 +373,41 @@ export default function CurrentWorkCard({
         [context],
     );
 
+    /**
+     * Run a command whose subject and inputs are already resolved.
+     *
+     * The subject is the one the Focus Panel is already showing — a child when the surface is
+     * child-grain — never the enclosing opportunity. That substitution is exactly what made this
+     * command unreachable through the drawer header, and re-introducing it here would put the work
+     * on the wrong record rather than merely failing.
+     *
+     * Executes through the registered-action route and nothing else; the server keeps eligibility.
+     */
+    const runCommandSurfaceAction = async (action: CurrentWorkActionVM) => {
+        // The durable child from the one carrier that names it. Absent means absent: the carrier's
+        // rule is that a wrong child is worse than no child, so there is no fallback and the host
+        // refuses rather than acting on whoever happens to be first.
+        const childId = context.participantScope?.customerMemberId?.trim() ?? "";
+
+        const result = await executeCommandSurfaceAction({
+            actionKey: action.handlerKey ?? action.key,
+            entityType: "child",
+            entityId: childId,
+            // Bound by configuration, carried through the projection — never re-asked of the operator.
+            ...(action.workTemplateKey ? { payload: { template_key: action.workTemplateKey } } : {}),
+            surface: "focus_panel",
+        });
+
+        if (!result.ok) {
+            setHandoffNotice(result.error);
+            return;
+        }
+        // Canonical completion: the same path a capability panel takes when it finishes, so the
+        // projection refreshes and the surface returns to the full Focus Panel.
+        resetCompletion();
+        handleActionPanelComplete();
+    };
+
     const invokeAction = (action: CurrentWorkActionVM) => {
         const plan = planCurrentWorkActionExecution(action);
         switch (plan.kind) {
@@ -384,6 +467,10 @@ export default function CurrentWorkCard({
             case "header_delegate":
                 setHandoffNotice(null);
                 invokeHeaderDelegate(plan.action);
+                return;
+            case "command_surface":
+                setHandoffNotice(null);
+                void runCommandSurfaceAction(plan.action);
                 return;
             case "cancel_tour": {
                 setHandoffNotice(null);
@@ -475,13 +562,13 @@ export default function CurrentWorkCard({
     };
 
     const handleConfirmOutcome = useCallback(() => {
-        if (!pendingOutcomeKey || !vm.primaryProjection || !vm.primaryWorkItem) return;
+        if (!pendingOutcomeKey || !activeProjection || !activeWorkItem) return;
         setCompletionPhase("processing");
-        void completeOutcome(vm.primaryProjection, pendingOutcomeKey).then(() => {
-            const effectLines = stageWorkOutcomeEffectLines(vm.primaryWorkItem!, pendingOutcomeKey);
+        void completeOutcome(activeProjection, pendingOutcomeKey).then(() => {
+            const effectLines = stageWorkOutcomeEffectLines(activeWorkItem, pendingOutcomeKey);
             setCompletionSummary(
                 buildOutcomeCompletionSummary({
-                    workItem: vm.primaryWorkItem!,
+                    workItem: activeWorkItem,
                     outcomeKey: pendingOutcomeKey,
                     effectLines,
                 }),
@@ -489,7 +576,7 @@ export default function CurrentWorkCard({
             setCompletionPhase("complete");
             setPendingOutcomeKey(null);
         });
-    }, [completeOutcome, pendingOutcomeKey, vm.primaryProjection, vm.primaryWorkItem]);
+    }, [completeOutcome, pendingOutcomeKey, activeProjection, activeWorkItem]);
 
     // #6: the status is expressed through the SHARED UniversalCard status-chip system (one canonical
     // chip aligned with the card title), never a bespoke pill nested inside the card's own status
@@ -550,8 +637,22 @@ export default function CurrentWorkCard({
             }}
             onCancelOutcome={() => {
                 setPendingOutcomeKey(null);
+                setSelectedWorkKey(null);
                 setCompletionPhase("working");
             }}
+            secondaryWork={secondaryOpenWork.map((item) => ({
+                key: item.template_key,
+                label: item.label,
+            }))}
+            selectedWorkKey={selectedWorkKey}
+            onSelectWork={(templateKey) => {
+                clearError();
+                setSelectedWorkKey(templateKey);
+                setPendingOutcomeKey(null);
+                setCompletionPhase("select_result");
+            }}
+            outcomes={activeOutcomes}
+            outcomeWorkLabel={selectedWorkItem?.label ?? null}
             onConfirmOutcome={handleConfirmOutcome}
             onClose={closeWorkspace}
             // R-014: return to the launcher list without collapsing the card. `closeActionPanel`
@@ -719,6 +820,23 @@ function SummaryBody({
     // buttons — a dominant command (or outcome when outcome-led), configured helpful actions, and
     // Record outcome as a subordinate button when a command leads.
     const { dominant, helpful, subordinateOutcome, dominantIsOutcome } = resolveCurrentWorkActionButtons(surface);
+
+    /*
+     * THE STAGE'S OTHER OPEN WORK, ON THE CARD THE OPERATOR IS LOOKING AT.
+     *
+     * `Record outcome` acts on the PRIMARY work — correctly, and deliberately so. The consequence
+     * was that a second open work item had no way to be resolved from here at all: on staging an
+     * offer work was started, was live in the runtime, and its outcomes (Spot offered, No
+     * response, Candidate paused) were reachable from nowhere, because the only surface that listed
+     * secondary work was the expanded workspace.
+     *
+     * Same derivation as that section, so the two cannot disagree about what counts as secondary,
+     * and the same handler, so selecting a row opens its own work and outcome context rather than
+     * needing a second navigation path.
+     */
+    const secondaryWork = (surface.checklist ?? []).filter(
+        (item) => item.kind === "stage_work" && item.workRole === "secondary" && item.status !== "complete",
+    );
     const card = buildWhatsNextCardPresentation({
         surface,
         context,
@@ -815,6 +933,25 @@ function SummaryBody({
                             >
                                 Record outcome
                             </button>
+                        :   null}
+                        {secondaryWork.length > 0 ?
+                            <div data-work-section="also-in-progress" data-work-secondary-summary="true">
+                                <p className="alloy-os-currentwork__context-label">Also in progress</p>
+                                <ul className="alloy-os-currentwork__recent-activity-list">
+                                    {secondaryWork.map((item) => (
+                                        <li key={item.key}>
+                                            <button
+                                                type="button"
+                                                className="alloy-os-currentwork__record-outcome-link"
+                                                data-work-secondary-item={item.key}
+                                                onClick={() => onChecklistItem(item)}
+                                            >
+                                                {item.label}
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
                         :   null}
                     </div>
                 :   null}

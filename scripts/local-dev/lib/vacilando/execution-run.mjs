@@ -14,6 +14,7 @@ import { LANE_ID_RE, LANE_INSTRUCTION_MAX, runReceiptToken, textProvesInstructio
 import { assertResettableRoot, canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
 import { cleanupRunResources, onExecutionRunTransition, resetResourceRequestsForTests } from "./execution-resource.mjs";
 import { TOOLKIT_DIR } from "./workspace-facts.mjs";
+import { isDeclaredWaitReason } from "./run-wait.mjs";
 import { localNodeId, vacilandoGatewayRoot } from "./execution-node.mjs";
 import * as attachmentsModule from "./lane-attachments.mjs";
 import { recordLaneProgress } from "./lane-memory.mjs";
@@ -745,6 +746,86 @@ function emitOutcomeEvent(run, root, { recordEvent = true } = {}) {
   return Promise.resolve(null);
 }
 
+
+/**
+ * MAY THIS RUN CLAIM TO CONTINUE THAT ONE?
+ *
+ * `continuation_of` existed, was documented, was tested once - and was accepted
+ * without a single check. Any string was stored: a run id that does not exist, a
+ * run still executing, the successor itself, or a cycle. Measured across the
+ * live store: 0 of 181 runs carried it, so nothing had ever exercised the field
+ * in anger and nothing had noticed it was unguarded.
+ *
+ * The doctrine is not changed here, only enforced. A continuation says "the work
+ * this run is doing was previously attempted by that run, which terminated". So:
+ *
+ *   the predecessor must exist          - a link to nothing is worse than no link
+ *   the predecessor must be terminal    - a live run has not been continued, it
+ *                                         is still going
+ *   it may not be the run itself        - self-lineage is a lie that traverses
+ *   the chain may not cycle             - A->B->A makes history untraversable
+ *   the lane must match                 - lineage is within a lane's history
+ *
+ * Chronology is deliberately NOT a criterion. "It happened after" is how an
+ * unrelated mission gets adopted into someone else's failure.
+ */
+export const CONTINUATION_REFUSALS = Object.freeze({
+  MISSING: "continuation_predecessor_missing",
+  NOT_TERMINAL: "continuation_predecessor_not_terminal",
+  SELF: "continuation_self_reference",
+  CYCLE: "continuation_cycle",
+  LANE: "continuation_lane_mismatch",
+});
+
+export function validateContinuation(successorRunId, continuation, { root = runtimeRoot() } = {}) {
+  const priorId = String(continuation?.run_id || continuation || "").trim();
+  if (!priorId) return { ok: false, code: CONTINUATION_REFUSALS.MISSING, detail: "no predecessor run id was given" };
+  if (priorId === String(successorRunId)) {
+    return { ok: false, code: CONTINUATION_REFUSALS.SELF, detail: "a run cannot continue itself" };
+  }
+
+  const store = readExecutionRunStore(root);
+  const index = new Map();
+  for (const [laneId, pack] of Object.entries(store?.lanes || {})) {
+    for (const r of pack.runs || []) index.set(r.run_id, { run: r, laneId });
+  }
+
+  const prior = index.get(priorId);
+  if (!prior) {
+    return { ok: false, code: CONTINUATION_REFUSALS.MISSING, detail: `no run ${priorId} exists to continue` };
+  }
+  if (!isTerminalRunState(prior.run.state)) {
+    return {
+      ok: false,
+      code: CONTINUATION_REFUSALS.NOT_TERMINAL,
+      detail: `run ${priorId} is ${prior.run.state}; a run still in flight has not been continued`,
+    };
+  }
+  const successor = index.get(String(successorRunId));
+  if (successor && successor.laneId !== prior.laneId) {
+    return {
+      ok: false,
+      code: CONTINUATION_REFUSALS.LANE,
+      detail: `run ${priorId} belongs to ${prior.laneId}, not ${successor.laneId}`,
+    };
+  }
+
+  // Walk the existing chain. The successor is not yet linked, so reaching it
+  // from the predecessor means this link would close a loop.
+  const seen = new Set([String(successorRunId)]);
+  let cursor = prior;
+  while (cursor) {
+    if (seen.has(cursor.run.run_id)) {
+      return { ok: false, code: CONTINUATION_REFUSALS.CYCLE, detail: `continuing ${priorId} would close a cycle` };
+    }
+    seen.add(cursor.run.run_id);
+    const nextId = cursor.run.continuation_of?.run_id;
+    cursor = nextId ? index.get(String(nextId)) : null;
+  }
+
+  return { ok: true, predecessor: { run_id: priorId, state: prior.run.state, lane_id: prior.laneId } };
+}
+
 /**
  * Attachment metadata for a run, resolved synchronously.
  *
@@ -771,6 +852,18 @@ export function publicExecutionRun(run, { includeInstruction = false, includeTra
     lane_id: run.lane_id,
     state: run.state,
     state_reason: run.state_reason || null,
+    /*
+     * LINEAGE REACHES THE OPERATOR, OR IT MIGHT AS WELL NOT EXIST.
+     *
+     * `continuation_of` was stored and never projected, so every surface built
+     * on this shape showed a recovery run as unrelated new work. That is half
+     * of why the field went unused in 181 runs: nothing could set it usefully
+     * and nothing would have shown it.
+     *
+     * The predecessor's own record is untouched - this is the successor saying
+     * what it continues, never the failed run being reopened.
+     */
+    continuation_of: run.continuation_of || null,
     current_phase: run.current_phase || null,
     created_at: run.created_at,
     started_at: run.started_at || null,
@@ -1124,7 +1217,41 @@ export function transitionExecutionRun(runId, toState, {
   }
   if (to === "WAITING_RESOURCE") {
     const key = resource_wait?.resource_key || resource_wait?.key || null;
+    /*
+     * THE MACHINE REASON SURVIVES THE WRITE.
+     *
+     * This rebuild used a presentation allowlist — resource_key, label, summary
+     * and friends — and `reason` was not in it. So `waitProjection()` built a
+     * correct S6 descriptor (`needs_operator_input`, human_indefinite, owner
+     * director), handed it here, and the writer dropped the entire envelope on
+     * the way to disk. Every governed approval wait was stored with no machine
+     * reason at all.
+     *
+     * MEASURED: erun_f4f9ff73ca8144ce entered WAITING_RESOURCE for a worktree
+     * retirement at 19:32:43 and the Governor failed it `missing_wait_reason`
+     * ten seconds later. The push wait is written exactly as wrongly; it
+     * survives only because it resumes before a sweep sees it. The comment on
+     * waitProjection already says the text was never the problem and the
+     * missing envelope was — and then the envelope was thrown away here.
+     *
+     * An UNDECLARED reason is not stored. A wait nobody defined must keep
+     * reading as missing rather than be preserved as a plausible-looking key.
+     */
+    const declared = isDeclaredWaitReason(resource_wait?.reason) ? resource_wait.reason : null;
     found.resource_wait = {
+      ...(declared
+        ? {
+          schema_version: resource_wait?.schema_version || null,
+          reason: declared,
+          resource_type: resource_wait?.resource_type || null,
+          owner: resource_wait?.owner || null,
+          waiting_since: Number(resource_wait?.waiting_since) || nowMs,
+          deadline: resource_wait?.deadline ?? null,
+          bound_policy: resource_wait?.bound_policy || null,
+          resolution_state: resource_wait?.resolution_state || null,
+          last_observed_at: Number(resource_wait?.last_observed_at) || nowMs,
+        }
+        : {}),
       resource_key: key ? String(key).slice(0, 80) : null,
       label: bound(resource_wait?.label || reason || key, 120),
       summary: bound(resource_wait?.summary || resource_wait?.purpose, 240),
@@ -1143,7 +1270,32 @@ export function transitionExecutionRun(runId, toState, {
       mission_id: resource_wait?.mission_id || resource_wait?.missionId || null,
     };
   } else if (to !== "WAITING_RESOURCE" && from === "WAITING_RESOURCE") {
-    found.resource_wait = found.resource_wait;
+    /*
+     * LEAVING A WAIT RESOLVES IT.
+     *
+     * This was the literal no-op `found.resource_wait = found.resource_wait`,
+     * so a run could leave WAITING_RESOURCE and keep a wait that still read
+     * `resolution_state: "waiting"`. An active wait on a running run is the same
+     * class of lie as a wait with no reason on a waiting one, and the live proof
+     * produced exactly it: erun_828e075e3c1ed70a ran for minutes carrying the
+     * retirement wait it had already left.
+     *
+     * RESOLVED, NOT ERASED. The earlier repair in this area cleared the wait
+     * outright and destroyed the forensic record on terminal failures — an
+     * operator looking at a failed run could no longer see what it had been
+     * waiting for. The record stays; only its state moves, and the moment it
+     * moved is recorded. An owner that genuinely wants the wait gone still
+     * clears it outright through patchRunResourceWait.
+     */
+    if (found.resource_wait && found.resource_wait.resolution_state === "waiting") {
+      found.resource_wait = {
+        ...found.resource_wait,
+        resolution_state: "resolved",
+        resolved_at: nowMs,
+        resolved_into: to,
+        last_observed_at: nowMs,
+      };
+    }
   }
   if (resource_wait?.governed_action) found.governed_action = resource_wait.governed_action;
   if (fingerprint) found.output_fingerprint_at_send = found.output_fingerprint_at_send || String(fingerprint);
@@ -1288,6 +1440,13 @@ export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = 
      * only; the historical run is never rewritten to pretend it executed.
      */
     if (fields.continuation_of !== undefined) {
+      if (fields.continuation_of) {
+        // EXPLICIT, AND CHECKED. The caller states the lineage; this refuses a
+        // claim that cannot be true rather than storing it for a later reader
+        // to trip over.
+        const v = validateContinuation(runId, fields.continuation_of, { root });
+        if (!v.ok) return { ok: false, error: v.code, detail: v.detail };
+      }
       found.continuation_of = fields.continuation_of
         ? {
           run_id: String(fields.continuation_of.run_id || fields.continuation_of),

@@ -15,6 +15,7 @@
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { firstMeaningfulLine } from "./trusted-host-push.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -47,7 +48,9 @@ async function git(args, cwd, { timeout = 20_000 } = {}) {
   } catch (err) {
     return {
       ok: false,
-      error: String(err?.stderr || err?.message || err).split("\n")[0].slice(0, 300),
+      // Retirement gates read this. "cannot tell" wearing the costume of an
+      // empty string is how an UNMEASURED gate refused a safe cleanup before.
+      error: firstMeaningfulLine(String(err?.stderr || err?.message || err), "git read failed").slice(0, 300),
     };
   }
 }

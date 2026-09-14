@@ -116,6 +116,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     const [subjectFilter, setSubjectFilter] = useState<string>("all");
     const [running, setRunning] = useState(false);
     const [commandError, setCommandError] = useState<string | null>(null);
+
+
     const [chargeAmount, setChargeAmount] = useState("");
     const [chargeNote, setChargeNote] = useState("");
     const [chargeEventDate, setChargeEventDate] = useState("");
@@ -235,6 +237,476 @@ export default function FinancialsCard({ model, context, receded = false, coordi
             if (current()) setLoading(false);
         }
     }, [customerId, scopedMemberId]);
+
+    /*
+     * ── MOVING MONEY BETWEEN OBLIGATIONS ─────────────────────────────────────────────────────────
+     *
+     * A Move is deliberately TWO governed actions: reverse the application, then apply the freed
+     * money to the chosen charge. It is not atomic and is not pretended to be — if the second step
+     * refuses, the first stays committed and the money is genuinely unapplied, which is a true state
+     * the operator can act on. `moveNotice` exists to say exactly that rather than "Move failed",
+     * which would imply the original application survived.
+     */
+    type MoveTarget = { chargeId: string; label: string; serviceDate: string | null; outstandingCents: number };
+    const [movePending, setMovePending] = useState<{ paymentId: string; allocationId: string } | null>(null);
+    const [applyPending, setApplyPending] = useState<{ paymentId: string } | null>(null);
+    const [moveTargets, setMoveTargets] = useState<MoveTarget[]>([]);
+    const [moveTargetId, setMoveTargetId] = useState("");
+    const [moveReason, setMoveReason] = useState("");
+
+    /*
+     * MANUAL ADJUSTMENTS.
+     *
+     * `billing.adjust_account` is scoped to an ENROLMENT AGREEMENT, not to the account, so the panel
+     * carries the agreement it is about rather than letting the operator believe this is
+     * account-wide. `adjustAgreementId` is that scope.
+     */
+    const [adjustOpen, setAdjustOpen] = useState(false);
+    const [adjustAgreementId, setAdjustAgreementId] = useState("");
+    /* WHICH OBLIGATION this reduces. A credit that names nothing reduces nothing — see below. */
+    const [adjustSourceChargeId, setAdjustSourceChargeId] = useState("");
+    const [adjustCategory, setAdjustCategory] = useState<"credit" | "adjustment">("credit");
+    const [adjustDirection, setAdjustDirection] = useState<"decrease" | "increase">("decrease");
+    const [adjustAmount, setAdjustAmount] = useState("");
+    const [adjustReason, setAdjustReason] = useState("");
+    const [adjustEffectiveDate, setAdjustEffectiveDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [adjustPreview, setAdjustPreview] = useState<{ summary: string; changes: string[] } | null>(null);
+    const [adjustError, setAdjustError] = useState<string | null>(null);
+    const [reversePending, setReversePending] = useState<{ applicationId: string } | null>(null);
+    const [reverseReason, setReverseReason] = useState("");
+    const [reversePreview, setReversePreview] = useState<{ summary: string; changes: string[] } | null>(null);
+    const [reverseError, setReverseError] = useState<string | null>(null);
+    const [adjustNotice, setAdjustNotice] = useState<string | null>(null);
+
+    /* Reversing a posted charge is a correction to money already told to a family: it previews first. */
+    const [reverseCharge, setReverseCharge] = useState<{ chargeId: string; label: string } | null>(null);
+    const [reverseChargePreview, setReverseChargePreview] = useState<{ summary: string; changes: string[] } | null>(null);
+    const [reverseChargeError, setReverseChargeError] = useState<string | null>(null);
+
+    const [movePreview, setMovePreview] = useState<{ summary: string; changes: string[] } | null>(null);
+    const [moveError, setMoveError] = useState<string | null>(null);
+    const [moveNotice, setMoveNotice] = useState<string | null>(null);
+
+    const closeMovePanels = useCallback(() => {
+        setMovePending(null);
+        setApplyPending(null);
+        setMoveTargets([]);
+        setMoveTargetId("");
+        setMoveReason("");
+        setMovePreview(null);
+        setMoveError(null);
+    }, []);
+
+    /** Targets come from the server resolver; the panel never assembles charges itself. */
+    const loadMoveTargets = useCallback(async (paymentId: string, excludeChargeId?: string | null) => {
+        setMoveTargets([]);
+        try {
+            const q = new URLSearchParams({ payment_id: paymentId });
+            if (excludeChargeId) q.append("exclude_charge_id", excludeChargeId);
+            const res = await fetch(`/api/admin/financials/eligible-target-charges?${q.toString()}`, {
+                credentials: "include",
+            });
+            const json = (await res.json()) as { ok?: boolean; charges?: MoveTarget[]; error?: string };
+            if (!json?.ok) {
+                setMoveError(json?.error || "Charges to apply this payment to could not be loaded.");
+                return;
+            }
+            setMoveTargets(json.charges ?? []);
+        } catch {
+            setMoveError("Charges to apply this payment to could not be loaded.");
+        }
+    }, []);
+
+    const openMovePayment = useCallback(
+        (args: { paymentId: string; allocationId: string }) => {
+            closeMovePanels();
+            setMovePending(args);
+            const source = vm?.payments
+                .find((p) => p.paymentId === args.paymentId)
+                ?.applications.find((a) => a.allocationId === args.allocationId);
+            void loadMoveTargets(args.paymentId, source?.chargeId ?? null);
+        },
+        [closeMovePanels, loadMoveTargets, vm],
+    );
+
+    const openApplyPayment = useCallback(
+        (args: { paymentId: string }) => {
+            closeMovePanels();
+            setApplyPending(args);
+            void loadMoveTargets(args.paymentId, null);
+        },
+        [closeMovePanels, loadMoveTargets],
+    );
+
+    const actionEntity = useCallback(
+        () => ({
+            entity_type: context.subject?.type ?? "opportunity",
+            entity_id: context.subject?.id ?? "",
+        }),
+        [context.subject?.id, context.subject?.type],
+    );
+
+    /* The preview is the ACTION's. Nothing about the consequence is reconstructed here. */
+    const previewMove = useCallback(async () => {
+        if (!movePending || running) return;
+        setRunning(true);
+        setMoveError(null);
+        try {
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: "payment.reverse_application",
+                    ...actionEntity(),
+                    mode: "preview",
+                    payload: { allocation_id: movePending.allocationId, reason: moveReason },
+                }),
+            });
+            const json = (await res.json()) as {
+                ok?: boolean;
+                error?: string | { message?: string };
+                data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
+            };
+            const p = json?.data?.execution_result?.preview;
+            if (!json?.ok || !p?.summary) {
+                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                setMoveError(err || "This move could not be previewed.");
+                return;
+            }
+            setMovePreview({ summary: p.summary, changes: p.changes ?? [] });
+        } catch {
+            setMoveError("The preview could not be requested.");
+        } finally {
+            setRunning(false);
+        }
+    }, [actionEntity, movePending, moveReason, running]);
+
+    const runAction = useCallback(
+        async (actionKey: string, payload: Record<string, unknown>) => {
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: actionKey,
+                    ...actionEntity(),
+                    mode: "execute",
+                    confirmation: { confirmed: true },
+                    payload,
+                }),
+            });
+            const json = (await res.json()) as { ok?: boolean; error?: string | { message?: string } };
+            if (!json?.ok) {
+                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                throw new Error(err || "The action was refused.");
+            }
+        },
+        [actionEntity],
+    );
+
+    const confirmMove = useCallback(async () => {
+        if (!movePending || !moveTargetId || running) return;
+        setRunning(true);
+        setMoveError(null);
+        setMoveNotice(null);
+        const target = moveTargets.find((t) => t.chargeId === moveTargetId);
+        try {
+            await runAction("payment.reverse_application", {
+                allocation_id: movePending.allocationId,
+                reason: moveReason,
+            });
+        } catch (e) {
+            // Nothing has changed yet; the original application is untouched.
+            setMoveError(e instanceof Error ? e.message : String(e));
+            setRunning(false);
+            return;
+        }
+        /*
+         * THE REVERSAL IS COMMITTED FROM HERE ON. If the apply refuses, the money is unapplied and
+         * stays that way; saying "Move failed" would tell the operator the opposite of what is true.
+         */
+        try {
+            await runAction("payment.apply_to_charge", {
+                payment_id: movePending.paymentId,
+                charge_id: moveTargetId,
+            });
+            setMoveNotice(
+                `Moved to ${target?.label ?? "the selected charge"}. The payment itself is unchanged.`,
+            );
+            closeMovePanels();
+        } catch (e) {
+            setMovePending(null);
+            setMovePreview(null);
+            setMoveNotice(
+                "The original application was reversed, so that money is now unapplied and can be applied to another charge. "
+                + `It was not applied to ${target?.label ?? "the selected charge"}: `
+                + (e instanceof Error ? e.message : String(e)),
+            );
+        } finally {
+            setRunning(false);
+            await load();
+        }
+    }, [closeMovePanels, load, movePending, moveReason, moveTargetId, moveTargets, runAction, running]);
+
+    const confirmApply = useCallback(async () => {
+        if (!applyPending || !moveTargetId || running) return;
+        setRunning(true);
+        setMoveError(null);
+        setMoveNotice(null);
+        const target = moveTargets.find((t) => t.chargeId === moveTargetId);
+        try {
+            await runAction("payment.apply_to_charge", {
+                payment_id: applyPending.paymentId,
+                charge_id: moveTargetId,
+            });
+            setMoveNotice(`Applied to ${target?.label ?? "the selected charge"}.`);
+            closeMovePanels();
+        } catch (e) {
+            setMoveError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+            await load();
+        }
+    }, [applyPending, closeMovePanels, load, moveTargetId, moveTargets, runAction, running]);
+
+    /*
+     * ── THE ONE PLACE A SIGN IS DECIDED ──────────────────────────────────────────────────────────
+     *
+     * The canonical amount is SIGNED: negative lowers what the family owes. Operators do not think
+     * in signed cents, and asking them to would make a typo into a charge. So the panel takes an
+     * unsigned amount plus an intent, and the conversion happens here, once. Nothing else in this
+     * component multiplies by −1, and nothing infers the category from the sign.
+     *
+     * A CREDIT only ever lowers an obligation — that is what the word means — so it has no direction
+     * control and cannot be used to raise one. An ADJUSTMENT is the category that goes either way,
+     * and it must say which out loud.
+     */
+    const adjustSignedCents = useCallback((): number | null => {
+        const entered = Number.parseFloat(adjustAmount.replace(/[$,\s]/g, ""));
+        if (!Number.isFinite(entered) || entered <= 0) return null;
+        const cents = Math.round(entered * 100);
+        if (cents === 0) return null;
+        const raises = adjustCategory === "adjustment" && adjustDirection === "increase";
+        return raises ? cents : -cents;
+    }, [adjustAmount, adjustCategory, adjustDirection]);
+
+    const closeAdjustPanels = useCallback(() => {
+        setAdjustOpen(false);
+        setReversePending(null);
+        setAdjustPreview(null);
+        setReversePreview(null);
+        setAdjustError(null);
+        setReverseError(null);
+        setAdjustAmount("");
+        setAdjustReason("");
+        setAdjustSourceChargeId("");
+        setReverseReason("");
+    }, []);
+
+    /** The agreements this account's money can be adjusted against, named for the operator. */
+    const adjustableSubjects = useMemo(
+        () => (vm?.subjects ?? []).filter((sub) => sub.agreementId),
+        [vm],
+    );
+
+    /**
+     * The obligations this reduction could be against.
+     *
+     * A reduction attaches to what it reduces through `source_charge_id`, and every authority that
+     * asks what a charge still owes nets it that way. A credit written without one appears on the
+     * ledger's signed total — so the family looks like they owe less — while the obligation it was
+     * meant to reduce is untouched and remains fully collectible. Two readings of the same
+     * household, one of them wrong, which is what the representative-household oracle found.
+     *
+     * Only the selected child's own posted obligations are offered: a reduction is netted against an
+     * enrolment-backed charge, and a correction or a credit is not an obligation to reduce.
+     */
+    const adjustableCharges = useMemo(() => {
+        const member = adjustableSubjects.find((sub) => sub.agreementId === adjustAgreementId)?.customerMemberId;
+
+        /*
+         * HOW MUCH OF EACH OBLIGATION IS STILL THERE TO REDUCE.
+         *
+         * A reduction may not take more than the charge holds: the service refuses it, because an
+         * obligation netted below zero is one `resolveAllocatableNet` will not read. Offering a
+         * charge with nothing left would be offering a choice that can only be refused, so what is
+         * already reduced is subtracted here — from the reductions the account read already carries,
+         * not from a second sum of our own.
+         */
+        const reducedBySource = new Map<string, number>();
+        for (const r of vm?.reductions ?? []) {
+            if (!r.sourceChargeId) continue;
+            reducedBySource.set(r.sourceChargeId, (reducedBySource.get(r.sourceChargeId) ?? 0) + r.amountCents);
+        }
+
+        return (vm?.rows ?? []).filter(
+            (r) =>
+                r.status === "posted"
+                && r.amountCents > 0
+                && !r.correctsChargeId
+                && !r.reversedByChargeId
+                && r.subjectMemberId != null
+                && r.subjectMemberId === member
+                && r.amountCents + (reducedBySource.get(r.chargeId) ?? 0) > 0,
+        );
+    }, [adjustAgreementId, adjustableSubjects, vm]);
+
+    const openAddAdjustment = useCallback(() => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setAdjustNotice(null);
+        /*
+         * Default to the enrolment already in view. When the card is narrowed to one child that is
+         * unambiguous; with the account as a whole it is only a default, and the panel still shows
+         * which agreement is about to be adjusted.
+         */
+        const scoped = adjustableSubjects.find((sub) => sub.customerMemberId === subjectFilter);
+        setAdjustAgreementId(scoped?.agreementId ?? adjustableSubjects[0]?.agreementId ?? "");
+        setAdjustSourceChargeId("");
+        setAdjustOpen(true);
+    }, [adjustableSubjects, closeAdjustPanels, closeMovePanels, subjectFilter]);
+
+    const openReverseAdjustment = useCallback((args: { applicationId: string }) => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setAdjustNotice(null);
+        setReversePending(args);
+    }, [closeAdjustPanels, closeMovePanels]);
+
+    /** The preview is the ACTION's. Nothing about the consequence is reconstructed here. */
+    const previewAdjustment = useCallback(async () => {
+        const amountCents = adjustSignedCents();
+        if (!adjustOpen || running || amountCents === null) return;
+        setRunning(true);
+        setAdjustError(null);
+        try {
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: "billing.adjust_account",
+                    ...actionEntity(),
+                    mode: "preview",
+                    payload: {
+                        enrollment_agreement_id: adjustAgreementId,
+                        source_charge_id: adjustSourceChargeId,
+                        charge_category: adjustCategory,
+                        amount_cents: amountCents,
+                        reason: adjustReason,
+                        effective_date: adjustEffectiveDate,
+                    },
+                }),
+            });
+            const json = (await res.json()) as {
+                ok?: boolean;
+                error?: string | { message?: string };
+                data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
+            };
+            const p = json?.data?.execution_result?.preview;
+            if (!json?.ok || !p?.summary) {
+                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                setAdjustError(err || "This adjustment could not be previewed.");
+                return;
+            }
+            setAdjustPreview({ summary: p.summary, changes: p.changes ?? [] });
+        } catch (e) {
+            setAdjustError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+        }
+    }, [actionEntity, adjustAgreementId, adjustCategory, adjustEffectiveDate, adjustOpen, adjustReason, adjustSignedCents, adjustSourceChargeId, running]);
+
+    const confirmAdjustment = useCallback(async () => {
+        const amountCents = adjustSignedCents();
+        if (!adjustOpen || running || !adjustPreview || amountCents === null) return;
+        setRunning(true);
+        setAdjustError(null);
+        try {
+            await runAction("billing.adjust_account", {
+                enrollment_agreement_id: adjustAgreementId,
+                source_charge_id: adjustSourceChargeId,
+                charge_category: adjustCategory,
+                amount_cents: amountCents,
+                reason: adjustReason,
+                effective_date: adjustEffectiveDate,
+            });
+            /*
+             * The action writes a DRAFT charge. What the family owes has not moved yet, and saying
+             * it had would be the one thing this panel must never do.
+             */
+            setAdjustNotice(
+                amountCents < 0
+                    ? "Recorded as a draft credit. It lowers what the family owes once it is posted."
+                    : "Recorded as a draft adjustment. It raises what the family owes once it is posted.",
+            );
+            closeAdjustPanels();
+        } catch (e) {
+            setAdjustError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+            await load();
+        }
+    }, [adjustAgreementId, adjustCategory, adjustEffectiveDate, adjustOpen, adjustPreview, adjustReason, adjustSignedCents, adjustSourceChargeId, closeAdjustPanels, load, runAction, running]);
+
+    const previewReversal = useCallback(async () => {
+        if (!reversePending || running) return;
+        setRunning(true);
+        setReverseError(null);
+        try {
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: "billing.reverse_adjustment",
+                    ...actionEntity(),
+                    mode: "preview",
+                    payload: { application_id: reversePending.applicationId, reason: reverseReason },
+                }),
+            });
+            const json = (await res.json()) as {
+                ok?: boolean;
+                error?: string | { message?: string };
+                data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
+            };
+            const p = json?.data?.execution_result?.preview;
+            if (!json?.ok || !p?.summary) {
+                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                setReverseError(err || "This reversal could not be previewed.");
+                return;
+            }
+            setReversePreview({ summary: p.summary, changes: p.changes ?? [] });
+        } catch (e) {
+            setReverseError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+        }
+    }, [actionEntity, reversePending, reverseReason, running]);
+
+    const confirmReversal = useCallback(async () => {
+        if (!reversePending || running || !reversePreview) return;
+        setRunning(true);
+        setReverseError(null);
+        try {
+            await runAction("billing.reverse_adjustment", {
+                application_id: reversePending.applicationId,
+                reason: reverseReason,
+            });
+            // The original is untouched on purpose; what changed is that its opposite now exists.
+            setAdjustNotice("Reversed. The original adjustment stays on the record, with its opposite beside it.");
+            closeAdjustPanels();
+        } catch (e) {
+            setReverseError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+            await load();
+        }
+    }, [closeAdjustPanels, load, reversePending, reversePreview, reverseReason, runAction, running]);
+
+
+
 
     useEffect(() => {
         // Clear FIRST: the previous household's balance must not linger while the next resolves.
@@ -755,6 +1227,79 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         void preview(first, vm.chargeTemplates.find((t) => t.id === first)?.label ?? "");
         // eslint-disable-next-line react-hooks/exhaustive-deps -- re-previews on open, subject and date change
     }, [overlay, subjectFilter, chargeEventDate]);
+
+    /** The row as the read model knows it — the callback carries identity, not attribution. */
+    const rowForCharge = useCallback(
+        (chargeId: string) => {
+            const row = vm?.rows.find((r) => r.chargeId === chargeId);
+            return {
+                chargeId,
+                description: row?.description ?? null,
+                subjectMemberId: row?.subjectMemberId ?? null,
+            };
+        },
+        [vm],
+    );
+
+    const openReverseCharge = useCallback((args: { chargeId: string; label: string }) => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setReverseChargePreview(null);
+        setReverseChargeError(null);
+        setAdjustNotice(null);
+        setReverseCharge(args);
+    }, [closeAdjustPanels, closeMovePanels]);
+
+    const previewReverseCharge = useCallback(async () => {
+        if (!reverseCharge || running) return;
+        setRunning(true);
+        setReverseChargeError(null);
+        try {
+            const row = rowForCharge(reverseCharge.chargeId);
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: "charge.reverse",
+                    entity_type: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
+                    entity_id: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
+                    mode: "preview",
+                    payload: {
+                        charge_id: reverseCharge.chargeId,
+                        charge_label: reverseCharge.label,
+                        kind: "reversal",
+                    },
+                }),
+            });
+            const json = (await res.json()) as {
+                ok?: boolean;
+                error?: string | { message?: string };
+                data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
+            };
+            const p = json?.data?.execution_result?.preview;
+            if (!json?.ok || !p?.summary) {
+                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                setReverseChargeError(err || "This reversal could not be previewed.");
+                return;
+            }
+            setReverseChargePreview({ summary: p.summary, changes: p.changes ?? [] });
+        } catch (e) {
+            setReverseChargeError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+        }
+    }, [chargeInvocation, reverseCharge, rowForCharge, running]);
+
+    const confirmReverseCharge = useCallback(async () => {
+        if (!reverseCharge || running || !reverseChargePreview) return;
+        const target = reverseCharge;
+        setReverseCharge(null);
+        setReverseChargePreview(null);
+        await runRowAction("charge.reverse", rowForCharge(target.chargeId));
+        // The original stays posted; what changed is that a corrective line now references it.
+        setAdjustNotice(`Reversed ${target.label}. The original charge stays on the record, with its correction beside it.`);
+    }, [reverseCharge, reverseChargePreview, rowForCharge, runRowAction, running]);
 
     // Elevation reported from RENDER-adjacent state, so the depth layer and this card agree on the
     // same frame. A card that reported after paint would flash its base surface first.
@@ -1493,7 +2038,390 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     if (overlay === "detail" && vm && reconciliation) {
         return (
             <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="detail">
+                {/*
+                  * The Move / Apply panel. One panel serves both intents because they differ only in
+                  * whether a reversal has to happen first — the destination question is identical, and
+                  * two panels asking it would be two places to get it wrong.
+                  */}
+                {moveNotice ? (
+                    <div className="alloy-os-fdetail__movenotice" data-testid="payment-move-notice">
+                        {moveNotice}
+                    </div>
+                ) : null}
+                {movePending || applyPending ? (
+                    <div className="alloy-os-fdetail__movepanel" data-testid="payment-move-panel">
+                        <div className="alloy-os-fdetail__moveheader">
+                            {movePending ? "Move payment" : "Apply payment"}
+                        </div>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>{movePending ? "Move to" : "Apply to"}</span>
+                            <select
+                                data-testid="payment-move-target"
+                                value={moveTargetId}
+                                onChange={(e) => {
+                                    setMoveTargetId(e.target.value);
+                                    // A new destination invalidates a preview taken for the old one.
+                                    setMovePreview(null);
+                                }}
+                            >
+                                <option value="">Choose a charge…</option>
+                                {moveTargets.map((t) => (
+                                    <option key={t.chargeId} value={t.chargeId}>
+                                        {t.label}
+                                        {t.serviceDate ? ` · ${t.serviceDate}` : ""}
+                                        {` · ${(t.outstandingCents / 100).toLocaleString(undefined, {
+                                            style: "currency",
+                                            currency,
+                                        })} outstanding`}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        {/* A reversal must say why; applying unapplied money undoes nothing. */}
+                        {movePending ? (
+                            <label className="alloy-os-fdetail__movefield">
+                                <span>Reason</span>
+                                <input
+                                    data-testid="payment-move-reason"
+                                    value={moveReason}
+                                    onChange={(e) => {
+                                        setMoveReason(e.target.value);
+                                        setMovePreview(null);
+                                    }}
+                                    placeholder="Applied to the wrong charge"
+                                />
+                            </label>
+                        ) : null}
+                        {movePreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="payment-move-preview">
+                                <strong>{movePreview.summary}</strong>
+                                {movePreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                            </div>
+                        ) : null}
+                        {moveError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="payment-move-error">
+                                {moveError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-fdetail__moveactions">
+                            {/*
+                              * Preview first, and only for a Move: Confirm stays disabled until the
+                              * ACTION has said what reversing this application will do. Applying
+                              * unapplied money has no reversal to explain.
+                              */}
+                            {movePending ? (
+                                <button
+                                    type="button"
+                                    data-testid="payment-move-preview-button"
+                                    disabled={running || !moveReason.trim()}
+                                    onClick={() => void previewMove()}
+                                >
+                                    Preview
+                                </button>
+                            ) : null}
+                            <button
+                                type="button"
+                                data-testid="payment-move-confirm"
+                                disabled={
+                                    running
+                                    || !moveTargetId
+                                    || (movePending ? !movePreview : false)
+                                }
+                                onClick={() => void (movePending ? confirmMove() : confirmApply())}
+                            >
+                                Confirm
+                            </button>
+                            <button type="button" data-testid="payment-move-cancel" onClick={closeMovePanels}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
+
+                {adjustNotice ? (
+                    <div className="alloy-os-fdetail__movenotice" data-testid="adjustment-notice">
+                        {adjustNotice}
+                    </div>
+                ) : null}
+
+                {/*
+                  * ADD ADJUSTMENT. Scoped to an enrolment agreement, because that is what the action
+                  * is scoped to — presenting it as account-wide would be a claim the backend cannot
+                  * honour. Confirm stays disabled until the ACTION has said what this will do.
+                  */}
+                {adjustOpen ? (
+                    <div className="alloy-os-fdetail__movepanel" data-testid="adjustment-panel">
+                        <div className="alloy-os-fdetail__moveheader">Add adjustment</div>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Against enrolment</span>
+                            <select
+                                data-testid="adjustment-agreement"
+                                value={adjustAgreementId}
+                                onChange={(e) => {
+                                    setAdjustAgreementId(e.target.value);
+                                    // The charges on offer belong to the enrolment; changing it changes them.
+                                    setAdjustSourceChargeId("");
+                                    setAdjustPreview(null);
+                                }}
+                            >
+                                {adjustableSubjects.map((sub) => (
+                                    <option key={sub.agreementId} value={sub.agreementId}>
+                                        {sub.displayName}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Against charge</span>
+                            <select
+                                data-testid="adjustment-source-charge"
+                                value={adjustSourceChargeId}
+                                onChange={(e) => {
+                                    setAdjustSourceChargeId(e.target.value);
+                                    setAdjustPreview(null);
+                                }}
+                            >
+                                <option value="">Choose the charge this is about…</option>
+                                {adjustableCharges.map((r) => (
+                                    <option key={r.chargeId} value={r.chargeId}>
+                                        {(r.description ?? r.categoryLabel)}
+                                        {r.date ? ` · ${r.date}` : ""}
+                                        {` · ${(r.outstandingCents / 100).toLocaleString(undefined, {
+                                            style: "currency",
+                                            currency,
+                                        })} outstanding`}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Type</span>
+                            <select
+                                data-testid="adjustment-category"
+                                value={adjustCategory}
+                                onChange={(e) => {
+                                    setAdjustCategory(e.target.value as "credit" | "adjustment");
+                                    setAdjustPreview(null);
+                                }}
+                            >
+                                {/*
+                                  * Two categories, not three. `discount` exists in the vocabulary but
+                                  * is owned by authored policy — a manual one would land in the same
+                                  * bucket as a configured one and nothing on the card could tell an
+                                  * operator which was policy and which was somebody's decision.
+                                  */}
+                                <option value="credit">Credit — lowers what the family owes</option>
+                                <option value="adjustment">Adjustment — either direction</option>
+                            </select>
+                        </label>
+                        {adjustCategory === "adjustment" ? (
+                            <label className="alloy-os-fdetail__movefield">
+                                <span>Direction</span>
+                                <select
+                                    data-testid="adjustment-direction"
+                                    value={adjustDirection}
+                                    onChange={(e) => {
+                                        setAdjustDirection(e.target.value as "decrease" | "increase");
+                                        setAdjustPreview(null);
+                                    }}
+                                >
+                                    <option value="decrease">Lower what the family owes</option>
+                                    <option value="increase">Raise what the family owes</option>
+                                </select>
+                            </label>
+                        ) : null}
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Amount</span>
+                            <input
+                                data-testid="adjustment-amount"
+                                inputMode="decimal"
+                                value={adjustAmount}
+                                onChange={(e) => {
+                                    setAdjustAmount(e.target.value);
+                                    setAdjustPreview(null);
+                                }}
+                                placeholder="25.00"
+                            />
+                        </label>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Reason</span>
+                            <input
+                                data-testid="adjustment-reason"
+                                value={adjustReason}
+                                onChange={(e) => {
+                                    setAdjustReason(e.target.value);
+                                    setAdjustPreview(null);
+                                }}
+                                placeholder="Agreed goodwill credit"
+                            />
+                        </label>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Effective date</span>
+                            <input
+                                data-testid="adjustment-effective-date"
+                                type="date"
+                                value={adjustEffectiveDate}
+                                onChange={(e) => {
+                                    setAdjustEffectiveDate(e.target.value);
+                                    setAdjustPreview(null);
+                                }}
+                            />
+                        </label>
+                        {adjustPreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="adjustment-preview">
+                                <strong>{adjustPreview.summary}</strong>
+                                {adjustPreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                                {/*
+                                  * The action's own summary speaks in the present tense. It writes a
+                                  * draft, so the timing is stated here rather than left to be
+                                  * discovered when the balance does not move.
+                                  */}
+                                <span data-testid="adjustment-preview-timing">
+                                    Recorded as a draft — it changes what the family owes once posted.
+                                </span>
+                            </div>
+                        ) : null}
+                        {adjustError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="adjustment-error">
+                                {adjustError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-fdetail__moveactions">
+                            <button
+                                type="button"
+                                data-testid="adjustment-preview-button"
+                                disabled={running || !adjustReason.trim() || !adjustAgreementId || !adjustSourceChargeId}
+                                onClick={() => void previewAdjustment()}
+                            >
+                                Preview
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="adjustment-confirm"
+                                disabled={running || !adjustPreview}
+                                onClick={() => void confirmAdjustment()}
+                            >
+                                Confirm
+                            </button>
+                            <button type="button" data-testid="adjustment-cancel" onClick={closeAdjustPanels}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
+
+                {reverseCharge ? (
+                    <div className="alloy-os-fdetail__movepanel" data-testid="charge-reverse-panel">
+                        <div className="alloy-os-fdetail__moveheader">Reverse charge</div>
+                        <div className="alloy-os-fdetail__movefield">
+                            <span data-testid="charge-reverse-subject">{reverseCharge.label}</span>
+                        </div>
+                        {reverseChargePreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="charge-reverse-preview">
+                                <strong>{reverseChargePreview.summary}</strong>
+                                {reverseChargePreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                            </div>
+                        ) : null}
+                        {reverseChargeError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="charge-reverse-error">
+                                {reverseChargeError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-fdetail__moveactions">
+                            <button
+                                type="button"
+                                data-testid="charge-reverse-preview-button"
+                                disabled={running}
+                                onClick={() => void previewReverseCharge()}
+                            >
+                                Preview
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="charge-reverse-confirm"
+                                disabled={running || !reverseChargePreview}
+                                onClick={() => void confirmReverseCharge()}
+                            >
+                                Confirm
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="charge-reverse-cancel"
+                                onClick={() => { setReverseCharge(null); setReverseChargePreview(null); }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
+
+                {/* REVERSE. The original is never edited; its opposite is appended. */}
+                {reversePending ? (
+                    <div className="alloy-os-fdetail__movepanel" data-testid="adjustment-reverse-panel">
+                        <div className="alloy-os-fdetail__moveheader">Reverse adjustment</div>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Reason</span>
+                            <input
+                                data-testid="adjustment-reverse-reason"
+                                value={reverseReason}
+                                onChange={(e) => {
+                                    setReverseReason(e.target.value);
+                                    setReversePreview(null);
+                                }}
+                                placeholder="Recorded against the wrong enrolment"
+                            />
+                        </label>
+                        {reversePreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="adjustment-reverse-preview">
+                                <strong>{reversePreview.summary}</strong>
+                                {reversePreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                            </div>
+                        ) : null}
+                        {reverseError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="adjustment-reverse-error">
+                                {reverseError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-fdetail__moveactions">
+                            <button
+                                type="button"
+                                data-testid="adjustment-reverse-preview-button"
+                                disabled={running || !reverseReason.trim()}
+                                onClick={() => void previewReversal()}
+                            >
+                                Preview
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="adjustment-reverse-confirm"
+                                disabled={running || !reversePreview}
+                                onClick={() => void confirmReversal()}
+                            >
+                                Confirm
+                            </button>
+                            <button type="button" data-testid="adjustment-reverse-cancel" onClick={closeAdjustPanels}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
+
                 <FinancialsDetailCard
+                    onMovePayment={openMovePayment}
+                    onApplyPayment={openApplyPayment}
+                    /* Only offered where an enrolment exists: the action is scoped to an agreement. */
+                    onAddAdjustment={adjustableSubjects.length > 0 ? openAddAdjustment : undefined}
+                    onReverseAdjustment={openReverseAdjustment}
+                    onPostCharge={({ chargeId }) => void runRowAction("charge.post", rowForCharge(chargeId))}
+                    onReverseCharge={openReverseCharge}
                     evidence={adaptFinancialsVmToFinancialsCard({
                         vm,
                         reconciliation,

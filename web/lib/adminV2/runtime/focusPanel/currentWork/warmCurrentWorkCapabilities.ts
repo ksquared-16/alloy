@@ -6,6 +6,16 @@
  * host to the data the capability needs on open and warms it, so the centered host renders warmed
  * content synchronously and verifies freshness in the background. Keyed on the surface only — never
  * on an action name, stage, or process key. Add a case per capability host as they gain a preload.
+ *
+ * EVERYTHING THIS DISPATCHES MUST BE A READ.
+ *
+ * It runs on pointer-enter, on focus, and — through `warmCurrentWorkCapabilitiesForActions` — on
+ * mere visibility of the surface, for every executable action at once. An operator who lets the
+ * pointer cross a row has decided nothing, so nothing here may create records, drafts, work,
+ * communications, or identifiers with durable meaning. The warm caches below all fetch through
+ * `speculativeFetch`, which refuses any method but GET/HEAD, so that rule is enforced rather than
+ * remembered. A capability that needs a durable write to open is warmed by preloading its code and
+ * its read-only context; the write waits for the click.
  */
 import { resolveCurrentWorkActionSurface } from "./resolveCurrentWorkActionSurface";
 import { resolveOpportunityTourScheduleFromTruth } from "./resolveOpportunityTourScheduleFromTruth";
@@ -13,7 +23,6 @@ import type { CurrentWorkActionVM } from "./currentWorkSurfaceTypes";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { resolveFocusPanelMutationOpportunityId } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { prefetchTourSchedule } from "@/lib/tours/tourScheduleWarmCache";
-import { prefetchTourInvitationPrepare } from "@/lib/tours/tourInvitationPrepareWarmCache";
 import { prefetchActiveDrawerFamilyWorkspace } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
 import { prefetchEligibleEnrollmentChildren } from "./eligibleEnrollmentChildrenWarmCache";
 import { prefetchFormDelivery } from "./formDeliveryWarmCache";
@@ -68,11 +77,21 @@ export function warmCurrentWorkCapabilityOnIntent(
                 () => import("@/components/admin/communications/CommunicationsDrawerSection"),
             );
             prefetchActiveDrawerFamilyWorkspace("opportunities", opportunityId);
-            if (actionKey === "send_tour_invitation") {
-                commandTimingMark("send_tour_invitation", "intent");
-                // Mint + template render is the slow path — start prepare on hover/focus.
-                prefetchTourInvitationPrepare(opportunityId);
-            }
+            /*
+             * NO PREPARE HERE. Tour invitation `prepare` mints a durable invitation and its public
+             * booking tokens, and this runs on pointer-enter, on focus, and on mere visibility —
+             * `warmCurrentWorkCapabilitiesForActions` warms every executable action as soon as the
+             * surface renders. Warming it created a real invitation each time, with a fresh
+             * idempotency key that defeated the server's replay dedupe.
+             *
+             * The mint now happens where it always also happened: `useTourInvitationComposeSeed`
+             * calls `provisionTourInvitationPrepare` when the composer opens, which is an explicit
+             * operator act. Recipients, thread and channel are warmed above, and the composer chunk
+             * is preloaded, so the panel still opens on warmed content.
+             *
+             * The timing mark stays: measuring intent is a read.
+             */
+            if (actionKey === "send_tour_invitation") commandTimingMark("send_tour_invitation", "intent");
             return;
         }
         case "inline_form": {

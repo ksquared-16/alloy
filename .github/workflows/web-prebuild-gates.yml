@@ -59,3 +59,292 @@ jobs:
       # scripts/routeCapabilities.declared.json fails here, on the PR, instead
       # of on staging after the merge.
       - run: npm run prebuild
+      # THE GOVERNED-ACTION CONTRACT, WHICH NOTHING RAN.
+      #
+      # GC2, GC4 and GC5 assert that every registered action has a governed mode,
+      # a fulfil dispatch branch and an executor branch. They were correct and
+      # they were red: `environment.execute_registered_reconciliation` sat
+      # registered, approvable and unreachable on staging, and no workflow ran
+      # the suite that said so, so nothing reported it.
+      #
+      # Scoped to this one file on purpose. Other suites under
+      # scripts/local-dev/tests have pre-existing failures unrelated to the action
+      # contract, and making a REQUIRED check depend on all of them would block
+      # every pull request in the fleet to fix one class of defect.
+      #
+      # No npm dependencies: these are plain `node --test` modules that import
+      # from scripts/local-dev/lib directly, which is why this runs from the
+      # repository root rather than `web`.
+      - name: Governed action contract (registered ⇒ mode + dispatch + executor)
+        working-directory: .
+        run: node --test scripts/local-dev/tests/development-governed-action-contract.test.mjs
+      # Reachable is not runnable, and a result that loses the reason is not a result.
+      #
+      # The contract suite above proves an action can be dispatched. It cannot see
+      # that the reconciliation runner needed ORG_ID nobody could supply, nor that
+      # `stderr || stdout` threw away the only sentence saying so. These two named
+      # files cover exactly that, and are added by name for the same reason the
+      # suite above is scoped: a glob over scripts/local-dev/tests would drag in
+      # pre-existing failures and block the fleet.
+      - name: Trusted-host executor fidelity (context resolution, diagnostics, provenance)
+        working-directory: .
+        run: |
+          node --test scripts/local-dev/tests/development-reconciliation-context.test.mjs
+          node --test scripts/local-dev/tests/development-push-diagnostic-fidelity.test.mjs
+      # A destructive action may not register without a semantic identity, and a
+      # governed approval wait may not be stored without its machine reason.
+      #
+      # Eleven worktree retirements reported success and removed nothing, each
+      # returning a twelfth worktree's result — and the run that filed the first
+      # was killed by the Governor for a `reason` the writer had dropped. Both
+      # are locked here, and a new deletion capability with no identity fails on
+      # the pull request rather than on a fleet.
+      - name: Destructive-action dedupe + governed wait contract
+        working-directory: .
+        run: node scripts/local-dev/tests/development-destructive-dedupe-integrity.test.mjs
+      # A satisfied wait must be released, and by exactly one owner.
+      #
+      # The resume existed only as an un-awaited Promise, so a governed action
+      # that executed inside a short-lived `vac` process left its run parked in
+      # WAITING_RESOURCE for ever. Locks both halves: the tick owns the resume,
+      # and leaving a wait resolves it so an EXECUTING run cannot carry one.
+      - name: Governed wait resume ownership
+        working-directory: .
+        run: node scripts/local-dev/tests/development-governed-resume-owner.test.mjs
+      # A health check that contradicts promoted doctrine trains its reader to
+      # ignore it. Branch drift is repaired at dispatch and a slotless managed
+      # lane is dispatchable by design; neither may be reported as an operator
+      # problem, and a real baseline gap still must be.
+      - name: Operator convergence signal quality
+        working-directory: .
+        run: node scripts/local-dev/tests/development-operator-convergence.test.mjs
+      # The operating report is a measurement, not a narrative. These lock what
+      # it REFUSES to say: an unmeasured stage is null rather than zero, operator
+      # time is never added to system time, and a join that matched the wrong row
+      # is caught rather than published as a negative latency.
+      - name: Operating report determinism
+        working-directory: .
+        run: node scripts/local-dev/tests/development-operating-report.test.mjs
+      # "Needs you" means the operator actually has something to do. A badge
+      # that is sometimes wrong is a badge that gets checked every time and
+      # trusted none of the time.
+      - name: Operator state language
+        working-directory: .
+        run: node scripts/local-dev/tests/development-operator-state-language.test.mjs
+      # The surfaces must MAP the canonical state, never re-derive it. The guard
+      # fails if the lane route grows a second rule about what needs the operator.
+      - name: Operator state surfaces
+        working-directory: .
+        run: node scripts/local-dev/tests/development-operator-state-surfaces.test.mjs
+      # Operator-facing wording and cadence. Cheap to break, and each of these
+      # was a real sentence a person read: "Authorize authorized", "Finalizing"
+      # at the start of a turn, and a week that could not see itself.
+      - name: Operator polish (copy, cadence, retention)
+        working-directory: .
+        run: node scripts/local-dev/tests/development-tonight-polish.test.mjs
+      # The reports ride the steward's existing timer. The guard that matters is
+      # the last one: the steward must never grow a scheduler of its own.
+      - name: Operating report timer wiring
+        working-directory: .
+        run: node scripts/local-dev/tests/development-report-timer.test.mjs
+      # The push fan-out must stay concurrent and index-mapped, routine failure
+      # paths must keep their first diagnostic line, and successful-output
+      # parsing must stay untouched.
+      - name: Backlog burn-down invariants
+        working-directory: .
+        run: node scripts/local-dev/tests/development-backlog-burndown.test.mjs
+      # Five times in one day a value was produced correctly and did not arrive.
+      # Every one had a passing test at the PRODUCER. These follow the value
+      # through the real serializer, writer or branch to the thing that reads it.
+      - name: Cross-layer propagation contracts
+        working-directory: .
+        run: node scripts/local-dev/tests/development-propagation-contracts.test.mjs
+
+      # One definition of the operator's day. "Today" was computed independently
+      # in six places; two were a UTC date standing in for a zoned one, and both
+      # reset seven hours early. These lock the semantics, not the arithmetic.
+      - name: Canonical civil-day semantics
+        working-directory: .
+        run: node scripts/local-dev/tests/development-civil-day.test.mjs
+
+      # Explicit result allowlists are safety boundaries and stay explicit. But an
+      # explicit list has a second failure mode that has now cost three incidents:
+      # a field produced correctly for weeks and dropped by a list nobody extended.
+      # This locks the fields an operator needs from a privileged write.
+      - name: Trusted-host result allowlist contract
+        working-directory: .
+        run: node scripts/local-dev/tests/development-result-allowlist-contract.test.mjs
+
+      # The S6 wait contract. This was red on staging for two runs because it was
+      # not gated: it asserted the OLD clearing mechanism after the contract moved
+      # to resolved-not-erased, and separately used a fixed character window that a
+      # growing comment overflowed. Gated now, so the next drift fails here.
+      - name: Governed run wait contract
+        working-directory: .
+        run: node scripts/local-dev/tests/development-governed-run-wait.test.mjs
+
+      # A test must not be able to dispatch real work by accident. 22 of the 27
+      # dispatch-capable tests relied on default auto-dispatch, which fires a real
+      # dispatchReadyAssignments on a 10ms timer: the assertions finish first, so
+      # the symptom was a passing transcript attached to a process that never
+      # exits. This requires each such test to declare how it handles dispatch.
+      - name: Test dispatch safety
+        working-directory: .
+        run: node scripts/local-dev/tests/development-dispatch-safety.test.mjs
+
+      # G5 — PROMOTED MIGRATION PHYSICAL/LEDGER CONVERGENCE.
+      #
+      # A governed migration can physically succeed and leave the Vacilando
+      # ledger without the corresponding identity. The runtime distinguishes the
+      # two opposite facts (ledger unreadable vs ledger readable and missing the
+      # version), refuses to re-apply, and has a registered recovery action -
+      # database.repair_migration_ledger - that writes the ledger only when the
+      # approved source, the physical census and the measured gap all agree.
+      #
+      # None of that was covered by any required gate. A regression here
+      # reintroduces physical/governance divergence on a DEPLOYED database, so it
+      # does not belong in a nightly suite - and the nightly cannot run anyway
+      # until Tier 2 reaches the default branch.
+      #
+      # Run under `node --test`: several of these gate assertions on the test
+      # runner context and silently report false failures as a plain script.
+      #
+      # production-apply-executor is deliberately NOT here. It resolves
+      # origin/staging at module load, and a CI checkout has no remote-tracking
+      # refs - "fatal: ambiguous argument 'origin/staging'". It is repo-state
+      # dependent, so it is Tier 3 host integration rather than a runner-safe
+      # gate. CI caught that classification error on this gate's first run,
+      # which is exactly what a required gate is for.
+      # The one narrow door to main. A workflow definition must reach the default
+      # branch for GitHub to schedule it at all, while the code it tests stays on
+      # staging. This locks the door open exactly that far: workflow paths only,
+      # candidate ownership mandatory, and a mixed commit refused WHOLE rather
+      # than trimmed to its acceptable files.
+      # The executor that writes main. Gated next to the boundary it enforces,
+      # because a regression here is a wrong write to the release branch.
+      - name: Repository metadata executor (main write)
+        working-directory: .
+        run: node scripts/local-dev/tests/development-metadata-executor.test.mjs
+
+      - name: Repository metadata promotion boundary
+        working-directory: .
+        run: node scripts/local-dev/tests/development-repository-metadata-promotion.test.mjs
+
+      - name: Migration ledger convergence (G5)
+        working-directory: .
+        run: |
+          node --test \
+            scripts/local-dev/tests/development-ledger-repair.test.mjs \
+            scripts/local-dev/tests/development-ledger-repair-executor.test.mjs \
+            scripts/local-dev/tests/migration-execution-outcome.test.mjs \
+            scripts/local-dev/tests/development-reconciliation-apply.test.mjs \
+            scripts/local-dev/tests/development-migration-parity.test.mjs \
+            scripts/local-dev/tests/certification-aware-migration-target.test.mjs
+
+      # A refusal that cannot be told apart from five other refusals is not a
+      # diagnosis, and the only recovery it leaves a worker is to guess and
+      # refile - which, on a privileged write, means retrying it. Three
+      # consecutive host.install_toolkit requests failed for three different
+      # reasons and reported two indistinguishable strings while the validator
+      # had already computed the sentence that ends the confusion.
+      - name: Governed failure carries its diagnosis
+        working-directory: .
+        run: node --test scripts/local-dev/tests/development-validation-detail-propagation.test.mjs
+
+      # Evidence that misattributes itself is worse than no evidence: a reader
+      # who follows the stored action id lands on a different observation and
+      # has no way to know. Measured: 5 of 5 committed census artifacts carrying
+      # an execution block were mixed-generation, 0 coherent, and in all five the
+      # query_hash agreed - which is how a two-field disagreement stays hidden.
+      - name: Census artifact provenance is one generation
+        working-directory: .
+        run: node scripts/local-dev/tests/development-census-provenance-generation.test.mjs
+
+      # A run that has just been queued is not a wait without a reason. Four
+      # healthy runs were collected by the governor at 0.239s, 0.374s, 0.627s and
+      # one at -0.041s - before its own QUEUED transition timestamp.
+      - name: Admission wait classification (governor race)
+        working-directory: .
+        run: node scripts/local-dev/tests/development-admission-wait-classification.test.mjs
+
+      # The seam between "registered" and "executor works". Five defects reached
+      # operator approval through it, four invisible to stub tests and the fifth
+      # invisible to everything except a real approved dispatch. This drives a
+      # registered action through executeTrustedHostAction against a throwaway
+      # repository - no real mutation - and reproduces the historical
+      # "defaultGit is not defined" when the import is removed.
+      - name: Registered action dispatch contract
+        working-directory: .
+        run: node scripts/local-dev/tests/development-registered-action-dispatch-contract.test.mjs
+
+      # A ratchet, not a clean bill of health: 16 of 21 registered actions still
+      # have no wrapper-level coverage. The list may only shrink, so a newly
+      # registered action cannot ship with a wrapper nothing has ever run.
+      - name: Dispatch wrapper coverage ratchet
+        working-directory: .
+        run: node scripts/local-dev/tests/development-dispatch-wrapper-coverage.test.mjs
+
+      # The four repository-state actions, driven through the wrapper live
+      # governed execution uses. Writing this found two defects in the
+      # housekeeping pair: the dispatch wrapper passed no client at all, so they
+      # could not be exercised without reaching real GitHub, and their module
+      # never imported liveRemoteMutationPermitted - the guard the other four
+      # remote verbs have always had.
+      - name: Repository action dispatch contract
+        working-directory: .
+        run: node scripts/local-dev/tests/development-repository-dispatch-contract.test.mjs
+
+      # One result object, two renderings. The per-file red ledger used to reach
+      # only GITHUB_STEP_SUMMARY, which the logs API does not return, so no tool
+      # could name the failing files behind a count.
+      - name: Tier 2 result contract
+        working-directory: .
+        run: node scripts/local-dev/tests/development-tier2-result-contract.test.mjs
+
+      # continuation_of existed, was documented, had one test, and was stored
+      # with no checks at all - any string, including a live run, the successor
+      # itself, or a cycle. 0 of 181 runs carried it.
+      - name: Execution run continuation lineage
+        working-directory: .
+        run: node scripts/local-dev/tests/development-continuation-lineage.test.mjs
+
+      # A hosted certification fixture may only destroy what it owns. Six subsidy
+      # teardown statements were scoped by organization alone and ran with
+      # replication triggers suspended; they are now constrained through the
+      # fixture's own program and agency, and this pins them there.
+      - name: Hosted fixture destructive safety
+        working-directory: .
+        run: node scripts/local-dev/tests/development-hosted-fixture-safety.test.mjs
+
+      # The registered reconciliation, driven through the same dispatcher live
+      # execution uses. Building it found four defects: a validator that refused
+      # its own normalized output, frozen context that never reached the runner,
+      # audit truth dropped at two boundaries, and a missing secret screen that
+      # every sibling wrapper already had.
+      - name: Hosted fixture dispatch contract
+        working-directory: .
+        run: node scripts/local-dev/tests/development-hosted-fixture-dispatch.test.mjs
+
+      # A fixture written for one database is not a hosted fixture. This one
+      # assigned itself the LOCAL cert tenant with a `\set org` that overrode the
+      # governed runner's `-v`, and named two campus `locations` by uuid that
+      # exist on no other database -- so the audit reported a frozen organization
+      # the writes never reached, and the apply could not have written the
+      # agreements anywhere else. It also ran under psql's autocommit, so a
+      # foreign key refusing halfway through committed the teardown and left
+      # partial fixture rows in a tenant holding real money. Organization,
+      # campuses and atomicity are now contract, with each defect re-plantable.
+      - name: Hosted fixture portability and atomicity
+        working-directory: .
+        run: node scripts/local-dev/tests/development-hosted-fixture-portability.test.mjs
+
+      # The first hosted execution of the governed fixture died in 13ms as
+      # `organization_probe_failed: spawnSync psql ENOENT`. Nothing was wrong
+      # with the fixture, the organization or the credential -- Homebrew's libpq
+      # is keg-only, so a host can have a working psql that PATH cannot see. The
+      # trusted-host SQL child had already met this and written it down; the seed
+      # runner one layer up spawned a bare psql anyway. This pins the resolution
+      # order, and that the runner does not go back to trusting PATH.
+      - name: Governed runner resolves its postgres client
+        working-directory: .
+        run: node scripts/local-dev/tests/development-runner-psql-resolution.test.mjs

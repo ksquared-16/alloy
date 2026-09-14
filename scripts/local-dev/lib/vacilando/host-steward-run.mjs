@@ -233,6 +233,56 @@ export async function runStewardCycleWithHygiene({
   }
 }
 
+
+/**
+ * Evaluate the report cadence and write whatever is due.
+ *
+ * Kept here rather than inside the report module so the report generator stays
+ * a pure derivation with no idea that a clock exists.
+ */
+async function runOperatingReportStage({ root, nowMs }) {
+  const { runDueOperatingReports, buildOperatingReport, operatingReportWindow } = await import("./operating-report.mjs");
+  const { mkdirSync, writeFileSync, readFileSync, existsSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const base = join(root, "vacilando");
+  const readJson = (p, fallback) => {
+    try { return existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : fallback; } catch { return fallback; }
+  };
+  return runDueOperatingReports({
+    now: new Date(nowMs),
+    build: (kind) => {
+      /*
+       * THE WINDOW COMES FROM THE ZONE THE CADENCE IS ON, not from UTC.
+       * This used to derive the day here, in UTC, while the cadence fired at
+       * 18:30 Pacific - so the report was keyed to tomorrow and covered the
+       * ninety minutes since 17:00. The zone was always configured; nothing
+       * carried it this far.
+       */
+      const win = operatingReportWindow(kind, new Date(nowMs));
+      if (!win) throw new Error("report_window_unresolved");
+      const { windowStart, windowEnd, timezone, day } = win;
+      const requests = readJson(join(base, "governed-actions", "requests.json"), { requests: [] }).requests || [];
+      const runStore = readJson(join(base, "execution-runs", "runs.json"), { lanes: {} }).lanes || {};
+      const runs = Object.values(runStore).flatMap((e) => e.runs || []);
+      const laneStore = readJson(join(base, "lanes", "lanes.json"), { lanes: {} }).lanes || {};
+      const notifStore = readJson(join(base, "notifications.json"), { notifications: [] });
+      const notifications = Array.isArray(notifStore) ? notifStore : (notifStore.notifications || []);
+      return buildOperatingReport({
+        kind, windowStart, windowEnd, timezone, day, requests, runs,
+        lanes: Object.values(laneStore), notifications,
+      });
+    },
+    write: (report) => {
+      const dir = join(base, "operating-reports");
+      mkdirSync(dir, { recursive: true });
+      // Idempotent BY WINDOW: the same day rewrites the same file, never a second.
+      const file = join(dir, `${report.report_id}.json`);
+      writeFileSync(file, JSON.stringify(report, null, 2));
+      return file;
+    },
+  });
+}
+
 async function asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene, hygieneOptions, recoveryStage, dispatchStage }) {
   /*
    * RECOVERY FIRST. A host that needs repairing must not spend its cycle
@@ -246,16 +296,43 @@ async function asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene
   }
   const recoveryBlocking = recovery?.failure_class && recovery.failure_class !== "HEALTHY" && !recovery.verified;
 
-  if (!hygiene || !root) return { ...steward, recovery, hygiene: null };
+  /*
+   * THE REPORT CADENCE SITS ABOVE EVERY GATE THAT IS NOT ITS OWN.
+   *
+   * I have now put this stage in the wrong place twice. First outside
+   * `recordStageOutcome`, so it left no evidence. Then behind the hygiene-due
+   * branch, so it ran every six hours instead of every five minutes. Both times
+   * the stage existed, was imported, and was tested.
+   *
+   * Two more gates sat above it: `hygiene: false`, and a control plane that is
+   * not healthy. §13 gates hygiene and scheduling for a good reason - they hand
+   * out work and mutate the host, and a broken control plane must not do
+   * either. A daily report does neither. It is a clock comparison, and once a
+   * day a read-only derivation of state that is already written down.
+   *
+   * An operator wants the report MOST on the day the control plane was unwell.
+   * Gating it on health would have made it disappear exactly then.
+   *
+   * Its own contract needs a runtime root and nothing else, so that is the only
+   * thing it is gated on.
+   */
+  let reports = null;
+  if (root && !dryRun) {
+    try { reports = await runOperatingReportStage({ root, nowMs }); }
+    catch (e) { reports = { ok: false, error: "report_stage_threw", detail: String(e?.message || e).slice(0, 300) }; }
+  }
+
+  if (!hygiene || !root) return { ...steward, recovery, hygiene: null, reports };
   if (recoveryBlocking) {
     // §13: recovery outranks ordinary work. Hygiene and scheduling wait for a
     // control plane that is not currently broken.
     if (!dryRun) {
       recordStageOutcome({ root, nowMs, outcome: {
         ok: true, recovery: recovery.failure_class, hygiene: "skipped_control_plane_not_healthy", dispatch: null,
+        reports: reportsSummary(reports),
       } });
     }
-    return { ...steward, recovery, hygiene: { skipped: "control_plane_not_healthy", failure_class: recovery.failure_class } };
+    return { ...steward, recovery, hygiene: { skipped: "control_plane_not_healthy", failure_class: recovery.failure_class }, reports };
   }
 
   const due = forceHygiene ? { due: true, reason: "forced" } : hygieneDue({ root, nowMs });
@@ -285,9 +362,10 @@ async function asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene
       recordStageOutcome({ root, nowMs, outcome: {
         ok: true, recovery: recovery?.failure_class ?? null, hygiene: "not_due",
         dispatch: dispatchSummary(dispatchOnly),
+        reports: reportsSummary(reports),
       } });
     }
-    return { ...steward, recovery, hygiene: { skipped: "not_due", last_ms: due.last_ms }, dispatch: dispatchOnly };
+    return { ...steward, recovery, hygiene: { skipped: "not_due", last_ms: due.last_ms }, dispatch: dispatchOnly, reports };
   }
 
   let result = null;
@@ -316,13 +394,50 @@ async function asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene
     });
   }
   const dispatch = await dispatchStage({ root, nowMs, dryRun });
+  /*
+   * THE OPERATING REPORTS RIDE THIS LOOP, AND ARE RECORDED WITH IT.
+   *
+   * The host has one launchd entry and it is a KeepAlive daemon with no
+   * schedule, so there is no host timer to add a line to. This cycle is the
+   * periodic owner that already exists, and the steward's own doctrine is that
+   * it uses the timers this server owns "rather than a second scheduler".
+   *
+   * It runs HERE, inside the stage set, rather than in the wrapper around it:
+   * the wrapper runs after `recordStageOutcome`, so a report written, skipped
+   * or failed there left no trace in the state file at all. The cadence would
+   * have been correct and unobservable, which for a thing that runs once a day
+   * unattended is nearly the same as not working.
+   *
+   * NOT_DUE is the answer 287 cycles in 288, and is recorded as an outcome
+   * rather than a fault. A failure is attached, never thrown: an end-of-day
+   * report that could not be written must not interrupt anyone's development.
+   */
   if (!dryRun) {
     recordStageOutcome({ root, nowMs, outcome: {
       ok: true, recovery: recovery?.failure_class ?? null, hygiene: result?.ok === true ? "ran" : "failed",
       dispatch: dispatchSummary(dispatch),
+      reports: reportsSummary(reports),
     } });
   }
-  return { ...steward, recovery, hygiene: result, dispatch };
+  return { ...steward, recovery, hygiene: result, dispatch, reports };
+}
+
+/**
+ * What the state file keeps about a cadence evaluation.
+ *
+ * Bounded like `dispatchSummary` beside it: the reason and the report id, never
+ * the report. "not due" is the normal entry and must stay cheap to write.
+ */
+function reportsSummary(r) {
+  if (!r) return null;
+  if (r.ok === false) return { ok: false, error: r.error ?? null, detail: r.detail ?? null };
+  return {
+    ok: true,
+    results: (r.results || []).map((x) => ({
+      kind: x.kind, ran: Boolean(x.ran), reason: x.reason ?? null,
+      report_id: x.report_id ?? null, error: x.error ?? null,
+    })),
+  };
 }
 
 /** A bounded shape for the state file: counts and refusals, never whole records. */

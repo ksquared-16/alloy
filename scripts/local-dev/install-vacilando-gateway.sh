@@ -112,6 +112,15 @@ cat > "$PLIST" <<EOF
     <key>VACILANDO_BIND</key><string>127.0.0.1</string>
     <key>VACILANDO_PORT</key><string>${PORT}</string>
     <key>VACILANDO_NODE_NAME</key><string>${VACILANDO_NODE_NAME:-}</string>
+    <!--
+      The clock the operating-report cadence runs on. Explicit product
+      configuration: the platform has no other canonical timezone, and
+      defaulting to the host's would quietly make "wherever this machine is" a
+      contract. Declared here because THIS FILE regenerates the plist - a value
+      added to the agent by hand is wiped the next time the gateway is
+      installed, which is how a setting silently disappears.
+    -->
+    <key>VACILANDO_REPORT_TIMEZONE</key><string>${VACILANDO_REPORT_TIMEZONE:-America/Los_Angeles}</string>
   </dict>
   <key>StandardOutPath</key><string>${LOG_DIR}/gateway.out.log</string>
   <key>StandardErrorPath</key><string>${LOG_DIR}/gateway.err.log</string>

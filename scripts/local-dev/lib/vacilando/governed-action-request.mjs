@@ -51,6 +51,7 @@ import {
   fulfillRepositoryPushForMission,
   fulfillClosePullRequestForMission,
   fulfillApplyReconciliationPlanForMission,
+  fulfillExecuteRegisteredReconciliationForMission,
   fulfillRetireWorktreeForMission,
   fulfillDeleteRemoteBranchForMission,
   fulfillRestoreDeployedQaSessionForMission,
@@ -64,9 +65,11 @@ import {
   fulfillPromotedMigrationForMission,
   fulfillLedgerRepairForMission,
   fulfillSetProviderCeilingForMission,
+  fulfillRegisterDeveloperApplicationForMission,
   fulfillInstallToolkitForMission,
   fulfillLaneDispatchForMission,
   previewTrustedHostAuthorization,
+  fulfillRepositoryMetadataPromotionForMission,
 } from "./trusted-host-actions.mjs";
 import { resolveDeployedTarget } from "./deployed-target-registry.mjs";
 import { qaActionNeedsDevelopmentSlot } from "./qa-slot-preflight.mjs";
@@ -227,6 +230,20 @@ function observedNow() {
 function stampDecisionTiming(rec, field) {
   if (!rec) return;
   rec.decision_timing = { ...(rec.decision_timing || {}), [field]: observedNow() };
+}
+
+/**
+ * Stamp a moment that can only happen once.
+ *
+ * `projection_visible_at` is now reachable from two places — the terminal write
+ * and the resume — and the question it answers is "when did this first become
+ * readable", not "when was it last touched". Overwriting would silently report
+ * the later of the two and make the measured latency look worse than it was.
+ */
+function stampDecisionTimingOnce(rec, field) {
+  if (!rec) return;
+  if (rec.decision_timing?.[field]) return;
+  stampDecisionTiming(rec, field);
 }
 
 /**
@@ -1270,7 +1287,36 @@ const SETTLED = new Set(SETTLED_GOVERNED_STATUSES);
  * there are — an unbounded backlog is a problem to SHOW the operator, never
  * one to fix by forgetting the oldest of it.
  */
-export function retainGovernedRequests(requests, cap = 200) {
+/**
+ * How many SETTLED records to keep.
+ *
+ * 200 was a fine number for a queue and a poor one for history: a single busy
+ * day produced 200 governed actions, so the weekly operating report's SHIPPING
+ * figures were identical to the daily one - the week simply had no older
+ * records left to count.
+ *
+ * Raised, and made a setting. The cost is one JSON file: a record is roughly
+ * 1-2 KB, so this is a few megabytes at the cap, and the eviction rule below is
+ * unchanged - an unanswered request is never disposable at any cap.
+ *
+ * 2000 IS A MEASURED NUMBER, NOT A ROUND ONE. 2026-09-13 produced 204 governed
+ * actions in a single day, and the run store shows ordinary days between 4 and
+ * 56 runs at roughly 5 actions each. So 1000 was five days at the observed peak
+ * - short of the seven the weekly report needs, and with nothing left over for
+ * the week-over-week comparison it wants next. 2000 covers a heavy week twice.
+ *
+ * It cannot recover what is already gone: the records before today were evicted
+ * under the old 200 cap, and no retention setting brings them back. The weekly
+ * report's SHIPPING section becomes meaningful as days accumulate from here.
+ */
+export const GOVERNED_REQUEST_RETENTION_DEFAULT = 2000;
+
+export function governedRequestRetentionCap() {
+  const raw = Number(process.env.VACILANDO_GOVERNED_REQUEST_RETENTION);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : GOVERNED_REQUEST_RETENTION_DEFAULT;
+}
+
+export function retainGovernedRequests(requests, cap = governedRequestRetentionCap()) {
   if (!Array.isArray(requests) || requests.length <= cap) return requests;
   const unsettled = requests.filter((r) => !SETTLED.has(r.status));
   const settled = requests.filter((r) => SETTLED.has(r.status));
@@ -1546,7 +1592,93 @@ function releaseRunAfterGovernedFailure(rec, { nowMs, root } = {}) {
     });
   }
   patchRunFields(rec.run_id, { governed_action: pub }, { nowMs, root });
-  patchRunResourceWait(rec.run_id, null, root);
+  /*
+   * THE WAIT IS RESOLVED, NOT DELETED.
+   *
+   * This nulled the wait outright, immediately after the transition above had
+   * marked it `resolution_state: "resolved"` - so on the one path where an
+   * operator most wants to know what the run had been waiting for, the record
+   * was marked resolved and then thrown away a line later.
+   *
+   * Clearing was right when leaving a wait left it reading `waiting` forever;
+   * seventeen terminal runs carrying live "Waiting on Director" text was a real
+   * defect. The resolved-wait contract solved that without destroying anything:
+   * an EXECUTING or NEEDS_INPUT run can no longer carry an ACTIVE wait, because
+   * the exit marks it. Deleting on top of that only removes the evidence.
+   *
+   * An owner that genuinely wants the wait gone still calls
+   * patchRunResourceWait directly; this path does not want that.
+   */
+  /*
+   * A REFUSAL IS A SETTLEMENT, AND `failRequest` says so a few lines below about
+   * its own timing. The projection stamp did not agree: every one of the twenty
+   * failed governed actions measured carried no `projection_visible_at`, so the
+   * convergence of a failure was the one thing the metric could never report —
+   * and a failure is what an operator most needs to see quickly.
+   */
+  stampDecisionTimingOnce(rec, "projection_visible_at");
+  saveRequest(rec, root);
+}
+
+/**
+ * Say WHICH refusal fired, not merely that one did.
+ *
+ * `executeTrustedHostAction` returns `{ ok: false, error: "input_validation_failed",
+ * validation: { error, detail, evidence } }`. The nested half is the diagnosis; the
+ * outer half is only its category. This boundary used to forward `out.error` alone,
+ * so a worker was told `input_validation_failed` for six mutually exclusive causes —
+ * bad sha shape, missing reason, unsupported ref, unreadable promoted staging,
+ * compare-and-set mismatch, blocked convergence — with no way to tell them apart.
+ *
+ * Measured: three consecutive host.install_toolkit requests failed for THREE DIFFERENT
+ * reasons and reported two indistinguishable strings. The validator had already
+ * computed "request names 10bd40ca6b9d; promoted staging is b5a770518671" — the exact
+ * sentence that ends the confusion — and this line dropped it. The only recovery left
+ * to the worker was to guess and refile, which is how a compare-and-set race turns
+ * into repeated privileged-write attempts.
+ *
+ * Same family as every other propagation defect in this file: produced correctly,
+ * dropped at an intermediate boundary, consumed as though it never existed.
+ *
+ * Redacted on the way out, because a validator detail may quote an input. The
+ * shared filter is narrow — connection strings, DATABASE_URL, JWTs — so this is
+ * a backstop, not a licence for validators to quote secrets into `detail`.
+ */
+function describeExecutionFailure(out) {
+  const outer = String(out?.error || "").trim();
+  const v = out?.validation;
+  const inner = String(v?.error || "").trim();
+  const fallback = String(out?.action?.failureReason || "").trim();
+
+  /*
+   * BOTH HALVES OF THE FAILURE SURFACE, NOT JUST THE VALIDATION ONE.
+   *
+   * There are two ways a trusted-host action fails and they carry their detail
+   * in different places:
+   *
+   *   input validation   { error, validation: { error, detail } }
+   *   EXECUTION          { error, detail, action.result.detail }   <- failTrustedAction
+   *
+   * The first version of this function read only `validation.detail`, so the
+   * execution half stayed exactly as broken as before. Measured: an
+   * operator-approved write to main failed and the operator was shown
+   * `metadata_promote_threw`, while `defaultGit is not defined` — the sentence
+   * that names the bug — sat on the action record and reached nobody. Closing
+   * one half of a two-half defect and reporting the defect closed is its own
+   * failure mode.
+   */
+  const detail = String(v?.detail || out?.detail || out?.action?.result?.detail || "").trim();
+
+  const parts = [];
+  if (outer) parts.push(outer);
+  if (inner && inner !== outer) parts.push(inner);
+  let text = parts.join(": ");
+  // A detail that merely repeats the code adds nothing but noise.
+  if (detail && detail !== outer && detail !== inner) {
+    text = text ? `${text} \u2014 ${detail}` : detail;
+  }
+  if (!text) text = fallback;
+  return redact(text) || "trusted-host execution failed";
 }
 
 function failRequest(rec, code, reason, { nowMs, root, skipResume = false } = {}) {
@@ -1777,6 +1909,16 @@ function defaultModeForAction(actionKey, requested) {
   // policy_denied — the trap two actions have already fallen into.
   if (actionKey === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) return "migration_apply";
   /*
+   * NOT "promotion". That mode means an Alloy product release, and this action
+   * exists precisely because writing a workflow definition to main is NOT one -
+   * conflating them in the mode would put repository configuration and product
+   * release in the same governed bucket, which is the distinction the whole
+   * class was built to hold. "other" is the member for a privileged action that
+   * is neither a promotion nor a migration. Named here so it can never inherit
+   * read_only and surface as policy_denied, the trap documented below.
+   */
+  if (actionKey === ACTION_TYPES.REPOSITORY_PROMOTE_METADATA) return "other";
+  /*
    * A privileged_write action must not inherit the read_only default. `validateAgainstRegistry`
    * refuses any non-read risk class in read_only mode, so an action added to the registry without
    * a mode here is registered, discoverable, proposable — and then denied with `policy_denied`,
@@ -1790,9 +1932,25 @@ function defaultModeForAction(actionKey, requested) {
   if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) return "other";
   if (actionKey === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) return "other";
   if (actionKey === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) return "other";
+  // A catalog write against a named database. It is not a promotion and not a
+  // migration — no schema changes — so it takes the same "other" home as the
+  // environment actions rather than widening the mode vocabulary for one action.
+  if (actionKey === ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION) return "other";
   if (actionKey === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) return "other";
   if (actionKey === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) return "other";
   if (actionKey === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) return "other";
+  /*
+   * Executing a registered reconciliation is a privileged_write against a permitted environment —
+   * `reconciliation-registry.mjs` permits staging and, by construction, no production entry exists.
+   * It is not a promotion: nothing moves between branches. It is not a migration_apply: no schema
+   * changes, and borrowing that mode would let it inherit migration governance it has no business
+   * inheriting. "other" is where its nearest neighbour `vacilando.apply_reconciliation_plan` already
+   * lives, and the mode is chosen from those semantics rather than to satisfy a red test.
+   *
+   * Operator approval is NOT granted by this line and is not affected by it: the registration carries
+   * `alwaysRequiresOperatorApproval: true`, which is enforced elsewhere and stays enforced.
+   */
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION) return "other";
   if (actionKey === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) return "other";
   if (actionKey === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) return "other";
   /*
@@ -3107,6 +3265,18 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       exactContext,
     });
   }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION) {
+    return fulfillExecuteRegisteredReconciliationForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
   if (rec.action_key === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) {
     return fulfillApplyReconciliationPlanForMission(scope, {
       assignmentId: rec.run_id || null,
@@ -3155,6 +3325,18 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
   }
   if (rec.action_key === ACTION_TYPES.HOST_INSTALL_TOOLKIT) {
     return fulfillInstallToolkitForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION) {
+    return fulfillRegisterDeveloperApplicationForMission(scope, {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: rec.inputs || {},
@@ -3228,6 +3410,22 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
    * because the migration artifacts are resolved out of the approved worktree's
    * git object store rather than any working copy.
    */
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_PROMOTE_METADATA) {
+    return fulfillRepositoryMetadataPromotionForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: {
+        ...(rec.inputs || {}),
+        worktree_path: rec.worktree_path,
+        worktreePath: rec.worktree_path,
+      },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
   if (rec.action_key === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
     return fulfillLedgerRepairForMission(scope, {
       assignmentId: rec.run_id || null,
@@ -3366,7 +3564,7 @@ function applyExecuteResult(rec, out, { nowMs, root, actor } = {}) {
     const code = out?.error === "wrong_database_target"
       ? "target_unavailable"
       : (out?.error === "unknown_action_type" ? "action_unavailable" : "execution_failed");
-    return failRequest(rec, code, out?.error || out?.action?.failureReason || "trusted-host execution failed", { nowMs, root });
+    return failRequest(rec, code, describeExecutionFailure(out), { nowMs, root });
   }
   const action = out.action;
   if (containsSecret(action.result) || containsSecret(action.inputs)) {
@@ -3387,8 +3585,52 @@ function applyExecuteResult(rec, out, { nowMs, root, actor } = {}) {
   // run; success did not, so a completed governed action left "Waiting on
   // Director" sitting on the record as though it were still true. Seventeen
   // terminal runs were carrying wait text for work that had long since landed.
+  /*
+   * BUT A LIVE WAIT IS NOT A RESOLVED ONE EITHER.
+   *
+   * Clearing unconditionally strands the run: the transition back to EXECUTING
+   * happens later, in resumeLaneAfterGovernedAction, and between these two
+   * moments the run sits in WAITING_RESOURCE with no wait at all.
+   * `waitReasonFor` reads `resource_wait.reason`, finds nothing, and the
+   * Governor fails the run `missing_wait_reason`.
+   *
+   * MEASURED TWICE. erun_f4f9ff73ca8144ce and erun_02e4ebd11a33fead both died
+   * exactly here, on a worktree retirement, ten seconds after entering the wait
+   * — the second one after the wait envelope itself had been repaired, which is
+   * how this half became visible. Push, open_pr and merge survive the same race
+   * only because their resume follows quickly enough.
+   *
+   * So the wait is cleared only once the run is no longer IN it. The resume
+   * path already clears it as part of the transition, which is the one place
+   * that can do both without a window in between.
+   */
   if (rec.run_id) {
-    try { patchRunResourceWait(rec.run_id, null, root); } catch { /* the run may be gone */ }
+    try {
+      const run = getExecutionRun(rec.run_id, root);
+      if (!run || run.state !== "WAITING_RESOURCE") patchRunResourceWait(rec.run_id, null, root);
+      /*
+       * THE PROJECTION IS WRITTEN WHERE THE TRUTH IS, NOT ONLY WHERE A RUN
+       * HAPPENS TO BE WAITING.
+       *
+       * `run.governed_action` was patched in exactly two places — attachRunWait
+       * and the resume — so a completion that did not resume a waiting run
+       * never reached the run at all. MEASURED: 18 runs projected a governed
+       * action that was not their most recent one, and 89 of 157 completed
+       * actions attached to a run carried no `projection_visible_at` at all.
+       * An operator reading those runs saw an older action's state than reality,
+       * and the platform's own convergence metric could not see it either.
+       *
+       * This is the authoritative terminal write, so it is the honest place to
+       * say the outcome is readable. The resume still stamps when it resumes,
+       * and the field records the FIRST of the two — the question is when this
+       * became readable, not when it was last touched.
+       */
+      if (run) {
+        patchRunFields(rec.run_id, { governed_action: publicGovernedAction(rec) }, { nowMs, root });
+        stampDecisionTimingOnce(rec, "projection_visible_at");
+        saveRequest(rec, root);
+      }
+    } catch { /* the run may be gone */ }
   }
   emitNotification("governed_action_complete", rec, {
     title: `${rec.title || rec.action_key} complete`,
@@ -4744,6 +4986,41 @@ export function tickGovernedActions({
     if (seen.has(rec.request_id)) continue;
     out.push(processGovernedAction(rec.request_id, { nowMs, root, actor: "director" }));
   }
+
+  /*
+   * AND THE RESUME, WHICH HAD NO OWNER AT ALL.
+   *
+   * `executeGovernedAction` assigns `applied.resumePromise` and nothing durable
+   * holds it: one caller awaits it in-process, the other calls `.catch(() => {})`.
+   * When the action executes inside a short-lived `vac` process — which is how a
+   * worktree retirement runs — the process exits and the run is never taken out
+   * of WAITING_RESOURCE. It does not die, because `needs_operator_input` is
+   * human_indefinite by design; it rests there for ever.
+   *
+   * MEASURED on erun_828e075e3c1ed70a: the retirement completed and the run sat
+   * waiting for over four minutes, until a worker resumed it by hand.
+   *
+   * `scheduleAcceptedExecution` states the rule this restores, a few hundred
+   * lines up: the tick is the owner and the immediate call is an optimisation
+   * "written so that losing it costs nothing". The completed record is durable
+   * and the waiting run is durable, so the shape is still here on the next tick.
+   * Re-running it is safe: a run that has already resumed is no longer
+   * WAITING_RESOURCE and is skipped.
+   */
+  const stranded = readGovernedActionStore(root).requests.filter((r) => {
+    if (r.status !== "complete" || !r.run_id) return false;
+    const run = getExecutionRun(r.run_id, root);
+    if (!run || run.state !== "WAITING_RESOURCE") return false;
+    const waitingOn = run.resource_wait?.governed_request_id;
+    return !waitingOn || waitingOn === r.request_id;
+  });
+  for (const rec of stranded) {
+    // Fire-and-forget HERE is honest: if it is lost, the next tick finds the
+    // identical shape. That is what makes this an owner rather than a promise.
+    out.push({ ok: true, resuming: rec.request_id });
+    Promise.resolve(resumeLaneAfterGovernedAction(rec.request_id, { nowMs, root, actor: "director" }))
+      .catch(() => { /* the tick is the owner and will find it again */ });
+  }
   return out;
 }
 
@@ -5289,6 +5566,21 @@ export async function resumeLaneAfterGovernedAction(requestId, {
 
   if (rec.run_id) {
     const run = getExecutionRun(rec.run_id, root);
+    /*
+     * THE RUN MUST BE WAITING ON *THIS* ACTION.
+     *
+     * `WAITING_RESOURCE` alone is not the same question. A completion that
+     * arrives late — a slow executor, a retried tick, a duplicate delivery —
+     * would otherwise resume a run that has since begun waiting on something
+     * else entirely, and the second wait would vanish with nobody to satisfy
+     * it. The wait names the request it belongs to; an unrelated one is left
+     * exactly where it is.
+     */
+    const waitingOnThis = !run?.resource_wait?.governed_request_id
+      || run.resource_wait.governed_request_id === rec.request_id;
+    if (run && run.state === "WAITING_RESOURCE" && !waitingOnThis) {
+      return { ok: true, stale: true, run_waiting_on: run.resource_wait.governed_request_id };
+    }
     if (run && run.state === "WAITING_RESOURCE") {
       transitionExecutionRun(rec.run_id, "EXECUTING", {
         reason: "governed_action_complete",
@@ -5304,7 +5596,7 @@ export async function resumeLaneAfterGovernedAction(requestId, {
       // reading the projection. It is not the moment a pixel changed in the
       // operator's browser — the server cannot observe that, and inventing a
       // stamp for it would be worse than admitting the series ends here.
-      stampDecisionTiming(rec, "projection_visible_at");
+      stampDecisionTimingOnce(rec, "projection_visible_at");
       saveRequest(rec, root);
       patchRunFields(rec.run_id, { governed_action: publicGovernedAction(rec) }, { nowMs, root });
       patchRunResourceWait(rec.run_id, null, root);
@@ -5487,4 +5779,4 @@ export function handleGovernedDecisionAnswer(missionId, chosenOptionId, {
   return { ok: false, error: "unhandled_option", chosenOptionId };
 }
 
-export { publicExecutionRun, redact as redactGovernedSecrets, containsSecret as governedPayloadHasSecrets };
+export { publicExecutionRun, redact as redactGovernedSecrets, containsSecret as governedPayloadHasSecrets, describeExecutionFailure };

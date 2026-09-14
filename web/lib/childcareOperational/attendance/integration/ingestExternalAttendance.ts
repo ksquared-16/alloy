@@ -30,12 +30,12 @@ import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { recordAttendanceEvent, correctAttendanceEvent } from "@/lib/childcareOperational/attendance/attendanceService";
-import { resolveExternalMapping } from "@/lib/childcareOperational/attendance/integration/externalMapping";
 import { resolveChildMemberEligibility } from "@/lib/records/childMemberEligibility";
 import {
-    resolveIntegrationProducer,
-    type ResolvedIntegrationProducer,
-} from "@/lib/childcareOperational/attendance/integration/producerAuthority";
+    correlateExternalId,
+    evidenceIdentityOf,
+    type AttendanceIngestAuthor,
+} from "@/lib/childcareOperational/attendance/integration/attendanceIngestAuthor";
 
 /**
  * What every provider adapter must produce. Provider-neutral by construction:
@@ -78,7 +78,6 @@ export type IngestDisposition =
     | "unmapped"
     | "conflicted"
     | "rejected"
-    | "unattributed";
 
 export type IngestOutcome = {
     disposition: IngestDisposition;
@@ -108,72 +107,35 @@ const serviceDateOf = (iso: string) => String(iso).slice(0, 10);
 /**
  * Ingest one normalized provider event.
  *
- * Ordered so that nothing is written before it is earned: the producer is
- * resolved first, then evidence is recorded, then identity, then authority, then
+ * Ordered so that nothing is written before it is earned: the author arrives
+ * already proven, then evidence is recorded, then identity, then authority, then
  * the canonical command. A request that fails at any step leaves an evidence row
  * explaining why and no attendance truth at all.
  */
 export async function ingestExternalAttendanceEvent(params: {
     supabase: SupabaseClient;
-    presentedCredential: string | null | undefined;
     providerKey: string;
     event: NormalizedExternalAttendanceEvent;
+    /**
+     * An author the CALLER already proved.
+     *
+     * Ingestion no longer accepts a credential. It used to take
+     * `presentedCredential` and resolve a legacy producer for itself, which made
+     * Attendance the owner of an authority the Developer Platform also owned —
+     * G-14. A production census returned zero legacy producers, so the path was
+     * removed rather than deprecated: a dormant credential path is still a
+     * credential path.
+     *
+     * There is therefore no UNATTRIBUTED disposition from this function any more.
+     * An unresolvable principal is refused at the request boundary and never
+     * reaches ingestion, so "a credential we do not recognise tried to author
+     * attendance" is a fact the boundary records, not this inbox.
+     */
+    author: AttendanceIngestAuthor;
 }): Promise<IngestOutcome> {
-    const { supabase, event } = params;
+    const { supabase, event, author } = params;
     const fingerprint = payloadFingerprint(event);
 
-    const resolved = await resolveIntegrationProducer(supabase, params.presentedCredential);
-    if (!resolved.ok) {
-        /*
-         * The producer could not be established, so there is no org to attribute
-         * this to. It is still recorded — an event Alloy cannot attribute is a
-         * real operational fact somebody may need to see — with a null org, which
-         * is exactly how the payments inbox treats an unrecognised account.
-         */
-        const row = {
-            provider_key: params.providerKey,
-            provider_event_id: event.externalEventId,
-            provider_event_type: event.eventKind,
-            disposition: "unattributed",
-            failure_code: resolved.code,
-            payload_fingerprint: fingerprint,
-            physical_event_at: event.physicalEventAt,
-            provider_recorded_at: event.providerRecordedAt ?? null,
-            raw: event.raw ?? {},
-            updated_at: new Date().toISOString(),
-        };
-        /*
-         * Read-then-write rather than an upsert. The uniqueness that holds here
-         * is a PARTIAL index (`WHERE producer_id IS NULL`), and Postgres will not
-         * infer a partial index as an ON CONFLICT target unless the statement
-         * repeats its predicate — which PostgREST's `onConflict` cannot express.
-         * The upsert this replaces therefore failed on every unidentified call,
-         * and failed silently, which is the worst way for an evidence table to
-         * behave: the record of "somebody tried to author attendance with a
-         * credential we do not know" is exactly the one worth keeping.
-         */
-        const seen = await supabase
-            .from("attendance_integration_events")
-            .select("id")
-            .eq("provider_key", params.providerKey)
-            .eq("provider_event_id", event.externalEventId)
-            .is("producer_id", null)
-            .limit(1);
-        const seenId = ((seen.data ?? []) as unknown as Array<{ id: string }>)[0]?.id ?? null;
-        const wrote = seenId
-            ? await supabase.from("attendance_integration_events").update(row).eq("id", seenId)
-            : await supabase.from("attendance_integration_events").insert(row);
-        if (wrote.error) {
-            // Losing the evidence must not look like a clean refusal.
-            return {
-                disposition: "unattributed",
-                code: resolved.code,
-                detail: `${resolved.detail} (evidence not recorded: ${wrote.error.message})`,
-            };
-        }
-        return { disposition: "unattributed", evidenceId: seenId, code: resolved.code, detail: resolved.detail };
-    }
-    const producer = resolved.producer;
 
     // ── Evidence first, and idempotently. One inbound event is one row, however
     // many times it is delivered or reprocessed.
@@ -182,7 +144,7 @@ export async function ingestExternalAttendanceEvent(params: {
         .select("id, disposition, payload_fingerprint, attendance_event_id")
         .eq("provider_key", params.providerKey)
         .eq("provider_event_id", event.externalEventId)
-        .eq("producer_id", producer.producerId)
+        .eq("installation_id", author.installationId)
         .limit(1);
 
     const prior = ((existing.data ?? []) as unknown as Array<{
@@ -227,7 +189,7 @@ export async function ingestExternalAttendanceEvent(params: {
     }
 
     const evidence = await upsertEvidence(supabase, {
-        producer,
+        author,
         providerKey: params.providerKey,
         event,
         fingerprint,
@@ -251,10 +213,9 @@ export async function ingestExternalAttendanceEvent(params: {
     const evidenceId = evidence.id;
 
     // ── Identity. Unknown never creates.
-    const child = await resolveExternalMapping({
+    const child = await correlateExternalId({
         supabase,
-        orgId: producer.orgId,
-        producerId: producer.producerId,
+        author,
         entityType: "child",
         externalId: event.externalChildId,
     });
@@ -270,10 +231,9 @@ export async function ingestExternalAttendanceEvent(params: {
         ["to", event.externalToRoomId],
     ] as const) {
         if (!externalId) { rooms[field] = null; continue; }
-        const loc = await resolveExternalMapping({
+        const loc = await correlateExternalId({
             supabase,
-            orgId: producer.orgId,
-            producerId: producer.producerId,
+            author,
             entityType: "location",
             externalId,
         });
@@ -284,19 +244,7 @@ export async function ingestExternalAttendanceEvent(params: {
             await setDisposition(supabase, evidenceId, "unmapped", loc.code);
             return { disposition: "unmapped", evidenceId, code: loc.code, detail: loc.detail };
         }
-        // Narrowed rather than asserted: a mapping row that resolved as a child
-        // must not silently be read as a room, which is precisely the confusion
-        // the typed targets in the schema exist to prevent.
-        if (loc.entityType !== "location") {
-            await setDisposition(supabase, evidenceId, "rejected", "mapping_wrong_entity_kind");
-            return {
-                disposition: "rejected",
-                evidenceId,
-                code: "mapping_wrong_entity_kind",
-                detail: `The mapping for "${externalId}" does not name a location.`,
-            };
-        }
-        rooms[field] = loc.locationId;
+        rooms[field] = loc.alloyId;
     }
 
     // ── Authority. The producer's registered sites decide reach; the request
@@ -313,29 +261,30 @@ export async function ingestExternalAttendanceEvent(params: {
     /*
      * THE MAPPING RESOLVED A UUID. IT DID NOT PROVE A CHILD.
      *
-     * `attendance_integration_mappings.child_customer_member_id` is a foreign key
-     * into `customer_members`, and that household table holds adults too. A
-     * provider that maps a parent's badge — deliberately or by an operator's
-     * honest mistake at mapping time — would otherwise produce a canonical
-     * attendance fact saying a CHILD was present because an ADULT moved.
+     * `integration_resource_refs.child_customer_member_id` is a foreign key into
+     * `customer_members`, and that household table holds adults too. An
+     * installation whose reference names a parent's badge — deliberately or by an
+     * operator's honest mistake when the reference was created — would otherwise
+     * produce a canonical attendance fact saying a CHILD was present because an
+     * ADULT moved.
      *
-     * The provider's own `entity_type = "child"` is not evidence of this: it
+     * The installation's own `resource_type = "child"` is not evidence of this: it
      * describes what the provider believes its identifier means, and the entire
      * point of the boundary is that the provider does not get to describe Alloy's
      * subjects. So the canonical resolver decides, and it fails closed.
      */
-    const eligible = await resolveChildMemberEligibility(supabase, producer.orgId, child.customerMemberId);
+    const eligible = await resolveChildMemberEligibility(supabase, author.orgId, child.alloyId);
     if (!eligible.ok) {
         await setDisposition(supabase, evidenceId, "rejected", eligible.code);
         return { disposition: "rejected", evidenceId, code: eligible.code, detail: eligible.message };
     }
 
-    const agreement = await resolveAgreementForChild(supabase, producer.orgId, child.customerMemberId);
+    const agreement = await resolveAgreementForChild(supabase, author.orgId, child.alloyId);
     if (!agreement) {
         await setDisposition(supabase, evidenceId, "rejected", "no_enrollment_agreement");
         return { disposition: "rejected", evidenceId, code: "no_enrollment_agreement", detail: "That child has no enrollment agreement to attach attendance to." };
     }
-    if (!producer.authority.allowedSiteLocationIds.includes(agreement.siteLocationId ?? "")) {
+    if (!author.authority.allowedSiteLocationIds.includes(agreement.siteLocationId ?? "")) {
         await setDisposition(supabase, evidenceId, "rejected", "site_not_authorized");
         return {
             disposition: "rejected",
@@ -344,7 +293,7 @@ export async function ingestExternalAttendanceEvent(params: {
             detail: "This producer is not authorized for that child's site.",
         };
     }
-    if (!producer.authority.grantedPermissionKeys.includes("attendance.record")) {
+    if (!author.authority.grantedPermissionKeys.includes("attendance.record")) {
         await setDisposition(supabase, evidenceId, "rejected", "capability_not_granted");
         return { disposition: "rejected", evidenceId, code: "capability_not_granted", detail: "This producer may not record attendance." };
     }
@@ -352,12 +301,12 @@ export async function ingestExternalAttendanceEvent(params: {
     // ── The canonical command. Provenance is derived here, never supplied.
     const actor = {
         actorType: "system" as const,
-        actorLabel: producer.label,
+        actorLabel: author.label,
         sourceType: "integration_api" as const,
-        sourceKey: producer.producerKey,
+        sourceKey: author.producerKey,
     };
     const common = {
-        orgId: producer.orgId,
+        orgId: author.orgId,
         eventAt: event.physicalEventAt,
         serviceDate: serviceDateOf(event.physicalEventAt),
         roomLocationId: rooms.room,
@@ -365,14 +314,14 @@ export async function ingestExternalAttendanceEvent(params: {
         toRoomLocationId: rooms.to,
         // The provider's event id IS the idempotency identity, so Thread 2's
         // substrate converges a replay that reached the writer.
-        idempotencyKey: `${producer.producerKey}:${event.externalEventId}`,
+        idempotencyKey: `${author.producerKey}:${event.externalEventId}`,
         actor,
     };
 
     try {
         let written;
         if (event.correctsExternalEventId) {
-            const target = await resolveCommittedFactFor(supabase, producer, params.providerKey, event.correctsExternalEventId);
+            const target = await resolveCommittedFactFor(supabase, author, params.providerKey, event.correctsExternalEventId);
             if (!target) {
                 // A correction naming an original Alloy never committed cannot be
                 // applied. Refusing keeps the lineage honest: a correction with
@@ -421,7 +370,7 @@ export async function ingestExternalAttendanceEvent(params: {
 async function upsertEvidence(
     supabase: SupabaseClient,
     args: {
-        producer: ResolvedIntegrationProducer;
+        author: AttendanceIngestAuthor;
         providerKey: string;
         event: NormalizedExternalAttendanceEvent;
         fingerprint: string;
@@ -434,9 +383,11 @@ async function upsertEvidence(
         provider_key: args.providerKey,
         provider_event_id: args.event.externalEventId,
         provider_event_type: args.event.eventKind,
-        org_id: args.producer.orgId,
-        producer_id: args.producer.producerId,
-        presented_producer_key: args.producer.producerKey,
+        org_id: args.author.orgId,
+        // One author column, with its own partial unique index. The CHECK that
+        // used to police two of them went with `producer_id` in 20260913160000.
+        ...evidenceIdentityOf(args.author),
+        presented_producer_key: args.author.producerKey,
         disposition: args.disposition,
         failure_code: args.failureCode,
         payload_fingerprint: args.fingerprint,
@@ -493,17 +444,20 @@ async function resolveAgreementForChild(
 /** The canonical fact a provider's earlier event produced, if it committed. */
 async function resolveCommittedFactFor(
     supabase: SupabaseClient,
-    producer: ResolvedIntegrationProducer,
+    author: AttendanceIngestAuthor,
     providerKey: string,
     externalEventId: string,
 ): Promise<string | null> {
+    // A correction may only target a fact THIS installation committed. Scoping by
+    // the author's own identity is what stops one installation correcting
+    // another's event because the provider reused an id.
     const { data } = await supabase
         .from("attendance_integration_events")
         .select("attendance_event_id")
         .eq("provider_key", providerKey)
         .eq("provider_event_id", externalEventId)
-        .eq("producer_id", producer.producerId)
         .eq("disposition", "applied")
+        .eq("installation_id", author.installationId)
         .limit(1);
     const row = ((data ?? []) as unknown as Array<{ attendance_event_id: string | null }>)[0];
     return row?.attendance_event_id ?? null;

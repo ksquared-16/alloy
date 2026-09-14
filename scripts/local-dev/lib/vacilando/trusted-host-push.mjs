@@ -38,6 +38,27 @@ export const PROTECTED_REFS = Object.freeze(["staging", "main", "master", "produ
 export const BRANCH_RE = /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,180}$/;
 export const SHA_RE = /^[a-f0-9]{7,40}$/;
 
+/**
+ * PROMOTION IS THE DEFAULT, AND THAT IS THE WHOLE POINT.
+ *
+ * A promotion candidate must declare what it owns: the baseline it was cut from
+ * and the exact commits created since. The guard that compares them has existed
+ * all along - it simply never ran, because it is skipped when nothing is
+ * declared, so an undeclared candidate was trusted by default. Two promotions
+ * carried another agent's commits through that hole.
+ *
+ * Requiring the declaration only when a caller SAYS it is promoting would leave
+ * the hole open: the mode is asserted by the caller, so omitting it would skip
+ * the check again. So the ABSENCE of a mode means promotion. A push that wants
+ * the permissive path must say so explicitly, which makes the unsafe case the
+ * one that requires an argument.
+ *
+ * This matches reality rather than widening a contract: all 71 repository.push
+ * requests on this host are mode "promotion", and the action already refuses
+ * every protected ref - a branch push exists in order to become a pull request.
+ */
+const PROMOTION_MODE = "promotion";
+
 const FORCE_KEYS = [
   "force", "forceWithLease", "force_with_lease", "delete", "mirror", "prune",
   "tags", "followTags", "follow_tags", "refspec", "argv", "shell", "command",
@@ -51,13 +72,57 @@ function normSha(v) {
   return String(v || "").trim().toLowerCase();
 }
 
-export function defaultGit(args, cwd, { timeout = 60_000 } = {}) {
+/**
+ * `env` IS HONOURED. It used to be destructured away and `process.env` passed
+ * verbatim, so a caller that asked for a different environment silently got the
+ * ambient one.
+ *
+ * That is not a cosmetic gap. The main-write executor builds its tree through
+ * `git(args, cwd, { env: { GIT_INDEX_FILE: <temp> } })` precisely so it never
+ * touches the index of the worktree it was pointed at - and that intent was
+ * being dropped right here, so `read-tree`/`update-index`/`write-tree` ran
+ * against the real index of the operator-named worktree and discarded whatever
+ * was staged in it. Measured: the temp index file was never created.
+ *
+ * Merged over `process.env` rather than replacing it, because git still needs
+ * PATH, HOME and the credential environment to function.
+ */
+export function defaultGit(args, cwd, { timeout = 60_000, env = null } = {}) {
   return spawnSync("git", ["-C", cwd, ...args], {
     encoding: "utf8",
     timeout,
-    env: process.env,
+    env: env ? { ...process.env, ...env } : process.env,
     maxBuffer: 8 * 1024 * 1024,
   });
+}
+
+/**
+ * The first line of git's complaint that actually says something.
+ *
+ * `err.split("\n")[0]` looks equivalent and is not. A refusal written for a
+ * human to read starts with a blank line so it stands off from the command, and
+ * the push guard does exactly that: it printf's a leading newline before
+ * "PUSH BLOCKED — archive/recovery refs may not be pushed...". Line zero is
+ * therefore the empty string, which is falsy, so the caller's
+ * `detail || "Push failed"` discarded 554 bytes of precise, actionable
+ * diagnosis and reported a generic sentence instead.
+ *
+ * That cost two missions. The refusal was correct every time — a namespace
+ * policy protecting the deployable remote — and it was unreadable, so it looked
+ * like a broken durability mechanism rather than a working guard.
+ *
+ * ANSI colour is stripped because it is presentation, and a stored failure
+ * reason is data: escape codes in a JSON record are noise a reader has to
+ * decode before they can see the sentence.
+ */
+export function firstMeaningfulLine(text, fallback = "git push failed") {
+  const lines = String(text ?? "")
+    // eslint-disable-next-line no-control-regex
+    .replace(/\u001b\[[0-9;]*m/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines[0] || fallback;
 }
 
 export function validatePushInputs(inputs = {}) {
@@ -100,9 +165,20 @@ export function validatePushInputs(inputs = {}) {
 
   // Optional, and load-bearing when present: the exact commits the proposal
   // reviewed. With it, a push that would carry anything else is refused.
-  const expectedCommits = Array.isArray(inputs.expected_commits || inputs.expectedCommits)
-    ? (inputs.expected_commits || inputs.expectedCommits).map(normSha).filter((c) => SHA_RE.test(c))
+  /*
+   * DECLARED-EMPTY IS NOT UNDECLARED, and `null` is what keeps them apart.
+   * Collapsing both to `[]` is exactly how the hole would reopen: a caller that
+   * said nothing would look identical to one that said "I own no commits".
+   */
+  const rawCommits = inputs.expected_commits ?? inputs.expectedCommits;
+  const candidateDeclared = Array.isArray(rawCommits);
+  const expectedCommits = candidateDeclared
+    ? rawCommits.map(normSha).filter((c) => SHA_RE.test(c))
     : null;
+  const baseRefRaw = String(inputs.base_ref || inputs.baseRef || "").trim();
+  const mode = String(inputs.requested_mode || inputs.requestedMode || inputs.mode || PROMOTION_MODE).trim();
+  const isPromotion = mode === PROMOTION_MODE;
+
 
   return {
     ok: true,
@@ -113,7 +189,11 @@ export function validatePushInputs(inputs = {}) {
       expectedHeadSha,
       worktreePath,
       expectedCommits,
-      baseRef: String(inputs.base_ref || inputs.baseRef || "origin/staging").trim(),
+      baseRef: baseRefRaw || "origin/staging",
+      baseRefDeclared: Boolean(baseRefRaw),
+      candidateDeclared,
+      mode,
+      isPromotion,
       remote: "origin",
       dedupeKey: `push:${repository}#${branch}#${expectedHeadSha.slice(0, 12)}`,
     },
@@ -124,7 +204,7 @@ export function validatePushInputs(inputs = {}) {
 export function remoteBranchSha(normalized, { gitImpl = defaultGit } = {}) {
   const out = gitImpl(["ls-remote", normalized.remote, `refs/heads/${normalized.branch}`], normalized.worktreePath, { timeout: 45_000 });
   if (out.status !== 0) {
-    return { ok: false, code: "remote_unreadable", detail: String(out.stderr || "ls-remote failed").split("\n")[0].slice(0, 200) };
+    return { ok: false, code: "remote_unreadable", detail: firstMeaningfulLine(String(out.stderr || ""), "ls-remote failed").slice(0, 200) };
   }
   const line = String(out.stdout || "").trim().split("\n").find(Boolean);
   if (!line) return { ok: true, sha: null };
@@ -250,18 +330,89 @@ export function evaluatePushReadiness(normalized, { gitImpl = defaultGit } = {})
 
   // COMMIT-SCOPE EXPANSION. When the proposal listed what it reviewed, the push
   // must carry those commits and no others.
-  if (normalized.expectedCommits && normalized.expectedCommits.length) {
+  /*
+   * ENFORCED AT THE BOUNDARY THAT MUTATES THE REMOTE, not in input parsing.
+   *
+   * `validatePushInputs` is a pure normaliser called by fixtures, previews and
+   * contract checks that never push anything; requiring a candidate declaration
+   * there refuses work that was never going to reach a remote. The thing that
+   * must be protected is the push itself, so the requirement lives with the
+   * other pre-mutation refusals - drift, branch mismatch, protected ref.
+   */
+  if (normalized.isPromotion && (!normalized.candidateDeclared || !normalized.baseRefDeclared)) {
+    const missing = [];
+    if (!normalized.baseRefDeclared) missing.push("base_ref");
+    if (!normalized.candidateDeclared) missing.push("expected_commits");
+    return {
+      ok: false,
+      code: "candidate_scope_undeclared",
+      detail: `a promotion candidate must declare what it owns; missing ${missing.join(" and ")}`,
+      mode: normalized.mode,
+      candidate: normalized.expectedHeadSha,
+      branch: normalized.branch,
+      missing,
+      required: ["base_ref", "expected_commits"],
+      remedy: "pass base_ref (the commit the branch was cut from) and expected_commits "
+        + "(git rev-list <base_ref>..<candidate>). Declare an empty array only if the "
+        + "candidate deliberately owns no commits.",
+    };
+  }
+
+  /*
+   * Gated on DECLARED, not on non-empty. `expectedCommits.length` skipped a
+   * declared-empty candidate, which is the same hole one layer in: a caller
+   * that says "I own no commits" would have had every commit in the range
+   * accepted without comparison.
+   */
+  if (normalized.candidateDeclared) {
     const range = gitImpl(["rev-list", `${normalized.baseRef}..${normalized.expectedHeadSha}`], cwd);
-    if (range.status === 0) {
+    if (range.status !== 0) {
+      /*
+       * DECLARED BUT UNVERIFIABLE IS NOT VERIFIED.
+       *
+       * Skipping here would let any base_ref that git cannot resolve satisfy
+       * the declaration while checking nothing - the same hole one layer down,
+       * reachable by a typo. A candidate whose baseline cannot be resolved is
+       * refused, and says which ref failed.
+       */
+      return {
+        ok: false,
+        code: "candidate_base_unresolvable",
+        detail: `the declared baseline ${normalized.baseRef} could not be resolved in this worktree`,
+        base: normalized.baseRef,
+        candidate: normalized.expectedHeadSha,
+      };
+    }
+    {
       const actual = String(range.stdout || "").split("\n").map(normSha).filter(Boolean);
-      const want = new Set(normalized.expectedCommits.map((c) => c.slice(0, 12)));
-      const extra = actual.filter((c) => !want.has(c.slice(0, 12)));
+      const short = (c) => c.slice(0, 12);
+      const want = new Set(normalized.expectedCommits.map(short));
+      const have = new Set(actual.map(short));
+      const extra = actual.filter((c) => !want.has(short(c)));
       if (extra.length) {
         return {
           ok: false,
           code: "commit_scope_expanded",
           detail: `${extra.length} commit(s) beyond what was reviewed would be pushed`,
           unexpected: extra.slice(0, 10),
+          declared: normalized.expectedCommits.slice(0, 10),
+          base: normalized.baseRef,
+        };
+      }
+      /*
+       * The other direction. A declared commit that is NOT in the candidate
+       * means the thing reviewed is not the thing being pushed - a rebase, an
+       * amend, or the wrong worktree - and it is just as wrong as an extra one.
+       */
+      const absent = normalized.expectedCommits.filter((c) => !have.has(short(c)));
+      if (absent.length) {
+        return {
+          ok: false,
+          code: "commit_scope_missing",
+          detail: `${absent.length} declared commit(s) are not in the candidate`,
+          missing: absent.slice(0, 10),
+          actual: actual.slice(0, 10),
+          base: normalized.baseRef,
         };
       }
     }
@@ -333,9 +484,9 @@ export function pushBranch(inputs, { git = defaultGit } = {}) {
   if (out.status !== 0) {
     const err = String(out.stderr || out.stdout || "git push failed");
     if (/\[rejected\]|non-fast-forward|fetch first/i.test(err)) {
-      return { ok: false, code: "non_fast_forward", detail: err.split("\n")[0].slice(0, 240) };
+      return { ok: false, code: "non_fast_forward", detail: firstMeaningfulLine(err).slice(0, 240) };
     }
-    return { ok: false, code: "push_failed", detail: err.split("\n")[0].slice(0, 240) };
+    return { ok: false, code: "push_failed", detail: firstMeaningfulLine(err).slice(0, 240) };
   }
 
   // VERIFY WHAT LANDED. A push that succeeded is not a push that put the right

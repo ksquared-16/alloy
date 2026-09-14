@@ -721,12 +721,33 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         ? checklistFromConfig(templateConfig, configCompletedKeys, checklistTruthByKey)
         : [];
     const readinessChecklist = checklistFromReadiness(readinessProjection);
-    const checklist =
+    /*
+     * REQUIREMENTS AND WORK ARE DIFFERENT KINDS, NOT COMPETING SOURCES.
+     *
+     * `stageChecklist` is the only source that carries the stage's WORK rows, and it used to be
+     * reached only when both requirement sources were empty. So the moment a stage authored any
+     * requirement, every work row vanished from the checklist — and with them the only record that
+     * a second work item was open.
+     *
+     * Measured on staging: an offer work was started and live (a repeat invocation deduped onto the
+     * same work id), and it appeared in no checklist, so no surface could offer its outcomes. The
+     * Waitlist stage has four authored field requirements, which is all it took.
+     *
+     * The requirement SOURCE selection is unchanged — config still wins over readiness, and an
+     * authored empty set still means empty. Work rows are then composed in, because a data
+     * requirement and a piece of work are not two answers to one question. `classifyChecklistItems`
+     * and the progress denominator already separate the two kinds, so nothing downstream had to be
+     * taught that they coexist; it was only this selection that assumed they could not.
+     */
+    const requirementChecklist =
         configChecklist.length > 0
             ? mergeChecklists(configChecklist, readinessChecklist)
-            : readinessChecklist.length > 0
-              ? readinessChecklist
-              : stageChecklist;
+            : readinessChecklist;
+    const requirementKeys = new Set(requirementChecklist.map((item) => item.key));
+    const checklist = [
+        ...requirementChecklist,
+        ...stageChecklist.filter((item) => !requirementKeys.has(item.key)),
+    ];
 
     // Requirement progress only — work items must not inflate the denominator.
     const requirementItems = checklist.filter((item) => item.kind !== "stage_work");

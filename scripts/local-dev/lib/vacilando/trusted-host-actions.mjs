@@ -54,7 +54,8 @@ import { executeRestoreQaSessionSync } from "./qa-session-restore-action.mjs";
 import { executeRestoreDeployedQaSessionSync } from "./deployed-qa-session-restore-action.mjs";
 import { executeProvisionQaIdentitySync } from "./qa-identity-provision-action.mjs";
 import { executeAssignQaAccessSync } from "./qa-access-assign-action.mjs";
-import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
+import { pushBranch, publicPushResult, defaultGit } from "./trusted-host-push.mjs";
+import { promoteRepositoryMetadata } from "./trusted-host-metadata-promote.mjs";
 import { executeProviderCeiling } from "./trusted-host-provider-ceiling.mjs";
 import { executeToolkitInstall } from "./toolkit-convergence.mjs";
 import { executeLaneDispatch } from "./lane-dispatch.mjs";
@@ -74,6 +75,7 @@ import {
   migrationPostconditionDescription,
   listMigrationsAtSha,
 } from "./trusted-host-migrate.mjs";
+import { buildRegistrationSql } from "./trusted-host-register-application.mjs";
 import {
   PRODUCTION_APPLY_TARGETS,
   validateProductionMigrationInputs,
@@ -293,6 +295,44 @@ export function sameActionOwnership(candidate, { executionSessionId = null, assi
   return true;
 }
 
+/** Order-independent structural equality over one action's normalised inputs. */
+export function sameNormalizedInputs(a = {}, b = {}) {
+  const canon = (v) => {
+    if (v === null || typeof v !== "object") return v === undefined ? null : v;
+    if (Array.isArray(v)) return v.map(canon);
+    return Object.keys(v).sort().reduce((acc, k) => { acc[k] = canon(v[k]); return acc; }, {});
+  };
+  try { return JSON.stringify(canon(a)) === JSON.stringify(canon(b)); } catch { return false; }
+}
+
+/**
+ * DOES THIS ACTION DESCRIBE THE THING THE CALLER ASKED ABOUT?
+ *
+ * Compared on the fields that name a target rather than on the whole payload: a
+ * reused action may legitimately differ in incidental context, but never in
+ * WHAT it acts on. Fields absent from both sides are not evidence and are
+ * skipped, so this can only ever refuse a real, visible disagreement.
+ */
+export const ACTION_IDENTITY_FIELDS = Object.freeze([
+  "worktree", "path", "branch", "safetyFingerprint", "repository",
+  "expectedHeadSha", "pullRequestNumber", "deployed_target", "laneId",
+]);
+
+export function resultOwnershipMatches(existingInputs = {}, requestedInputs = {}) {
+  for (const field of ACTION_IDENTITY_FIELDS) {
+    const had = existingInputs?.[field];
+    const want = requestedInputs?.[field];
+    if (had === undefined && want === undefined) continue;
+    if (String(had ?? "") !== String(want ?? "")) {
+      return {
+        ok: false,
+        detail: `a completed action for ${field}="${had ?? "—"}" cannot answer a request for ${field}="${want ?? "—"}"`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
 export function requestTrustedHostAction({
   missionId,
   assignmentId = null,
@@ -321,15 +361,87 @@ export function requestTrustedHostAction({
   const dedupeKey = validated.normalized.dedupeKey
     || validated.normalized.queryHash
     || null;
-  // Dedupe in-flight / completed only — failed actions may be retried.
+  /*
+   * A COMPLETED ACTION IS NOT ALWAYS A REUSABLE ANSWER.
+   *
+   * Dedupe was written for censuses, where reuse is sound: a pinned query hash names the same
+   * question and the stored result IS the answer. Some actions are the opposite — their whole
+   * purpose is to produce a fresh artifact, and the stored result describes an artifact that has
+   * since expired.
+   *
+   * Measured: three `restore_deployed_qa_session` requests in one run all adopted the same
+   * completed action. Its `dedupeKey` is `restore_deployed_qa_session:<target>`, constant per
+   * target, so after the first mint every later request replayed that stored result — reporting
+   * `verified: true` with the ORIGINAL `verified_at`, while the browser's storage-state file was
+   * never rewritten and the session had long since expired. Each request recorded its own
+   * `execution_started_at`, so from the outside it looked like it ran.
+   *
+   * In-flight reuse is kept for every action: two concurrent requests must not both mint. Only the
+   * COMPLETED state is withheld, and only from definitions that say their result does not keep.
+   */
+  const REUSABLE_IN_FLIGHT_STATES = ["requested", "policy_review", "authorized", "executing", "retrying"];
+  /*
+   * A COMPLETED RESULT MAY ONLY BE REPLAYED BY SOMETHING THAT SAYS WHICH
+   * QUESTION IT ANSWERED.
+   *
+   * `dedupeKey` and `queryHash` are both OPTIONAL. Most actions declare one in
+   * their own module — push, open_pr, merge, close_pr, delete_branch,
+   * install_toolkit, the reconciliations — and `retire_worktree` did not. For an
+   * action that declares neither, the predicate below reduced to
+   * `undefined === undefined`, and `sameActionOwnership` compares only session,
+   * assignment and lane — so ANY completed action of that type satisfied ANY
+   * later request of that type in the same scope. Measured still true today for
+   * `platform.register_developer_application`.
+   *
+   * That is how eleven worktree retirements returned a twelfth worktree's
+   * result. The hazard is general: `resultKeeps: false` was the per-action fix
+   * for one instance of it, and it cannot be the fix for an action nobody
+   * noticed.
+   *
+   * SCOPED TO WHAT IT IS ABOUT. Withholding completed reuse from EVERY keyless
+   * action would also move `restore_qa_session`, whose ownership contract is
+   * locked by its own test and is not this mission's to change. The narrowing
+   * applies to actions that DECLARE themselves destructive: replaying a finished
+   * deletion is categorically different from replaying a finished answer, and a
+   * destructive action that cannot say what it acted on may not replay at all.
+   * In-flight reuse is kept for everything — two concurrent requests must still
+   * never both execute.
+   */
+  const hasSemanticIdentity = Boolean(dedupeKey);
+  const mayNotReplayFinished = def.resultKeeps === false
+    || (def.destructive === true && !hasSemanticIdentity);
+  const reusableStates = mayNotReplayFinished
+    ? REUSABLE_IN_FLIGHT_STATES
+    : [...REUSABLE_IN_FLIGHT_STATES, "completed"];
   const existing = listTrustedHostActions(missionId).find((a) =>
     a.actionType === actionType
     && sameActionOwnership(a, { executionSessionId, assignmentId, inputs: validated.normalized })
     && (dedupeKey
       ? (a.inputs?.dedupeKey === dedupeKey || a.inputs?.queryHash === dedupeKey)
-      : a.inputs?.queryHash === validated.normalized.queryHash)
-    && ["requested", "policy_review", "authorized", "executing", "completed", "retrying"].includes(a.state));
+      /*
+       * NO KEY IS NOT A WILDCARD — for something that deletes. With nothing
+       * declared, the only honest statement of "the same request" is the same
+       * normalised inputs, compared whole, so two distinct retirements can no
+       * longer share an action merely by both being keyless. Everything else
+       * keeps the existing predicate.
+       */
+      : (def.destructive === true
+        ? sameNormalizedInputs(a.inputs, validated.normalized)
+        : a.inputs?.queryHash === validated.normalized.queryHash))
+    && reusableStates.includes(a.state));
   if (existing) {
+    /*
+     * DEFENCE IN DEPTH: the reused action must be about the same thing.
+     *
+     * Reached only if a future dedupe rule is wrong. A destructive action that
+     * replays someone else's success is the failure this refuses to make
+     * possible twice, so the mismatch is a named integrity error rather than a
+     * silently adopted result.
+     */
+    const owned = resultOwnershipMatches(existing.inputs, validated.normalized);
+    if (!owned.ok) {
+      return { ok: false, error: "action_identity_mismatch", detail: owned.detail, actionType };
+    }
     return { ok: true, action: existing, deduped: true };
   }
 
@@ -499,6 +611,102 @@ export function resolveActionAuthorization(action, {
 }
 
 /**
+ * ONE OBSERVATION, ONE GENERATION.
+ *
+ * A census artifact says "these results came from this action". The merge that
+ * refreshed an existing artifact was an object spread with an explicit list of
+ * fields to update:
+ *
+ *   { ...prior, status, query_hash, execution: {...}, results }
+ *
+ * `...prior` carried the OLD top-level `trusted_host_action_id`, and the
+ * refresh list did not include it. Fresh results were written beside stale
+ * provenance - and because the nested `execution.trusted_host_action_id` WAS
+ * refreshed, the artifact ended up carrying two action ids that disagreed: the
+ * documented top-level one wrong, the nested one right.
+ *
+ * MEASURED in certification/migrations/hosted-migration-identity-census.sql.results.json:
+ *   top    trusted_host_action_id  tha_62a0bc1ab313f7   (four days stale)
+ *   nested trusted_host_action_id  tha_02c7feeb72f587   (produced these results)
+ *   results.census_run_at          2026-09-12T16:21:08.115Z
+ *   execution.executed_at          2026-09-12T16:21:07.148Z
+ *
+ * `query_hash` matched in both places only because the query had not changed,
+ * which is exactly how a two-field disagreement stays invisible.
+ *
+ * The action id IS the generation id; no new identity system is needed. This
+ * constructor derives EVERY provenance field from the one action, so results and
+ * provenance cannot come from different generations. Unrelated keys a prior
+ * artifact carried are preserved; no provenance field survives a previous
+ * observation.
+ */
+export function censusEvidenceEnvelope(action, resultObj, { prior = null, nowMs = Date.now() } = {}) {
+  const carried = prior && typeof prior === "object" ? { ...prior } : {};
+
+  /*
+   * THE ORDERING IS THE MECHANISM, and it is the whole fix.
+   *
+   * `...carried` FIRST, every owned field after. The original defect was not a
+   * missing guard - it was that the top-level `trusted_host_action_id` appeared
+   * nowhere after the spread, so `...prior` was its last writer. Any field this
+   * constructor does not restate below is inherited from the previous
+   * observation, silently.
+   *
+   * A first draft of this function also deleted the owned keys off `carried`
+   * before spreading. That read as protective and did nothing: the later spread
+   * overwrites them anyway, and a planted regression proved the test could not
+   * tell the two versions apart. Dead defensive code is worse than none - it
+   * invites the reader to believe a guard is holding something up.
+   */
+  const provenance = {
+    trusted_host_action_id: action.id,
+    query_hash: action.inputs.queryHash,
+  };
+  return {
+    ...carried,
+    ...provenance,
+    status: "executed",
+    execution: {
+      executed: true,
+      executed_at: iso(nowMs),
+      executed_by: "trusted_host_action",
+      ...provenance,
+      authorization_id: action.authorizationId,
+      database_target: action.inputs.databaseTarget,
+      database_target_fingerprint: databaseTargetFingerprint(action.inputs.databaseTarget),
+      blocker: null,
+    },
+    results: resultObj,
+  };
+}
+
+/**
+ * Can a reader prove this metadata describes THESE results?
+ *
+ * Returns both action ids and both query hashes so a caller sees a
+ * mixed-generation artifact instead of trusting whichever field it read first.
+ */
+export function censusEvidenceGeneration(artifact = {}) {
+  const top = artifact?.trusted_host_action_id ?? null;
+  const nested = artifact?.execution?.trusted_host_action_id ?? null;
+  const topHash = artifact?.query_hash ?? null;
+  const nestedHash = artifact?.execution?.query_hash ?? null;
+  // An artifact with no `execution` block was written whole and has one
+  // generation by construction; only a merged artifact can disagree.
+  const hasNested = artifact?.execution != null;
+  const coherent = !hasNested || (top === nested && topHash === nestedHash);
+  return {
+    coherent,
+    generation: coherent ? top : null,
+    trusted_host_action_id: top,
+    execution_trusted_host_action_id: nested,
+    query_hash: topHash,
+    execution_query_hash: nestedHash,
+    mismatch: coherent ? null : { action_id: top !== nested, query_hash: topHash !== nestedHash },
+  };
+}
+
+/**
  * Would a governed request's action be authorized at the boundary?
  *
  * Normalizes the inputs through the SAME registry validator the action is built
@@ -657,6 +865,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   if (action.actionType === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
     return executeLedgerRepairTrustedHostAction(action, { actor, nowMs, grant });
   }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_PROMOTE_METADATA) {
+    return executeRepositoryMetadataPromotionTrustedHostAction(action, { actor, nowMs, grant });
+  }
   if (action.actionType === ACTION_TYPES.REPOSITORY_PUSH) {
     return executePushTrustedHostAction(action, { actor, nowMs, grant });
   }
@@ -727,6 +938,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION) {
     return executeRegisteredReconciliationTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION) {
+    return executeRegisterDeveloperApplicationTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
@@ -872,11 +1086,8 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   const evidenceRel = String(queryRel).replace(/\.json$/i, "") + ".results.json";
   const storeEvidenceAbs = join(storeDir(), `${action.id}.results.json`);
   try {
-    writeFileSync(storeEvidenceAbs, JSON.stringify({
-      trusted_host_action_id: action.id,
-      query_hash: action.inputs.queryHash,
-      results: resultObj,
-    }, null, 2));
+    writeFileSync(storeEvidenceAbs, JSON.stringify(
+      censusEvidenceEnvelope(action, resultObj, { nowMs }), null, 2));
   } catch { /* action.result still holds the census */ }
   const evidenceAbs = join(originatingRoot, evidenceRel);
   try {
@@ -884,38 +1095,15 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
     if (existsSync(evidenceAbs) && evidenceAbs.endsWith(".json")) {
       try {
         const prior = JSON.parse(readFileSync(evidenceAbs, "utf8"));
-        const merged = {
-          ...prior,
-          status: "executed",
-          query_hash: action.inputs.queryHash,
-          execution: {
-            ...(prior.execution || {}),
-            executed: true,
-            executed_at: iso(nowMs),
-            executed_by: "trusted_host_action",
-            trusted_host_action_id: action.id,
-            authorization_id: action.authorizationId,
-            query_hash: action.inputs.queryHash,
-            database_target: action.inputs.databaseTarget,
-            database_target_fingerprint: databaseTargetFingerprint(action.inputs.databaseTarget),
-            blocker: null,
-          },
-          results: resultObj,
-        };
-        writeFileSync(evidenceAbs, JSON.stringify(merged, null, 2));
+        writeFileSync(evidenceAbs, JSON.stringify(
+          censusEvidenceEnvelope(action, resultObj, { prior, nowMs }), null, 2));
       } catch {
-        writeFileSync(evidenceAbs, JSON.stringify({
-          trusted_host_action_id: action.id,
-          query_hash: action.inputs.queryHash,
-          results: resultObj,
-        }, null, 2));
+        writeFileSync(evidenceAbs, JSON.stringify(
+          censusEvidenceEnvelope(action, resultObj, { nowMs }), null, 2));
       }
     } else {
-      writeFileSync(evidenceAbs, JSON.stringify({
-        trusted_host_action_id: action.id,
-        query_hash: action.inputs.queryHash,
-        results: resultObj,
-      }, null, 2));
+      writeFileSync(evidenceAbs, JSON.stringify(
+        censusEvidenceEnvelope(action, resultObj, { nowMs }), null, 2));
     }
   } catch {
     /* originating worktree write is best-effort; Director store holds the result */
@@ -1139,12 +1327,32 @@ let mergeGhForTests = null;
 // test that forgets one is refused rather than reaching the real remote.
 let pushGitForTests = null;
 let openPrGhForTests = null;
+/*
+ * The housekeeping verbs had no seam at all: the dispatch wrapper called them
+ * with `{}`, so `gh` always resolved to the real client and there was no way to
+ * drive close-PR or branch-deletion through the real dispatcher without
+ * reaching GitHub. That is why both sat in the uncovered pin.
+ */
+let housekeepingGhForTests = null;
+/*
+ * The reconciliation dispatch wrapper spawns a repository runner. Without a seam
+ * here the only way to exercise the wrapper is to run the real npm script
+ * against a real database, which is precisely what must never happen in CI - so
+ * the action sat in the uncovered pin for want of four lines.
+ */
+let reconciliationSpawnForTests = null;
 
 export function setPushGitForTests(fn) {
   pushGitForTests = typeof fn === "function" ? fn : null;
 }
 export function setOpenPrGhForTests(fn) {
   openPrGhForTests = typeof fn === "function" ? fn : null;
+}
+export function setRepositoryHousekeepingGhForTests(fn) {
+  housekeepingGhForTests = typeof fn === "function" ? fn : null;
+}
+export function setReconciliationSpawnForTests(fn) {
+  reconciliationSpawnForTests = typeof fn === "function" ? fn : null;
 }
 
 let migrationRunnersForTests = null;
@@ -1199,13 +1407,28 @@ function payloadHasSecrets(value) {
   return /postgresql:\/\/|postgres:\/\/|DATABASE_URL|ghp_[A-Za-z0-9]|github_pat_/i.test(text);
 }
 
-function failTrustedAction(action, code, detail, { nowMs } = {}) {
+function failTrustedAction(action, code, detail, { nowMs, extra = null } = {}) {
   action.state = "failed";
   action.executionState = "failed";
   action.failureReason = code;
   action.completed_at = iso(nowMs);
   action.updated_at = iso(nowMs);
   action.result = { ok: false, code, detail: redactSecrets(detail || code).slice(0, 400) };
+  /*
+   * A FAILURE IS A RESULT TOO.
+   *
+   * The detail is clamped to 400 characters and everything else was dropped, so a
+   * failed trusted-host action told an operator what went wrong and nothing about
+   * where. Structured extras (provenance, exit code) survive here; they go through
+   * the same redaction as the detail, and a bag that still contains a secret after
+   * that is discarded rather than recorded.
+   */
+  if (extra && typeof extra === "object") {
+    try {
+      const cleaned = JSON.parse(redactSecrets(JSON.stringify(extra)));
+      if (!payloadHasSecrets(cleaned)) Object.assign(action.result, cleaned);
+    } catch { /* a bag that will not serialise is simply not recorded */ }
+  }
   writeAction(action);
   return { ok: false, error: code, detail: action.result.detail, action };
 }
@@ -1900,6 +2123,92 @@ export function executePromotedMigrationTrustedHostAction(action, { actor = "dir
  * Push a reviewed branch. Re-authorized here on purpose: execution must never
  * trust that an earlier call in this same flow already checked.
  */
+/**
+ * PROMOTE REPOSITORY-OPERATIONAL METADATA TO main.
+ *
+ * The whole decision lives in promoteRepositoryMetadata, which revalidates the
+ * candidate and compare-and-swaps against the approved main immediately before
+ * mutating. This wrapper does what every other trusted-host action does -
+ * authorize, execute, shape the result - and nothing else. In particular it
+ * builds no git command of its own: there is no generic `git push main` path
+ * reachable from outside the governed action.
+ */
+/**
+ * The git the main-write promotion runs on.
+ *
+ * NAMED AND EXPORTED SO SOMETHING CAN ACTUALLY CALL IT.
+ *
+ * This was an inline arrow closing over `defaultGit`, which this module never
+ * imported. Nothing failed at import time - a ReferenceError on a free variable
+ * fires when the closure RUNS, and the only thing that runs it is a real
+ * dispatch of an operator-approved action. So the whole path stayed green
+ * locally and threw `metadata_promote_threw: defaultGit is not defined` on the
+ * live write, after an operator had approved it.
+ *
+ * Every test called `promoteRepositoryMetadata` directly, so no test ever
+ * constructed this closure. Pulling it out of the wrapper gives the lock
+ * something to hold that does not require authorizing an action to reach.
+ *
+ * `wd || cwd` so an inner call that names its own directory keeps it, and the
+ * opts - carrying GIT_INDEX_FILE - are forwarded rather than dropped.
+ */
+export function metadataPromotionGit(cwd) {
+  return (args, wd, opts) => defaultGit(args, wd || cwd, opts);
+}
+
+export function executeRepositoryMetadataPromotionTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+
+  const inputs = action.inputs || {};
+  const cwd = inputs.worktreePath || inputs.worktree_path;
+  if (!cwd) {
+    return failTrustedAction(action, "worktree_path_missing",
+      "a metadata promotion needs the worktree holding the certified candidate", { nowMs });
+  }
+
+  let out;
+  try {
+    out = promoteRepositoryMetadata(inputs, { git: metadataPromotionGit(cwd), cwd, nowMs });
+  } catch (e) {
+    out = { ok: false, code: "metadata_promote_threw", detail: String(e?.message || e).slice(0, 300) };
+  }
+
+  if (!out.ok) {
+    return failTrustedAction(action, out.code || "metadata_promote_failed", out.detail || out.code, {
+      nowMs,
+      extra: {
+        // Both heads survive a refusal, so nobody has to guess whether main moved.
+        main_before: out.main_before ?? null,
+        main_after: out.main_after ?? null,
+        approved_before: out.approved_before ?? null,
+        built_commit: out.built_commit ?? null,
+        offending: out.offending ?? null,
+        product_files_changed: false,
+      },
+    });
+  }
+
+  return completeTrustedAction(action, {
+    destination: out.destination ?? "main",
+    main_before: out.main_before,
+    main_after: out.main_after,
+    commit: out.commit,
+    already_present: out.already_present === true,
+    candidate: out.candidate ?? null,
+    expected_commits: out.expected_commits ?? null,
+    expected_files: out.expected_files ?? null,
+    actual_files: out.actual_files ?? null,
+    files: out.files ?? null,
+    promotion_class: out.promotion_class ?? "repository_metadata",
+    // Stated explicitly rather than implied by the file list, because this is
+    // the single question an auditor of a main commit actually asks.
+    product_files_changed: false,
+    credentialsExposed: false,
+  }, { nowMs });
+}
+
 export function executePushTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
   const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
   if (!authz.ok) return authz;
@@ -2153,7 +2462,7 @@ export function executeClosePullRequestTrustedHostAction(action, { actor = "dire
   action.started_at = action.started_at || iso(nowMs);
   action.updated_at = iso(nowMs);
   writeAction(action);
-  const out = closePullRequest(action.inputs, {});
+  const out = closePullRequest(action.inputs, housekeepingGhForTests ? { gh: housekeepingGhForTests } : {});
   if (payloadHasSecrets(out)) {
     return failTrustedAction(action, "result_contained_secrets", "Result contained secrets and was discarded.", { nowMs });
   }
@@ -2174,7 +2483,7 @@ export function executeDeleteRemoteBranchTrustedHostAction(action, { actor = "di
   action.started_at = action.started_at || iso(nowMs);
   action.updated_at = iso(nowMs);
   writeAction(action);
-  const out = deleteRemoteBranch(action.inputs, {});
+  const out = deleteRemoteBranch(action.inputs, housekeepingGhForTests ? { gh: housekeepingGhForTests } : {});
   if (payloadHasSecrets(out)) {
     return failTrustedAction(action, "result_contained_secrets", "Result contained secrets and was discarded.", { nowMs });
   }
@@ -2210,15 +2519,58 @@ export function executeRegisteredReconciliationTrustedHostAction(action, { actor
   writeAction(action);
 
   const out = runRegisteredReconciliation(action.inputs ?? {}, {
-    repoRoot: findRepoRoot(),
+    ...(reconciliationSpawnForTests ? { spawn: reconciliationSpawnForTests } : {}),
+    /*
+     * THE CANONICAL ROOT, not findRepoRoot().
+     *
+     * findRepoRoot() walks up from process.cwd(), which for the Gateway is
+     * wherever it happened to be started. A trusted-host action that executes
+     * REPOSITORY CONTENT must run from the checkout the platform calls canonical,
+     * not from a directory discovered by accident — and when that walk finds no
+     * repository it returns cwd/../.., so the spawn lands on a path with no web/
+     * and fails with no output at all. That is indistinguishable, in the result,
+     * from the script running and printing nothing.
+     */
+    repoRoot: resolveCanonicalRepoRoot(),
+    /*
+     * The file the control plane designates as the trusted environment. The runner
+     * reads the registry's declared context names out of it — `DEV_QUEUE_ORG_ID`
+     * lives there and not in this process's env, which is why resolving from
+     * process.env alone refused on the very host the platform ships.
+     */
+    trustedEnvSource: resolveTrustedServerEnvSource(),
     trustedEnv: {
       ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
       ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
       ALLOY_REPO: resolveCanonicalRepoRoot(),
     },
   });
+  /*
+   * THE SCREEN ITS SIBLINGS HAVE HAD ALL ALONG.
+   *
+   * push, open_pr and close_pr each call payloadHasSecrets before completing.
+   * This wrapper did not, and it is the one that needs it most: its runner
+   * resolves a database URL server-side, so a careless diagnostic line is the
+   * likeliest place a credential would ever surface. Measured while building the
+   * wrapper contract — a planted
+   * `postgres://user:SPECIMEN_PASSWORD@host/db` reached the operator result
+   * intact.
+   *
+   * BOTH PATHS, because a failure diagnostic is if anything more likely to quote
+   * a connection string than a success result is. Canonical semantics: the
+   * unsafe payload is DISCARDED rather than masked, so nothing partially
+   * redacted is published in its place.
+   */
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets",
+      "Reconciliation result contained credential-shaped material and was discarded.", { nowMs });
+  }
   if (!out.ok) {
-    return failTrustedAction(action, out.error || "reconciliation_failed", out.detail || "reconciliation refused", { nowMs });
+    // Provenance rides the FAILURE, which is the case that needs it most.
+    return failTrustedAction(action, out.error || "reconciliation_failed", out.detail || "reconciliation refused", {
+      nowMs,
+      extra: { provenance: out.provenance ?? null, exit_code: out.exit_code ?? null, dry_run: out.dry_run ?? null },
+    });
   }
   return completeTrustedAction(action, {
     reconciliation_key: out.reconciliation_key,
@@ -2226,6 +2578,18 @@ export function executeRegisteredReconciliationTrustedHostAction(action, { actor
     dry_run: out.dry_run,
     exit_code: out.exit_code,
     counts: out.counts,
+    // The executor computed this and the result threw it away.
+    provenance: out.provenance ?? null,
+    /*
+     * AND THE SAME THING ONE BOUNDARY ALONG.
+     *
+     * This is an explicit allowlist, so a field the runner computes exists only
+     * if it is named here. The hosted fixture's audit - which bytes ran, against
+     * which database, for which organization, and where that organization came
+     * from - is exactly what an operator needs and exactly what an allowlist
+     * drops by saying nothing.
+     */
+    fixture_audit: out.fixture_audit ?? null,
     stdout_tail: out.stdout_tail,
   }, { nowMs });
 }
@@ -2373,6 +2737,137 @@ export function executeSetProviderCeilingTrustedHostAction(action, { actor = "di
   }, { nowMs });
 }
 
+/**
+ * Register ONE developer application in a named database.
+ *
+ * The statement is built here from validated values — see
+ * `trusted-host-register-application.mjs` for why a registration takes no query
+ * artifact where a census does. The invariants (ownership mode, duplicate
+ * behaviour, audit row) belong to `public.register_developer_application`; this
+ * function's job is to reach the right database, run one statement, and record
+ * what came back without interpreting it.
+ *
+ * A REFUSAL BY THE FUNCTION IS NOT AN EXECUTION FAILURE. `ok: false` from the
+ * platform function means the platform declined — an unsupported ownership mode,
+ * a conflicting slug — and it arrives as a completed action carrying that code.
+ * Collapsing it into `execution_failed` would tell a lane to retry a decision.
+ */
+export function executeRegisterDeveloperApplicationTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+
+  const i = action.inputs || {};
+  const sql = buildRegistrationSql({
+    slug: i.slug,
+    name: i.name,
+    publisher: i.publisher,
+    ownershipMode: i.ownershipMode,
+    applicationEnvironment: i.applicationEnvironment,
+    distributionMode: i.distributionMode,
+    status: i.status,
+    registeredBy: i.registeredBy || action.id,
+  });
+
+  const tmpDir = join(storeDir(), "tmp");
+  ensureDir(tmpDir);
+  const sqlFile = join(tmpDir, `${action.id}.register.sql`);
+  const outFile = join(tmpDir, `${action.id}.register.out`);
+  const errFile = join(tmpDir, `${action.id}.register.err`);
+  writeFileSync(sqlFile, `${sql};\n`);
+
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.hostProcess = { kind: "trusted-host-register-application" };
+  action.retryState.attempts = (action.retryState.attempts || 0) + 1;
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  try { chmodSync(APPLY_MIGRATION_SH, 0o755); } catch { /* */ }
+  const child = spawnSync("bash", [APPLY_MIGRATION_SH, sqlFile, outFile, errFile, String(i.databaseTarget || "")], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: action.inputs.timeoutMs || 120_000,
+    encoding: "utf8",
+  });
+  const errText = redactSecrets((existsSync(errFile) ? readFileSync(errFile, "utf8") : "") || child.stderr || "");
+  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8").trim() : "";
+  try { unlinkSync(sqlFile); } catch { /* */ }
+
+  const fail = (code, detail) => {
+    action.state = "failed";
+    action.executionState = "failed";
+    action.failureReason = code;
+    action.completed_at = iso(nowMs);
+    action.audit = buildAudit(action, { success: false, failureCode: code });
+    action.updated_at = iso(nowMs);
+    writeAction(action);
+    return { ok: false, error: code, detail: detail ? String(detail).slice(0, 400) : null, action };
+  };
+
+  if (child.status !== 0) {
+    return fail(classifySqlChildFailure(errText, "execution_failed"), errText);
+  }
+
+  let payload = null;
+  for (const line of outText.split("\n").map((l) => l.trim()).filter(Boolean).reverse()) {
+    if (!line.startsWith("{")) continue;
+    try { payload = JSON.parse(line); break; } catch { /* keep looking */ }
+  }
+  if (!payload) return fail("result_parse_failed", outText.slice(0, 200));
+
+  const app = payload.application || {};
+  action.result = {
+    ok: Boolean(payload.ok),
+    code: payload.ok ? null : String(payload.code || "registration_refused"),
+    detail: payload.detail ?? null,
+    duplicate: Boolean(payload.duplicate),
+    application_id: app.id ?? null,
+    application_key: app.slug ?? null,
+    application_status: app.status ?? null,
+    ownership_mode: app.ownership_mode ?? null,
+    application_environment: app.environment ?? null,
+    distribution_mode: app.distribution_mode ?? null,
+    audit_id: payload.audit_id ?? null,
+    database_target: i.databaseTarget ?? null,
+    // Named so a reader never has to infer it from the absence of a field: this
+    // action creates an identity and nothing else.
+    installation_created: false,
+    credential_created: false,
+  };
+  action.state = "completed";
+  action.executionState = "completed";
+  action.completed_at = iso(nowMs);
+  action.audit = buildAudit(action, { success: true, authorizingOperator: authz.authorization?.granted_by || null });
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  return { ok: true, action, result: action.result };
+}
+
+export function fulfillRegisterDeveloperApplicationForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.PLATFORM_REGISTER_DEVELOPER_APPLICATION, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
 export function fulfillSetProviderCeilingForMission(missionId, {
   assignmentId = null, executionSessionId = null, inputs = {},
   actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
@@ -2441,12 +2936,68 @@ export function executeInstallToolkitTrustedHostAction(action, { actor = "direct
     readback_verified: out.readback_verified,
     rollback_target: out.rollback_target,
     gateway_restart_required: out.gateway_restart_required,
+    /*
+     * WHICH TOOLKIT THE GATEWAY IS ACTUALLY RUNNING.
+     *
+     * Found by the audit rather than by an incident: the producer has returned
+     * this all along and the list dropped it, so `gateway_restart_required`
+     * arrived without the one fact that makes it interpretable - restart
+     * required FROM what, TO what. It is a git sha and carries nothing secret.
+     */
+    gateway_executing_sha: out.gateway_executing_sha ?? null,
+    /*
+     * THE PRODUCER COMPUTED IT AND THIS LIST DROPPED IT.
+     *
+     * `installPromotedToolkit` returns a `convergence` block saying which of
+     * CONVERGENCE_SCHEDULED / CONVERGED applies and that no operator action is
+     * required - added precisely because `gateway_restart_required: true` reads
+     * as "required of you" when the TOOLKIT_DRIFT episode already owns it.
+     *
+     * It never reached a single result, because this is an explicit field list
+     * and nobody added it. I predicted twice that the next install would carry
+     * it and was wrong twice: the cause was never a generation lag, it was an
+     * allowlist one layer up. Third time this exact shape has cost something -
+     * the executor's provenance and the wait envelope were the other two.
+     */
+    convergence: out.convergence ?? null,
     credentialsExposed: false,
   };
   action.completed_at = iso(nowMs);
   action.updated_at = iso(nowMs);
   writeAction(action);
   return { ok: true, action };
+}
+
+/**
+ * Mission-scoped fulfilment for a repository-metadata promotion. Same shape as
+ * every other trusted-host fulfil wrapper: request, authorize, execute. The
+ * decision and the compare-and-swap live in the executor, not here.
+ */
+export function fulfillRepositoryMetadataPromotionForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy: actor,
+    actionType: ACTION_TYPES.REPOSITORY_PROMOTE_METADATA,
+    inputs,
+    nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export function fulfillInstallToolkitForMission(missionId, {
@@ -2542,7 +3093,33 @@ export function fulfillRetireWorktreeForMission(missionId, {
     authorizationContext: exactContext,
   });
   if (!req.ok) return req;
-  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  if (req.action.state === "completed" && req.deduped) {
+    /*
+     * THE RESULT ITSELF MUST NAME THIS WORKTREE.
+     *
+     * The framework already refuses to reuse an action about something else,
+     * and this checks the other end: the stored RESULT, which is what a caller
+     * reads and what an operator is shown. Eleven callers were handed a result
+     * whose `worktree` was not the one they asked to retire, and whose
+     * `filesystem_path_absent: true` was true of a different directory.
+     *
+     * A deletion is not a fact you may infer from someone else's receipt.
+     */
+    const out = req.action.result || {};
+    const wantWorktree = String(inputs.worktree ?? "").trim();
+    const wantFingerprint = String(inputs.safetyFingerprint ?? "").trim();
+    const mismatch = (out.worktree && wantWorktree && String(out.worktree) !== wantWorktree)
+      || (out.safety_fingerprint && wantFingerprint && String(out.safety_fingerprint) !== wantFingerprint);
+    if (mismatch) {
+      return {
+        ok: false,
+        error: "destructive_result_ownership_mismatch",
+        detail: `a completed retirement of "${out.worktree}" (fingerprint ${String(out.safety_fingerprint).slice(0, 12)}) cannot report the retirement of "${wantWorktree}" (fingerprint ${wantFingerprint.slice(0, 12)})`,
+        action: req.action,
+      };
+    }
+    return { ok: true, action: req.action, already: true };
+  }
   const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
   if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
   return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
@@ -2555,6 +3132,35 @@ export function fulfillApplyReconciliationPlanForMission(missionId, {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
     actionType: ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/**
+ * Execute a REGISTERED reconciliation.
+ *
+ * Same shape as every other fulfil, deliberately: the whole point of this
+ * capability is that it adds no new execution mechanism. Which script runs,
+ * which environments it may touch and what a dry run means are resolved by
+ * `reconciliation-registry.mjs` inside `validateInputs`, so there is nothing
+ * here to parameterise and nowhere for a caller-supplied command to enter.
+ *
+ * This function is the leg that was missing. The action was registered, had an
+ * executor branch, was discoverable and approvable — and had no way to be
+ * reached, because `requestGovernedAction` had no branch that named it.
+ */
+export function fulfillExecuteRegisteredReconciliationForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION, inputs, nowMs,
     authorizationContext: exactContext,
   });
   if (!req.ok) return req;
