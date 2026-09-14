@@ -63,6 +63,20 @@ export function projectIdFor(rec) {
  * and an operator has to be able to recognise it. Collisions take a numeric
  * suffix rather than silently reusing an identity.
  */
+/**
+ * Give a record a project identity if it has none.
+ *
+ * Alloy is deliberately left alone: its record predates the field and
+ * `projectIdFor` answers `prj_alloy` for it by repository id, so writing one
+ * would change a persisted identity that every governed record already uses.
+ */
+export function ensureProjectIdentity(rec, store) {
+  if (!rec || rec.project_id) return rec?.project_id ?? null;
+  if (rec.repository_id === ALLOY_REPOSITORY_ID) return ALLOY_PROJECT_ID;
+  rec.project_id = mintProjectId(rec.name, store);
+  return rec.project_id;
+}
+
 export function mintProjectId(name, store = null) {
   const slug = String(name || "").toLowerCase()
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "project";
@@ -692,8 +706,37 @@ export async function registerLocalRepository({
   }
 
   const existing = findRepositoryByCommonDir(info.git_common_dir, root);
-  if (existing) {
+  if (existing && existing.state === "ACTIVE") {
     return { ok: false, error: "repository_already_registered", repository: publicRepository(existing) };
+  }
+  if (existing) {
+    /*
+     * A RETIRED PROJECT IS RECONNECTED, NOT REFUSED.
+     *
+     * `findRepositoryByCommonDir` matched retired records too, so "Add project"
+     * on a path you had previously deactivated answered
+     * `repository_already_registered` and pointed at a record the list does not
+     * show by default. There was no way out of that from the product: the
+     * operator is looking at a repository Vacilando says it already has and
+     * cannot see.
+     *
+     * Retire has always meant disconnect, never delete — so registering the same
+     * path again is the operator reconnecting it, and the record, its lanes and
+     * its history come back rather than a duplicate being created beside them.
+     */
+    const store = readRepositoryStore(root);
+    const rec = store.repositories[existing.repository_id];
+    rec.state = "ACTIVE";
+    delete rec.retired_at;
+    if (name) {
+      const renamed = validateRepositoryName(name);
+      if (!renamed.ok) return renamed;
+      rec.name = renamed.name;
+    }
+    ensureProjectIdentity(rec, store);
+    rec.updated_at = iso(nowMs);
+    writeStore(store, root);
+    return { ok: true, repository: publicRepository(rec), reconnected: true };
   }
 
   const named = validateRepositoryName(name || info.root.split(sep).pop());
@@ -880,6 +923,9 @@ export function reactivateRepository(repositoryId, { nowMs = Date.now(), root = 
   if (!rec) return { ok: false, error: "repository_not_found" };
   rec.state = "ACTIVE";
   delete rec.retired_at;
+  // A record written before project identities existed gets one here rather
+  // than carrying a permanent null that nothing can ever fill.
+  ensureProjectIdentity(rec, store);
   rec.updated_at = iso(nowMs);
   writeStore(store, root);
   return { ok: true, repository: publicRepository(rec) };

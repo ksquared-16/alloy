@@ -390,5 +390,59 @@ test("28 — the promotion patch is validated, and never widens silently", () =>
   assert.equal(off.repository.promotion.governed_promotion, false);
 });
 
+test("29 — a retired project is RECONNECTED by Add project, not refused", async () => {
+  /*
+   * THE FOURTH THING THE LIVE REGISTRATION FOUND, and the one with no way out.
+   *
+   * `findRepositoryByCommonDir` matched retired records, so registering a path
+   * you had previously deactivated answered `repository_already_registered` and
+   * pointed at a record the list does not show by default. The operator is
+   * looking at a repository Vacilando says it already has and cannot see, with
+   * nothing in the product to do about it.
+   *
+   * Retire has always meant disconnect, never delete — so registering the same
+   * path again is the operator RECONNECTING it. The record, its lanes and its
+   * history come back rather than a duplicate appearing beside them, and a
+   * record written before project identities existed gets one on the way.
+   */
+  const { execFileSync } = await import("node:child_process");
+  const root = mkdtempSync(join(tmpdir(), "vac-s1a-reconn-"));
+  const repo = mkdtempSync(join(tmpdir(), "vac-s1a-repo-"));
+  execFileSync("git", ["init", "-q", "-b", "main", repo]);
+  const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@x", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@x" };
+  execFileSync("git", ["-C", repo, "commit", "-q", "--allow-empty", "-m", "x"], { env });
+
+  const first = await R.registerLocalRepository({ path: repo, name: "Reconnect Me", root });
+  assert.equal(first.ok, true);
+  const id = first.repository.repository_id;
+  assert.match(String(first.repository.project_id), /^prj_reconnect-me$/, "registration mints an identity");
+
+  assert.equal(R.retireRepository(id, { root }).ok, true);
+  const again = await R.registerLocalRepository({ path: repo, name: "Reconnect Me", root });
+  assert.equal(again.ok, true, `a retired path must reconnect, got ${again.error}`);
+  assert.equal(again.reconnected, true, "and say that is what happened");
+  assert.equal(again.repository.repository_id, id, "the SAME record, not a duplicate");
+  assert.equal(again.repository.state, "ACTIVE");
+  assert.equal(R.listRepositories({ root }).filter((r) => r.root === again.repository.root).length, 1,
+    "reconnecting must never leave two records for one repository");
+  // An ACTIVE one is still refused: that is a different question.
+  const third = await R.registerLocalRepository({ path: repo, name: "Reconnect Me", root });
+  assert.equal(third.error, "repository_already_registered");
+});
+
+test("30 — a record written before identities existed gets one, except Alloy's", () => {
+  const store = { repositories: {} };
+  const legacy = { repository_id: "repo_legacy", name: "Legacy Thing" };
+  assert.equal(R.ensureProjectIdentity(legacy, store), "prj_legacy-thing");
+  assert.equal(legacy.project_id, "prj_legacy-thing", "and it is PERSISTED, not derived each read");
+  // Alloy is left alone: its identity is already what every governed record uses.
+  const alloy = { repository_id: R.ALLOY_REPOSITORY_ID, name: "Alloy" };
+  assert.equal(R.ensureProjectIdentity(alloy, store), "prj_alloy");
+  assert.equal(alloy.project_id, undefined, "writing one would change a persisted identity");
+  // An identity already chosen is never overwritten.
+  const held = { repository_id: "repo_h", name: "Renamed", project_id: "prj_original" };
+  assert.equal(R.ensureProjectIdentity(held, store), "prj_original");
+});
+
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
 process.exit(fail ? 1 : 0);
