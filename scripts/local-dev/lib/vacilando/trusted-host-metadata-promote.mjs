@@ -53,7 +53,9 @@ export function promoteRepositoryMetadata(inputs = {}, { git, cwd, nowMs = Date.
     // Even a refusal says what main was, so a reader never has to guess whether
     // the branch moved underneath the attempt.
     main_before: extra.main_before ?? null,
-    main_after: extra.main_before ?? null,
+    // NOT a copy of main_before. Two fields that cannot disagree prove nothing;
+    // the pair is only evidence if main_after can report a value of its own.
+    main_after: extra.main_after ?? extra.main_before ?? null,
     product_files_changed: false,
     ...extra,
   });

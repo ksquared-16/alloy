@@ -218,5 +218,84 @@ test("A — a missing candidate refuses before anything is built", () => {
   assert.ok(!calls.some((c) => c.startsWith("commit-tree")));
 });
 
+
+/* ── THE SEAM: what the executor actually receives ───────────────────────────
+ *
+ * Every case above hands promoteRepositoryMetadata the RAW request inputs. The
+ * live path does not. requestTrustedHostAction stores `validated.normalized`
+ * as the action's inputs, and the executor reads `action.inputs` at mutation
+ * time - so the executor never sees a field the normalizer did not carry.
+ *
+ * That gap is not hypothetical. The first live promotion refused with
+ * `worktree_path_missing` having been filed WITH a worktree path, and would
+ * have refused next on `main_before is required` having been filed WITH
+ * main_before. Eighteen green cases above, and the one boundary between them
+ * was the thing that was broken.
+ *
+ * These cases run the real chain: definition.validateInputs -> normalized ->
+ * executor.
+ * ──────────────────────────────────────────────────────────────────────────*/
+
+const { getActionDefinition, ACTION_TYPES } = await import(
+  "../lib/vacilando/trusted-host-action-registry.mjs"
+);
+const promoteDef = getActionDefinition(ACTION_TYPES.REPOSITORY_PROMOTE_METADATA);
+const WT = "/tmp/wt";
+const normalize = (over = {}) =>
+  promoteDef.validateInputs(inputs({ worktree_path: WT, ...over }));
+
+test("S1 - normalized inputs still reach the executor's happy path", () => {
+  const v = normalize();
+  assert.equal(v.ok, true, `validation refused: ${v.code || ""} ${v.detail || ""}`);
+  const stub = gitStub();
+  // EXACTLY what the trusted host does: the normalized object IS action.inputs.
+  const r = promoteRepositoryMetadata(v.normalized, { git: stub, cwd: WT });
+  assert.equal(r.ok, true, `refused after normalization: ${r.code || ""} ${r.detail || ""}`);
+  assert.equal(r.main_after, NEW);
+  assert.deepEqual(r.files, [WF]);
+});
+
+test("S2 - normalized carries the worktree the executor resolves the candidate in", () => {
+  const v = normalize();
+  assert.equal(v.normalized.worktreePath, WT,
+    "dropped here and the executor refuses worktree_path_missing after an operator has approved");
+});
+
+test("S3 - normalized carries the main it was approved onto", () => {
+  const v = normalize();
+  assert.equal(v.normalized.mainBefore, MAIN);
+  // And the executor must accept it from that field, not only from raw input.
+  const r = promoteRepositoryMetadata(v.normalized, { git: gitStub(), cwd: WT });
+  assert.notEqual(r.code, METADATA_PROMOTION_FAILURES.REVALIDATION_FAILED);
+});
+
+test("S4 - a filer that omits the worktree is refused at request time", () => {
+  const v = promoteDef.validateInputs(inputs());
+  assert.equal(v.ok, false);
+  assert.equal(v.code, "missing_worktree_path",
+    "the refusal must reach the filer, not the operator who already approved");
+});
+
+test("S5 - the write declares what it acted on, so it cannot inherit a stranger's result", () => {
+  const a = normalize().normalized.dedupeKey;
+  const b = normalize({ candidate_sha: "c".repeat(40) }).normalized.dedupeKey;
+  const c = normalize({ main_before: "2".repeat(40) }).normalized.dedupeKey;
+  assert.ok(a, "a keyless privileged write can adopt any completed action of its type");
+  assert.notEqual(a, b, "a different candidate is a different promotion");
+  assert.notEqual(a, c, "the same candidate onto a different main is a different promotion");
+  assert.equal(a, normalize().normalized.dedupeKey, "and the same promotion is stable");
+});
+
+test("S6 - main_after is not a copy of main_before", () => {
+  // Two fields that cannot disagree are one field wearing two names, and prove
+  // nothing to a reader trying to establish whether the branch moved.
+  const { r } = run({}, gitStub({ pushStatus: 1, pushErr: "rejected" }));
+  assert.equal(r.ok, false);
+  assert.equal(r.main_before, MAIN);
+  assert.equal(r.main_after, MAIN, "a refused push leaves main where it was");
+  const ok = run().r;
+  assert.notEqual(ok.main_after, ok.main_before, "a successful write moves it");
+});
+
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
 process.exit(fail ? 1 : 0);

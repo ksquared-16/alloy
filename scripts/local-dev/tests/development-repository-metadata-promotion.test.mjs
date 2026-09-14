@@ -219,5 +219,44 @@ test("12b — a verified destination SHA from the executor wins over any ref loo
   assert.equal(v.normalized.destinationRef, DEST);
 });
 
+/* ── 13: the validator must be able to read its own output ───────────────── */
+
+test("13 — validating the normalized output reproduces it, field for field", () => {
+  /*
+   * This validator runs twice on the live path: at request time, and again
+   * inside the executor at mutation time - where its input is the `normalized`
+   * object the first run produced, because that object IS the action's stored
+   * inputs. If the second read cannot parse the first write, the revalidation
+   * that is the entire safety argument for writing main becomes the thing that
+   * makes writing main impossible.
+   *
+   * Measured: normalized emitted `target` and `candidate` while the reads asked
+   * for `target_branch` and `candidate_sha`, so a candidate that had just
+   * validated cleanly revalidated as `metadata_target_not_allowed`.
+   */
+  const first = validateRepositoryMetadataInputs(inputs({ main_before: DEST, worktree_path: "/tmp/wt" }));
+  assert.equal(first.ok, true, `first pass refused: ${first.code || ""}`);
+
+  const second = validateRepositoryMetadataInputs(first.normalized);
+  assert.equal(second.ok, true,
+    `revalidating normalized output refused: ${second.code || ""} ${second.detail || ""}`);
+  assert.deepEqual(second.normalized, first.normalized,
+    "normalization must be a fixed point, or the executor acts on different inputs than were approved");
+
+  // And a third pass, because a two-pass fixed point can still drift on the next.
+  assert.deepEqual(
+    validateRepositoryMetadataInputs(second.normalized).normalized,
+    first.normalized,
+  );
+});
+
+test("13a — a refusal survives normalization too", () => {
+  // The stricter half: a candidate that must be refused must still be refused
+  // when the executor re-reads it, not silently accepted on the second look.
+  const bad = validateRepositoryMetadataInputs(inputs({ target_branch: "staging" }));
+  assert.equal(bad.ok, false);
+  assert.equal(bad.code, "metadata_target_not_allowed");
+});
+
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
 process.exit(fail ? 1 : 0);
