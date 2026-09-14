@@ -293,3 +293,17 @@ jobs:
       - name: Repository action dispatch contract
         working-directory: .
         run: node scripts/local-dev/tests/development-repository-dispatch-contract.test.mjs
+
+      # One result object, two renderings. The per-file red ledger used to reach
+      # only GITHUB_STEP_SUMMARY, which the logs API does not return, so no tool
+      # could name the failing files behind a count.
+      - name: Tier 2 result contract
+        working-directory: .
+        run: node scripts/local-dev/tests/development-tier2-result-contract.test.mjs
+
+      # continuation_of existed, was documented, had one test, and was stored
+      # with no checks at all - any string, including a live run, the successor
+      # itself, or a cycle. 0 of 181 runs carried it.
+      - name: Execution run continuation lineage
+        working-directory: .
+        run: node scripts/local-dev/tests/development-continuation-lineage.test.mjs

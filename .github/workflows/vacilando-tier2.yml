@@ -110,51 +110,31 @@ jobs:
           echo "tier4=$(wc -l < /tmp/tier4)" >> "$GITHUB_OUTPUT"
 
       - name: Run Tier 2
-        id: run
+        id: tier2
+        env:
+          TIER2_TESTED_SHA: ${{ steps.provenance.outputs.tested_sha }}
+          TIER2_TESTED_REF: ${{ steps.provenance.outputs.tested_ref }}
+          TIER2_DEFINITION_SHA: ${{ github.sha }}
+          TIER2_DEFINITION_REF: ${{ github.ref_name }}
+          TIER2_EXCLUDED_TIER3: ${{ steps.partition.outputs.tier3 }}
+          TIER2_EXCLUDED_TIER4: ${{ steps.partition.outputs.tier4 }}
         run: |
-          cd scripts/local-dev/tests
-          pass=0 ; fail=0 ; hang=0
-          : > /tmp/reds
-          while read -r f; do
-            # Bounded per file. A file that cannot finish is recorded as a hang
-            # rather than being allowed to consume the job's whole budget.
-            if timeout 150 node "$f" > /tmp/out 2>&1; then
-              pass=$((pass+1))
-            else
-              code=$?
-              if [ $code -eq 124 ]; then
-                hang=$((hang+1)); echo "HANG    $f" >> /tmp/reds
-              else
-                fail=$((fail+1))
-                echo "FAIL    $f  ($(grep -Eo '^# fail [0-9]+' /tmp/out | tail -1))" >> /tmp/reds
-              fi
-            fi
-          done < /tmp/tier2
-          {
-            echo "## Vacilando Tier 2 — extended deterministic"
-            echo ""
-            echo "| tier | files |"
-            echo "|---|---|"
-            echo "| Tier 2 run here | ${{ steps.partition.outputs.tier2 }} |"
-            echo "| Tier 3 host integration (excluded) | ${{ steps.partition.outputs.tier3 }} |"
-            echo "| Tier 4 certification/live (excluded) | ${{ steps.partition.outputs.tier4 }} |"
-            echo ""
-            echo "**green $pass · red $fail · hang $hang**"
-            echo ""
-            if [ -s /tmp/reds ]; then
-              echo "<details><summary>Reds</summary>"
-              echo ""
-              echo '```'
-              cat /tmp/reds
-              echo '```'
-              echo ""
-              echo "</details>"
-            else
-              echo "No reds."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "green=$pass red=$fail hang=$hang"
+          # ONE RESULT, RENDERED TWICE. The counting lives in
+          # scripts/local-dev/lib/vacilando/tier2-report.mjs so the step summary
+          # and the JSON artifact cannot disagree - the previous inline loop
+          # wrote its red ledger only to GITHUB_STEP_SUMMARY, which the logs API
+          # does not return, so no tool could name the failing files.
+          node scripts/local-dev/tier2-run.mjs /tmp/tier2 "$PWD/scripts/local-dev/tests" tier2-result.json
           # NON-BLOCKING BY DESIGN. Known reds exist and are classified; failing
           # this job would only train people to ignore it. It is promoted to
           # blocking per-file, by moving a file into Tier 1, as each goes green.
           exit 0
+
+      # Retrievable through the API without scraping rendered markdown.
+      - name: Publish the machine-readable result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tier2-result
+          path: tier2-result.json
+          if-no-files-found: error
