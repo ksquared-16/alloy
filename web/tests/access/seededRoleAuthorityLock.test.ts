@@ -91,6 +91,13 @@ const ACCESS_OWNED = [
      * They derive authority from it now, and the ops default package was corrected in the same
      * slice so activating the key could not hand ops ten mutations it had never performed. No new
      * exception is recorded: the bounded area reaches zero.
+     *
+     * DISCOUNTS joins as the Jobs vertical's, not the childcare one's. Its three mutations asked for
+     * the admin role; they ask for `ops.jobs.write` now, which is already admin-present and
+     * ops-absent, so the rehome preserved the exact behaviour without a migration. The model was NOT
+     * retired: the Financials program recorded `discount_programs` as a different vertical when it
+     * built `financial_reduction_applications`, and Jobs/Booking remains supported. Its legacy-only
+     * authoring surface is product debt, not an authority exception.
      */
     join(webRoot, "app", "api", "admin", "option-sets"),
     join(webRoot, "app", "api", "admin", "entity-layouts"),
@@ -102,6 +109,7 @@ const ACCESS_OWNED = [
     join(webRoot, "app", "api", "admin", "organization-calculations"),
     join(webRoot, "app", "api", "admin", "metrics"),
     join(webRoot, "lib", "admin", "canReadAnalytics.ts"),
+    join(webRoot, "app", "api", "admin", "discounts"),
 ];
 
 /**
