@@ -69,6 +69,7 @@ import {
   fulfillInstallToolkitForMission,
   fulfillLaneDispatchForMission,
   previewTrustedHostAuthorization,
+  fulfillRepositoryMetadataPromotionForMission,
 } from "./trusted-host-actions.mjs";
 import { resolveDeployedTarget } from "./deployed-target-registry.mjs";
 import { qaActionNeedsDevelopmentSlot } from "./qa-slot-preflight.mjs";
@@ -1847,6 +1848,16 @@ function defaultModeForAction(actionKey, requested) {
   // policy_denied — the trap two actions have already fallen into.
   if (actionKey === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) return "migration_apply";
   /*
+   * NOT "promotion". That mode means an Alloy product release, and this action
+   * exists precisely because writing a workflow definition to main is NOT one -
+   * conflating them in the mode would put repository configuration and product
+   * release in the same governed bucket, which is the distinction the whole
+   * class was built to hold. "other" is the member for a privileged action that
+   * is neither a promotion nor a migration. Named here so it can never inherit
+   * read_only and surface as policy_denied, the trap documented below.
+   */
+  if (actionKey === ACTION_TYPES.REPOSITORY_PROMOTE_METADATA) return "other";
+  /*
    * A privileged_write action must not inherit the read_only default. `validateAgainstRegistry`
    * refuses any non-read risk class in read_only mode, so an action added to the registry without
    * a mode here is registered, discoverable, proposable — and then denied with `policy_denied`,
@@ -3338,6 +3349,22 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
    * because the migration artifacts are resolved out of the approved worktree's
    * git object store rather than any working copy.
    */
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_PROMOTE_METADATA) {
+    return fulfillRepositoryMetadataPromotionForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: {
+        ...(rec.inputs || {}),
+        worktree_path: rec.worktree_path,
+        worktreePath: rec.worktree_path,
+      },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
   if (rec.action_key === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
     return fulfillLedgerRepairForMission(scope, {
       assignmentId: rec.run_id || null,

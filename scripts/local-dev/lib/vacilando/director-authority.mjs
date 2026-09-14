@@ -79,6 +79,10 @@ export const OPERATOR_OWNED_ACTION_KEYS = Object.freeze([
   // refusal are independent, which is the pattern apply_promoted_migration
   // already documents two lines above.
   "database.repair_migration_ledger",
+  // Writes main, the release branch and GitHub default branch. Operator-owned
+  // for the same reason as the ledger repair: the blast radius is not the size
+  // of the file, it is what the branch means.
+  "repository.promote_metadata",
   "environment.provision_qa_identity",
   "environment.assign_qa_identity_access",
   "environment.restore_qa_session",
