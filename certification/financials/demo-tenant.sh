@@ -46,6 +46,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CERT_DIR="$ROOT/certification"
 DB="${CERT_DB_URL:-postgresql://postgres:postgres@127.0.0.1:54422/postgres}"
 
+# THE TENANT IS NAMED BY THE CALLER, LIKE EVERY OTHER SCRIPT HERE.
+#
+# This was the one financials certification script that did NOT declare an org: it piped the
+# fixture in with no `-v org=` and relied on the fixture's own `\set org`. That `\set` is what made
+# the fixture unusable anywhere else -- psql applies `-v` at startup and the file afterwards, so the
+# file always won, and the governed hosted runner's frozen organization was silently overridden.
+# The `\set` is gone, so the tenant is declared here, in the same form the other ten use.
+ORG='00000000-0000-4000-8000-000000000001'
+
 green() { printf '\033[32m✓\033[0m %s\n' "$1"; }
 die()   { printf '\033[31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
 
@@ -60,7 +69,7 @@ pg() {
 
 seed_demo_tenant() {
   echo "── installing the representative demo subjects (households, children, agreements, agency)"
-  pg -v ON_ERROR_STOP=1 -q -f - < "$CERT_DIR/fixtures/financials-demo-tenant.sql" \
+  pg -v ON_ERROR_STOP=1 -v org="$ORG" -q -f - < "$CERT_DIR/fixtures/financials-demo-tenant.sql" \
     || die "structural demo fixture failed"
   green "four households across two campuses, a funding agency and an authorization"
 

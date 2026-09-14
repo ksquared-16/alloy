@@ -63,11 +63,21 @@ export function isFixtureScoped(text) {
   return vars.some((v) => v !== ORG_VAR) || String(text).includes(FIXTURE_ID_PREFIX);
 }
 
-/** Statements executing while replication triggers are suspended. */
+/**
+ * Statements executing while replication triggers are suspended.
+ *
+ * MATCHED AS A STATEMENT, NOT AS A SUBSTRING. This read `indexOf` on the exact
+ * text `set session_replication_role = replica`, so the fixture becoming atomic
+ * — `SET LOCAL`, which is the form that cannot outlive a rolled-back
+ * transaction — reported NO WINDOW AT ALL rather than a widened one. A contract
+ * that answers "nothing to check here" when the thing it checks is rewritten is
+ * the failure mode this module exists to avoid, so the boundary is anchored to
+ * the start of a line and both forms are recognised.
+ */
 export function replicaWindow(sql) {
   const text = String(sql);
-  const open = text.indexOf("set session_replication_role = replica");
-  const close = text.indexOf("set session_replication_role = origin");
+  const open = text.search(/^[ \t]*set\s+(?:local\s+)?session_replication_role\s*=\s*replica\b/im);
+  const close = text.search(/^[ \t]*set\s+(?:local\s+)?session_replication_role\s*=\s*origin\b/im);
   if (open < 0 || close < 0 || close < open) return { ok: false, statements: [] };
   const body = text.slice(open, close);
   const statements = [...body.matchAll(/^\s*(insert|update|delete)\b/gim)].map((m) => m[1].toLowerCase());
