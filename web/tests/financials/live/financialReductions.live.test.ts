@@ -1113,4 +1113,131 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
             "undoing the reduction must restore the obligation it reduced",
         ).toBe(grossCents);
     }, 300_000);
+
+    // ── 9 · REDUCTION / COLLECTIBILITY CONVERGENCE ──────────────────────────────────────────
+
+    /**
+     * A CREDIT AND ITS REVERSAL MUST BE A NO-OP, AND MUST BE ONE EVERY TIME.
+     *
+     * Driven on a clean obligation rather than on a shared tenant's history, because the question is
+     * whether the cycle nets — and a fixture that earlier runs have already driven below zero cannot
+     * answer it. Read back through `resolveAllocatableNet`, which is the net every authority that
+     * asks "what does this charge still owe" is composed from.
+     */
+    it("nets a credit and its reversal to nothing, repeatedly, on one obligation", async () => {
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const target = (await grossCharges())[0]!;
+        const gross = Number(target.amount_cents);
+
+        const net = async () =>
+            (await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id })).netCents;
+
+        expect(await net(), "the obligation starts whole").toBe(gross);
+
+        for (const cycle of [1, 2, 3]) {
+            const credit = await applyManualReduction(supabase, {
+                orgId: ORG,
+                enrollmentAgreementId: kids[0]!.agreementId,
+                customerId,
+                customerMemberId: kids[0]!.memberId,
+                chargeCategory: "credit",
+                amountCents: -5_000,
+                reason: `Goodwill, cycle ${cycle}`,
+                effectiveDate: PERIOD_START,
+                sourceChargeId: target.id,
+                actorUserId: ACTOR,
+                idempotencyKey: `fred:manual:cert-cycle-${cycle}`,
+            });
+            expect(await net(), `cycle ${cycle}: the credit reduces the obligation once`)
+                .toBe(gross - 5_000);
+
+            await reverseManualReduction(supabase, {
+                orgId: ORG,
+                applicationId: credit.applicationId,
+                reason: `Undoing cycle ${cycle}`,
+                actorUserId: ACTOR,
+            });
+            expect(await net(), `cycle ${cycle}: undoing it restores the obligation exactly`)
+                .toBe(gross);
+        }
+
+        // Three complete cycles, and the obligation is exactly where it started. No ratchet.
+        expect(await net(), "no drift across repeated cycles").toBe(gross);
+    }, 420_000);
+
+    /**
+     * THE BOUNDARY: a reduction may not take more than the obligation holds.
+     *
+     * `resolveAllocatableNet` refuses to net an obligation below zero, and says that state is
+     * unreachable because the policy path clamps. The manual path did not clamp or bound, so an
+     * operator could write a credit larger than the charge it names and leave that obligation in a
+     * state one authority refuses to read while others carried on reporting it. The writer now holds
+     * the same bound, so the refusal is genuinely unreachable rather than merely undocumented.
+     */
+    it("refuses a manual reduction larger than the obligation it names", async () => {
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const target = (await grossCharges())[0]!;
+        const gross = Number(target.amount_cents);
+
+        await expect(
+            applyManualReduction(supabase, {
+                orgId: ORG,
+                enrollmentAgreementId: kids[0]!.agreementId,
+                customerId,
+                customerMemberId: kids[0]!.memberId,
+                chargeCategory: "credit",
+                amountCents: -(gross + 1_000),
+                reason: "More goodwill than there was obligation",
+                effectiveDate: PERIOD_START,
+                sourceChargeId: target.id,
+                actorUserId: ACTOR,
+                idempotencyKey: "fred:manual:cert-overreduce",
+            }),
+            "the writer refuses rather than leaving an obligation nobody can read",
+        ).rejects.toThrow(/larger than what the charge still holds/i);
+
+        // Nothing was written, and the obligation is still readable and whole.
+        expect((await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id })).netCents)
+            .toBe(gross);
+
+        // Reducing it exactly to zero is allowed — the bound is "not below", not "not to".
+        await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -gross,
+            reason: "Forgiving the whole charge",
+            effectiveDate: PERIOD_START,
+            sourceChargeId: target.id,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-exact",
+        });
+        expect(
+            (await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id })).netCents,
+            "an obligation reduced to exactly nothing is still readable",
+        ).toBe(0);
+
+        // And one more cent is refused, now that nothing remains.
+        await expect(
+            applyManualReduction(supabase, {
+                orgId: ORG,
+                enrollmentAgreementId: kids[0]!.agreementId,
+                customerId,
+                customerMemberId: kids[0]!.memberId,
+                chargeCategory: "credit",
+                amountCents: -1,
+                reason: "One cent past nothing",
+                effectiveDate: PERIOD_START,
+                sourceChargeId: target.id,
+                actorUserId: ACTOR,
+                idempotencyKey: "fred:manual:cert-onemore",
+            }),
+        ).rejects.toThrow(/larger than what the charge still holds/i);
+    }, 420_000);
 });

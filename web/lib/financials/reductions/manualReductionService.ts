@@ -76,6 +76,60 @@ function requireReason(reason: string): string {
     return trimmed;
 }
 
+
+/**
+ * A REDUCTION MAY NOT TAKE MORE THAN THE OBLIGATION HOLDS.
+ *
+ * `resolveAllocatableNet` refuses to net an obligation below zero — "the honest move is to refuse
+ * rather than allocate a negative obligation between people" — and its own comment says that state
+ * is unreachable, because the policy path clamps its aggregate at zero. The MANUAL path never
+ * clamped and never bounded, so an operator could write a credit larger than the charge it names and
+ * leave that obligation in a state one authority refuses to read while others go on reporting it.
+ * The writer now holds the same bound the reader does, which is what makes the reader's refusal
+ * genuinely unreachable rather than merely undocumented.
+ *
+ * Only an ATTACHED reduction is bounded: one that names no obligation reduces none, so there is
+ * nothing for it to exceed.
+ */
+async function assertWithinObligation(supabase: SupabaseClient, input: ManualReductionInput): Promise<void> {
+    const sourceChargeId = (input.sourceChargeId ?? "").trim();
+    if (!sourceChargeId || input.amountCents >= 0) return;
+
+    const { data: chargeRow, error: chargeError } = await supabase
+        .from("charges")
+        .select("amount_cents")
+        .eq("org_id", input.orgId)
+        .eq("id", sourceChargeId)
+        .maybeSingle();
+    if (chargeError) throw new ManualReductionError("db_error", chargeError.message);
+    if (!chargeRow) {
+        throw new ManualReductionError("not_found", "No such charge on this account to reduce.");
+    }
+
+    const { data: existingRows, error: existingError } = await supabase
+        .from("financial_reduction_applications")
+        .select("amount_cents, idempotency_key")
+        .eq("org_id", input.orgId)
+        .eq("source_charge_id", sourceChargeId);
+    if (existingError) throw new ManualReductionError("db_error", existingError.message);
+
+    /*
+     * A RETRY IS NOT A SECOND REDUCTION. The same idempotency key names the same decision, and
+     * counting the row it already wrote would make a harmless resubmit look like an overdraw.
+     */
+    const already = ((existingRows ?? []) as Array<{ amount_cents: number; idempotency_key: string | null }>)
+        .filter((r) => (r.idempotency_key ?? "") !== input.idempotencyKey)
+        .reduce((acc, r) => acc + (Number(r.amount_cents) || 0), 0);
+
+    const remaining = (Number((chargeRow as { amount_cents: number }).amount_cents) || 0) + already;
+    if (input.amountCents + remaining < 0) {
+        throw new ManualReductionError(
+            "exceeds_obligation",
+            `This reduction is larger than what the charge still holds: ${remaining} cents remain to reduce.`,
+        );
+    }
+}
+
 export async function applyManualReduction(
     supabase: SupabaseClient,
     input: ManualReductionInput,
@@ -90,6 +144,7 @@ export async function applyManualReduction(
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.effectiveDate)) {
         throw new ManualReductionError("invalid_effective_date", "Name the date this reduction takes effect.");
     }
+    await assertWithinObligation(supabase, input);
 
     try {
         const result = await applyReductionCore(supabase, {

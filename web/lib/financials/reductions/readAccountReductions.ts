@@ -40,6 +40,14 @@ export type AccountReduction = {
     /** The charge row this reduction wrote — how it reaches the ledger. */
     chargeId: string | null;
     /**
+     * The obligation this reduction is ABOUT, when it names one.
+     *
+     * This is the field every reader that answers "what does this charge still owe" nets against. A
+     * reduction without it moves the ledger's signed total and reduces no obligation, so whether it
+     * is present is the difference between two authorities agreeing and disagreeing.
+     */
+    sourceChargeId: string | null;
+    /**
      * The status of that charge: `draft` until somebody posts it.
      *
      * This is load-bearing, not decoration. A manual reduction is written as a DRAFT, and a draft is
@@ -79,7 +87,8 @@ export async function readAccountReductions(
         .from("financial_reduction_applications")
         .select(
             "id, reduction_kind, enrollment_agreement_id, customer_member_id, charge_id, "
-            + "amount_cents, currency_code, reason, period_key, created_at, reversed_by_id, reverses_id",
+            + "source_charge_id, amount_cents, currency_code, reason, period_key, created_at, "
+            + "reversed_by_id, reverses_id",
         )
         .eq("org_id", input.orgId)
         .in("enrollment_agreement_id", ids);
@@ -123,6 +132,7 @@ export async function readAccountReductions(
             createdAt: nullable(r.created_at),
             chargeId: nullable(r.charge_id),
             chargeStatus: statusByCharge.get(t(r.charge_id)) ?? null,
+            sourceChargeId: nullable(r.source_charge_id),
             reversedByApplicationId: nullable(r.reversed_by_id),
             reversesApplicationId: nullable(r.reverses_id),
         }))
