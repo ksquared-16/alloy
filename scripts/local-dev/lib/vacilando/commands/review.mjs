@@ -48,3 +48,29 @@ export function readReviews(limit = 50) {
     return out;
   } catch { return []; }
 }
+
+/**
+ * Reviews resolved inside a civil-day window. Same reasoning as
+ * `countAuditEventsInWindow`: a last-N tail filtered for "today" is a floor,
+ * not a count. Scans backwards and stops once it is before the window.
+ */
+export function countReviewsInWindow({ startMs, endMs, scanCap = 100000 } = {}) {
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return { total: 0, complete: false, scanned: 0 };
+  let lines;
+  try { lines = readFileSync(PATH, "utf8").split("\n"); }
+  catch { return { total: 0, complete: true, scanned: 0 }; }
+  let total = 0, scanned = 0, complete = true;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (!line) continue;
+    if (scanned >= scanCap) { complete = false; break; }
+    scanned += 1;
+    let r; try { r = JSON.parse(line); } catch { continue; }
+    const t = Date.parse(r?.occurred_at || "");
+    if (Number.isNaN(t)) continue;
+    if (t < startMs) break;
+    if (t >= endMs) continue;
+    total += 1;
+  }
+  return { total, complete, scanned };
+}
