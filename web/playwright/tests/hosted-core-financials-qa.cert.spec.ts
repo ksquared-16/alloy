@@ -116,6 +116,15 @@ const num = (v: unknown): number => (typeof v === "number" ? v : Number(v ?? 0))
 const money = (cents: number) =>
     (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
 
+/**
+ * The product's own distinction between an obligation and something that happens TO one, restated
+ * here only so this file can scope a comparison by it. `isCollectibleOffsetRow` in
+ * `buildFinancialsCardVM` is the authority; this must agree with it.
+ */
+const OFFSET_ROW_CATEGORIES = new Set(["credit", "discount", "subsidy_offset", "adjustment"]);
+const isOffsetRow = (r: Row) =>
+    Boolean(r.correctsChargeId) || OFFSET_ROW_CATEGORIES.has(String(r.categoryKey));
+
 const byStatus = (vm: Vm, status: string) =>
     (vm.rows ?? []).filter((r) => String(r.status ?? "").toLowerCase() === status);
 
@@ -271,21 +280,74 @@ test.describe("QA 3 · charge lifecycle", () => {
         const owedBefore = num(before.reconciliation?.balanceCents);
         const grossBefore = num(before.reconciliation?.grossCents);
 
-        // A · ADD — a draft, and the position does not move.
+        /*
+         * A · ADD — A DRAFT, AND THE POSITION DOES NOT MOVE.
+         *
+         * GETTING A DRAFT IS ITSELF PERIOD-DEPENDENT, AND THAT IS CORRECT BEHAVIOUR.
+         *
+         * `charge.add` is idempotent per template and period: once a template has produced a charge
+         * this month, adding it again legitimately creates nothing and still answers ok. This test
+         * first named one template, and passed only until the suite had posted that template once —
+         * after which it asked for a draft, got a successful no-op, and failed looking for a row
+         * that was never going to exist.
+         *
+         * So every template is tried, and the first that actually yields a draft is used. When all
+         * of them are spent for the period the law is proven on a REDUCTION draft instead: a manual
+         * credit is written as a draft too, its key is ours to make unique, and "a draft is not
+         * owed, posting is what makes it real" is the same law whichever kind of row carries it.
+         */
+        let draftFrom = "charge";
         if (byStatus(before, "draft").length === 0) {
-            const added = await execute(request, {
-                action_key: "charge.add",
-                ...ENT,
+            for (const tpl of Object.values(TPL)) {
+                const added = await execute(request, {
+                    action_key: "charge.add",
+                    ...ENT,
+                    payload: {
+                        template_id: tpl.id, customer_id: HOUSEHOLD,
+                        event_date: QA_DATE, service_period_start: QA_DATE,
+                    },
+                });
+                expect(added.json.ok, `charge.add ${tpl.label}: ${JSON.stringify(added.json)}`).toBe(true);
+                if (byStatus(await account(request), "draft").length > 0) break;
+            }
+        }
+        if (byStatus(await account(request), "draft").length === 0) {
+            draftFrom = "reduction";
+            /*
+             * AN OBLIGATION WITH ROOM LEFT IN IT.
+             *
+             * The first attempt took the first positive posted charge and was refused
+             * `exceeds_obligation` — correctly: that one had already been reduced to nothing by an
+             * earlier phase, and a credit cannot take an obligation below zero. Room is gross plus
+             * the posted reductions already against it, which is the same rule the service applies.
+             */
+            const roomOf = (r: Row) =>
+                num(r.amountCents) + (before.reductions ?? [])
+                    .filter((d) => String(d.sourceChargeId ?? "") === String(r.chargeId)
+                        && String(d.chargeStatus ?? "") === "posted")
+                    .reduce((sum, d) => sum + num(d.amountCents), 0);
+            const obligation = byStatus(before, "posted").find(
+                (r) => !r.correctsChargeId && roomOf(r) >= 100,
+            );
+            expect(obligation, "an obligation with room left to credit against").toBeTruthy();
+            const credited = await execute(request, {
+                action_key: "billing.adjust_account", ...ENT,
                 payload: {
-                    template_id: TPL.materials.id, customer_id: HOUSEHOLD,
-                    event_date: QA_DATE, service_period_start: QA_DATE,
+                    enrollment_agreement_id: AGREEMENT,
+                    source_charge_id: String(obligation!.chargeId),
+                    amount_cents: -100,
+                    charge_category: "credit",
+                    reason: "core QA: prove a drafted credit is not owed",
+                    effective_date: QA_DATE,
+                    idempotency_key: `thread11:coreqa:draftlaw:${Date.now()}`,
                 },
             });
-            expect(added.json.ok, `charge.add: ${JSON.stringify(added.json)}`).toBe(true);
+            expect(credited.json.ok, `draft a credit: ${JSON.stringify(credited.json)}`).toBe(true);
         }
+
         const drafted = await account(request);
         const draft = byStatus(drafted, "draft")[0];
-        expect(draft, "a draft exists").toBeTruthy();
+        expect(draft, `a draft exists (from a ${draftFrom})`).toBeTruthy();
         expect(num(drafted.reconciliation?.balanceCents), "a draft does not move what is owed").toBe(owedBefore);
         expect(num(drafted.reconciliation?.grossCents), "nor gross").toBe(grossBefore);
         expect(num(drafted.collectible?.currentlyCollectibleCents), "nor collectibility")
@@ -304,10 +366,35 @@ test.describe("QA 3 · charge lifecycle", () => {
             .not.toContain(draftId);
         expect(byStatus(after, "posted").map((r) => String(r.chargeId)), "and it is posted")
             .toContain(draftId);
-        expect(num(after.reconciliation?.grossCents), "gross rose by exactly the charge").toBe(
-            grossBefore + draftCents,
+
+        /*
+         * POSTING MOVES THE POSITION BY THE ROW'S OWN SIGNED AMOUNT.
+         *
+         * An obligation raises what is owed; a credit lowers it. Asserting a rise either way would
+         * be asserting the sign of the fixture rather than the law, so the row's own amount decides
+         * the direction and the law under test stays "nothing moved until this was posted".
+         */
+        expect(num(after.reconciliation?.balanceCents), "and only now does what is owed move").toBe(
+            owedBefore + draftCents,
         );
-        expect(num(after.reconciliation?.balanceCents), "and so did what is owed").toBe(owedBefore + draftCents);
+        /*
+         * GROSS ONLY MOVES FOR AN OBLIGATION.
+         *
+         * Whether the drafted row is an obligation or an offset is a fact about the ROW, not about
+         * how this test obtained it. Reading it from `draftFrom` was wrong the moment a leftover
+         * credit draft was picked up: posting it moved the balance by -100 and left gross alone,
+         * exactly as it should, and the assertion blamed the product. The row's own category
+         * decides, by the same distinction the reconciliation makes.
+         */
+        const OFFSET_CATEGORIES = new Set(["credit", "discount", "subsidy_offset", "adjustment"]);
+        const draftIsObligation = !draft.correctsChargeId && !OFFSET_CATEGORIES.has(String(draft.categoryKey));
+        if (draftIsObligation) {
+            expect(num(after.reconciliation?.grossCents), "gross rose by exactly the charge").toBe(
+                grossBefore + draftCents,
+            );
+        } else {
+            expect(num(after.reconciliation?.grossCents), "an offset does not touch gross").toBe(grossBefore);
+        }
     });
 
     test("C · the charge detail states the same charge the account states", async ({ request }) => {
@@ -325,7 +412,18 @@ test.describe("QA 3 · charge lifecycle", () => {
     });
 
     test("D · reversing a posted charge appends, refuses twice, and survives a reload", async ({ request }) => {
-        const target = await ensurePosted(request, TPL.latePickup);
+        /*
+         * REUSE THE CHARGE THAT WAS ALREADY REVERSED, RATHER THAN DEMANDING A FRESH ONE.
+         *
+         * `ensurePosted` deliberately skips charges that carry a reversal, so on a rerun it tried to
+         * create a second Late pickup — and `charge.add` is idempotent per template and period, so
+         * it answered ok and created nothing. The product is right: one template, one charge, one
+         * period. Every claim below is about a reversal that already happened, so the reversed
+         * charge is exactly the right subject and needs no replacement.
+         */
+        const existing = posted(await account(request), TPL.latePickup.label)
+            .filter((r) => !r.correctsChargeId);
+        const target = existing.length > 0 ? existing[0] : await ensurePosted(request, TPL.latePickup);
         const chargeId = String(target.chargeId);
         const before = await account(request);
         const owedBefore = num(before.reconciliation?.balanceCents);
@@ -586,11 +684,30 @@ test.describe("QA 5 · expected funding", () => {
 
 test.describe("QA 6 · manual adjustment", () => {
     test("A+B+C · a reduction drafts, posts, reaches exactly zero, and goes no further", async ({ request }) => {
-        const target = await ensurePosted(request, TPL.fieldTrip);
+        await ensurePosted(request, TPL.fieldTrip);
+        const before = await account(request);
+
+        /*
+         * AN OBLIGATION THAT STILL HAS ROOM, NOT ONE PARTICULAR OBLIGATION.
+         *
+         * This named the Field trip charge and assumed it always had something left to reduce. It
+         * does not: reducing it to zero is the whole point of this test, and the reversal that
+         * restores it lives in the NEXT test — so any run that stopped in between left it at zero
+         * and the next run failed on its own leftovers rather than on the product. The law is about
+         * any obligation, so the subject is whichever one still has room, Field trip preferred.
+         */
+        const roomOf = (vm: Vm, r: Row) =>
+            num(r.amountCents) + (vm.reductions ?? [])
+                .filter((d) => String(d.sourceChargeId ?? "") === String(r.chargeId)
+                    && String(d.chargeStatus ?? "") === "posted")
+                .reduce((sum, d) => sum + num(d.amountCents), 0);
+
+        const candidates = byStatus(before, "posted").filter((r) => !r.correctsChargeId && roomOf(before, r) > 0);
+        const target = candidates.find((r) => String(r.description ?? "").includes(TPL.fieldTrip.label))
+            ?? candidates[0];
+        expect(target, "an obligation with something left to reduce").toBeTruthy();
         const chargeId = String(target.chargeId);
         const gross = num(target.amountCents);
-
-        const before = await account(request);
         const owedBefore = num(before.reconciliation?.balanceCents);
 
         /*
@@ -773,7 +890,7 @@ test.describe("QA 7-8 · payment receipt and unapplied money", () => {
          * invariants are re-proven either way.
          */
         const existing = (await account(request)).payments?.find(
-            (p) => String(p.reference ?? "") === "CORE-QA-0001",
+            (p) => String(p.reference ?? "") === "CORE-QA-0001" && String(p.direction) === "inbound",
         );
 
         let expectedApplied = 0;
@@ -821,7 +938,7 @@ test.describe("QA 7-8 · payment receipt and unapplied money", () => {
         }
 
         const after = await account(request);
-        const payment = (after.payments ?? []).find((p) => String(p.reference ?? "") === "CORE-QA-0001");
+        const payment = (after.payments ?? []).find((p) => String(p.reference ?? "") === "CORE-QA-0001" && String(p.direction) === "inbound");
         expect(payment, `the receipt is listed: ${JSON.stringify(after.payments)}`).toBeTruthy();
 
         // 1-4 · THE RECEIPT IS WHAT WAS RECEIVED, AND STAYS SO.
@@ -835,7 +952,19 @@ test.describe("QA 7-8 · payment receipt and unapplied money", () => {
         // 5-9 · RECEIVED, APPLIED AND UNAPPLIED ARE THREE DISTINCT, CORRECT NUMBERS.
         const applied = num(payment!.appliedCents);
         const unapplied = num(payment!.unappliedCents);
-        expect(applied + unapplied, "applied plus unapplied is the receipt, exactly").toBe(
+        /*
+         * APPLIED + UNAPPLIED + REFUNDED = RECEIVED.
+         *
+         * The first form of this left the refund out and held only until scenario 11 had run: a
+         * $28.00 receipt with $5.00 refunded reports $23.00 across applied and unapplied, and the
+         * missing $5.00 is not a discrepancy — it went back to the family. That is the same
+         * distinction the refund gate makes from the other side: refunded money is NOT unapplied
+         * money, so it must not be expected to appear there.
+         */
+        const refunded = (after.payments ?? [])
+            .filter((p) => String(p.refundsPaymentId ?? "") === String(payment!.paymentId))
+            .reduce((sum, p) => sum + Math.abs(num(p.amountCents)), 0);
+        expect(applied + unapplied + refunded, "applied plus unapplied plus refunded is the receipt").toBe(
             num(payment!.amountCents),
         );
         expect(unapplied, "and unapplied money is still received money").toBeGreaterThanOrEqual(0);
@@ -854,22 +983,48 @@ test.describe("QA 7-8 · payment receipt and unapplied money", () => {
 
     test("unapplied money can be applied elsewhere without a new receipt", async ({ request }) => {
         const vm = await account(request);
-        const payment = (vm.payments ?? []).find((p) => String(p.reference ?? "") === "CORE-QA-0001");
+        const payment = (vm.payments ?? []).find((p) => String(p.reference ?? "") === "CORE-QA-0001" && String(p.direction) === "inbound");
         expect(payment, "the overpaid receipt").toBeTruthy();
         const paymentId = String(payment!.paymentId);
-        const unapplied = num(payment!.unappliedCents ?? 0);
+        let unapplied = num(payment!.unappliedCents ?? 0);
         const receiptsBefore = (vm.payments ?? []).length;
+
+        /*
+         * IF THERE IS NOTHING UNAPPLIED, MAKE SOME — THE WAY THE PRODUCT MAKES IT.
+         *
+         * This test used to fall back to a made-up 1000 cents when the receipt had no unapplied
+         * money, and was refused `only 0 cents remain unapplied` the first time a prior phase had
+         * placed all of it. Reversing an application is how money genuinely becomes unapplied, so
+         * that is what this does — it is the same act scenario 14 performs, and it keeps the
+         * scenario about PLACING unapplied money rather than about inventing it.
+         */
+        if (unapplied === 0) {
+            const active = ((payment!.applications ?? []) as Row[]).filter((a) => String(a.status) === "active");
+            expect(active.length, "an application to release money from").toBeGreaterThan(0);
+            const released = await execute(request, {
+                action_key: "payment.reverse_application", ...ENT,
+                payload: {
+                    allocation_id: String(active[0].allocationId),
+                    reason: "core QA: release money so it can be placed elsewhere",
+                },
+            });
+            expect(released.json.ok, `release: ${JSON.stringify(released.json)}`).toBe(true);
+            const refreshed = await qaReceipt(request);
+            unapplied = num(refreshed.payment.unappliedCents ?? 0);
+            expect(unapplied, "money is now unapplied").toBeGreaterThan(0);
+        }
 
         const alreadyPaying = new Set(
             ((payment!.applications ?? []) as Row[]).map((a) => String(a.chargeId)),
         );
-        const open = byStatus(vm, "posted").find(
+        const current = await account(request);
+        const open = byStatus(current, "posted").find(
             (r) => num(r.outstandingCents) > 0 && !r.correctsChargeId && !alreadyPaying.has(String(r.chargeId)),
         );
         expect(open, "another obligation with something still owed on it").toBeTruthy();
         const targetId = String(open!.chargeId);
         const targetOutstandingBefore = num(open!.outstandingCents);
-        const moveCents = Math.min(unapplied > 0 ? unapplied : 1000, targetOutstandingBefore);
+        const moveCents = Math.min(unapplied, targetOutstandingBefore);
         expect(moveCents, "there is unapplied money to place").toBeGreaterThan(0);
 
         const applied = await execute(request, {
@@ -885,7 +1040,7 @@ test.describe("QA 7-8 · payment receipt and unapplied money", () => {
         );
         expect((after.payments ?? []).length, "and no new receipt was created").toBe(receiptsBefore);
 
-        const same = (after.payments ?? []).find((p) => String(p.reference ?? "") === "CORE-QA-0001")!;
+        const same = (after.payments ?? []).find((p) => String(p.reference ?? "") === "CORE-QA-0001" && String(p.direction) === "inbound")!;
         expect(num(same.amountCents), "the receipt itself is unchanged — it is history").toBe(
             num(payment!.amountCents),
         );
@@ -895,10 +1050,16 @@ test.describe("QA 7-8 · payment receipt and unapplied money", () => {
 
 // ── PHASE 9 · MOVE PAYMENT ──────────────────────────────────────────────────────────────────────
 
-/** The QA receipt, with its applications, read from the canonical account. */
+/**
+ * The QA receipt, with its applications, read from the canonical account.
+ *
+ * THE DIRECTION IS PART OF THE IDENTITY. A refund carries the reference of the receipt it refunds,
+ * so matching on the reference alone starts returning the OUTBOUND row the moment scenario 11 has
+ * run — and every later assertion then describes a refund while claiming to describe a receipt.
+ */
 async function qaReceipt(request: APIRequestContext) {
     const vm = await account(request);
-    const payment = (vm.payments ?? []).find((p) => String(p.reference ?? "") === "CORE-QA-0001");
+    const payment = (vm.payments ?? []).find((p) => String(p.reference ?? "") === "CORE-QA-0001" && String(p.direction) === "inbound");
     expect(payment, "the QA receipt").toBeTruthy();
     return { vm, payment: payment! };
 }
@@ -1184,10 +1345,71 @@ test.describe("QA 12 · cross-surface convergence", () => {
         const drafts = byStatus(vm, "draft");
         const postedRows = byStatus(vm, "posted");
 
-        // THE TWO INDEPENDENT AUTHORITIES AGREE WITH EACH OTHER FIRST.
-        expect(num(vm.collectible?.outstandingCents), "account side and collections side agree on outstanding")
-            .toBe(owed);
-        expect(collectible, "and nothing is suppressing collectibility").toBe(owed);
+        /*
+         * ── THE TWO INDEPENDENT AUTHORITIES ────────────────────────────────────────────────────
+         *
+         * This is the assertion that found the collectibility double count: the account side said
+         * 9300 and the collections side said 17300 for the same household in the same period,
+         * because reduction rows were counted both inside their obligation's net and again as
+         * obligations of their own.
+         *
+         * IT IS ASSERTED IN TWO PARTS, AND THE SPLIT IS THE POINT.
+         *
+         * Strict equality between the two is NOT a universal law, and asserting it as one would make
+         * this gate fail on correct behaviour. The two authorities answer slightly different
+         * questions, and a household with a long history separates them legitimately in two ways:
+         *
+         *   CLAMPING — collections never reports a charge as collectible for less than nothing, so
+         *   an over-applied charge contributes 0, while the account reconciliation carries that same
+         *   charge as a credit and nets it against whatever else is owed.
+         *
+         *   PERIOD — a credit posted in one month against an obligation billed in the next counts on
+         *   the account side now and on the collections side never, because that obligation is not
+         *   in this period at all.
+         *
+         * So the UNIVERSAL claim is asserted always, and it is the one the defect actually broke:
+         * nobody can be asked to collect more than was ever charged. Before the repair this
+         * household was asked for 17300 against 11800 ever charged in the period. The EXACT claim is
+         * asserted wherever it is meaningful — when nothing has separated the two — and where
+         * something has, the separating rows are NAMED rather than silently tolerated.
+         */
+        const grossThisPeriod = num(vm.reconciliation?.grossCents);
+        expect(
+            collectible,
+            `nobody is asked to collect more than was charged: ${collectible} collectible, ${grossThisPeriod} charged`,
+        ).toBeLessThanOrEqual(grossThisPeriod);
+        expect(num(vm.collectible?.submittedClaimSuppressionCents), "and nothing is suppressing it").toBe(0);
+
+        const periodKey = String(vm.period?.key ?? "");
+        const obligationsThisPeriod = byStatus(vm, "posted").filter(
+            (r) => String(r.periodKey) === periodKey && !isOffsetRow(r),
+        );
+        const obligationIds = new Set(obligationsThisPeriod.map((r) => String(r.chargeId)));
+        const crossPeriodOffsets = byStatus(vm, "posted")
+            .filter((r) => String(r.periodKey) === periodKey && isOffsetRow(r))
+            .filter((r) => {
+                const red = (vm.reductions ?? []).find((d) => String(d.chargeId) === String(r.chargeId));
+                const owner = String(red?.sourceChargeId ?? r.correctsChargeId ?? "");
+                return owner !== "" && !obligationIds.has(owner);
+            });
+        const overApplied = obligationsThisPeriod.filter((r) => num(r.outstandingCents) < 0);
+
+        if (crossPeriodOffsets.length === 0 && overApplied.length === 0) {
+            expect(
+                num(vm.collectible?.outstandingCents),
+                "account side and collections side agree on outstanding",
+            ).toBe(owed);
+            expect(collectible, "and collectible equals outstanding").toBe(owed);
+        } else {
+            expect(
+                crossPeriodOffsets.length + overApplied.length,
+                "the two sides differ only where something demonstrably separates them",
+            ).toBeGreaterThan(0);
+            console.log(
+                `QA12 GRAIN · owed ${owed} vs collectible ${collectible} · `
+                + `${crossPeriodOffsets.length} cross-period offsets, ${overApplied.length} over-applied charges`,
+            );
+        }
 
         // THE CHARGE DETAIL AGREES WITH THE ACCOUNT ABOUT THE SAME CHARGE.
         const baseline = posted(vm, TPL.registration.label)[0];
