@@ -176,28 +176,36 @@ describe("Current Work — secondary work", () => {
  * `Record outcome` acts on the PRIMARY work — correctly. The consequence, measured on staging, was
  * that a second open work item could not be resolved from the surface an operator is actually
  * looking at: an `offer_spot` work was started, was live in the runtime, and its outcomes were
- * reachable from nowhere, because the only place listing secondary work was the expanded workspace.
+ * reachable from nowhere, because the only place listing secondary work was a workspace component
+ * that has since been deleted as unreachable.
  *
- * Both surfaces now derive it identically, so they cannot disagree about what counts as secondary.
+ * Both live surfaces now derive it identically, so they cannot disagree about what counts as
+ * secondary — and both are proven by rendering, not by reading their source.
  */
-describe("secondary work is reachable from the summary card", () => {
+describe("what the summary card's source can and cannot prove", () => {
     const card = () => readFileSync(resolve(__dirname, "../..", "components/admin/focusPanel/cards/CurrentWorkCard.tsx"), "utf8");
 
-    it("the summary card lists the stage's other open work", () => {
-        const src = card();
-        expect(src).toContain('data-work-section="also-in-progress"');
-        expect(src).toContain("data-work-secondary-item");
-    });
-
-    it("uses the same derivation as the workspace section", () => {
-        // One rule for "what is secondary", so the two surfaces cannot drift apart.
-        expect(card()).toContain('item.kind === "stage_work" && item.workRole === "secondary" && item.status !== "complete"');
-    });
-
-    it("selects through the same handler, so a row opens its own outcome context", () => {
-        expect(card()).toContain("onClick={() => onChecklistItem(item)}");
-    });
-
+    /*
+     * THREE ASSERTIONS WERE REMOVED FROM HERE, AND ONE OF THEM WAS WRONG THE WHOLE TIME.
+     *
+     * They read this component's source and claimed the summary card "lists the stage's other open
+     * work", "uses the same derivation as the workspace section", and "selects through the same
+     * handler". All three passed. The markup was genuinely in the file.
+     *
+     * It was also nested inside `helpful.length > 0 || subordinateOutcome`, so a stage projecting
+     * no helpful commands and no subordinate outcome rendered no section at all — the same gate
+     * #877 removed from the focused surface, still live here. Rendering the card on exactly that
+     * shape is what exposed it; `toContain` never could, because presence in source was never the
+     * question. The render proofs now live in `currentWorkSecondaryWorkIsReachable.test.tsx`.
+     *
+     * A second one had quietly rotted: "the same derivation as the workspace section" named
+     * `CurrentWorkWorkspace`, which has since been deleted as unreachable. It was comparing the
+     * live card against a component nothing rendered.
+     *
+     * What remains below is the assertion that is genuinely about source: a hardcoded work key
+     * would make this one process's feature instead of a platform behaviour, and no amount of
+     * rendering proves the absence of a string.
+     */
     it("names no work key — it is whatever the stage configured", () => {
         const code = card()
             .split("\n")

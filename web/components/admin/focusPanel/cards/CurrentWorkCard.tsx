@@ -934,47 +934,57 @@ function SummaryBody({
                                 Record outcome
                             </button>
                         :   null}
-                        {secondaryWork.length > 0 ?
-                            <div data-work-section="also-in-progress" data-work-secondary-summary="true">
-                                <p className="alloy-os-currentwork__context-label">Also in progress</p>
-                                <ul className="alloy-os-currentwork__recent-activity-list">
-                                    {secondaryWork.map((item) => (
-                                        <li key={item.key}>
-                                            <button
-                                                type="button"
-                                                className="alloy-os-currentwork__record-outcome-link"
-                                                data-work-secondary-item={item.key}
-                                                onClick={() => onChecklistItem(item)}
-                                            >
-                                                {item.label}
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        :   null}
                     </div>
                 :   null}
-                <div className="alloy-os-currentwork__still-activity-row" data-work-still-activity-row="true">
-                    <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
-                    {showRecentActivity ?
-                        <div className="alloy-os-currentwork__recent-activity" data-work-recent-activity="true">
-                            {recentActivity.length > 0 ?
-                                <>
-                                    <p className="alloy-os-currentwork__context-label">Recent activity</p>
-                                    <ul className="alloy-os-currentwork__recent-activity-list">
-                                        {recentActivity.map((item) => (
-                                            <li key={item.key}>
-                                                <span className="alloy-os-currentwork__recent-activity-icon" aria-hidden>
-                                                    <CurrentWorkActivityKindIcon
-                                                        kind={item.kind as CurrentWorkActivityPreviewItem["kind"]}
-                                                    />
-                                                </span>
-                                                <span className="alloy-os-currentwork__recent-activity-body">
-                                                    <span className="alloy-os-currentwork__recent-activity-label">{item.label}</span>
-                                                    {item.occurredAt ?
-                                                        <span className="alloy-os-currentwork__recent-activity-when">{item.occurredAt}</span>
-                                                    :   null}
+                {/*
+                  * OUTSIDE THE ACTION STACK, for the same reason the focused surface is.
+                  *
+                  * This sat inside `helpful.length > 0 || subordinateOutcome`, so a stage projecting
+                  * no helpful commands and no subordinate outcome dropped the section entirely — and
+                  * the static guard that claimed "the summary card lists the stage's other open
+                  * work" stayed green throughout, because the markup was always present in source.
+                  * A render test on that exact shape is what found it. Other open work exists
+                  * independently of whether this stage happens to project commands.
+                  */}
+                {secondaryWork.length > 0 ?
+                    <div data-work-section="also-in-progress" data-work-secondary-summary="true">
+                        <p className="alloy-os-currentwork__context-label">Also in progress</p>
+                        <ul className="alloy-os-currentwork__recent-activity-list">
+                            {secondaryWork.map((item) => (
+                                <li key={item.key}>
+                                    <button
+                                        type="button"
+                                        className="alloy-os-currentwork__record-outcome-link"
+                                        data-work-secondary-item={item.key}
+                                        onClick={() => onChecklistItem(item)}
+                                    >
+                                        {item.label}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+            :   null}
+            <div className="alloy-os-currentwork__still-activity-row" data-work-still-activity-row="true">
+                <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
+                {showRecentActivity ?
+                    <div className="alloy-os-currentwork__recent-activity" data-work-recent-activity="true">
+                        {recentActivity.length > 0 ?
+                            <>
+                                <p className="alloy-os-currentwork__context-label">Recent activity</p>
+                                <ul className="alloy-os-currentwork__recent-activity-list">
+                                    {recentActivity.map((item) => (
+                                        <li key={item.key}>
+                                            <span className="alloy-os-currentwork__recent-activity-icon" aria-hidden>
+                                                <CurrentWorkActivityKindIcon
+                                                    kind={item.kind as CurrentWorkActivityPreviewItem["kind"]}
+                                                />
+                                            </span>
+                                            <span className="alloy-os-currentwork__recent-activity-body">
+                                                <span className="alloy-os-currentwork__recent-activity-label">{item.label}</span>
+                                                {item.occurredAt ?
+                                                    <span className="alloy-os-currentwork__recent-activity-when">{item.occurredAt}</span>
+                                                :   null}
                                                 </span>
                                             </li>
                                         ))}
