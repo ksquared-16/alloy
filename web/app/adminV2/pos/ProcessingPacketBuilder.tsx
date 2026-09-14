@@ -9,6 +9,8 @@ import { mergeFormListWithPacketItems, type PacketStepFormOption } from "@/lib/a
 import type { NewDocumentStep } from "@/components/forms/workspace/PacketAddStepChooser";
 import { readPacketStepConfig } from "@/lib/forms/packets/packetStepKind";
 import { trimLeadingEmptyStepRows } from "@/lib/admin/forms/packetStepRecentFormPlacement";
+import type { PacketExperienceVM } from "@/components/forms/workspace/PacketExperienceOverview";
+import type { StepExperienceCard } from "@/components/forms/workspace/PacketStepCompositionEditor";
 import { countSessionsByPacketDefinition } from "@/lib/forms/packets/packetOrchestrationPresentation";
 import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
@@ -31,6 +33,8 @@ type PacketItem = {
  * legacy route-bound PacketDefinitionDetailClient, keyed on a `packetDefId` prop instead
  * of useParams/useSearchParams, and composes the preserved PacketBuilderWorkspaceLayout view.
  */
+type PacketExperiencePayload = PacketExperienceVM & { steps: StepExperienceCard[] };
+
 export default function ProcessingPacketBuilder({
     packetDefId,
     onBack,
@@ -58,6 +62,11 @@ export default function ProcessingPacketBuilder({
     const [createdLink, setCreatedLink] = useState<PacketCreatedLinkPayload | null>(null);
     /** Who the next launch is for. Seeds the session's CRM snapshot, so known info can be reused. */
     const [launchTarget, setLaunchTarget] = useState<RecordPickerOption | null>(null);
+    /**
+     * What this packet asks of a family, derived server-side from the configuration that exists.
+     * Null until it arrives — the composition editor renders without it rather than blocking.
+     */
+    const [experience, setExperience] = useState<PacketExperiencePayload | null>(null);
 
     const hasCompletedInitialLoad = useRef(false);
 
@@ -72,16 +81,19 @@ export default function ProcessingPacketBuilder({
         else setRefreshing(true);
         setErr(null);
         try {
-            const [pRes, fRes, lRes, sRes] = await Promise.all([
+            const [pRes, fRes, lRes, sRes, xRes] = await Promise.all([
                 fetch(`/api/admin/forms/packet-definitions/${encodeURIComponent(packetDefId)}`),
                 fetch("/api/admin/forms"),
                 fetch(`/api/admin/forms/packet-definitions/${encodeURIComponent(packetDefId)}/public-links`),
                 fetch("/api/admin/forms/packet-sessions", { credentials: "include" }),
+                fetch(`/api/admin/forms/packet-definitions/${encodeURIComponent(packetDefId)}/experience`),
             ]);
             const pj = await pRes.json().catch(() => ({}));
             const fj = await fRes.json().catch(() => ({}));
             const lj = await lRes.json().catch(() => ({}));
             const sj = await sRes.json().catch(() => ({}));
+            const xj = await xRes.json().catch(() => ({}));
+            setExperience(xRes.ok ? ((xj as { data?: PacketExperiencePayload }).data ?? null) : null);
             if (!pRes.ok) throw new Error((pj as { error?: string }).error ?? "Failed to load packet");
             const def = (pj as { data?: { definition?: { name: string; key: string; description: string | null; is_active: boolean; metadata?: Record<string, unknown> }; items?: PacketItem[] } }).data;
             if (!def?.definition) throw new Error("Invalid response");
@@ -426,6 +438,7 @@ export default function ProcessingPacketBuilder({
                             defKey={defKey}
                             stepCount={items.length}
                             sessionCount={sessionCount}
+                            experience={experience}
                             allStepsPublished={allStepsPublished}
                             savedItems={items}
                             steps={steps}

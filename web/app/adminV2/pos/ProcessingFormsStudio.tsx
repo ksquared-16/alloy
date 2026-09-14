@@ -13,10 +13,12 @@ export default function ProcessingFormsStudio({
     initialFormName = null,
     onSelectedFormIdChange,
     initialTab = "forms",
+    initialFormMode = "edit",
     onTabChange,
 }: {
     selectedFormId: string | null;
     initialFormName?: string | null;
+    initialFormMode?: "edit" | "preview";
     onSelectedFormIdChange: (formId: string | null) => void;
     initialTab?: ProcessingStudioTab;
     onTabChange?: (tab: ProcessingStudioTab) => void;
@@ -77,6 +79,7 @@ export default function ProcessingFormsStudio({
                 formId={selectedFormId}
                 formMeta={formMeta}
                 initialFormName={initialFormName}
+                initialMode={initialFormMode}
                 onBack={handleBackFromBuilder}
             />
         );

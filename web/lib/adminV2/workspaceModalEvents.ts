@@ -25,6 +25,12 @@ export type ProcessingModalIntent =
           studioTab?: ProcessingStudioTabKey;
           formId?: string | null;
           formName?: string | null;
+          /**
+           * Which face of the Form editor to land on. A packet step offering both "Manage
+           * information" and "Preview form" must actually arrive somewhere different for each,
+           * or the second is a lie about the first.
+           */
+          formMode?: "edit" | "preview";
       }
     | {
           mode: "work";

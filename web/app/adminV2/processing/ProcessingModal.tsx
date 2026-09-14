@@ -56,6 +56,7 @@ export default function ProcessingModal({
     );
     const [studioFormId, setStudioFormId] = useState<string | null>(null);
     const [studioFormName, setStudioFormName] = useState<string | null>(null);
+    const [studioFormMode, setStudioFormMode] = useState<"edit" | "preview">("edit");
 
     useEffect(() => {
         if (open) {
@@ -131,6 +132,7 @@ export default function ProcessingModal({
             setStudioTab(intent.studioTab ?? "forms");
             setStudioFormId(intent.formId ?? null);
             setStudioFormName(intent.formName ?? null);
+            setStudioFormMode(intent.formMode ?? "edit");
         } else {
             setMode("work");
             const caseId = intent.caseId?.trim() || null;
@@ -184,6 +186,7 @@ export default function ProcessingModal({
                         <ProcessingFormsStudio
                             selectedFormId={studioFormId}
                             initialFormName={studioFormName}
+                            initialFormMode={studioFormMode}
                             onSelectedFormIdChange={(formId) => {
                                 setStudioFormId(formId);
                                 if (!formId) setStudioFormName(null);

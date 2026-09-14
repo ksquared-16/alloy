@@ -105,11 +105,14 @@ export default function ProcessingFormBuilder({
     formId,
     formMeta,
     initialFormName = null,
+    initialMode = "edit",
     onBack,
 }: {
     formId: string;
     formMeta: ProcessingFormRow | null;
     initialFormName?: string | null;
+    /** A packet step's "Preview form" lands here directly, rather than on Edit. */
+    initialMode?: BuilderMode;
     onBack: () => void;
 }) {
     const {
@@ -125,7 +128,7 @@ export default function ProcessingFormBuilder({
     const [schema, setSchema] = useState<FormSchemaV1 | null>(null);
     const [editVersionId, setEditVersionId] = useState<string | null>(null);
     const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
-    const [mode, setMode] = useState<BuilderMode>("edit");
+    const [mode, setMode] = useState<BuilderMode>(initialMode);
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     /**
      * Where this Form's questions live on its paperwork, when it has any.

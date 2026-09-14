@@ -19,8 +19,13 @@ import {
 import {
     PacketStepCompositionEditor,
     type StepDraft,
+    type StepExperienceCard as PacketStepExperienceRow,
 } from "@/components/forms/workspace/PacketStepCompositionEditor";
 import type { NewDocumentStep } from "@/components/forms/workspace/PacketAddStepChooser";
+import {
+    PacketExperienceOverview,
+    type PacketExperienceVM,
+} from "@/components/forms/workspace/PacketExperienceOverview";
 import {
     intakeWorkspaceBtnPrimary,
     intakeWorkspaceBtnSecondary,
@@ -28,7 +33,6 @@ import {
 import type { PacketStepFormOption } from "@/lib/admin/forms/packetDefinitionStepForms";
 import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import {
-    buildPacketStepDisplayRows,
     packetOrchestrationStatusLabel,
     packetOrchestrationStatusTone,
     packetStepReadinessLabel,
@@ -92,6 +96,8 @@ type Props = {
      * retired standalone Forms surface.
      */
     onOpenWorkQueue?: () => void;
+    /** Derived obligation facts for this packet; null while loading. */
+    experience?: (PacketExperienceVM & { steps: PacketStepExperienceRow[] }) | null;
 };
 
 /** Packet builder orchestration layout (OW-4). */
@@ -126,13 +132,13 @@ export function PacketBuilderWorkspaceLayout({
     launchTarget,
     onToggleLink,
     onOpenWorkQueue,
+    experience,
 }: Props) {
     const statusRow = {
         is_active: defActive,
         step_count: stepCount,
         all_steps_published: allStepsPublished,
     };
-    const pipelinePreview = buildPacketStepDisplayRows(savedItems);
 
     return (
         <>
@@ -143,27 +149,12 @@ export function PacketBuilderWorkspaceLayout({
                         tone={packetOrchestrationStatusTone(statusRow)}
                     />
                     <span className={opMetadata}>
-                        {stepCount} step{stepCount === 1 ? "" : "s"} · {sessionCount} session
-                        {sessionCount === 1 ? "" : "s"}
+                        {stepCount} step{stepCount === 1 ? "" : "s"}
                     </span>
                 </div>
                 {defDesc ?
                     <p className={clsx("mt-2", opMetadata)}>{defDesc}</p>
                 :   null}
-                <div className="mt-3 flex flex-wrap gap-2">
-                    {onOpenWorkQueue ? (
-                        <button type="button" onClick={onOpenWorkQueue} className={intakeWorkspaceBtnPrimary}>
-                            Session inbox
-                        </button>
-                    ) : (
-                        <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetSessions} className={intakeWorkspaceBtnPrimary}>
-                            Session inbox
-                        </FormsOperationalLink>
-                    )}
-                    <a href="#packet-distribution" className={intakeWorkspaceBtnSecondary}>
-                        Launch packet
-                    </a>
-                </div>
             </div>
 
             <div className={clsx(opCaseFileCanvas, "mt-5", opStackPage)} data-testid="packet-builder-workspace">
@@ -222,42 +213,15 @@ export function PacketBuilderWorkspaceLayout({
                     </div>
                 </IntakeWorkspaceRegion>
 
-                {pipelinePreview.length > 0 ?
-                    <section className={opRegionSeparator}>
-                        {/*
-                         * "Included forms", not "Saved pipeline".
-                         *
-                         * The operator's question here is which artifacts make up this packet — the
-                         * old title answered a question about server state instead. The ORDER is
-                         * kept and still numbered, because it is not cosmetic: the runtime advances
-                         * through `current_sequence_index`, and review renders in the same order.
-                         */}
-                        <IntakeWorkspaceRegion
-                            title="Included forms"
-                            lead={`${pipelinePreview.length} form${pipelinePreview.length === 1 ? "" : "s"} · the order a family meets them, and the order they are reviewed in.`}
-                            data-testid="packet-region-included-forms"
-                        >
-                            <ol className={opGroupedSurface}>
-                                {pipelinePreview.map((step) => (
-                                    <li key={`${step.sequence_index}-${step.form_definition_id}`} className={opGroupedRowInner}>
-                                        <div className="flex flex-wrap items-center justify-between gap-2">
-                                            <span className="text-sm font-medium text-alloy-midnight">
-                                                {step.sequence_index + 1}. {step.form_name}
-                                            </span>
-                                            <FormsReviewBadge
-                                                label={packetStepReadinessLabel(step.step_has_published)}
-                                                tone={step.step_has_published ? "success" : "warning"}
-                                            />
-                                        </div>
-                                        {step.step_label ?
-                                            <p className={clsx("mt-0.5", opMutedMeta)}>{step.step_label}</p>
-                                        :   null}
-                                    </li>
-                                ))}
-                            </ol>
-                        </IntakeWorkspaceRegion>
-                    </section>
-                :   null}
+                {/*
+                 * "What families complete" replaced "Included forms".
+                 *
+                 * The old region answered a question about storage — which Form rows this packet
+                 * contains — for a packet that contains one Form, one document to read and one
+                 * document to send in. Calling all three "forms" was not shorthand, it was wrong,
+                 * and it was the reason an administrator could not tell what a family would meet.
+                 */}
+                <PacketExperienceOverview vm={experience ?? null} />
 
                 <section id="packet-steps" className={clsx(opRegionSeparator, "rounded-[14px] border border-alloy-stone/20 bg-white p-4")} data-testid="packet-region-steps">
                     {/*
@@ -269,8 +233,8 @@ export function PacketBuilderWorkspaceLayout({
                      * through `current_sequence_index`, and review renders in the same order.
                      */}
                     <IntakeWorkspaceRegion
-                        title="Confirm order"
-                        lead="The order a family meets these forms, and the order they are reviewed in. Processing already chose the forms — change the order here if it should read differently."
+                        title="What families complete"
+                        lead="Each obligation, in the order a family meets it. Change what is asked here; change how a question is worded, whether it is required, and where its answer is stored, inside the step itself."
                     >
                         <PacketStepCompositionEditor
                             steps={steps}
@@ -278,6 +242,7 @@ export function PacketBuilderWorkspaceLayout({
                             recentPublishedForms={recentPublishedForms}
                             busy={busy}
                             savedStepCount={savedItems.length}
+                            experience={experience?.steps}
                             onStepsChange={onStepsChange}
                             onAddStep={onAddStep}
                             onAddDocumentStep={onAddDocumentStep}
@@ -288,7 +253,19 @@ export function PacketBuilderWorkspaceLayout({
                     </IntakeWorkspaceRegion>
                 </section>
 
-                <section id="packet-distribution" className={clsx(opRegionSeparator, "rounded-[14px] border border-alloy-stone/20 bg-white p-4")} data-testid="packet-region-distribution">
+                {/*
+                 * SECONDARY, BECAUSE THIS PACKET IS USUALLY PROCESS-OWNED.
+                 *
+                 * The page said in words that a configured process launches participant work on its
+                 * own, and then devoted its largest section to sending links by hand. Direct send is
+                 * a real capability and keeps working — it is simply not what an administrator opens
+                 * an Enrollment packet to do, so it no longer competes with the configuration.
+                 */}
+                <details className={clsx(opRegionSeparator, "rounded-[14px] border border-alloy-stone/20 bg-white p-4")} data-testid="packet-region-operational">
+                    <summary className="cursor-pointer text-[12px] font-semibold text-alloy-midnight/70">
+                        Direct distribution and session history
+                    </summary>
+                    <div className="mt-3" data-testid="packet-region-distribution">
                     {/*
                      * Named so it cannot be mistaken for Enrollment execution. `enrollment.start`
                      * already realizes the participant objective — it derives its own packet, mints
@@ -310,9 +287,9 @@ export function PacketBuilderWorkspaceLayout({
                             onToggleLink={onToggleLink}
                         />
                     </IntakeWorkspaceRegion>
-                </section>
+                    </div>
 
-                <section className={clsx(opRegionSeparator, "rounded-[14px] border border-alloy-stone/20 bg-white p-4")} data-testid="packet-region-sessions">
+                    <div className="mt-4" data-testid="packet-region-sessions">
                     <IntakeWorkspaceRegion
                         title="Sessions & review"
                         lead="Families appear here after they submit a completed run of this packet, whether it was sent directly or launched by a process."
@@ -339,7 +316,8 @@ export function PacketBuilderWorkspaceLayout({
                             )}
                         </div>
                     </IntakeWorkspaceRegion>
-                </section>
+                    </div>
+                </details>
 
                 <div className={opRegionSeparator}>
                     <TechnicalDetailDisclosure

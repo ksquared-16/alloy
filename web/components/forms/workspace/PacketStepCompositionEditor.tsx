@@ -12,6 +12,18 @@ import { CLASSIFICATION_KEY_LABELS } from "@/lib/pos/processingCase/classificati
 import { PacketAddStepChooser, type NewDocumentStep } from "@/components/forms/workspace/PacketAddStepChooser";
 import { opGroupedRowInner, opGroupedSurface, opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
 
+/** What one obligation actually does, derived server-side from the configuration. */
+export type StepExperienceCard = {
+    sequence: number;
+    obligation: string;
+    behavior: string;
+    facts: string[];
+    ready: boolean;
+    readyDetail: string;
+    form_definition_id?: string | null;
+    acknowledgment_document_id?: string | null;
+};
+
 export type StepDraft = {
     packet_item_id?: string;
     form_definition_id: string;
@@ -37,6 +49,8 @@ type Props = {
     recentPublishedForms: PacketStepFormOption[];
     busy: boolean;
     savedStepCount: number;
+    /** Derived obligation facts, by sequence. Absent while loading — the row still renders. */
+    experience?: readonly StepExperienceCard[];
     onStepsChange: (updater: (rows: StepDraft[]) => StepDraft[]) => void;
     onAddStep: () => void;
     /** Document steps persist on add — their executor is generated server-side. */
@@ -53,6 +67,7 @@ export function PacketStepCompositionEditor({
     recentPublishedForms,
     busy,
     savedStepCount,
+    experience,
     onStepsChange,
     onAddStep,
     onAddDocumentStep,
@@ -64,28 +79,8 @@ export function PacketStepCompositionEditor({
         <div data-testid="packet-step-composition">
             <p className={opMetadata}>
                 Each step is one thing the family does, in order — answer questions, send in a document, or read
-                and agree to one. Save when the packet looks right.
+                and agree to one. Alloy works out how to guide them through it; you configure what is asked.
             </p>
-
-            {recentPublishedForms.length > 0 ?
-                <div className="mt-3">
-                    <p className={opMutedMeta}>Quick add published form</p>
-                    <ul className="mt-2 flex flex-wrap gap-2">
-                        {recentPublishedForms.map((f) => (
-                            <li key={f.id}>
-                                <button
-                                    type="button"
-                                    className="rounded-full border border-alloy-midnight/10 bg-white px-3 py-1.5 text-xs font-medium text-alloy-blue hover:bg-alloy-stone/20"
-                                    disabled={busy}
-                                    onClick={() => onStepsChange((rows) => applyRecentFormToSteps(rows, f.id))}
-                                >
-                                    + {f.name}
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            :   null}
 
             <ol className={clsx(opGroupedSurface, "mt-4")} data-testid="packet-step-list">
                 {steps.map((s, idx) => {
@@ -93,6 +88,7 @@ export function PacketStepCompositionEditor({
                     const published = selected?.has_published_version !== false && Boolean(s.form_definition_id);
                     const kind: PacketStepKind = s.kind ?? "form";
                     const isDocumentStep = kind !== "form";
+                    const card = experience?.find((c) => c.sequence === idx);
                     return (
                         <li key={s.packet_item_id ?? `draft-${idx}-${s.form_definition_id || "empty"}`} className={opGroupedRowInner}>
                             <div className="flex flex-wrap items-center gap-2">
@@ -129,6 +125,29 @@ export function PacketStepCompositionEditor({
                                             `Reads ${s.acknowledgment_document_title}${s.requires_signature ? ", and signs" : ""}`
                                         :   `Reads a document${s.requires_signature ? ", and signs" : ""}`}
                                     </p>
+                                    {kind === "document_acknowledgment" && (card?.acknowledgment_document_id || s.acknowledgment_document_id) ? (
+                                        /*
+                                         * The administrator should be able to see the document the family
+                                         * will be shown, from the step that asks for it — a signed URL to
+                                         * the real file, not a description of it.
+                                         */
+                                        <button
+                                            type="button"
+                                            className="mt-1.5 text-xs font-semibold text-alloy-blue hover:underline"
+                                            data-testid={`packet-step-view-document-${idx}`}
+                                            onClick={async () => {
+                                                const id = card?.acknowledgment_document_id || s.acknowledgment_document_id;
+                                                const res = await fetch(`/api/admin/documents/${encodeURIComponent(String(id))}/signed-url`, {
+                                                    credentials: "same-origin",
+                                                });
+                                                const body = (await res.json().catch(() => ({}))) as { url?: string; data?: { url?: string } };
+                                                const url = body.url ?? body.data?.url;
+                                                if (url) window.open(url, "_blank", "noopener");
+                                            }}
+                                        >
+                                            View document →
+                                        </button>
+                                    ) : null}
                                 </div>
                             :   <div className="mt-2 grid gap-3 lg:grid-cols-2">
                                 <label className="space-y-1 text-sm">
@@ -170,8 +189,22 @@ export function PacketStepCompositionEditor({
                                 </label>
                             </div>
                             }
+                            {card ? (
+                                <div className="mt-2" data-testid={`packet-step-experience-${idx}`}>
+                                    <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] font-medium text-alloy-midnight/70">
+                                        {card.facts.map((f, i) => (
+                                            <span key={f}>
+                                                {i > 0 ? <span className="mr-1.5 text-alloy-midnight/25">·</span> : null}
+                                                {f}
+                                            </span>
+                                        ))}
+                                    </p>
+                                    {/* What the family meets. Platform-owned behaviour, described rather than offered as a toggle. */}
+                                    <p className={clsx("mt-1.5", opMutedMeta)}>{card.behavior}</p>
+                                </div>
+                            ) : null}
                             {selected && !isDocumentStep ?
-                                <p className="mt-2">
+                                <p className="mt-2 flex flex-wrap gap-3">
                                     {/*
                                      * Open the FORM EDITOR, not a queue.
                                      *
@@ -194,7 +227,23 @@ export function PacketStepCompositionEditor({
                                             })
                                         }
                                     >
-                                        Edit this form →
+                                        Manage information →
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="text-xs font-semibold text-alloy-midnight/60 hover:underline"
+                                        data-testid={`packet-step-preview-form-${idx}`}
+                                        onClick={() =>
+                                            dispatchAdminV2OpenProcessingModal({
+                                                mode: "studio",
+                                                studioTab: "forms",
+                                                formId: selected.id,
+                                                formName: selected.name,
+                                                formMode: "preview",
+                                            })
+                                        }
+                                    >
+                                        Preview form
                                     </button>
                                 </p>
                             :   null}
