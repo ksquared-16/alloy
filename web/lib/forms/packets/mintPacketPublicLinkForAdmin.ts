@@ -20,6 +20,18 @@ export async function assertPacketStepsPublishableCore(
     orgId: string,
     steps: { form_definition_id: string; pinned_form_definition_version_id: string | null; sequence_index: number }[]
 ): Promise<{ ok: false; message: string } | { ok: true }> {
+    /*
+     * A packet with no steps asks a family for nothing.
+     *
+     * The loop below judges each step, so zero steps passed it vacuously and an empty packet could
+     * be sent — the family would open a link to an experience with nothing in it. An empty packet is
+     * a legitimate DRAFT, which is exactly why the refusal belongs here, at the moment someone tries
+     * to hand it to somebody, rather than in a rule that would stop it being created.
+     */
+    if (steps.length === 0) {
+        return { ok: false, message: "This packet has no steps yet, so there is nothing to send. Add at least one step." };
+    }
+
     const formIds = [...new Set(steps.map((s) => s.form_definition_id))];
     const { data: verRows, error } = await supabase
         .from("form_definition_versions")

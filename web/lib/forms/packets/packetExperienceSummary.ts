@@ -228,8 +228,16 @@ export function packetContentSummary(steps: readonly StepExperienceFacts[]): str
     return "no obligations yet";
 }
 
-/** Readiness, assembled from the same facts the cards show — not a second validation engine. */
+/**
+ * Readiness, assembled from the same facts the cards show — not a second validation engine.
+ *
+ * A packet with NO steps is a legitimate object: it is what every packet is for a moment after it is
+ * created. It is not a broken packet and it is not a ready one, and saying nothing at all left the
+ * panel blank under a "Not ready yet" heading with no reason. It reports the one thing an
+ * administrator needs to do next instead.
+ */
 export function packetReadinessRows(steps: readonly StepExperienceFacts[]): { ok: boolean; label: string }[] {
+    if (steps.length === 0) return [{ ok: false, label: "Needs setup — add at least one step" }];
     return steps.map((s) => ({ ok: s.ready, label: s.readyDetail }));
 }
 

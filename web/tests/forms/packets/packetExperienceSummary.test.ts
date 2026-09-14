@@ -274,3 +274,22 @@ describe("what the packet CONTAINS, not what a family does with it", () => {
         expect(packetContentSummary([])).toBe("no obligations yet");
     });
 });
+
+describe("a packet with no steps yet", () => {
+    /*
+     * Every packet is empty for a moment after it is created. That is a draft, not a defect — but it
+     * is also not ready, and an empty readiness panel under "Not ready yet" told an administrator
+     * nothing about what to do next.
+     */
+    it("says what to do next rather than showing nothing", () => {
+        expect(packetReadinessRows([])).toEqual([{ ok: false, label: "Needs setup — add at least one step" }]);
+    });
+
+    it("is not ready", () => {
+        expect(packetIsReady([])).toBe(false);
+    });
+
+    it("contains nothing, and says so", () => {
+        expect(packetContentSummary([])).toBe("no obligations yet");
+    });
+});

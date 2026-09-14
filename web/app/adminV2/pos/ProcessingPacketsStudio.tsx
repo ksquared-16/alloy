@@ -4,6 +4,7 @@ import { Layers, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import ProcessingPacketBuilder from "./ProcessingPacketBuilder";
 import PosPacketsPanel from "./PosPacketsPanel";
+import ProcessingCreatePacketDialog from "./ProcessingCreatePacketDialog";
 
 type PacketDef = {
     id: string;
@@ -47,6 +48,7 @@ function CardSkeleton() {
  */
 export default function ProcessingPacketsStudio() {
     const [selectedPacketDefId, setSelectedPacketDefId] = useState<string | null>(null);
+    const [creating, setCreating] = useState(false);
     const [rows, setRows] = useState<PacketDef[]>([]);
     const [loading, setLoading] = useState(true);
     const [loaded, setLoaded] = useState(false);
@@ -86,7 +88,11 @@ export default function ProcessingPacketsStudio() {
         return <ProcessingPacketBuilder packetDefId={selectedPacketDefId} onBack={handleBack} />;
     }
 
-    // Create = the requirement-responsibility composer (single creator).
+    /*
+     * SENDING a one-off packet to a household is a real capability and keeps working — it is simply
+     * not how a packet is CREATED any more. It composes from Form templates and mints share links
+     * for a chosen family, which is distribution, so it is named for that and reached deliberately.
+     */
     if (composing) {
         return <PosPacketsPanel embedded composerOnly onClose={() => setComposing(false)} onCreated={() => setLoaded(false)} />;
     }
@@ -106,16 +112,45 @@ export default function ProcessingPacketsStudio() {
                         className="max-w-md min-w-[200px] flex-1 rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-[13px] shadow-sm focus:border-alloy-bend-pine/40 focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/15"
                         data-testid="packets-studio-search"
                     />
+                    {/*
+                      * New packet creates a packet DEFINITION and opens it in this same editor.
+                      *
+                      * It used to open the per-record composer — pick Forms, pick a household, mint
+                      * a link — which is the model this product replaced. An administrator could
+                      * configure all three obligation kinds and could not create a packet that
+                      * worked that way, so the product only made sense for a packet somebody else
+                      * had already made.
+                      */}
                     <button
                         type="button"
-                        onClick={() => setComposing(true)}
+                        onClick={() => setCreating(true)}
                         className="ml-auto inline-flex items-center gap-1 rounded-lg bg-alloy-bend-pine px-3 py-2 text-[12px] font-semibold text-white hover:bg-alloy-bend-pine/90 disabled:opacity-60"
                         data-testid="packets-studio-new-packet"
                     >
                         <Plus className="h-3.5 w-3.5" aria-hidden /> New packet
                     </button>
+                    <button
+                        type="button"
+                        onClick={() => setComposing(true)}
+                        className="rounded-lg border border-alloy-midnight/12 px-3 py-2 text-[12px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/15"
+                        data-testid="packets-studio-send-one-off"
+                    >
+                        Send a one-off packet
+                    </button>
                 </div>
             </div>
+
+            <ProcessingCreatePacketDialog
+                open={creating}
+                onClose={() => setCreating(false)}
+                onCreated={(packetDefId) => {
+                    // Straight into the editor every other packet uses. A new packet is one with
+                    // no steps yet, not a different kind of thing.
+                    setCreating(false);
+                    setLoaded(false);
+                    setSelectedPacketDefId(packetDefId);
+                }}
+            />
 
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
                 {error ? (
