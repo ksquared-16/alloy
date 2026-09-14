@@ -15,12 +15,39 @@ import { spawnSync } from "node:child_process";
 // leaves this machine, and one guard in one place is the point.
 import { canonicalGatewayRuntimeRoot, liveMergePermitted } from "./trusted-host-remote-guard.mjs";
 import { firstMeaningfulLine } from "./trusted-host-push.mjs";
+import { ALLOY_REPOSITORY_ID, promotionPolicyFor } from "./repository-registry.mjs";
 
 export { canonicalGatewayRuntimeRoot, liveMergePermitted };
 
-export const ALLOWED_TARGET_BRANCHES = Object.freeze(["staging"]);
+/*
+ * THESE ARE ALLOY'S CONVENTIONS, AND THEY NOW SAY SO.
+ *
+ * As module constants they were GLOBAL: every repository Vacilando merged in
+ * inherited Alloy's staging trunk and Alloy's protected names, whether or not it
+ * had either. Alloy being the primary consumer is not a reason for Alloy's
+ * branch policy to be the runtime's default.
+ *
+ * They remain exported at Alloy's values because existing callers and tests
+ * name them, and S0 changes ownership rather than behaviour. The authority is
+ * `promotionPolicyFor`, resolved per repository; these are what it returns for
+ * the alloy profile.
+ */
 export const ALLOWED_MERGE_METHODS = Object.freeze(["merge", "squash", "rebase"]);
-export const BLOCKED_TARGET_BRANCHES = Object.freeze(["main", "master", "production", "prod"]);
+const ALLOY_POLICY = promotionPolicyFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID });
+export const ALLOWED_TARGET_BRANCHES = Object.freeze([ALLOY_POLICY.promotion_branch]);
+export const BLOCKED_TARGET_BRANCHES = Object.freeze([...ALLOY_POLICY.protected_branches]);
+
+/**
+ * The branch policy governing THIS merge.
+ *
+ * Resolved from the repository the merge names, defaulting to Alloy only while
+ * Alloy is the only registered repository with governed promotion — and saying
+ * which, so a future repository's refusal is legible rather than mysterious.
+ */
+export function mergeBranchPolicyFor(repositoryRecord) {
+  if (repositoryRecord) return promotionPolicyFor(repositoryRecord);
+  return ALLOY_POLICY;
+}
 const DEFAULT_REPOS = Object.freeze(["ksquared-16/alloy"]);
 
 /**
@@ -192,12 +219,17 @@ export function validateMergeInputs(inputs = {}) {
         : `pull_request_number must be a positive integer; received ${JSON.stringify(rawPullRequest)}`,
     };
   }
-  const targetBranch = identity.targetBranch || "staging";
-  if (BLOCKED_TARGET_BRANCHES.includes(targetBranch) || targetBranch === "production") {
+  const policy = mergeBranchPolicyFor(inputs.repositoryRecord || null);
+  if (!policy.governed_promotion) {
+    // A repository whose profile has no governed promotion does not get Alloy's.
+    return { ok: false, code: "governed_promotion_not_configured", detail: "this repository's profile declares no governed promotion" };
+  }
+  const targetBranch = identity.targetBranch || policy.promotion_branch;
+  if (policy.protected_branches.includes(targetBranch) || targetBranch === "production") {
     return { ok: false, code: "production_target_rejected", detail: "Production and default-branch merges are not registered." };
   }
-  if (!ALLOWED_TARGET_BRANCHES.includes(targetBranch)) {
-    return { ok: false, code: "target_branch_not_allowed", detail: `target_branch must be one of: ${ALLOWED_TARGET_BRANCHES.join(", ")}` };
+  if (targetBranch !== policy.promotion_branch) {
+    return { ok: false, code: "target_branch_not_allowed", detail: `target_branch must be: ${policy.promotion_branch}` };
   }
   const expectedHeadSha = identity.expectedHeadSha
     || normSha(inputs.expected_head_sha || inputs.expectedHeadSha || inputs.head_sha);

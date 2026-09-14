@@ -8,6 +8,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateReadOnlySql } from "./trusted-host-sql-readonly.mjs";
+import { ALLOY_REPOSITORY_ID, getRepository as getRepositoryRecord } from "./repository-registry.mjs";
 import { validateMergeInputs } from "./trusted-host-merge.mjs";
 import { validatePushInputs } from "./trusted-host-push.mjs";
 import { validateRepositoryMetadataInputs } from "./trusted-host-repository-metadata.mjs";
@@ -164,9 +165,29 @@ export function sqlFromCensusArtifact(raw, abs) {
 
 /** Canonical Alloy checkout for trusted credentials (never the managed worker env). */
 export function resolveCanonicalRepoRoot() {
+  /*
+   * THE REGISTERED PROJECT IS ASKED FIRST.
+   *
+   * This resolved Alloy by guessing: two environment variables, then
+   * ~/Alloy, then a literal /Users/Kelly/Alloy, then whatever repository the
+   * process happened to start in. Every one of those is a machine-shaped
+   * assumption about ONE project, sitting in generic runtime, and the literal
+   * is another person's home directory.
+   *
+   * The registry is the authority on where a project lives, so it answers
+   * first. The old candidates remain BELOW it, unchanged: an unseeded registry
+   * on a fresh host must still resolve, and S0 changes ownership rather than
+   * behaviour.
+   */
+  let registered = null;
+  try {
+    const rec = getRepositoryRecord(ALLOY_REPOSITORY_ID);
+    registered = rec?.root || null;
+  } catch { registered = null; }
   const candidates = [
     process.env.ALLOY_CANONICAL_ROOT,
     process.env.ALLOY_REPO,
+    registered,
     join(process.env.HOME || "", "Alloy"),
     "/Users/Kelly/Alloy",
     findRepoRoot(),
