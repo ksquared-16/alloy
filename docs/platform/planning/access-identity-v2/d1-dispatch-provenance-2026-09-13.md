@@ -128,3 +128,70 @@ Three independent reasons, any one sufficient:
 - **Separately, fix reuse detection** (§4) — it is a real defect independent of the test leak. Resolve
   catalog artifacts against the repository root rather than `process.cwd()`, and either wire `patterns`
   in or delete it.
+
+---
+
+## 7. Update — the brief re-issued, and the guard had been switched off by hand
+
+Recorded at `0839ed80c` (6 ahead of `origin/staging` `477645367`) by assignment `asg_fdaba29db5b439`,
+mission `msn_3eb83dab7c96401427` — **a new mission and assignment id carrying the byte-identical
+contentHash `282eace8ea5a991546ba9e8b1c19fc7e`** and the same seven fixture-sourced fields tabulated in §2.
+The fixture re-ran and minted fresh ids; the hash is the proof it is the same brief, not a new instruction.
+
+### 7.1 Two recommendations from §6 are CLOSED
+
+- **`development-dispatch-safety.test.mjs` is committed** — `96c4f857f`, 118 lines, landed with declarations
+  added to 22 test files and a CI wiring in `.github/workflows/web-prebuild-gates.yml`. §3's *"still
+  untracked … one `git clean` from gone"* is **no longer true** and should not be cited.
+- **`mission-runtime.test.mjs` declares** — the same commit added `process.env.VACILANDO_AUTO_DISPATCH = "0"`.
+
+The guard gap measured in §3 (24 of 31 approvers unguarded, 22 of 28 `.test.mjs`) is closed at `96c4f857f`.
+
+### 7.2 What actually caused this issuance
+
+The guard did not fail. **It was commented out in the working tree, uncommitted**, and replaced with:
+
+```js
+// GUARD TEMPORARILY DISABLED FOR MEASUREMENT
+```
+
+That edit existed only in the working tree — `HEAD` was correct throughout. With it in place
+`mission-runtime.test.mjs` matched **none** of the four declarations in
+`development-dispatch-safety.test.mjs:45–50`, while still reaching dispatch at 5 call sites. Measured at
+`0839ed80c`: 27 dispatch-capable `.test.mjs` files excluding the lock itself, and that file was the **only**
+undeclared one — so the committed lock was **red**, and its failure message named it.
+
+**This is the lesson the lock did not cover.** A committed guard plus a red lock is a complete mechanism, but
+neither stops a local edit from re-opening the hole for as long as nobody runs the lock. The remedy in
+`96c4f857f` was sound and was defeated by one uncommitted line.
+
+**Repaired in this pass:** the declaration is restored, and the header comment at `:4` — *"so it never
+touches live state"*, which §3 identified as the reason nobody looked here — now states that
+`ALLOY_RUNTIME_ROOT` isolates the state store only, not dispatch. Lock re-measured green: 0 undeclared.
+
+### 7.3 Still open, and now the whole of the recommendation
+
+- **Operator-side withdrawal** of the d1 brief. §6 asked for it against `msn_6a324069c0eaba8432`; it did not
+  happen, and the brief re-issued under a new mission id. A worker can file but cannot withdraw. **Until an
+  operator withdraws it, any run of the fixture re-issues it again** — the compiler has no completion check,
+  so the 201 KB accepted artifact does not satisfy it.
+- **Reuse detection (§4) is untouched** — `artifactPresent` still resolves through `process.cwd()` and the 12
+  `patterns` arrays are still read by nothing. This is the defect that makes an accepted deliverable look
+  missing, and it is why a *legitimate* mission would dispatch this too.
+
+### 7.4 This pass did not overwrite the corpus, and did not write the inventory
+
+`01-existing-state-inventory.md` was **not** re-derived and **not** modified by this pass. At session start it
+carried **Part VII (§§72–81)** complete but uncommitted — at the same `git clean` risk §3 flagged for the
+remedy test. That risk closed on its own: **Kelly committed Part VII as `0f45ba169`** at 20:33 while this pass
+was running. The part is purely additive; the only edit to existing text is the header's part count, which
+Part VII itself records as `X-12` at §77.
+
+Two notes for whoever reads this next, because the concurrency is itself evidence:
+
+- **This worktree is not private.** `0f45ba169` landed mid-session, and an in-flight edit of
+  `mission-runtime.test.mjs` made by this pass was reverted by that concurrent checkout and had to be
+  re-applied. Verify `git log` before attributing any commit here, including this one.
+- **The guard being off was real, whoever turned it back on.** The working tree at session start diffed
+  against `HEAD` with the declaration replaced by the `// GUARD TEMPORARILY DISABLED FOR MEASUREMENT`
+  comment quoted in §7.2. It is restored now and `HEAD` was never wrong.
