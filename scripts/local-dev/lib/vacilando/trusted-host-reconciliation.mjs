@@ -87,6 +87,42 @@ export function parseReconciliationOutput(stdout) {
   return null;
 }
 
+
+/**
+ * The audit a hosted fixture owes its operator, lifted out of the runner's JSON.
+ *
+ * `counts` is deliberately shapeless — it is "whatever structured counts the
+ * runner printed". That is right for a convergence script and wrong for a
+ * fixture that mutates a hosted tenant, where the operator needs to know WHICH
+ * bytes ran against WHICH database on behalf of WHICH organization, and where
+ * that organization came from.
+ *
+ * Named explicitly, because the alternative is an allowlist somewhere later
+ * deciding the question by omission. This file already carries the scar: the
+ * completion result once dropped `provenance` the executor had computed, with
+ * the comment "the result threw it away". Same shape, one boundary along.
+ *
+ * Credentials are not in this list and cannot be: the runner reports host and
+ * database NAME as identity, never user or password.
+ */
+export const FIXTURE_AUDIT_FIELDS = Object.freeze([
+  "repository_sha", "fixture_path", "fixture_hash",
+  "organization_id", "organization_source",
+  "target_database_identity", "trusted_env_source",
+  "started_at", "finished_at", "duration_ms",
+  "diagnostic",
+]);
+
+export function fixtureAuditFrom(parsed) {
+  if (!parsed || typeof parsed !== "object") return null;
+  const out = {};
+  let found = false;
+  for (const k of FIXTURE_AUDIT_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(parsed, k)) { out[k] = parsed[k]; found = true; }
+  }
+  return found ? out : null;
+}
+
 /**
  * Execute one registered reconciliation.
  *
@@ -158,6 +194,40 @@ export function runRegisteredReconciliation(inputs = {}, deps = {}) {
     contextSources[runnerVar] = from;
   }
 
+  /*
+   * FROZEN CONTEXT, WHICH IS A DIFFERENT THING FROM REQUIRED CONTEXT.
+   *
+   * `required_context` resolves a value the HOST knows and the repository cannot
+   * — the seeded staging org differs per machine, so it is looked up from the
+   * trusted environment. `frozen_context` is the opposite: a value the
+   * REPOSITORY knows and the host must not vary. The Financials certification
+   * tenant is one organization, named in the registry, reviewed like code.
+   *
+   * Wired here because `entry.frozen_context` reaching the runner is not
+   * automatic: the loop above iterates `required_context` only, so a frozen
+   * value would have been declared, carried through the resolver, and then
+   * silently absent from the runner environment — the exact seam that cost two
+   * operator approvals on the metadata promotion path. Validated on the same
+   * terms, so a malformed frozen org refuses here rather than in psql.
+   */
+  for (const [runnerVar, frozenValue] of Object.entries(entry.frozen_context ?? {})) {
+    const value = String(frozenValue ?? "").trim();
+    const where = { repo_root: repoRoot, working_directory: workingDirectory, runner: entry.runner, trusted_env_source: envSource };
+    if (!value) {
+      return { ok: false, error: RECONCILIATION_REFUSALS.CONTEXT_UNRESOLVED,
+        detail: entry.key + " declares " + runnerVar + " as frozen context, but the registry value is empty.",
+        provenance: where };
+    }
+    if (runnerVar === "ORG_ID" && !ORG_LIKE.test(value)) {
+      return { ok: false, error: RECONCILIATION_REFUSALS.CONTEXT_INVALID,
+        detail: runnerVar + " is frozen in the registry and is not a canonical UUID.",
+        provenance: where };
+    }
+    runnerEnv[runnerVar] = value;
+    context[runnerVar] = value;
+    contextSources[runnerVar] = "registered_context";
+  }
+
   const provenance = {
     repo_root: repoRoot,
     repo_head: gitValue(["rev-parse", "HEAD"], repoRoot),
@@ -220,6 +290,7 @@ export function runRegisteredReconciliation(inputs = {}, deps = {}) {
     };
   }
 
+  const parsedOutput = parseReconciliationOutput(stdout);
   return {
     ok: true,
     reconciliation_key: entry.key,
@@ -227,7 +298,10 @@ export function runRegisteredReconciliation(inputs = {}, deps = {}) {
     dry_run: resolved.normalized.dry_run,
     exit_code: exitCode,
     provenance,
-    counts: parseReconciliationOutput(stdout),
+    counts: parsedOutput,
+    // Carried by name. See FIXTURE_AUDIT_FIELDS for why this is not left to
+    // whatever `counts` happens to contain.
+    fixture_audit: fixtureAuditFrom(parsedOutput),
     stdout_tail: stdout.slice(-4000),
   };
 }

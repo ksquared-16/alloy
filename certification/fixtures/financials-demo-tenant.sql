@@ -121,12 +121,56 @@ delete from charges where org_id = :'org'::uuid
   and billable_source_id in (:'agr_a'::uuid, :'agr_b'::uuid, :'agr_c'::uuid, :'agr_d'::uuid,
                              :'hh_a'::uuid, :'hh_b'::uuid, :'hh_c'::uuid, :'hh_d'::uuid);
 
-delete from financial_subsidy_variances where org_id = :'org'::uuid;
-delete from financial_subsidy_remittance_lines where org_id = :'org'::uuid;
-delete from financial_subsidy_remittances where org_id = :'org'::uuid;
-delete from financial_subsidy_claim_lines where org_id = :'org'::uuid;
-delete from financial_subsidy_claims where org_id = :'org'::uuid;
-delete from financial_subsidy_authorizations where org_id = :'org'::uuid;
+-- ── SUBSIDY TEARDOWN, NARROWED TO THIS FIXTURE'S OWN CHAIN ──
+--
+-- These six were `where org_id = :'org'` — every subsidy claim, remittance,
+-- authorization and variance in the tenant, whoever created them, deleted with
+-- the protective triggers suspended. On the shared local cert stack that was
+-- defensible: the tenant is disposable and other sessions reset it anyway. This
+-- fixture is now reachable through a governed action against HOSTED staging,
+-- where it is not, and where unrelated subsidy data may exist tomorrow even if
+-- none exists today.
+--
+-- Every row this fixture creates in the chain descends from its own program and
+-- agency, so the whole teardown is derivable from two fixture-owned ids:
+--
+--   authorizations   .program_id   -> :program
+--   claims           .program_id   -> :program   (and .agency_id -> :agency)
+--   claim_lines      .claim_id     -> those claims
+--   remittances      .agency_id    -> :agency
+--   remittance_lines .remittance_id-> those remittances
+--   variances        .claim_line_id-> those claim lines
+--
+-- Innermost outward, so a foreign key never blocks its own cleanup. Emptiness of
+-- these tables today is NOT the safety argument — the predicates are.
+delete from financial_subsidy_variances
+  where org_id = :'org'::uuid
+    and claim_line_id in (
+      select cl.id from financial_subsidy_claim_lines cl
+        join financial_subsidy_claims c on c.id = cl.claim_id
+       where c.org_id = :'org'::uuid and c.program_id = :'program'::uuid);
+
+delete from financial_subsidy_remittance_lines
+  where org_id = :'org'::uuid
+    and remittance_id in (
+      select r.id from financial_subsidy_remittances r
+       where r.org_id = :'org'::uuid and r.agency_id = :'agency'::uuid);
+
+delete from financial_subsidy_remittances
+  where org_id = :'org'::uuid and agency_id = :'agency'::uuid;
+
+delete from financial_subsidy_claim_lines
+  where org_id = :'org'::uuid
+    and claim_id in (
+      select c.id from financial_subsidy_claims c
+       where c.org_id = :'org'::uuid and c.program_id = :'program'::uuid);
+
+delete from financial_subsidy_claims
+  where org_id = :'org'::uuid and program_id = :'program'::uuid;
+
+delete from financial_subsidy_authorizations
+  where org_id = :'org'::uuid and program_id = :'program'::uuid;
+
 delete from financial_subsidy_programs where id = :'program'::uuid;
 delete from financial_funding_agencies where id = :'agency'::uuid;
 

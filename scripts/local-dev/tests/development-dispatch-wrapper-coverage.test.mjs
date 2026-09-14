@@ -68,7 +68,6 @@ const UNCOVERED = Object.freeze([
   "database.read_census",
   "database.repair_migration_ledger",
   "environment.assign_qa_identity_access",
-  "environment.execute_registered_reconciliation",
   "environment.provision_qa_identity",
   "environment.restore_deployed_qa_session",
   "environment.restore_qa_session",
