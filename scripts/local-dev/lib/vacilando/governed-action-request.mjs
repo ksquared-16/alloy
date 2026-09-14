@@ -1620,6 +1620,46 @@ function releaseRunAfterGovernedFailure(rec, { nowMs, root } = {}) {
   saveRequest(rec, root);
 }
 
+/**
+ * Say WHICH refusal fired, not merely that one did.
+ *
+ * `executeTrustedHostAction` returns `{ ok: false, error: "input_validation_failed",
+ * validation: { error, detail, evidence } }`. The nested half is the diagnosis; the
+ * outer half is only its category. This boundary used to forward `out.error` alone,
+ * so a worker was told `input_validation_failed` for six mutually exclusive causes —
+ * bad sha shape, missing reason, unsupported ref, unreadable promoted staging,
+ * compare-and-set mismatch, blocked convergence — with no way to tell them apart.
+ *
+ * Measured: three consecutive host.install_toolkit requests failed for THREE DIFFERENT
+ * reasons and reported two indistinguishable strings. The validator had already
+ * computed "request names 10bd40ca6b9d; promoted staging is b5a770518671" — the exact
+ * sentence that ends the confusion — and this line dropped it. The only recovery left
+ * to the worker was to guess and refile, which is how a compare-and-set race turns
+ * into repeated privileged-write attempts.
+ *
+ * Same family as every other propagation defect in this file: produced correctly,
+ * dropped at an intermediate boundary, consumed as though it never existed.
+ *
+ * Redacted on the way out, because a validator detail may quote an input. The
+ * shared filter is narrow — connection strings, DATABASE_URL, JWTs — so this is
+ * a backstop, not a licence for validators to quote secrets into `detail`.
+ */
+function describeExecutionFailure(out) {
+  const outer = String(out?.error || "").trim();
+  const v = out?.validation;
+  const inner = String(v?.error || "").trim();
+  const detail = String(v?.detail || "").trim();
+  const fallback = String(out?.action?.failureReason || "").trim();
+
+  const parts = [];
+  if (outer) parts.push(outer);
+  if (inner && inner !== outer) parts.push(inner);
+  let text = parts.join(": ");
+  if (detail) text = text ? `${text} \u2014 ${detail}` : detail;
+  if (!text) text = fallback;
+  return redact(text) || "trusted-host execution failed";
+}
+
 function failRequest(rec, code, reason, { nowMs, root, skipResume = false } = {}) {
   rec.status = "failed";
   rec.failure_code = code;
@@ -3503,7 +3543,7 @@ function applyExecuteResult(rec, out, { nowMs, root, actor } = {}) {
     const code = out?.error === "wrong_database_target"
       ? "target_unavailable"
       : (out?.error === "unknown_action_type" ? "action_unavailable" : "execution_failed");
-    return failRequest(rec, code, out?.error || out?.action?.failureReason || "trusted-host execution failed", { nowMs, root });
+    return failRequest(rec, code, describeExecutionFailure(out), { nowMs, root });
   }
   const action = out.action;
   if (containsSecret(action.result) || containsSecret(action.inputs)) {
@@ -5718,4 +5758,4 @@ export function handleGovernedDecisionAnswer(missionId, chosenOptionId, {
   return { ok: false, error: "unhandled_option", chosenOptionId };
 }
 
-export { publicExecutionRun, redact as redactGovernedSecrets, containsSecret as governedPayloadHasSecrets };
+export { publicExecutionRun, redact as redactGovernedSecrets, containsSecret as governedPayloadHasSecrets, describeExecutionFailure };
