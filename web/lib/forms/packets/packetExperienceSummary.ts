@@ -201,13 +201,13 @@ export function familyExperienceLines(steps: readonly StepExperienceFacts[]): st
     return steps.map((s) => {
         if (s.kind === "form") {
             return s.facts.some((f) => /connected to Alloy/.test(f))
-                ? `Alloy collects ${s.title.toLowerCase()}, reusing information it already knows where it can.`
-                : `Alloy collects ${s.title.toLowerCase()}.`;
+                ? `Alloy collects ${s.title}, reusing information it already knows where it can.`
+                : `Alloy collects ${s.title}.`;
         }
         if (s.kind === "document_acknowledgment") {
-            return `The family reads and acknowledges ${s.title.toLowerCase()}${s.requiresSignature ? ", and signs it" : ""}.`;
+            return `The family reads and acknowledges ${s.title}${s.requiresSignature ? ", and signs it" : ""}.`;
         }
-        return `The family uploads ${s.title.toLowerCase()}.`;
+        return `The family uploads ${s.title}.`;
     });
 }
 

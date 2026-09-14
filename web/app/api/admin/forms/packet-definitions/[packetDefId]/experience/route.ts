@@ -226,10 +226,11 @@ async function findPacketUsage(
                 readOnly: true,
             });
             if (editorState) draftMetadata = { ...metadata, [LIFECYCLE_BUILDER_METADATA_KEY]: editorState.draft_payload };
-        } catch {
-            // A department with no draft is the ordinary case, not an error.
+        } catch (e) {
+            // A department with no draft is the ordinary case; a FAILURE to read one is not, and
+            // silently falling back to the publication would report a configured packet as unused.
+            console.warn("[packet-experience] draft read failed", { departmentId: dept.id, error: String(e) });
         }
-
         for (const hit of collectPacketRequirements(draftMetadata, packetDefId)) {
             out.push({ ...hit, published: publishedIds.has(`${hit.stageName}:${packetDefId}`) });
         }
