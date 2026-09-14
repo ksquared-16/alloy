@@ -3,6 +3,7 @@
  * Does not hit the shared tenant; SQL validation is offline.
  */
 import assert from "node:assert/strict";
+const { SUBJECT_SCOPES, classifyStandingGrant } = await import("../lib/vacilando/trusted-host-authz.mjs");
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -104,13 +105,28 @@ assert.equal(looksLikeManualPrivilegedExecutionRequest({
 
 // --- Authz scopes ---
 const mid = "msn_tha_test_authz";
+/*
+ * A STANDING GRANT MUST DECLARE ITS SCOPE. ABSENCE IS NOT A WILDCARD.
+ *
+ * This granted nothing but a mission and an action type, which is the shape a
+ * mission grant had BEFORE that rule existed — and back then it matched every
+ * request of its action type, so one approval of one pull-request close became
+ * authority over all of them. `classifyStandingGrant` now calls that shape
+ * `legacy_unbound` and refuses to match it.
+ *
+ * The grant is therefore declared, faithfully, rather than the matcher being
+ * loosened to accept an unbound one. The negative below is the half that
+ * matters: a bare grant must still find nothing.
+ */
 const grant = grantMissionAuthorization({
   missionId: mid,
   actionType: ACTION_TYPES.DATABASE_READ_CENSUS,
   actor: "test",
+  subjectScope: SUBJECT_SCOPES.ANY_WITHIN_MISSION,
   expiresAt: new Date(Date.now() + 3600_000).toISOString(),
 });
 assert.equal(grant.ok, true);
+assert.equal(classifyStandingGrant(grant.authorization).class, "explicit_wildcard");
 const found = findAuthorization({
   missionId: mid,
   actionType: ACTION_TYPES.DATABASE_READ_CENSUS,
@@ -118,6 +134,22 @@ const found = findAuthorization({
 });
 assert.ok(found);
 assert.equal(found.authorizationId, grant.authorization.authorizationId);
+
+// THE HARDENING ITSELF, pinned. An undeclared grant is not a weaker match, it
+// is no match: the hole this closed was one approval becoming authority over
+// every subject of its action type.
+const bare = grantMissionAuthorization({
+  missionId: "msn_tha_test_bare",
+  actionType: ACTION_TYPES.DATABASE_READ_CENSUS,
+  actor: "test",
+  expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+});
+assert.equal(classifyStandingGrant(bare.authorization).class, "legacy_unbound");
+assert.equal(findAuthorization({
+  missionId: "msn_tha_test_bare",
+  actionType: ACTION_TYPES.DATABASE_READ_CENSUS,
+  databaseTarget: "alloy_deployed_primary",
+}), null, "an unbound standing grant must match nothing");
 
 // Wrong action type denied
 assert.equal(findAuthorization({
