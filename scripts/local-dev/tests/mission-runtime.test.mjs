@@ -1,7 +1,9 @@
 /**
  * Mission Runtime — deterministic unit tests (node:test, no external deps).
  * Run: node --test scripts/local-dev/tests/mission-runtime.test.mjs
- * Uses a scratch ALLOY_RUNTIME_ROOT so it never touches live state.
+ * Uses a scratch ALLOY_RUNTIME_ROOT, which isolates the STATE STORE only.
+ * It does not isolate dispatch - that is the VACILANDO_AUTO_DISPATCH guard
+ * below, which is what keeps this suite from starting real work.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
