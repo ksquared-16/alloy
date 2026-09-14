@@ -30,6 +30,7 @@ const C = "a".repeat(40);
 const FOREIGN = "f".repeat(40);
 const BASE = "b".repeat(40);
 const WF = ".github/workflows/vacilando-tier2.yml";
+const DEST = "3".repeat(40);
 
 const inputs = (over = {}) => ({
   repository: "ksquared-16/alloy",
@@ -41,9 +42,10 @@ const inputs = (over = {}) => ({
   ...over,
 });
 
-function gitStub({ range = [C], diff = [WF], rangeStatus = 0, diffStatus = 0 } = {}) {
+function gitStub({ range = [C], diff = [WF], rangeStatus = 0, diffStatus = 0, destStatus = 0 } = {}) {
   return (args) => {
     const a = args.join(" ");
+    if (a.startsWith("rev-parse --verify")) return { status: destStatus, stdout: DEST, stderr: "" };
     if (a.startsWith("rev-list")) return { status: rangeStatus, stdout: range.join("\n"), stderr: "" };
     if (a.startsWith("diff")) return { status: diffStatus, stdout: diff.join("\n"), stderr: "" };
     return { status: 0, stdout: "", stderr: "" };
@@ -61,7 +63,7 @@ test("1 — a workflow-only candidate is eligible", () => {
   const r = evaluate();
   assert.equal(r.ok, true, `refused: ${r.code || ""} ${r.detail || ""}`);
   assert.deepEqual(r.files, [WF]);
-  assert.equal(r.diff_against, "main", "the diff must be taken against the destination");
+  assert.equal(r.diff_against, DEST, "the diff must be taken against the RESOLVED destination commit");
 });
 
 /* ── 2-3: product code fails closed ──────────────────────────────────────── */
@@ -184,6 +186,37 @@ test("8 — the run records the definition SHA and the tested SHA separately", a
   assert.match(wf, /tested_sha=/);
   assert.match(wf, /no scripts\/local-dev\/tests/,
     "and refuses loudly rather than silently testing the wrong tree");
+});
+
+test("12 — the destination is RESOLVED, never a bare ref that a local branch can shadow", () => {
+  /*
+   * Measured on this host: a stale local branch named main sat at 5111b9c02019
+   * while origin/main was 80ff5bf591a8, and diffing the bare name refused a
+   * clean one-file candidate as seven product files. The inverse is the real
+   * hazard - a local ref already carrying product changes would diff them away
+   * and ACCEPT a candidate that ships product code to the remote.
+   */
+  const calls = [];
+  const spy = (args) => { calls.push(args.join(" ")); return gitStub()(args); };
+  const v = validateRepositoryMetadataInputs(inputs());
+  evaluateRepositoryMetadataCandidate(v.normalized, { gitImpl: spy, cwd: "/tmp" });
+  assert.ok(calls.some((c) => c.includes("refs/remotes/origin/main")),
+    "the destination must be resolved through the remote-tracking ref");
+  assert.ok(!calls.some((c) => /^diff --name-only main\.\.\./.test(c)),
+    "and never diffed against the bare name");
+});
+
+test("12a — an unresolvable destination REFUSES rather than falling back to a name", () => {
+  const r = evaluate({}, gitStub({ destStatus: 128 }));
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "candidate_destination_unresolvable");
+});
+
+test("12b — a verified destination SHA from the executor wins over any ref lookup", () => {
+  // The executor has already compare-and-swapped against the real remote head;
+  // that answer is better than re-deriving it.
+  const v = validateRepositoryMetadataInputs(inputs({ main_before: DEST }));
+  assert.equal(v.normalized.destinationRef, DEST);
 });
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);

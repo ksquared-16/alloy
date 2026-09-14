@@ -142,6 +142,10 @@ export function validateRepositoryMetadataInputs(inputs = {}) {
       expectedCommits,
       expectedFiles,
       reason: String(inputs.reason || "").trim() || null,
+      // An explicitly verified destination wins over any ref lookup: the
+      // executor has already compare-and-swapped against the real remote head.
+      destinationRef: String(inputs.destination_ref || inputs.destinationRef || inputs.main_before || inputs.mainBefore || "").trim() || null,
+      remote: String(inputs.remote || "origin").trim(),
     },
   };
 }
@@ -184,10 +188,40 @@ export function evaluateRepositoryMetadataCandidate(normalized, { gitImpl, cwd }
    * have diverged by thousands of commits - a file unchanged since the branch
    * point is still a change TO MAIN.
    */
-  const diff = gitImpl(["diff", "--name-only", `${normalized.target}...${normalized.candidate}`], cwd);
+  /*
+   * DIFF AGAINST THE DESTINATION THAT WILL ACTUALLY BE WRITTEN, NOT A LOCAL REF
+   * THAT MERELY SHARES ITS NAME.
+   *
+   * This diffed the bare ref `main`, and a worktree can carry a stale local
+   * branch called main that is nothing like the remote. Measured on this host:
+   * local main was 5111b9c02019 while origin/main was 80ff5bf591a8, and a
+   * candidate whose only change is one workflow file was refused as containing
+   * seven product files.
+   *
+   * The false refusal is the harmless direction. The dangerous one is the
+   * inverse: if the local ref already contained product changes that the remote
+   * does not, those files would diff away to nothing and a candidate carrying
+   * product code would be ACCEPTED. A safety check comparing against the wrong
+   * tree is worse than no check, because it reads as a check.
+   *
+   * So the destination is resolved explicitly - the caller's verified
+   * destination SHA if it supplied one, otherwise the remote-tracking ref - and
+   * an unresolvable destination refuses rather than falling back to a name.
+   */
+  const destinationRef = String(normalized.destinationRef || "").trim()
+    || `refs/remotes/${normalized.remote || "origin"}/${normalized.target}`;
+  const resolved = gitImpl(["rev-parse", "--verify", `${destinationRef}^{commit}`], cwd);
+  if (resolved.status !== 0) {
+    return refuse("candidate_destination_unresolvable",
+      `could not resolve the destination ${destinationRef}; refusing rather than diffing against a local ref that merely shares the name`,
+      { destination_ref: destinationRef });
+  }
+  const destinationSha = normSha(resolved.stdout);
+
+  const diff = gitImpl(["diff", "--name-only", `${destinationSha}...${normalized.candidate}`], cwd);
   if (diff.status !== 0) {
     return refuse("candidate_diff_unreadable",
-      `could not diff ${normalized.target} against the candidate`);
+      `could not diff ${destinationRef} against the candidate`, { destination_ref: destinationRef });
   }
   const changed = String(diff.stdout || "").split("\n").map((l) => l.trim()).filter(Boolean);
 
@@ -224,6 +258,7 @@ export function evaluateRepositoryMetadataCandidate(normalized, { gitImpl, cwd }
     candidate: normalized.candidate,
     commits: actualCommits,
     files: changed,
-    diff_against: normalized.target,
+    diff_against: destinationSha,
+    destination_ref: destinationRef,
   };
 }
