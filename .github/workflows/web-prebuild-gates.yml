@@ -208,6 +208,13 @@ jobs:
       #
       # Run under `node --test`: several of these gate assertions on the test
       # runner context and silently report false failures as a plain script.
+      #
+      # production-apply-executor is deliberately NOT here. It resolves
+      # origin/staging at module load, and a CI checkout has no remote-tracking
+      # refs - "fatal: ambiguous argument 'origin/staging'". It is repo-state
+      # dependent, so it is Tier 3 host integration rather than a runner-safe
+      # gate. CI caught that classification error on this gate's first run,
+      # which is exactly what a required gate is for.
       - name: Migration ledger convergence (G5)
         working-directory: .
         run: |
@@ -217,5 +224,4 @@ jobs:
             scripts/local-dev/tests/migration-execution-outcome.test.mjs \
             scripts/local-dev/tests/development-reconciliation-apply.test.mjs \
             scripts/local-dev/tests/development-migration-parity.test.mjs \
-            scripts/local-dev/tests/certification-aware-migration-target.test.mjs \
-            scripts/local-dev/tests/production-apply-executor.test.mjs
+            scripts/local-dev/tests/certification-aware-migration-target.test.mjs
