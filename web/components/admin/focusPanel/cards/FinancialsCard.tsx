@@ -524,6 +524,22 @@ export default function FinancialsCard({ model, context, receded = false, coordi
      */
     const adjustableCharges = useMemo(() => {
         const member = adjustableSubjects.find((sub) => sub.agreementId === adjustAgreementId)?.customerMemberId;
+
+        /*
+         * HOW MUCH OF EACH OBLIGATION IS STILL THERE TO REDUCE.
+         *
+         * A reduction may not take more than the charge holds: the service refuses it, because an
+         * obligation netted below zero is one `resolveAllocatableNet` will not read. Offering a
+         * charge with nothing left would be offering a choice that can only be refused, so what is
+         * already reduced is subtracted here — from the reductions the account read already carries,
+         * not from a second sum of our own.
+         */
+        const reducedBySource = new Map<string, number>();
+        for (const r of vm?.reductions ?? []) {
+            if (!r.sourceChargeId) continue;
+            reducedBySource.set(r.sourceChargeId, (reducedBySource.get(r.sourceChargeId) ?? 0) + r.amountCents);
+        }
+
         return (vm?.rows ?? []).filter(
             (r) =>
                 r.status === "posted"
@@ -531,7 +547,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 && !r.correctsChargeId
                 && !r.reversedByChargeId
                 && r.subjectMemberId != null
-                && r.subjectMemberId === member,
+                && r.subjectMemberId === member
+                && r.amountCents + (reducedBySource.get(r.chargeId) ?? 0) > 0,
         );
     }, [adjustAgreementId, adjustableSubjects, vm]);
 

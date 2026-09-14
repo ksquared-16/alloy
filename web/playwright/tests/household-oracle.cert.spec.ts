@@ -276,13 +276,20 @@ test.describe("representative household — convergence", () => {
         ).toBe(-AMOUNT_CENTS);
 
         /*
-         * COLLECTIONS IS MEASURED, NOT ASSERTED — and this is the run's open finding.
+         * COLLECTIONS IS MEASURED HERE, NOT ASSERTED — and the reason is worth stating, because an
+         * earlier reading of this number was wrong.
          *
-         * The account authority moves by the credit, as asserted above. The collections cohort does
-         * not move at all, on a charge both authorities carry. Whether a posted reduction should
-         * lower what collections will pursue is a question owned by the collectibility thread, and
-         * an oracle that answered it by asserting one side would be inventing the rule rather than
-         * checking it. So the movement is recorded for the owner, with the charge that shows it.
+         * Both authorities net a reduction against the obligation it names, and a credit followed by
+         * its reversal is exactly a no-op. That is now proven on clean data, three cycles deep, in
+         * the live reduction suite, which is where a claim about arithmetic belongs.
+         *
+         * This household is not clean. Repeated certification runs stacked credits on one obligation
+         * until its net went below zero, and `resolveAllocatableNet` refuses that state rather than
+         * reporting a negative — so readers that catch the refusal and contribute nothing diverge
+         * from readers that clamp. A movement measured here can therefore be about the fixture's
+         * history rather than about the rule, which is precisely why it is recorded and not asserted.
+         * The writer now refuses to create that state at all, so it is reachable only through data
+         * that predates the bound.
          */
         // eslint-disable-next-line no-console
         console.log(
@@ -338,7 +345,8 @@ test.describe("representative household — convergence", () => {
             afterT.account - beforeT.account,
             "undoing the credit gives back exactly what it took",
         ).toBe(AMOUNT_CENTS);
-        // Recorded for the same reason as the posting step above.
+        // Recorded for the same reason as the posting step above: on a household carrying history,
+        // a movement can be about the history rather than about the rule.
         // eslint-disable-next-line no-console
         console.log(
             `[oracle] reversing the credit: account moved ${afterT.account - beforeT.account}, `
