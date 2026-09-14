@@ -304,6 +304,28 @@ async function asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene
     return { ...steward, recovery, hygiene: { skipped: "control_plane_not_healthy", failure_class: recovery.failure_class } };
   }
 
+  /*
+   * THE REPORT CADENCE IS NOT ON HYGIENE'S CADENCE EITHER.
+   *
+   * I put this stage on the hygiene-due path, which is the exact defect the
+   * comment below already describes for scheduling: hygiene is due every six
+   * hours, so an 18:30 report evaluated on that branch would usually not be
+   * evaluated at all. Watching the state file is what caught it - three
+   * consecutive cycles recorded `reports: null` while `hygiene: not_due`.
+   *
+   * Building the stage is not the same as reaching it, which is written
+   * directly above the line I should have read.
+   *
+   * Evaluating is cheap - a clock comparison, and on 287 of 288 cycles it is
+   * only that - so it happens every tick, before the branch, and both paths
+   * record it.
+   */
+  let reports = null;
+  if (!dryRun) {
+    try { reports = await runOperatingReportStage({ root, nowMs }); }
+    catch (e) { reports = { ok: false, error: "report_stage_threw", detail: String(e?.message || e).slice(0, 300) }; }
+  }
+
   const due = forceHygiene ? { due: true, reason: "forced" } : hygieneDue({ root, nowMs });
   // Carry the recovery result on EVERY return path. Dropping it on the
   // hygiene-not-due branch made the resident stage look like it had not run.
@@ -331,9 +353,10 @@ async function asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene
       recordStageOutcome({ root, nowMs, outcome: {
         ok: true, recovery: recovery?.failure_class ?? null, hygiene: "not_due",
         dispatch: dispatchSummary(dispatchOnly),
+        reports: reportsSummary(reports),
       } });
     }
-    return { ...steward, recovery, hygiene: { skipped: "not_due", last_ms: due.last_ms }, dispatch: dispatchOnly };
+    return { ...steward, recovery, hygiene: { skipped: "not_due", last_ms: due.last_ms }, dispatch: dispatchOnly, reports };
   }
 
   let result = null;
@@ -380,11 +403,6 @@ async function asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene
    * rather than a fault. A failure is attached, never thrown: an end-of-day
    * report that could not be written must not interrupt anyone's development.
    */
-  let reports = null;
-  if (!dryRun) {
-    try { reports = await runOperatingReportStage({ root, nowMs }); }
-    catch (e) { reports = { ok: false, error: "report_stage_threw", detail: String(e?.message || e).slice(0, 300) }; }
-  }
   if (!dryRun) {
     recordStageOutcome({ root, nowMs, outcome: {
       ok: true, recovery: recovery?.failure_class ?? null, hygiene: result?.ok === true ? "ran" : "failed",
