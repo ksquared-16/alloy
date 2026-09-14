@@ -1,3 +1,9 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-09-14
+---
+
 # S0 — what was moved, and what was deliberately left
 
 S0 moved **repository identity and branch/promotion policy** behind the existing
