@@ -105,12 +105,31 @@ export const REPOSITORY_PROFILES = Object.freeze({
      */
     execution: {
       managed_slots: false,
+      managed_slot_count: 0,
       first_agent_port: null,
       worktree_namespace: null,
       remote_slug: null,
       deployed_target: null,
       database_target: null,
       hosted_host: null,
+      /*
+       * WHERE THIS PROJECT'S SERVER CREDENTIALS LIVE, relative to its root.
+       *
+       * `ALLOY_SERVER_ENV_SOURCE` named ONE file — Alloy's `web/.env.local` —
+       * from generic runtime, with a guess chain ending in another person's
+       * home directory. It is not a host setting; it is a property of a
+       * project that HAS a server. A repository-only project has none, and
+       * null is the correct answer rather than a path that does not exist.
+       */
+      env_source_relpath: null,
+      /*
+       * Where this project keeps migrations, and what its local database stack
+       * is called. Both were literals — `supabase/migrations` in the promotion
+       * train, `alloy-cert` in the process classifier — and both are properties
+       * of a project that HAS a database. A repository-only project has neither.
+       */
+      migrations_relpath: null,
+      local_stack_name: null,
     },
   },
   alloy: {
@@ -133,12 +152,19 @@ export const REPOSITORY_PROFILES = Object.freeze({
     // Alloy's actual execution conventions, stated once and owned here.
     execution: {
       managed_slots: true,
+      // Six permanent slots on 3011-3016. The count lived only in an observer's
+      // frozen port list, which meant the observer and the allocator could
+      // disagree about how many slots Alloy has.
+      managed_slot_count: 6,
       first_agent_port: 3011,
       worktree_namespace: "alloy-worktrees",
       remote_slug: "ksquared-16/alloy",
       deployed_target: "alloy_staging_web",
       database_target: "alloy_deployed_primary",
       hosted_host: "staging.workwithalloy.com",
+      env_source_relpath: "web/.env.local",
+      migrations_relpath: "supabase/migrations",
+      local_stack_name: "alloy-cert",
     },
   },
 });
@@ -171,12 +197,16 @@ export function executionProfileFor(rec) {
   const pick = (k) => (override && override[k] !== undefined ? override[k] : base[k]);
   return Object.freeze({
     managed_slots: Boolean(pick("managed_slots")),
+    managed_slot_count: Number(pick("managed_slot_count") ?? 0) || 0,
     first_agent_port: pick("first_agent_port") ?? null,
     worktree_namespace: pick("worktree_namespace") ?? null,
     remote_slug: rec?.remote_slug ?? pick("remote_slug") ?? null,
     deployed_target: pick("deployed_target") ?? null,
     database_target: pick("database_target") ?? null,
     hosted_host: pick("hosted_host") ?? null,
+    env_source_relpath: pick("env_source_relpath") ?? null,
+    migrations_relpath: pick("migrations_relpath") ?? null,
+    local_stack_name: pick("local_stack_name") ?? null,
     source: override ? "repository_record" : `profile:${profile.id}`,
   });
 }
@@ -193,6 +223,112 @@ export function worktreeParentFor(rec) {
   if (rec?.worktree_parent) return String(rec.worktree_parent).replace(/\/+$/, "");
   const ns = executionProfileFor(rec).worktree_namespace;
   return ns ? join(homedir(), "Code", ns) : null;
+}
+
+/**
+ * Where a repository's server environment file lives, as an absolute path.
+ *
+ * This is the owner of what `ALLOY_SERVER_ENV_SOURCE` used to be. That variable
+ * named one project's credential file from generic runtime: every consumer that
+ * asked for "the server environment" got ALLOY'S, whichever project the
+ * operation was actually for, and when the variable was unset the fallback
+ * guessed its way down to `/Users/Kelly/Alloy`.
+ *
+ * The record may state an absolute `env_source` of its own; otherwise the
+ * profile's relative path is joined to the project's root. A project with no
+ * root, or a profile with no server, resolves NULL — which is what a
+ * repository-only project actually has, and the reason this returns a path
+ * rather than accepting one.
+ */
+export function environmentSourceFor(rec) {
+  if (rec?.env_source) return String(rec.env_source);
+  const rel = executionProfileFor(rec).env_source_relpath;
+  if (!rel || !rec?.root) return null;
+  return join(String(rec.root).replace(/\/+$/, ""), rel);
+}
+
+/**
+ * The slot ports a repository actually has, in order.
+ *
+ * `reconciliation-observe` froze `[3011 … 3016]` as a module constant, so an
+ * observer scanning ANY project looked at Alloy's six ports. The range is
+ * first_agent_port + managed_slot_count, and a project with no managed slots
+ * has an EMPTY range rather than Alloy's.
+ */
+export function slotPortsFor(rec) {
+  const e = executionProfileFor(rec);
+  if (!e.managed_slots || !e.first_agent_port || !e.managed_slot_count) return Object.freeze([]);
+  return Object.freeze(
+    Array.from({ length: e.managed_slot_count }, (_, i) => e.first_agent_port + i),
+  );
+}
+
+/**
+ * Every deployed database target that belongs to a registered project.
+ *
+ * WHY THIS REPLACES TWO FROZEN LITERALS. `PRODUCTION_APPLY_TARGETS` and
+ * `LEDGER_REPAIR_TARGETS` were each `["alloy_deployed_primary"]`, written into
+ * the modules that guard them. The exact-name discipline was right and is kept:
+ * this returns EXACT NAMES a project actually declares, never a pattern and
+ * never a class flag, so "looks like production" still cannot point a mutation
+ * at the wrong database.
+ *
+ * What changes is who says which names those are. A project with no database
+ * contributes none, which is why a repository-only project has no applicable
+ * production target — it does not inherit Alloy's, and the guard refuses.
+ *
+ * FAIL-CLOSED ON AN UNSEEDED REGISTRY. If nothing is registered the set is
+ * empty and every production apply refuses. That is the safe direction, and it
+ * is deliberate: a literal floor here would be the fallback this slice removes.
+ */
+export function deployedDatabaseTargets({ root = runtimeRoot() } = {}) {
+  const seen = [];
+  for (const rec of Object.values(readRepositoryStore(root).repositories)) {
+    if (rec.state !== "ACTIVE") continue;
+    const target = executionProfileFor(rec).database_target;
+    if (target && !seen.includes(target)) seen.push(target);
+  }
+  return Object.freeze(seen);
+}
+
+/**
+ * EVERYTHING AN OPERATION NEEDS TO KNOW ABOUT THE PROJECT IT IS FOR.
+ *
+ * Vacilando runtime has to be able to answer five questions — which project is
+ * this for, which environment, which database, which deployment target, which
+ * worktree/observation scope — and until now it answered all five the same way:
+ * implicitly, as Alloy. A scanner defaulted to `~/Code/alloy-worktrees`, a
+ * migration defaulted to `alloy_deployed_primary`, a credential read defaulted
+ * to Alloy's `web/.env.local`. None of those defaults was wrong for Alloy; all
+ * of them were wrong for anything else, and silently.
+ *
+ * This is the one place those five are answered together, from the record that
+ * already owns them. It is deliberately NOT a new subsystem: every field is
+ * read straight off `executionProfileFor` / `worktreeParentFor` /
+ * `environmentSourceFor`, which are the existing authority.
+ *
+ * `known` is false for an unregistered id, and every scope field is null. That
+ * is the honest answer, and it is what makes an unscoped observation refuse
+ * instead of quietly scanning Alloy's worktrees.
+ */
+export function projectScope(repositoryId, { root = runtimeRoot() } = {}) {
+  let rec = null;
+  try { rec = repositoryId ? getRepository(repositoryId, root) : null; } catch { rec = null; }
+  const e = executionProfileFor(rec);
+  return Object.freeze({
+    known: Boolean(rec),
+    repository_id: rec?.repository_id ?? null,
+    project_id: projectIdFor(rec),
+    root: rec?.root ?? null,
+    worktree_parent: rec ? worktreeParentFor(rec) : null,
+    slot_ports: rec ? slotPortsFor(rec) : Object.freeze([]),
+    database_target: e.database_target,
+    deployed_target: e.deployed_target,
+    hosted_host: e.hosted_host,
+    env_source: rec ? environmentSourceFor(rec) : null,
+    migrations_relpath: e.migrations_relpath,
+    local_stack_name: e.local_stack_name,
+  });
 }
 
 export function promotionPolicyFor(rec) {

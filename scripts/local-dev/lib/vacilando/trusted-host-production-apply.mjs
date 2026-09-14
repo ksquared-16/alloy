@@ -43,7 +43,7 @@
 import { migrationParity } from "./migration-parity.mjs";
 import {
   PRODUCTION_APPLY_ACTION_KEY,
-  PRODUCTION_APPLY_TARGETS,
+  productionApplyTargets,
   assertProductionApplyPreconditions,
   evaluateProductionApplyOutcome,
   classifyApplyFailure,
@@ -218,7 +218,7 @@ export function judgeProductionExecutorIdentity({
   registeredProjectRef = REGISTERED_PRODUCTION_PROJECT_REF,
 } = {}) {
   const t = norm(target);
-  if (!PRODUCTION_APPLY_TARGETS.includes(t)) {
+  if (!productionApplyTargets().includes(t)) {
     return { ok: false, code: PRODUCTION_APPLY_FAILURES.EXECUTOR_TARGET_MISMATCH, detail: `${t || "(none)"} is not a registered production target.` };
   }
 

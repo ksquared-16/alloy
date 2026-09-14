@@ -29,6 +29,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import { ALLOY_REPOSITORY_ID, projectScope } from "./repository-registry.mjs";
+
 export const LANE_PLACEMENT_SCHEMA = "vacilando.lane_placement.v1";
 
 export const PLACEMENT = Object.freeze({
@@ -134,7 +136,10 @@ export function classifyLane(lane, { registrations, worktreesRoot }) {
 
 export function classifyLanes({
   root = RUNTIME_ROOT(),
-  worktreesRoot = join(homedir(), "Code", "alloy-worktrees"),
+  // Alloy by default, resolved rather than written: the value is unchanged and
+  // a second project's lanes are now classifiable against its own worktrees.
+  repositoryId = ALLOY_REPOSITORY_ID,
+  worktreesRoot = projectScope(repositoryId).worktree_parent || join(homedir(), "Code", "alloy-worktrees"),
   lanes = null,
   registrations = null,
 } = {}) {

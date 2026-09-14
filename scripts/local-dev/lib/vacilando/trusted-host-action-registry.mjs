@@ -8,7 +8,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateReadOnlySql } from "./trusted-host-sql-readonly.mjs";
-import { ALLOY_REPOSITORY_ID, getRepository as getRepositoryRecord } from "./repository-registry.mjs";
+import { ALLOY_REPOSITORY_ID, environmentSourceFor, getRepository as getRepositoryRecord } from "./repository-registry.mjs";
 import { validateMergeInputs } from "./trusted-host-merge.mjs";
 import { validatePushInputs } from "./trusted-host-push.mjs";
 import { validateRepositoryMetadataInputs } from "./trusted-host-repository-metadata.mjs";
@@ -201,10 +201,48 @@ export function resolveCanonicalRepoRoot() {
   return "/Users/Kelly/Alloy";
 }
 
+/**
+ * The server environment file belonging to ONE project, or null.
+ *
+ * This is the generic form, and the one new code should call. It asks the
+ * registry where the project lives and what its profile says its environment
+ * file is, and answers NULL when the project has neither. A repository-only
+ * project has no credentials, and a path that does not exist is a worse answer
+ * than no path: it sends a consumer looking for a file, finding none, and
+ * falling through to whatever the next candidate happens to be — which is how
+ * every project ended up sharing Alloy's.
+ */
+export function projectEnvSource(repositoryId) {
+  let rec = null;
+  try { rec = getRepositoryRecord(repositoryId); } catch { rec = null; }
+  if (!rec) return null;
+  return environmentSourceFor(rec) || null;
+}
+
+/**
+ * Alloy's server environment file, for the trusted host's own credentials.
+ *
+ * WHAT CHANGED IS THE OWNER, NOT THE VALUE. This resolved by reading
+ * `ALLOY_SERVER_ENV_SOURCE` and otherwise guessing a canonical root; the
+ * project record now answers first, and the guess chain remains below it so an
+ * unseeded host still resolves exactly as it did.
+ *
+ * `ALLOY_SERVER_ENV_SOURCE` IS DEPRECATED. It is kept as a per-host override
+ * for an operator who has already set it, and it is NOT generic runtime
+ * authority any more: it can only ever name Alloy's file, because only this
+ * Alloy-specific function reads it. Its removal belongs with the rest of the
+ * `ALLOY_`-prefixed runtime variables in **S3**, alongside `ALLOY_RUNTIME_ROOT`
+ * and the `/Users/Kelly/Alloy` fallbacks — a project with an environment gets
+ * it from `projectEnvSource` before then.
+ *
+ * @deprecated-input ALLOY_SERVER_ENV_SOURCE — removal assigned to S3.
+ */
 export function resolveTrustedServerEnvSource() {
   if (process.env.ALLOY_SERVER_ENV_SOURCE && existsSync(process.env.ALLOY_SERVER_ENV_SOURCE)) {
     return process.env.ALLOY_SERVER_ENV_SOURCE;
   }
+  const registered = projectEnvSource(ALLOY_REPOSITORY_ID);
+  if (registered && existsSync(registered)) return registered;
   const canonical = resolveCanonicalRepoRoot();
   return join(canonical, "web", ".env.local");
 }

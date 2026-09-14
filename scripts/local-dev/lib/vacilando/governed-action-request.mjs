@@ -9,11 +9,32 @@
  * decisions, and trusted-host actions.
  */
 import { stampRepositoryAuthority } from "./repository-execution-authority.mjs";
-import { executionProfileFor as executionProfileForRepo } from "./repository-registry.mjs";
+import { executionProfileFor as executionProfileForRepo, projectScope } from "./repository-registry.mjs";
 
 /** Alloy's database target, owned by Alloy's profile. */
 const alloyDatabaseTarget = () =>
   executionProfileForRepo({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID_FOR_TARGET }).database_target;
+
+/**
+ * The database a request is actually FOR.
+ *
+ * S1 replaced the literal `"alloy_deployed_primary"` with Alloy's profile, which
+ * fixed where the value came from and left the behaviour: a request that omitted
+ * a target still acquired ALLOY'S DATABASE, whichever project it named.
+ *
+ * A request that NAMES a project now resolves that project's database, or none —
+ * a project with no database gets a null target and the action refuses
+ * downstream, which is the correct outcome for a repository-only project. Only a
+ * request that names no project at all keeps the incumbent Alloy default, and
+ * that last fallback belongs to S3, once every request carries its project.
+ */
+function requestDatabaseTarget(req = {}, inputs = {}) {
+  const stated = inputs.target || inputs.environment || req.target;
+  if (stated) return stated;
+  const named = req.authority?.repository_id || inputs.repository_id || null;
+  if (named) return projectScope(named).database_target || null;
+  return alloyDatabaseTarget();
+}
 const ALLOY_REPOSITORY_ID_FOR_TARGET = "repo_alloy";
 import { createHash, randomBytes } from "node:crypto";
 import { measureMergePullRequestGates } from "./trusted-host-repository-housekeeping.mjs";
@@ -537,7 +558,7 @@ export function presentationForGovernedAction(req = {}) {
     const versions = list.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean);
     // The literal here meant any project omitting a target acquired Alloy's
   // database. Alloy's profile answers for Alloy; another project supplies its own.
-  const target = inputs.target || inputs.environment || req.target || alloyDatabaseTarget();
+  const target = requestDatabaseTarget(req, inputs);
     const sha = String(inputs.expectedSha || inputs.expected_sha || "");
     return {
       approve_label: "Authorize PRODUCTION migration",
@@ -717,7 +738,7 @@ function productionMigrationProposal(req) {
   const list = Array.isArray(i.migrations) ? i.migrations : [];
   const versions = list.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean);
   const files = list.map((m) => (typeof m === "string" ? m : (m?.path || m?.migration_path || m?.version || ""))).filter(Boolean);
-  const target = i.target || i.environment || req.target || alloyDatabaseTarget();
+  const target = requestDatabaseTarget(req, i);
   const sha = String(i.expectedSha || i.expected_sha || "");
   const facts = [
     factRow("Environment", "PRODUCTION — deployed primary"),

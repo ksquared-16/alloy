@@ -77,7 +77,7 @@ import {
 } from "./trusted-host-migrate.mjs";
 import { buildRegistrationSql } from "./trusted-host-register-application.mjs";
 import {
-  PRODUCTION_APPLY_TARGETS,
+  productionApplyTargets,
   validateProductionMigrationInputs,
 } from "./trusted-host-production-migrate.mjs";
 import {
@@ -2062,7 +2062,7 @@ export function executePromotedMigrationTrustedHostAction(action, { actor = "dir
 
   const inputs = action.inputs || {};
   const target = String(inputs.target || inputs.environment || "").trim().toLowerCase();
-  if (!PRODUCTION_APPLY_TARGETS.includes(target)) {
+  if (!productionApplyTargets().includes(target)) {
     return failTrustedAction(
       action,
       "target_not_registered_production",

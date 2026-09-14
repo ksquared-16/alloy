@@ -28,6 +28,7 @@ import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import { deployedDatabaseTargets } from "./repository-registry.mjs";
 import {
   assertNoArbitrarySql,
   assertShaReachableFromStaging,
@@ -42,10 +43,27 @@ export const PRODUCTION_APPLY_ACTION_KEY = "database.apply_promoted_migration";
  *
  * An allowlist of exact names rather than a pattern or a class flag: "looks
  * like production" is the kind of inference that eventually points a mutation
- * at the wrong database. If Alloy later needs a hosted staging database it gets
- * its OWN explicit target rather than a reinterpretation of this one.
+ * at the wrong database. That discipline is unchanged — what changed is who
+ * says which names are on the list.
+ *
+ * This was the literal `["alloy_deployed_primary"]`, written here. It is now
+ * the set of deployed database targets that REGISTERED PROJECTS actually
+ * declare, resolved through the same repository authority that owns every other
+ * project convention. For Alloy the value is identical. A project that declares
+ * no database contributes nothing, which is the point: a repository-only
+ * project has no applicable production target and this guard refuses, rather
+ * than the project inheriting Alloy's database because a constant had no owner.
+ *
+ * It is a FUNCTION, not a frozen array, because registering a project is a live
+ * operator action. A module-load snapshot would be stale the moment one was
+ * added, and a stale allowlist beside a live registry is two authorities.
+ *
+ * FAIL-CLOSED: an unseeded registry yields an empty set and every production
+ * apply refuses. A literal floor here would reintroduce exactly what was removed.
  */
-export const PRODUCTION_APPLY_TARGETS = Object.freeze(["alloy_deployed_primary"]);
+export function productionApplyTargets() {
+  return deployedDatabaseTargets();
+}
 
 /** Authority: never delegable, never satisfied by a policy gate. */
 export const PRODUCTION_APPLY_AUTHORITY = Object.freeze({
@@ -268,7 +286,7 @@ export function validateProductionMigrationInputs(inputs = {}, {
   if (!target) {
     return { ok: false, code: "missing_target", detail: "target is required and must name a registered production database." };
   }
-  if (!PRODUCTION_APPLY_TARGETS.includes(target)) {
+  if (!productionApplyTargets().includes(target)) {
     // A NON-PRODUCTION TARGET IS REFUSED HERE TOO, in the other direction.
     // If this action accepted staging it would become a way to apply a staging
     // migration under production authority, which is the same boundary failure
@@ -276,7 +294,7 @@ export function validateProductionMigrationInputs(inputs = {}, {
     return {
       ok: false,
       code: "target_not_registered_production",
-      detail: `${PRODUCTION_APPLY_ACTION_KEY} targets only: ${PRODUCTION_APPLY_TARGETS.join(", ")}`,
+      detail: `${PRODUCTION_APPLY_ACTION_KEY} targets only the deployed database of a registered project: ${productionApplyTargets().join(", ") || "none registered"}`,
     };
   }
 
@@ -401,7 +419,7 @@ export function assertProductionApplyPreconditions({
 
   // 2 — the target is exactly the registered deployed primary.
   const target = norm(normalized.target);
-  if (!PRODUCTION_APPLY_TARGETS.includes(target)) {
+  if (!productionApplyTargets().includes(target)) {
     return refuse("target_not_registered_production", `${target || "(none)"} is not a registered production target.`);
   }
   if (registeredTarget && norm(registeredTarget.name || registeredTarget) !== target) {

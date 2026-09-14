@@ -82,3 +82,63 @@ port; a repository with no managed slot range has none.
 | `alloy_deployed_primary` in a conversation string | 1 | **cosmetic** | operator prose, not configuration |
 
 Nothing is unassigned.
+
+---
+
+# S2 — project environment authority
+
+S2 moved the layer where Vacilando touches the outside world: credentials,
+production databases, and the scope an observer scans. Values are unchanged for
+Alloy; a project without an environment resolves **nothing**.
+
+## Moved behind repository authority in S2
+
+| concept | was | now |
+|---|---|---|
+| server env file | `ALLOY_SERVER_ENV_SOURCE`, then a guess chain ending in `/Users/Kelly/Alloy` | `environmentSourceFor(rec)` / `projectEnvSource(id)`; **null** for a project with no server |
+| production-apply targets | `PRODUCTION_APPLY_TARGETS = ["alloy_deployed_primary"]` | `productionApplyTargets()` over `deployedDatabaseTargets()` |
+| ledger-repair targets | the same literal, written a second time | `ledgerRepairTargets()`, the same set — the two can no longer drift |
+| observer worktree scope | `~/Code/alloy-worktrees` as a default argument in six observers | `projectScope(id).worktree_parent`; **null** for an unregistered project |
+| slot port range | `PORTS = [3011 … 3016]` frozen in `reconciliation-observe` | `slotPortsFor(rec)`, from `first_agent_port` + `managed_slot_count` |
+| migrations directory | `supabase/migrations` in the promotion train | `execution.migrations_relpath` |
+| local database stack | `alloy-cert` in the process classifier | `execution.local_stack_name` |
+| policy board prose | `3011–3016` and `~/Code/alloy-worktrees` written as text | rendered from `projectScope` |
+
+`projectScope(id)` answers all five runtime questions — project, environment,
+database, deployment target, observation scope — in one place, off the existing
+record. No new subsystem, no second profile map.
+
+### `ALLOY_SERVER_ENV_SOURCE` was demoted, not renamed
+
+Renaming it to something generic while it kept Alloy semantics would have
+preserved the whole defect behind a tidier label. Instead: only the
+Alloy-specific `resolveTrustedServerEnvSource` reads it, it is marked
+`@deprecated-input`, and **its removal is assigned to S3** with the rest of the
+`ALLOY_`-prefixed runtime variables. New code calls `projectEnvSource`.
+
+### Fail-closed is deliberate
+
+An unseeded registry yields **no** production targets and every apply refuses. A
+literal floor there would reintroduce exactly what this slice removed. The
+consequence is that an isolated test fixture must now register the project it is
+applying for, which `production-apply-executor` does explicitly.
+
+## Deliberately NOT moved
+
+| occurrence | why |
+|---|---|
+| `alloy_deployed_primary` in `trusted-host-authz` / `executor-authority` denylists | **safety policy, not configuration** — never-auto-approve names every project benefits from. Genericising them because the value contains Alloy's name would weaken authorization to tidy a string. |
+| `alloy_deployed_primary` in a conversation string | operator prose |
+
+## Still Alloy-specific, and whose slice
+
+| occurrence | files | slice | why |
+|---|---|---|---|
+| `ALLOY_RUNTIME_ROOT` | 90 | **S3** | rename with a deprecation alias |
+| `ALLOY_SERVER_ENV_SOURCE` as a deprecated host override | 1 runtime reader | **S3** | demoted in S2; deleted with the other `ALLOY_` variables |
+| `/Users/Kelly/Alloy` and `~/Alloy` fallbacks | 7 | **S3** | below the registry since S0; deletable once every host is seeded |
+| `ALLOY_WORKTREE_ROOT`, `ALLOY_MAX_AGENTS`, `ALLOY_FIRST_AGENT_PORT` in shell (`read-core.sh`, `git-durability.sh`, `common.sh`) | ~6 | **S3** | the shell layer reads env vars, not the JS registry; it moves with the `ALLOY_` rename |
+| `supabase/migrations` in acceptance, review and capability regexes | ~12 | **S3** | repository LAYOUT assertions, not environment authority; they move with the layout conventions |
+| `alloy-worktrees` in `provider-prompt-authority`, `validate-caps.sh`, `vacilando-secret-preflight`, `vac-health`, `vac-maintenance`, `vac-reconcile`, `vac-worktree-retire`, `workspace-facts`, `identity`, `execution-node`, `control-plane-resilience`, `browser-auth` | ~12 | **S3** | CLI entry points and host-fact collectors, which S3 rethreads when the runtime root moves |
+
+Nothing is unassigned.

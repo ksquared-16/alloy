@@ -21,6 +21,8 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 
+import { ALLOY_REPOSITORY_ID, projectScope } from "./repository-registry.mjs";
+
 export const CAPABILITY_RESOLUTION_SCHEMA = "vacilando.provider_capability_resolution.v1";
 
 /** The three outcomes of second-stage resolution. */
@@ -84,15 +86,33 @@ const SIGNATURES = Object.freeze([
   },
 ]);
 
-/** Local Supabase/docker stacks map to the certification environment, not staging. */
-const ENVIRONMENT_HINTS = Object.freeze([
-  { re: /supabase_db_alloy-cert|alloy-cert/, environment: "certification" },
+/**
+ * Local Supabase/docker stacks map to the certification environment, not staging.
+ *
+ * The local stack's name was the literal `alloy-cert`. It is a property of the
+ * project that owns the stack, so the profile states it, and this is built at
+ * call time from what the registry resolves. A project with no local stack
+ * contributes no hint rather than matching Alloy's containers.
+ */
+function environmentHints(repositoryId = ALLOY_REPOSITORY_ID) {
+  const stack = projectScope(repositoryId).local_stack_name;
+  const local = stack
+    ? [{ re: new RegExp(`supabase_db_${escapeForRegExp(stack)}|${escapeForRegExp(stack)}`), environment: "certification" }]
+    : [];
+  return Object.freeze([...local, ...GENERIC_ENVIRONMENT_HINTS]);
+}
+
+function escapeForRegExp(v) {
+  return String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const GENERIC_ENVIRONMENT_HINTS = Object.freeze([
   { re: /\bproduction\b|prod\b/, environment: "production" },
   { re: /\bstaging\b/, environment: "staging" },
 ]);
 
 export function resolveEnvironment(command, { fallback = null } = {}) {
-  for (const h of ENVIRONMENT_HINTS) if (h.re.test(String(command))) return h.environment;
+  for (const h of environmentHints()) if (h.re.test(String(command))) return h.environment;
   return fallback;
 }
 

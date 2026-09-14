@@ -34,12 +34,21 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 
-import { governedPromotionCandidateFor, readGovernedActionRecords } from "./trusted-host-production-migrate.mjs";
+import { governedPromotionCandidateFor, productionApplyTargets, readGovernedActionRecords } from "./trusted-host-production-migrate.mjs";
 
 export const REPAIR_LEDGER_ACTION_KEY = "database.repair_migration_ledger";
 
-/** Exactly the production targets this capability may reconcile. */
-export const LEDGER_REPAIR_TARGETS = Object.freeze(["alloy_deployed_primary"]);
+/**
+ * Exactly the production targets this capability may reconcile.
+ *
+ * Was the literal `["alloy_deployed_primary"]`. It is now the same set
+ * production apply uses — the deployed databases registered projects declare —
+ * so the two capabilities cannot drift apart, and neither carries a project's
+ * name in its own source. A project with no database has none to reconcile.
+ */
+export function ledgerRepairTargets() {
+  return productionApplyTargets();
+}
 
 /** The ledger table, named once. */
 export const LEDGER_RELATION = "supabase_migrations.schema_migrations";
@@ -85,7 +94,7 @@ export function assertLedgerRepairPreconditions({
 
   // 1 — the target is exactly a registered production target for THIS capability.
   const target = norm(normalized?.target);
-  if (!LEDGER_REPAIR_TARGETS.includes(target)) {
+  if (!ledgerRepairTargets().includes(target)) {
     return refuse("target_not_registered_for_ledger_repair",
       `${target || "(none)"} is not a target this capability may reconcile.`);
   }
@@ -282,10 +291,10 @@ export function validateLedgerRepairInputs(inputs = {}, {
   }
   const target = norm(inputs.target || inputs.environment || "");
   if (!target) return { ok: false, code: "missing_target", detail: "target is required." };
-  if (!LEDGER_REPAIR_TARGETS.includes(target)) {
+  if (!ledgerRepairTargets().includes(target)) {
     return {
       ok: false, code: "target_not_registered_for_ledger_repair",
-      detail: `${REPAIR_LEDGER_ACTION_KEY} reconciles only: ${LEDGER_REPAIR_TARGETS.join(", ")}`,
+      detail: `${REPAIR_LEDGER_ACTION_KEY} reconciles only the deployed database of a registered project: ${ledgerRepairTargets().join(", ") || "none registered"}`,
     };
   }
   const expected = inputs.expectedLedger || inputs.expected_ledger || {};
