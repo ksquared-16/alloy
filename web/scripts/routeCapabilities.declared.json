@@ -4382,6 +4382,18 @@
         "status": "none",
         "reason": "External token exchange. Admission IS the presented installation credential, resolved by hashed secret through resolveApplicationPrincipal, which reads the organization from the installation row. There is no org principal to hold a catalog capability: the caller is a non-human Application Principal, and Alloy's capability catalog describes what a MEMBER may do. External authority is the installation's granted_scopes, enforced at /api/v1 by requireScope, not a catalog key."
       }
+    },
+    "app/api/admin/qa/financials-director/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Internal Director QA readiness. Renders a real household's outstanding, collectible and responsibility figures through buildFinancialsCardVM, so it is gated exactly as the Financials card is — being a QA tool is not a reason to read money more cheaply than the product does."
+      },
+      "POST": {
+        "status": "none",
+        "reason": "Records a Director's human acceptance testimony only — scenario key, result, observation, classification, evidence reference — into qa_director_acceptance_results. It holds no amounts, references no financial row, and writes nothing a balance can be derived from. Role-gated by requireAdminOrOps; a Financials capability would misdescribe what it touches."
+      }
     }
   }
 }
