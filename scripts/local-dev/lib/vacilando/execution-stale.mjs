@@ -988,12 +988,51 @@ export const WAITING_RUN_STATES = Object.freeze(["QUEUED", "NEEDS_INPUT", "WAITI
  * reinterpreted, guessed at, or pattern-matched into a nearby code — it simply
  * is not a key, and the run falls through to whatever the descriptor says.
  */
-function waitReasonFor(run) {
+/*
+ * EXPORTED SO SOMETHING CAN ACTUALLY CALL IT. This classifier decides whether a
+ * live run is collected by the governor, and it was reachable only through a
+ * sweep that reads the real run store - so the one decision that kills runs had
+ * no direct test.
+ */
+export function waitReasonFor(run) {
   if (run.state === "NEEDS_INPUT") return "needs_operator_input";
   if (run.state === "RECOVERING") return "recovering";
   const declared = run.resource_wait?.reason;
   if (isDeclaredWaitReason(declared)) return declared;
   if (isDeclaredWaitReason(run.state_reason)) return run.state_reason;
+
+  /*
+   * A RUN THAT HAS JUST BEEN QUEUED IS NOT A WAIT WITHOUT A REASON.
+   *
+   * QUEUED is in WAITING_RUN_STATES on purpose - a run that never started was
+   * the one shape nothing collected, and one sat QUEUED on
+   * `provider_provisioning` for over thirteen hours. But a run is QUEUED from
+   * the instant it is created, BEFORE any writer could declare anything, and
+   * for that window `waitReasonFor` returned null. `describeWait(null)` is
+   * `bound_policy: "invalid"`, `reconcileWait` fails an invalid descriptor
+   * IMMEDIATELY - there is no bound to exceed - and the governor killed a
+   * perfectly healthy run on its first sweep.
+   *
+   * MEASURED across 181 runs in the store: 4 runs in 3 lanes died this way, at
+   * 0.239s, 0.374s, 0.627s and one at -0.041s - failed before its own QUEUED
+   * transition timestamp. Every one had `resource_wait: null`, every one had
+   * `delivery.acknowledged: true`, and every one was told "The run waited
+   * longer than allowed and was stopped. It never reached a provider." Nothing
+   * waited and the provider had acknowledged it. The most recent is the run
+   * that was executing this very repair.
+   *
+   * The honest classification already exists in the table: the send IS in
+   * progress. `send_in_progress` is bounded at five minutes and owned by
+   * execution-run-send, so a send that genuinely never lands is still collected
+   * - the thirteen-hour case stays closed - while a run in the normal
+   * milliseconds-long admission window is simply within its bound.
+   *
+   * This is a DERIVED reason, not a parsed caption: it comes from the run's
+   * state, not from any human text. It also removes the race the sweep was
+   * losing, because the classification no longer depends on a writer winning
+   * against the governor.
+   */
+  if (run.state === "QUEUED") return "send_in_progress";
   return null;
 }
 

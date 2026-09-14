@@ -611,6 +611,102 @@ export function resolveActionAuthorization(action, {
 }
 
 /**
+ * ONE OBSERVATION, ONE GENERATION.
+ *
+ * A census artifact says "these results came from this action". The merge that
+ * refreshed an existing artifact was an object spread with an explicit list of
+ * fields to update:
+ *
+ *   { ...prior, status, query_hash, execution: {...}, results }
+ *
+ * `...prior` carried the OLD top-level `trusted_host_action_id`, and the
+ * refresh list did not include it. Fresh results were written beside stale
+ * provenance - and because the nested `execution.trusted_host_action_id` WAS
+ * refreshed, the artifact ended up carrying two action ids that disagreed: the
+ * documented top-level one wrong, the nested one right.
+ *
+ * MEASURED in certification/migrations/hosted-migration-identity-census.sql.results.json:
+ *   top    trusted_host_action_id  tha_62a0bc1ab313f7   (four days stale)
+ *   nested trusted_host_action_id  tha_02c7feeb72f587   (produced these results)
+ *   results.census_run_at          2026-09-12T16:21:08.115Z
+ *   execution.executed_at          2026-09-12T16:21:07.148Z
+ *
+ * `query_hash` matched in both places only because the query had not changed,
+ * which is exactly how a two-field disagreement stays invisible.
+ *
+ * The action id IS the generation id; no new identity system is needed. This
+ * constructor derives EVERY provenance field from the one action, so results and
+ * provenance cannot come from different generations. Unrelated keys a prior
+ * artifact carried are preserved; no provenance field survives a previous
+ * observation.
+ */
+export function censusEvidenceEnvelope(action, resultObj, { prior = null, nowMs = Date.now() } = {}) {
+  const carried = prior && typeof prior === "object" ? { ...prior } : {};
+
+  /*
+   * THE ORDERING IS THE MECHANISM, and it is the whole fix.
+   *
+   * `...carried` FIRST, every owned field after. The original defect was not a
+   * missing guard - it was that the top-level `trusted_host_action_id` appeared
+   * nowhere after the spread, so `...prior` was its last writer. Any field this
+   * constructor does not restate below is inherited from the previous
+   * observation, silently.
+   *
+   * A first draft of this function also deleted the owned keys off `carried`
+   * before spreading. That read as protective and did nothing: the later spread
+   * overwrites them anyway, and a planted regression proved the test could not
+   * tell the two versions apart. Dead defensive code is worse than none - it
+   * invites the reader to believe a guard is holding something up.
+   */
+  const provenance = {
+    trusted_host_action_id: action.id,
+    query_hash: action.inputs.queryHash,
+  };
+  return {
+    ...carried,
+    ...provenance,
+    status: "executed",
+    execution: {
+      executed: true,
+      executed_at: iso(nowMs),
+      executed_by: "trusted_host_action",
+      ...provenance,
+      authorization_id: action.authorizationId,
+      database_target: action.inputs.databaseTarget,
+      database_target_fingerprint: databaseTargetFingerprint(action.inputs.databaseTarget),
+      blocker: null,
+    },
+    results: resultObj,
+  };
+}
+
+/**
+ * Can a reader prove this metadata describes THESE results?
+ *
+ * Returns both action ids and both query hashes so a caller sees a
+ * mixed-generation artifact instead of trusting whichever field it read first.
+ */
+export function censusEvidenceGeneration(artifact = {}) {
+  const top = artifact?.trusted_host_action_id ?? null;
+  const nested = artifact?.execution?.trusted_host_action_id ?? null;
+  const topHash = artifact?.query_hash ?? null;
+  const nestedHash = artifact?.execution?.query_hash ?? null;
+  // An artifact with no `execution` block was written whole and has one
+  // generation by construction; only a merged artifact can disagree.
+  const hasNested = artifact?.execution != null;
+  const coherent = !hasNested || (top === nested && topHash === nestedHash);
+  return {
+    coherent,
+    generation: coherent ? top : null,
+    trusted_host_action_id: top,
+    execution_trusted_host_action_id: nested,
+    query_hash: topHash,
+    execution_query_hash: nestedHash,
+    mismatch: coherent ? null : { action_id: top !== nested, query_hash: topHash !== nestedHash },
+  };
+}
+
+/**
  * Would a governed request's action be authorized at the boundary?
  *
  * Normalizes the inputs through the SAME registry validator the action is built
@@ -990,11 +1086,8 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   const evidenceRel = String(queryRel).replace(/\.json$/i, "") + ".results.json";
   const storeEvidenceAbs = join(storeDir(), `${action.id}.results.json`);
   try {
-    writeFileSync(storeEvidenceAbs, JSON.stringify({
-      trusted_host_action_id: action.id,
-      query_hash: action.inputs.queryHash,
-      results: resultObj,
-    }, null, 2));
+    writeFileSync(storeEvidenceAbs, JSON.stringify(
+      censusEvidenceEnvelope(action, resultObj, { nowMs }), null, 2));
   } catch { /* action.result still holds the census */ }
   const evidenceAbs = join(originatingRoot, evidenceRel);
   try {
@@ -1002,38 +1095,15 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
     if (existsSync(evidenceAbs) && evidenceAbs.endsWith(".json")) {
       try {
         const prior = JSON.parse(readFileSync(evidenceAbs, "utf8"));
-        const merged = {
-          ...prior,
-          status: "executed",
-          query_hash: action.inputs.queryHash,
-          execution: {
-            ...(prior.execution || {}),
-            executed: true,
-            executed_at: iso(nowMs),
-            executed_by: "trusted_host_action",
-            trusted_host_action_id: action.id,
-            authorization_id: action.authorizationId,
-            query_hash: action.inputs.queryHash,
-            database_target: action.inputs.databaseTarget,
-            database_target_fingerprint: databaseTargetFingerprint(action.inputs.databaseTarget),
-            blocker: null,
-          },
-          results: resultObj,
-        };
-        writeFileSync(evidenceAbs, JSON.stringify(merged, null, 2));
+        writeFileSync(evidenceAbs, JSON.stringify(
+          censusEvidenceEnvelope(action, resultObj, { prior, nowMs }), null, 2));
       } catch {
-        writeFileSync(evidenceAbs, JSON.stringify({
-          trusted_host_action_id: action.id,
-          query_hash: action.inputs.queryHash,
-          results: resultObj,
-        }, null, 2));
+        writeFileSync(evidenceAbs, JSON.stringify(
+          censusEvidenceEnvelope(action, resultObj, { nowMs }), null, 2));
       }
     } else {
-      writeFileSync(evidenceAbs, JSON.stringify({
-        trusted_host_action_id: action.id,
-        query_hash: action.inputs.queryHash,
-        results: resultObj,
-      }, null, 2));
+      writeFileSync(evidenceAbs, JSON.stringify(
+        censusEvidenceEnvelope(action, resultObj, { nowMs }), null, 2));
     }
   } catch {
     /* originating worktree write is best-effort; Director store holds the result */

@@ -250,3 +250,19 @@ jobs:
       - name: Governed failure carries its diagnosis
         working-directory: .
         run: node --test scripts/local-dev/tests/development-validation-detail-propagation.test.mjs
+
+      # Evidence that misattributes itself is worse than no evidence: a reader
+      # who follows the stored action id lands on a different observation and
+      # has no way to know. Measured: 5 of 5 committed census artifacts carrying
+      # an execution block were mixed-generation, 0 coherent, and in all five the
+      # query_hash agreed - which is how a two-field disagreement stays hidden.
+      - name: Census artifact provenance is one generation
+        working-directory: .
+        run: node scripts/local-dev/tests/development-census-provenance-generation.test.mjs
+
+      # A run that has just been queued is not a wait without a reason. Four
+      # healthy runs were collected by the governor at 0.239s, 0.374s, 0.627s and
+      # one at -0.041s - before its own QUEUED transition timestamp.
+      - name: Admission wait classification (governor race)
+        working-directory: .
+        run: node scripts/local-dev/tests/development-admission-wait-classification.test.mjs
