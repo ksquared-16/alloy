@@ -260,7 +260,7 @@ async function runOperatingReportStage({ root, nowMs }) {
        */
       const win = operatingReportWindow(kind, new Date(nowMs));
       if (!win) throw new Error("report_window_unresolved");
-      const { windowStart, windowEnd } = win;
+      const { windowStart, windowEnd, timezone, day } = win;
       const requests = readJson(join(base, "governed-actions", "requests.json"), { requests: [] }).requests || [];
       const runStore = readJson(join(base, "execution-runs", "runs.json"), { lanes: {} }).lanes || {};
       const runs = Object.values(runStore).flatMap((e) => e.runs || []);
@@ -268,7 +268,7 @@ async function runOperatingReportStage({ root, nowMs }) {
       const notifStore = readJson(join(base, "notifications.json"), { notifications: [] });
       const notifications = Array.isArray(notifStore) ? notifStore : (notifStore.notifications || []);
       return buildOperatingReport({
-        kind, windowStart, windowEnd, requests, runs,
+        kind, windowStart, windowEnd, timezone, day, requests, runs,
         lanes: Object.values(laneStore), notifications,
       });
     },

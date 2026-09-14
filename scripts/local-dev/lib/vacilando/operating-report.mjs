@@ -82,6 +82,12 @@ export function buildOperatingReport({
   kind = "daily",
   windowStart,
   windowEnd,
+  // The zone and civil day the window was resolved in. Carried so the ARTIFACT
+  // can say which day it describes: "07:00Z → 07:00Z" is readable as neither
+  // the 13th nor the 14th, and an operator should not have to do the offset
+  // arithmetic to find out which day their report is about.
+  timezone = null,
+  day = null,
   requests = [],
   runs = [],
   lanes = [],
@@ -225,7 +231,7 @@ export function buildOperatingReport({
     schema_version: OPERATING_REPORT_SCHEMA,
     kind,
     report_id: reportId({ kind, windowStart, windowEnd }),
-    window: { start: windowStart, end: windowEnd },
+    window: { start: windowStart, end: windowEnd, timezone, day },
     generated_at: generatedAt,
     today: {
       staging_sha: runtime?.staging ?? null,
@@ -296,7 +302,10 @@ export function buildOperatingReport({
 export function renderOperatingReport(r) {
   const d = (x) => (x && x.n ? `P50 ${x.p50}s  P95 ${x.p95}s  max ${x.max}s  (n=${x.n})` : "no samples");
   const L = [];
-  L.push(`${r.kind === "weekly" ? "WEEK" : "DAY"}  ${r.window.start} → ${r.window.end}`);
+  const label = r.window.day
+    ? `${r.window.day}${r.window.timezone ? ` ${r.window.timezone}` : ""}`
+    : `${r.window.start} → ${r.window.end}`;
+  L.push(`${r.kind === "weekly" ? "WEEK ending" : "DAY"}  ${label}`);
   L.push(`report ${r.report_id}`);
   L.push("");
   L.push(`staging ${r.today.staging_sha || "—"} · toolkit ${r.today.installed_toolkit || "—"} · gateway ${r.today.running_gateway || "—"}${r.today.converged === false ? " (NOT CONVERGED)" : ""}`);

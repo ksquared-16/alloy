@@ -48,7 +48,7 @@ if (!win) {
   }, null, 2));
   process.exit(2);
 }
-const { windowStart, windowEnd } = win;
+const { windowStart, windowEnd, timezone, day } = win;
 
 const requests = readJson(join(base, "governed-actions", "requests.json"), { requests: [] }).requests || [];
 const runStore = readJson(join(base, "execution-runs", "runs.json"), { lanes: {} }).lanes || {};
@@ -100,7 +100,7 @@ if (has("due")) {
   process.exit(verdict.due ? 0 : 3);
 }
 
-const report = buildOperatingReport({ kind, windowStart, windowEnd, requests, runs, lanes, notifications, health, runtime });
+const report = buildOperatingReport({ kind, windowStart, windowEnd, timezone, day, requests, runs, lanes, notifications, health, runtime });
 
 if (has("write")) {
   const dir = join(base, "operating-reports");

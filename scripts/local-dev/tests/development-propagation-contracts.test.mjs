@@ -19,7 +19,7 @@
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { operatingReportWindow } from "../lib/vacilando/operating-report.mjs";
+import { operatingReportWindow, buildOperatingReport, renderOperatingReport, reportId } from "../lib/vacilando/operating-report.mjs";
 
 let pass = 0, fail = 0;
 function test(name, fn) {
@@ -247,6 +247,35 @@ test("P10 no caller derives a report day from UTC any more", () => {
 test("P10 no zone configured is a non-answer, never a UTC guess", () => {
   assert.equal(operatingReportWindow("daily", FIRES_AT, { timeZone: null }), null,
     "silently falling back to UTC is how this defect would come back");
+});
+
+test("P10 the report ARTIFACT says which day and zone it describes", () => {
+  /*
+   * Computing the window in the zone and then printing two UTC instants is the
+   * same defect one layer out: "07:00Z -> 07:00Z" is readable as neither the
+   * 13th nor the 14th, and the operator would do the offset arithmetic.
+   */
+  const w = operatingReportWindow("daily", FIRES_AT, { timeZone: TZ });
+  const r = buildOperatingReport({
+    kind: "daily", windowStart: w.windowStart, windowEnd: w.windowEnd,
+    timezone: w.timezone, day: w.day,
+  });
+  assert.equal(r.window.day, "2026-09-12");
+  assert.equal(r.window.timezone, TZ);
+  const head = renderOperatingReport(r).split("\n")[0];
+  assert.match(head, /2026-09-12/, `the day must be legible in the header, got: ${head}`);
+  assert.match(head, /America\/Los_Angeles/, `and the zone that day is measured in, got: ${head}`);
+});
+
+test("P10 carrying the zone did not change report identity", () => {
+  // Identity is the window, so a report that gained descriptive fields is the
+  // same report - otherwise today would silently acquire a second file.
+  const w = operatingReportWindow("daily", FIRES_AT, { timeZone: TZ });
+  const withZone = buildOperatingReport({
+    kind: "daily", windowStart: w.windowStart, windowEnd: w.windowEnd,
+    timezone: w.timezone, day: w.day,
+  });
+  assert.equal(withZone.report_id, reportId({ kind: "daily", windowStart: w.windowStart, windowEnd: w.windowEnd }));
 });
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
