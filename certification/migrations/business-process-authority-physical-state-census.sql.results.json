@@ -1,0 +1,49 @@
+{
+  "trusted_host_action_id": "tha_c88d35285171ad",
+  "query_hash": "f9b15b0426e8a788801ae6807c7ecf8e588fe4766dfb22247458027b04c16769",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T19:50:46.135Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_c88d35285171ad",
+    "query_hash": "f9b15b0426e8a788801ae6807c7ecf8e588fe4766dfb22247458027b04c16769",
+    "authorization_id": "grnt_139c3f7f0bfa430b",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T19:50:46.946Z",
+    "question_ids": [
+      "m090000",
+      "m091000",
+      "nonvacuity"
+    ],
+    "questions": {
+      "m090000": {
+        "question_id": "m090000",
+        "row_count": null,
+        "rows": [
+          "catalog=2 admin_roles_missing_a_key=0 ops_grants=0 director_grants=0 departments_keys=0"
+        ]
+      },
+      "m091000": {
+        "question_id": "m091000",
+        "row_count": null,
+        "rows": [
+          "fn_installed=true sentinels=true admin_has_configure=true admin_has_activate=true ops_has_either=false fn_names_departments_key=false trigger=1"
+        ]
+      },
+      "nonvacuity": {
+        "question_id": "nonvacuity",
+        "row_count": null,
+        "rows": [
+          "catalog_total=82 admin_roles=3 grants_total=330"
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}
