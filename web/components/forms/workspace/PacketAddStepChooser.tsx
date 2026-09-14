@@ -71,9 +71,21 @@ export function PacketAddStepChooser({
     const [docsLoading, setDocsLoading] = useState(false);
     const [docsError, setDocsError] = useState<string | null>(null);
 
-    // Only the acknowledgment step needs the document list, so only it pays for the fetch.
+    /*
+     * Only the acknowledgment step needs the document list, so only it pays for the fetch.
+     *
+     * THE FETCH USED TO CANCEL ITSELF. `docsLoading` was both set by this effect and listed as a
+     * dependency of it, so the first run started the request and immediately re-ran; the re-run's
+     * cleanup set `cancelled = true` on the only fetch in flight, and every branch that followed was
+     * guarded by `!cancelled`. The response arrived 200 and was thrown away, the select never left
+     * "Loading…", and a read-and-acknowledge step could not be authored at all. Measured on a QA
+     * packet: 180 documents returned to the network tab, one option in the picker.
+     *
+     * Keyed on the step kind alone now. `documents.length` stays out for the same reason: it is
+     * written by this effect, and an effect that depends on its own writes re-runs against itself.
+     */
     useEffect(() => {
-        if (draft?.kind !== "document_acknowledgment" || documents.length > 0 || docsLoading) return;
+        if (draft?.kind !== "document_acknowledgment") return;
         let cancelled = false;
         setDocsLoading(true);
         setDocsError(null);
@@ -93,7 +105,7 @@ export function PacketAddStepChooser({
         return () => {
             cancelled = true;
         };
-    }, [draft?.kind, documents.length, docsLoading]);
+    }, [draft?.kind]);
 
     const startDocumentStep = (kind: Exclude<PacketStepKind, "form">) => {
         setOpen(false);
