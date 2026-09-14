@@ -357,6 +357,20 @@ const nextConfig: NextConfig = {
       /**
        * Phase G: canonical operator workspace at `/workspace` (browser URL; serves AdminV2 tree).
        */
+      /**
+       * Core Financials Director QA — an internal operator surface.
+       *
+       * It lives under `/workspace` because that is `CANONICAL_OPERATOR_BASE`: the middleware's
+       * operator gate protects everything beneath it, and nothing redirects it away. The obvious
+       * choice, `/admin/system/qa/...`, does NOT work — the `/admin/*` family is retired, and
+       * `legacyAdminRedirectTarget` sends every path under it to a canonical surface, so a page
+       * there is unreachable no matter what it renders. That was proven on the hosted route, not
+       * guessed: `/admin/system` answered with `/organization` and `/admin/roster` with
+       * `/workspace`.
+       *
+       * The implementation stays under `/adminV2/*`, like every other operator surface here.
+       */
+      { source: "/workspace/qa/core-financials", destination: "/adminV2/system/qa/core-financials" },
       { source: "/workspace", destination: "/adminV2/workspace" },
       { source: "/workspace/work-unit/:workUnitSlug", destination: "/adminV2/workspace/work-unit/:workUnitSlug" },
       /**
