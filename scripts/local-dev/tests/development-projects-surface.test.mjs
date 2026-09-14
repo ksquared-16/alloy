@@ -33,6 +33,8 @@ const R = await import("../lib/vacilando/repository-registry.mjs");
 const V = await import("../apps/vacilando/public/gateway-view.mjs");
 const SERVER = readFileSync(new URL("../lib/vacilando-server.mjs", import.meta.url).pathname, "utf8");
 const VIEW = readFileSync(new URL("../apps/vacilando/public/gateway-view.mjs", import.meta.url).pathname, "utf8");
+const APP = readFileSync(new URL("../apps/vacilando/public/gateway.js", import.meta.url).pathname, "utf8");
+const CSS = readFileSync(new URL("../apps/vacilando/public/styles.css", import.meta.url).pathname, "utf8");
 
 const alloy = R.publicRepository({
   repository_id: R.ALLOY_REPOSITORY_ID, project_id: R.ALLOY_PROJECT_ID, name: "Alloy",
@@ -83,10 +85,28 @@ test("3 — Add Project persists through the registry, not a new store", () => {
     "registration must persist through the registry");
 });
 
-test("4 — Edit / validate / retire / reactivate go through the same authority", () => {
+test("4 — Edit / validate / retire / reactivate are ROUTED, not just documented", () => {
+  /*
+   * THE FIRST VERSION OF THIS CASE WAS A FALSE GREEN. It asserted that the file
+   * contained "/api/repositories/" and the word "retire" somewhere — which the
+   * file's own header comment, listing the endpoints it intends to serve,
+   * satisfies without a single line of routing. A test that a comment can pass
+   * is a test of the documentation.
+   *
+   * These four are served by ONE regex rather than four `path ===` branches, so
+   * the assertion has to read that regex.
+   */
+  const routed = SERVER.match(/path\.match\(\/\^\\\/api\\\/repositories\\\/\(\[\^\/\]\+\)\\\/\(([a-z|]+)\)\$\/\)/);
+  assert.ok(routed, "the per-project route must exist in the server, not only in its header");
+  const verbs = routed[1].split("|");
   for (const op of ["validate", "retire", "reactivate", "update"]) {
-    assert.ok(SERVER.includes(`/api/repositories/`) && SERVER.includes(op),
-      `the ${op} operation must be served`);
+    assert.ok(verbs.includes(op), `${op} is documented but not routed`);
+  }
+  const at = SERVER.indexOf(routed[0]);
+  const handler = SERVER.slice(at, at + 2600);
+  assert.match(handler, /repository-registry\.mjs/, "and it must act through the registry");
+  for (const fn of ["validateRepository", "updateRepository", "retireRepository", "reactivateRepository"]) {
+    assert.ok(handler.includes(fn), `the handler must call ${fn}`);
   }
 });
 
@@ -199,6 +219,109 @@ test("15 — the surface reuses the existing shell, not a new admin editor", () 
   assert.ok(body.includes("gw-kv"), "it uses the product's existing key/value pattern");
   assert.ok(!/textarea|contenteditable|JSON\.stringify/.test(body),
     "a raw configuration editor is not the product experience");
+});
+
+/* ── the manage surface: the half that made "edit the file" unnecessary ───── */
+
+const retired = R.publicRepository({
+  repository_id: "repo_old", name: "Retired one", root: "/tmp/old", profile: "generic", state: "RETIRED",
+});
+
+test("16 — Projects lists every registered project, retired ones included", () => {
+  const html = V.renderProjectsSheet({ repositories: [alloy, repoOnly, retired] });
+  for (const r of [alloy, repoOnly, retired]) {
+    assert.ok(html.includes(`data-gw-proj-open="${r.repository_id}"`), `${r.name} is not openable`);
+  }
+  assert.match(html, /Inactive/, "a retired project must be visibly retired, not hidden");
+  assert.match(html, /data-gw-proj-new/, "and a project can be added from here");
+});
+
+test("17 — a retired project is fetched deliberately, not by accident", () => {
+  // A project you cannot see is a project you cannot bring back.
+  assert.match(APP, /\/api\/repositories\?include_retired=1/,
+    "the manage list must ask for retired records");
+});
+
+test("18 — opening a project shows what it can do ABOVE what can be typed", () => {
+  const html = V.renderProjectsSheet({ repositories: [alloy], selected: alloy.repository_id });
+  const caps = html.indexOf("gw-project-caps");
+  const edit = html.indexOf("gw-proj-edit");
+  assert.ok(caps > 0 && edit > caps, "capabilities must precede the edit fields");
+  assert.ok(html.includes("prj_alloy") && html.includes("3011"));
+});
+
+test("19 — only the three fields the server accepts are editable", () => {
+  const html = V.renderProjectsSheet({ repositories: [repoOnly], selected: "repo_plain" });
+  for (const f of ["data-gw-proj-name", "data-gw-proj-branch", "data-gw-proj-wt"]) {
+    assert.ok(html.includes(f), `${f} must be offered`);
+  }
+  /*
+   * PROMOTION AND EXECUTION ARE NOT FIELDS. They resolve from the profile; a
+   * text box holding a copy of a resolved value is a second authority wearing a
+   * label, and it disagrees with the resolver the first time a profile changes.
+   */
+  for (const name of ["promotion_branch", "database_target", "first_agent_port", "promoted_ref"]) {
+    assert.ok(!new RegExp(`data-gw-proj-[a-z]*["'][^>]*${name}|name="${name}"`).test(html),
+      `${name} must not be an editable field`);
+  }
+});
+
+test("20 — the client sends ONLY the fields the update route allows", () => {
+  const at = APP.indexOf("async function saveProjectEdits");
+  assert.ok(at > 0, "the save path must exist");
+  const body = APP.slice(at, APP.indexOf("\n}", at));
+  const keys = body.match(/\["name", "default_branch", "worktree_parent"\]/);
+  assert.ok(keys, "the patch must be built from the route's allowed list");
+  // The route rejects anything else as unexpected_control_field; sending a
+  // whole record would fail every save.
+  assert.ok(!/JSON\.stringify\(repo\)|\.\.\.repo/.test(body), "a whole record must never be posted");
+});
+
+test("21 — Deactivate is RETIRE: reversible, and nothing is deleted", () => {
+  const html = V.renderProjectsSheet({ repositories: [repoOnly], selected: "repo_plain" });
+  assert.match(html, /data-gw-proj-retire="repo_plain"/);
+  assert.match(html, /Nothing is deleted/, "the operator must be told what deactivating does");
+  assert.ok(!/data-gw-proj-delete|Delete project/.test(html), "there is no delete");
+  const back = V.renderProjectsSheet({ repositories: [retired], selected: "repo_old" });
+  assert.match(back, /data-gw-proj-reactivate="repo_old"/, "a retired project can be brought back");
+  assert.ok(!/data-gw-proj-retire/.test(back), "and cannot be retired twice");
+});
+
+test("22 — a refusal for live work reads as work in progress, not as a fault", () => {
+  const text = V.projectErrorText("repository_has_active_work", { active_lanes: ["ln_a", "ln_b"] });
+  assert.match(text, /2 lanes/, "it must count the lanes the registry actually named");
+  assert.ok(!text.includes("undefined") && !text.includes("some"),
+    "reading the wrong field renders a vague message for every refusal");
+  assert.match(V.projectErrorText("repository_has_active_work", { active_lanes: ["ln_a"] }), /1 lane of this project has work in progress/);
+});
+
+test("23 — every control the sheet renders is handled by the client", () => {
+  const html = [
+    V.renderProjectsSheet({ repositories: [alloy, retired] }),
+    V.renderProjectsSheet({ repositories: [alloy], selected: alloy.repository_id }),
+    V.renderProjectsSheet({ repositories: [retired], selected: "repo_old" }),
+  ].join("");
+  const attrs = new Set([...html.matchAll(/data-gw-(proj[a-z-]*|projects)\b/g)].map((m) => m[0]));
+  assert.ok(attrs.size >= 7, `expected the full control set, saw ${[...attrs].join(", ")}`);
+  for (const a of attrs) {
+    assert.ok(APP.includes(`[${a}]`), `${a} is rendered but nothing listens for it`);
+  }
+});
+
+test("24 — the inventory has a door on the lane list", () => {
+  const list = V.renderLaneList([], null, { repositories: [alloy] });
+  assert.match(list, /data-gw-projects/, "Projects must be reachable without knowing a URL");
+  assert.match(list, /data-gw-repo-new/, "and adding a repository still works as it did");
+});
+
+test("25 — absence is styled as ordinary, never as an alert", () => {
+  const rule = CSS.match(/\.gw-cap-absent\{([^}]*)\}/);
+  assert.ok(rule, "the absent state must be styled, not left to default ink");
+  assert.ok(!/--blocked|--red|--danger/.test(rule[1]),
+    "a project with no database is not broken and must not be coloured as if it were");
+  for (const cls of ["gw-proj-row", "gw-project-caps", "gw-proj-edit"]) {
+    assert.ok(CSS.includes(`.${cls}`), `${cls} is rendered with no stylesheet rule`);
+  }
 });
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);

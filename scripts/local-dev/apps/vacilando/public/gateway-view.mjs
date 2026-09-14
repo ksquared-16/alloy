@@ -3854,7 +3854,10 @@ export function renderLaneList(lanes, selectedId, { loading = false, attentionBy
   const add = `<a class="gw-add" data-gw-add href="#/lanes/connect">+ Add Lane</a>`;
   const newFolder = `<button type="button" class="gw-add gw-add-folder" data-gw-folder-new>+ Folder</button>`;
   const addRepo = `<button type="button" class="gw-add gw-add-repo" data-gw-repo-new title="Register another Git repository">+ Repo</button>`;
-  const head = `<div class="gw-lanes-h-row"><div class="gw-lanes-h">Development Lanes</div>${addRepo}${newFolder}${add}</div>`;
+  // Projects is the inventory: what is registered, what each one can do, and
+  // the only place a project is edited or taken out of service.
+  const projects = `<button type="button" class="gw-add gw-add-projects" data-gw-projects title="Registered projects and what each can do">Projects</button>`;
+  const head = `<div class="gw-lanes-h-row"><div class="gw-lanes-h">Development Lanes</div>${projects}${addRepo}${newFolder}${add}</div>`;
   if (!list.length) {
     return `<div class="gw-lanes" data-gw-lanes>
       ${head}
@@ -5004,6 +5007,170 @@ export function renderProjectCapabilities(repo = {}) {
   return `<div class="gw-project-caps">${repository}${branches}${lanes}${environment}</div>`;
 }
 
+/**
+ * PROJECTS — the surface that ends "edit the file".
+ *
+ * Every operation here already existed on the server and in the registry:
+ * `/api/repositories` lists, `inspect` + `connect-local` create, and
+ * `:id/update|validate|retire|reactivate` change a record. None of it had a
+ * door. An operator could register a project and then had no way to see what it
+ * resolved to, correct a name, point it at a different canonical branch, or
+ * take it out of service — so the honest answer to "how do I change a project?"
+ * was still `repositories.json`, which is precisely the answer this removes.
+ *
+ * ONE SHEET, TWO MODES. The list is the inventory; opening a project shows what
+ * it CAN DO (the same server-resolved capabilities block the Add flow shows
+ * before registering) above the few fields that are actually editable.
+ *
+ * WHAT IS EDITABLE IS WHAT THE SERVER ACCEPTS — name, canonical branch and
+ * worktree location. Promotion policy and execution profile are NOT fields
+ * here: they come from the project's profile, and a text box that silently
+ * disagreed with the resolver would be a second authority wearing a label.
+ *
+ * DEACTIVATE IS RETIRE, NOT DELETE. The record and its history stay; the
+ * project stops being offered for new lanes. The server refuses while any lane
+ * of that project still has live work, and that refusal is shown as what it is
+ * — work in progress, not a failure.
+ */
+export function renderProjectsSheet(state = {}) {
+  const repos = Array.isArray(state.repositories) ? state.repositories : [];
+  const busy = Boolean(state.busy);
+  const err = state.error
+    ? `<div class="gw-notice err" role="alert">${esc(projectErrorText(state.error, state.errorDetail || {}))}</div>`
+    : "";
+  const ok = state.notice ? `<div class="gw-notice ok">${esc(state.notice)}</div>` : "";
+
+  const open = state.selected ? repos.find((r) => r.repository_id === state.selected) : null;
+  if (open) return renderProjectDetail(open, state, { busy, err, ok });
+
+  if (!repos.length) {
+    return sheet("Projects", `${err}${ok}
+      <p class="gw-sheet-note">No projects yet. Add the local clone of a repository and Vacilando
+      will run lanes in it.</p>`, {
+      actions: `<button type="button" class="btn primary" data-gw-proj-new>Add project</button>`,
+    });
+  }
+
+  // The row says what the project IS at a glance: where it lives, how many
+  // lanes it holds, and whether it is still in service. Everything else is one
+  // tap away rather than crowded in here.
+  const rows = repos.map((r) => {
+    const retired = String(r.state || "ACTIVE") !== "ACTIVE";
+    const bits = [
+      r.project_id || null,
+      r.default_branch || null,
+      `${r.lane_count || 0} ${Number(r.lane_count) === 1 ? "lane" : "lanes"}`,
+    ].filter(Boolean).join(" · ");
+    return `<button type="button" class="gw-proj-row${retired ? " is-retired" : ""}"
+      data-gw-proj-open="${esc(r.repository_id)}">
+      <span class="gw-proj-name">${esc(r.name || r.repository_id)}</span>
+      ${retired ? `<span class="gw-proj-badge">Inactive</span>` : ""}
+      <span class="gw-proj-meta">${esc(bits)}</span>
+      <span class="gw-proj-root">${esc(r.root || "")}</span>
+    </button>`;
+  }).join("");
+
+  return sheet("Projects", `${err}${ok}<div class="gw-proj-list">${rows}</div>`, {
+    actions: `<button type="button" class="btn primary" data-gw-proj-new ${busy ? "disabled" : ""}>Add project</button>`,
+  });
+}
+
+function renderProjectDetail(repo, state, { busy, err, ok }) {
+  const retired = String(repo.state || "ACTIVE") !== "ACTIVE";
+  const draft = state.edit || {};
+  const val = (key, fallback) => (draft[key] === undefined ? (fallback ?? "") : draft[key]);
+  const dirty = Boolean(state.edit && Object.keys(state.edit).length);
+
+  const laneNote = Number(repo.lane_count) > 0
+    ? `<p class="gw-field-hint">${esc(String(repo.lane_count))} lane${Number(repo.lane_count) === 1 ? "" : "s"}
+        currently belong${Number(repo.lane_count) === 1 ? "s" : ""} to this project.</p>`
+    : "";
+
+  // Editing is deliberately three fields. The rest of what this project can do
+  // is shown above and resolved by the server; it is not typed here.
+  const fields = `<div class="gw-proj-edit">
+    <label class="gw-field">
+      <span class="gw-field-label" id="gw-proj-name-l">Display name</span>
+      <input id="gw-proj-name" type="text" maxlength="80" data-gw-proj-name
+        aria-labelledby="gw-proj-name-l" value="${esc(val("name", repo.name))}">
+    </label>
+    <label class="gw-field">
+      <span class="gw-field-label" id="gw-proj-branch-l">Canonical branch</span>
+      <input id="gw-proj-branch" type="text" autocapitalize="off" autocorrect="off" spellcheck="false"
+        data-gw-proj-branch aria-labelledby="gw-proj-branch-l"
+        value="${esc(val("default_branch", repo.default_branch))}">
+      <span class="gw-field-hint">The branch lanes start from. Promotion policy comes from the
+        project's profile, not from this field.</span>
+    </label>
+    <label class="gw-field">
+      <span class="gw-field-label" id="gw-proj-wt-l">Worktrees in</span>
+      <input id="gw-proj-wt" type="text" autocapitalize="off" autocorrect="off" spellcheck="false"
+        data-gw-proj-wt aria-labelledby="gw-proj-wt-l"
+        value="${esc(val("worktree_parent", repo.worktree_parent))}"
+        placeholder="${esc(defaultWorktreeParent(repo.root))}">
+    </label>
+  </div>`;
+
+  const lifecycle = retired
+    ? `<div class="gw-proj-lifecycle">
+        <p class="gw-cap-absent">This project is inactive. It is not offered for new lanes; its
+        record, lanes and history are unchanged.</p>
+        <button type="button" class="btn" data-gw-proj-reactivate="${esc(repo.repository_id)}"
+          ${busy ? "disabled" : ""}>Reactivate project</button>
+      </div>`
+    : `<div class="gw-proj-lifecycle">
+        <p class="gw-field-hint">Deactivating stops this project being offered for new lanes.
+        Nothing is deleted, existing lanes keep their worktrees, and it can be reactivated.</p>
+        <button type="button" class="btn" data-gw-proj-retire="${esc(repo.repository_id)}"
+          ${busy ? "disabled" : ""}>Deactivate project</button>
+      </div>`;
+
+  const body = `${err}${ok}
+    ${renderProjectCapabilities(repo)}
+    ${laneNote}
+    ${fields}
+    <div class="gw-proj-recheck">
+      <button type="button" class="btn" data-gw-proj-validate="${esc(repo.repository_id)}"
+        ${busy ? "disabled" : ""}>Re-check this path</button>
+      <span class="gw-field-hint">Confirms the repository is still where the record says it is.</span>
+    </div>
+    ${lifecycle}`;
+
+  return sheet(repo.name || "Project", body, {
+    back: `<button type="button" class="gw-sheet-x" data-gw-proj-back aria-label="All projects">←</button>`,
+    actions: `<button type="button" class="btn primary" data-gw-proj-save="${esc(repo.repository_id)}"
+      ${busy || !dirty ? "disabled" : ""}>${busy ? "Saving…" : "Save changes"}</button>`,
+  });
+}
+
+/**
+ * The server's refusals in the operator's terms. `repository_has_active_work`
+ * is the one that matters: it is not an error, it is the system telling the
+ * operator that something is still running.
+ */
+export function projectErrorText(code, detail = {}) {
+  switch (String(code || "")) {
+    case "repository_has_active_work": {
+      // The registry names this field `active_lanes`; reading `active_lane_ids`
+      // here would silently render "some" for every refusal.
+      const n = (detail.active_lanes || []).length;
+      return n
+        ? `Still in use — ${n} lane${n === 1 ? "" : "s"} of this project ${n === 1 ? "has" : "have"} work in progress. Finish or cancel ${n === 1 ? "it" : "them"}, then deactivate.`
+        : "Still in use — a lane of this project has work in progress.";
+    }
+    case "repository_not_found":
+      return "That project is no longer registered.";
+    case "invalid_name":
+      return "That display name cannot be used. Use 1–80 characters.";
+    case "unexpected_control_field":
+      return "That change is not one this surface may make.";
+    case "network":
+      return "Could not reach Vacilando. Nothing was changed.";
+    default:
+      return repositoryErrorText(code, detail);
+  }
+}
+
 export function renderRepositorySheet(state = {}) {
   const method = state.method === "clone" ? "clone" : "connect";
   const v = state.validation || null;
@@ -5078,10 +5245,12 @@ export function renderRepositorySheet(state = {}) {
   return sheet("Add repository", body, { actions });
 }
 
-function sheet(title, body, { actions = "", cancelOnly = false } = {}) {
+function sheet(title, body, { actions = "", cancelOnly = false, back = null } = {}) {
+  // `back` lets a two-mode sheet return to its own list instead of closing:
+  // leaving a project detail is not abandoning the sheet.
   return `<section class="gw-sheet" data-gw-sheet role="dialog" aria-modal="true" aria-label="${esc(title)}">
     <header class="gw-sheet-head">
-      <button type="button" class="gw-sheet-x" data-gw-sheet-cancel aria-label="Cancel">\u2190</button>
+      ${back || `<button type="button" class="gw-sheet-x" data-gw-sheet-cancel aria-label="Cancel">\u2190</button>`}
       <h2 class="gw-sheet-title">${esc(title)}</h2>
     </header>
     <div class="gw-sheet-body">${body}</div>
@@ -6094,6 +6263,7 @@ export function renderGatewayShell({
   lightbox = null,
   repositories = [],
   repositorySheet = null,
+  projectsSheet = null,
   slotReclaim = null,
   laneWizard = null,
   cancelPending = false,
@@ -6131,7 +6301,9 @@ export function renderGatewayShell({
     ? renderSlotReclaimSheet(slotReclaim)
     : (repositorySheet
       ? renderRepositorySheet(repositorySheet)
-      : (laneWizard ? renderLaneWizard({ ...laneWizard, repositories, folders }) : ""));
+      : (projectsSheet
+        ? renderProjectsSheet({ repositories, ...projectsSheet })
+        : (laneWizard ? renderLaneWizard({ ...laneWizard, repositories, folders }) : "")));
   if (openSheet) {
     return `<div class="gw is-sheet" data-gw data-gw-mode="sheet">${openSheet}</div>`;
   }
