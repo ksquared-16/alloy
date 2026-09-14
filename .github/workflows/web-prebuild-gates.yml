@@ -166,3 +166,11 @@ jobs:
       - name: Canonical civil-day semantics
         working-directory: .
         run: node scripts/local-dev/tests/development-civil-day.test.mjs
+
+      # Explicit result allowlists are safety boundaries and stay explicit. But an
+      # explicit list has a second failure mode that has now cost three incidents:
+      # a field produced correctly for weeks and dropped by a list nobody extended.
+      # This locks the fields an operator needs from a privileged write.
+      - name: Trusted-host result allowlist contract
+        working-directory: .
+        run: node scripts/local-dev/tests/development-result-allowlist-contract.test.mjs
