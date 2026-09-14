@@ -10012,6 +10012,14 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 3%, transparent);
+  /*
+   * Add charge confirms here, so the same rule applies as to the other command panels: bound to the
+   * viewport, scrolling inside itself, with the confirm sticky at the foot. It previously grew and
+   * let the PAGE scroll, which put "Add charge" under the fold on a short window.
+   */
+  max-height: min(60svh, 420px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .alloy-os-financials__preview-summary {
   margin: 0;
@@ -10022,6 +10030,12 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-financials__preview-actions {
   display: flex;
   gap: 6px;
+  /* Reachable without hunting, while the preview body scrolls above it. */
+  position: sticky;
+  bottom: -8px;
+  padding-block: 8px;
+  margin-bottom: -8px;
+  background: color-mix(in srgb, var(--alloy-os-surface, #fff) 92%, transparent);
 }
 
 /* ── HEALTH & SAFETY ────────────────────────────────────────────────────────────────────────────

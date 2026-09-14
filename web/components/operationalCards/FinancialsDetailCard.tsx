@@ -29,9 +29,6 @@ import type { FinancialsEvidence, FinancialsLedgerPeriod } from "@/lib/cardLab/c
 export default function FinancialsDetailCard({
     evidence,
     periods,
-    activeFilter = "all",
-    activePayer = "All payers",
-    activeSubject = "All",
     onPayment,
     onAddCharge,
     onManagePayment,
@@ -44,7 +41,6 @@ export default function FinancialsDetailCard({
 }: {
     evidence: FinancialsEvidence;
     periods: FinancialsLedgerPeriod[];
-    activeFilter?: "all" | "charges" | "payments" | "credits" | "funding";
     /**
      * TWO INDEPENDENT DIMENSIONS, deliberately not collapsed:
      *   subject — who or what the item is FOR   (Household · Avery · Riley)
@@ -52,8 +48,6 @@ export default function FinancialsDetailCard({
      * A charge for Avery may be paid by Jordan; a household charge has no child subject at all.
      * Both are FILTERS over canonical truth, never separate ledgers, and they compose.
      */
-    activePayer?: string;
-    activeSubject?: string;
     /**
      * The detail's commands, when a host supplies them. `Payment` is one entry into the settle-what-
      * is-owed operation rather than a permanent row of competing payment buttons; `Add charge`
@@ -73,7 +67,6 @@ export default function FinancialsDetailCard({
     /** Put already-received money against an obligation. */
     onApplyPayment?: (args: { paymentId: string }) => void;
 }) {
-    const payerFilters = ["All payers", ...evidence.payers.map((p) => (p.funding ? "Funding" : p.name.split(" ")[0]!))];
     const { period, pastDue } = evidence;
 
     return (
@@ -147,52 +140,17 @@ export default function FinancialsDetailCard({
                 {/* The ledger owns the detail. */}
                 <div className="alloy-os-billingdetail__ledgerband">
                     <SectionHead ruled={false}>Ledger</SectionHead>
-                    <div className="alloy-os-fdetail__filterrow">
-                        <div className="alloy-os-billingdetail__filters">
-                            {(["all", "charges", "payments", "credits", "funding"] as const).map((f) => (
-                                <button
-                                    key={f}
-                                    type="button"
-                                    className={clsx(
-                                        "alloy-os-billingdetail__filter",
-                                        activeFilter === f && "alloy-os-billingdetail__filter--on",
-                                    )}
-                                >
-                                    {FILTER_LABEL[f]}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="alloy-os-billingdetail__filters">
-                            <span className="alloy-os-fdetail__filterlabel">Subject</span>
-                            {["All", ...evidence.subjects].map((f) => (
-                                <button
-                                    key={f}
-                                    type="button"
-                                    className={clsx(
-                                        "alloy-os-billingdetail__filter",
-                                        activeSubject === f && "alloy-os-billingdetail__filter--on",
-                                    )}
-                                >
-                                    {f}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="alloy-os-billingdetail__filters">
-                            <span className="alloy-os-fdetail__filterlabel">Payer</span>
-                            {payerFilters.map((f) => (
-                                <button
-                                    key={f}
-                                    type="button"
-                                    className={clsx(
-                                        "alloy-os-billingdetail__filter",
-                                        activePayer === f && "alloy-os-billingdetail__filter--on",
-                                    )}
-                                >
-                                    {f}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                    {/*
+                      * THE DECORATIVE FILTERS ARE GONE.
+                      *
+                      * Three groups rendered here — ledger kind, subject and payer — as plain
+                      * buttons with NO click handler and no caller supplying one. They highlighted
+                      * a default and did nothing else, which is the same defect as a dead command
+                      * and is worse on a financial surface: an operator who believes they have
+                      * filtered a ledger will read the wrong cohort and act on it. The card above
+                      * already carries a working subject filter, so nothing usable was lost.
+                      * Filtering belongs here, but it belongs here WIRED.
+                      */}
 
                     {periods.map((per) => (
                         <section key={per.label} className="alloy-os-fdetail__period">
@@ -433,22 +391,26 @@ export default function FinancialsDetailCard({
                 {/* A quiet utility link at the foot of the card — management, not a peer command,
                     and deliberately the last thing on the surface rather than a button above the
                     ledger competing with the work. */}
-                <div className="alloy-os-fdetail__utility">
-                    <FooterAction onClick={onManagePayment}>Manage payment →</FooterAction>
-                </div>
+                {/*
+                  * OFFERED ONLY WHERE IT IS WIRED.
+                  *
+                  * This rendered unconditionally with `onClick={undefined}`, and no caller has ever
+                  * passed `onManagePayment` — so every operator who has clicked "Manage payment" on
+                  * this card has clicked a control that does nothing. A dead affordance is worse
+                  * than an absent one: it tells the operator a capability exists and then teaches
+                  * them the product is unreliable. Manage payment is still the intended home for
+                  * payers, methods and autopay; until something owns it, the card does not claim it.
+                  */}
+                {onManagePayment ? (
+                    <div className="alloy-os-fdetail__utility">
+                        <FooterAction onClick={onManagePayment}>Manage payment →</FooterAction>
+                    </div>
+                ) : null}
 
                             </UniversalCard>
         </div>
     );
 }
-
-const FILTER_LABEL = {
-    all: "All",
-    charges: "Charges",
-    payments: "Payments",
-    credits: "Credits & adjustments",
-    funding: "Funding",
-} as const;
 
 function Stat({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: "ok" | "due" }) {
     return (

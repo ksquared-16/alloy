@@ -2438,7 +2438,6 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                         currency,
                         openPeriodKey: vm.period.key,
                     })}
-                    activeSubject={subjectFilter === "all" ? "All" : subjectFilter}
                     /*
                      * `Payment` enters the settle operation. Slice H is that lane, so the control is
                      * live: it selects the obligation the operator is most likely to settle — the
