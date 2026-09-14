@@ -19,6 +19,7 @@ import {
 import { parseStageV2DraftInput } from "@/lib/lifecycle/persistStageV2DraftFields";
 import type { LifecycleActivationV1 } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { snapshotEnrollmentPipelineWorkUnit } from "@/lib/lifecycle/parseEnrollmentPipelineQueues";
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 /** POST — canonical stage setup (statuses + optional work unit queue) in one transaction. */
 export async function POST(request: NextRequest) {
@@ -26,9 +27,8 @@ export async function POST(request: NextRequest) {
     if (forbidden) return forbidden;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (denied) return denied;
 
     let body: {
         department_id?: string;

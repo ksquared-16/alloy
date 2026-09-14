@@ -12,14 +12,14 @@ import { deleteActivationLifecycleForDepartment } from "@/lib/lifecycle/lifecycl
 import { isActivationOwnedDepartmentMetadata } from "@/lib/lifecycle/lifecycleActivationOwned";
 import { editBuilderInDraft } from "@/lib/businessProcesses/configuration/editProcessInDraft";
 import { BusinessProcessDraftEditConflictError } from "@/lib/businessProcesses/configuration/businessProcessConfigurationService";
+import { BUSINESS_PROCESS_ACTIVATE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 /** POST — delete builder-owned department or remove legacy process (with confirm). */
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_ACTIVATE);
+    if (denied) return denied;
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
