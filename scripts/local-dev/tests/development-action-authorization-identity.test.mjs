@@ -160,13 +160,34 @@ test("every authorization LOOKUP is fed by the canonical resolver", () => {
     ...callsTo(ACTIONS_SRC, "findAuthorization"),
   ];
   assert.ok(lookups.length >= 2, "policy-side and boundary lookups must both exist");
+  /*
+   * ONE DOCUMENTED EXCEPTION, AND IT IS NAMED.
+   *
+   * A lane STANDING grant is deliberately looked up in a different scope from
+   * the request's own mission — "has the operator already approved THIS
+   * capability for THIS lane, in this repository and environment?" — so that
+   * lookup MUST override missionId. It is the only one allowed to, it may
+   * override nothing else, and it still spreads the resolver's identity for
+   * every other dimension.
+   *
+   * The blanket rule failed this the moment the standing lookup was added,
+   * which is the wrong shape for a ratchet: it forbade something doctrine
+   * requires, and the only way to satisfy it was to delete a real capability.
+   */
+  const standingOverrides = lookups.filter((a) => /missionId:\s*standingScope/.test(a));
+  assert.ok(standingOverrides.length <= 1,
+    "at most one lookup may re-scope, and it is the lane standing-grant lookup");
   for (const args of lookups) {
     assert.ok(
       /\.\.\.[^,\n]*\.lookup\b/.test(args),
       `a lookup builds its own identity instead of spreading resolver.lookup:\n${args.slice(0, 400)}`,
     );
-    for (const own of ["databaseTarget:", "environment:", "queryHash:", "repository:", "missionId:"]) {
+    const isStanding = /missionId:\s*standingScope/.test(args);
+    for (const own of ["databaseTarget:", "environment:", "queryHash:", "repository:"]) {
       assert.ok(!args.includes(own), `a lookup overrides ${own} after the resolver supplied it`);
+    }
+    if (!isStanding) {
+      assert.ok(!args.includes("missionId:"), "only the standing-grant lookup may re-scope missionId");
     }
   }
 });
@@ -189,8 +210,18 @@ test("the pre-consumption proof calls the boundary's own resolver, not a copy", 
   // passed, and the delegation was consumed for authority that could not be
   // used. There must be exactly ONE lookup on the policy side, and the proof
   // must go through the trusted-host module.
-  assert.equal(callsTo(REQ_SRC, "findAuthorization").length, 1,
-    "the delegated preflight must not call findAuthorization itself");
+  /*
+   * The count was 1 when the only policy-side lookup was the delegated
+   * preflight's. The lane standing-grant lookup is a SECOND, deliberate one,
+   * added with its own doctrine comment. What must stay true is that neither of
+   * them re-implements the boundary's resolver — which the case below checks by
+   * following the preview into the trusted-host module.
+   */
+  const policyLookups = callsTo(REQ_SRC, "findAuthorization");
+  assert.ok(policyLookups.length <= 2,
+    `the policy side has ${policyLookups.length} lookups; only the preflight and the standing grant may exist`);
+  assert.ok(policyLookups.some((a) => /missionId:\s*standingScope/.test(a))
+    || policyLookups.length === 1, "a second policy lookup must be the standing-grant one");
   assert.ok(REQ_SRC.includes("previewTrustedHostAuthorization"),
     "the preflight must call the trusted-host preview");
   const preview = functionBody(ACTIONS_SRC, "export function previewTrustedHostAuthorization({");
