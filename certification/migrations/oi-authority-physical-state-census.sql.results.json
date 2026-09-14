@@ -1,0 +1,70 @@
+{
+  "trusted_host_action_id": "tha_da7e8e67dc4633",
+  "query_hash": "58e0bc45c14fd91813db61b4a04eb5299216f7f4f1ff5058dbb86de37d72f474",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T21:32:39.387Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_da7e8e67dc4633",
+    "query_hash": "58e0bc45c14fd91813db61b4a04eb5299216f7f4f1ff5058dbb86de37d72f474",
+    "authorization_id": "grnt_6187fa356b11495f",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T21:32:40.569Z",
+    "question_ids": [
+      "m120000",
+      "ledger_version",
+      "nonvacuity",
+      "ledger_head",
+      "ledger_total"
+    ],
+    "questions": {
+      "m120000": {
+        "question_id": "m120000",
+        "row_count": null,
+        "rows": [
+          "seed installed with both sentinel regions ~ expected true ~ got true ~ true",
+          "ops enumeration no longer grants reports.write ~ expected true ~ got true ~ true",
+          "ops enumeration keeps reports.read ~ expected true ~ got true ~ true",
+          "admin enumeration keeps both reports keys ~ expected true ~ got true ~ true",
+          "class_A ops reports.write grants remaining ~ expected 0 ~ got 0 ~ true",
+          "orgs trigger still calls seed_default_rbac ~ expected >=1 ~ got 1 ~ true"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20260915120000 ~ registered ~ present ~ true"
+        ]
+      },
+      "nonvacuity": {
+        "question_id": "nonvacuity",
+        "row_count": null,
+        "rows": [
+          "grants_total=329 ops_roles=3"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20260915120000
+        ]
+      },
+      "ledger_total": {
+        "question_id": "ledger_total",
+        "row_count": null,
+        "rows": [
+          439
+        ]
+      }
+    },
+    "row_count": 10
+  }
+}
