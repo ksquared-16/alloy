@@ -1,0 +1,49 @@
+{
+  "trusted_host_action_id": "tha_bd690663a89915",
+  "query_hash": "bd216bc21007238456726f648379da5f7b8fcca5d822e39ce42fe7e82a1eba13",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T20:01:27.039Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_bd690663a89915",
+    "query_hash": "bd216bc21007238456726f648379da5f7b8fcca5d822e39ce42fe7e82a1eba13",
+    "authorization_id": "grnt_f475a78ee06c4ee6",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T20:01:28.251Z",
+    "question_ids": [
+      "m183000",
+      "m184000",
+      "nonvacuity"
+    ],
+    "questions": {
+      "m183000": {
+        "question_id": "m183000",
+        "row_count": null,
+        "rows": [
+          "catalog=3 admin_roles_short=0 ops_sensitive=0 director_sensitive=0"
+        ]
+      },
+      "m184000": {
+        "question_id": "m184000",
+        "row_count": null,
+        "rows": [
+          "fn_installed=true sentinels=true admin_has_option_sets_delete=true admin_has_layouts_lifecycle=true admin_has_fields_delete=true ops_has_any_sensitive=false ops_keeps_manage=true"
+        ]
+      },
+      "nonvacuity": {
+        "question_id": "nonvacuity",
+        "row_count": null,
+        "rows": [
+          "catalog_total=82 admin_roles=3 grants_total=330"
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

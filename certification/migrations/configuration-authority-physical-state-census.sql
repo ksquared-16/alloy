@@ -83,5 +83,18 @@ from (
             || ' admin_roles=' || (select count(*) from public.role_definitions where role_key='admin' and is_active)::text
             || ' grants_total=' || (select count(*) from public.role_permission_grants)::text)::text,
            'z1'::text
+    union all
+    -- LEDGER TRUTH. The repair approves a STATE TRANSITION, not a version list, so the same census
+    -- that proves the physical effects must also say where the ledger stands. Both are unfiltered
+    -- across all of history: a windowed count says nothing about the pre-baseline tail.
+    select 'ledger_head'::text, 'max'::text,
+           coalesce(max(m.version)::text, 'none'), 'zzzz1'::text
+    from supabase_migrations.schema_migrations m
+
+    union all
+    select 'ledger_total'::text, 'count'::text,
+           count(*)::text, 'zzzz2'::text
+    from supabase_migrations.schema_migrations m
+
 ) q
 order by sort_key;
