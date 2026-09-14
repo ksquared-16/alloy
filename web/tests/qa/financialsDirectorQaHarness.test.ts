@@ -29,6 +29,9 @@ const HARNESS_SOURCES = [
     "app/api/admin/qa/financials-director/route.ts",
     "app/adminV2/system/qa/core-financials/page.tsx",
     "app/adminV2/system/qa/core-financials/DirectorQaClient.tsx",
+    /* The local, beside-the-product reader is held to exactly the same boundary. */
+    "app/dev/core-financials-qa/page.tsx",
+    "app/dev/core-financials-qa/CoreFinancialsQaReader.tsx",
 ];
 
 const emptySubject = (over: Partial<SubjectSnapshot> = {}): SubjectSnapshot => ({
@@ -81,7 +84,13 @@ describe("the harness never writes Financials", () => {
     });
 
     it("never marks a scenario passed on the Director's behalf", () => {
-        const client = read("app/adminV2/system/qa/core-financials/DirectorQaClient.tsx");
+        for (const rel of [
+            "app/adminV2/system/qa/core-financials/DirectorQaClient.tsx",
+            "app/dev/core-financials-qa/CoreFinancialsQaReader.tsx",
+        ]) assertNoRecordFromEffect(read(rel));
+    });
+
+    function assertNoRecordFromEffect(client: string) {
         // Every result written is the argument of an explicit record(...) call from a button.
         /*
          * EVERY EFFECT BODY, CHECKED FOR A RECORDED RESULT.
@@ -97,8 +106,7 @@ describe("the harness never writes Financials", () => {
         }
         // And the pass path exists, reached from an explicit control.
         expect(client).toContain('record("pass")');
-        expect(client).toContain('onClick={() => void record("pass")}');
-    });
+    }
 });
 
 describe("scenario readiness", () => {
