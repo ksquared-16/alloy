@@ -29,7 +29,6 @@
     "ops.customers.read",
     "ops.customers.write",
     "ops.jobs.read",
-    "ops.jobs.write",
     "ops.locations.read",
     "ops.locations.write",
     "ops.messaging.read",
@@ -39,7 +38,6 @@
     "ops.schedules.write",
     "ops.workflows.read",
     "ops.workflows.write",
-    "scheduling.read",
-    "scheduling.write"
+    "scheduling.read"
   ]
 }

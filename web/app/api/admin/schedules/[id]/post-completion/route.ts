@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { FIN_POST, requireSchedulingJobsCapability } from "@/lib/access/schedulingJobsAuthority";
 import { emitEvent } from "@/lib/emitEvent";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertExistingScheduleMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
@@ -26,9 +27,8 @@ export async function POST(
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireSchedulingJobsCapability(ctx, FIN_POST);
+    if (denied) return denied;
 
     const { id: scheduleId } = await context.params;
     if (!scheduleId) return NextResponse.json({ error: "Missing schedule id" }, { status: 400 });

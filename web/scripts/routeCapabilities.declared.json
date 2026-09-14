@@ -2,7 +2,7 @@
   "reviewed": "2026-09-10",
   "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
   "ratchet": {
-    "max_pending": 631,
+    "max_pending": 617,
     "$comment": "Lowered 693 -> 679 by the Access & Identity V2 Financials slice: twelve financial record-data handlers converted to fin.read and two GL-account mutations to fin.write, plus two entries overturned from a reasoned `none` (see their `supersedes`). Lowered 679 -> 656 by the Forms authority cleanup: 23 handlers that were already enforcing authorization moved from pending to declared. The enforcement did not become stricter - it stopped being invisible to this table. Lowered 656 -> 655 by Attendance Productization V1 Thread 8: declaring the new pickup-authority handler against `attendance.read` made the burndown able to see that `app/api/admin/childcare-attendance/route.ts` GET already ran the same `assertAttendanceReadAllowed` gate while still marked pending, so it was drained rather than left claiming less than it enforces. Lowered again to 631 by the POS + Processing authority cleanup, which drained 24 net from the same 656 baseline: 25 handlers declared against forms.author and the four new processing.* keys, less one returned to pending - `processing/cases/[caseId]/identity/review` GET, which flows through the shared operator context but never required the old role gate, so declaring a capability there would have claimed an enforcement that does not exist and adding one would have tightened an open read. Attendance's reduction and this one are independent and both count: 656 - 1 - 24 = 631. The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack."
   },
   "inherited": {
@@ -2143,22 +2143,34 @@
     },
     "app/api/admin/jobs/[id]/archive/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary job management. Same reuse-and-correct shape as scheduling.write: catalogued, granted, enforced nowhere until now."
       }
     },
     "app/api/admin/jobs/[id]/assign-vendor/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary job management. Same reuse-and-correct shape as scheduling.write: catalogued, granted, enforced nowhere until now."
       }
     },
     "app/api/admin/jobs/[id]/charges/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.post",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. MONEY. Served from under schedules/ or jobs/, but the business consequence is financial, and authority follows the consequence rather than the URL folder. Deliberately NOT scheduling.write (labelled \"Manage scheduling\", and the migration that minted it defines billing.read as a separate family in the same statement), NOT fin.write (held by ops and enforced elsewhere, so reuse would widen ops into four admin-only money operations), and NOT fin.adjust (scoped by its own description to corrections that REDUCE what a family owes)."
       }
     },
     "app/api/admin/jobs/[id]/location/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary job management. Same reuse-and-correct shape as scheduling.write: catalogued, granted, enforced nowhere until now."
       }
     },
     "app/api/admin/jobs/[id]/payment-collect-context/route.ts": {
@@ -2181,12 +2193,18 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary job management. Same reuse-and-correct shape as scheduling.write: catalogued, granted, enforced nowhere until now."
       }
     },
     "app/api/admin/jobs/[id]/unarchive/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary job management. Same reuse-and-correct shape as scheduling.write: catalogued, granted, enforced nowhere until now."
       }
     },
     "app/api/admin/jobs/[id]/vendors-for-assign/route.ts": {
@@ -2199,7 +2217,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary job management. Same reuse-and-correct shape as scheduling.write: catalogued, granted, enforced nowhere until now."
       }
     },
     "app/api/admin/layout-proof/opportunities/route.ts": {
@@ -3396,27 +3417,42 @@
     },
     "app/api/admin/schedules/[id]/cancel/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "scheduling.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary schedule management. Replaced a literal `admin` role gate with a key the catalog has held for months and enforced NOWHERE — its only executable reference was the unenforced-permission list. Enforcing it is what makes it a real control, which is why the same slice removed it from the ops default: the gate denied ops a moment earlier."
       }
     },
     "app/api/admin/schedules/[id]/location/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "scheduling.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary schedule management. Replaced a literal `admin` role gate with a key the catalog has held for months and enforced NOWHERE — its only executable reference was the unenforced-permission list. Enforcing it is what makes it a real control, which is why the same slice removed it from the ops default: the gate denied ops a moment earlier."
       }
     },
     "app/api/admin/schedules/[id]/post-completion/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.post",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. MONEY. Served from under schedules/ or jobs/, but the business consequence is financial, and authority follows the consequence rather than the URL folder. Deliberately NOT scheduling.write (labelled \"Manage scheduling\", and the migration that minted it defines billing.read as a separate family in the same statement), NOT fin.write (held by ops and enforced elsewhere, so reuse would widen ops into four admin-only money operations), and NOT fin.adjust (scoped by its own description to corrections that REDUCE what a family owes)."
       }
     },
     "app/api/admin/schedules/[id]/post-customer-payment/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.post",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. MONEY. Served from under schedules/ or jobs/, but the business consequence is financial, and authority follows the consequence rather than the URL folder. Deliberately NOT scheduling.write (labelled \"Manage scheduling\", and the migration that minted it defines billing.read as a separate family in the same statement), NOT fin.write (held by ops and enforced elsewhere, so reuse would widen ops into four admin-only money operations), and NOT fin.adjust (scoped by its own description to corrections that REDUCE what a family owes)."
       }
     },
     "app/api/admin/schedules/[id]/post-vendor-payout/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.post",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. MONEY. Served from under schedules/ or jobs/, but the business consequence is financial, and authority follows the consequence rather than the URL folder. Deliberately NOT scheduling.write (labelled \"Manage scheduling\", and the migration that minted it defines billing.read as a separate family in the same statement), NOT fin.write (held by ops and enforced elsewhere, so reuse would widen ops into four admin-only money operations), and NOT fin.adjust (scoped by its own description to corrections that REDUCE what a family owes)."
       }
     },
     "app/api/admin/schedules/[id]/reschedule/route.ts": {
@@ -3429,7 +3465,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "scheduling.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary schedule management. Replaced a literal `admin` role gate with a key the catalog has held for months and enforced NOWHERE — its only executable reference was the unenforced-permission list. Enforcing it is what makes it a real control, which is why the same slice removed it from the ops default: the gate denied ops a moment earlier."
       }
     },
     "app/api/admin/schedules/[id]/vendors-for-assign/route.ts": {
@@ -3442,7 +3481,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "scheduling.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary schedule management. Replaced a literal `admin` role gate with a key the catalog has held for months and enforced NOWHERE — its only executable reference was the unenforced-permission list. Enforcing it is what makes it a real control, which is why the same slice removed it from the ops default: the gate denied ops a moment earlier."
       }
     },
     "app/api/admin/scheduling/route.ts": {

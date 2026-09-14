@@ -82,6 +82,8 @@ const APPROVED_ADDITIONS: Record<string, string> = {
         "20260912113000 — taking a case out of the queue; its own key so that granting `ops` processing.operate does not also hand it an archive it never had",
     "processing.documents.manage":
         "20260912113000 — renaming a source document, and deleting one with the case it opened and the stored file; deliberately NOT `documents.write`, which `ops` holds in every organization",
+    "fin.post":
+        "20260914113000 — posting a financial consequence that arises from operational work: a customer receipt, a vendor payout, a completion journal entry, a manual receivable charge. Financials-owned though enforced from under schedules/ and jobs/, because authority follows the business consequence rather than the URL folder",
     "processing.dev_cleanup":
         "20260912113000 — the Processing test-data reset; necessary and not sufficient, because the route and the planner both refuse in production whoever holds it",
 };
