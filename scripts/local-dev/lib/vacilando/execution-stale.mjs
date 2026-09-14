@@ -1247,6 +1247,11 @@ export function attachLaneRunLifecycle(lanes, { root, nowMs = Date.now() } = {})
 export async function reconcileLaneBeforeSend(laneId, { root, nowMs = Date.now() } = {}) {
   const out = reconcileStaleExecutionRuns({ root, nowMs, laneId });
   let closedIdleGoverned = false;
+  // Captured for the decision log below. Null when the lane held no run between
+  // governed steps, which is itself the answer to "why was nothing decided".
+  let priorPhase = null;
+  let priorPhaseReason = null;
+  let decisionReason = null;
   const active = activeRunForLane(laneId, root);
   if (active?.state === "EXECUTING" && active.state_reason === "governed_action_complete") {
     /*
@@ -1266,16 +1271,50 @@ export async function reconcileLaneBeforeSend(laneId, { root, nowMs = Date.now()
      */
     const facts = collectStaleRunFacts(active, { root, nowMs });
     const cls = classifyExecutionRunStale(active, facts);
-    const { sendMayCloseAsStale } = await import("./run-lifecycle.mjs");
-    const decision = sendMayCloseAsStale(active, { ...facts, now_ms: nowMs, stale: cls });
+    const lifecycle = await import("./run-lifecycle.mjs");
+    const phase = lifecycle.runLifecyclePhase(active, { ...facts, now_ms: nowMs, stale: cls });
+    const decision = lifecycle.sendMayCloseAsStale(active, { ...facts, now_ms: nowMs, stale: cls });
+    priorPhase = phase.phase;
+    priorPhaseReason = phase.reason;
+    decisionReason = decision.why;
     if (decision.close) {
       const closed = closeStaleExecutionRun(active.run_id, { root, nowMs, origin: "governor" });
       closedIdleGoverned = Boolean(closed?.ok && closed.run?.state === "ABANDONED");
     }
   }
-  return {
+  const result = {
     stale_run_closed: out.count > 0 || closedIdleGoverned,
     abandoned: out.abandoned,
     active: activeRunForLane(laneId, root),
   };
+  /*
+   * THE DECISION IS WRITTEN DOWN, BECAUSE IT WAS NOT.
+   *
+   * `stale_run_closed` is returned to the caller and rendered as a notice, and
+   * then forgotten. Two attempts to verify the lifecycle repair counted the
+   * PHRASE inside execution-run records and reported a live positive; the
+   * matches were prose — a run's own instruction text and the report quoting
+   * it. No such field is persisted on a run, so the measurement was of my own
+   * writing.
+   *
+   * The phase is captured BEFORE the close, because afterwards a closed run is
+   * TERMINAL either way, and "was closing it right?" is exactly what the phase
+   * answers. Swallowed on failure: telemetry may never turn a send into a
+   * refusal.
+   */
+  try {
+    const { recordSendLifecycleDecision } = await import("./send-lifecycle-log.mjs");
+    recordSendLifecycleDecision({
+      laneId,
+      runId: active?.run_id || null,
+      phase: priorPhase,
+      phaseReason: priorPhaseReason,
+      staleRunClosed: result.stale_run_closed,
+      reason: decisionReason,
+      abandoned: out.abandoned,
+      nowMs,
+      root,
+    });
+  } catch { /* never let observability change the answer */ }
+  return result;
 }
