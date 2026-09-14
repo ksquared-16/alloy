@@ -196,3 +196,73 @@ the source.
 
 The one thing the screen reports as *not* configured is **Used by**: no business process requires
 this packet, which is true and is the open finding recorded above.
+
+---
+
+## Forensic close-out, 2026-09-14 — how the requirement was lost
+
+### What durable history says
+
+A governed read-only census of `business_process_revisions` (immutable; UPDATE and DELETE are
+blocked) for the Enrollment department, all 31 revisions from 2026-08-06 to 2026-09-12:
+
+| Measured | Result |
+| --- | --- |
+| Revisions mentioning the packet's id | **0 / 31** |
+| Revisions mentioning `"kind":"packet"` | **0 / 31** |
+| Revisions mentioning `packet_definition_id` | **0 / 31** |
+| Revisions matching the string `enrollment_packet` | 31 / 31 — **false positive**, the `send_enrollment_packet` work template |
+
+**No published revision has ever contained the packet requirement.** So there is no "last revision
+with it" and no "first revision without it": it lived only in the editable draft.
+
+### The window
+
+- rev 28 published 2026-09-11T19:59Z — no packet requirement
+- **2026-09-11 ~22:00Z — the requirement is observed IN THE DRAFT** (this lane, previous run)
+- rev 29 published 2026-09-12T01:14Z — no packet requirement
+- revs 30, 31 follow on 2026-09-12; 31 is current
+
+Publication makes the draft equal to what was published, so by rev 29 the draft had already lost it.
+The loss happened in the draft between 2026-09-11T~22:00Z and 2026-09-12T01:14Z.
+
+### Which operation — UNKNOWN, and that is itself a finding
+
+`business_process_drafts` is mutable, carries only a monotonic `draft_revision`, and there is no
+configuration audit log. Nothing records which save changed what. The exact removing operation is
+therefore **not recoverable**, and no amount of care at the time would have made it recoverable.
+
+### Stale-draft overwrite — REJECTED
+
+Every writer of the draft passes a compare-and-set on the revision it read
+(`lifecycle-builder` route, `editProcessInDraft`, `editBuilderInDraft`,
+`saveLifecycleStageRuntimeConfig`). A stale editor **fails** with
+`BusinessProcessDraftEditConflictError` rather than overwriting. Concurrent editing is not the cause.
+
+### The mechanism that IS real — and is now fixed
+
+Persistence is **whole-document replacement**, serialized from what was just parsed. And
+`parseStageRequirementsV1` deliberately SKIPS requirement rows it cannot read.
+
+Those two decisions are each defensible and together delete data: a row the parser could not read
+was absent from the document the next save wrote — so **any save of any unrelated part of the
+process silently destroyed it**. Proven directly: a requirement whose `kind` is nested under `ref`
+instead of at the row's top level parses to `[]`, with no error anywhere.
+
+`saveDraft` documents itself as "lossless by construction… fields this branch does not understand
+survive". That was true of every section except this one.
+
+**Fixed:** the parser keeps unreadable rows verbatim and the serializer re-emits them. They are still
+not honoured, and authoring a stage's section still replaces it outright — but an unrelated save can
+no longer destroy a requirement nobody read. Covered by `requirementPersistenceIntegrity.test.ts`.
+
+Whether the lost requirement was unreadable or explicitly removed cannot be distinguished without
+draft history. The mechanism was real either way, and is closed either way.
+
+### Blocking publication, separately
+
+Publication is refused with `process_command_set_incomplete — Unknown capability 'stage_work.start'`.
+It comes from `action_catalog_v1.candidate_actions` on the **Waitlist** stage, it is present in the
+published payload (rev 31), and it predates this work — it only became visible because validation
+runs once there are unpublished changes. **Kelly cannot publish until that is resolved.** Not fixed
+here: it is a different subsystem and outside this slice.
