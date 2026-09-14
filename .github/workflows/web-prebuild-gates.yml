@@ -266,3 +266,20 @@ jobs:
       - name: Admission wait classification (governor race)
         working-directory: .
         run: node scripts/local-dev/tests/development-admission-wait-classification.test.mjs
+
+      # The seam between "registered" and "executor works". Five defects reached
+      # operator approval through it, four invisible to stub tests and the fifth
+      # invisible to everything except a real approved dispatch. This drives a
+      # registered action through executeTrustedHostAction against a throwaway
+      # repository - no real mutation - and reproduces the historical
+      # "defaultGit is not defined" when the import is removed.
+      - name: Registered action dispatch contract
+        working-directory: .
+        run: node scripts/local-dev/tests/development-registered-action-dispatch-contract.test.mjs
+
+      # A ratchet, not a clean bill of health: 16 of 21 registered actions still
+      # have no wrapper-level coverage. The list may only shrink, so a newly
+      # registered action cannot ship with a wrapper nothing has ever run.
+      - name: Dispatch wrapper coverage ratchet
+        working-directory: .
+        run: node scripts/local-dev/tests/development-dispatch-wrapper-coverage.test.mjs
