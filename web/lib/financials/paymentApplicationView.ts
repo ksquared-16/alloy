@@ -21,6 +21,7 @@
  * is still only one definition.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { resolveBillableSourceHouseholdId } from "@/lib/financials/billableSourceHousehold";
@@ -193,8 +194,25 @@ export async function resolveHouseholdPaymentViews(
                     return {
                         allocationId: a.id,
                         chargeId: a.charge_id,
+                        /*
+                         * THE OPERATOR'S WORD FOR IT, NEVER THE KEY.
+                         *
+                         * This fell back to `charge_category` raw, so an application whose charge
+                         * carried no description read as "materials_fee" on a surface an operator
+                         * uses to explain money to a parent. The category catalog is the owner of
+                         * that word — `chargeCategoryLabel` turns it into "Materials" — and it is
+                         * resolved here rather than patched in a component, so every surface reading
+                         * this view gets the same answer.
+                         *
+                         * The catalog returns the key unchanged for a category it does not know,
+                         * which is the honest floor: a label nobody configured is not invented here.
+                         */
                         chargeLabel:
-                            (charge?.description?.trim() || charge?.charge_category?.trim() || "Charge"),
+                            charge?.description?.trim()
+                            || (charge?.charge_category?.trim()
+                                ? chargeCategoryLabel(charge.charge_category.trim())
+                                : "")
+                            || "Charge",
                         chargeServiceDate: charge?.service_date ?? null,
                         appliedCents: Number(a.allocated_amount_cents) || 0,
                         status: a.status,

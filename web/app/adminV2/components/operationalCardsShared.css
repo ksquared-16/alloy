@@ -2120,6 +2120,24 @@
   margin-bottom: 10px;
   display: grid;
   gap: 8px;
+
+  /*
+   * ── THE COMMAND KEEPS ITS OWN SCROLLBAR, AND ITS CONFIRM STAYS ON SCREEN ───────────────────
+   *
+   * These panels grew to whatever their content needed and relied on the PAGE to scroll. On a
+   * laptop-height window — and badly at phone height — the confirm button fell below the fold of a
+   * surface that does not look scrollable, so the operator either hunted for it or concluded the
+   * command was broken. A command that cannot be completed without discovering hidden scrolling is
+   * not finished.
+   *
+   * So the panel bounds itself to the viewport and owns the overflow: the body scrolls INSIDE the
+   * panel, and the action row is sticky at its foot. `70svh` rather than `vh` because mobile
+   * browsers shrink the visual viewport when the address bar is showing, and `vh` measures the
+   * taller one — which is exactly how a CTA ends up under the browser chrome.
+   */
+  max-height: min(70svh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .alloy-os-fdetail__moveheader {
@@ -2157,6 +2175,13 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  /* Stays reachable while the body above it scrolls — see the note on `__movepanel`. */
+  position: sticky;
+  bottom: -10px;
+  z-index: 1;
+  padding-block: 8px;
+  margin-bottom: -10px;
+  background: var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff));
 }
 
 .alloy-os-fdetail__moveactions button {
