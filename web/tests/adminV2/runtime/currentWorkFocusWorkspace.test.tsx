@@ -8,7 +8,6 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import CurrentWorkWorkspace from "@/components/admin/focusPanel/cards/CurrentWorkWorkspace";
 import {
     isCurrentWorkActionExecutable,
     planCurrentWorkActionExecution,
@@ -177,115 +176,17 @@ describe("Current Work Focus workspace composition", () => {
         expect(isFocusElevatingCard("household")).toBe(true);
     });
 
-    it("renders workspace surface without outer CURRENT WORK card chrome", () => {
-        const html = renderToStaticMarkup(
-            <CurrentWorkWorkspace
-                surface={minimalSurface}
-                completionPhase="working"
-                pendingOutcome={null}
-                pendingOutcomeKey={null}
-                primaryWorkItem={null}
-                busy={false}
-                error={null}
-                handoffNotice={null}
-                activityItems={[{ label: "Note added", occurredAt: "Today" }]}
-                activityPreviewOpen={false}
-                onToggleActivityPreview={() => undefined}
-                onCloseActivityPreview={() => undefined}
-                onViewFullActivity={() => undefined}
-                onChecklistItem={() => undefined}
-                onSelectOutcome={() => undefined}
-                onCancelOutcome={() => undefined}
-                onConfirmOutcome={() => undefined}
-                onCancelPicker={() => undefined}
-                onAction={() => undefined}
-                onBack={() => undefined}
-                onContinueAfterComplete={() => undefined}
-                completionSummary={null}
-                stageLabel="Lead"
-            />,
-        );
-        expect(html).toContain('data-current-work-workspace="true"');
-        expect(html).toContain("Back to summary");
-        expect(html).toContain("Next action");
-        expect(html).toContain("Record outcome");
-        expect(html).toContain("More actions");
-        expect(html).toContain("Other transitions");
-        expect(html).toContain("Recent activity");
-        // Tour actions are grouped under the shared DropdownMenu trigger (items portal on open).
-        expect(html).toContain('data-work-tour-menu-trigger="true"');
-        expect(html).toContain("Tour ▾");
-        expect(html).toContain("Send Form");
-        expect(html).not.toMatch(/>CURRENT WORK</i);
-        expect(html).not.toContain("data-work-summary");
-    });
-
-    it("promotes Record Outcome for outcome-led work without a fake Primary Action", () => {
-        const outcomeLedSurface = {
-            ...minimalSurface,
-            title: "Conduct Tour",
-            primaryAction: null,
-            execution: {
-                executionMode: "outcome_led",
-                prominentCta: "record_outcome",
-                hasExecutablePrimaryAction: false,
-                primaryActionIsExecutable: false,
-            },
-        } as CurrentWorkSurfaceVM;
-        const html = renderToStaticMarkup(
-            <CurrentWorkWorkspace
-                surface={outcomeLedSurface}
-                completionPhase="working"
-                pendingOutcome={null}
-                pendingOutcomeKey={null}
-                primaryWorkItem={null}
-                busy={false}
-                error={null}
-                handoffNotice={null}
-                activityItems={[]}
-                activityPreviewOpen={false}
-                onToggleActivityPreview={() => undefined}
-                onCloseActivityPreview={() => undefined}
-                onViewFullActivity={() => undefined}
-                onChecklistItem={() => undefined}
-                onSelectOutcome={() => undefined}
-                onCancelOutcome={() => undefined}
-                onConfirmOutcome={() => undefined}
-                onCancelPicker={() => undefined}
-                onAction={() => undefined}
-                onBack={() => undefined}
-                onContinueAfterComplete={() => undefined}
-                completionSummary={null}
-                stageLabel="Tour"
-            />,
-        );
-        expect(html).toContain('data-execution-mode="outcome_led"');
-        expect(html).toContain('data-prominent-cta="record_outcome"');
-        expect(html).toContain('data-outcome-prominence="primary"');
-        expect(html).not.toContain("data-work-primary-action");
-    });
-
-    it("ModeGrid elevates current_work via the standard depth path — no canvas replace (Slice A)", () => {
-        const source = readFileSync(
-            path.join(process.cwd(), "components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx"),
-            "utf8",
-        );
-        // Slice A removed the full-canvas workspace replace; current_work elevates like truth cards.
-        expect(source).not.toContain('data-focus-panel-workspace="current_work"');
-        expect(source).not.toContain('presentation="workspace"');
-        expect(source).toContain("elevatedCellKey");
-    });
-
-    it("current_work card reports centered-elevation depth (Slice A)", () => {
-        const source = readFileSync(
-            path.join(process.cwd(), "components/admin/focusPanel/cards/CurrentWorkCard.tsx"),
-            "utf8",
-        );
-        expect(source).toContain('presentation?: "summary" | "workspace"');
-        // Opening now elevates the card (reports "focused") instead of a canvas replace; the
-        // coordination host raises the cell (backdrop + centered) via activeDepth/elevatedCellKey.
-        expect(source).toContain('useReportPerspective(coordination, "current_work"');
-        expect(source).toContain("useDismissSignal(coordination, \"current_work\"");
-        expect(source).not.toContain("setFocused(true)");
-    });
+    /*
+     * TWO RENDER TESTS WERE REMOVED HERE, AND RENDERING IS NOT WHAT WAS WRONG WITH THEM.
+     *
+     * They mounted `CurrentWorkWorkspace` and asserted its chrome and its outcome-led execution
+     * treatment. Both genuinely rendered — and both rendered a component no product code imported,
+     * so they certified markup an operator could never reach. A render test is only as true as the
+     * component it mounts, which is the same lesson as the source guards in #951 one level deeper.
+     *
+     * The component is now deleted. The live equivalents are certified against the real path:
+     * `currentWorkSecondaryWorkIsReachable.test.tsx` mounts `CurrentWorkCard` and proves the
+     * focused surface renders secondary work, and `currentWorkCenteredHost.test.tsx` proves the
+     * card elevates into that focused surface rather than a workspace replace.
+     */
 });
