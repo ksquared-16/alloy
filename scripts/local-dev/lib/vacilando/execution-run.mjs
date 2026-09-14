@@ -746,6 +746,86 @@ function emitOutcomeEvent(run, root, { recordEvent = true } = {}) {
   return Promise.resolve(null);
 }
 
+
+/**
+ * MAY THIS RUN CLAIM TO CONTINUE THAT ONE?
+ *
+ * `continuation_of` existed, was documented, was tested once - and was accepted
+ * without a single check. Any string was stored: a run id that does not exist, a
+ * run still executing, the successor itself, or a cycle. Measured across the
+ * live store: 0 of 181 runs carried it, so nothing had ever exercised the field
+ * in anger and nothing had noticed it was unguarded.
+ *
+ * The doctrine is not changed here, only enforced. A continuation says "the work
+ * this run is doing was previously attempted by that run, which terminated". So:
+ *
+ *   the predecessor must exist          - a link to nothing is worse than no link
+ *   the predecessor must be terminal    - a live run has not been continued, it
+ *                                         is still going
+ *   it may not be the run itself        - self-lineage is a lie that traverses
+ *   the chain may not cycle             - A->B->A makes history untraversable
+ *   the lane must match                 - lineage is within a lane's history
+ *
+ * Chronology is deliberately NOT a criterion. "It happened after" is how an
+ * unrelated mission gets adopted into someone else's failure.
+ */
+export const CONTINUATION_REFUSALS = Object.freeze({
+  MISSING: "continuation_predecessor_missing",
+  NOT_TERMINAL: "continuation_predecessor_not_terminal",
+  SELF: "continuation_self_reference",
+  CYCLE: "continuation_cycle",
+  LANE: "continuation_lane_mismatch",
+});
+
+export function validateContinuation(successorRunId, continuation, { root = runtimeRoot() } = {}) {
+  const priorId = String(continuation?.run_id || continuation || "").trim();
+  if (!priorId) return { ok: false, code: CONTINUATION_REFUSALS.MISSING, detail: "no predecessor run id was given" };
+  if (priorId === String(successorRunId)) {
+    return { ok: false, code: CONTINUATION_REFUSALS.SELF, detail: "a run cannot continue itself" };
+  }
+
+  const store = readExecutionRunStore(root);
+  const index = new Map();
+  for (const [laneId, pack] of Object.entries(store?.lanes || {})) {
+    for (const r of pack.runs || []) index.set(r.run_id, { run: r, laneId });
+  }
+
+  const prior = index.get(priorId);
+  if (!prior) {
+    return { ok: false, code: CONTINUATION_REFUSALS.MISSING, detail: `no run ${priorId} exists to continue` };
+  }
+  if (!isTerminalRunState(prior.run.state)) {
+    return {
+      ok: false,
+      code: CONTINUATION_REFUSALS.NOT_TERMINAL,
+      detail: `run ${priorId} is ${prior.run.state}; a run still in flight has not been continued`,
+    };
+  }
+  const successor = index.get(String(successorRunId));
+  if (successor && successor.laneId !== prior.laneId) {
+    return {
+      ok: false,
+      code: CONTINUATION_REFUSALS.LANE,
+      detail: `run ${priorId} belongs to ${prior.laneId}, not ${successor.laneId}`,
+    };
+  }
+
+  // Walk the existing chain. The successor is not yet linked, so reaching it
+  // from the predecessor means this link would close a loop.
+  const seen = new Set([String(successorRunId)]);
+  let cursor = prior;
+  while (cursor) {
+    if (seen.has(cursor.run.run_id)) {
+      return { ok: false, code: CONTINUATION_REFUSALS.CYCLE, detail: `continuing ${priorId} would close a cycle` };
+    }
+    seen.add(cursor.run.run_id);
+    const nextId = cursor.run.continuation_of?.run_id;
+    cursor = nextId ? index.get(String(nextId)) : null;
+  }
+
+  return { ok: true, predecessor: { run_id: priorId, state: prior.run.state, lane_id: prior.laneId } };
+}
+
 /**
  * Attachment metadata for a run, resolved synchronously.
  *
@@ -772,6 +852,18 @@ export function publicExecutionRun(run, { includeInstruction = false, includeTra
     lane_id: run.lane_id,
     state: run.state,
     state_reason: run.state_reason || null,
+    /*
+     * LINEAGE REACHES THE OPERATOR, OR IT MIGHT AS WELL NOT EXIST.
+     *
+     * `continuation_of` was stored and never projected, so every surface built
+     * on this shape showed a recovery run as unrelated new work. That is half
+     * of why the field went unused in 181 runs: nothing could set it usefully
+     * and nothing would have shown it.
+     *
+     * The predecessor's own record is untouched - this is the successor saying
+     * what it continues, never the failed run being reopened.
+     */
+    continuation_of: run.continuation_of || null,
     current_phase: run.current_phase || null,
     created_at: run.created_at,
     started_at: run.started_at || null,
@@ -1348,6 +1440,13 @@ export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = 
      * only; the historical run is never rewritten to pretend it executed.
      */
     if (fields.continuation_of !== undefined) {
+      if (fields.continuation_of) {
+        // EXPLICIT, AND CHECKED. The caller states the lineage; this refuses a
+        // claim that cannot be true rather than storing it for a later reader
+        // to trip over.
+        const v = validateContinuation(runId, fields.continuation_of, { root });
+        if (!v.ok) return { ok: false, error: v.code, detail: v.detail };
+      }
       found.continuation_of = fields.continuation_of
         ? {
           run_id: String(fields.continuation_of.run_id || fields.continuation_of),
