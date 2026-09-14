@@ -193,10 +193,13 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         // 36 until W-13/AD-22 recovered `settings.users_roles.read`; 35 until `fin.read` and
         // `fin.write` were recovered the same way; 33 until the Forms authority cleanup recovered
         // `crm.customers.read`, which the catalog had held and nothing had ever enforced — the CRM
-        // entity search under Forms was gated on the literal `admin` role instead. Every movement
-        // this initiative has recorded has been OUT of the deletion list, which is the direction that
-        // means the product grew a real gate rather than lost one.
-        expect(unenforced.length).toBe(32);
+        // entity search under Forms was gated on the literal `admin` role instead; 32 until the
+        // Schedules + Jobs authority cleanup recovered `scheduling.write` and `ops.jobs.write`, the
+        // same story twice over — catalogued in 20260505164000, granted to admin and ops for months,
+        // and consulted by nothing, while fourteen handlers asked `ctx.role !== "admin"` instead.
+        // Every movement this initiative has recorded has been OUT of the deletion list, which is the
+        // direction that means the product grew a real gate rather than lost one.
+        expect(unenforced.length).toBe(30);
     });
 
     it("C13 resolves against the measurement: nothing enforces a workflows key", () => {
