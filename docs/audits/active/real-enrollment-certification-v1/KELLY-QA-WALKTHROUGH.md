@@ -47,29 +47,25 @@ rows. Read down the list and check each one:
 | Queue views match statuses | Ready |
 | Records query ready | Info |
 | Actions configured | Ready |
-| **Families have paperwork to complete** | **Needs fix — "No paperwork is required here…"** — see below |
-| Required paperwork still exists | Ready — *Every required form resolves* |
-| Required paperwork is published | Ready — *Every required form has a published version* |
-| Requested documents are identified | Ready — *Every requested document is identified* |
-| Signatures land on the paperwork | Ready — *Every signature has a place on the document* |
+| **Families have paperwork to complete** | **Needs fix** — *"No paperwork is required in the LIVE configuration … A saved draft change adds 3 — publish it to apply."* |
+| Required paperwork still exists | *Nothing to check — no paperwork is required in the live configuration* |
+| Required paperwork is published | *Nothing to check …* |
+| Requested documents are identified | *Nothing to check …* |
+| Signatures land on the paperwork | *Nothing to check …* |
 
-> **KNOWN, ALREADY DIAGNOSED — do not spend time on it.** That one red row is expected today, and
-> the three green rows under it are green for the wrong reason (they pass over an empty list).
+> **THIS IS THE CORRECT READING, AND IT IS THE DECISION WAITING FOR YOU.**
 >
-> The stage edit that made Enrolling require **Enrollment Paperwork 2026–2027** instead of three
-> separate forms is **no longer in the configuration at all**. On 2026-09-11 it was present in the
-> builder draft and missing only from the publication; on 2026-09-14 it is in neither — the
-> Enrolling stage now carries no paperwork requirement of any kind, and Packet Studio's **Used by**
-> panel says so too.
+> Everything below the red row used to say *"Every required form resolves"* — three green ticks that
+> had checked an empty list. They now say what they actually did, which is nothing.
 >
-> So this is no longer "publish it and the row goes green". The requirement has to be **re-authored**
-> on the Enrolling stage first (A4–A6 is where), and then published.
+> The red row is honest: **live** Enrollment requires no paperwork, because the packet requirement is
+> saved in the draft and has not been applied. The row names that pending change rather than pretending
+> it is already true.
 >
-> Re-authoring and publishing a stage requirement changes what real families are asked for, so it is
-> being left to you rather than done for you. Full write-up:
-> `docs/audits/active/real-enrollment-certification-v1/PACKET-AS-REQUIREMENT-AUDIT.md`.
+> **Nothing here is broken and nothing needs fixing.** Applying the Enrollment configuration is what
+> turns this green, and that is yours to approve — see the note at the end of Part B.
 >
-> **STOP** only if a row *other* than "Families have paperwork to complete" is not **Ready**.
+> **STOP** only if a row *other* than "Families have paperwork to complete" reports a problem.
 
 **A4. DO** — Click the **Stages** tab, then click **Enrolling**.
 **EXPECT** — The Enrolling stage opens with a **Requirements** section.
@@ -139,11 +135,11 @@ and *When they finish, the completed packet arrives for staff review in Processi
 *Immunization record identified*.
 
 **B6. DO** — Read **Used by**.
-**EXPECT** — Today it says **no business process requires this packet yet**.
+**EXPECT** — **Enrollment · Enrolling stage — required · blocking**, and underneath:
+*Saved, not published yet — families are not being asked for this until the process is published.*
 
-> **THIS IS A REAL FINDING, ALREADY DIAGNOSED — see Part A.** The Enrolling stage's requirement for
-> this packet is gone from the configuration; it is not merely unpublished. When it is restored, this
-> panel names the process and stage, and says whether it has been published.
+> That second line is the one to check. The requirement is configured and waiting for you; it is not
+> live, and nothing is being asked of any family until you apply it.
 
 **B7. DO** — Scroll to **What families complete**.
 **EXPECT** — Three obligation cards. Each says what it is, then what actually happens:
@@ -163,6 +159,22 @@ and *When they finish, the completed packet arrives for staff review in Processi
 **B8. DO** — Look for **Direct distribution and session history**.
 **EXPECT** — One collapsed row near the bottom. Sending links by hand and the session inbox still
 exist; they are not what you opened this screen to do, so they no longer compete with it.
+
+> ## THE DECISION WAITING FOR YOU
+>
+> Everything in Part B is **configured and validated, and not live**. Live Enrollment is still
+> revision 31 and asks families for no paperwork at all.
+>
+> Applying the Enrollment configuration is what makes this real. What becomes live:
+>
+> **Enrollment → Enrolling** begins requiring **Enrollment Paperwork 2026–2027**, *Required* and
+> *Blocking*, containing:
+>
+> 1. **Admissions Information** — Collect information
+> 2. **Family Handbook** — Read & acknowledge, and sign
+> 3. **Immunization record** — Upload a document
+>
+> Until you apply it, no family is asked for any of it. Nothing will publish on your behalf.
 
 ---
 
