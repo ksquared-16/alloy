@@ -23,6 +23,11 @@ on:
     # to run once a day.
     - cron: "0 11 * * *"
   workflow_dispatch:
+    inputs:
+      tested_ref:
+        description: "Branch or SHA to test (defaults to staging, the development trunk)"
+        required: false
+        default: "staging"
 
 permissions:
   contents: read
@@ -37,10 +42,50 @@ jobs:
       VACILANDO_AUTO_DISPATCH: "0"
     timeout-minutes: 60
     steps:
+      # THE DEFINITION LIVES ON main; THE CODE UNDER TEST LIVES ON staging.
+      #
+      # GitHub resolves a scheduled workflow from the DEFAULT branch, and a bare
+      # checkout would then check out main - where scripts/local-dev/tests does
+      # not exist at all (0 files on main, 376 on staging). This workflow would
+      # have failed on `cd scripts/local-dev/tests` on every scheduled run, which
+      # is worse than not running: a permanently red nightly teaches people to
+      # ignore it.
+      #
+      # main is Alloy's release branch and is expected to lag staging during
+      # pre-production development. That is branch doctrine, not staleness debt.
+      # So the ref is named explicitly rather than inherited.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tested_ref || 'staging' }}
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+
+      - name: Record what defined this run and what it is testing
+        id: provenance
+        run: |
+          # Two different SHAs, and conflating them is the whole hazard.
+          echo "workflow_definition_sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "tested_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "tested_ref=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached)" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Provenance"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| workflow definition (default branch) | \`${GITHUB_REF_NAME}\` @ \`${GITHUB_SHA}\` |"
+            echo "| code under test | \`$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached)\` @ \`$(git rev-parse HEAD)\` |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Refuse to run against a tree without the inventory
+        run: |
+          # Fail loudly rather than silently testing the wrong branch.
+          if [ ! -d scripts/local-dev/tests ]; then
+            echo "::error::checked-out tree has no scripts/local-dev/tests - this is not the development trunk"
+            exit 1
+          fi
+          echo "inventory present: $(ls scripts/local-dev/tests/*.test.mjs | wc -l) files"
 
       - name: Partition the inventory
         id: partition

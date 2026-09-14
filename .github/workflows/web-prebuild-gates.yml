@@ -215,6 +215,15 @@ jobs:
       # dependent, so it is Tier 3 host integration rather than a runner-safe
       # gate. CI caught that classification error on this gate's first run,
       # which is exactly what a required gate is for.
+      # The one narrow door to main. A workflow definition must reach the default
+      # branch for GitHub to schedule it at all, while the code it tests stays on
+      # staging. This locks the door open exactly that far: workflow paths only,
+      # candidate ownership mandatory, and a mixed commit refused WHOLE rather
+      # than trimmed to its acceptable files.
+      - name: Repository metadata promotion boundary
+        working-directory: .
+        run: node scripts/local-dev/tests/development-repository-metadata-promotion.test.mjs
+
       - name: Migration ledger convergence (G5)
         working-directory: .
         run: |
