@@ -98,6 +98,7 @@ import {
 
 import { appendTimelineEvent } from "./timeline.mjs";
 import { attachEvidence } from "./evidence.mjs";
+import { completedReuseDecision } from "./action-repeatability.mjs";
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim()
   || join(os.homedir(), ".local", "state", "alloy-dev");
@@ -413,7 +414,9 @@ export function requestTrustedHostAction({
   const reusableStates = mayNotReplayFinished
     ? REUSABLE_IN_FLIGHT_STATES
     : [...REUSABLE_IN_FLIGHT_STATES, "completed"];
-  const existing = listTrustedHostActions(missionId).find((a) =>
+  let dedupeDisposition = null;
+  let dedupeWhy = null;
+  let existing = listTrustedHostActions(missionId).find((a) =>
     a.actionType === actionType
     && sameActionOwnership(a, { executionSessionId, assignmentId, inputs: validated.normalized })
     && (dedupeKey
@@ -429,6 +432,40 @@ export function requestTrustedHostAction({
         ? sameNormalizedInputs(a.inputs, validated.normalized)
         : a.inputs?.queryHash === validated.normalized.queryHash))
     && reusableStates.includes(a.state));
+  if (existing && existing.state === "completed") {
+    /*
+     * A COMPLETED ACTION IS ADOPTED ONLY IF A REPEAT MEANS "THE SAME ANSWER".
+     *
+     * It used to be adopted whenever the naive match found it, so a second
+     * intentional request in one Execution Run was answered from the first
+     * execution. Measured: two reconciliation requests in erun_dc7857293e0e0502
+     * shared `result_ref tha_5975676b98005f`; the runner's diagnostic opened
+     * `DELETE 0` both times, where a genuine second execution opens `DELETE 4`.
+     *
+     * The occurrence boundary is the governed request id, which is carried
+     * rather than invented — a retry of the SAME request still reuses, which is
+     * checked before the classification so repeatability never costs retry
+     * safety. No caller-supplied dedupeKey participates.
+     */
+    const decision = completedReuseDecision({
+      actionType,
+      existing,
+      requestId: authorizationContext?.requestId || null,
+      reuseAuthorized: typeof def.reuseAuthorized === "function"
+        ? def.reuseAuthorized(validated.normalized)
+        : null,
+    });
+    if (!decision.reuse) {
+      // Fall through to minting a new action. The disposition is recorded on it
+      // below, so why a second execution happened is answerable afterwards.
+      dedupeDisposition = decision.disposition;
+      dedupeWhy = decision.why;
+      existing = null;
+    } else {
+      dedupeDisposition = decision.disposition;
+      dedupeWhy = decision.why;
+    }
+  }
   if (existing) {
     /*
      * DEFENCE IN DEPTH: the reused action must be about the same thing.
@@ -482,6 +519,13 @@ export function requestTrustedHostAction({
       reason: identity.reason || null,
     },
     policyClassification: def.riskClass,
+    /*
+     * WHY THIS ACTION EXISTS RATHER THAN REUSING ONE. Internal provenance, not
+     * operator-facing noise: it is how "a second execution happened" is
+     * answerable without re-deriving the dedupe decision months later.
+     */
+    dedupeDisposition: dedupeDisposition || "first_occurrence",
+    dedupeWhy,
     authorizationState: "pending",
     authorizationId: null,
     executionState: "not_started",

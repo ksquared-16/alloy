@@ -252,6 +252,19 @@ export function resolveReconciliationRequest(inputs = {}) {
        */
       frozen_context: entry.frozen_context ? { ...entry.frozen_context } : null,
       fixture_path: entry.fixture_path ?? null,
+      /*
+       * CARRIED, OR THE GUARD IS INERT.
+       *
+       * The executor reads `validated.normalized`, so a field the normalizer
+       * omits does not exist at mutation time. The repository-identity check was
+       * written, wired before the spawn, and did nothing at all until this line
+       * existed — its test caught it by counting spawns rather than by trusting
+       * that the check had been called.
+       *
+       * Runtime-owned: the expectation is resolved by the filer from the
+       * promoted authority, never described by the caller.
+       */
+      expected_repo_head: inputs.expected_repo_head ?? null,
       purpose: entry.purpose ?? null,
       dedupeKey: `reconcile:${entry.key}:${environment}:${dryRun ? "dry" : "apply"}`,
     },

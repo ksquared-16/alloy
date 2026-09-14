@@ -217,6 +217,19 @@ function defineDatabaseReadCensus() {
      */
     requiresArtifactRef: true,
     artifactInputKeys: ["queryArtifactPath", "query_artifact_path"],
+    /*
+     * THE CONTEXT THAT AUTHORISES REUSE IS THE QUERY ITSELF.
+     *
+     * A census is a measurement at a time, which is why its repeatability is
+     * CONTEXT_DEPENDENT rather than simply reusable: a before/after comparison
+     * genuinely needs two. But the dedupe match that reaches this point already
+     * required an identical `queryHash` — the same question, asked again, in
+     * the same run. That is a retry, and the answer keeps.
+     *
+     * Declared here rather than assumed in the classification, so the reason
+     * lives with the action that knows it.
+     */
+    reuseAuthorized: () => true,
     outputSchema: { resultJson: "object" },
     evidenceSchema: ["query_artifact", "query_hash", "validation_report", "result_json", "execution_audit"],
     validateInputs(inputs = {}) {

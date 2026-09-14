@@ -1198,6 +1198,18 @@ export function closeStaleExecutionRun(runId, {
   return { ok: true, run: publicExecutionRun(out.run, { includeInstruction: true, includeTransitions: true }) };
 }
 
+/*
+ * Bound lazily and synchronously: `run-lifecycle.mjs` imports this module, so a
+ * static import here would be a cycle. The phase is presentation, so a lane list
+ * still renders if the binding is unavailable.
+ */
+let laneLifecyclePhaseImpl = null;
+function laneLifecyclePhase(run, facts) {
+  if (!laneLifecyclePhaseImpl) return { phase: null, reason: null };
+  return laneLifecyclePhaseImpl(run, facts);
+}
+export function setLaneLifecyclePhaseImpl(fn) { laneLifecyclePhaseImpl = fn; }
+
 export function attachLaneRunLifecycle(lanes, { root, nowMs = Date.now() } = {}) {
   const list = Array.isArray(lanes) ? lanes : [];
   if (!list.length) return list;
@@ -1209,6 +1221,7 @@ export function attachLaneRunLifecycle(lanes, { root, nowMs = Date.now() } = {})
     const full = getExecutionRun(run.run_id, root) || run;
     const facts = collectStaleRunFacts(full, { root, nowMs, sendStore, resourceStore });
     const cls = classifyExecutionRunStale(full, facts);
+    const phase = laneLifecyclePhase(full, { ...facts, now_ms: nowMs, stale: cls });
     return {
       ...lane,
       execution_run: {
@@ -1216,20 +1229,46 @@ export function attachLaneRunLifecycle(lanes, { root, nowMs = Date.now() } = {})
         run_lifecycle: {
           class: cls.class,
           reason: cls.reason,
+          /*
+           * The phase the lane can actually render. "Finalizing" was never
+           * wrong about its inputs — agent idle, run open, which is equally
+           * true of a run at rest between governed steps. It had no way to say
+           * which, so it said the cautious thing forever. Additive: `class` and
+           * `reason` are unchanged for every existing reader.
+           */
+          phase: phase.phase,
+          phase_reason: phase.reason,
         },
       },
     };
   });
 }
 
-export function reconcileLaneBeforeSend(laneId, { root, nowMs = Date.now() } = {}) {
+export async function reconcileLaneBeforeSend(laneId, { root, nowMs = Date.now() } = {}) {
   const out = reconcileStaleExecutionRuns({ root, nowMs, laneId });
   let closedIdleGoverned = false;
   const active = activeRunForLane(laneId, root);
   if (active?.state === "EXECUTING" && active.state_reason === "governed_action_complete") {
+    /*
+     * A LANE BETWEEN GOVERNED STEPS IS NOT A STALE LANE.
+     *
+     * This closed the run whenever the classifier said stale or ambiguous —
+     * and the classifier protects a governed resume for exactly one settle
+     * window, so any pause longer than twenty minutes between two steps of the
+     * same piece of work became "stale". It runs on EVERY send, which is why
+     * "Previous run was stale and was closed" appeared on routine messages.
+     *
+     * Twenty minutes is a perfectly ordinary gap between governed steps, so the
+     * window was the defect rather than its length. `sendMayCloseAsStale` reads
+     * the lifecycle phase, which bounds RESTING by whether the lane still owns
+     * the session rather than by elapsed time — a genuinely stranded run has no
+     * session and is still closed here.
+     */
     const facts = collectStaleRunFacts(active, { root, nowMs });
     const cls = classifyExecutionRunStale(active, facts);
-    if (cls.class === "ambiguous" || cls.class === "stale") {
+    const { sendMayCloseAsStale } = await import("./run-lifecycle.mjs");
+    const decision = sendMayCloseAsStale(active, { ...facts, now_ms: nowMs, stale: cls });
+    if (decision.close) {
       const closed = closeStaleExecutionRun(active.run_id, { root, nowMs, origin: "governor" });
       closedIdleGoverned = Boolean(closed?.ok && closed.run?.state === "ABANDONED");
     }
