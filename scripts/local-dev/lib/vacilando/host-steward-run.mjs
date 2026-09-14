@@ -241,7 +241,7 @@ export async function runStewardCycleWithHygiene({
  * a pure derivation with no idea that a clock exists.
  */
 async function runOperatingReportStage({ root, nowMs }) {
-  const { runDueOperatingReports, buildOperatingReport } = await import("./operating-report.mjs");
+  const { runDueOperatingReports, buildOperatingReport, operatingReportWindow } = await import("./operating-report.mjs");
   const { mkdirSync, writeFileSync, readFileSync, existsSync } = await import("node:fs");
   const { join } = await import("node:path");
   const base = join(root, "vacilando");
@@ -251,12 +251,16 @@ async function runOperatingReportStage({ root, nowMs }) {
   return runDueOperatingReports({
     now: new Date(nowMs),
     build: (kind) => {
-      const day = new Date(nowMs).toISOString().slice(0, 10);
-      const start = new Date(`${day}T00:00:00.000Z`);
-      const windowStart = kind === "weekly"
-        ? new Date(start.getTime() - 6 * 24 * 3600 * 1000).toISOString()
-        : start.toISOString();
-      const windowEnd = new Date(start.getTime() + 24 * 3600 * 1000).toISOString();
+      /*
+       * THE WINDOW COMES FROM THE ZONE THE CADENCE IS ON, not from UTC.
+       * This used to derive the day here, in UTC, while the cadence fired at
+       * 18:30 Pacific - so the report was keyed to tomorrow and covered the
+       * ninety minutes since 17:00. The zone was always configured; nothing
+       * carried it this far.
+       */
+      const win = operatingReportWindow(kind, new Date(nowMs));
+      if (!win) throw new Error("report_window_unresolved");
+      const { windowStart, windowEnd } = win;
       const requests = readJson(join(base, "governed-actions", "requests.json"), { requests: [] }).requests || [];
       const runStore = readJson(join(base, "execution-runs", "runs.json"), { lanes: {} }).lanes || {};
       const runs = Object.values(runStore).flatMap((e) => e.runs || []);

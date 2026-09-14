@@ -19,6 +19,7 @@
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { operatingReportWindow } from "../lib/vacilando/operating-report.mjs";
 
 let pass = 0, fail = 0;
 function test(name, fn) {
@@ -177,6 +178,75 @@ test("P9. a governed FAILURE leaves the wait readable, resolved, not deleted", (
   assert.match(body, /transitionExecutionRun\(rec\.run_id, "NEEDS_INPUT"/, "it still leaves the wait");
   assert.doesNotMatch(body, /patchRunResourceWait\(rec\.run_id, null/,
     "and must not delete the record it just resolved");
+});
+
+/* ── BOUNDARY 10: configured report zone -> the window the report describes ─ */
+
+/*
+ * Instance seven, and the only one found while auditing rather than while
+ * debugging. VACILANDO_REPORT_TIMEZONE was resolved correctly and honoured by
+ * the CADENCE - the daily report fired at 18:30 Pacific exactly as designed.
+ * Both callers then derived the WINDOW themselves in UTC, where 18:30 Pacific
+ * is already the next day. Produced, not carried, and the consumer behaved as
+ * though no zone had ever been set.
+ *
+ * These assert the window a report covers, not the way it is computed, so they
+ * survive the next refactor of how.
+ */
+const TZ = "America/Los_Angeles";
+// 18:30 PDT on 2026-09-12 - the cadence instant, already tomorrow in UTC.
+const FIRES_AT = new Date("2026-09-13T01:30:00.000Z");
+
+test("P10 the daily window is the configured zone's day, not UTC's", () => {
+  const w = operatingReportWindow("daily", FIRES_AT, { timeZone: TZ });
+  assert.equal(w.day, "2026-09-12", "the day being reported on is the local day");
+  assert.notEqual(w.day, FIRES_AT.toISOString().slice(0, 10),
+    "and is precisely NOT the UTC day, which is the defect");
+  assert.equal(w.windowStart, "2026-09-12T07:00:00.000Z", "local midnight, resolved in zone");
+  assert.equal(w.windowEnd, "2026-09-13T07:00:00.000Z");
+});
+
+test("P10 the instant the report fires is inside the window it reports", () => {
+  const w = operatingReportWindow("daily", FIRES_AT, { timeZone: TZ });
+  assert.ok(FIRES_AT.toISOString() > w.windowStart && FIRES_AT.toISOString() < w.windowEnd,
+    `18:30 local must fall inside its own day, got ${w.windowStart}..${w.windowEnd}`);
+  // The pre-fix window started at 17:00 local the same evening: 90 minutes.
+  const hours = (Date.parse(w.windowEnd) - Date.parse(w.windowStart)) / 3600000;
+  assert.equal(hours, 24, "a daily report covers a day");
+});
+
+test("P10 the weekly window is seven local days ending with the reported day", () => {
+  const w = operatingReportWindow("weekly", FIRES_AT, { timeZone: TZ });
+  assert.equal(w.day, "2026-09-12");
+  assert.equal(w.windowStart, "2026-09-06T07:00:00.000Z");
+  assert.equal(w.windowEnd, "2026-09-13T07:00:00.000Z");
+});
+
+test("P10 a DST day is its real length, not a fixed 24 hours", () => {
+  // 2026-11-01 is the US fall-back: a 25-hour local day. A start+24h window
+  // would have stopped an hour before the day did.
+  const w = operatingReportWindow("daily", new Date("2026-11-02T01:30:00.000Z"), { timeZone: TZ });
+  assert.equal(w.day, "2026-11-01");
+  const hours = (Date.parse(w.windowEnd) - Date.parse(w.windowStart)) / 3600000;
+  assert.equal(hours, 25, "the window is as long as the day actually was");
+});
+
+test("P10 no caller derives a report day from UTC any more", () => {
+  for (const [name, src] of [
+    ["host-steward-run.mjs", lib("host-steward-run.mjs")],
+    ["vac-operating-report.mjs", readFileSync(new URL("../vac-operating-report.mjs", import.meta.url), "utf8")],
+  ]) {
+    assert.match(src, /operatingReportWindow\(/, `${name} must ask the owner for its window`);
+    assert.doesNotMatch(src, /const (day|start) = .*toISOString\(\)\.slice\(0, 10\)/,
+      `${name} must not compute a report day in UTC`);
+    assert.doesNotMatch(src, /T00:00:00\.000Z/,
+      `${name}: midnight of a local day key is not midnight UTC`);
+  }
+});
+
+test("P10 no zone configured is a non-answer, never a UTC guess", () => {
+  assert.equal(operatingReportWindow("daily", FIRES_AT, { timeZone: null }), null,
+    "silently falling back to UTC is how this defect would come back");
 });
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
