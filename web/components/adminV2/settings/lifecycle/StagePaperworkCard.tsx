@@ -308,9 +308,19 @@ export default function StagePaperworkCard({
                             <option value="">{packets.length ? "Choose a packet…" : "No packets available"}</option>
                             {packets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
+                        {/*
+                          * This said the opposite of what the code does, and of the ownership rule.
+                          *
+                          * Choosing a packet stores ONE requirement that references it — it does not
+                          * copy the packet's forms in. So editing the packet later DOES change what a
+                          * family completes, which is the entire point of requiring a packet rather
+                          * than a list of forms, and the previous sentence promised the reverse on the
+                          * one screen where an administrator decides this.
+                          */}
                         <p className="mt-1 text-[0.6875rem] text-alloy-midnight/45">
-                            Its forms are copied here as this stage&rsquo;s requirements, in packet order. Editing the packet
-                            later does not change what this stage requires.
+                            The stage requires the packet itself, not a copy of its steps. Changing the packet later
+                            changes what a family completes here; the packet owns its steps, this stage owns when they
+                            are required.
                         </p>
                     </div>
                     <div>
