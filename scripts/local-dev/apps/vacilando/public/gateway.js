@@ -3856,6 +3856,7 @@ async function projectRequest(id, verb, body) {
 async function saveProjectEdits(id) {
   const st = G.projectsSheet;
   if (!st?.edit) return;
+  const current = (st.repositories || []).find((r) => r.repository_id === id) || null;
   // Only the fields the operator actually touched, and only the ones the update
   // route accepts. An empty worktree parent means "use the default", which the
   // registry represents as null rather than as an empty string.
@@ -3864,6 +3865,18 @@ async function saveProjectEdits(id) {
     if (st.edit[key] === undefined) continue;
     const v = String(st.edit[key]).trim();
     patch[key] = v === "" ? null : v;
+  }
+  /*
+   * Promotion goes as ONE object, the shape the route validates. Turning it off
+   * sends governed_promotion:false rather than omitting the block, because an
+   * omitted block means "unchanged" and the operator meant "off".
+   */
+  if (st.edit.governed_promotion !== undefined || st.edit.promotion_branch !== undefined) {
+    const on = st.edit.governed_promotion ?? Boolean(current?.promotion?.governed_promotion);
+    const branch = String(st.edit.promotion_branch ?? current?.promotion?.promotion_branch ?? "").trim();
+    patch.promotion = on
+      ? { governed_promotion: true, promotion_branch: branch || String(current?.default_branch || "").replace(/^origin\//, "") }
+      : { governed_promotion: false };
   }
   if (!Object.keys(patch).length) return;
   const j = await projectRequest(id, "update", patch);
@@ -4026,6 +4039,7 @@ document.addEventListener("input", (e) => {
     if (t.matches?.("[data-gw-proj-name]")) { editProjectField("name", t.value); return; }
     if (t.matches?.("[data-gw-proj-branch]")) { editProjectField("default_branch", t.value); return; }
     if (t.matches?.("[data-gw-proj-wt]")) { editProjectField("worktree_parent", t.value); return; }
+    if (t.matches?.("[data-gw-proj-pb]")) { editProjectField("promotion_branch", t.value); return; }
   }
   if (!G.laneWizard) return;
   const d = G.laneWizard.draft;
@@ -4054,6 +4068,14 @@ document.addEventListener("click", async (e) => {
   if (projRetire) { e.preventDefault(); await setProjectState(projRetire.getAttribute("data-gw-proj-retire"), "retire"); return; }
   const projReactivate = hit("[data-gw-proj-reactivate]");
   if (projReactivate) { e.preventDefault(); await setProjectState(projReactivate.getAttribute("data-gw-proj-reactivate"), "reactivate"); return; }
+  const gp = hit("[data-gw-proj-gp]");
+  if (gp && G.projectsSheet?.selected) {
+    // A repaint is needed here, unlike the text fields: turning governed
+    // promotion on reveals the branch it promotes to.
+    editProjectField("governed_promotion", gp.checked);
+    paint();
+    return;
+  }
   const projValidate = hit("[data-gw-proj-validate]");
   if (projValidate) { e.preventDefault(); await revalidateProject(projValidate.getAttribute("data-gw-proj-validate")); return; }
   const method = hit("[data-gw-repo-method]");

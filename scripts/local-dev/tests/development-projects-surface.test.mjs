@@ -23,7 +23,7 @@
  * database target", never `database_target: null`, and never as a fault.
  */
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -322,6 +322,72 @@ test("25 — absence is styled as ordinary, never as an alert", () => {
   for (const cls of ["gw-proj-row", "gw-project-caps", "gw-proj-edit"]) {
     assert.ok(CSS.includes(`.${cls}`), `${cls} is rendered with no stylesheet rule`);
   }
+});
+
+/* ── what the LIVE registration proved was still missing ──────────────────── */
+
+test("26 — a registered project is given an identity of its own", () => {
+  /*
+   * FOUND BY REGISTERING THE REAL REPOSITORY, not by reading the code.
+   *
+   * S0 gave Alloy `prj_alloy` and gave every other project null, and no write
+   * path set the field — not registration, not update. The real Vacilando
+   * project registered correctly, resolved none of Alloy's conventions, and had
+   * no identity, so `prj_vacilando` was unreachable through the product. A
+   * project model where exactly one project has an identity is half a model.
+   */
+  assert.equal(R.mintProjectId("Vacilando"), "prj_vacilando", "readable, from the operator's own name");
+  assert.equal(R.mintProjectId("My Project!"), "prj_my-project");
+  assert.equal(R.mintProjectId(""), "prj_project", "an unnameable project still gets an identity");
+  // Collisions take a suffix rather than silently reusing an identity.
+  const store = { repositories: { a: { project_id: "prj_vacilando" } } };
+  assert.equal(R.mintProjectId("Vacilando", store), "prj_vacilando_2");
+  // Alloy's identity is still reserved, even though its record predates the field.
+  const alloyStore = { repositories: { repo_alloy: { repository_id: R.ALLOY_REPOSITORY_ID } } };
+  assert.equal(R.mintProjectId("Alloy", alloyStore), "prj_alloy_2");
+});
+
+test("27 — promotion is SETTABLE, not just showable", () => {
+  /*
+   * The surface could show a project's promotion policy and not change it, so a
+   * newly registered project could never be given governed promotion without
+   * opening repositories.json — the thing this slice exists to end. Registering
+   * the real Vacilando repository (canonical main, promotion main) is what made
+   * that concrete.
+   */
+  const at = SERVER.indexOf('const allowed = ["name", "default_branch", "worktree_parent", "promotion"]');
+  assert.ok(at > 0, "the update route must accept a promotion policy");
+  const html = V.renderProjectsSheet({ repositories: [repoOnly], selected: "repo_plain" });
+  assert.match(html, /data-gw-proj-gp/, "governed promotion must be a control");
+  assert.ok(APP.includes("[data-gw-proj-gp]"), "and something must listen for it");
+  // Off by default for a generic project: the branch box only appears once it is on.
+  assert.ok(!html.includes("data-gw-proj-pb"), "a promotion branch with promotion off reads nothing");
+  const on = R.publicRepository({
+    repository_id: "repo_gp", name: "GP", root: "/tmp/gp", profile: "generic", state: "ACTIVE",
+    default_branch: "main", promotion: { governed_promotion: true, promotion_branch: "main" },
+  });
+  assert.match(V.renderProjectsSheet({ repositories: [on], selected: "repo_gp" }), /data-gw-proj-pb/);
+});
+
+test("28 — the promotion patch is validated, and never widens silently", () => {
+  const root = mkdtempSync(join(tmpdir(), "vac-s1a-upd-"));
+  const rec = { repository_id: "repo_u", name: "U", root: "/tmp/u", profile: "generic", state: "ACTIVE" };
+  mkdirSync(join(root, "vacilando"), { recursive: true });
+  writeFileSync(join(root, "vacilando", "repositories.json"),
+    JSON.stringify({ schema_version: R.REPOSITORY_SCHEMA, repositories: { repo_u: rec } }), "utf8");
+  // A field the policy does not own is refused rather than stored.
+  assert.equal(R.updateRepository("repo_u", { promotion: { database_target: "x" } }, { root }).error,
+    "invalid_promotion_field");
+  assert.equal(R.updateRepository("repo_u", { promotion: { promotion_branch: "a b" } }, { root }).error, "invalid_branch");
+  // The real thing.
+  const ok = R.updateRepository("repo_u", { promotion: { governed_promotion: true, promotion_branch: "main" } }, { root });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.repository.promotion.governed_promotion, true);
+  assert.equal(ok.repository.promotion.promotion_branch, "main");
+  assert.equal(ok.repository.promotion.source, "repository_record", "and it says the project owns it");
+  // Turning it off states false rather than deleting the block into a profile default.
+  const off = R.updateRepository("repo_u", { promotion: { governed_promotion: false } }, { root });
+  assert.equal(off.repository.promotion.governed_promotion, false);
 });
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
