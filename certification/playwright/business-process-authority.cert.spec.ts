@@ -314,4 +314,60 @@ test.describe("Business Process authority, and a retired Department product", ()
             expect(res?.status(), `${url} must still serve`).toBeLessThan(400);
         }
     });
+
+    test("PHASE 9 — a grant reaches the holder on their next request, and a revoke removes it at once", async ({ browser, page }) => {
+        /*
+         * D2 / CACHE, FOR THE NEW CAPABILITIES.
+         *
+         * "The grant committed" and "the person has it" are different claims, and the gap between
+         * them is a cache. So the change is made by the OPERATOR in one context and observed by the
+         * TARGET in their own signed-in session — the same shape d2-access-change-audit uses.
+         *
+         * `mcert_bp_titular` is the subject precisely because it is the role LABELLED Admin that
+         * holds nothing: it starts refused, which makes the grant below non-vacuous, and it must end
+         * refused, which makes the revoke non-vacuous too.
+         *
+         * There is deliberately NO wait anywhere in this test. Every assertion is the target's very
+         * next authoritative request after the operator's save returns. If the cache were not
+         * invalidated on commit, or invalidated before it, this is where it shows.
+         */
+        const ROLE = "mcert_bp_titular";
+        const setKeys = async (keys: string[]) => {
+            const res = await page.request.patch(`/api/admin/rbac/roles/${ROLE}`, {
+                data: { permission_keys: keys },
+                failOnStatusCode: false,
+            });
+            expect(res.status(), await res.text()).toBeLessThan(400);
+        };
+
+        const target = await signIn(browser, PERSONAS.titular.email);
+        expect(target.signedIn, "the target must reach the portal to observe anything").toBe(true);
+        try {
+            // NON-VACUITY: refused before the grant, or the grant proves nothing.
+            expect(await knock(target.request, "builder"), "the titular admin must start refused").toBe(403);
+
+            await setKeys(["portal.access", "business_process.configure"]);
+            const afterGrant = await knock(target.request, "builder");
+            record("d2GrantThenProbe", "builder", afterGrant);
+            expect(
+                afterGrant,
+                `the grant must reach the holder on their next request without a TTL wait; got ${afterGrant}`,
+            ).not.toBe(403);
+
+            // Configure still must not open activation — the split survives a live grant.
+            expect(await knock(target.request, "activate"), "configure alone must not activate").toBe(403);
+
+            await setKeys(["portal.access"]);
+            const afterRevoke = await knock(target.request, "builder");
+            record("d2RevokeThenProbe", "builder", afterRevoke);
+            expect(
+                afterRevoke,
+                `the revoke must deny immediately, not after a TTL; got ${afterRevoke}`,
+            ).toBe(403);
+        } finally {
+            // Leave the fixture as the next run expects to find it, however this ended.
+            await setKeys(["portal.access"]);
+            await target.close();
+        }
+    });
 });

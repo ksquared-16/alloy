@@ -1,0 +1,74 @@
+{
+  "trusted_host_action_id": "tha_1a46bf174a5af6",
+  "query_hash": "35ecfcecd1cf6cc542a17fbb98067ac03eb10514676946849a6bec600a43e6b5",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T21:02:58.399Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_1a46bf174a5af6",
+    "query_hash": "35ecfcecd1cf6cc542a17fbb98067ac03eb10514676946849a6bec600a43e6b5",
+    "authorization_id": "grnt_f86d3f7fb3dc4714",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T21:02:59.334Z",
+    "question_ids": [
+      "org_settings_keys",
+      "mentions_calculation",
+      "calculation_referenced",
+      "nonvacuity"
+    ],
+    "questions": {
+      "org_settings_keys": {
+        "question_id": "org_settings_keys",
+        "row_count": null,
+        "rows": [
+          "ai_policy x1",
+          "config_locked x1",
+          "kpi_targets x1",
+          "oi_org_calc_measurement_history x1",
+          "oi_org_calc_measurements x1",
+          "organization_populations x1",
+          "organization_weightings x1",
+          "timezone x1",
+          "tour_comms x1",
+          "vendor_payout_policy x1"
+        ]
+      },
+      "mentions_calculation": {
+        "question_id": "mentions_calculation",
+        "row_count": null,
+        "rows": [
+          "org_settings_rows=2 mentioning_calculation_id=1 mentioning_orgcalc=0"
+        ]
+      },
+      "calculation_referenced": {
+        "question_id": "calculation_referenced",
+        "row_count": null,
+        "rows": [
+          "orgcalc.capacity ~ referenced_in_org_settings ~ false ~ false",
+          "orgcalc.effective_physical_licensed_seats ~ referenced_in_org_settings ~ false ~ false",
+          "orgcalc.fte_room_utilization_preview ~ referenced_in_org_settings ~ false ~ false",
+          "orgcalc.qa_capacity_12_53_49 ~ referenced_in_org_settings ~ true ~ true",
+          "orgcalc.qa_capacity_18_27_14 ~ referenced_in_org_settings ~ true ~ true",
+          "orgcalc.qa_proving_1785174725436 ~ referenced_in_org_settings ~ false ~ false",
+          "orgcalc.qa_proving_1785174801275 ~ referenced_in_org_settings ~ false ~ false",
+          "orgcalc.qa_proving_1785174871173 ~ referenced_in_org_settings ~ false ~ false",
+          "orgcalc.room_utilization ~ referenced_in_org_settings ~ true ~ true"
+        ]
+      },
+      "nonvacuity": {
+        "question_id": "nonvacuity",
+        "row_count": null,
+        "rows": [
+          "org_settings_rows=2 calculations=9 orgs=3"
+        ]
+      }
+    },
+    "row_count": 21
+  }
+}

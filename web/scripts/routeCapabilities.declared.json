@@ -2,8 +2,8 @@
   "reviewed": "2026-09-10",
   "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
   "ratchet": {
-    "max_pending": 593,
-    "$comment": "Lowered 693 -> 679 by the Access & Identity V2 Financials slice: twelve financial record-data handlers converted to fin.read and two GL-account mutations to fin.write, plus two entries overturned from a reasoned `none` (see their `supersedes`). Lowered 679 -> 656 by the Forms authority cleanup: 23 handlers that were already enforcing authorization moved from pending to declared. The enforcement did not become stricter - it stopped being invisible to this table. Lowered 656 -> 655 by Attendance Productization V1 Thread 8: declaring the new pickup-authority handler against `attendance.read` made the burndown able to see that `app/api/admin/childcare-attendance/route.ts` GET already ran the same `assertAttendanceReadAllowed` gate while still marked pending, so it was drained rather than left claiming less than it enforces. Lowered again to 631 by the POS + Processing authority cleanup, which drained 24 net from the same 656 baseline: 25 handlers declared against forms.author and the four new processing.* keys, less one returned to pending - `processing/cases/[caseId]/identity/review` GET, which flows through the shared operator context but never required the old role gate, so declaring a capability there would have claimed an enforcement that does not exist and adding one would have tightened an open read. Attendance's reduction and this one are independent and both count: 656 - 1 - 24 = 631. The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack. Lowered 602 -> 593 by Department Product Retirement + Business Process Authority Convergence V1: eight handlers moved pending -> declared under business_process.configure / .activate, and the generic department DELETE left the table entirely because the route was retired — it had no mounted caller and could not have worked on a real operational domain, whose department_id is NOT NULL on four live tables."
+    "max_pending": 583,
+    "$comment": "Lowered 693 -> 679 by the Access & Identity V2 Financials slice: twelve financial record-data handlers converted to fin.read and two GL-account mutations to fin.write, plus two entries overturned from a reasoned `none` (see their `supersedes`). Lowered 679 -> 656 by the Forms authority cleanup: 23 handlers that were already enforcing authorization moved from pending to declared. The enforcement did not become stricter - it stopped being invisible to this table. Lowered 656 -> 655 by Attendance Productization V1 Thread 8: declaring the new pickup-authority handler against `attendance.read` made the burndown able to see that `app/api/admin/childcare-attendance/route.ts` GET already ran the same `assertAttendanceReadAllowed` gate while still marked pending, so it was drained rather than left claiming less than it enforces. Lowered again to 631 by the POS + Processing authority cleanup, which drained 24 net from the same 656 baseline: 25 handlers declared against forms.author and the four new processing.* keys, less one returned to pending - `processing/cases/[caseId]/identity/review` GET, which flows through the shared operator context but never required the old role gate, so declaring a capability there would have claimed an enforcement that does not exist and adding one would have tightened an open read. Attendance's reduction and this one are independent and both count: 656 - 1 - 24 = 631. The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack. Lowered 602 -> 593 by Department Product Retirement + Business Process Authority Convergence V1: eight handlers moved pending -> declared under business_process.configure / .activate, and the generic department DELETE left the table entirely because the route was retired — it had no mounted caller and could not have worked on a real operational domain, whose department_id is NOT NULL on four live tables. Lowered 593 -> 583 by Operational Intelligence Authority Convergence V1: ten OI mutation handlers moved pending -> declared under reports.write, activating a key the catalog has carried since the permission grid and that was enforced nowhere. No folder capability was created; the ops default package was corrected in the same slice so activation could not widen ops."
   },
   "inherited": {
     "$comment": "Handlers that entered web/app/api from OTHER programs while this branch was frozen, and are therefore not part of the Access backlog `ratchet.max_pending` bounds. The effective assertion is `pending - inherited <= max_pending`, so the program-owned backlog stays ratcheted at its committed ceiling and the ceiling is NOT raised. Every entry must still exist, still be exported, and still be `pending`: a deleted route, a removed method, or a handler that has since been classified `declared` or `none` FAILS until it is removed from this list. The list may only shrink. Nothing here asserts anything about a handler's authorization - these are W-15 backlog items awaiting OD-7 exactly like every other `pending` entry, and none of them is exempt from it. Shape follows the sibling gate scripts/checkServiceClientPrincipal.mjs, whose `baseline` list is the same idea for the same backlog. 2026-08-19, OD-2 reconciliation: merging current origin/staging brought five handlers this table had never seen. Three are participant token routes and took the settled `none` classification of their fourteen siblings rather than being seeded pending. The two on app/api/admin/communications/ingress-routes are Communications' and are enumerated here — gated by requireAdminOrgContextLight, an admission helper, consulting no catalog capability, exactly like the seventeen before them. The ceiling was NOT raised to absorb them. 2026-08-20, post-merge staging repair: the Communications lane merged app/api/communications/unsubscribe between this census's last run and the PR #475 merge, so staging's build failed on an undeclared route. Enumerated here rather than classified `none`: it is gated by an HMAC-signed recipient token, which is plausibly the same 'the credential is in the request' doctrine as the public-form family, but no sibling carries a settled review for signed unsubscribe tokens and this census does not assert another program's authorization model on inference. The ceiling was NOT raised.",
@@ -2444,7 +2444,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "KPI target configuration, called by the OI workspace and the analytics KPI panel. Same product, same authority - the metrics folder is not a second domain."
       }
     },
     "app/api/admin/metrics/oi-config/route.ts": {
@@ -2452,7 +2455,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "OI configuration sparse merge. INTERNAL/API: no caller anywhere, and org_settings.metadata.oi_config is absent on every deployed tenant. Kept and capability-gated rather than retired, because never-exercised is not proof of obsolete and deleting a route on inference is not this slice's mandate. Recorded as OI_CONFIG_NEVER_EXERCISED."
       }
     },
     "app/api/admin/metrics/oi-org-calc-measurements/[id]/observe/route.ts": {
@@ -2465,7 +2471,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Edit an OI measurement."
       }
     },
     "app/api/admin/metrics/oi-org-calc-measurements/route.ts": {
@@ -2473,7 +2482,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Create an OI measurement - the binding that makes a calculation reach an operator answer through answerRoomUtilization, answerFutureRoomCapacity and answerMeasureQuestion."
       }
     },
     "app/api/admin/metrics/resolve/route.ts": {
@@ -2735,12 +2747,18 @@
     },
     "app/api/admin/organization-calculations/[id]/archive/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Retire a calculation. Reversible - restore is its pair - so it carries no separate destructive key."
       }
     },
     "app/api/admin/organization-calculations/[id]/bind-runtime/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Mark which version is in use. Canonical, not historical: it is wired to a rendered control in the Calculation Library. Deployed consumer_bindings reading zero means unexercised, not obsolete."
       }
     },
     "app/api/admin/organization-calculations/[id]/evaluate/route.ts": {
@@ -2750,12 +2768,18 @@
     },
     "app/api/admin/organization-calculations/[id]/publish/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Freeze an immutable version. Deliberately NOT split under a narrower lifecycle key: the OI builders create and publish inside a single operator action, and the Calculation Library exposes publish, bind, archive and restore as peer controls on one panel, so OI treats them as one authority."
       }
     },
     "app/api/admin/organization-calculations/[id]/restore/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Un-retire a calculation, the reverse of archive."
       }
     },
     "app/api/admin/organization-calculations/[id]/route.ts": {
@@ -2763,7 +2787,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Edit a draft calculation's metadata. Ordinary OI authoring."
       }
     },
     "app/api/admin/organization-calculations/catalog/route.ts": {
@@ -2776,7 +2803,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Create an Operational Intelligence calculation. The Calculation Library is a tab inside OI, not a standalone product - /settings/calculations redirects there - so the authority is OI's, under the reports.* pair the catalog already names ANALYTICS_READ_PERMISSION / ANALYTICS_MANAGE_PERMISSION. No organization_calculations.* family was created: a folder is not a product."
       }
     },
     "app/api/admin/organization-calculations/runtime/route.ts": {

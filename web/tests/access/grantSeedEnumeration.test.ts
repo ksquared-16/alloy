@@ -62,7 +62,7 @@ const M6 = "20260807170000_w12_seed_default_rbac_enumerated_grants.sql";
  * capability a NEW organization never receives — the cliff `20260910183000` was written to end.
  * Forms moved it here.
  */
-const LIVE_SEED = "20260915091000_business_process_authority_default_seed.sql";
+const LIVE_SEED = "20260915120000_operational_intelligence_authority_ops_default.sql";
 
 /**
  * The migration that owns the COMPLETENESS contract — the admin-is-the-whole-catalog rule, the nine
@@ -154,6 +154,18 @@ const OPS_WITHHELD = [
      */
     "business_process.configure",
     "business_process.activate",
+    /*
+     * Operational Intelligence authoring. A CORRECTION rather than a withholding of something ops
+     * never had on paper: reports.write WAS seeded to ops and enforced nowhere, so the grant
+     * conferred nothing, and all ten OI mutation routes answered ops 403 on the role literal.
+     * Making the key real without removing it would have handed ops ten mutations on the strength
+     * of a grant that had never authorized anything - the same shape, and the same answer, as
+     * scheduling.write and ops.jobs.write above.
+     *
+     * ops KEEPS reports.read, and canReadAnalytics accepts either key, so Operational Intelligence
+     * stays readable. Only authoring narrows.
+     */
+    "reports.write",
     /*
      * Schedule and job management, and financial posting. Not a new judgement about what ops should
      * be: before this program touched anything, all fourteen of those routes answered ops with 403
