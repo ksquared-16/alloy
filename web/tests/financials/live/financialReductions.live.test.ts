@@ -19,6 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { applyFinancialReductions } from "@/lib/financials/reductions/applyFinancialReductions";
 import { applyManualReduction, reverseManualReduction } from "@/lib/financials/reductions/manualReductionService";
 import { readAccountReductions } from "@/lib/financials/reductions/readAccountReductions";
+import { resolveAllocatableNet } from "@/lib/financials/responsibility/resolveAllocatableNet";
 import { generateTuitionCharges } from "@/lib/financials/tuitionGeneration/generateTuitionCharges";
 import { postChildcareCharge } from "@/lib/financials/childcareChargeService";
 import { resolveHouseholdEligibility } from "@/lib/financials/reductions/resolveReductionEligibility";
@@ -1004,4 +1005,112 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
         expect(rows.every((r) => r.agreementId !== null), "every row names the enrolment it is against")
             .toBe(true);
     }, 120_000);
+
+    /**
+     * A CREDIT THAT NAMES NOTHING REDUCES NOTHING.
+     *
+     * `resolveAllocatableNet` nets a charge as its amount plus the reductions whose
+     * `source_charge_id` names it. A manual reduction written without one still appears as a credit
+     * row — so the card's signed reconciliation nets it and the family looks like they owe less —
+     * while the obligation it was meant to reduce is untouched, and every authority that asks "what
+     * is still collectible on this charge" answers the full amount.
+     *
+     * Two readings of the same household, and only one of them can be right. This pins the
+     * difference so the surface cannot quietly go back to writing unattached credits.
+     */
+    it("only reduces an obligation when the reduction names the charge it reduces", async () => {
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const charges = await grossCharges();
+        const target = charges[0]!;
+        const grossCents = Number(target.amount_cents);
+
+        const before = await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id });
+        expect(before.netCents, "the charge starts at its full amount").toBe(grossCents);
+
+        // Unattached: the shape the manual panel produced.
+        await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -5_000,
+            reason: "Goodwill that names no charge",
+            effectiveDate: PERIOD_START,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-unattached",
+        });
+        const afterFloating = await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id });
+        expect(
+            afterFloating.netCents,
+            "a credit that names no charge leaves every obligation exactly as it was",
+        ).toBe(grossCents);
+
+        // Attached: the same decision, against the charge it is about.
+        await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -5_000,
+            reason: "Goodwill against the tuition it concerns",
+            effectiveDate: PERIOD_START,
+            sourceChargeId: target.id,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-attached",
+        });
+        const afterAttached = await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id });
+        expect(
+            afterAttached.netCents,
+            "naming the charge is what makes the credit reduce it",
+        ).toBe(grossCents - 5_000);
+    }, 300_000);
+
+    /**
+     * AND REVERSING AN ATTACHED CREDIT MUST GIVE THE OBLIGATION BACK.
+     *
+     * `reverseManualReduction` appends the opposite with `sourceChargeId` set to the ORIGINAL
+     * REDUCTION'S OWN charge — not to the obligation the reduction was against. If that is what
+     * reaches `financial_reduction_applications.source_charge_id`, the reversal names the credit
+     * rather than the charge, `resolveAllocatableNet` never sees it, and the obligation stays
+     * reduced after the operator has undone the reduction.
+     */
+    it("gives the obligation back when an attached credit is reversed", async () => {
+        await clearReductions();
+        await clearTuition();
+        await generateGross();
+        const target = (await grossCharges())[0]!;
+        const grossCents = Number(target.amount_cents);
+
+        const credit = await applyManualReduction(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: kids[0]!.agreementId,
+            customerId,
+            customerMemberId: kids[0]!.memberId,
+            chargeCategory: "credit",
+            amountCents: -5_000,
+            reason: "Goodwill against this tuition",
+            effectiveDate: PERIOD_START,
+            sourceChargeId: target.id,
+            actorUserId: ACTOR,
+            idempotencyKey: "fred:manual:cert-attached-reverse",
+        });
+        expect((await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id })).netCents)
+            .toBe(grossCents - 5_000);
+
+        await reverseManualReduction(supabase, {
+            orgId: ORG,
+            applicationId: credit.applicationId,
+            reason: "Reversing the goodwill",
+            actorUserId: ACTOR,
+        });
+
+        expect(
+            (await resolveAllocatableNet(supabase, { orgId: ORG, chargeId: target.id })).netCents,
+            "undoing the reduction must restore the obligation it reduced",
+        ).toBe(grossCents);
+    }, 300_000);
 });

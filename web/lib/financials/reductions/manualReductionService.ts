@@ -190,7 +190,19 @@ export async function reverseManualReduction(
         reason,
         effectiveDate: today,
         periodKey: original.period_key,
-        sourceChargeId: original.charge_id,
+        /*
+         * THE OBLIGATION THE ORIGINAL REDUCED — not the credit's own charge.
+         *
+         * `source_charge_id` is how a reduction attaches to the thing it reduces:
+         * `resolveAllocatableNet` nets a charge as its amount plus the reductions naming it. Pointing
+         * the reversal at the credit's own charge attached it to nothing anybody asks about, so the
+         * obligation stayed reduced after the operator had undone the reduction — the money came
+         * back on the ledger's signed total and never came back on what the family actually owed.
+         *
+         * Lineage is not what this field is for, and never was: `reverses_id` and `reversed_by_id`
+         * already record which reversal undoes which reduction.
+         */
+        sourceChargeId: original.source_charge_id,
         actorUserId: input.actorUserId,
         idempotencyKey: `fred:reverse:${original.id}`,
     });

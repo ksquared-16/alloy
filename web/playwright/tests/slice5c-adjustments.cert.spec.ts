@@ -81,6 +81,24 @@ const card = (page: Page) => page.locator('[data-financials-overlay="detail"]');
 /** Scoped: the inert background copy of the card carries the same testids. */
 const control = (page: Page, id: string) => card(page).getByTestId(id);
 
+/**
+ * A reduction has to name what it reduces.
+ *
+ * `resolveAllocatableNet` nets a charge as its amount plus the reductions naming it, so a credit
+ * written without a `source_charge_id` moves the ledger's signed total and leaves the obligation
+ * fully collectible — the contradiction the representative-household oracle surfaced. The panel now
+ * asks, so the certification has to answer.
+ */
+async function chooseObligation(page: Page) {
+    const select = control(page, "adjustment-source-charge");
+    await expect(select, "the panel asks which obligation this is about").toBeVisible();
+    await expect
+        .poll(() => select.locator("option").count(), { timeout: 30_000 })
+        .toBeGreaterThan(1);
+    const value = await select.locator("option").nth(1).getAttribute("value");
+    await select.selectOption(value!);
+}
+
 test.describe.configure({ mode: "serial" });
 
 /*
@@ -122,6 +140,7 @@ test.describe("Slice 5C — manual adjustments, mounted", () => {
             .toHaveCount(0);
 
         const confirm = control(page, "adjustment-confirm");
+        await chooseObligation(page);
         await control(page, "adjustment-amount").fill(AMOUNT);
         await control(page, "adjustment-reason").fill("Certification: goodwill for a closure day");
         await expect(confirm, "Confirm waits for the action's own preview").toBeDisabled();
@@ -153,6 +172,7 @@ test.describe("Slice 5C — manual adjustments, mounted", () => {
         await openCard(page);
         await card(page).getByText("Add adjustment").click();
         await expect(control(page, "adjustment-panel")).toBeVisible();
+        await chooseObligation(page);
         await control(page, "adjustment-amount").fill(AMOUNT);
         await control(page, "adjustment-reason").fill("Certification: goodwill for a closure day");
         await control(page, "adjustment-preview-button").click();
