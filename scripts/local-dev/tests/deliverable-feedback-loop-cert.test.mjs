@@ -11,19 +11,17 @@
  */
 import assert from "node:assert/strict";
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
   writeFileSync,
   readFileSync,
-  existsSync,
-  cpSync,
   rmSync,
 } from "node:fs";
 import { join } from "node:path";
 import os from "node:os";
 import { createHash, randomBytes } from "node:crypto";
 
-const LIVE_ROOT = join(os.homedir(), ".local", "state", "alloy-dev");
 const MID = "msn_2d054741a54698fa4c";
 const AID = "asg_d203f547736c16";
 const OTHER_MID = "msn_feedback_loop_other_" + randomBytes(4).toString("hex");
@@ -33,19 +31,20 @@ process.env.ALLOY_RUNTIME_ROOT = root;
 process.env.VACILANDO_API_TOKEN = "test-token-dfl-cert-" + randomBytes(4).toString("hex");
 process.env.VACILANDO_REQUIRE_API_AUTH = "1";
 
-function seedFromLive() {
-  const pairs = [
-    ["vacilando/assignments", `${MID}.json`],
-    ["vacilando/evidence", `${MID}.json`],
-    ["vacilando/deliverable-reviews", `${MID}.json`],
-  ];
-  for (const [dir, file] of pairs) {
-    const src = join(LIVE_ROOT, dir, file);
-    const destDir = join(root, dir);
-    mkdirSync(destDir, { recursive: true });
-    if (existsSync(src)) {
-      cpSync(src, join(destDir, file));
-    }
+/*
+ * SEEDED, NOT COPIED FROM LIVE.
+ *
+ * This used to copy the assignment, evidence and review stores out of the
+ * operator's real gateway root for a hard-coded mission. Two things were wrong
+ * with that and one of them is worse than it looks: the records aged out of a
+ * rolling store, AND the copy was guarded by `if (existsSync(src))`, so once
+ * they were gone the seeding step silently did nothing and the test carried on
+ * with an empty store until it failed somewhere unrelated-looking. A setup step
+ * that can no-op is how a fixture problem arrives disguised as a product bug.
+ */
+function seedFixture() {
+  for (const dir of ["vacilando/assignments", "vacilando/evidence", "vacilando/deliverable-reviews"]) {
+    mkdirSync(join(root, dir), { recursive: true });
   }
   // Empty message / timeline / idempotency for clean conversation proof
   mkdirSync(join(root, "vacilando", "director-messages"), { recursive: true });
@@ -55,7 +54,11 @@ function seedFromLive() {
   writeFileSync(join(root, "vacilando", "director-messages", `${OTHER_MID}.jsonl`), "");
 }
 
-seedFromLive();
+seedFixture();
+
+const { seedW4Assignment, seedW4Evidence } = await import("./helpers/deliverable-review-fixture.mjs");
+seedW4Assignment(root, { missionId: MID, assignmentId: AID });
+await seedW4Evidence({ missionId: MID, assignmentId: AID });
 
 const {
   createDeliverableReview,
