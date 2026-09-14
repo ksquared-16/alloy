@@ -1,24 +1,25 @@
 {
-  "trusted_host_action_id": "tha_829c0da837bc31",
-  "query_hash": "2916ee313e91aae71d9562a08af4e1ed22b1547d62e6b6dabedad3d0f030492a",
+  "trusted_host_action_id": "tha_62ae90bdcf86f4",
+  "query_hash": "c3a3077f053581df4f1fcd960e200d3c4d46a07a620bc48bb04a4e61ffcd3f6b",
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-09-14T20:05:27.060Z",
+    "executed_at": "2026-09-14T20:17:57.345Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_829c0da837bc31",
-    "query_hash": "2916ee313e91aae71d9562a08af4e1ed22b1547d62e6b6dabedad3d0f030492a",
-    "authorization_id": "grnt_99d610bbbcf549c4",
+    "trusted_host_action_id": "tha_62ae90bdcf86f4",
+    "query_hash": "c3a3077f053581df4f1fcd960e200d3c4d46a07a620bc48bb04a4e61ffcd3f6b",
+    "authorization_id": "grnt_b8df60cfacdd4561",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
   },
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-14T20:05:28.021Z",
+    "census_run_at": "2026-09-14T20:17:58.230Z",
     "question_ids": [
       "m183000",
       "m184000",
+      "ledger_version",
       "nonvacuity",
       "ledger_head",
       "ledger_total"
@@ -28,14 +29,28 @@
         "question_id": "m183000",
         "row_count": null,
         "rows": [
-          "catalog=3 admin_roles_short=0 ops_sensitive=0 director_sensitive=0"
+          "sensitive keys catalogued ~ expected 3 ~ got 3 ~ true",
+          "admin roles holding all six ~ expected 0 short ~ got 0 ~ true",
+          "ops holds none of the sensitive three ~ expected 0 ~ got 0 ~ true",
+          "director roles hold none ~ expected 0 ~ got 0 ~ true"
         ]
       },
       "m184000": {
         "question_id": "m184000",
         "row_count": null,
         "rows": [
-          "fn_installed=true sentinels=true admin_has_option_sets_delete=true admin_has_layouts_lifecycle=true admin_has_fields_delete=true ops_has_any_sensitive=false ops_keeps_manage=true"
+          "seed_default_rbac installed with both sentinel regions ~ expected true ~ got true ~ true",
+          "admin enumeration carries all three sensitive keys ~ expected true ~ got true ~ true",
+          "ops enumeration carries none of them ~ expected true ~ got true ~ true",
+          "ops keeps the three manage keys it already exercised ~ expected true ~ got true ~ true"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20260914183000 ~ registered ~ absent ~ false",
+          "20260914184000 ~ registered ~ absent ~ false"
         ]
       },
       "nonvacuity": {
@@ -60,6 +75,6 @@
         ]
       }
     },
-    "row_count": 5
+    "row_count": 13
   }
 }
