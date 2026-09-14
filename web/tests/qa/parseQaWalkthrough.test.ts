@@ -27,18 +27,19 @@ const DOC = join(
 describe("the real document", () => {
     const blocks = parseQaWalkthrough(readFileSync(DOC, "utf8"));
 
-    it("keeps all seven parts, in order", () => {
+    it("keeps all eight parts, in order", () => {
         const parts = blocks
             .filter((b): b is Extract<typeof b, { kind: "heading" }> => b.kind === "heading" && /^PART /.test(b.text))
             .map((b) => b.slug);
-        expect(parts).toEqual(["part-a", "part-b", "part-c", "part-d", "part-e", "part-f", "part-g"]);
+        // Part 0 is the admin acceptance pass and deliberately precedes Part A.
+        expect(parts).toEqual(["part-0", "part-a", "part-b", "part-c", "part-d", "part-e", "part-f", "part-g"]);
     });
 
     it("finds the numbered steps as steps, not prose", () => {
         const steps = blocks.filter((b) => b.kind === "step");
         // The script is ~59 steps; assert it is clearly a script rather than a page of paragraphs.
         expect(steps.length).toBeGreaterThan(50);
-        expect(steps.every((s) => s.kind === "step" && /^[A-G]\d+$/.test(s.label))).toBe(true);
+        expect(steps.every((s) => s.kind === "step" && /^(?:[A-G]\d+|0\.\d+)$/.test(s.label))).toBe(true);
     });
 
     it("every step is DO or EXPECT", () => {

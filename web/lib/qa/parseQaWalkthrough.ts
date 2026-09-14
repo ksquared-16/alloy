@@ -37,7 +37,8 @@ export type QaBlock =
 
 /** Heading → anchor id. "PART D — Open the QA child" becomes "part-d". */
 export function slugForHeading(text: string): string {
-    const part = text.match(/^PART\s+([A-G])\b/i);
+    // `0` joins A–G for the admin acceptance pass, which deliberately comes before Part A.
+    const part = text.match(/^PART\s+([0A-G])\b/i);
     if (part) return `part-${part[1]!.toLowerCase()}`;
     return text
         .toLowerCase()
@@ -151,7 +152,8 @@ export function parseQaWalkthrough(markdown: string): QaBlock[] {
         }
 
         // A numbered step: "**A1. DO** — ..." or "**E3. EXPECT** — ...".
-        const step = trimmed.match(/^\*\*([A-G]\d+)\.\s*(DO|EXPECT)\*\*\s*(?:—|-)?\s*(.*)$/);
+        // "A1" through "G9", plus Part 0's "0.1" form.
+        const step = trimmed.match(/^\*\*((?:[A-G]\d+|0\.\d+))\.\s*(DO|EXPECT)\*\*\s*(?:—|-)?\s*(.*)$/);
         if (step) {
             flushParagraph(para);
             const body: string[] = [step[3]!];
@@ -160,7 +162,7 @@ export function parseQaWalkthrough(markdown: string): QaBlock[] {
             while (i < lines.length) {
                 const n = lines[i]!.trim();
                 if (!n || n.startsWith(">") || n.startsWith("|") || /^(#{1,3})\s/.test(n) || /^---+$/.test(n)) break;
-                if (/^\*\*([A-G]\d+)\.\s*(DO|EXPECT)\*\*/.test(n) || /^\*\*EXPECT\*\*/.test(n)) break;
+                if (/^\*\*(?:[A-G]\d+|0\.\d+)\.\s*(?:DO|EXPECT)\*\*/.test(n) || /^\*\*EXPECT\*\*/.test(n)) break;
                 body.push(n);
                 i += 1;
             }
@@ -182,7 +184,7 @@ export function parseQaWalkthrough(markdown: string): QaBlock[] {
             while (i < lines.length) {
                 const n = lines[i]!.trim();
                 if (!n || n.startsWith(">") || n.startsWith("|") || /^(#{1,3})\s/.test(n) || /^---+$/.test(n)) break;
-                if (/^\*\*([A-G]\d+)\./.test(n) || /^\*\*EXPECT\*\*/.test(n)) break;
+                if (/^\*\*(?:[A-G]\d+|0\.\d+)\./.test(n) || /^\*\*EXPECT\*\*/.test(n)) break;
                 body.push(n);
                 i += 1;
             }
