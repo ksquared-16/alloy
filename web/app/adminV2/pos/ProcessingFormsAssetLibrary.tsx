@@ -266,6 +266,20 @@ export default function ProcessingFormsAssetLibrary({
                         </button>
                     </div>
                 ) : (
+                    <>
+                    {/*
+                     * WHY THE LIST IS SHORTER THAN THE PACKET.
+                     *
+                     * "Why don't I see the other forms in Studio → Forms?" is the right question to
+                     * ask of a product that called all three packet steps forms. Two of them are not
+                     * Forms — a document to read and a document to send in — and the Forms list is
+                     * correct to omit them. Saying so here costs one sentence and removes the whole
+                     * suspicion that something is missing.
+                     */}
+                    <p className="mb-3 text-[12px] leading-snug text-alloy-midnight/55" data-testid="forms-scope-note">
+                        Forms collect information from families. Documents a family reads and agrees to, or sends in,
+                        are obligations configured inside a packet — they are not Forms and do not appear here.
+                    </p>
                     <AssetSection
                         title={activeFolderLabel}
                         forms={visibleForms}
@@ -280,6 +294,7 @@ export default function ProcessingFormsAssetLibrary({
                         onRequestArchive={setConfirmArchive}
                         onRequestDelete={setConfirmDelete}
                     />
+                    </>
                 )}
                 </div>
                 <ProcessingFolderDetailPanel

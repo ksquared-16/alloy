@@ -37,6 +37,7 @@ import { parseFidelityPdfMapping } from "@/lib/forms/pdf/fidelityMappingContract
 import {
     describeStep,
     familyExperienceLines,
+    packetContentSummary,
     packetIsReady,
     packetReadinessRows,
     summarizeFormQuestions,
@@ -191,8 +192,25 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
                 stepInputs[i].kind === "document_acknowledgment"
                     ? readPacketStepConfig(rows[i]?.metadata).acknowledgmentDocumentId || null
                     : null,
+            /*
+             * The stored configuration itself, so the Configure surface edits what IS rather than
+             * re-deriving it from the sentences above. Same reader the authoring path uses.
+             */
+            packet_item_id: rows[i]?.id ?? null,
+            participant_instructions: readPacketStepConfig(rows[i]?.metadata).instructions || "",
+            document_type_key: readPacketStepConfig(rows[i]?.metadata).documentTypeKey || null,
+            requires_signature: readPacketStepConfig(rows[i]?.metadata).requiresSignature,
+            acknowledgment_document_title:
+                stepInputs[i].kind === "document_acknowledgment"
+                    ? (stepInputs[i] as { documentTitle?: string | null }).documentTitle ?? null
+                    : null,
+            form_name:
+                stepInputs[i].kind === "form" && rows[i]?.form_definition_id
+                    ? formNameById.get(rows[i]!.form_definition_id!) || null
+                    : null,
         })),
         familyExperience: familyExperienceLines(steps),
+        contentSummary: packetContentSummary(steps),
         readiness: packetReadinessRows(steps),
         ready: packetIsReady(steps),
         usage,

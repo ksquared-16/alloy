@@ -96,6 +96,8 @@ type Props = {
      * retired standalone Forms surface.
      */
     onOpenWorkQueue?: () => void;
+    /** Open the configuration surface for one obligation. */
+    onConfigureStep?: (index: number) => void;
     /** Derived obligation facts for this packet; null while loading. */
     experience?: (PacketExperienceVM & { steps: PacketStepExperienceRow[] }) | null;
 };
@@ -133,6 +135,7 @@ export function PacketBuilderWorkspaceLayout({
     onToggleLink,
     onOpenWorkQueue,
     experience,
+    onConfigureStep,
 }: Props) {
     const statusRow = {
         is_active: defActive,
@@ -243,6 +246,7 @@ export function PacketBuilderWorkspaceLayout({
                             busy={busy}
                             savedStepCount={savedItems.length}
                             experience={experience?.steps}
+                            onConfigureStep={onConfigureStep}
                             onStepsChange={onStepsChange}
                             onAddStep={onAddStep}
                             onAddDocumentStep={onAddDocumentStep}

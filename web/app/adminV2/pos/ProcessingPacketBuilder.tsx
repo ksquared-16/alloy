@@ -11,6 +11,7 @@ import { readPacketStepConfig } from "@/lib/forms/packets/packetStepKind";
 import { trimLeadingEmptyStepRows } from "@/lib/admin/forms/packetStepRecentFormPlacement";
 import type { PacketExperienceVM } from "@/components/forms/workspace/PacketExperienceOverview";
 import type { StepExperienceCard } from "@/components/forms/workspace/PacketStepCompositionEditor";
+import { PacketStepConfigureModal } from "@/components/forms/workspace/PacketStepConfigureModal";
 import { countSessionsByPacketDefinition } from "@/lib/forms/packets/packetOrchestrationPresentation";
 import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
@@ -67,6 +68,8 @@ export default function ProcessingPacketBuilder({
      * Null until it arrives — the composition editor renders without it rather than blocking.
      */
     const [experience, setExperience] = useState<PacketExperiencePayload | null>(null);
+    /** Which obligation's configuration is open, by step index. */
+    const [configureIndex, setConfigureIndex] = useState<number | null>(null);
 
     const hasCompletedInitialLoad = useRef(false);
 
@@ -439,6 +442,7 @@ export default function ProcessingPacketBuilder({
                             stepCount={items.length}
                             sessionCount={sessionCount}
                             experience={experience}
+                            onConfigureStep={(idx) => setConfigureIndex(idx)}
                             allStepsPublished={allStepsPublished}
                             savedItems={items}
                             steps={steps}
@@ -469,6 +473,36 @@ export default function ProcessingPacketBuilder({
                             onToggleLink={(link, next) => void toggleLink(link, next)}
                             onOpenWorkQueue={() =>
                                 dispatchAdminV2OpenProcessingModal({ mode: "work", workView: "work" })
+                            }
+                        />
+                        <PacketStepConfigureModal
+                            open={configureIndex !== null}
+                            packetDefId={packetDefId}
+                            step={(() => {
+                                const card = configureIndex === null ? null : experience?.steps?.[configureIndex];
+                                if (!card?.packet_item_id) return null;
+                                return {
+                                    packet_item_id: card.packet_item_id,
+                                    kind: card.kind,
+                                    label: card.title,
+                                    participant_instructions: card.participant_instructions ?? "",
+                                    document_type_key: card.document_type_key ?? null,
+                                    acknowledgment_document_id: card.acknowledgment_document_id ?? null,
+                                    acknowledgment_document_title: card.acknowledgment_document_title ?? null,
+                                    requires_signature: card.requires_signature ?? false,
+                                    form_definition_id: card.form_definition_id ?? null,
+                                    form_name: card.form_name ?? null,
+                                };
+                            })()}
+                            onClose={() => setConfigureIndex(null)}
+                            onSaved={() => void loadAll()}
+                            onManageForm={(formId, formName) =>
+                                dispatchAdminV2OpenProcessingModal({
+                                    mode: "studio",
+                                    studioTab: "forms",
+                                    formId,
+                                    formName,
+                                })
                             }
                         />
                         {/*

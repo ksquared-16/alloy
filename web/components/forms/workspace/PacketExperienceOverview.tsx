@@ -13,6 +13,8 @@ export type PacketUsageVM = {
 
 export type PacketExperienceVM = {
     familyExperience: string[];
+    /** "1 Form and 2 document obligations" — what the packet CONTAINS. */
+    contentSummary?: string;
     readiness: { ok: boolean; label: string }[];
     ready: boolean;
     usage: PacketUsageVM[];
@@ -35,8 +37,9 @@ export function PacketExperienceOverview({ vm }: { vm: PacketExperienceVM | null
                 <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
                     Family experience
                 </h3>
-                <p className={clsx("mt-1", opMutedMeta)}>
-                    {vm.familyExperience.length} step{vm.familyExperience.length === 1 ? "" : "s"}, in this order.
+                <p className={clsx("mt-1", opMutedMeta)} data-testid="packet-content-summary">
+                    {vm.familyExperience.length} step{vm.familyExperience.length === 1 ? "" : "s"}, in this order
+                    {vm.contentSummary ? ` — ${vm.contentSummary}` : ""}.
                 </p>
                 <ol className="mt-2 space-y-1.5" data-testid="packet-family-experience">
                     {vm.familyExperience.map((line, i) => (

@@ -8,6 +8,7 @@ import { applyRecentFormToSteps } from "@/lib/admin/forms/packetStepRecentFormPl
 import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
 import { packetStepReadinessLabel } from "@/lib/forms/packets/packetOrchestrationPresentation";
 import { PACKET_STEP_KIND_LABELS, type PacketStepKind } from "@/lib/forms/packets/packetStepKind";
+import { STEP_TYPE_LABEL } from "@/components/forms/workspace/PacketStepConfigureModal";
 import { CLASSIFICATION_KEY_LABELS } from "@/lib/pos/processingCase/classification/operatorCorrection";
 import { PacketAddStepChooser, type NewDocumentStep } from "@/components/forms/workspace/PacketAddStepChooser";
 import { opGroupedRowInner, opGroupedSurface, opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
@@ -15,6 +16,9 @@ import { opGroupedRowInner, opGroupedSurface, opMetadata, opMutedMeta } from "@/
 /** What one obligation actually does, derived server-side from the configuration. */
 export type StepExperienceCard = {
     sequence: number;
+    /** The obligation's own name, as the administrator titled it. */
+    title: string;
+    kind: "form" | "document_upload" | "document_acknowledgment";
     obligation: string;
     behavior: string;
     facts: string[];
@@ -22,6 +26,12 @@ export type StepExperienceCard = {
     readyDetail: string;
     form_definition_id?: string | null;
     acknowledgment_document_id?: string | null;
+    packet_item_id?: string | null;
+    participant_instructions?: string;
+    document_type_key?: string | null;
+    requires_signature?: boolean;
+    acknowledgment_document_title?: string | null;
+    form_name?: string | null;
 };
 
 export type StepDraft = {
@@ -51,6 +61,8 @@ type Props = {
     savedStepCount: number;
     /** Derived obligation facts, by sequence. Absent while loading — the row still renders. */
     experience?: readonly StepExperienceCard[];
+    /** Open the configuration surface for one obligation. */
+    onConfigureStep?: (index: number) => void;
     onStepsChange: (updater: (rows: StepDraft[]) => StepDraft[]) => void;
     onAddStep: () => void;
     /** Document steps persist on add — their executor is generated server-side. */
@@ -68,6 +80,7 @@ export function PacketStepCompositionEditor({
     busy,
     savedStepCount,
     experience,
+    onConfigureStep,
     onStepsChange,
     onAddStep,
     onAddDocumentStep,
@@ -97,6 +110,20 @@ export function PacketStepCompositionEditor({
                                 </span>
                                 <span className="text-xs font-medium text-alloy-midnight/60">
                                     {PACKET_STEP_KIND_LABELS[kind]}
+                                </span>
+                                {/*
+                                 * WHAT KIND OF THING THIS IS, beside what the family does with it.
+                                 *
+                                 * "Why don't I see the other forms in Studio → Forms?" is the right
+                                 * question to ask of a screen that called all three steps forms. Two
+                                 * of them are not Forms and never were; saying so here is what makes
+                                 * the Forms list's contents correct rather than mysterious.
+                                 */}
+                                <span
+                                    className="rounded-full border border-alloy-midnight/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/50"
+                                    data-testid={`packet-step-type-${idx}`}
+                                >
+                                    {STEP_TYPE_LABEL[kind]}
                                 </span>
                                 {!isDocumentStep && s.form_definition_id ?
                                     <FormsReviewBadge
@@ -248,6 +275,18 @@ export function PacketStepCompositionEditor({
                                 </p>
                             :   null}
                             <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold">
+                                {/* Every obligation is configurable from the card that describes it. */}
+                                {s.packet_item_id && onConfigureStep ? (
+                                    <button
+                                        type="button"
+                                        className="text-alloy-blue"
+                                        data-testid={`packet-step-configure-${idx}`}
+                                        disabled={busy}
+                                        onClick={() => onConfigureStep(idx)}
+                                    >
+                                        Configure
+                                    </button>
+                                ) : null}
                                 <button type="button" className="text-alloy-blue" disabled={busy || idx === 0} onClick={() => onMoveStep(idx, -1)}>
                                     Move up
                                 </button>

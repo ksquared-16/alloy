@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
     describeStep,
     familyExperienceLines,
+    packetContentSummary,
     packetIsReady,
     packetReadinessRows,
     summarizeFormQuestions,
@@ -235,5 +236,41 @@ describe("the packet's family experience", () => {
 
     it("an empty packet is not ready", () => {
         expect(packetIsReady([])).toBe(false);
+    });
+});
+
+describe("what the packet CONTAINS, not what a family does with it", () => {
+    /*
+     * "3 forms" sent an administrator looking for the other two in Studio → Forms, where they
+     * correctly are not, because they are not Forms. One sentence removes the whole question.
+     */
+    const form = describeStep({
+        kind: "form", sequence: 0, title: "Admissions Information", published: true, hasSourceDocument: false,
+        questions: { questions: 80, connectedToAlloy: 4, formOnly: 76, required: 65, alloyFills: 0 },
+    });
+    const ack = describeStep({
+        kind: "document_acknowledgment", sequence: 1, title: "Family Handbook",
+        documentTitle: "2026–2027 Family Handbook", pageCount: null, requiresSignature: true,
+    });
+    const upload = describeStep({
+        kind: "document_upload", sequence: 2, title: "Immunization record", documentTypeKey: "immunization_record",
+    });
+
+    it("names the real package as one Form and two document obligations", () => {
+        expect(packetContentSummary([form, ack, upload])).toBe("1 Form and 2 document obligations");
+    });
+
+    it("never calls a document obligation a form", () => {
+        expect(packetContentSummary([ack, upload])).toBe("2 document obligations");
+        expect(packetContentSummary([ack])).toBe("1 document obligation");
+    });
+
+    it("counts Forms as Forms", () => {
+        expect(packetContentSummary([form])).toBe("1 Form");
+        expect(packetContentSummary([form, form])).toBe("2 Forms");
+    });
+
+    it("says so when a packet has nothing yet", () => {
+        expect(packetContentSummary([])).toBe("no obligations yet");
     });
 });

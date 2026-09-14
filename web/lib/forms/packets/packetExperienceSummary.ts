@@ -211,6 +211,23 @@ export function familyExperienceLines(steps: readonly StepExperienceFacts[]): st
     });
 }
 
+/**
+ * What this packet CONTAINS, as opposed to what a family does with it.
+ *
+ * "3 forms" was wrong and it was the source of a real confusion: an administrator who read it then
+ * went looking for the other two in Studio → Forms, where they correctly are not, because they are
+ * not Forms. One sentence removes the whole question.
+ */
+export function packetContentSummary(steps: readonly StepExperienceFacts[]): string {
+    const forms = steps.filter((s) => s.kind === "form").length;
+    const documents = steps.length - forms;
+    const part = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+    if (forms && documents) return `${part(forms, "Form", "Forms")} and ${part(documents, "document obligation", "document obligations")}`;
+    if (forms) return part(forms, "Form", "Forms");
+    if (documents) return part(documents, "document obligation", "document obligations");
+    return "no obligations yet";
+}
+
 /** Readiness, assembled from the same facts the cards show — not a second validation engine. */
 export function packetReadinessRows(steps: readonly StepExperienceFacts[]): { ok: boolean; label: string }[] {
     return steps.map((s) => ({ ok: s.ready, label: s.readyDetail }));
