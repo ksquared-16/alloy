@@ -352,6 +352,12 @@ const ANALYTICS_FAMILY_DIRS = [
  */
 const SUFFICIENT_GATES = [
     "requireAnalyticsReadAccess",
+    /*
+     * Operational Intelligence WRITE. Strictly stronger than its read sibling: it demands
+     * `reports.write` alone, where the read gate accepts either key. Added with the OI authority
+     * convergence, which enforced it on ten mutation handlers that had asked for the admin role.
+     */
+    "requireAnalyticsManageAccess",
     "requireAnalyticsV2AdminContext",
     "requireAnalyticsV2AdminMutate",
     "requireAdminOrOps",
@@ -543,6 +549,7 @@ const CAPABILITY_GATES = [
     "canReadProgramPublication",
     "canManageProgramPublication",
     "canReadAnalytics",
+    "canManageAnalytics",
 ] as const;
 
 /** Reviewed exceptions. Empty by design — an entry here is a security decision (W-4's ratchet). */
