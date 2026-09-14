@@ -153,3 +153,9 @@ jobs:
       - name: Backlog burn-down invariants
         working-directory: .
         run: node scripts/local-dev/tests/development-backlog-burndown.test.mjs
+      # Five times in one day a value was produced correctly and did not arrive.
+      # Every one had a passing test at the PRODUCER. These follow the value
+      # through the real serializer, writer or branch to the thing that reads it.
+      - name: Cross-layer propagation contracts
+        working-directory: .
+        run: node scripts/local-dev/tests/development-propagation-contracts.test.mjs

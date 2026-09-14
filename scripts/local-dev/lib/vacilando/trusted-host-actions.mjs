@@ -2726,6 +2726,15 @@ export function executeInstallToolkitTrustedHostAction(action, { actor = "direct
     rollback_target: out.rollback_target,
     gateway_restart_required: out.gateway_restart_required,
     /*
+     * WHICH TOOLKIT THE GATEWAY IS ACTUALLY RUNNING.
+     *
+     * Found by the audit rather than by an incident: the producer has returned
+     * this all along and the list dropped it, so `gateway_restart_required`
+     * arrived without the one fact that makes it interpretable - restart
+     * required FROM what, TO what. It is a git sha and carries nothing secret.
+     */
+    gateway_executing_sha: out.gateway_executing_sha ?? null,
+    /*
      * THE PRODUCER COMPUTED IT AND THIS LIST DROPPED IT.
      *
      * `installPromotedToolkit` returns a `convergence` block saying which of
