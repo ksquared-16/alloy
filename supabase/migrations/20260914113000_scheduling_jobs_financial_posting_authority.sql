@@ -40,9 +40,16 @@
 -- made `mutation_events` the immutable record of every access change, so the discriminator is
 -- simply whether any audited change ever touched that key in that organization. The test is applied
 -- INSIDE this migration rather than read from a census snapshot, so a grant deliberately made
--- between the census and this apply is still preserved. Measured on the deployed primary at
--- 2026-09-14T16:30:59Z: three active ops roles, two holding a key, both with zero audited events,
--- no ambiguous case anywhere.
+-- between the census and this apply is still preserved.
+--
+-- The predicate is ROLE-PRECISE, and that is not a detail. An org-wide test was the first draft, and
+-- the certification tenant showed why it was wrong: of its 68 audited events naming these keys, 66
+-- concern the ADMIN role. Admin history would then have protected an ops grant nobody ever chose,
+-- which inverts the doctrine — preserving by accident exactly where it should correct. The event has
+-- to name the same role whose grant is in question.
+--
+-- Measured on the deployed primary at 2026-09-14T16:30:59Z: three active ops roles, two holding a
+-- key, both with zero audited events of any kind, no ambiguous case anywhere.
 
 DO $guard$
 BEGIN
@@ -104,8 +111,13 @@ DELETE FROM public.role_permission_grants g
 WHERE g.role_key = 'ops'
   AND g.permission_key IN ('scheduling.write', 'ops.jobs.write')
   AND NOT EXISTS (
-      SELECT 1 FROM public.mutation_events m
+      SELECT 1
+        FROM public.mutation_events m
+        JOIN public.role_definitions rd
+          ON rd.id = m.subject_id AND rd.org_id = m.org_id
        WHERE m.org_id = g.org_id
+         AND m.subject_type = 'role'
+         AND rd.role_key = g.role_key
          AND (coalesce(m.new_state, '')      LIKE '%' || g.permission_key || '%'
            OR coalesce(m.previous_state, '') LIKE '%' || g.permission_key || '%')
   );
@@ -152,8 +164,13 @@ BEGIN
      WHERE g.role_key = 'ops'
        AND g.permission_key IN ('scheduling.write', 'ops.jobs.write')
        AND NOT EXISTS (
-           SELECT 1 FROM public.mutation_events m
+           SELECT 1
+             FROM public.mutation_events m
+             JOIN public.role_definitions rd
+               ON rd.id = m.subject_id AND rd.org_id = m.org_id
             WHERE m.org_id = g.org_id
+              AND m.subject_type = 'role'
+              AND rd.role_key = g.role_key
               AND (coalesce(m.new_state, '')      LIKE '%' || g.permission_key || '%'
                 OR coalesce(m.previous_state, '') LIKE '%' || g.permission_key || '%'));
     IF v_ops_kept <> 0 THEN

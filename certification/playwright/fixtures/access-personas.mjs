@@ -122,6 +122,23 @@ export const CUSTOM = {
     procPortalOnly: "mcert_proc_portal_only",
     procDocsWriter: "mcert_proc_docs_writer",
     procFormsAuthor: "mcert_proc_forms_author",
+
+    /*
+     * ── SCHEDULES, JOBS, AND THE MONEY THEY POST ──
+     *
+     * Three capabilities that deliberately do not imply one another. The matrix exists for the
+     * DENIALS: a schedule manager must not be able to post a cash receipt, a job manager must not
+     * be able to raise a charge, and a financial poster must not be able to edit a schedule.
+     *
+     * `sjTitular` is the role-name control — labelled "Admin", holding nothing.
+     * `sjFinWrite` is the reason fin.post exists: it holds the `fin.write` that ops holds in every
+     * organization, and must still be refused all four money postings.
+     */
+    sjScheduler: "mcert_sj_scheduler",
+    sjJobber: "mcert_sj_jobber",
+    sjPoster: "mcert_sj_poster",
+    sjTitular: "mcert_sj_titular",
+    sjFinWrite: "mcert_sj_finwrite",
 };
 
 export const P = {
@@ -150,6 +167,12 @@ export const P = {
     procPortalOnly: { id: "c0000000-0000-4000-8000-00000000d021", email: "cert.procportal@northwind.invalid",    role: CUSTOM.procPortalOnly },
     procDocsWriter: { id: "c0000000-0000-4000-8000-00000000d022", email: "cert.procdocswriter@northwind.invalid",role: CUSTOM.procDocsWriter },
     procFormsAuthor:{ id: "c0000000-0000-4000-8000-00000000d023", email: "cert.procformsauthor@northwind.invalid",role: CUSTOM.procFormsAuthor },
+
+    sjScheduler:    { id: "c0000000-0000-4000-8000-00000000d024", email: "cert.sjscheduler@northwind.invalid",   role: CUSTOM.sjScheduler },
+    sjJobber:       { id: "c0000000-0000-4000-8000-00000000d025", email: "cert.sjjobber@northwind.invalid",      role: CUSTOM.sjJobber },
+    sjPoster:       { id: "c0000000-0000-4000-8000-00000000d026", email: "cert.sjposter@northwind.invalid",      role: CUSTOM.sjPoster },
+    sjTitular:      { id: "c0000000-0000-4000-8000-00000000d027", email: "cert.sjtitular@northwind.invalid",     role: CUSTOM.sjTitular },
+    sjFinWrite:     { id: "c0000000-0000-4000-8000-00000000d028", email: "cert.sjfinwrite@northwind.invalid",    role: CUSTOM.sjFinWrite },
 };
 
 async function principal(p) {
@@ -200,6 +223,13 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.procPortalOnly, role_label: "Processing bystander", description: "In the portal, holding no Processing capability.",        is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.procDocsWriter, role_label: "General doc writer",   description: "Holds documents.write, as ops does. Not a Processing authority.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.procFormsAuthor,role_label: "Packet author",        description: "Holds forms.author. Authors packets, works no case.",     is_system: false, is_active: true },
+
+        { org_id: ORG, role_key: CUSTOM.sjScheduler, role_label: "Schedule coordinator", description: "Manages schedules. Posts no money.",                is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.sjJobber,    role_label: "Job coordinator",      description: "Manages jobs. Raises no charges.",                  is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.sjPoster,    role_label: "Financial poster",     description: "Posts receipts, payouts, journals and charges.",    is_system: false, is_active: true },
+        /* The label is the trap. It holds nothing. */
+        { org_id: ORG, role_key: CUSTOM.sjTitular,   role_label: "Admin",                description: "Named Admin, granted no schedule, job or posting authority.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.sjFinWrite,  role_label: "Financials manager",   description: "Holds fin.write, as ops does. Not a posting authority.",      is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
 
@@ -225,6 +255,12 @@ export async function setup() {
         [CUSTOM.procPortalOnly, ["portal.access"]],
         [CUSTOM.procDocsWriter, ["portal.access", "documents.write", "documents.read"]],
         [CUSTOM.procFormsAuthor, ["portal.access", "forms.author"]],
+
+        [CUSTOM.sjScheduler, ["portal.access", "scheduling.write"]],
+        [CUSTOM.sjJobber, ["portal.access", "ops.jobs.write"]],
+        [CUSTOM.sjPoster, ["portal.access", "fin.post"]],
+        [CUSTOM.sjTitular, ["portal.access"]],
+        [CUSTOM.sjFinWrite, ["portal.access", "fin.write", "fin.read"]],
     ]) {
         const { error } = await sb.rpc("replace_role_permission_grants", {
             p_org_id: ORG,
