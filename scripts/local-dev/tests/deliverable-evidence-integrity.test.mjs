@@ -1,25 +1,44 @@
 /**
  * Deliverable Review Evidence Integrity V1
+ *
+ * SEEDED, NOT BORROWED. This read a hard-coded mission and assignment out of the
+ * LIVE gateway store with no isolated root. Those records aged out of a rolling
+ * store, so every case that needed a review failed at
+ * `createDeliverableReview -> { ok: false, error: "assignment_not_found" }`.
+ *
+ * The evidence semantics below are pure functions and were always sound; only
+ * the cases that needed a real assignment were affected. The fixture builds one
+ * and attaches evidence through the real `attachEvidence` API, so a case that
+ * omits evidence still fails `evidence_present` - omission stays visible, which
+ * is the whole point of this file.
+ *
+ * Imports are dynamic because ESM hoists static ones and the library captures
+ * ALLOY_RUNTIME_ROOT at module load.
  */
 import assert from "node:assert/strict";
-import {
+import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+import { join } from "node:path";
+import os from "node:os";
+
+const root = mkdtempSync(join(os.tmpdir(), "vac-deliverable-evidence-"));
+process.env.ALLOY_RUNTIME_ROOT = root;
+
+const { seedW4Assignment, seedW4Evidence } = await import("./helpers/deliverable-review-fixture.mjs");
+const { missionId: mid, assignmentId: aid } = seedW4Assignment(root);
+await seedW4Evidence({ missionId: mid, assignmentId: aid });
+
+const {
   parseTestEvidenceSemantics,
   reconcileDeliverableEvidence,
   workerClaimsTestsPassed,
   evaluateAssignmentTests,
-} from "../lib/vacilando/deliverable-evidence.mjs";
-import {
+} = await import("../lib/vacilando/deliverable-evidence.mjs");
+const {
   createDeliverableReview,
   acceptDeliverableReview,
   deliverableReviewVm,
   supersedeOpenReviewsForAssignment,
-} from "../lib/vacilando/deliverable-review.mjs";
-import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import os from "node:os";
-
-const mid = "msn_2d054741a54698fa4c";
-const aid = "asg_d203f547736c16";
+} = await import("../lib/vacilando/deliverable-review.mjs");
 
 // --- Semantics: "0 failed" must not mark suite failed (W-4 root cause) ---
 {
@@ -258,7 +277,10 @@ assert.equal(workerClaimsTestsPassed({ summary: "15 passed, 0 failed" }), true);
 
 {
   const r = createDeliverableReview(mid, aid, { force: true, autoRepair: false }).review;
-  const file = join(os.homedir(), ".local/state/alloy-dev/vacilando/deliverable-reviews", `${mid}.json`);
+  // THE ISOLATED ROOT, not the operator's home. This reached into the live
+  // gateway store to corrupt a review row on purpose - which only worked while
+  // the live mission existed, and would have written to real state if it did.
+  const file = join(root, "vacilando", "deliverable-reviews", `${mid}.json`);
   const store = JSON.parse(readFileSync(file, "utf8"));
   const row = store.reviews.find((x) => x.review_id === r.review_id);
   row.certification_state = "evidence_discrepancy";
@@ -283,8 +305,21 @@ const vmFinal = deliverableReviewVm(mid, restored.review);
 assert.equal(vmFinal.operatorMayApprove, true);
 assert.match(vmFinal.recommendation.headline, /Approve W-4/i);
 
-// Leave W-1 as the open operator briefing when it is ready (do not resurrect W-4).
-const w1 = "asg_d77353d7377647";
+/*
+ * A SECOND deliverable in the same mission, seeded rather than borrowed.
+ *
+ * This named another live assignment - asg_d77353d7377647 - purely to leave the
+ * operator's real W-1 briefing open at teardown. In an isolated root there is no
+ * operator briefing to preserve, but the contract the block checks is real: a
+ * different assignment also reaches ready_for_review. So the assertion stays and
+ * the live id goes.
+ */
+const w1 = "asg_deliverable_review_fixture_w1";
+seedW4Assignment(root, {
+  missionId: mid, assignmentId: w1, append: true,
+  title: "W-1 — Service-client principal check (second deliverable)",
+});
+await seedW4Evidence({ missionId: mid, assignmentId: w1 });
 supersedeOpenReviewsForAssignment(mid, aid, { reason: "test_teardown_keep_w1" });
 const w1Ready = createDeliverableReview(mid, w1, { force: true, autoRepair: false });
 assert.ok(w1Ready.ok);

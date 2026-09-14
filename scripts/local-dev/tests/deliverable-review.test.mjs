@@ -1,11 +1,34 @@
 /**
  * Deliverable Review — Director certification briefing (W-4).
  *
- * Uses an explicit review object for shape assertions so the live mission
- * can keep W-4 certified without the test re-opening a ready briefing.
+ * SEEDED, NOT BORROWED. This read a hard-coded mission and assignment out of the
+ * LIVE gateway store - msn_2d054741a54698fa4c / asg_d203f547736c16 - with no
+ * isolated root at all. Those records aged out of a rolling store, and the test
+ * failed at `createDeliverableReview -> { ok: false, error:
+ * "assignment_not_found" }`. The product contract was never wrong: refusing an
+ * assignment that does not exist is exactly right.
+ *
+ * The fixture builds its own W-4 assignment and attaches evidence through the
+ * real `attachEvidence` API, then lets the review runtime decide. The curated
+ * briefing attaches on TITLE, not on id, so the content assertions below still
+ * describe the same deliverable they always did.
+ *
+ * Imports are dynamic because ESM hoists static ones: the library captures
+ * ALLOY_RUNTIME_ROOT at module load, so the root has to be set first.
  */
 import assert from "node:assert/strict";
-import {
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const root = mkdtempSync(join(tmpdir(), "vac-deliverable-review-"));
+process.env.ALLOY_RUNTIME_ROOT = root;
+
+const { seedW4Assignment, seedW4Evidence } = await import("./helpers/deliverable-review-fixture.mjs");
+const { missionId: mid, assignmentId: aid } = seedW4Assignment(root);
+await seedW4Evidence({ missionId: mid, assignmentId: aid });
+
+const {
   ensureDeliverableReviewsForMission,
   createDeliverableReview,
   getOpenDeliverableReview,
@@ -17,12 +40,9 @@ import {
   runDirectorVerification,
   listDeliverableReviews,
   supersedeOpenReviewsForAssignment,
-} from "../lib/vacilando/deliverable-review.mjs";
-import { listDirectorMessages } from "../lib/vacilando/director-comms.mjs";
-import { missionOutcomeVm } from "../lib/vacilando/presentation/operator-views.mjs";
-
-const mid = "msn_2d054741a54698fa4c";
-const aid = "asg_d203f547736c16";
+} = await import("../lib/vacilando/deliverable-review.mjs");
+const { listDirectorMessages } = await import("../lib/vacilando/director-comms.mjs");
+const { missionOutcomeVm } = await import("../lib/vacilando/presentation/operator-views.mjs");
 
 const ensured = ensureDeliverableReviewsForMission(mid);
 assert.ok(ensured.ok);
