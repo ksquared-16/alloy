@@ -60,7 +60,7 @@ test("A2 — retry reuse is decided BEFORE the classification, not after", () =>
 
 test("B — a NEW request for a REEXECUTE_REQUIRED action does not adopt the result", () => {
   const d = completedReuseDecision({
-    actionType: "environment.restore_qa_session", existing: completed("gar_1"), requestId: "gar_2",
+    actionType: "environment.restore_deployed_qa_session", existing: completed("gar_1"), requestId: "gar_2",
   });
   assert.equal(d.reuse, false);
   assert.equal(d.disposition, "new_occurrence");
@@ -148,7 +148,9 @@ test("H — every classification carries its semantic reason", () => {
 test("I — classification is by meaning, not by risk class", () => {
   // Both are privileged writes. One is an end state, the other an event.
   assert.equal(repeatabilityFor("repository.push").class, REPEATABILITY.REUSE_CORRECT);
-  assert.equal(repeatabilityFor("environment.restore_qa_session").class, REPEATABILITY.REEXECUTE_REQUIRED);
+  assert.equal(repeatabilityFor("environment.restore_deployed_qa_session").class, REPEATABILITY.REEXECUTE_REQUIRED);
+  // And the sibling with the same shape of name is NOT the same contract.
+  assert.equal(repeatabilityFor("environment.restore_qa_session").class, REPEATABILITY.REUSE_CORRECT);
 });
 
 /* ── MUTATION PROOFS ──────────────────────────────────────────────────────── */

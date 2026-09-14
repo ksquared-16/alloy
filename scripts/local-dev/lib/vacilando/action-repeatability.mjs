@@ -48,10 +48,13 @@ export const REPEATABILITY = Object.freeze({
  * Every registered action, with the reason for its classification.
  *
  * Classified by what a repeat MEANS, never by risk class: `repository.push` is
- * a privileged write and is safely reusable, while `restore_qa_session` is a
- * comparatively mild action that must mint again. Risk says how much damage a
- * mistake does; it says nothing about whether a second request is a second
+ * a privileged write and is safely reusable, while `restore_deployed_qa_session`
+ * is a comparatively mild action that must mint again. Risk says how much damage
+ * a mistake does; it says nothing about whether a second request is a second
  * occurrence.
+ *
+ * Nor by the shape of the name. The two session restores sit side by side and
+ * are classified differently, for reasons recorded beside them.
  */
 export const ACTION_REPEATABILITY = Object.freeze({
   // ── ensure-a-postcondition. A second request wants the same end state.
@@ -77,8 +80,23 @@ export const ACTION_REPEATABILITY = Object.freeze({
     why: "a fixture seed is a teardown followed by a rebuild — the measured specimen where one execution answered two requests",
   },
   "vacilando.apply_reconciliation_plan": { class: "REEXECUTE_REQUIRED", why: "applying a plan is an event against state that has since moved" },
-  "environment.restore_qa_session": { class: "REEXECUTE_REQUIRED", why: "a session is minted and expires; replaying a mint reports a dead session as live" },
-  "environment.restore_deployed_qa_session": { class: "REEXECUTE_REQUIRED", why: "as restore_qa_session — already the reason this one carries resultKeeps: false" },
+  /*
+   * THE TWO SESSION RESTORES ARE CLASSIFIED DIFFERENTLY, ON PURPOSE.
+   *
+   * The DEPLOYED one replayed a single mint for three requests in one run,
+   * reporting `verified: true` against an expired session; that is why it
+   * already carries `resultKeeps: false`. The local one does NOT, and its reuse
+   * is locked by `trusted-host-action-ownership.test.mjs` — "the behaviour the
+   * narrowing must not disturb".
+   *
+   * The first draft here classified both as REEXECUTE_REQUIRED on the symmetry
+   * of their names, and the expected-surface run turned that test red before
+   * the branch was pushed. A new module does not get to overrule an action's own
+   * locked contract from the outside; if the local restore should stop keeping
+   * its result, that is a change to ITS definition, argued on its own evidence.
+   */
+  "environment.restore_qa_session": { class: "REUSE_CORRECT", why: "its own definition keeps its result, and its ownership contract is locked by trusted-host-action-ownership" },
+  "environment.restore_deployed_qa_session": { class: "REEXECUTE_REQUIRED", why: "a deployed session is minted and expires — three requests once replayed one mint and reported an expired session as verified" },
   "lane.dispatch_measurement_instruction": { class: "REEXECUTE_REQUIRED", why: "each dispatch is an instruction actually delivered to a lane" },
 
   // ── only the operation can say.
