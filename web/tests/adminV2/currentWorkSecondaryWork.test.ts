@@ -120,28 +120,41 @@ describe("Current Work — secondary work", () => {
 
     /* ------------------------------------------------------------ presentation */
 
-    it("renders secondary work in its own section, not among Requirements", () => {
+    /*
+     * THESE TWO CLAIMS MOVED TO A RENDER TEST, AND HERE IS WHY.
+     *
+     * They used to read `CurrentWorkWorkspace.tsx` and assert it contained
+     * `data-work-section="also-in-progress"`, `data-work-secondary-item` and
+     * `item.workRole === "secondary"`. Every assertion passed. Every one still would: that file
+     * still contains all of it.
+     *
+     * No product code imports that component. Its only importer in the repository is a test. So the
+     * two tests named "renders secondary work…" and "selects secondary work…" were describing a
+     * component an operator could never reach, and they stayed green through two cycles in which
+     * secondary work was genuinely unreachable on staging.
+     *
+     * The render proof now lives in `currentWorkSecondaryWorkIsReachable.test.tsx`, which mounts
+     * `CurrentWorkCard` and asserts the row in the emitted markup — including on a stage that
+     * projects no action stack, the shape that hid the defect. The reachability of the component
+     * itself is policed by `sourcePresenceIsNotRuntimeProof.test.tsx`.
+     *
+     * What survives here is the part that IS a static architecture contract: the section must not
+     * name a work key, because a hardcoded key would make it one process's feature rather than a
+     * platform behaviour. That is a property of the source and is correctly asserted against it —
+     * but against the component that actually renders.
+     */
+    it("the rendered secondary-work section names no work key", () => {
         const src = readFileSync(
-            resolve(__dirname, "../../components/admin/focusPanel/cards/CurrentWorkWorkspace.tsx"),
+            resolve(__dirname, "../../components/admin/focusPanel/cards/CurrentWorkFocusedSurface.tsx"),
             "utf8",
         );
         expect(src).toContain('data-work-section="also-in-progress"');
-        expect(src).toContain("Also in progress");
-        // Selected through the SAME handler as any other checklist row, so it opens its own
-        // work/outcome context rather than needing a second navigation path.
         expect(src).toContain("data-work-secondary-item");
-        expect(src).toContain("onClick={() => onChecklistItem(item)}");
-    });
-
-    it("selects secondary work by ROLE, naming no template key", () => {
-        const src = readFileSync(
-            resolve(__dirname, "../../components/admin/focusPanel/cards/CurrentWorkWorkspace.tsx"),
-            "utf8",
-        );
-        expect(src).toContain('item.workRole === "secondary"');
-        // The defect this forbids is a hardcoded work key, which would make the section one
-        // process's feature instead of a platform behaviour.
-        expect(src).not.toContain("offer_spot");
+        const code = src
+            .split("\n")
+            .filter((l) => !l.trim().startsWith("*") && !l.trim().startsWith("//") && !l.includes("/*"))
+            .join("\n");
+        expect(code).not.toContain("offer_spot");
     });
 
     it("only shows secondary work that is still outstanding", () => {

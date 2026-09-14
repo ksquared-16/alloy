@@ -20,6 +20,7 @@
  * default remains the last line of defence beneath that.
  */
 
+import { assertRepositoryIdentity } from "./repository-execution-authority.mjs";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -243,6 +244,49 @@ export function runRegisteredReconciliation(inputs = {}, deps = {}) {
     context_sources: contextSources,
     trusted_env_source: envSource,
   };
+
+  /*
+   * THE BYTES ARE CHECKED BEFORE THEY RUN, NOT DESCRIBED AFTERWARDS.
+   *
+   * This spawns npm inside the canonical checkout, so what executes IS that
+   * working tree. During the Financials certification it sat 35 commits behind
+   * promoted staging — holding the pre-repair fixture and, at that moment, no
+   * runner file at all — and was 2 behind again within the hour of being
+   * fast-forwarded. Toolkit convergence deliberately never touches it, so
+   * "staging == installed == running" was true throughout.
+   *
+   * REFUSAL, NOT RECONCILIATION. Fast-forwarding the checkout here would couple
+   * the approved action to a silent change of the environment it was approved
+   * against. The refusal names both SHAs and the recovery instead.
+   */
+  const identity = assertRepositoryIdentity({
+    actionType: "environment.execute_registered_reconciliation",
+    provenance,
+    expectedRepoHead: resolved.normalized.expected_repo_head || null,
+  });
+  if (!identity.ok) {
+    return {
+      ok: false,
+      code: identity.code,
+      detail: identity.detail,
+      recovery: identity.recovery,
+      // Carried on the FAILURE too: a refusal that cannot say what it found is
+      // a refusal nobody can act on.
+      provenance: { ...provenance, expected_repo_head: identity.provenance.expected_repo_head },
+      // The same `where` shape the sibling refusals carry. Built here rather
+      // than reused: the two earlier ones are block-scoped, and reaching for a
+      // name that is not in scope is a ReferenceError at the exact moment this
+      // path matters most.
+      where: {
+        repo_root: repoRoot,
+        working_directory: workingDirectory,
+        runner: entry.runner,
+        trusted_env_source: envSource,
+      },
+    };
+  }
+  provenance.expected_repo_head = identity.provenance.expected_repo_head;
+  provenance.repository_identity = identity.unenforced ? "undeclared" : "verified";
 
   const child = spawn("npm", ["run", "--silent", entry.runner], {
     cwd: workingDirectory,
