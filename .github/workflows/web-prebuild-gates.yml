@@ -220,6 +220,12 @@ jobs:
       # staging. This locks the door open exactly that far: workflow paths only,
       # candidate ownership mandatory, and a mixed commit refused WHOLE rather
       # than trimmed to its acceptable files.
+      # The executor that writes main. Gated next to the boundary it enforces,
+      # because a regression here is a wrong write to the release branch.
+      - name: Repository metadata executor (main write)
+        working-directory: .
+        run: node scripts/local-dev/tests/development-metadata-executor.test.mjs
+
       - name: Repository metadata promotion boundary
         working-directory: .
         run: node scripts/local-dev/tests/development-repository-metadata-promotion.test.mjs

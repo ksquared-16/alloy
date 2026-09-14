@@ -55,6 +55,7 @@ import { executeRestoreDeployedQaSessionSync } from "./deployed-qa-session-resto
 import { executeProvisionQaIdentitySync } from "./qa-identity-provision-action.mjs";
 import { executeAssignQaAccessSync } from "./qa-access-assign-action.mjs";
 import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
+import { promoteRepositoryMetadata } from "./trusted-host-metadata-promote.mjs";
 import { executeProviderCeiling } from "./trusted-host-provider-ceiling.mjs";
 import { executeToolkitInstall } from "./toolkit-convergence.mjs";
 import { executeLaneDispatch } from "./lane-dispatch.mjs";
@@ -767,6 +768,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
     return executeLedgerRepairTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_PROMOTE_METADATA) {
+    return executeRepositoryMetadataPromotionTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType === ACTION_TYPES.REPOSITORY_PUSH) {
     return executePushTrustedHostAction(action, { actor, nowMs, grant });
@@ -2029,6 +2033,69 @@ export function executePromotedMigrationTrustedHostAction(action, { actor = "dir
  * Push a reviewed branch. Re-authorized here on purpose: execution must never
  * trust that an earlier call in this same flow already checked.
  */
+/**
+ * PROMOTE REPOSITORY-OPERATIONAL METADATA TO main.
+ *
+ * The whole decision lives in promoteRepositoryMetadata, which revalidates the
+ * candidate and compare-and-swaps against the approved main immediately before
+ * mutating. This wrapper does what every other trusted-host action does -
+ * authorize, execute, shape the result - and nothing else. In particular it
+ * builds no git command of its own: there is no generic `git push main` path
+ * reachable from outside the governed action.
+ */
+export function executeRepositoryMetadataPromotionTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+
+  const inputs = action.inputs || {};
+  const cwd = inputs.worktreePath || inputs.worktree_path;
+  if (!cwd) {
+    return failTrustedAction(action, "worktree_path_missing",
+      "a metadata promotion needs the worktree holding the certified candidate", { nowMs });
+  }
+
+  let out;
+  try {
+    out = promoteRepositoryMetadata(inputs, { git: (args, wd, opts) => defaultGit(args, wd || cwd, opts), cwd, nowMs });
+  } catch (e) {
+    out = { ok: false, code: "metadata_promote_threw", detail: String(e?.message || e).slice(0, 300) };
+  }
+
+  if (!out.ok) {
+    return failTrustedAction(action, out.code || "metadata_promote_failed", out.detail || out.code, {
+      nowMs,
+      extra: {
+        // Both heads survive a refusal, so nobody has to guess whether main moved.
+        main_before: out.main_before ?? null,
+        main_after: out.main_after ?? null,
+        approved_before: out.approved_before ?? null,
+        built_commit: out.built_commit ?? null,
+        offending: out.offending ?? null,
+        product_files_changed: false,
+      },
+    });
+  }
+
+  return completeTrustedAction(action, {
+    destination: out.destination ?? "main",
+    main_before: out.main_before,
+    main_after: out.main_after,
+    commit: out.commit,
+    already_present: out.already_present === true,
+    candidate: out.candidate ?? null,
+    expected_commits: out.expected_commits ?? null,
+    expected_files: out.expected_files ?? null,
+    actual_files: out.actual_files ?? null,
+    files: out.files ?? null,
+    promotion_class: out.promotion_class ?? "repository_metadata",
+    // Stated explicitly rather than implied by the file list, because this is
+    // the single question an auditor of a main commit actually asks.
+    product_files_changed: false,
+    credentialsExposed: false,
+  }, { nowMs });
+}
+
 export function executePushTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
   const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
   if (!authz.ok) return authz;
@@ -2755,6 +2822,38 @@ export function executeInstallToolkitTrustedHostAction(action, { actor = "direct
   action.updated_at = iso(nowMs);
   writeAction(action);
   return { ok: true, action };
+}
+
+/**
+ * Mission-scoped fulfilment for a repository-metadata promotion. Same shape as
+ * every other trusted-host fulfil wrapper: request, authorize, execute. The
+ * decision and the compare-and-swap live in the executor, not here.
+ */
+export function fulfillRepositoryMetadataPromotionForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy: actor,
+    actionType: ACTION_TYPES.REPOSITORY_PROMOTE_METADATA,
+    inputs,
+    nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export function fulfillInstallToolkitForMission(missionId, {

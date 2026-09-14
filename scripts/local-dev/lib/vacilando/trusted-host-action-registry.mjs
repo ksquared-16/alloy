@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { validateReadOnlySql } from "./trusted-host-sql-readonly.mjs";
 import { validateMergeInputs } from "./trusted-host-merge.mjs";
 import { validatePushInputs } from "./trusted-host-push.mjs";
+import { validateRepositoryMetadataInputs } from "./trusted-host-repository-metadata.mjs";
 import { validateOpenPrInputs } from "./trusted-host-open-pr.mjs";
 import { validateProductionMigrationInputs } from "./trusted-host-production-migrate.mjs";
 import { validateLedgerRepairInputs } from "./trusted-host-ledger-repair.mjs";
@@ -38,6 +39,7 @@ export const ACTION_TYPES = Object.freeze({
   DATABASE_APPLY_MIGRATION: "database.apply_migration",
   DATABASE_APPLY_PROMOTED_MIGRATION: "database.apply_promoted_migration",
   DATABASE_REPAIR_MIGRATION_LEDGER: "database.repair_migration_ledger",
+  REPOSITORY_PROMOTE_METADATA: "repository.promote_metadata",
   ENVIRONMENT_RESTORE_QA_SESSION: "environment.restore_qa_session",
   ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION: "environment.restore_deployed_qa_session",
   ENVIRONMENT_PROVISION_QA_IDENTITY: "environment.provision_qa_identity",
@@ -694,6 +696,61 @@ function defineLaneDispatchMeasurementInstruction() {
  * parity gap and a physical-state census — already proves the effects present
  * and matching. It applies nothing, creates nothing, and accepts no SQL.
  */
+/**
+ * THE ONLY ACTION THAT WRITES main, AND IT IS NOT A PRODUCT RELEASE.
+ *
+ * repository.push, promotion.open_pr and repository.merge_pull_request all
+ * refuse main deliberately, and none of that changes. This exists because
+ * GitHub resolves scheduled workflows from the DEFAULT branch only, so a
+ * workflow definition has to reach main for the scheduler to see it at all -
+ * while the code it tests stays on staging.
+ *
+ * Operator approval is required and delegation is off. It writes the release
+ * branch; that is not something to delegate in a first version, whatever the
+ * file size.
+ */
+function defineRepositoryPromoteMetadata() {
+  return {
+    actionType: ACTION_TYPES.REPOSITORY_PROMOTE_METADATA,
+    version: 1,
+    title: "Promote repository-operational metadata to main (no product release)",
+    requiredCapability: "trusted_host.repository.promote_metadata",
+    riskClass: "privileged_write",
+    operatorApprovalRequired: true,
+    delegable: false,
+    timeoutMs: 120_000,
+    // One attempt. The mutation is compare-and-swapped against an approved main;
+    // a retry that cannot see why it failed would be re-running a decision.
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: [
+        "repository", "target_branch", "candidate_sha",
+        "base_ref", "expected_commits", "expected_files", "main_before",
+      ],
+    },
+    outputSchema: {
+      main_before: "string", main_after: "string", commit: "string",
+      files: "array", product_files_changed: "boolean",
+    },
+    evidenceSchema: [
+      "main_before", "main_after", "candidate", "expected_files",
+      "actual_files", "promotion_class", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      const v = validateRepositoryMetadataInputs(inputs);
+      if (!v.ok) return v;
+      // main_before is the compare-and-swap anchor and is required here rather
+      // than only at mutation time, so an operator never approves a promotion
+      // that does not say which main it is promoting onto.
+      if (!String(inputs.main_before || inputs.mainBefore || "").trim()) {
+        return { ok: false, code: "missing_main_before",
+          detail: "a metadata promotion is approved ONTO a specific main; main_before is required" };
+      }
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
 function defineDatabaseRepairMigrationLedger() {
   return {
     actionType: ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER,
@@ -953,6 +1010,7 @@ const REGISTRY = new Map([
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
   [ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION, defineDatabaseApplyPromotedMigration()],
   [ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER, defineDatabaseRepairMigrationLedger()],
+  [ACTION_TYPES.REPOSITORY_PROMOTE_METADATA, defineRepositoryPromoteMetadata()],
   [ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING, defineCapacitySetProviderCeiling()],
   [ACTION_TYPES.HOST_INSTALL_TOOLKIT, defineHostInstallToolkit()],
   [ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION, defineLaneDispatchMeasurementInstruction()],

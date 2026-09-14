@@ -364,6 +364,13 @@ export const ACTION_CLASS_INVENTORY = Object.freeze([
     bounds: null,
   }),
   Object.freeze({
+    class_id: "repository.promote_metadata", surface: "repository",
+    action_key: "repository.promote_metadata", tier: C,
+    executes_via: "operator only (trusted host, after an explicit decision)",
+    why: "Writes main, which is Alloy's release/production branch AND the GitHub default branch. It exists only because GitHub resolves scheduled workflows from the default branch, so a workflow definition must reach main while the code it tests stays on staging. The path is narrow by construction - one destination, .github/workflows/** only, a mixed candidate refused whole rather than trimmed, and a compare-and-swap against the exact main the operator approved. It is NOT an Alloy product release and must never be presented as one. Declares delegable:false: approving a write to the release branch is not a decision to hand to an agent in a first version.",
+    bounds: null,
+  }),
+  Object.freeze({
     class_id: "database.repair_migration_ledger", surface: "data",
     action_key: "database.repair_migration_ledger", tier: C,
     executes_via: "operator only (trusted host, after an explicit decision)",
