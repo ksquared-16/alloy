@@ -380,6 +380,41 @@ export default function ProcessingFormQuestionInspector({
                                 )}
                             </div>
                         ) : null}
+                        {/*
+                         * WHAT THIS ACTUALLY MEANS, in the words an administrator uses.
+                         *
+                         * The two selects above say where an answer is filed; neither says what
+                         * that decision does. This is the sentence that settles "which answers
+                         * update Alloy records, and which stay only with the form" without anyone
+                         * having to know what a field_source is.
+                         */}
+                        {field.field_source?.field_key ? (
+                            <div
+                                className="rounded-lg border border-alloy-blue/20 bg-alloy-blue/[0.04] px-2.5 py-2"
+                                data-testid="form-builder-destination-meaning"
+                            >
+                                <p className="text-[11px] font-semibold text-alloy-blue">
+                                    Alloy already knows this when available
+                                </p>
+                                <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/65">
+                                    {storeFieldOptions.find((c) => c.id === selectedCanonicalId)?.label ??
+                                        STORE_SUBJECT_OPTIONS.find((o) => o.value === storeSubject)?.label ??
+                                        "An Alloy record"}
+                                    {" — "}the family is asked only if it is missing, can correct it, and the answer
+                                    updates the record.
+                                </p>
+                            </div>
+                        ) : (
+                            <div
+                                className="rounded-lg border border-alloy-midnight/10 bg-alloy-stone/[0.06] px-2.5 py-2"
+                                data-testid="form-builder-destination-meaning"
+                            >
+                                <p className="text-[11px] font-semibold text-alloy-midnight/70">Stored with this form</p>
+                                <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/55">
+                                    Not written to the child or family record. The family is always asked for it.
+                                </p>
+                            </div>
+                        )}
                         {field.field_source?.field_key ? (
                             <details className="text-[10px] text-alloy-midnight/40">
                                 <summary className="cursor-pointer font-medium text-alloy-midnight/45">Technical reference</summary>

@@ -591,9 +591,14 @@ export default function ProcessingFormBuilder({
 
             {mode === "preview" ? (
                 <div className="flex shrink-0 items-center gap-2 border-b border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.05] px-4 py-1.5 text-[11px] font-semibold text-alloy-bend-pine">
+                    {/*
+                     * "What families complete" overclaimed. This is the Form, presented as a form —
+                     * not the guided conversation Alloy actually runs a family through, which is
+                     * assembled from the packet's obligations and is not previewable here.
+                     */}
                     {paperwork?.source
-                        ? "Preview — the document this produces, with each mapped box named"
-                        : "Preview — what families complete"}
+                        ? "Form preview — the document this produces, with each mapped box named"
+                        : "Form preview — how this information appears when presented as a form"}
                 </div>
             ) : paperwork?.source ? (
                 <div className="flex shrink-0 items-center gap-2 border-b border-alloy-midnight/[0.06] bg-alloy-midnight/[0.03] px-4 py-1.5 text-[11px] font-semibold text-alloy-midnight/55">

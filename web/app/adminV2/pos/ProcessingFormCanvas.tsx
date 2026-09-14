@@ -167,9 +167,37 @@ function QuestionBlock({
             {dropNewLineAfter ? (
                 <div className="absolute -bottom-1 left-0 right-0 h-[3px] rounded bg-alloy-bend-pine shadow-[0_0_8px_rgba(0,162,131,0.35)]" />
             ) : null}
-            <p className="text-[11px] font-semibold text-alloy-midnight">
-                {field.label}
-                {field.required ? <span className="text-alloy-ember"> *</span> : null}
+            <p className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-alloy-midnight">
+                <span>{field.label}</span>
+                {/*
+                 * Requiredness and destination, on the question itself.
+                 *
+                 * A bare asterisk answered "is this required?" only for someone who already knew the
+                 * convention, and nothing at all answered "does this answer become Alloy data?" —
+                 * which is the question an administrator opens this screen to settle. Both are now
+                 * legible without selecting anything.
+                 */}
+                {!isTextBlock ? (
+                    <span
+                        className={
+                            field.required
+                                ? "rounded-full border border-alloy-ember/25 bg-alloy-ember/[0.06] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-alloy-ember"
+                                : "rounded-full border border-alloy-midnight/12 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-alloy-midnight/40"
+                        }
+                        data-testid={`form-canvas-requiredness-${field.id}`}
+                    >
+                        {field.required ? "Required" : "Optional"}
+                    </span>
+                ) : null}
+                {!isTextBlock && field.field_source?.field_key ? (
+                    <span
+                        className="rounded-full border border-alloy-blue/25 bg-alloy-blue/[0.06] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-alloy-blue"
+                        data-testid={`form-canvas-alloy-bound-${field.id}`}
+                        title="This answer updates the Alloy record"
+                    >
+                        Alloy
+                    </span>
+                ) : null}
                 {field.description === PROCESSING_NEEDS_DESTINATION_DESCRIPTION ? (
                     <span
                         className="ml-1.5 rounded-full border border-alloy-ember/25 bg-alloy-ember/[0.06] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-alloy-ember"
