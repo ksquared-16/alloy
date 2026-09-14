@@ -1,0 +1,50 @@
+{
+  "trusted_host_action_id": "tha_c66a10f02adb42",
+  "query_hash": "b37343834a9c21fe59bb9d0200abc02da9177955a3301054a2f9e82f353051f7",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T20:37:58.161Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_c66a10f02adb42",
+    "query_hash": "b37343834a9c21fe59bb9d0200abc02da9177955a3301054a2f9e82f353051f7",
+    "authorization_id": "grnt_6a2c92ba7a8f4757",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T20:37:58.950Z",
+    "question_ids": [
+      "org_context",
+      "passing_org_context",
+      "nonvacuity"
+    ],
+    "questions": {
+      "org_context": {
+        "question_id": "org_context",
+        "row_count": null,
+        "rows": [
+          "7803388d-cdee-4afb-89cf-23a137f39423 ~ alloy-bend ~ created=2026-01-27 ~ roles=5 ~ ops_active=1 ~ users_with_roles=2 ~ ops_principals=0 ~ ops_grants_total=26",
+          "93667019-bd28-49b5-a688-acc9bb1e0a19 ~ demo-childcare-co-c144769f ~ created=2026-04-22 ~ roles=5 ~ ops_active=1 ~ users_with_roles=11 ~ ops_principals=2 ~ ops_grants_total=7"
+        ]
+      },
+      "passing_org_context": {
+        "question_id": "passing_org_context",
+        "row_count": null,
+        "rows": [
+          "0bbaad43-1235-401e-88ea-62e0881e950a ~ _w17_selftest_0bbaad43 ~ created=2026-09-12 ~ ops_grants_total=58 ~ ops_principals=0"
+        ]
+      },
+      "nonvacuity": {
+        "question_id": "nonvacuity",
+        "row_count": null,
+        "rows": [
+          "orgs_total=3 user_roles_total=15"
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}

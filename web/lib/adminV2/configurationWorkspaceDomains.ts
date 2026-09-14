@@ -117,12 +117,6 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 label: "Attendance devices",
                 description: "Tablets that record attendance at a site.",
             },
-            {
-                href: settings("departments"),
-                label: "Departments",
-                description: "Teams and organizational structure.",
-                advanced: true,
-            },
         ],
     },
     {

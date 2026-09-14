@@ -146,7 +146,6 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/settings", label: "Platform Configuration" },
             { href: "/settings/users-roles", label: "Users & Roles" },
             { href: "/legacy-admin/users", label: "Users" },
-            { href: "/settings/departments", label: "Departments" },
             { href: "/settings/work-units", label: "Work units (diagnostic)" },
             { href: "/legacy-admin/verticals", label: "Verticals" },
             { href: "/legacy-admin/system/verticals-industries", label: "Industries (diagnostic)" },

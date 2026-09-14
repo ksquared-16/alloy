@@ -62,7 +62,7 @@ const M6 = "20260807170000_w12_seed_default_rbac_enumerated_grants.sql";
  * capability a NEW organization never receives — the cliff `20260910183000` was written to end.
  * Forms moved it here.
  */
-const LIVE_SEED = "20260914184000_configuration_authority_default_seed.sql";
+const LIVE_SEED = "20260915091000_business_process_authority_default_seed.sql";
 
 /**
  * The migration that owns the COMPLETENESS contract — the admin-is-the-whole-catalog rule, the nine
@@ -142,6 +142,18 @@ const OPS_WITHHELD = [
     "processing.archive",
     "processing.documents.manage",
     "processing.dev_cleanup",
+    /*
+     * Business process design and activation. Also not a judgement invented by the seed: all eight
+     * handlers under `/api/admin/departments`, and the business-process publish beside them, asked
+     * `ctx.role !== "admin"`, so every one of them answered ops with 403 before the Department
+     * convergence rehomed them. Withholding both is what preserves that.
+     *
+     * They are two keys rather than one because activating a process changes what the tenant is
+     * RUNNING while configuring one does not — the same line that keeps `layouts.lifecycle` out of
+     * `layouts.manage`.
+     */
+    "business_process.configure",
+    "business_process.activate",
     /*
      * Schedule and job management, and financial posting. Not a new judgement about what ops should
      * be: before this program touched anything, all fourteen of those routes answered ops with 403

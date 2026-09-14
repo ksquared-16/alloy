@@ -2,8 +2,8 @@
   "reviewed": "2026-09-10",
   "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
   "ratchet": {
-    "max_pending": 602,
-    "$comment": "Lowered 693 -> 679 by the Access & Identity V2 Financials slice: twelve financial record-data handlers converted to fin.read and two GL-account mutations to fin.write, plus two entries overturned from a reasoned `none` (see their `supersedes`). Lowered 679 -> 656 by the Forms authority cleanup: 23 handlers that were already enforcing authorization moved from pending to declared. The enforcement did not become stricter - it stopped being invisible to this table. Lowered 656 -> 655 by Attendance Productization V1 Thread 8: declaring the new pickup-authority handler against `attendance.read` made the burndown able to see that `app/api/admin/childcare-attendance/route.ts` GET already ran the same `assertAttendanceReadAllowed` gate while still marked pending, so it was drained rather than left claiming less than it enforces. Lowered again to 631 by the POS + Processing authority cleanup, which drained 24 net from the same 656 baseline: 25 handlers declared against forms.author and the four new processing.* keys, less one returned to pending - `processing/cases/[caseId]/identity/review` GET, which flows through the shared operator context but never required the old role gate, so declaring a capability there would have claimed an enforcement that does not exist and adding one would have tightened an open read. Attendance's reduction and this one are independent and both count: 656 - 1 - 24 = 631. The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack."
+    "max_pending": 593,
+    "$comment": "Lowered 693 -> 679 by the Access & Identity V2 Financials slice: twelve financial record-data handlers converted to fin.read and two GL-account mutations to fin.write, plus two entries overturned from a reasoned `none` (see their `supersedes`). Lowered 679 -> 656 by the Forms authority cleanup: 23 handlers that were already enforcing authorization moved from pending to declared. The enforcement did not become stricter - it stopped being invisible to this table. Lowered 656 -> 655 by Attendance Productization V1 Thread 8: declaring the new pickup-authority handler against `attendance.read` made the burndown able to see that `app/api/admin/childcare-attendance/route.ts` GET already ran the same `assertAttendanceReadAllowed` gate while still marked pending, so it was drained rather than left claiming less than it enforces. Lowered again to 631 by the POS + Processing authority cleanup, which drained 24 net from the same 656 baseline: 25 handlers declared against forms.author and the four new processing.* keys, less one returned to pending - `processing/cases/[caseId]/identity/review` GET, which flows through the shared operator context but never required the old role gate, so declaring a capability there would have claimed an enforcement that does not exist and adding one would have tightened an open read. Attendance's reduction and this one are independent and both count: 656 - 1 - 24 = 631. The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack. Lowered 602 -> 593 by Department Product Retirement + Business Process Authority Convergence V1: eight handlers moved pending -> declared under business_process.configure / .activate, and the generic department DELETE left the table entirely because the route was retired — it had no mounted caller and could not have worked on a real operational domain, whose department_id is NOT NULL on four live tables."
   },
   "inherited": {
     "$comment": "Handlers that entered web/app/api from OTHER programs while this branch was frozen, and are therefore not part of the Access backlog `ratchet.max_pending` bounds. The effective assertion is `pending - inherited <= max_pending`, so the program-owned backlog stays ratcheted at its committed ceiling and the ceiling is NOT raised. Every entry must still exist, still be exported, and still be `pending`: a deleted route, a removed method, or a handler that has since been classified `declared` or `none` FAILS until it is removed from this list. The list may only shrink. Nothing here asserts anything about a handler's authorization - these are W-15 backlog items awaiting OD-7 exactly like every other `pending` entry, and none of them is exempt from it. Shape follows the sibling gate scripts/checkServiceClientPrincipal.mjs, whose `baseline` list is the same idea for the same backlog. 2026-08-19, OD-2 reconciliation: merging current origin/staging brought five handlers this table had never seen. Three are participant token routes and took the settled `none` classification of their fourteen siblings rather than being seeded pending. The two on app/api/admin/communications/ingress-routes are Communications' and are enumerated here — gated by requireAdminOrgContextLight, an admission helper, consulting no catalog capability, exactly like the seventeen before them. The ceiling was NOT raised to absorb them. 2026-08-20, post-merge staging repair: the Communications lane merged app/api/communications/unsubscribe between this census's last run and the PR #475 merge, so staging's build failed on an undeclared route. Enumerated here rather than classified `none`: it is gated by an HMAC-signed recipient token, which is plausibly the same 'the credential is in the request' doctrine as the public-form family, but no sibling carries a settled review for signed unsubscribe tokens and this census does not assert another program's authorization model on inference. The ceiling was NOT raised.",
@@ -572,7 +572,10 @@
     },
     "app/api/admin/business-process/configuration/publish/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Publishing a business process configuration, in the canonical business-process namespace. The convergence census found it carrying the same role-title gate as the lifecycle-* family it publishes for, so it converges with them rather than being left as the one place the old question survived."
       }
     },
     "app/api/admin/business-process/configuration/route.ts": {
@@ -1226,18 +1229,27 @@
         "status": "pending"
       },
       "PUT": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Which actions a process offers at which stage, edited from LifecycleActionsMatrix and BusinessProcessActionsQueueWorkspace — the latter is literally a Business Process surface."
       }
     },
     "app/api/admin/departments/[departmentId]/lifecycle-activation/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.activate",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Tears an activated lifecycle down through deleteActivationLifecycleForDepartment. This is the sanctioned way a business process is removed, and it is why the generic department DELETE was retired rather than capability-enabled: process teardown already had a correct owner."
       },
       "GET": {
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.activate",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Activation changes what the tenant is RUNNING, not what a process would do, so it is deliberately not implied by configure — the same reason layouts.lifecycle sits outside layouts.manage. A role may be trusted to design a process without being trusted to switch the tenant onto it."
       }
     },
     "app/api/admin/departments/[departmentId]/lifecycle-activation/validate/route.ts": {
@@ -1250,7 +1262,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Thirteen mounted callers, every one a Lifecycle or Business Process surface — the hub, the activation board, the create form, the stage editors, the track adoption card and the BOS command key resolver. This is the business process builder; the /departments prefix is the legacy namespace doctrine already accepted keeping (business-process-system.md: 'Builder API paths remain lifecycle-* internally — Accepted, rename deferred')."
       }
     },
     "app/api/admin/departments/[departmentId]/lifecycle-queue-filter-audit/route.ts": {
@@ -1263,7 +1278,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Stage field and information requirements, edited from LifecycleStageRequirementsEditor and LifecycleStageFieldRequirementsEditor. Designing what a stage demands is business process configuration."
       }
     },
     "app/api/admin/departments/[departmentId]/operational-bootstrap/route.ts": {
@@ -1292,14 +1310,14 @@
       }
     },
     "app/api/admin/departments/[departmentId]/route.ts": {
-      "DELETE": {
-        "status": "pending"
-      },
       "GET": {
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Authority follows the semantic owner of the write, not the shared JSON column. The handler splits on body shape: the process-owned columns (key, name, description, sort_order, is_active) require business_process.configure — their one mounted caller is the Lifecycle rename keeping departments.name in step with the process name. A body carrying `metadata` additionally keeps the admin role check, because its only live caller is the org-wide attention/SLA page, whose rules drive resolveOpportunityAttention and are catalogued under crm_attention. That is not a business process write; settings.manage would widen it to ops, and folding it into configure would turn a process-design key into a generic JSON metadata-write key. Recorded as ATTENTION_SLA_METADATA_AUTHORITY_DEBT."
       }
     },
     "app/api/admin/departments/[departmentId]/work-unit-queue-summaries/route.ts": {
@@ -1312,7 +1330,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Business Process provisioning, not department creation. The only mounted caller is clientCreateLifecycleViaBuilder, which POSTs here to mint the runtime identity a NEW business process needs and then immediately PATCHes lifecycle-builder with create_process; the operator types a process name and never sees a department. The department convergence census found no other mounted caller. Authority is the process family's, because a departments.* key would give a retired product abstraction capability vocabulary and make it look current again."
       }
     },
     "app/api/admin/dev/create-org/route.ts": {

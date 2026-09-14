@@ -108,6 +108,15 @@ export const CAPABILITY_AREAS: readonly CapabilityArea[] = Object.freeze([
     { key: "enrollment", label: "Enrollment", description: "Exceptions to configured enrollment policy — pricing overrides and requirement exceptions.", order: 25 },
     { key: "reports", label: "Reports", description: "Reports and analytics.", order: 70 },
     { key: "workflows", label: "Workflows", description: "Operational workflows.", order: 80 },
+    /*
+     * BUSINESS PROCESS is the operator's noun, not Lifecycle and not Department.
+     * `docs/platform/core/business-process-system.md` records it as shipped product language, and
+     * the configuration workspace labels the surface "Processes". The two rows here were role-title
+     * gates under `/api/admin/departments` until the Department convergence; they are grouped by
+     * what an administrator is deciding — who may DESIGN a process, and who may SWITCH THE TENANT
+     * ONTO one — rather than by the legacy path they still answer on.
+     */
+    { key: "business_process", label: "Business Processes", description: "Designing business processes, and choosing which configuration is live.", order: 85 },
     { key: "expectations", label: "Operational expectations", description: "Authoring and ratifying operational expectations.", order: 90 },
     { key: "configuration", label: "Configuration", description: "How records look and behave — fields, layouts, sections, option sets and configuration assistance.", order: 100 },
     { key: "settings", label: "Settings", description: "Organization settings.", order: 110 },
@@ -133,6 +142,7 @@ export const UNMAPPED = "__unmapped__" as const;
  */
 const GROUP_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
     portal: "portal",
+    business_process: "business_process",
     billing: "billing",
     enrollment: "enrollment",
     financials: "financials",

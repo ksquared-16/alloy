@@ -11,6 +11,7 @@ import {
 } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { deleteActivationLifecycleForDepartment } from "@/lib/lifecycle/lifecycleActivationOwned";
 import { mergeCategoryFDepartmentMetadata } from "@/lib/lifecycle/mergeCategoryFDepartmentMetadata";
+import { BUSINESS_PROCESS_ACTIVATE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 async function loadDepartment(orgId: string, departmentId: string) {
     const supabase = createAdminClient();
@@ -53,9 +54,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
 export async function PATCH(request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_ACTIVATE);
+    if (denied) return denied;
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
@@ -133,9 +133,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_ACTIVATE);
+    if (denied) return denied;
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
