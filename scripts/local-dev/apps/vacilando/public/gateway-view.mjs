@@ -4919,6 +4919,91 @@ export function renderStatus(lane, resources, { open = false, summary, sessionLi
  * VALIDATION NEVER PERSISTS. The inspect endpoint is read-only; nothing durable
  * exists until Confirm.
  */
+/**
+ * WHAT A PROJECT CAN DO, IN THE OPERATOR'S WORDS.
+ *
+ * The registry has carried project identity, a promotion policy and an
+ * execution profile since S0/S1, and none of it was visible: the only way to
+ * learn whether a repository had managed lanes, a promotion trunk or a database
+ * was to read `repositories.json`. Registering a project therefore still meant
+ * editing a file, which is the thing this surface exists to end.
+ *
+ * EVERY VALUE HERE IS SERVER-COMPUTED. `publicRepository` already resolves
+ * `promotion` and `execution` through `promotionPolicyFor` and
+ * `executionProfileFor`; this function formats them and computes nothing. A
+ * second effective-config calculation in the client is a second authority, and
+ * it would drift the first time a profile changed.
+ *
+ * ABSENCE IS A STATE, NOT AN ERROR. A repository with no database, no hosted
+ * environment and no managed lanes is an ordinary repository — most are. It
+ * says "No database target", not `database_target: null`, and never a warning
+ * colour: the operator is being told what this project IS, not what it lacks.
+ *
+ * PROVENANCE IS SHOWN because "why is my promotion branch staging?" is the
+ * question that sends people to the source. A value either came from the
+ * project's own record or was inherited from its profile, and it says which.
+ */
+export function renderProjectCapabilities(repo = {}) {
+  const promotion = repo.promotion || {};
+  const execution = repo.execution || {};
+
+  // "Inherited from the Alloy profile" reads better than "profile:alloy", and a
+  // record-level override is worth calling out because it is the unusual case.
+  const origin = (block) => {
+    const src = String(block.source || "");
+    if (src === "repository_record") return `<span class="gw-cap-src">set on this project</span>`;
+    const profile = src.startsWith("profile:") ? src.slice("profile:".length) : null;
+    return profile ? `<span class="gw-cap-src">from the ${esc(profile)} profile</span>` : "";
+  };
+  const absent = (what) => `<dd class="gw-cap-absent">No ${esc(what)}</dd>`;
+  const row = (label, value, absentText) => `<dt>${esc(label)}</dt>`
+    + (value ? `<dd>${esc(String(value))}</dd>` : absent(absentText || String(label).toLowerCase()));
+
+  const repository = `<section class="gw-cap-group"><h4>Repository</h4><dl class="gw-kv">
+      ${row("Project", repo.project_id, "project identity")}
+      ${row("Repository", repo.name)}
+      ${row("Remote", execution.remote_slug || (repo.has_remote ? repo.remote_normalized : null), "remote — local only")}
+      ${row("Root", repo.root)}
+      <dt>Profile</dt><dd>${esc(repo.profile_label || repo.profile || "Generic Git")}</dd>
+    </dl></section>`;
+
+  const branches = `<section class="gw-cap-group"><h4>Branches &amp; promotion</h4><dl class="gw-kv">
+      ${row("Canonical branch", repo.default_branch, "canonical branch")}
+      <dt>Governed promotion</dt><dd>${promotion.governed_promotion
+        ? `Enabled ${origin(promotion)}`
+        : `<span class="gw-cap-absent">Not configured</span>`}</dd>
+      ${promotion.governed_promotion ? row("Promotes to", promotion.promotion_branch, "promotion target") : ""}
+      ${promotion.governed_promotion && promotion.promoted_ref ? row("Release truth", promotion.promoted_ref) : ""}
+      ${(promotion.protected_branches || []).length
+        ? `<dt>Protected</dt><dd>${esc((promotion.protected_branches || []).join(", "))}</dd>`
+        : ""}
+    </dl></section>`;
+
+  const lanes = `<section class="gw-cap-group"><h4>Lanes</h4><dl class="gw-kv">
+      <dt>Managed lanes</dt><dd>${execution.managed_slots
+        ? `Enabled ${origin(execution)}`
+        : `<span class="gw-cap-absent">Not managed — lanes use their own worktrees</span>`}</dd>
+      ${execution.managed_slots && execution.first_agent_port
+        ? `<dt>First port</dt><dd>${esc(String(execution.first_agent_port))}</dd>` : ""}
+      ${row("Worktrees in", repo.worktree_parent, "fixed worktree location")}
+    </dl></section>`;
+
+  // Only rendered when the project HAS an environment. A project with none is
+  // not missing a section; it simply has nothing to say here.
+  const hasEnv = Boolean(execution.hosted_host || execution.deployed_target || execution.database_target);
+  const environment = hasEnv
+    ? `<section class="gw-cap-group"><h4>Environment</h4><dl class="gw-kv">
+        ${execution.hosted_host ? row("Hosted at", execution.hosted_host) : ""}
+        ${execution.deployed_target ? row("Deployment target", execution.deployed_target) : ""}
+        ${execution.database_target ? row("Database", execution.database_target) : ""}
+        <dt>Source</dt><dd>${origin(execution) || "profile"}</dd>
+      </dl></section>`
+    : `<section class="gw-cap-group"><h4>Environment</h4>
+        <p class="gw-cap-absent">No hosted environment, deployment target or database.</p></section>`;
+
+  return `<div class="gw-project-caps">${repository}${branches}${lanes}${environment}</div>`;
+}
+
 export function renderRepositorySheet(state = {}) {
   const method = state.method === "clone" ? "clone" : "connect";
   const v = state.validation || null;
@@ -4948,7 +5033,11 @@ export function renderRepositorySheet(state = {}) {
       <dt>Remote</dt><dd>${v.has_remote ? esc(v.remote_normalized || "configured") : "Local only"}</dd>
       <dt>Worktrees will go in</dt><dd>${esc(v.worktree_parent || defaultWorktreeParent(v.root))}</dd>
       <dt>Profile</dt><dd>${v.profile === "alloy" ? "Alloy managed sprint" : "Generic Git"}</dd>
-    </dl>` : "";
+    </dl>
+    ${/* What this project will be ABLE to do, before it is registered. Most of
+          it will read "not configured", and that is the honest answer for an
+          ordinary repository rather than a list of things to go and fix. */ ""}
+    ${renderProjectCapabilities(v)}` : "";
 
   const warning = v && v.is_worktree
     ? `<div class="gw-notice err" role="alert">That path is a worktree of
