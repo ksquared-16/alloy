@@ -7,14 +7,22 @@ supersedes: []
 
 # 01 — Existing-state inventory
 
-> **This file has four parts.** **Part I (§§0–9)** is the existing-state inventory. **Part II (§§10–23)** is
+> **This file has seven parts.** **Part I (§§0–9)** is the existing-state inventory. **Part II (§§10–23)** is
 > the **security threat & enforcement matrix** — required output #7. **Part III (§§24–36)** is the
 > **gap analysis** — required output #8. **Part IV (§§37–44)** is the **role-model depth and role-editor
-> surface inventory**, added on operator reopen. Parts II–IV were delivered by later Mission 2 phases and
-> appended here per their assignment scopes; each reuses what precedes it rather than restating it. Read Part I
-> first, or jump to [§10](#10-headline--the-unauthenticated-surface-is-the-best-defended-part-of-this-platform),
+> surface inventory**, added on operator reopen. **Part V (§§45–57)** is the **security assessment of the
+> four-layer chain and the role editor**. **Part VI (§§58–71)** is the **reopen delta and corpus-integrity
+> register**. **Part VII (§§72–81)** is the **product-state re-anchor at 2026-09-13** — the first pass since
+> Part II to re-derive product state rather than corpus state. Parts II–VII were delivered by later Mission 2
+> phases and appended here per their assignment scopes; each reuses what precedes it rather than restating it.
+> Read Part I first, or jump to
+> [§10](#10-headline--the-unauthenticated-surface-is-the-best-defended-part-of-this-platform),
 > [§24](#24-headline--the-gap-is-no-longer-in-the-product-alone-it-is-between-the-corpus-and-its-plan) or
 > [§37](#37-headline--there-is-no-role-hierarchy-to-flatten).
+>
+> **If you are citing this file for current product state, read Part VII first.** §§3–6's product claims date
+> from 2026-08-03, and §80.9 records why their line numbers should be distrusted. Part VII supersedes §3.5 and
+> §3.3's mechanism for C6, and supersedes §4's census.
 
 > **Mission 2 refresh.** The accepted corpus is reused as input, not re-derived. This pass re-anchors the
 > inventory to the current worktree and records what has **changed since acceptance** — because remediation
@@ -2662,3 +2670,371 @@ git diff --stat -- docs/platform/planning/vacilando-os/qa/access-identity-v2/05-
   and is superseded by §61. Part III's text is left unedited, per the corpus's convention that a part records
   its state at its date; §61 is the correction of record.
 - **Not re-verified:** all carried findings, all severities, all line numbers cited from earlier parts.
+
+---
+
+## 72. Headline — the inventory stopped inventorying, and the product moved out from under it
+
+Part VI anchored at `03efba377` (**2026-08-06**). This part anchors at `4ad15391a` (**2026-09-13**), base
+`origin/staging` `477645367`. In those 38 days:
+
+| Measure, `03efba377..HEAD` | Count |
+|---|---:|
+| Commits touching `web/lib` or `supabase/migrations` | **1,066** |
+| Migrations added | **119** |
+| Commits tagged `(access)` | **199** |
+
+**No part since Part II re-derived product state.** Parts IV, V and VI are corpus work — role-model depth, the
+threat model of the four-layer chain, identifier collisions, plan coverage. Part VI says so itself (§70.1):
+*"Documentary and static… This part asserts **no new product defect**; every defect cited is owned by an
+earlier document or part."* That was a correct description of its own scope. Compounded three times, it means
+**the document's newest material is about the corpus, while its product claims date from 2026-08-03** — §3,
+§4 and §5, the sections a reader treats as "existing state."
+
+This part does only the neglected half: it re-runs §6 and re-reads the open findings of §3 at `HEAD`. It adds
+no threat, no workstream and no plan reading.
+
+**Four of the six open findings in §3 have moved, and one moved far enough to change what a reader should
+conclude from it.**
+
+| Finding | §3 state (2026-08-03) | State at `4ad15391a` | § |
+|---|---|---|---|
+| **G4** new membership gets no access profile | OPEN, fail-open, "highest-value open defect" | **SPLIT — write side CLOSED and locked; read side still pinned fail-open** (new **C14**) | §75.1, §76 |
+| **C6** two personas cannot reach the portal | OPEN, unchanged | **MECHANISM REMOVED** — `PORTAL_ROLES` no longer exists; admission is a capability | §75.2 |
+| **C11** second resolver diverges | OPEN, unchanged | **OPEN — now instrumented**, both paths share one scope function and log divergence | §75.3 |
+| **C10** RLS authorizes `owner`/`manager` | OPEN, unchanged | **not re-derived this pass** — see §80.3 | — |
+| **G6** RLS is not a backstop | OPEN, narrowed at edges | **OPEN — proportionally unchanged** (95.5% → 93.1%) | §75.4 |
+| **G3** delegation ceiling | PARTIAL, ceiling open | **not re-derived this pass** — see §80.3 | — |
+
+---
+
+## 73. Method — what this part re-derived, and what it refused to
+
+Static and file-grounded, at one commit. Every claim below cites `path:line` **re-read in this pass**. The
+rule this part follows, and the reason it is short:
+
+- **Re-derived:** the four census commands of §6, verbatim; the code behind §3.2–§3.6's open findings.
+- **Reused, not re-derived:** everything else in the corpus. Findings C1–C5, C7–C9, C12, C13, G1, G2, G5, the
+  Part II threat register, and all of Parts III–VI are inputs here and are **cited, not re-checked**.
+- **Not touched:** no source, schema, migration, test or UI was modified. No wave was created or renumbered.
+
+Where Part VI's headline is now wrong it is **corrected in place here, not edited there** — the corpus
+convention that a part records its state at its date (Part VI §71) is preserved.
+
+---
+
+## 74. The census, re-anchored
+
+The four commands of §6, re-run verbatim at `4ad15391a`:
+
+| Measure | 2026-07-30 | 2026-08-03 | **2026-09-13** | Δ since §4 |
+|---|---:|---:|---:|---|
+| `route.ts` files under `web/app/api` | 539 | 559 | **635** | +76 |
+| …holding a service-role client | 517 | 534 | **591** | +57 |
+| …resolving `getAdminAccessContext` | 88 | 89 | **103** | +14 |
+| Files in `web/lib` mentioning `permissionKeys` | 11 | 13 | **42** | **+29 (3.2×)** |
+
+**The fourth row is the finding.** §4 called 13 "the enforced-permission surface grew for the first time in
+this window" and treated +2 as directional. It has since **tripled**. That is the largest proportional move in
+any measure this inventory tracks, and it is in the direction §8 asked for.
+
+**It does not, on its own, mean enforcement tripled** — §4's own caution stands unchanged: *"mentioning
+`permissionKeys` is still not enforcing it."* This pass did not re-derive the enforced-vs-mentioned ratio, so
+the 30× over-report factor in §4 is **carried, not reconfirmed**. What the row licenses is a re-measurement,
+not a conclusion.
+
+Rows 1–3 grew roughly together (+13.6%, +10.7%, +15.7%) — the API surface expanded without changing shape.
+
+---
+
+## 75. The open findings, re-verified
+
+### 75.1 G4 — the write side is closed, and held by a lock that can fail
+
+`POST /api/admin/users` no longer inserts membership. It calls a single helper
+(`web/app/api/admin/users/route.ts:177`) under a comment that names the finding:
+
+```ts
+// W-5/G4: membership + access profile are one transaction. Never insert into
+// `user_roles` directly here — that is the fail-open path this closes.   // :175-176
+const membership = await createMembershipWithAccessProfile(supabase, { … });  // :177
+```
+
+The helper delegates to an atomic RPC — `create_membership_with_access_profile`
+(`web/lib/admin/membershipWithProfile.ts:47`), with `replace_membership_with_access_profile` at `:76` —
+defined in `supabase/migrations/20260807090001_membership_profile_atomic_create.sql`.
+
+**A comment naming a finding is not evidence the finding is closed.** What closes it is that the invariant is
+held repo-wide rather than in one handler. `web/tests/access/membershipAtomicWiring.test.ts` sweeps every file
+under `app/` and `lib/` for a direct write (`:39`, `:84`):
+
+```ts
+const DIRECT_WRITE = /from\(\s*["'`]user_roles["'`]\s*\)\s*(?:\.\s*\w+\([^)]*\)\s*)*?\.\s*(insert|upsert|update)\b/;
+```
+
+This lock is better built than most in the corpus, and the reason is worth recording as method: it carries a
+**positive control** — `expect(DIRECT_WRITE.test(knownDirectWriter)).toBe(true)` (`:102`) — so the regex is
+proven able to detect a violation, and a **floor**, `expect(files.length).toBeGreaterThan(500)` (`:95`), so a
+broken glob cannot pass by scanning nothing. A file-existence or count-only lock would green on both failures.
+`membershipProfileInvariant.integration.test.ts` covers the database side.
+
+**G4's write leg is closed and bound. No membership the product creates can lack a profile row.**
+
+### 75.2 C6 — the mechanism named by the finding no longer exists
+
+`PORTAL_ROLES` is gone from the resolver. It survives only as two comments recording its removal
+(`web/lib/admin/resolveAdminAccessCore.ts:39,41`) — *"`PORTAL_ROLES` STOOD HERE, and its absence is the W-13
+repair."* §6's check `rg -n 'PORTAL_ROLES' …resolveAdminAccessCore.ts # :18, :142, :233` now returns **no code
+line at all**.
+
+Admission is a capability. `web/lib/admin/portalAdmission.ts:27` defines
+`PORTAL_ADMISSION_CAPABILITY = "portal.access"`, resolved through `portalAdmissionFromPermissionKeys` (`:54`)
+and `isPortalAdmitted` (`:43`), called at `resolveAdminAccessCore.ts:378` and `:496`. The module states the
+change in the terms §8 asked for (`:14-15`): the question is no longer *"is this principal's role named admin
+or ops?"* but *"does this principal hold the capability to enter the portal?"*
+
+`portalAdmissionFromPermissionKeys` distinguishes `"unresolved"` from `"no-capability"` (`:55-56`) — an
+unreadable grant set is not silently a denial, which is the failure mode §3.4's divergence was made of.
+
+**C6 as written — "the platform ships two named personas it cannot admit to the portal" — is no longer
+structurally true.** `regional_lead` and `school_director` are admissible by granting `portal.access`.
+**This pass did not verify that any org actually grants it**, so the reachability question is re-opened as
+configuration, not closed. C6 should be **restated against the capability model, not marked closed**.
+
+### 75.3 C11 — still open, but no longer merely asserted
+
+`resolveAdminAccessDimensionsForOrgMember` still recomputes independently, now at
+`resolveAdminAccessCore.ts:455` (§3.4 cited `:209`), with its own `portalEligible` at `:496`.
+
+What changed is that the divergence is now **measured**. Both paths resolve scope through one function,
+`resolveScopeAnswerFromProfile`, run in a dual mode that computes the answer the *other* enforcement setting
+would give and compares them (`:145-155`):
+
+```ts
+const shadowMode: AbsentProfileMode = ABSENT_PROFILE_ENFORCEMENT === "deny" ? "legacy-all" : "deny";
+const enforced = resolveScopeAnswerFromProfile(profileRow, ABSENT_PROFILE_ENFORCEMENT);   // :149
+…
+return { enforced, shadow, diverges };                                                     // :155
+```
+
+`logScopeDivergence` (`:194`) fires on both paths — `:398` for the enforcing resolver, `:527` for the
+dimensions resolver.
+
+**Read precisely: this instruments the *absent-profile* divergence (§76), not the resolver-vs-resolver
+divergence C11 names.** The two resolvers now share the scope leg, which narrows C11's surface; they still
+compute admission separately. **C11 stays open, narrowed.**
+
+### 75.4 G6 — proportionally unchanged
+
+**591 of 635** route files hold a service-role client — **93.1%**, against 534 of 559 (95.5%) at §3.6 and
+517 of 539 (95.9%) at acceptance. Three measurements, ~2.8 points of drift, no structural change. For that
+surface the check inside the handler's own module graph is still the only authority that exists.
+**G6 open, unchanged in substance.**
+
+---
+
+## 76. C14 — G4 is now two findings with different owners, and only one is closed
+
+**New finding, minted by this part.** `C1`–`C13` and `GAP-1`–`GAP-17` are in use (§26, §63); `C14` is the next
+free ID in §3's space.
+
+§75.1 closes the *write* leg: a new membership always gets a profile row. The *read* leg — what the resolver
+does when a membership **has no profile row** — is a separate decision, and it is pinned to the historical
+fail-open:
+
+```ts
+export const ABSENT_PROFILE_ENFORCEMENT: AbsentProfileMode = "legacy-all";
+// web/lib/admin/resolveAdminAccessCore.ts:88
+```
+
+`legacy-all` is documented at `:76` as *"the historical fail-open: both dimensions resolve `all`."* The
+alternative, `deny`, is W-7's target (`:73-77`). The constant's own docblock states the release condition
+(`:79-84`):
+
+> MUST remain `legacy-all` until M1 (`20260807140000_backfill_membership_access_profiles.sql`) is APPLIED on
+> the shared target. W-0 Q4 stands at 2 `(user, org)` pairs with no profile row, so flipping this ahead of the
+> backfill locks out those 2 principals — the exact L1 outcome W-7 exists to avoid.
+
+**Three things follow, and they are the finding:**
+
+1. **Every membership that predates W-5 and lacks a profile row still resolves to unrestricted department and
+   site scope.** §3.5's sentence — *"an absent profile row still means unrestricted scope on both
+   dimensions"* — is **still true of the read path**, and remains true no matter how well the write path is
+   locked.
+2. **A reader who sees "G4 closed by W-5" will conclude scope is enforced. It is not.** The two legs have
+   different owners (W-5, W-7), different closure conditions, and only one is done. That is the reason this
+   needs its own ID rather than a status edit on G4.
+3. **M1 is not applied — the pin is holding, not forgotten.** M1 is present in the tree
+   (`supabase/migrations/20260807140000_backfill_membership_access_profiles.sql`). A migration file's presence
+   cannot establish that it ran; the W-6 preflight establishes the negative **functionally**, which for this
+   migration is the stronger proof: *"the migration's entire effect is to drive `q4_pairs_without_profile` to
+   0, and the live read returns 2. It therefore CANNOT have been applied to this target"*
+   (`docs/platform/planning/vacilando-os/qa/access-identity-v2/w6-m1-preflight.json:124`). So `:88` is
+   correctly `legacy-all`, and C14 is **not** a claim that someone forgot to flip it.
+4. **The docblock's population figure is stale, and its reasoning with it.** `:80-82` justifies the pin by
+   *"W-0 Q4 stands at 2 `(user, org)` pairs … flipping this ahead of the backfill locks out those 2
+   principals."* **Census run 4 (2026-09-04) returned 5.** The preflight — repaired at `0839ed80c`, which
+   landed on this branch *during* this pass — now carries `"ok": false` (`:22`), `voided_at: "2026-09-06"`
+   (`:23`), and an explicit sizing instruction: *"Do not size it from 2 (run 3) and do not size it from 5
+   (run 4) — 5 is already nine days old at the time of this edit and the population is demonstrably no longer
+   static"* (`:33`). Its binding requirement is that M1's created-row count equal `q4_pairs_without_profile`
+   **as returned by a fresh preflight run, "never the 2 recorded on 2026-08-04"** (`:75`).
+
+**C14 — severity: same class as G4 (fail-open scope). The population is unbounded in the sense that matters:
+it is moving, and no current number exists.** The code comment that gates the W-7 flip still reads 2; the last
+census read 5; the preflight forbids sizing from either. Anyone reasoning about the flip from
+`resolveAdminAccessCore.ts:80-82` alone is reasoning from a figure three counts out of date.
+
+**Note the shape, because it is the same one twice.** `0839ed80c`'s own summary records it: *"a verdict
+recorded in prose beside the numbers it overrules, never written to the file the gate reads."* The W-6 ruling
+voided the preflight on 2026-09-06 in plan prose; the artifact an operator opens still said `ok: true` for
+seven days. **C14 is that shape in source rather than JSON** — the docblock at `:79-84` is prose recording a
+condition, sitting beside the constant a reader actually acts on. The repair for the JSON was to write the
+file. The equivalent repair here is to stop citing `:80-82`'s figure as a live count.
+
+The corrective is not a code change — it is that **G4 must not be reported closed while `:88` reads
+`legacy-all`.**
+
+---
+
+## 77. `X-12` — the file's own header undercounts its parts
+
+Until this pass, `01…`'s header block read *"**This file has four parts.**"* This file has **seven**. Parts V
+(§§45–57), VI (§§58–71) and VII (§§72–81) were absent from it, as Part VI §70.11 predicted for `README.md`
+(*"Parts IV, V and VI are absent from its document table"*). The header now names all seven and points a
+reader citing current product state at Part VII first.
+
+Minted in the `X-n` corpus-integrity space (`X-1`…`X-11` in use, §32, §65, §66) and inheriting `X-9`'s
+numbering risk. **Unlike the rest of that space, this one is repairable by the part that found it and has
+been:** the header is navigation, not a dated record, so correcting it does not violate the convention that a
+part records its state at its date. `README.md` is **not** updated — it is outside this assignment's single
+named output, so `X-2`'s escalation and Part VI §70.11's standing follow-up both stand.
+
+---
+
+## 78. What this part does not resolve
+
+1. **Whether any org grants `portal.access`** — decides whether C6 is closed or merely restated (§75.2).
+2. **The current count of profile-less `(user, org)` pairs.** Not open for want of asking: the preflight
+   **forbids** reusing run 3's 2 or run 4's 5 and requires a fresh run immediately before apply
+   (`w6-m1-preflight.json:33,:75`). Until that run exists, no number here is citable — which is precisely
+   C14's point, and is a containment question rather than a product one.
+3. **Whether the `permissionKeys` tripling is enforcement or mention** (§74) — the measurement §4's 30×
+   caution now warrants.
+
+**Resolved during this pass, and therefore not listed:** whether M1 is applied. `w6-m1-preflight.json:124`
+establishes functionally that it is not (§76.3).
+
+(1)–(3) are measurements against a running target, not decisions; none needs a Director. **This part raises no
+decision and mints none.**
+
+---
+
+## 79. Reproduce
+
+```bash
+# §72 — drift since Part VI's anchor
+git log --oneline 03efba377..HEAD -- web/lib supabase/migrations | wc -l        # 1066
+git diff --name-only --diff-filter=A 03efba377..HEAD -- supabase/migrations | wc -l  # 119
+git log --oneline 03efba377..HEAD | rg -c '\(access\)'                          # 199
+
+# §74 — the census, §6's four commands verbatim
+rg -l --glob 'route.ts' '' web/app/api | wc -l                                  # 635
+rg -l 'supabaseAdmin|createServiceRoleClient|SERVICE_ROLE' --glob 'web/app/api/**/route.ts' | wc -l  # 591
+rg -l 'getAdminAccessContext' -g 'route.ts' web/app/api | wc -l                 # 103
+rg -l 'permissionKeys' web/lib | wc -l                                          # 42
+
+# §75.1 — G4 write leg closed and locked
+rg -n 'createMembershipWithAccessProfile|W-5/G4' web/app/api/admin/users/route.ts   # :175-177
+rg -n 'rpc\(' web/lib/admin/membershipWithProfile.ts                            # :47, :76
+rg -n 'DIRECT_WRITE|toBeGreaterThan|knownDirectWriter' web/tests/access/membershipAtomicWiring.test.ts
+
+# §75.2 — C6: PORTAL_ROLES is gone; admission is a capability
+rg -n 'PORTAL_ROLES' web/lib/admin/resolveAdminAccessCore.ts                    # comments only, :39/:41
+rg -n 'PORTAL_ADMISSION_CAPABILITY|isPortalAdmitted' web/lib/admin/portalAdmission.ts  # :27, :43, :54
+
+# §75.3 / §76 — the dual-run, and the constant that pins the read leg
+rg -n 'ABSENT_PROFILE_ENFORCEMENT|logScopeDivergence' web/lib/admin/resolveAdminAccessCore.ts  # :88, :194, :398, :527
+ls supabase/migrations/20260807140000_backfill_membership_access_profiles.sql   # present in tree
+
+# §76 — M1 is not applied, the preflight is void, and the docblock's figure is stale
+rg -n '"ok"|voided_at|q4_pairs_without_profile|CANNOT have been applied|never the 2 recorded' \
+  docs/platform/planning/vacilando-os/qa/access-identity-v2/w6-m1-preflight.json   # :22 :23 :52 :75 :124
+git log --oneline 4ad15391a..HEAD        # 0839ed80c repaired the preflight mid-pass (§81)
+```
+
+---
+
+## 80. Limits — read before citing
+
+1. **Static, single-commit, read-only.** No request, browser, database, test, typecheck or build was run. The
+   locks in §75.1 were **read, not executed** — the claim is *what they assert*, not that they pass at `HEAD`.
+2. **This part asserts one new finding (`C14`) and one corpus-integrity finding (`X-12`).** Everything else
+   restates an existing finding's status against re-read code.
+3. **C10 and G3 were not re-derived.** §72's table marks them so. Both are cited here at their §3 state and a
+   reader must not read this part as reconfirming them. They are the first two candidates for the next pass.
+4. **§75.2 does not close C6.** It establishes that the *mechanism* C6 names is gone. Whether the personas are
+   admissible in practice is a configuration question this pass did not ask (§78.1).
+5. **Every count in §74 is a file count from a name search**, inheriting §7's and §35's caution in full: a file
+   that mentions a token is not a file that enforces it, and the 30× over-report factor in §4 is carried
+   forward unre-derived.
+6. **`C14` quotes three population figures and measures none of them.** 2 (docblock, run 3), 5 (run 4) and
+   "no citable number" (the preflight's own rule) are all **read from artifacts**, not from the target. This
+   pass has no channel to the database and did not run a census. The finding is that the figures disagree and
+   that the one in source is the stalest — **not** that any particular number is currently correct.
+7. **`C14`.3's "not applied" is a functional inference, not a `schema_migrations` read**, and is quoted from
+   `w6-m1-preflight.json:124`, which reasons from run 3's live read. It is the preflight's conclusion, carried
+   here with its provenance, not an independent verification by this part.
+8. **`C14` is minted in §3's `C-n` space and `X-12` in the `X-n` space**, both of which `03…§23` binds. They
+   need binding at the next re-sequence and inherit `X-9`'s / `X-10`'s renumbering risk.
+9. **Line numbers cited from Parts I–VI were not re-derived**, and §72 is direct evidence they should be
+   distrusted: 1,066 commits touched these paths. §3.4's `:209` had already moved to `:455` and §6's
+   `PORTAL_ROLES # :18, :142, :233` no longer resolves at all. **Treat every unverified line number in this
+   file as stale until re-read.**
+10. **Scope discipline, with one exception.** The assignment names one output path and only that file was
+    written. The exception is §77's header correction — **inside** the named file. `README.md` was not updated.
+11. **The measurements were taken at `4ad15391a`; the branch moved to `0839ed80c` mid-pass** (§81). The anchor
+    remains an ancestor of `HEAD`, and of the four commits added, the only path touched that this part cites
+    is `web/tests/access/selfAuthorityRouteDiscovery.test.ts` — which §75.1 does **not** rely on (it cites
+    `membershipAtomicWiring.test.ts`). **Every §74 count and every line number in §75 was therefore left as
+    measured and is valid at `4ad15391a`; none was re-run at `0839ed80c`.**
+12. **The anchor is an `unmanaged` worktree** (§81) — a class, not a base defect: it is 0 behind
+    `origin/staging` `477645367`.
+
+---
+
+## 81. Provenance — Part VII
+
+- **Verified at `4ad15391a`**, base `origin/staging` `477645367`, in an `unmanaged` worktree under
+  `scratchpad/ph` on the shared branch `runtime/test-dispatch-safety`.
+- **The branch moved under this pass, and the record says so.** At the start, `HEAD` was `4ad15391a` (2 ahead)
+  with two uncommitted changes present. At the end, `HEAD` was `0839ed80c` (6 ahead) and those changes were
+  gone — a concurrent session on the same worktree had committed them. `4ad15391a` was confirmed an **ancestor**
+  of `0839ed80c` (`git merge-base --is-ancestor`), so the measurements stand; see §80.11 for exactly what was
+  and was not re-run. Two of the four added commits bear on this part:
+  - `0839ed80c` repaired `w6-m1-preflight.json` — **incorporated into §76.3–§76.4**, which is why C14 states
+    M1's apply status and the 2/5 disagreement rather than deferring both.
+  - `0441cf010` independently traced the assignment that produced this part to a unit-test fixture (§81, last
+    bullet).
+- **This part's own dispatch was a fixture.** The brief ordering "produce `01-existing-state-inventory.md`"
+  named a file that already existed at 2,664 lines, and its distinctive fields trace to string literals in
+  `scripts/local-dev/tests/mission-runtime.test.mjs` (title `:1639`), whose objective trips
+  `isAccessIdentityBrief` (`mission-compiler.mjs:198`) so the compiler substitutes the access catalog. The
+  catalog marks a deliverable satisfied on file existence >200 bytes (`mission-compiler.mjs:183-196`), which is
+  why an artifact this large is repeatedly re-ordered. **Complying literally meant overwriting accepted
+  corpus.** This part appends instead — and the re-anchor in §72 is the work that ordering *should* have
+  requested. `0441cf010` records the same trace from a different assignment.
+- **Read this pass, in the product:** `web/app/api/admin/users/route.ts`;
+  `web/lib/admin/membershipWithProfile.ts`; `web/lib/admin/resolveAdminAccessCore.ts` §§`:39-200`, `:370-400`,
+  `:450-530`; `web/lib/admin/portalAdmission.ts`; `web/tests/access/membershipAtomicWiring.test.ts`;
+  `supabase/migrations/` index.
+- **Read this pass, in the corpus:** `01…` §§0–9 (Part I, in full), §70–§71 (Part VI's limits and provenance),
+  and all part headers. **Parts II, III, IV and V were not re-read** — cited from their own text.
+- **Mechanical checks:** every command in §79, run at `4ad15391a`.
+- **Corrected this pass:** the header's *"This file has four parts"* (§77). Part VI's §70.1 scope statement is
+  not corrected — it was accurate for Part VI; §72 records only that three consecutive parts shared that scope.
+- **Superseded by this part:** §3.5's status for G4's write leg (§75.1) and §3.3's `PORTAL_ROLES` mechanism for
+  C6 (§75.2). §4's census is superseded by §74. **Earlier text is left unedited**, per the corpus convention;
+  these sections are the corrections of record.
+- **Not re-verified:** C1–C5, C7–C13, G1–G3, G5, `GAP-1`…`GAP-17`, `X-1`…`X-11`, all severities, and all line
+  numbers cited from Parts I–VI (§80.9).
