@@ -266,3 +266,62 @@ It comes from `action_catalog_v1.candidate_actions` on the **Waitlist** stage, i
 published payload (rev 31), and it predates this work — it only became visible because validation
 runs once there are unpublished changes. **Kelly cannot publish until that is resolved.** Not fixed
 here: it is a different subsystem and outside this slice.
+
+---
+
+## The publication blocker, 2026-09-14 — `stage_work.start`
+
+Publication is refused with one error and only one:
+
+> `process_command_set_incomplete` — Unknown capability `'stage_work.start'` in `command_set_v1`
+> (`path: processes[enrollment].command_set_v1`)
+
+### Where it comes from
+
+`stage_work.start` is an **enabled command in the process's `command_set_v1`** (14 commands), present
+identically in published revision 31 and in the current draft. It is also a Waitlist
+`action_catalog_v1` candidate action — the Waitlist *Offer spot* work. It is not stage-local
+configuration; it is a process-level command selection.
+
+### It is a real, current capability — just not on this branch
+
+| | |
+| --- | --- |
+| Occurrences in `capabilityRegistry.ts` on this lane's branch | **0** |
+| Occurrences on `origin/staging` | **4** |
+| Introduced | `ea806ca7a` 2026-09-11 16:09 — *"stage_work.start — offering a spot is an operator act"* |
+| Made resolvable | `1ad4de1e1` 2026-09-12 06:13 — *"stage_work.start is resolvable, so a configured start renders"* |
+| Either commit an ancestor of this lane's HEAD | **No** |
+| This lane vs `origin/staging` | **850 behind**, 70 ahead; merge base `4df58a92b`, 2026-09-09 |
+
+On staging it is fully defined — `capabilityKey`/`canonicalCommandKey` `stage_work.start`, operator
+label *Start stage work*, family `enrollment`, maturity `executable`, execution owner
+`registered_action`, catalog visibility `organization_command_catalog` — and its own commit message
+records that it was already "a production capability, a registered adminV2 action, process-selected
+in the tenant command set, and configured against the Waitlist stage with its work template bound."
+
+### Classification — OTHER: branch base drift
+
+Not a stale configuration reference: the config is correct and the capability is current.
+Not a missing registration in the product: it is registered on staging.
+Not a validator defect: the validator is right — *this build* genuinely does not have the capability.
+
+The tenant's configuration was authored on 2026-09-12 against a product that has
+`stage_work.start`. This lane's base is 2026-09-09, three days before it existed. The validator is
+correctly reporting that the code it is running does not know a capability the configuration
+legitimately uses.
+
+### Why nothing was changed here
+
+Each available "fix" would have been a defect:
+
+- removing the config reference would delete live, correct Waitlist configuration to satisfy an old build;
+- registering `stage_work.start` in this branch would fork a capability that already exists on staging;
+- relaxing the validator would let genuinely unknown capabilities publish.
+
+The real remedy is to bring this lane onto a base containing `1ad4de1e1`, which is a rebase/merge —
+authorization Kelly has not given. Publication should be performed from a staging-based build, where
+this error does not arise.
+
+**Waitlist behaviour is unaffected in the meantime**: the stage editor renders, *Review waitlist
+position* and *Offer spot* are both present, and no capability error is shown to an operator.
