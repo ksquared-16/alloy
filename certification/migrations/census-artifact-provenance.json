@@ -15,15 +15,6 @@
       "execution_executed_at": "2026-09-11T23:34:56.198Z"
     },
     {
-      "artifact": "hosted-migration-identity-census.sql.results.json",
-      "status": "HISTORICAL_MIXED_GENERATION",
-      "stated_trusted_host_action_id": "tha_62a0bc1ab313f7",
-      "authoritative_trusted_host_action_id": "tha_02c7feeb72f587",
-      "query_hash_agrees": true,
-      "results_census_run_at": "2026-09-12T16:21:08.115Z",
-      "execution_executed_at": "2026-09-12T16:21:07.148Z"
-    },
-    {
       "artifact": "thread7-apply-outcome-census.sql.results.json",
       "status": "HISTORICAL_MIXED_GENERATION",
       "stated_trusted_host_action_id": "tha_d871c5a4913fcf",
