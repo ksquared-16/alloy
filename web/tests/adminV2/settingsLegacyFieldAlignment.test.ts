@@ -84,9 +84,17 @@ describe("settings legacy closeout", () => {
         // (`certification/playwright/access-role-surface-reachability.cert.spec.ts`) and over the
         // redirect table (`tests/access/roleEditorSingleSurface.test.ts`). A page-level redirect is
         // one mechanism for this invariant, not the invariant itself.
+        //
+        // `departments` left this list the same way and for a stronger reason: the Department
+        // PRODUCT is retired. The convergence census proved the settings screen was registered in
+        // the configuration domains and then filtered straight back out by `advanced: true`, so no
+        // operator could navigate to it, and every mounted caller of the routes beneath it was a
+        // Lifecycle or Business Process surface. The page, its client and its redirect page are
+        // gone; `next.config.ts` now lands both legacy Department URLs on `/organization/processes`,
+        // the canonical owner. The department ROW is untouched — it is still ACL and metadata
+        // ownership, and `department_id` is still NOT NULL on four live tables.
         const redirects: Array<[string, string]> = [
             ["app/legacy-admin/system/page.tsx", 'redirect("/settings")'],
-            ["app/legacy-admin/system/departments/page.tsx", 'redirect("/settings/departments")'],
             ["app/legacy-admin/system/work-units/page.tsx", 'redirect("/settings/work-units")'],
             ["app/legacy-admin/system/pipelines/page.tsx", 'redirect("/settings/processes")'],
             ["app/legacy-admin/system/customer-person-roles/page.tsx", 'redirect("/settings/relationships'],

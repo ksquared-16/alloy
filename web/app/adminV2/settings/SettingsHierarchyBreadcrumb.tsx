@@ -73,11 +73,6 @@ function crumbsForPath(path: string): Crumb[] {
         return base;
     }
 
-    if (tail === "/departments" || tail.startsWith("/departments/")) {
-        base.push({ label: "Departments", href: null });
-        return base;
-    }
-
     if (tail === "/kpis" || tail.startsWith("/kpis/")) {
         base.push({ label: "Operational Intelligence", href: `${SETTINGS_ROOT}/analytics?tab=visibility` });
         return base;

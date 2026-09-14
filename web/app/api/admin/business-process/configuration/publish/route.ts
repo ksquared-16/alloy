@@ -34,15 +34,15 @@ import {
     summarizeBusinessProcessEditorState,
 } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
 import { validateBusinessProcessForPublish } from "@/lib/businessProcesses/configuration/businessProcessPublishValidation";
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 export async function POST(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (denied) return denied;
 
     let body: { department_id?: string; draft_revision?: number; base_revision_id?: string | null } = {};
     try {

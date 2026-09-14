@@ -75,12 +75,23 @@ const ACCESS_OWNED = [
      * is an unresolved product decision. Minting a capability for either would make it MORE
      * reachable — a key can be granted to a custom role, a role literal cannot — so both keep the
      * gate they already had and are recorded as debt rather than migrated. They are named in
-     * KNOWN_ROLE_GATED below so this lock stays green on exactly those two and nothing else.
+     * KNOWN_ROLE_GATED below so this lock stays green on exactly those and nothing else.
+     *
+     * THE BUSINESS PROCESS TREES join this lock with the Department convergence. Every lifecycle
+     * operation under `departments/` and the publish route under `business-process/` now derives
+     * authority from `business_process.configure` / `.activate`, and the generic department DELETE
+     * was retired outright rather than given a key. One gate survives on purpose: the PATCH shape
+     * carrying `metadata` is the org-wide attention/SLA write, which has no truthful capability yet
+     * and must not borrow a process key to get one. It is recorded below, and the same handler's
+     * column-field branch is capability-gated, so the exception is a write shape, not a route.
      */
     join(webRoot, "app", "api", "admin", "option-sets"),
     join(webRoot, "app", "api", "admin", "entity-layouts"),
     join(webRoot, "app", "api", "admin", "field-definitions"),
     join(webRoot, "lib", "access", "configurationAuthority.ts"),
+    join(webRoot, "app", "api", "admin", "departments"),
+    join(webRoot, "app", "api", "admin", "business-process"),
+    join(webRoot, "lib", "access", "businessProcessAuthority.ts"),
 ];
 
 /**
@@ -96,6 +107,10 @@ const KNOWN_ROLE_GATED: { suffix: string; why: string }[] = [
     {
         suffix: join("field-definitions", "ensure-platform-field", "route.ts"),
         why: "PLATFORM_AUTHORITY_DELEGABILITY_UNRESOLVED — installs unremovable is_system rows; see platform-field-authority-delegability.md",
+    },
+    {
+        suffix: join("departments", "[departmentId]", "route.ts"),
+        why: "ATTENTION_SLA_METADATA_AUTHORITY_DEBT — the PATCH metadata shape is the org-wide attention/SLA write, not a business process write; settings.manage would widen it to ops and business_process.configure would make a process key a generic JSON write key. The column fields ARE capability-gated in the same handler; only the metadata branch still asks the role.",
     },
 ];
 
@@ -255,7 +270,22 @@ describe("W-17 — a seeded role key is not authority inside Access", () => {
                 `${known.suffix} no longer decides from a role key — delete its KNOWN_ROLE_GATED entry (${known.why})`,
             ).toBe(true);
         }
-        expect(KNOWN_ROLE_GATED.length, "the exception list may only shrink").toBeLessThanOrEqual(2);
+        /*
+         * THE CAP MOVES ONLY WITH THE SCANNED SURFACE, NEVER WITH A NEW DEFECT IN AN OLD ONE.
+         *
+         * It was 2 while this lock covered option-sets, entity-layouts and field-definitions. The
+         * Department convergence brought two more trees under the scan — `departments/` and
+         * `business-process/` — carrying nine role-title sites between them. Eight are gone: seven
+         * converted to business_process.configure / .activate and the generic department DELETE was
+         * retired with the route. The ninth is a WRITE SHAPE, not a route: a PATCH body carrying
+         * `metadata` is the org-wide attention/SLA write, and the same handler's column-field branch
+         * is capability-gated beside it.
+         *
+         * So 3 is the honest number for a surface that now scans two more trees than it did, and it
+         * is a ceiling rather than a budget: nothing in an already-scanned tree may claim it. When
+         * attention/SLA gets its own owner, this returns to 2 and does not rise again.
+         */
+        expect(KNOWN_ROLE_GATED.length, "the exception list may only shrink").toBeLessThanOrEqual(3);
     });
 
     it("actually scanned the configuration authorization surface", () => {

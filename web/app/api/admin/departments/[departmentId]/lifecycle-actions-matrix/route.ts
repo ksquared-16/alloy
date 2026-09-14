@@ -23,6 +23,7 @@ import {
     editProcessInDraft,
 } from "@/lib/businessProcesses/configuration/editProcessInDraft";
 import { loadBusinessProcessEditorState } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 async function loadDepartment(orgId: string, departmentId: string) {
     const supabase = createAdminClient();
@@ -83,9 +84,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
 export async function PUT(request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (denied) return denied;
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);

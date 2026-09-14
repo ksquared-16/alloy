@@ -230,7 +230,7 @@ const nextConfig: NextConfig = {
       // here or the path 404s — and `components/admin/AdminLayout.tsx` still links to it. Same
       // destination, one hop instead of two; no URL changes where it lands.
       { source: "/legacy-admin/users", destination: "/organization/access", permanent: false },
-      { source: "/legacy-admin/system/departments", destination: "/settings/departments", permanent: false },
+      { source: "/legacy-admin/system/departments", destination: "/organization/processes", permanent: false },
       { source: "/legacy-admin/system/work-units", destination: "/settings/work-units", permanent: false },
       { source: "/legacy-admin/system/pipelines", destination: "/organization/processes", permanent: false },
       { source: "/legacy-admin/system/customer-person-roles", destination: "/settings/relationships", permanent: false },
@@ -253,7 +253,7 @@ const nextConfig: NextConfig = {
       { source: "/admin/system/layouts", destination: "/organization/surfaces", permanent: false },
       { source: "/admin/system/access-control", destination: "/organization/access", permanent: false },
       { source: "/admin/system/roles", destination: "/organization/access", permanent: false },
-      { source: "/admin/system/departments", destination: "/settings/departments", permanent: false },
+      { source: "/admin/system/departments", destination: "/organization/processes", permanent: false },
       { source: "/admin/system/work-units", destination: "/settings/work-units", permanent: false },
       { source: "/admin/system/pipelines", destination: "/organization/processes", permanent: false },
       { source: "/admin/system/customer-person-roles", destination: "/settings/relationships", permanent: false },

@@ -5,6 +5,7 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { invalidateTenantConfigReadCache } from "@/lib/runtime/provisioning/configReadCache";
 import { LIFECYCLE_BUILDER_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -75,9 +76,6 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
 export async function PATCH(request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
 
     const { departmentId } = await context.params;
     if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
@@ -94,6 +92,34 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
         body = (await request.json()) as Record<string, unknown>;
     } catch {
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
+    /*
+     * AUTHORITY FOLLOWS THE SEMANTIC OWNER OF THE WRITE, NOT THE SHARED JSON COLUMN.
+     *
+     * This endpoint carries two live shapes and they belong to different owners. `{ name }` is the
+     * Lifecycle rename keeping `departments.name` in step with the process name — Business Process
+     * configuration, and it moves to `business_process.configure` with the rest of the family.
+     *
+     * `{ metadata: { opportunity_attention_rules } }` is the org-wide attention/SLA settings page.
+     * Those rules drive `resolveOpportunityAttention` and the runtime metadata catalog files them
+     * under `crm_attention`; they are not a Business Process write. Gating them under
+     * `business_process.configure` would turn a process-design key into a generic JSON
+     * metadata-write key — the one boundary this slice was told not to cross. The only existing key
+     * that could own them, `settings.manage`, is granted to admin AND ops while this handler is
+     * admin-only, so reusing it would widen access rather than converge it.
+     *
+     * So the metadata shape keeps the authority it already had, recorded as
+     * ATTENTION_SLA_METADATA_AUTHORITY_DEBT. It is no more reachable than before; it simply has no
+     * truthful capability yet. A body touching both shapes must satisfy both.
+     */
+    const PROCESS_OWNED_FIELDS = ["key", "name", "description", "sort_order", "is_active"] as const;
+    if (PROCESS_OWNED_FIELDS.some((field) => body[field] !== undefined)) {
+        const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+        if (denied) return denied;
+    }
+    if (body.metadata !== undefined && ctx.role !== "admin") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const supabase = createAdminClient();
@@ -198,50 +224,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
     return NextResponse.json(updated);
 }
 
-/** DELETE: remove department if no work units reference it (RESTRICT). Admin only. */
-export async function DELETE(_request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const { departmentId } = await context.params;
-    if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
-
-    const access = await getAdminAccessContextCached();
-    if (!access.ok) return adminContextFailureResponse(access);
-    const deleteDeptDim = scopeDimensionsFromAccess(access);
-    if (!departmentIdAllowed(deleteDeptDim, departmentId)) {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    const supabase = createAdminClient();
-    const { count } = await supabase
-        .from("work_units")
-        .select("id", { count: "exact", head: true })
-        .eq("department_id", departmentId)
-        .eq("org_id", ctx.orgId);
-
-    if ((count ?? 0) > 0) {
-        return NextResponse.json(
-            { error: "Remove or reassign work units under this department before deleting it." },
-            { status: 409 }
-        );
-    }
-
-    const { error } = await supabase.from("departments").delete().eq("id", departmentId).eq("org_id", ctx.orgId);
-
-    if (error) {
-        const code = (error as { code?: string }).code;
-        if (code === "23503") {
-            return NextResponse.json(
-                { error: "Cannot delete: other records still reference this department." },
-                { status: 409 }
-            );
-        }
-        return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    return NextResponse.json({ ok: true });
-}
+/**
+ * NO DELETE. The department PRODUCT is retired; the department ROW is internal grouping identity.
+ *
+ * The convergence census found no mounted caller for this handler — only the legacy DepartmentsClient,
+ * which this slice removes. It could not have worked on anything real in any case:
+ * `business_process_revisions.department_id`, `business_process_drafts.department_id`,
+ * `work_units.department_id` and `user_department_access.department_id` are all NOT NULL, so every
+ * live operational domain is protected by RESTRICT and the handler answered 409. Deleting a
+ * lifecycle has its own path — `lifecycle-activation` DELETE, via
+ * `deleteActivationLifecycleForDepartment`, which tears the process down in the right order.
+ *
+ * So there is nothing to capability-enable: no `departments.delete` key exists and none should. A
+ * destructive admin-only route left standing behind a removed UI is exactly the hidden surface this
+ * program exists to eliminate. An unmatched method now returns Next.js 405, which is the canonical
+ * not-found for a route that does not implement it.
+ */
