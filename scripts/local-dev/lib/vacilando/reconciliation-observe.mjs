@@ -13,7 +13,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { classifyPort, classifyWorktree } from "./resource-reconciliation.mjs";
 import { resolveWorktreeRegistration } from "./worktree-registration.mjs";
-import { ALLOY_REPOSITORY_ID, projectScope } from "./repository-registry.mjs";
+import { ALLOY_REPOSITORY_ID, projectScope, slotPortsFor } from "./repository-registry.mjs";
 
 /* ── Observation ──────────────────────────────────────────────────────────
  * The same rules `vac health` already uses, in one owner so the plan and the
@@ -30,7 +30,24 @@ import { ALLOY_REPOSITORY_ID, projectScope } from "./repository-registry.mjs";
  * which is the correct scan for a repository that has no servers.
  */
 function portsFor(repositoryId) {
-  return projectScope(repositoryId).slot_ports;
+  const scope = projectScope(repositoryId);
+  if (scope.slot_ports.length) return scope.slot_ports;
+  /*
+   * AN OBSERVER MUST NEVER SILENTLY SCAN NOTHING.
+   *
+   * An unregistered id resolves to an empty range, which is correct for a
+   * project that has no slots — and catastrophic for the INCUMBENT on a host
+   * whose registry has not been seeded yet, because "I looked at no ports and
+   * found no problems" is indistinguishable from "this host is healthy". Five
+   * port-classification cases failed exactly that way.
+   *
+   * So the Alloy id falls back to ALLOY'S PROFILE, the same shape
+   * `hygiene-observe` uses for its worktree parent. This is not "any project
+   * inherits Alloy": the profile is asked for repo_alloy by name, and any other
+   * id still gets nothing.
+   */
+  if (repositoryId === ALLOY_REPOSITORY_ID) return slotPortsFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID });
+  return scope.slot_ports;
 }
 
 /** Verdicts arrive hyphenated from the probe and underscored from the classifier. */

@@ -277,17 +277,35 @@ export function slotPortsFor(rec) {
  * contributes none, which is why a repository-only project has no applicable
  * production target — it does not inherit Alloy's, and the guard refuses.
  *
- * FAIL-CLOSED ON AN UNSEEDED REGISTRY. If nothing is registered the set is
- * empty and every production apply refuses. That is the safe direction, and it
- * is deliberate: a literal floor here would be the fallback this slice removes.
+ * TWO SOURCES, NEITHER OF THEM A LITERAL: the databases the known PROFILES
+ * declare, and the databases REGISTERED PROJECTS declare. The union is the
+ * answer.
+ *
+ * The first version read the registry alone and returned nothing when nothing
+ * was registered. That looked like admirable fail-closed behaviour and was
+ * wrong, because it answers the wrong question. This list is not "may this
+ * request proceed" — authorization decides that, and it is operator-only with
+ * Director approval either way. It is "which names does this capability ever
+ * address", and that does not depend on whether a particular host has been
+ * seeded. A CI runner with an empty runtime root is not a host where Alloy's
+ * production database stopped existing; it is a host that has not been told
+ * about it, and 19 ledger-repair cases failed saying so.
+ *
+ * The property that matters is unchanged and is what case 9 pins: a project
+ * whose profile declares NO database contributes nothing. A repository-only
+ * project still has no production target, because the generic profile has none
+ * to contribute — not because the registry happened to be empty.
  */
 export function deployedDatabaseTargets({ root = runtimeRoot() } = {}) {
   const seen = [];
-  for (const rec of Object.values(readRepositoryStore(root).repositories)) {
-    if (rec.state !== "ACTIVE") continue;
-    const target = executionProfileFor(rec).database_target;
-    if (target && !seen.includes(target)) seen.push(target);
-  }
+  const add = (t) => { if (t && !seen.includes(t)) seen.push(t); };
+  for (const profile of Object.values(REPOSITORY_PROFILES)) add(profile.execution?.database_target);
+  try {
+    for (const rec of Object.values(readRepositoryStore(root).repositories)) {
+      if (rec.state !== "ACTIVE") continue;
+      add(executionProfileFor(rec).database_target);
+    }
+  } catch { /* an unreadable store narrows the set; it never widens it */ }
   return Object.freeze(seen);
 }
 

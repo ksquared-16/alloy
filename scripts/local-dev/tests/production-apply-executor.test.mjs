@@ -37,28 +37,6 @@ const REPO = resolve(HERE, "..", "..", "..");
 const ROOT = mkdtempSync(join(tmpdir(), "prod-apply-exec-"));
 process.env.ALLOY_RUNTIME_ROOT = ROOT;
 
-/*
- * A PRODUCTION APPLY NEEDS A REGISTERED PROJECT NOW.
- *
- * The eligible target set was the frozen literal `["alloy_deployed_primary"]`,
- * so an isolated runtime root inherited it for free. S2 derives that set from
- * the deployed databases registered projects DECLARE — which is what makes a
- * repository-only project have no production target at all — and the same rule
- * means an EMPTY registry has none either. Fail-closed is the safe direction
- * and it is deliberate, so the fixture must state the project it is applying
- * for rather than relying on a constant with no owner.
- */
-mkdirSync(join(ROOT, "vacilando"), { recursive: true });
-writeFileSync(join(ROOT, "vacilando", "repositories.json"), JSON.stringify({
-  schema_version: "vacilando.repository.v1",
-  repositories: {
-    repo_alloy: {
-      repository_id: "repo_alloy", name: "Alloy", root: "/Users/vacilando/Alloy",
-      profile: "alloy", state: "ACTIVE",
-    },
-  },
-}), "utf8");
-
 const TH = await import("../lib/vacilando/trusted-host-actions.mjs");
 const GA = await import("../lib/vacilando/governed-action-request.mjs");
 const EX = await import("../lib/vacilando/trusted-host-production-apply.mjs");

@@ -175,16 +175,58 @@ test("8 — production-apply targets are DERIVED, and identical for Alloy", () =
   }
 });
 
-test("9 — a host whose only project has no database has NO production target", () => {
+test("9 — a project whose profile declares no database contributes none", () => {
+  /*
+   * THE PROPERTY THAT ACTUALLY MATTERS, and the one that survived a correction.
+   *
+   * The first version asserted the set was EMPTY on a host whose only project
+   * was repository-only. That read as admirable fail-closed behaviour and was
+   * wrong: it made the governed-target list depend on whether a host had been
+   * seeded, and 19 ledger-repair cases failed on a CI runner with an empty
+   * runtime root — a machine where Alloy's production database had not stopped
+   * existing, only stopped being mentioned.
+   *
+   * The list answers "which names does this capability ever address", not "may
+   * this request proceed" — authorization decides that, operator-only and
+   * Director-approved either way. So it is the union of what the known profiles
+   * declare and what registered projects declare. A repository-only project
+   * contributes nothing because the GENERIC PROFILE has no database, which is
+   * the real invariant and does not move with host state.
+   */
   const root = registryWith(GENERIC);
-  assert.deepEqual([...R.deployedDatabaseTargets({ root })], [],
-    "a repository-only project must not make Alloy's database appliable");
+  const targets = [...R.deployedDatabaseTargets({ root })];
+  assert.ok(!targets.includes("repo_plain"), "sanity: targets are database names");
+  assert.equal(R.executionProfileFor(GENERIC).database_target, null,
+    "the generic profile declares no database, so it can contribute none");
+  // Registering it added nothing that was not already declared by a profile.
+  assert.deepEqual(targets, [...R.deployedDatabaseTargets({ root: registryWith() })],
+    "a repository-only project widened the governed set");
 });
 
-test("10 — and an unseeded registry fails CLOSED rather than falling back", () => {
-  const root = registryWith();
-  assert.deepEqual([...R.deployedDatabaseTargets({ root })], [],
-    "empty is the safe direction; a literal floor here is the defect being removed");
+test("10 — the set is declared, never a literal, and never host-state dependent", () => {
+  const seeded = [...R.deployedDatabaseTargets({ root: registryWith(ALLOY) })];
+  const unseeded = [...R.deployedDatabaseTargets({ root: registryWith() })];
+  assert.deepEqual(seeded, unseeded,
+    "an unseeded host is not a host where Alloy's database stopped existing");
+  assert.ok(seeded.includes("alloy_deployed_primary"));
+  const body = code("repository-registry.mjs");
+  const start = body.indexOf("export function deployedDatabaseTargets");
+  const fn = body.slice(start, body.indexOf("\n}", start));
+  assert.ok(!fn.includes("alloy_deployed_primary"),
+    "the resolver must not name a database; the profile declares it");
+  assert.ok(fn.includes("REPOSITORY_PROFILES"), "profiles are one of the two sources");
+});
+
+test("10b — a project that declares a NEW database widens the set, and only it", () => {
+  const root = registryWith({
+    repository_id: "repo_other2", profile: "generic", root: "/tmp/o2",
+    execution: { database_target: "other_deployed_primary" },
+  });
+  const targets = [...R.deployedDatabaseTargets({ root })];
+  assert.ok(targets.includes("other_deployed_primary"), "a declared database becomes addressable");
+  assert.ok(targets.includes("alloy_deployed_primary"), "and Alloy's is unaffected");
+  // The per-project resolution is the thing that must never leak, and does not.
+  assert.equal(R.executionProfileFor(GENERIC).database_target, null);
 });
 
 test("11 — the operator-only safety denylists are UNTOUCHED", () => {
@@ -216,6 +258,25 @@ test("13 — retirement candidates for an unregistered project are EMPTY, not Al
     root: ROOT, processes: [], s7Worktrees: [{ path: "wt1-something" }], repository: "repo_invented",
   });
   assert.deepEqual(out, [], "retiring another project's worktrees is the worst possible default");
+});
+
+test("13b — an observer never silently scans NOTHING for the incumbent", () => {
+  /*
+   * The other half of the correction CI found, and the more dangerous half.
+   *
+   * An unregistered id resolving to an empty port range is right for a project
+   * with no slots. For the INCUMBENT on an unseeded host it is catastrophic:
+   * "I looked at no ports and found no problems" is indistinguishable from
+   * "this host is healthy", and five port-classification cases failed exactly
+   * that way. Alloy's id falls back to Alloy's PROFILE — asked for by name, so
+   * no other project inherits it.
+   */
+  const body = code("reconciliation-observe.mjs");
+  assert.ok(body.includes("ALLOY_REPOSITORY_ID"), "the fallback must be scoped to the incumbent by name");
+  assert.deepEqual([...R.slotPortsFor({ profile: "alloy", repository_id: R.ALLOY_REPOSITORY_ID })],
+    [3011, 3012, 3013, 3014, 3015, 3016], "and it resolves the profile, not a literal");
+  // Any other project still gets nothing.
+  assert.deepEqual([...R.slotPortsFor({ profile: "generic", repository_id: "repo_other" })], []);
 });
 
 test("14 — no observer keeps Alloy's worktree namespace as an executable default", () => {
@@ -313,8 +374,17 @@ test("20 — prj_vacilando's shape: registered, promotable, and environment-free
     assert.equal(s[k], null, `prj_vacilando inherited Alloy's ${k}`);
   }
   assert.deepEqual([...s.slot_ports], []);
-  assert.deepEqual([...R.deployedDatabaseTargets({ root })], [],
-    "and it exposes no production target for anything to apply to");
+  /*
+   * The project exposes no production target OF ITS OWN. Asserting the global
+   * governed set is empty here was the same superseded claim as case 9: that
+   * set is what the known profiles and registered projects declare, and Alloy's
+   * profile declares one whether or not prj_vacilando exists beside it. What
+   * matters is that prj_vacilando contributes nothing and resolves nothing.
+   */
+  assert.equal(s.database_target, null, "it has no database of its own");
+  assert.deepEqual([...R.deployedDatabaseTargets({ root })],
+    [...R.deployedDatabaseTargets({ root: registryWith() })],
+    "registering it widened the governed set");
 });
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
