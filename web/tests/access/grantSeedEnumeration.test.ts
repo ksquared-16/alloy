@@ -62,7 +62,7 @@ const M6 = "20260807170000_w12_seed_default_rbac_enumerated_grants.sql";
  * capability a NEW organization never receives — the cliff `20260910183000` was written to end.
  * Forms moved it here.
  */
-const LIVE_SEED = "20260912114000_processing_capability_default_seed.sql";
+const LIVE_SEED = "20260914114000_scheduling_jobs_default_seed.sql";
 
 /**
  * The migration that owns the COMPLETENESS contract — the admin-is-the-whole-catalog rule, the nine
@@ -142,6 +142,16 @@ const OPS_WITHHELD = [
     "processing.archive",
     "processing.documents.manage",
     "processing.dev_cleanup",
+    /*
+     * Schedule and job management, and financial posting. Not a new judgement about what ops should
+     * be: before this program touched anything, all fourteen of those routes answered ops with 403
+     * because the gate read `ctx.role !== "admin"`. The two write keys were seeded and enforced
+     * NOWHERE, so the grant conferred nothing; keeping it while the keys became real would have been
+     * the widening. `fin.post` ops never had at all.
+     */
+    "scheduling.write",
+    "ops.jobs.write",
+    "fin.post",
 ];
 
 const statements = discoverGrantStatements();

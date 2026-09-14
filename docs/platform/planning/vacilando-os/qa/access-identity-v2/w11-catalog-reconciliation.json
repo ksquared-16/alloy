@@ -20,8 +20,8 @@
     "not_a_live_measurement": "This is the tree, not the database. Live catalog width, live grant counts, and any key seeded on the target outside the tree are M5 preflight subjects (§11)."
   },
   "catalog_width": 57,
-  "enforced_count": 24,
-  "deletion_candidate_count": 33,
+  "enforced_count": 27,
+  "deletion_candidate_count": 30,
   "w13_restatement": "Enforced was 21 and the deletion list 36 until W-13/AD-22 removed the `portalEligible` role literal from `requirePortalOrUsersRolesManageAuth`, which gave `settings.users_roles.read` its first enforcement site. Catalog width is unchanged at 57 — one key moved between the two sets, and it moved OUT of the deletion list, which is the only such movement this initiative has recorded.",
   "financials_restatement": "2026-09-10. Enforced was 22 and the deletion list 35 until `fin.read` and `fin.write` were recovered from it. Both had in fact been enforced for some time and nothing re-derived the measurement — the same staleness, in the same direction, that `web/lib/admin/unenforcedPermissionKeys.json` carried, where it had the sharper consequence of making Financials ungrantable from the role editor. Catalog width is unchanged by this movement, and as with W-13 the movement is OUT of the deletion list, which is the direction that means the product grew a real gate rather than lost one.",
   "addition_candidate_count": 1,
@@ -264,6 +264,30 @@
         "web/lib/admin/canManageUsersAndRoles.ts"
       ],
       "note": "W-13/AD-22 — acquired an enforcement site when `requirePortalOrUsersRolesManageAuth` stopped admitting on `portalEligible` and started reading the RBAC catalog read capability. Moved here from `deletion_candidates`: it was inert only because the gate above it was a role literal."
+    },
+    {
+      "key": "scheduling.write",
+      "sites": [
+        "web/lib/access/schedulingJobsAuthority.ts",
+        "web/app/api/admin/schedules/route.ts",
+        "web/app/api/admin/schedules/[id]/route.ts",
+        "web/app/api/admin/schedules/[id]/cancel/route.ts",
+        "web/app/api/admin/schedules/[id]/location/route.ts"
+      ],
+      "note": "Catalogued in 20260505164000 and enforced NOWHERE until the Schedules + Jobs authority cleanup: its only executable reference was the unenforced-permission list. Now gates the four non-money schedule mutations. The three money postings served from under schedules/ are deliberately NOT here — they are fin.post."
+    },
+    {
+      "key": "ops.jobs.write",
+      "sites": [
+        "web/lib/access/schedulingJobsAuthority.ts",
+        "web/app/api/admin/jobs/route.ts",
+        "web/app/api/admin/jobs/[id]/route.ts",
+        "web/app/api/admin/jobs/[id]/archive/route.ts",
+        "web/app/api/admin/jobs/[id]/unarchive/route.ts",
+        "web/app/api/admin/jobs/[id]/assign-vendor/route.ts",
+        "web/app/api/admin/jobs/[id]/location/route.ts"
+      ],
+      "note": "Same shape as scheduling.write: catalogued long ago, enforced nowhere, now gating the six non-money job mutations. jobs/[id]/charges is deliberately NOT here — a posted receivable charge is fin.post."
     }
   ],
   "deletion_candidates": [
@@ -287,7 +311,6 @@
     "ops.customers.read",
     "ops.customers.write",
     "ops.jobs.read",
-    "ops.jobs.write",
     "ops.locations.read",
     "ops.locations.write",
     "ops.messaging.read",
@@ -297,12 +320,11 @@
     "ops.schedules.write",
     "ops.workflows.read",
     "ops.workflows.write",
-    "scheduling.read",
-    "scheduling.write"
+    "scheduling.read"
   ],
   "deletion_candidates_by_vocabulary": {
     "legacy_ops_fin_admin_seed_set": {
-      "count": 21,
+      "count": 18,
       "seeded_by": "20260329165048_remote_schema.sql (seed_default_rbac), re-seeded by 20260729120000_…phase0….sql",
       "operator_meaning": "An operator has never been offered these as controls in a product surface, but since W-10 the grid projects the whole catalog, so they became visible controls that change nothing.",
       "keys": [
@@ -315,7 +337,6 @@
         "ops.customers.read",
         "ops.customers.write",
         "ops.jobs.read",
-        "ops.jobs.write",
         "ops.locations.read",
         "ops.locations.write",
         "ops.messaging.read",
@@ -328,7 +349,7 @@
       ]
     },
     "grid_vocabulary": {
-      "count": 10,
+      "count": 9,
       "seeded_by": "20260505164000_permission_grid_keys.sql, re-seeded by 20260729120000_…phase0….sql",
       "operator_meaning": "These are the ones that will surprise. They have been operator-visible controls with real labels — 'Billing / payments', 'Customers / families', 'Scheduling' — since the grid shipped. An operator may have set one to None believing it removed access.",
       "w13_departure": "`settings.users_roles.read` left this group when W-13/AD-22 gave it an enforcement site. It is the one deletion candidate this initiative has RECOVERED rather than deleted, and the reason generalises: a key can be inert because nothing needs it, or inert because the gate that should have read it was reading a role literal instead. Only the first kind is a deletion candidate, and the two are indistinguishable until the literal is removed.",
@@ -341,8 +362,7 @@
         "crm.opportunities.read",
         "crm.opportunities.write",
         "documents.write",
-        "scheduling.read",
-        "scheduling.write"
+        "scheduling.read"
       ]
     },
     "declared_per_feature_but_inert": {

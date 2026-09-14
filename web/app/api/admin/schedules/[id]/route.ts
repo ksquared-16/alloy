@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { SCHEDULING_WRITE, requireSchedulingJobsCapability } from "@/lib/access/schedulingJobsAuthority";
 import { logAdminAudit } from "@/lib/adminAuth";
 import {
     postScheduleCompletion,
@@ -108,9 +109,8 @@ export async function PATCH(
 ) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireSchedulingJobsCapability(ctx, SCHEDULING_WRITE);
+    if (denied) return denied;
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });

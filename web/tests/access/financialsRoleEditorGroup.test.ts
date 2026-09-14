@@ -33,7 +33,20 @@ import { discoverCatalogEntries } from "./permissionCatalogDiscovery";
 
 const CATALOG = discoverCatalogEntries();
 const GRID = buildPermissionGridRows(CATALOG);
-const FINANCIAL_KEYS = ["fin.read", "fin.write", "fin.adjust", "fin.responsibility", "fin.subsidy"] as const;
+const FINANCIAL_KEYS = [
+    "fin.read",
+    "fin.write",
+    "fin.adjust",
+    "fin.responsibility",
+    "fin.subsidy",
+    /*
+     * Posting a financial consequence that arises from operational work — a customer receipt, a
+     * vendor payout, a completion journal entry, a manual receivable charge. It is enforced from
+     * under `schedules/` and `jobs/`, because authority follows the business consequence rather than
+     * the URL folder, but it is a Financials capability and the operator finds it here.
+     */
+    "fin.post",
+] as const;
 
 function financialsArea(granted: ReadonlySet<string>) {
     const area = buildCapabilityMatrix(GRID, granted).find((a) => a.areaKey === "financials");
@@ -48,7 +61,13 @@ describe("the Financials capability group", () => {
         // Billing's two keys are enforced by nothing; filing the live keys beside them would put the
         // product's actual money authority under a heading whose other rows change nothing.
         const rowIds = area.rows.map((r) => r.id).sort();
-        expect(rowIds).toEqual(["fin", "fin.adjust", "fin.responsibility", "fin.subsidy"]);
+        /*
+         * `fin.post` is its OWN row, for the reason `fin.adjust` is: the grid collapses a pair into
+         * one row only when the final segments are the read/write verbs it recognises. "post" is
+         * not one, so it cannot fold into the View/Manage radio — which is wanted, because posting
+         * money must never be something an operator grants as a side effect of granting Manage.
+         */
+        expect(rowIds).toEqual(["fin", "fin.adjust", "fin.post", "fin.responsibility", "fin.subsidy"]);
     });
 
     it("reaches every Financials capability the platform enforces — none is ungrantable", () => {

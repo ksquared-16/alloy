@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { SCHEDULING_WRITE, requireSchedulingJobsCapability } from "@/lib/access/schedulingJobsAuthority";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertScheduleInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { logAdminAudit } from "@/lib/adminAuth";
@@ -18,9 +19,8 @@ export async function PATCH(
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireSchedulingJobsCapability(ctx, SCHEDULING_WRITE);
+    if (denied) return denied;
 
     const { id } = await context.params;
     if (!id) {

@@ -1,0 +1,52 @@
+{
+  "trusted_host_action_id": "tha_180da6e6a0c540",
+  "query_hash": "d196d822588630ab3790bcd3211e3cfcb91698706367999faa6e9253f9cf2dce",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T16:30:58.397Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_180da6e6a0c540",
+    "query_hash": "d196d822588630ab3790bcd3211e3cfcb91698706367999faa6e9253f9cf2dce",
+    "authorization_id": "grnt_b2962d66b66746e6",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T16:30:59.688Z",
+    "question_ids": [
+      "ops_grant",
+      "class_totals",
+      "org_totals"
+    ],
+    "questions": {
+      "ops_grant": {
+        "question_id": "ops_grant",
+        "row_count": null,
+        "rows": [
+          "0bbaad43-1235-401e-88ea-62e0881e950a ~ scheduling.write=held ~ ops.jobs.write=held ~ audited_events=0 ~ class=A",
+          "7803388d-cdee-4afb-89cf-23a137f39423 ~ scheduling.write=absent ~ ops.jobs.write=held ~ audited_events=0 ~ class=A",
+          "93667019-bd28-49b5-a688-acc9bb1e0a19 ~ scheduling.write=absent ~ ops.jobs.write=absent ~ audited_events=0 ~ class=none-held"
+        ]
+      },
+      "class_totals": {
+        "question_id": "class_totals",
+        "row_count": null,
+        "rows": [
+          "A ~ organizations=2",
+          "none-held ~ organizations=1"
+        ]
+      },
+      "org_totals": {
+        "question_id": "org_totals",
+        "row_count": null,
+        "rows": [
+          "active ops roles=3 ~ holding either key=2"
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}

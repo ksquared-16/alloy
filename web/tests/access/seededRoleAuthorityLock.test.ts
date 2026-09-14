@@ -54,6 +54,17 @@ const ACCESS_OWNED = [
     join(webRoot, "app", "api", "admin", "processing"),
     join(webRoot, "lib", "pos", "processingIdentity"),
     join(webRoot, "lib", "access", "processingAuthority.ts"),
+    /*
+     * The Schedules + Jobs authorization surface. Fourteen gates, and the reason they are listed as
+     * ONE cluster is that four of them were never scheduling or job operations at all: they post a
+     * cash receipt, a vendor payout, a GL journal entry and a receivable charge. Authority there
+     * follows the business consequence rather than the URL folder, so `fin.post` is enforced from
+     * under `schedules/` and `jobs/` — and this lock has to cover both trees or the money four
+     * could quietly regress to a role title while the other ten stayed clean.
+     */
+    join(webRoot, "app", "api", "admin", "schedules"),
+    join(webRoot, "app", "api", "admin", "jobs"),
+    join(webRoot, "lib", "access", "schedulingJobsAuthority.ts"),
 ];
 
 /**
@@ -142,6 +153,16 @@ describe("W-17 — a seeded role key is not authority inside Access", () => {
         // A lock that silently stopped traversing Forms would pass forever while the gates returned.
         const forms = scanned.filter((f) => f.includes(`${sep}forms${sep}`) || f.endsWith("formsAuthority.ts"));
         expect(forms.length, "the Forms authorization surface was not scanned").toBeGreaterThan(15);
+    });
+
+    it("actually scanned the Schedules + Jobs authorization surface", () => {
+        // Separate non-vacuity claim: a different tree, which must not be covered by another tree
+        // still being noisy. Both folders are named because the money four live under `schedules/`
+        // and `jobs/` while being owned by Financials.
+        const sched = scanned.filter((f) => f.includes(`${sep}schedules${sep}`));
+        const jobs = scanned.filter((f) => f.includes(`${sep}jobs${sep}`));
+        expect(sched.length, "the Schedules authorization surface was not scanned").toBeGreaterThan(5);
+        expect(jobs.length, "the Jobs authorization surface was not scanned").toBeGreaterThan(5);
     });
 
     it("actually scanned the POS + Processing authorization surface", () => {
