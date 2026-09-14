@@ -122,15 +122,13 @@ export function laneAttentionView({
   };
 }
 
-function labelForRunState(runState) {
-  const s = String(runState || "").toUpperCase();
-  if (s === "EXECUTING") return "Working";
-  if (s === "NEEDS_INPUT") return "Needs you";
-  if (s === "COMPLETE") return "Completed";
-  if (s === "FAILED" || s === "ABANDONED") return "Stopped";
-  if (s === "VALIDATING") return "Validating";
-  return "Ready";
-}
+/*
+ * labelForRunState lived here and returned "Completed" for a COMPLETE run. The
+ * label now comes from laneOperatorState, whose canonical states are
+ * NEEDS_YOU/WORKING/WAITING/BLOCKED/FAILED/READY - there is no "Completed"
+ * state, a finished run is READY. Nothing called this; it survived only to
+ * contradict the canonical vocabulary in a grep. Removed.
+ */
 
 /**
  * The view for every lane, from one read of the store.
