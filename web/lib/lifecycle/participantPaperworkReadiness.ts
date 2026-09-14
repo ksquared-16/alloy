@@ -57,6 +57,13 @@ export type ParticipantReadinessCheck = {
     readonly informational?: boolean;
 };
 
+/*
+ * Four rows below judge the live paperwork. With no live paperwork they judged an empty list and
+ * reported "Every required form resolves" — three green ticks that had verified nothing, which read
+ * as a healthy configuration sitting beside the one red row that was telling the truth.
+ */
+const NOTHING_LIVE_TO_CHECK = "Nothing to check — no paperwork is required in the live configuration.";
+
 const ORDER: ParticipantReadinessCheckId[] = [
     "participant_work_exists",
     "required_forms_resolve",
@@ -89,6 +96,16 @@ function nameOf(facts: ReferencedFormFacts | undefined, id: string): string {
 export function participantPaperworkReadiness(input: {
     readonly requirements: readonly StageFormRequirementFacts[];
     readonly forms: readonly ReferencedFormFacts[];
+    /**
+     * What the UNPUBLISHED draft would require, when it differs from what is live.
+     *
+     * These rows judge the LIVE configuration — that is what families meet, and saying a saved
+     * change is already true would be the worst possible lie here. But reporting "no paperwork is
+     * required" while the administrator is looking at a draft that adds it reads as though their
+     * work was lost, which is exactly the confusion this whole investigation began with. So the
+     * live answer is given first and the draft is named as pending, never as done.
+     */
+    readonly draftObligationCount?: number;
 }): ParticipantReadinessCheck[] {
     const byId = new Map(input.forms.map((f) => [f.form_definition_id, f]));
     const obligations = input.requirements.filter(isParticipantObligation);
@@ -102,7 +119,9 @@ export function participantPaperworkReadiness(input: {
         pass: obligations.length > 0,
         summary: obligations.length
             ? `${obligations.length} form${obligations.length === 1 ? "" : "s"} a family must complete in this stage.`
-            : "No paperwork is required here, so a family reaches this stage with nothing to do.",
+            : (input.draftObligationCount ?? 0) > 0
+              ? `No paperwork is required in the LIVE configuration, so a family reaches this stage with nothing to do. A saved draft change adds ${input.draftObligationCount} — publish it to apply.`
+              : "No paperwork is required here, so a family reaches this stage with nothing to do.",
         informational: obligations.length > 0,
     });
 
@@ -114,7 +133,7 @@ export function participantPaperworkReadiness(input: {
         pass: missing.length === 0,
         summary: missing.length
             ? `${missing.length} requirement${missing.length === 1 ? "" : "s"} point at paperwork that has been deleted. Remove or replace ${missing.length === 1 ? "it" : "them"}.`
-            : "Every required form resolves.",
+            : obligations.length ? "Every required form resolves." : NOTHING_LIVE_TO_CHECK,
     });
 
     // 3. Only a PUBLISHED version can be handed to a family.
@@ -127,7 +146,7 @@ export function participantPaperworkReadiness(input: {
         pass: unpublished.length === 0,
         summary: unpublished.length
             ? `${list(unpublished.map((f) => f.name ?? "Untitled form"))} ${unpublished.length === 1 ? "is" : "are"} still a draft, so ${unpublished.length === 1 ? "it cannot" : "they cannot"} be sent to a family. Publish ${unpublished.length === 1 ? "it" : "them"} from Forms.`
-            : "Every required form has a published version.",
+            : obligations.length ? "Every required form has a published version." : NOTHING_LIVE_TO_CHECK,
     });
 
     // 4. An unclassified upload can be attached but never recognised.
@@ -146,7 +165,7 @@ export function participantPaperworkReadiness(input: {
         pass: unclassified.length === 0,
         summary: unclassified.length
             ? `${list(unclassified)} ${unclassified.length === 1 ? "asks" : "ask"} a family to attach a document without saying which document it is, so Alloy cannot tell them what they still owe.`
-            : "Every requested document is identified.",
+            : obligations.length ? "Every requested document is identified." : NOTHING_LIVE_TO_CHECK,
     });
 
     // 5. A signature on a rendered document needs somewhere on the page to land.
@@ -163,7 +182,7 @@ export function participantPaperworkReadiness(input: {
         pass: unplaceable.length === 0,
         summary: unplaceable.length
             ? `${list(unplaceable)} asks for a signature that has nowhere to appear on the document a family reviews.`
-            : "Every signature has a place on the document.",
+            : obligations.length ? "Every signature has a place on the document." : NOTHING_LIVE_TO_CHECK,
     });
 
     return ORDER.map((id) => rows.find((r) => r.id === id)!);

@@ -9,6 +9,8 @@ import {
 import { lifecycleActivationFromMetadata } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { validateLifecycleActivationRuntime } from "@/lib/lifecycle/validateLifecycleActivationRuntime";
 import { gatherParticipantPaperworkFacts } from "@/lib/lifecycle/gatherParticipantPaperworkFacts";
+import { loadBusinessProcessEditorState } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
+import { LIFECYCLE_BUILDER_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import {
     participantPaperworkReadiness,
     PARTICIPANT_CHECK_ID_BY_READINESS_ID,
@@ -62,9 +64,34 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
          * come from the owners that hold them; the judging is pure and lives elsewhere.
          */
         const facts = await gatherParticipantPaperworkFacts(supabase, ctx.orgId, row.metadata);
+
+        /*
+         * What the DRAFT would require, read only so the live answer can name a pending change.
+         *
+         * These checks judge the published configuration and must keep doing so. But a stage
+         * requirement saved and not yet published is invisible to them, and reporting "no paperwork
+         * is required" at an administrator who just added some reads as though the save was lost.
+         */
+        let draftObligationCount = 0;
+        try {
+            const editorState = await loadBusinessProcessEditorState(supabase, {
+                orgId: ctx.orgId,
+                departmentId,
+                readOnly: true,
+            });
+            if (editorState) {
+                const draftFacts = await gatherParticipantPaperworkFacts(supabase, ctx.orgId, {
+                    ...(row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : {}),
+                    [LIFECYCLE_BUILDER_METADATA_KEY]: editorState.draft_payload,
+                });
+                draftObligationCount = draftFacts.requirements.length;
+            }
+        } catch {
+            // No draft, or it cannot be read: the live answer below stands on its own.
+        }
         const participantChecks = facts.noProcess
             ? []
-            : participantPaperworkReadiness(facts).map((c) => ({
+            : participantPaperworkReadiness({ ...facts, draftObligationCount }).map((c) => ({
                   id: PARTICIPANT_CHECK_ID_BY_READINESS_ID[c.id],
                   label: c.label,
                   pass: c.pass,

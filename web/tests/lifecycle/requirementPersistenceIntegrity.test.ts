@@ -194,3 +194,43 @@ describe("what a packet or form edit can reach", () => {
         expect(after).toEqual(before);
     });
 });
+
+describe("configuration health tells draft and live apart", () => {
+    /*
+     * The previous failure mode was worse than a wrong answer: one honest red row saying no
+     * paperwork was required, sitting beside three green ticks that had verified an empty list.
+     */
+    it("does not report green over an empty live configuration", async () => {
+        const { participantPaperworkReadiness } = await import("@/lib/lifecycle/participantPaperworkReadiness");
+        const rows = participantPaperworkReadiness({ requirements: [], forms: [] });
+
+        expect(rows.find((r) => r.id === "participant_work_exists")?.pass).toBe(false);
+        for (const id of ["required_forms_resolve", "required_forms_published", "upload_requests_classified", "signature_can_be_placed"]) {
+            expect(rows.find((r) => r.id === id)?.summary).toMatch(/Nothing to check/);
+        }
+    });
+
+    it("names a pending draft change without claiming it is live", async () => {
+        const { participantPaperworkReadiness } = await import("@/lib/lifecycle/participantPaperworkReadiness");
+        const rows = participantPaperworkReadiness({ requirements: [], forms: [], draftObligationCount: 3 });
+        const row = rows.find((r) => r.id === "participant_work_exists")!;
+
+        // Still not live, and says so first.
+        expect(row.pass).toBe(false);
+        expect(row.summary).toMatch(/LIVE configuration/);
+        expect(row.summary).toMatch(/publish it to apply/i);
+    });
+
+    it("says nothing about a draft when the live configuration already requires paperwork", async () => {
+        const { participantPaperworkReadiness } = await import("@/lib/lifecycle/participantPaperworkReadiness");
+        const rows = participantPaperworkReadiness({
+            requirements: [{ requirement_id: "r1", form_definition_id: "f1", level: "required" }],
+            forms: [{ form_definition_id: "f1", name: "A form", exists: true, has_published_version: true, uploads: [], signature_field_ids: [], signature_placement_field_ids: [], renders_source_document: false }],
+            draftObligationCount: 3,
+        });
+        const row = rows.find((r) => r.id === "participant_work_exists")!;
+
+        expect(row.pass).toBe(true);
+        expect(row.summary).not.toMatch(/draft/i);
+    });
+});
