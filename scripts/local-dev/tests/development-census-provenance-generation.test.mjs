@@ -20,7 +20,8 @@
  */
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   censusEvidenceEnvelope,
   censusEvidenceGeneration,
@@ -133,25 +134,39 @@ test("8b — an artifact written whole has one generation by construction", () =
 
 /* ── A5: the committed artifacts, held where they are ─────────────────────── */
 
-const MIGRATIONS = "certification/migrations";
+/*
+ * RESOLVED FROM THIS FILE. Tier 2 runs from scripts/local-dev/tests, where
+ * "certification/migrations" does not exist - and the first version of this
+ * gate SKIPPED its only real case there and reported 14 passed, 0 failed. A
+ * gate that reports green by doing nothing is the exact defect family this
+ * suite exists to police, so the skip is gone: if the directory cannot be
+ * found, that is a failure, not a pass.
+ */
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const MIGRATIONS = join(ROOT, "certification", "migrations");
 
 /*
- * The five artifacts below were mixed-generation BEFORE this fix and are left
- * exactly as they are. Repairing them would be rewriting historical evidence,
- * which is an operator decision, not a test's. Pinning them by name means a
- * SIXTH one fails this gate immediately, while the known five stay visible
- * rather than quietly tolerated.
+ * The known-mixed set now lives in a MANIFEST, not in this file.
+ *
+ * certification/migrations/census-artifact-provenance.json records, for each
+ * artifact, the id it states and the id that actually produced its results. A
+ * pin that exists only inside a test warns nobody: the readers at risk here are
+ * humans and forensic reconstruction, and they do not run the suite. The
+ * manifest is the supersession record they can read; this gate enforces it.
+ *
+ * The artifacts themselves are untouched. Correcting a stated id in place would
+ * be rewriting historical evidence, which is an operator decision.
  */
-const KNOWN_MIXED = Object.freeze([
-  "d2-candidate-physical-state-census.sql.results.json",
-  "hosted-migration-identity-census.sql.results.json",
-  "thread7-apply-outcome-census.sql.results.json",
-  "thread7-post-apply-verification-census.sql.results.json",
-  "w13-portal-access-ledger-repair-census.sql.results.json",
-]);
+const MANIFEST = join(MIGRATIONS, "census-artifact-provenance.json");
+function manifestEntries() {
+  if (!existsSync(MANIFEST)) return [];
+  try { return JSON.parse(readFileSync(MANIFEST, "utf8")).entries || []; } catch { return []; }
+}
+const KNOWN_MIXED = manifestEntries().map((e) => e.artifact);
 
 test("A5 — no NEW committed census artifact may be mixed-generation", () => {
-  if (!existsSync(MIGRATIONS)) { process.stdout.write("    (no certification/migrations here; skipped)\n"); return; }
+  assert.ok(existsSync(MIGRATIONS),
+    `certification/migrations not found at ${MIGRATIONS}; this gate must never pass by skipping`);
   const found = [];
   for (const f of readdirSync(MIGRATIONS).filter((n) => n.endsWith(".results.json"))) {
     let d; try { d = JSON.parse(readFileSync(join(MIGRATIONS, f), "utf8")); } catch { continue; }
@@ -163,7 +178,7 @@ test("A5 — no NEW committed census artifact may be mixed-generation", () => {
 });
 
 test("A5a — the known-mixed list may only shrink", () => {
-  if (!existsSync(MIGRATIONS)) return;
+  assert.ok(existsSync(MIGRATIONS), "resolved migrations directory must exist");
   const stillMixed = KNOWN_MIXED.filter((f) => {
     const p = join(MIGRATIONS, f);
     if (!existsSync(p)) return false;
@@ -172,6 +187,29 @@ test("A5a — the known-mixed list may only shrink", () => {
   assert.ok(stillMixed.length <= KNOWN_MIXED.length);
   if (stillMixed.length < KNOWN_MIXED.length) {
     process.stdout.write(`    (${KNOWN_MIXED.length - stillMixed.length} repaired; trim KNOWN_MIXED)\n`);
+  }
+});
+
+
+test("A5b — the manifest names an authoritative id for every artifact it lists", () => {
+  // A supersession record that says "this one is wrong" without saying which id
+  // IS right leaves the reader exactly where they started.
+  for (const e of manifestEntries()) {
+    assert.equal(e.status, "HISTORICAL_MIXED_GENERATION", e.artifact);
+    assert.ok(e.authoritative_trusted_host_action_id, `no authoritative id for ${e.artifact}`);
+    assert.notEqual(e.authoritative_trusted_host_action_id, e.stated_trusted_host_action_id, e.artifact);
+    assert.ok(existsSync(join(MIGRATIONS, e.artifact)), `manifest names a missing artifact: ${e.artifact}`);
+  }
+});
+
+test("A5c — and the manifest matches what the artifacts actually say", () => {
+  // Measured against the files, so the record cannot drift from the evidence.
+  for (const e of manifestEntries()) {
+    const d = JSON.parse(readFileSync(join(MIGRATIONS, e.artifact), "utf8"));
+    const g = censusEvidenceGeneration(d);
+    assert.equal(g.coherent, false, `${e.artifact} is coherent now; remove it from the manifest`);
+    assert.equal(g.trusted_host_action_id, e.stated_trusted_host_action_id, e.artifact);
+    assert.equal(g.execution_trusted_host_action_id, e.authoritative_trusted_host_action_id, e.artifact);
   }
 });
 

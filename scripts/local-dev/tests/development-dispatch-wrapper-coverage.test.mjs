@@ -22,7 +22,8 @@
  */
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { ACTION_TYPES, getActionDefinition } from "../lib/vacilando/trusted-host-action-registry.mjs";
 
 let pass = 0, fail = 0;
@@ -31,8 +32,18 @@ function test(name, fn) {
   catch (e) { fail += 1; process.stdout.write(`FAIL - ${name} :: ${e.message}\n`); }
 }
 
-const LIB = "scripts/local-dev/lib/vacilando";
-const TESTS = "scripts/local-dev/tests";
+/*
+ * RESOLVED FROM THIS FILE, NOT FROM THE CWD.
+ *
+ * Tier 2 runs `cd scripts/local-dev/tests` and then `node <file>`, so a gate
+ * written against repo-root-relative paths throws ENOENT there while passing
+ * from the prebuild gate, which runs at the root. Found by the local ledger run
+ * that was measuring CI drift - this gate was one of its reds.
+ */
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(HERE, "..", "..", "..");
+const LIB = join(ROOT, "scripts", "local-dev", "lib", "vacilando");
+const TESTS = join(ROOT, "scripts", "local-dev", "tests");
 const ACTIONS_SRC = readFileSync(join(LIB, "trusted-host-actions.mjs"), "utf8");
 
 const testFiles = readdirSync(TESTS).filter((f) => f.endsWith(".test.mjs"));

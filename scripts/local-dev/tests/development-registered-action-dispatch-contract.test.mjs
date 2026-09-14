@@ -232,5 +232,50 @@ test("D5c — a detail that merely repeats the code adds no noise", () => {
   );
 });
 
+/* ── R: the result shape a consumer is promised ───────────────────────────── */
+
+const { getActionDefinition } = await import("../lib/vacilando/trusted-host-action-registry.mjs");
+
+test("R1 — the dispatched result carries every field the registry declares", () => {
+  /*
+   * CHECKED AT RUNTIME, ON THE REAL DISPATCHED RESULT — deliberately not by
+   * reading the source.
+   *
+   * A static version of this was written first: for each action, regex the
+   * executor body for each declared outputSchema key. It reported
+   * `database.apply_promoted_migration` as dropping `target` and
+   * `recensus_required`. Both are present. `target` is a shorthand property
+   * (`{ ...publicResult, ok: true, target }`) and `recensus_required` arrives
+   * through the spread from `publicProductionApplyResult`. A `key:` regex can
+   * see neither, so the check produced a false defect report against a
+   * database-mutating action.
+   *
+   * The lesson is the gate's design, not the regex: a result-shape contract has
+   * to be asserted on a result that was actually produced.
+   */
+  const f = fixture();
+  try {
+    const out = dispatch(seedAction(normalized(f)));
+    assert.equal(out.ok, true, out.detail || out.error || "");
+    const declared = Object.keys(getActionDefinition(ACTION_TYPES.REPOSITORY_PROMOTE_METADATA).outputSchema || {});
+    assert.ok(declared.length > 0, "the action must declare what its consumers get");
+    const missing = declared.filter((k) => !(k in out.action.result));
+    assert.deepEqual(missing, [],
+      `declared to consumers but absent from the dispatched result: ${missing.join(", ")}`);
+  } finally { rmSync(f.base, { recursive: true, force: true }); }
+});
+
+test("R1a — and the declared fields are not silently null on a successful write", () => {
+  const f = fixture();
+  try {
+    const r = dispatch(seedAction(normalized(f))).action.result;
+    assert.equal(typeof r.main_before, "string");
+    assert.equal(typeof r.main_after, "string");
+    assert.notEqual(r.main_after, r.main_before, "a successful write moves the branch");
+    assert.equal(typeof r.commit, "string");
+    assert.equal(r.product_files_changed, false);
+  } finally { rmSync(f.base, { recursive: true, force: true }); }
+});
+
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
 process.exit(fail ? 1 : 0);
