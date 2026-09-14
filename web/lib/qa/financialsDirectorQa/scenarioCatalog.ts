@@ -27,6 +27,19 @@
  * Nothing is omitted. A capability absent from this file is a defect in this file.
  */
 
+/**
+ * THE WORDING OF THE QUESTIONS, VERSIONED.
+ *
+ * An acceptance is an answer to a specific question. Rewrite the question and the previous answer
+ * stops being an answer to it — so every recorded result carries the version it was given under,
+ * and this must be bumped whenever a scenario's meaning changes. Adding a scenario counts; fixing a
+ * typo does not.
+ */
+export const CATALOG_VERSION = "2026-09-14.1";
+
+/** The acceptance program these scenarios belong to. Results are namespaced by it. */
+export const SUITE_KEY = "core_financials_director_qa";
+
 export type ScenarioDisposition =
     | "HUMAN_WALKTHROUGH"
     | "AUTOMATED_CERTIFIED_HUMAN_PENDING"
