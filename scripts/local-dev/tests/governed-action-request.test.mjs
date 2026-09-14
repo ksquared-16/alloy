@@ -270,7 +270,21 @@ await test("trusted-host failure is persisted without asking the lane to retry",
   const open = activeRunForLane("alloy-identity", ROOT);
   assert.equal(open.state, "NEEDS_INPUT");
   assert.equal(open.governed_action.status, "failed");
-  assert.equal(open.resource_wait, null);
+  /*
+   * RESOLVED, NOT DELETED. This asserted `null`, which was right when clearing
+   * was the only way to stop a run reading "Waiting on Director" for ever. The
+   * resolved-wait contract does that without destroying anything, and a failed
+   * run is where an operator most wants to see what it had been waiting for.
+   *
+   * The invariant that matters is unchanged and is asserted directly: a run
+   * that has left a wait must not carry an ACTIVE one.
+   */
+  assert.notEqual(open.resource_wait?.resolution_state, "waiting",
+    "a run that has left the wait must not still be waiting on it");
+  if (open.resource_wait) {
+    assert.equal(open.resource_wait.resolution_state, "resolved");
+    assert.ok(open.resource_wait.resolved_at, "and when it stopped waiting");
+  }
   assert.equal(sends.length, 1);
   assert.match(sends[0].text, /GOVERNED ACTION FAILED/);
 });

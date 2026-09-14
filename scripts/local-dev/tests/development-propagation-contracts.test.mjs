@@ -111,7 +111,7 @@ test("P5. a terminal governed action projects onto its run, success and failure"
   assert.match(window, /stampDecisionTimingOnce\(rec, "projection_visible_at"\)/);
   // Failure: a refusal is a settlement, and it is what an operator most needs.
   const failure = gov.slice(gov.indexOf("function releaseRunAfterGovernedFailure"));
-  const fwin = failure.slice(0, 1600);
+  const fwin = failure.slice(0, 2600);
   assert.match(fwin, /patchRunFields\(rec\.run_id, \{ governed_action: pub \}/);
   assert.match(fwin, /stampDecisionTimingOnce\(rec, "projection_visible_at"\)/);
 });
@@ -158,6 +158,25 @@ test("P8. and every path that records an outcome records the cadence with it", (
   for (const r of outcomeRecorders) {
     assert.match(r, /reports: reportsSummary\(reports\)/, `a success path records no cadence:\n${r.slice(0, 160)}`);
   }
+});
+
+test("P9. a governed FAILURE leaves the wait readable, resolved, not deleted", () => {
+  /*
+   * The last case of the older "terminal failure erases resource_wait" debt.
+   * The failure path nulled the wait immediately after the transition had
+   * marked it resolved - so on the one path where an operator most wants to
+   * know what the run was waiting for, the evidence was removed a line after
+   * being preserved.
+   *
+   * The resolved-wait contract already prevents the thing clearing was for: a
+   * run that has left a wait cannot carry an ACTIVE one.
+   */
+  const gov = lib("governed-action-request.mjs");
+  const fn = gov.slice(gov.indexOf("function releaseRunAfterGovernedFailure"));
+  const body = fn.slice(0, fn.indexOf("\nfunction "));
+  assert.match(body, /transitionExecutionRun\(rec\.run_id, "NEEDS_INPUT"/, "it still leaves the wait");
+  assert.doesNotMatch(body, /patchRunResourceWait\(rec\.run_id, null/,
+    "and must not delete the record it just resolved");
 });
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
