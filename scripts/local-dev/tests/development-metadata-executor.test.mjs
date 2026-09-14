@@ -359,5 +359,53 @@ test("I2 - an env override does not strip the ambient environment git needs", ()
   }
 });
 
+test("I3 - the build works in a LINKED WORKTREE, which is where every candidate lives", () => {
+  /*
+   * `.git` is a directory only in a main checkout. Every lane, and every
+   * promotion candidate, lives in a linked worktree where `.git` is a FILE -
+   * so `<cwd>/.git/metadata-promote-index` is a path inside a regular file and
+   * cannot be created. The promotion then refuses metadata_tree_build_failed,
+   * for every candidate, always.
+   *
+   * It was invisible twice over: a git stub returns 0 for read-tree whatever the
+   * index path is, and while the env override was being dropped the build
+   * silently used the worktree's own index and appeared to work. The mask and
+   * the fault sat in the same two lines.
+   */
+  const root = mkdtempSync(join(tmpdir(), "metapromote-main-"));
+  const wtDir = mkdtempSync(join(tmpdir(), "metapromote-linked-"));
+  const linked = join(wtDir, "wt");
+  try {
+    const g = (...a) => defaultGit(a, root);
+    g("init", "-q", "-b", "main");
+    g("config", "user.email", "t@example.com");
+    g("config", "user.name", "t");
+    writeFileSync(join(root, "a.txt"), "one\n");
+    g("add", "a.txt");
+    g("commit", "-qm", "first");
+    const add = defaultGit(["worktree", "add", "-q", "--detach", linked, "HEAD"], root);
+    assert.equal(add.status, 0, add.stderr || "");
+    assert.ok(!existsSync(join(linked, ".git", "config")),
+      "precondition: .git in a linked worktree is a file, not a directory");
+
+    // What the executor computes, now that it asks git instead of guessing.
+    const resolved = defaultGit(["rev-parse", "--absolute-git-dir"], linked);
+    assert.equal(resolved.status, 0, resolved.stderr || "");
+    const idx = `${resolved.stdout.trim()}/metadata-promote-index`;
+
+    const rt = defaultGit(["read-tree", "HEAD"], linked, { env: { GIT_INDEX_FILE: idx } });
+    assert.equal(rt.status, 0, `read-tree failed in a linked worktree: ${rt.stderr || ""}`);
+    assert.ok(existsSync(idx), "the alternate index must be creatable from a linked worktree");
+
+    // And the naive path is genuinely unusable, which is what made this a defect.
+    const naive = defaultGit(["read-tree", "HEAD"], linked,
+      { env: { GIT_INDEX_FILE: join(linked, ".git", "metadata-promote-index") } });
+    assert.notEqual(naive.status, 0, "<cwd>/.git/<file> must fail here, or this test proves nothing");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(wtDir, { recursive: true, force: true });
+  }
+});
+
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
 process.exit(fail ? 1 : 0);
