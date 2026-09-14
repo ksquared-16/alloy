@@ -174,3 +174,11 @@ jobs:
       - name: Trusted-host result allowlist contract
         working-directory: .
         run: node scripts/local-dev/tests/development-result-allowlist-contract.test.mjs
+
+      # The S6 wait contract. This was red on staging for two runs because it was
+      # not gated: it asserted the OLD clearing mechanism after the contract moved
+      # to resolved-not-erased, and separately used a fixed character window that a
+      # growing comment overflowed. Gated now, so the next drift fails here.
+      - name: Governed run wait contract
+        working-directory: .
+        run: node scripts/local-dev/tests/development-governed-run-wait.test.mjs

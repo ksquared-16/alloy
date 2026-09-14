@@ -69,12 +69,32 @@ await test("6 — a RESOLVED governed action releases the run's wait, not only a
   // terminal runs came to carry live-looking wait text.
   const idx = SRC.indexOf('appendAudit(rec, "complete"');
   assert.ok(idx > -1, "the completion audit point must exist");
-  const after = SRC.slice(idx, idx + 700);
+  /*
+   * To the END OF THE FUNCTION, not a fixed number of characters. This read 700
+   * and went red when the comment above the call grew past it - the code was
+   * correct the whole time. A window measured in characters silently becomes a
+   * test of how much prose sits between two statements.
+   */
+  const nextFn = SRC.indexOf("\nfunction ", idx);
+  const after = SRC.slice(idx, nextFn > -1 ? nextFn : idx + 4000);
   assert.match(after, /patchRunResourceWait\(rec\.run_id, null, root\)/,
     "completion must release the wait");
-  // And the failure path must still do so.
+  /*
+   * The FAILURE path is deliberately different, and this assertion used to say
+   * the opposite. It required the failure path to null the wait - which it did,
+   * one line after the transition had already marked it RESOLVED. So on the one
+   * path where an operator most wants to know what the run was waiting for, the
+   * evidence was deleted a line after being preserved.
+   *
+   * The contract is resolved-not-erased. What clearing was actually for - a
+   * terminal run still advertising a LIVE wait - is now carried by the
+   * resolution state, so that is what gets asserted.
+   */
   const fail = SRC.slice(SRC.indexOf("function releaseRunAfterGovernedFailure"), SRC.indexOf("function failRequest"));
-  assert.match(fail, /patchRunResourceWait\(rec\.run_id, null, root\)/);
+  assert.match(fail, /transitionExecutionRun\(rec\.run_id, "NEEDS_INPUT"/,
+    "a failed governed action must still take the run out of the wait");
+  assert.doesNotMatch(fail, /patchRunResourceWait\(rec\.run_id, null/,
+    "but must not delete the forensic record it just resolved");
 });
 
 await test("7 — a machine wait still carries a deadline", () => {
