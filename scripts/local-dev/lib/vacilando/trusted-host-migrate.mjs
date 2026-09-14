@@ -311,9 +311,25 @@ export function assertShaReachableForEnvironment(sha, {
   const fullSha = String(rev.stdout || "").trim();
 
   const env = String(environment || "").trim().toLowerCase();
-  const carried = sanctionedRefCarrying(fullSha, { git, cwd });
+  /*
+   * ENUMERATED ONLY WHEN A BRANCH ACTUALLY NEEDS IT.
+   *
+   * This ran eagerly, so `git for-each-ref` over the sanctioned globs executed
+   * for EVERY environment - including production, which reaches neither branch
+   * below unless an explicit candidate proof was supplied. The result was
+   * discarded, so nothing was wrong with the answer; the contract is that the
+   * sanctioned refs are not consulted outside certification at all, and that
+   * was quietly untrue. Memoised so the two branches that do need it still read
+   * it once.
+   */
+  let carriedMemo;
+  const carriedRef = () => {
+    if (carriedMemo === undefined) carriedMemo = sanctionedRefCarrying(fullSha, { git, cwd });
+    return carriedMemo;
+  };
 
   if (CERTIFICATION_ENVIRONMENTS.includes(env)) {
+    const carried = carriedRef();
     if (carried) {
       return {
         ok: true, fullSha, stagingSha: primary.stagingSha ?? null,
@@ -333,6 +349,7 @@ export function assertShaReachableForEnvironment(sha, {
     // The commit must be PUBLISHED on a sanctioned ref before its identity is
     // even considered: a SHA that exists only in somebody's checkout proves
     // nothing about what anyone else can see.
+    const carried = carriedRef();
     if (!carried) {
       return {
         ...primary,

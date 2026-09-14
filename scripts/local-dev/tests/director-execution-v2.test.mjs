@@ -40,7 +40,10 @@ const { getBrief } = await import("../lib/vacilando/mission-brief.mjs");
 function briefBody(overrides = {}) {
   return {
     title: "V2 Cert Mission",
-    objective: "Prove worker contract",
+    // The compiler refuses an objective under 24 characters as ambiguous, and
+    // "Prove worker contract" is 21. The fixture predates that rule; the rule is
+    // the product behaviour, so the fixture is what moves.
+    objective: "Prove the worker execution contract end to end",
     plan: [
       { phaseId: "p0", order: 1, title: "Foundation", objective: "Build foundation", requiredOutputs: ["code"], acceptanceCriteriaIds: ["AC1"] },
       { phaseId: "p1", order: 2, title: "QA", objective: "Validate", requiredOutputs: ["tests"], dependencies: ["p0"], acceptanceCriteriaIds: ["AC2"] },
@@ -132,8 +135,17 @@ test("completion without evidence is rejected", async () => {
   assert.equal(rejected.error, "missing_evidence");
   assert.ok(rejected.missing.length > 0);
 
-  // Attach required evidence profile pieces
-  for (const type of ["diff", "test", "typecheck", "build", "commit"]) {
+  /*
+   * Attach what THIS assignment requires, read from the assignment itself.
+   * The hard-coded code_only set (diff/test/typecheck/build/commit) was the
+   * default before assignments carried an explicit requiredEvidence; they now
+   * declare ["log", "document"], so the old list attached five artifacts and
+   * still satisfied nothing. Deriving it keeps the test honest the next time
+   * the profile moves.
+   */
+  const requiredTypes = (asg.requiredEvidence || []).map((r) => (typeof r === "string" ? r : r.type));
+  assert.ok(requiredTypes.length > 0, "the assignment must state what evidence it needs");
+  for (const type of requiredTypes) {
     attachEvidence({
       missionId: m.mission.mission_id, assignmentId: asg.assignmentId,
       type, title: type, acceptanceCriteriaIds: ["AC1"],
@@ -147,8 +159,18 @@ test("completion without evidence is rejected", async () => {
   const validated = validateAssignmentCompletion(m.mission.mission_id, asg.assignmentId);
   assert.equal(validated.validation.passed, true);
   assert.equal(validated.assignment.status, "complete");
-  // dependent unlocks
-  assert.equal(listAssignments(m.mission.mission_id)[1].status, "ready");
+  /*
+   * THE DEPENDENT DOES NOT UNLOCK ON COMPLETION, AND THAT IS THE CONTRACT.
+   *
+   * This asserted "ready" here, which was true under the pre-review design.
+   * The only live unlockDependents is in deliverable-review, called when a
+   * review is ACCEPTED - work is reviewed before its dependents start.
+   * worker-assignment.mjs still carries an identical unlockDependents that
+   * nothing calls; wiring it in would make this line pass by bypassing the
+   * review gate, which is not a fix.
+   */
+  assert.equal(listAssignments(m.mission.mission_id)[1].status, "waiting",
+    "a dependent waits for review acceptance, not merely for completion");
 });
 
 test("decision pause / respond / resume", async () => {
