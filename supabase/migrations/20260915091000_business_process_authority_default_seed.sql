@@ -377,7 +377,7 @@ BEGIN
     IF strpos(v_src, 'W12:ADMIN-GRANTS:BEGIN') = 0 OR strpos(v_src, 'W12:OPS-GRANTS:BEGIN') = 0
        OR strpos(v_src, 'ACCESSV2:DIRECTOR-GRANTS:BEGIN') = 0 THEN
         RAISE EXCEPTION
-            'BPAUTH ABORT: a sentinel region is missing; this redefinition cannot verify itself.';
+            'BPAUTH ABORT: the installed seed_default_rbac does not carry the grant-enumeration sentinels. Nothing can be asserted about what it grants, so the migration refuses to leave it installed.';
     END IF;
 
     v_admin_region := substr(v_src, strpos(v_src, 'W12:ADMIN-GRANTS:BEGIN'),
@@ -387,23 +387,39 @@ BEGIN
     v_dir_region   := substr(v_src, strpos(v_src, 'ACCESSV2:DIRECTOR-GRANTS:BEGIN'),
                              strpos(v_src, 'ACCESSV2:DIRECTOR-GRANTS:END') - strpos(v_src, 'ACCESSV2:DIRECTOR-GRANTS:BEGIN'));
 
-    -- The administrator must actually receive both keys the converged routes now demand.
     SELECT array_agg(k ORDER BY k) INTO v_missing
-      FROM unnest(ARRAY['business_process.configure', 'business_process.activate']) AS k
+      FROM unnest(ARRAY['processing.operate', 'processing.archive',
+                        'processing.documents.manage', 'processing.dev_cleanup',
+                        'scheduling.write', 'ops.jobs.write', 'fin.post',
+                        'option_sets.delete', 'layouts.lifecycle', 'fields.delete',
+                        'business_process.configure', 'business_process.activate']) AS k
      WHERE strpos(v_admin_region, '''' || k || '''') = 0;
     IF v_missing IS NOT NULL THEN
         RAISE EXCEPTION 'BPAUTH ABORT: % absent from the admin enumeration; a new administrator could not configure a business process.', v_missing;
     END IF;
 
-    -- ops and the director roles must receive neither.
     SELECT array_agg(k ORDER BY k) INTO v_ops_extra
-      FROM unnest(ARRAY['business_process.configure', 'business_process.activate']) AS k
+      FROM unnest(ARRAY[
+          'admin.users.write', 'admin.roles.write',
+          'enrollment.pricing.override', 'enrollment.requirement_exception.manage',
+          'fin.adjust', 'fin.responsibility', 'fin.subsidy',
+          'health.view', 'health.manage',
+          'forms.author', 'forms.submissions',
+          'processing.archive', 'processing.documents.manage', 'processing.dev_cleanup',
+          'scheduling.write', 'ops.jobs.write', 'fin.post',
+          'option_sets.delete', 'layouts.lifecycle', 'fields.delete',
+          'business_process.configure', 'business_process.activate'
+      ]) AS k
      WHERE strpos(v_ops_region, '''' || k || '''') > 0
         OR strpos(v_dir_region, '''' || k || '''') > 0;
     IF v_ops_extra IS NOT NULL THEN
         RAISE EXCEPTION
-            'BPAUTH ABORT: % reached ops or a director region; every one of these routes answered them 403 before this slice.',
+            'BPAUTH ABORT: the ops enumeration grants %, which the migration that introduced each of those keys explicitly withheld from ops. This would widen ops, not preserve it.',
             v_ops_extra;
+    END IF;
+
+    IF strpos(v_ops_region, '''forms.submissions.confirm''') = 0 THEN
+        RAISE EXCEPTION 'BPAUTH ABORT: ops lost forms.submissions.confirm, the one Forms write it already had.';
     END IF;
 
     -- The retired product must not return as vocabulary.
@@ -411,8 +427,6 @@ BEGIN
         RAISE EXCEPTION 'BPAUTH ABORT: the seed enumerates a departments.* key; the department product is retired and must not gain capability vocabulary.';
     END IF;
 
-    -- The keys ops already held are still there. A redefinition that silently dropped one would
-    -- remove authority this slice never intended to touch.
     IF strpos(v_ops_region, '''option_sets.manage''') = 0 OR strpos(v_ops_region, '''layouts.manage''') = 0 THEN
         RAISE EXCEPTION 'BPAUTH ABORT: ops lost a manage key it already exercised through Config Layout Assist.';
     END IF;
@@ -429,6 +443,10 @@ DECLARE
     v_ops_new  integer;
     v_dir_new  integer;
 BEGIN
+    -- The org row is required: role_definitions.org_id carries a foreign key to public.orgs, so a
+    -- bare uuid cannot be seeded. Same shape as 20260914184000's self-test.
+    INSERT INTO public.orgs (id, name, slug)
+    VALUES (v_org, 'Business process authority seed self-test', '_bp_seed_' || substr(v_org::text, 1, 8));
     PERFORM public.seed_default_rbac(v_org);
 
     SELECT count(*) INTO v_admin FROM public.role_permission_grants
@@ -454,6 +472,7 @@ BEGIN
 
     DELETE FROM public.role_permission_grants WHERE org_id = v_org;
     DELETE FROM public.role_definitions WHERE org_id = v_org;
+    DELETE FROM public.orgs WHERE id = v_org;
 
     RAISE NOTICE 'BPAUTH SEED: a new organization administrator receives both business process keys; ops and directors receive neither.';
 END
