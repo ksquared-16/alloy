@@ -375,3 +375,58 @@ a configuration change and a second publication, so it is **not** done here.
 **Recommended, pending Kelly's authorization:** restore `work_template_key: "offer_spot"` on the
 Waitlist candidate action and publish revision 33. Separately, `stageActionCatalogV1` should carry
 rows it cannot fully read, the way `stageRequirementsV1` now does.
+
+---
+
+## Revision 33, 2026-09-14 — the corrective publication
+
+Revision 33 published at 2026-09-14T21:40:23Z. **Revision 31 → 33 contains exactly one change:**
+
+```
+Enrolling → requirements_v1.requirements = [ONE row]
+  kind: packet · packet_definition_id: c03425c9… · level: required · enforcement: blocking
+```
+
+7 keys added, **0 removed, 0 changed**. The Waitlist `work_template_key: "offer_spot"` is back to its
+revision-31 value, and the regression probe's Enrolled-stage description is gone. Both repairs were
+made through the product — *Work an operator may start* for the binding, the stage description field
+for the probe delta — never by editing revision JSON.
+
+### The action catalog is lossless now
+
+`stageActionCatalogV1` now uses `preserveUnknownFields` (Law 7 / Law 1), the mechanism the stage and
+process levels already used and this section did not: rows carry their residue, unreadable rows are
+kept verbatim, and the catalog is serialized explicitly because `JSON.stringify` drops the symbol
+carrier. Nothing became executable — an unreadable row is carried, not obeyed — and an authored edit
+or removal still wins. Covered by `actionCatalogLosslessness.test.ts`, including the exact live
+failure: `offer_spot` surviving a save about a different stage.
+
+### The publication-attribution question, answered
+
+Not a phantom and not an auto-fire. The server log shows `POST …/configuration/validate` immediately
+followed by `POST …/configuration/publish` — the Apply click from the automation, which landed once
+**Validate refreshed a stale publication summary** and the button became enabled. `validateConfiguration`
+only validates; it publishes nothing.
+
+What was wrong was the bar's *state*, not its behaviour: it renders from the stage bootstrap's
+`configuration_state`, which was showing "Everything here is live" with Apply disabled while the API
+reported unpublished changes. That is no longer reproducible — a fresh load now reports
+`unpublished_changes`, the right draft revision and an enabled Apply, agreeing with the API — so no
+speculative fix was made. Revision 33 was published with one explicit click and exactly one publish
+request, verified from the browser's own network calls.
+
+**Worth watching:** Validate is currently the control that reconciles a stale bar. If the staleness
+recurs, the fix is to refresh the publication summary after any configuration-changing save rather
+than only on Validate.
+
+### Getting a subject into Enrolling — the legitimate path
+
+No child is in Enrolling today; the workspace carries New leads (3), Waitlist (16), Tours (0) and
+Enrolled children (2), and Enrolling is entered transiently. From the live configuration:
+
+> **Waitlist → *Offer spot*** (started by `stage_work.start` — the binding revision 32 lost and 33
+> restored) **→ *Move to Enrolling*** (`waitlist_transition_1`) **→ Enrolling → *Send enrollment
+> packet***, which launches the participant session against the live packet.
+
+Moving a real waitlisted child is an operator act on live data and part of Kelly's D-flow, so the
+process-launched session proof is deferred to it rather than manufactured here.
