@@ -115,11 +115,35 @@ function localImports(abs: string): string[] {
 /* -------------------------------------------------------------- authority writes */
 
 /**
- * The three tables that carry `(principal, org)` authority. `user_department_access`
+ * The tables that carry `(principal, org)` authority. `user_department_access`
  * is included because W-8 closed a self-insert on it; a future route could reopen
  * that path without touching `user_roles` at all.
+ *
+ * **`membership_access_profiles` was a phantom, and it was removed 2026-09-13 (this issuance).**
+ * No such table exists: it appears in **zero** migrations, and the only non-doc occurrence of the
+ * string in the tree is the *filename* `20260807140000_backfill_membership_access_profiles.sql` —
+ * M1 — whose body writes `public.user_access_profiles` (`:80-82`). The name was transcribed from a
+ * migration filename describing *"membership access profiles"* rather than from a table, so this
+ * list has been watching something that cannot be written while the real table went unwatched.
+ *
+ * The three access-scope tables are created together by
+ * `20260504103000_user_access_scope_tables_v1.sql` — `user_access_profiles` (`:18`),
+ * `user_department_access` (`:69`) and `user_site_access` (`:150`). This list previously held
+ * exactly one of them. The count in the old comment ("three tables") was right by accident; the
+ * membership was not.
+ *
+ * `user_site_access` matters on this workstream's own terms: W-2's execution record names
+ * *"widen your own department/site scope to `all`"* as the self-elevation vector it closed, and the
+ * **site** half of that sentence was never in the subject. Seventh instance of the
+ * enumerated-subject failure class §5 tracks, and the first where the enumeration named a
+ * table that does not exist.
  */
-const AUTHORITY_TABLES = ["user_roles", "user_department_access", "membership_access_profiles"];
+const AUTHORITY_TABLES = [
+    "user_roles",
+    "user_access_profiles",
+    "user_department_access",
+    "user_site_access",
+];
 
 const TABLE_WRITE = new RegExp(
     `from\\(\\s*["'\`](?:${AUTHORITY_TABLES.join("|")})["'\`]\\s*\\)\\s*(?:\\.\\s*\\w+\\([^)]*\\)\\s*)*?\\.\\s*(insert|upsert|update|delete)\\b`
@@ -138,8 +162,22 @@ const TABLE_WRITE = new RegExp(
  * there is no self-escalation in it. Adding it would widen the predicate past the thing the file
  * says it is about, and the self-guard assertion would then demand a guard for a mutation with no
  * subject to guard.
+ *
+ * **W-17's two audited role RPCs were added 2026-09-13 (this issuance), and they are the sharp half
+ * of this run's finding.** `assign_member_role_audited` INSERTs `public.user_roles` *and*
+ * `public.user_access_profiles`; `remove_member_role_audited` DELETEs `public.user_roles`
+ * (`20260912010000_w17_additive_role_assignment.sql:82,87,172`). They are the **newest** product
+ * writers of `(principal, org)` authority, they reach it only through
+ * `lib/admin/memberRoleAssignmentWrite.ts:37-82`, and neither this list nor `AUTHORITY_TABLES`
+ * named them — `memberRoleAssignmentWrite.ts` mentions `user_roles` exactly once, in a `.select(`.
+ *
+ * So the two routes W-17 added — `users/[userId]/roles/route.ts` and
+ * `users/[userId]/roles/[roleKey]/route.ts` — were **outside the discovered subject entirely**.
+ * Both do apply the self guard today, so nothing was exposed; but RL-11 was not the reason, and
+ * deleting the guard from either would not have reddened this lock. A lock that passes whether or
+ * not the guard is present is not holding the guard.
  */
-const AUTHORITY_RPCS = /create_membership_with_access_profile|replace_membership_with_access_profile|remove_member_access_audited|replace_member_access_scope_audited/;
+const AUTHORITY_RPCS = /create_membership_with_access_profile|replace_membership_with_access_profile|remove_member_access_audited|replace_member_access_scope_audited|assign_member_role_audited|remove_member_role_audited/;
 
 function writesAuthorityDirectly(abs: string): boolean {
     const src = code(abs);
@@ -276,13 +314,21 @@ describe("W-2 / RL-11 — the self-authority ban's subject is discovered", () =>
         ).toEqual([]);
     });
 
-    it("finds the three routes RL-11 already guards", () => {
+    it("finds the five routes RL-11 already guards", () => {
         // If discovery silently stops matching, the lock above passes for the wrong
         // reason. Anchor it on the known-true subject.
+        //
+        // Three became five on 2026-09-13: W-17's role routes reach `user_roles` through
+        // `assign_member_role_audited` / `remove_member_role_audited` and apply the self guard
+        // (`roles/route.ts:28`, `roles/[roleKey]/route.ts:34`). They are anchored here rather than
+        // left to the exact-subject pin alone, because an anchor names the route a regression would
+        // drop, and these two are the ones this file could not see until now.
         const found = authorityMutatingRoutes();
         expect(found).toContain("app/api/admin/users/[userId]/role/route.ts");
         expect(found).toContain("app/api/admin/users/[userId]/access-scope/route.ts");
         expect(found).toContain("app/api/admin/users/[userId]/remove/route.ts");
+        expect(found).toContain("app/api/admin/users/[userId]/roles/route.ts");
+        expect(found).toContain("app/api/admin/users/[userId]/roles/[roleKey]/route.ts");
     });
 
     it("sees a helper-mediated writer that a table-name census misses", () => {
@@ -338,12 +384,27 @@ describe("W-2 / RL-11 — the self-authority ban's subject is discovered", () =>
         //
         // A new authority writer therefore fails HERE with a name as well as failing the lock
         // above with a remedy. Adding one is a decision, not a retune.
+        //
+        // **6 → 8 on 2026-09-13**, and this pin is how the run's finding surfaced. Widening
+        // `AUTHORITY_RPCS` to W-17's `assign_member_role_audited` / `remove_member_role_audited`
+        // brought the two role routes below into the subject for the first time. They were added by
+        // W-17 and had been mutating `(principal, org)` authority outside every predicate in this
+        // file — so this assertion failed with their names, exactly as it is built to.
+        //
+        // Both already applied the self guard, so the load-bearing assertion above stayed green
+        // throughout and **no exposure existed**. That is the honest reading and also the reason the
+        // gap mattered: RL-11 was not what kept them guarded, and removing the guard from either
+        // would not have reddened this lock. Proved by decomposition — repairing `AUTHORITY_TABLES`
+        // alone leaves the subject at 6 (inert on today's corpus), and the RPC repair alone moves it
+        // to 8.
         expect(authorityMutatingRoutes()).toEqual([
             "app/api/admin/dev/create-org/route.ts",
             "app/api/admin/lifecycle-catalog/delete/route.ts",
             "app/api/admin/users/[userId]/access-scope/route.ts",
             "app/api/admin/users/[userId]/remove/route.ts",
             "app/api/admin/users/[userId]/role/route.ts",
+            "app/api/admin/users/[userId]/roles/[roleKey]/route.ts",
+            "app/api/admin/users/[userId]/roles/route.ts",
             "app/api/admin/users/route.ts",
         ]);
     });

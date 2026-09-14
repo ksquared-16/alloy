@@ -83,6 +83,18 @@ product path** — W-5's product closure is complete (the dev create-org route, 
 atomic RPC), so the **class** is attributed and the **instance** is not. **The finding that outlives M1: W-6 cannot
 establish W-7's precondition, and no version of W-6 can** — *"Q4 returns 0"* is momentary, so **W-7 now waits on an
 invariant, not a count** (W-5/M9 scope). Tier A evidence remains uncapturable: still no write channel (§4, §5, §6, §11)
+· **W-0 re-issued a tenth time — 2026-09-13** (mission `msn_d2a063990a2488afd1`, assignment `asg_8778825c260fed`,
+mission title *"DX-2 Explained Confidence Fixture"*) — **no run 5; AC_W0 confirmed met from `run_history`.** The
+re-dispatch now has a **located mechanical cause**: `mission-advance.mjs`'s access-identity phase list is a static
+literal array returned with **no completion check**, which is also why one `contentHash` rides unrelated briefs.
+Two **propagation** defects found and repaired instead. **(1) The 2026-09-06 W-6 ruling never reached its
+artifact** — §6 said `w6-m1-preflight.json` *"now carries `preflight.ok: false`"*, but that file's only two
+commits are both 2026-08-07, so for seven days it carried `ok: true` / *"M1 sized at exactly 2 inserted rows"*
+while the population stood at **5**, in the exact field the apply gate reads. **(2) The census misattributed its
+own drift** — `why_q4_grew_this_time` blamed `POST /api/admin/users`, but W-5 closed that path on 2026-08-07
+(`ab9c5730b`; `route.ts:177` uses the atomic RPC) and the file's run-3 block already said so; the correct
+attribution is §6's seed/QA-tooling class, which makes the open question **containment, not product**. Both are
+the same shape: **a verdict recorded in prose and never written to the file the gate reads** (§4, §6, §11)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -1041,6 +1053,68 @@ compiled brief dispatched twice"* — that hash also rode a W-0 census brief.
 whether the census has already run — **and do not treat a matching `contentHash` as evidence of anything.**
 Re-run this census only immediately before a lockout-class switch or an M1 apply, per `residual_risks[0]`.
 
+#### W-0 re-issued a tenth time — **2026-09-13**, assignment `asg_8778825c260fed`: still no run 5, and the ruling that never reached its artifact
+
+Mission `msn_d2a063990a2488afd1` v1, contentHash `5d17cc99075c029bedda580dc02ef6cb`, mission title **"DX-2
+Explained Confidence Fixture"**. **AC_W0 remains met and no run 5 was filed.** Confirmed in one read, as the
+eighth pass instructed: `run_history[3]` holds run 4 at 2026-09-04T11:28:53Z against `org_fingerprint`
+`ab7e5dde…` on query `a3982ca5…`, and the propagation is complete across both scope files.
+
+**The re-dispatch now has a located cause, and it is mechanical — not a Director decision.**
+`scripts/local-dev/lib/vacilando/mission-advance.mjs`: `accessIdentityImplementationPhases()` is a **static
+11-phase list** (`impl_w0` … `impl_w3d`) whose titles, objectives and `requiredOutputs` are **string literals**,
+and `implementationPhasesFor()` returns that whole list whenever the plan path matches `/access-identity/i`,
+**consulting no completion state** — not `run_history`, not this plan's own `Status` line.
+`IMPLEMENTATION_PLAN_CANDIDATES` lists this plan **first**, so any mission reaching implementation planning
+without its own `implementation_plan_path` inherits the entire Wave 0→3 list. That explains both standing
+puzzles at once: why unrelated fixture-titled missions keep issuing this census, and why one `contentHash` rides
+unrelated briefs — **the fields are constants.** `5d17cc99…` has now ridden the **fifth** re-issue
+(`asg_727e2369868c78`, 2026-09-04), the **ninth** (`asg_c249f0f5126f7d`, 2026-09-06) and this **tenth**, eight
+days and three missions apart. **Do not attempt to fix this from the repo** — the toolkit runs from its installed
+copy, so editing `scripts/local-dev` changes nothing that dispatches.
+
+**What this pass found instead, and it is the reason the pass was not a no-op.**
+
+**1. The W-6 ruling voided M1's preflight in prose and never wrote it to the artifact.** §6 said
+[`w6-m1-preflight.json`](w6-m1-preflight.json) *"now carries `preflight.ok: false`"* and §11's M1 row cited that
+file as the evidence for `unmet`. `git log -- w6-m1-preflight.json` returns **two commits, both 2026-08-07** —
+the file's last write **predates census run 4**. So for seven days the artifact carried `"ok": true`,
+`"status_of_migration": "awaiting_authorization"` and the summary *"M1 sized at exactly 2 inserted rows"*, while
+the live population measured **5**. [`MIGRATION-APPLY-GATE.md`](../../MIGRATION-APPLY-GATE.md) `:16` scores
+`operator_review` **only when `preflight.ok === true`** and `unmet` when it is `false` or missing — the stale
+green was in the exact field the gate reads. **Repaired this pass**; see the correction block in §6 and the
+artifact's `preflight.why_this_edit_exists`. The artifact had *predicted a version of this*: its
+`durability_rationale` snapshotted run 3's counts so a run 4 could not strip them. It protected the gate's
+**inputs** and not the gate's **verdict**.
+
+**2. The census file blamed a product path that W-5 had already closed.**
+`drift_since_previous_run.why_q4_grew_this_time` read *"W-5 has not landed, so `POST /api/admin/users` still
+inserts into `user_roles` alone"* and *"the create path is still writing memberships without profiles."* **Both
+false.** W-5 landed **2026-08-07** (`ab9c5730b`), *before* the observation window opened, and
+`web/app/api/admin/users/route.ts:177` calls `createMembershipWithAccessProfile` under the comment *"Never insert
+into `user_roles` directly here — that is the fail-open path this closes."* The entry also **contradicted its own
+file**: `drift_run_2_to_run_3.why_q4_still_did_not_grow` already recorded W-5 as landed. The correct attribution
+is §6's own ruling — four fail-open writers, **all seed/QA tooling, no product path**. **The arithmetic was never
+in question; the mechanism was**, and only the mechanism tells anyone what to do. As written it made W-5 read as
+a live regression minting lockout candidates (a product emergency); corrected, the open question is *which
+tooling is writing to the deployed tenant and should it be able to* — **containment, not product.** Corrected in
+place, with the superseded text and its refutation retained.
+
+**Both defects are the same shape, and it is worth naming.** A fact was established in one place and consumed
+from another, and the propagation was recorded as done without being done. §14's standing rule — *every consumer
+re-derives rather than cites* — protects the **numbers**; nothing protected the **verdicts** written beside them.
+**On this programme, `git log` the artifact before trusting any sentence that says a file "now carries" anything.**
+
+**Still open, and still not answerable from a worker.** `dec_b1c5c947f5129e` / `gar_3368b11eb1b1ce` — the
+duplicate run-4 card. The eighth pass closed the search across four routes; nothing has changed (the store is
+outside the workspace boundary, `vac` exposes no governed-action read, `node` is permission-walled). **Operator:
+decline it if still pending** — approving it now runs a fifth census nobody has asked for.
+
+**For whoever dispatches an eleventh.** Unchanged, plus: the re-issue is a dispatcher defect with a known
+location; read `run_history` and `re_issue_log` in the census artifact and do not spend an authorization. The
+census is owed **only** immediately before a lockout-class switch or an M1 apply. **Neither is imminent** — M1's
+authorization is void pending re-authorization and no worker-reachable write channel exists to apply it.
+
 ---
 
 ## 5. Wave 1 — Fail-closed quick wins
@@ -1996,6 +2070,129 @@ otherwise conclude this run happened outside a sanctioned root.
 
 **Not verified this run.** No live database query — W-0's run-4 counts are two days old and are the W-0 owner's
 to refresh. Wave 1 needs no live query.
+
+#### Wave 1, ninth issuance on this branch — **2026-09-13**, assignment `asg_ca7b01c5e11f56`: RL-11 was watching a table that does not exist, and could not see the two newest authority writers
+
+The ninth issuance *of the branch of record*, and §4's rule holds a ninth time: **re-execute rather than
+re-assert.** The numbering needs its own sentence, because it is part of the finding. Commits titled *Wave 1
+ninth, tenth and eleventh issuance* exist — `6a80ef4e4` on `promote/activation-closure`, `c51072b1e` /
+`79c3be5d1` / `b20fc1817` / `cfd8e17d7` on `promote/devops-8-config-hygiene` — and **none of them is on
+`origin/staging` or on this branch.** The last Wave 1 record reachable here is the eighth, above. So this run
+re-derived everything from the tree rather than building on records it cannot see, and a reader comparing
+issuance numbers across branches will find three that never landed. **This is the same hazard the W-0 tenth
+re-issue recorded one phase over** — *a fix that has not merged is not in force* — recurring in Wave 1's own
+ledger, and it is the reason the defect below survived at least three passes that may well have found it.
+
+| Field | Value |
+|---|---|
+| Base | `477645367` → `e17acffa4` @ `runtime/test-dispatch-safety`. **The worktree was re-pointed twice mid-session** (see below). API routes **603 → 635**, migrations **373 → 431** since the eighth issuance — the first Wave 1 run across a materially grown corpus since 2026-08-07. Root class `unmanaged` by `alloy-root`, on a base 0 behind `origin/staging` |
+| Suites | **Passed — 102 passed / 0 failed**, 4 files. `analyticsRouteGates` 58 · `permissionGrid` 20 · `selfAuthorityRouteDiscovery` **10** (was 6) · `selfAuthorityMutation` 14 |
+| Subjects | Executed, not derived: analytics family **27** (floor 27) · class-wide G2 **103 of 635** (floor 103) · aliases **3** (floor 3) · classified exports **21** (floor 21) · lib modules **4357** (was 4212) · **RL-11 subject 6 → 8** |
+| Typecheck | `vac run typecheck:tests` **rc=0 class=ok**. Fourth consecutive Wave 1 run to reproduce one |
+| Regression | Full `tests/access`: **901 passed / 7 failed / 79 skipped** across 63 files (was 794/6/8 across 47) |
+| Changed | `web/tests/access/selfAuthorityRouteDiscovery.test.ts` and this section. **No route handler, library, schema or migration** — no behaviour change |
+
+**Every W-1 ratchet is still exact, across +32 routes.** Family **27**, class-wide **103**, aliases **3**,
+classified exports **21** — each equal to its floor, read from the predicates themselves via temporary
+impossible floors and then reverted. The class-wide figure deserves the emphasis: **103 of 603 became 103 of
+635**, so thirty-two routes arrived and not one of them holds a raw access resolution. That is a real result
+rather than a stale one, and it was checked as such — the scan's *denominator* carries no assertion, so it was
+measured the same way (**635**, matching `find web/app/api -name route.ts`) to rule out a discovery that had
+quietly stopped walking. Only the coarse anti-vacuity floor on lib modules (3000 against a live 4357) carries
+slack, and that is by construction: its exactness comes from the three path-named symbol anchors beside it.
+
+**The finding: `AUTHORITY_TABLES` named a table that has never existed.**
+
+RL-11's subject rests on three tables it calls *"the tables that carry `(principal, org)` authority"*. One of
+them, `membership_access_profiles`, **appears in zero migrations**. The only occurrence of that string in the
+tree outside this programme's own documents is a *filename* — `20260807140000_backfill_membership_access_profiles.sql`,
+M1 — whose body writes `public.user_access_profiles` (`:80-82`). The name was transcribed from a migration
+filename describing *"membership access profiles"* and has been watching nothing ever since.
+
+Meanwhile the three real access-scope tables are created together by `20260504103000_user_access_scope_tables_v1.sql`:
+`user_access_profiles` (`:18`), `user_department_access` (`:69`), `user_site_access` (`:150`). **The list held
+exactly one of them.** The old comment's count — "three tables" — was right by accident; the membership was
+not. `user_site_access` matters on this workstream's own terms: W-2's execution record names *"widen your own
+department/site scope to `all`"* as the vector it closed, and the **site** half of that sentence was never in
+the subject.
+
+**The sharper half: W-17's two audited role RPCs were invisible, and they are the newest authority writers in
+the product.** `assign_member_role_audited` INSERTs `public.user_roles` **and** `public.user_access_profiles`;
+`remove_member_role_audited` DELETEs `public.user_roles`
+(`20260912010000_w17_additive_role_assignment.sql:82,87,172`). Both are reached only through
+`lib/admin/memberRoleAssignmentWrite.ts:37-82`, which mentions `user_roles` exactly once — in a `.select(`.
+Neither RPC was in `AUTHORITY_RPCS`, so the two routes W-17 added,
+`users/[userId]/roles/route.ts` and `users/[userId]/roles/[roleKey]/route.ts`, **sat outside the discovered
+subject entirely.** The exact-subject pin read six routes and passed, because a route that is never discovered
+cannot make an enumeration look wrong.
+
+**Seventh instance of this workstream's recurring escape class, and the first where the enumeration named
+something that does not exist.** The previous six were subjects too narrow; this one was also *false*.
+
+**There was no exposure, and the distinction is the point.** Both W-17 routes do apply the self guard
+(`roles/route.ts:28`, `roles/[roleKey]/route.ts:34`), so the load-bearing assertion was green on the merits
+throughout. **But RL-11 was not the reason they were guarded**, and that was proved rather than asserted:
+
+1. The self guard was deleted from `users/[userId]/roles/route.ts` and the **shipped** lock re-run →
+   **10 passed / 0 failed.** All four Wave 1 suites together → **102 passed / 0 failed.** A live, unguarded
+   self-authority writer sat in the tree and no lock in Wave 1 said a word.
+2. The same defect against the **repaired** lock → **RED**, naming
+   `app/api/admin/users/[userId]/roles/route.ts` and carrying the remedy (*apply `isSelfAuthorityMutation`, or
+   add a reasoned entry to `EXEMPT`*).
+3. Fixture reverted; the delivered result is the 102/0 above.
+
+A lock that passes whether or not the guard is present is not holding the guard — it was holding two routes
+that happened to be correct.
+
+**The repair, and an honest decomposition of it.** `AUTHORITY_TABLES` drops the phantom and gains
+`user_access_profiles` and `user_site_access`; `AUTHORITY_RPCS` gains W-17's two. Measured separately, because
+the two halves are not equally load-bearing: **the table repair alone leaves the subject at 6** — inert on
+today's corpus, since every product write of `user_access_profiles` goes through an RPC already listed, and the
+only direct table writes in the tree are in `web/scripts/**` and `web/tests/**` — while **the RPC repair alone
+moves it to 8**. The table half is filed as correct-but-inert rather than sold as a fix, the same discipline
+the eighth issuance applied to `canReadAnalytics`.
+
+**W-2 / RL-11 — the exit criterion holds, and now the lock is a reason to believe it.** Five product routes
+mutate `(principal, org)` authority and all five call the guard; the discovery subject is **8** (five guarded
+plus three reasoned exemptions); `selfAuthorityRouteDiscovery` **10 passed**, `selfAuthorityMutation`
+**14 passed**. The guarded set grew **3 → 5** since the eighth issuance without any run noticing, which is
+exactly what a discovered subject is supposed to prevent and did not.
+
+**W-3 / RL-2 → RL-3 — green and unchanged.** `permissionGrid.test.ts` **20 passed**. `permissionGrid.ts`
+mentions `PERMISSION_GRID_ROWS` only in the header comment recording W-10's removal, so a row naming an absent
+key stays unrepresentable. Across **58 new migrations** nothing re-seeds bare `workflows.*`; the only live
+occurrences are `ops.workflows.read` / `ops.workflows.write` in `lib/admin/unenforcedPermissionKeys.json:40-41`
+and three prose mentions. C13 → W-11 still owns the restore question.
+
+**Seven failures in `tests/access` that are not Wave 1's — reported, not repaired.** `catalogVocabularyReconciliation`
+(4, W-11), `catalogConsolidationLock` (2, RL-7 / W-9) and `grantSeedEnumeration` (1, RL-8 / W-12). The
+composition moved since the eighth issuance rather than merely growing: **`capabilityTaxonomy` is now green and
+`catalogConsolidationLock` is newly red**, netting 6 → 7. The W-12 failure reports the administrator grant
+region missing `integrations.manage` / `integrations.read`, consistent with catalog work landing ahead of its
+seed. None is reachable from this run's change — the changed file is a leaf test that nothing imports, and all
+three were red before it. **Outside this assignment's scope**, and not claimed fixed.
+
+**The worktree was re-pointed twice mid-session, and the SHAs in this record are the survivors.** The session
+began on `runtime/wait-contract-gate` @ `9db29aeb9`; a later broker log read `commit=4776453671db`, and the
+checkout had moved to `runtime/test-dispatch-safety` @ `477645367`, then to `e17acffa4` under a concurrent
+session's commit. **Every count above was re-taken at the final base and is unchanged**, which is defensible
+rather than lucky: the diff between the two bases is three documents and one `a.md`, with no product or test
+source in it. Two consequences are recorded rather than absorbed. First, commit `9db29aeb9` — the **W-0 tenth
+re-issue's repair** to `w6-m1-preflight.json` and `wave0-authority-census.json` — **is no longer on this
+HEAD**, so that repair is once again a branch away, one day after being written precisely because its
+predecessor was. Second, this file's own line numbers shifted under the re-point, which is why this record
+cites content anchors rather than the offsets the session started with.
+
+**Mission identity divergence — a fifth consecutive run raising it.** This assignment arrives under mission
+`msn_6bae19f18b53f305d6`, titled **"DX-1 Executive Overview Fixture"**, contentHash
+`5cc8a895477c55b065075f22faef3cbe` — the **same contentHash the eighth issuance recorded under a different
+mission id** (`msn_f817f5b9608736b771`). So one hash now demonstrably rides a read-only census brief, a
+code-changing implementation brief, and two distinct missions. Neither the hash nor the title identifies the
+work; only the brief body does. Escalated rather than absorbed for the fifth time; no run has answered it.
+
+**Not verified this run.** No live database query — Wave 1 needs none, and this run changed no product code.
+The claim that the two W-17 routes are guarded is a source fact plus an executed lock, not a runtime
+observation; proving a self-PATCH is refused against a live stack remains tier C and unclaimed.
 
 ### W-4 — Service-client principal check *(M · I-3 · addresses G6)*
 
@@ -3338,11 +3535,23 @@ authorization rests on a preflight measured 2026-08-07T17:24:15Z against a popul
 **2 → 5**, and the operator granted it against a written record saying *"2 rows"*. An apply emitting
 `profile_rows_created = 5` under a ticket that says 2 is an operator reading a correct apply as a misfire. **This
 is a re-authorization against fresh numbers, not a re-litigation of the decision.** Accordingly
-[`w6-m1-preflight.json`](w6-m1-preflight.json) now carries `preflight.ok: false`, and M1 returns from
+[`w6-m1-preflight.json`](w6-m1-preflight.json) carries `preflight.ok: false`, and M1 returns from
 `authorized_awaiting_apply` to **`preflight_void_reauthorization_required`** in the §11 register. Per
 [`MIGRATION-APPLY-GATE.md`](../../MIGRATION-APPLY-GATE.md) the gate drops from `operator_review` back to **`unmet`**.
 Leaving `ok: true` would have left the gate reading `operator_review` on numbers known to be wrong — the one
 outcome the gate exists to prevent.
+
+> **⚠ CORRECTION 2026-09-13 (W-0 tenth re-issue, `asg_8778825c260fed`).** The sentence above read *"now carries
+> `preflight.ok: false`"* from 2026-09-06 to 2026-09-13 **and it was not true.** The ruling was written into this
+> plan and into the §11 register, but **the edit never reached the artifact.** `git log -- w6-m1-preflight.json`
+> returns exactly two commits — `e4aecbe87` and `3e000209a`, **both 2026-08-07** — so the file's last write
+> predated census run 4 entirely. For seven days §6 and §11 said **VOID** while the evidence file an operator
+> opens said `"ok": true`, `"status_of_migration": "awaiting_authorization"`, and *"M1 sized at exactly 2 inserted
+> rows"*. Per [`MIGRATION-APPLY-GATE.md`](../../MIGRATION-APPLY-GATE.md) `:16` the gate scores `operator_review`
+> **only** when `preflight.ok === true` — so the stale green was sitting in the exact field the gate reads. **The
+> paragraph above named this outcome as the one the gate exists to prevent, and then left it in place.** The
+> artifact now carries `ok: false` with the run-4 counts; see its `preflight.why_this_edit_exists`. **The lesson
+> generalises past this row: a ruling recorded in prose is not a ruling that has landed. `git log` the artifact.**
 
 **3. The finding that outlives M1: W-6 cannot establish W-7's precondition, and no version of W-6 can.** This is
 the divergence from the compiled plan and the reason this dispatch escalates rather than just re-sizing a number.
