@@ -13,7 +13,7 @@ You do not need to read any source code to run this.
 | | |
 |---|---|
 | Staging URL | https://staging.workwithalloy.com |
-| Deployed build | `2103b3973038eca90861f22662ccdc0c451d15b4` — check at `/api/build-info` |
+| Deployed build | must contain the collectibility repair, merged as `2103b3973` — check `/api/build-info`. A **newer** SHA is fine and expected: staging moves with other threads. |
 | QA identity | `qa-slot1-product@example.com` |
 | Organization | `93667019-bd28-49b5-a688-acc9bb1e0a19` (Firefly Early Learning) |
 | Household | **Alvarez Household (demo)** · `fd000000-0000-4000-8000-0000000c0001` |
