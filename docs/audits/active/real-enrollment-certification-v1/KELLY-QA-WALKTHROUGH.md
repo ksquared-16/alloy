@@ -33,14 +33,14 @@ go* to configure what a family must do during Enrollment.
 
 ---
 
-**0.1 DO** — Open **/workspace** → **Processing** (left rail) → **Studio** → **Packets**.
+**0.1. DO** — Open **/workspace** → **Processing** (left rail) → **Studio** → **Packets**.
 **EXPECT** — One packet card, and only one: **Enrollment Paperwork 2026–2027**, *3 steps · Active*,
 with *Admissions Information · Family Handbook · Immunization record* underneath.
 
 > If you see **Cert Packet…**, **Mo500…**, **Handbook probe** or **Enrollment — enrolling**, stop:
 > the certification leftovers are back.
 
-**0.2 DO** — Open **Enrollment Paperwork 2026–2027** and read the top of the page before clicking
+**0.2. DO** — Open **Enrollment Paperwork 2026–2027** and read the top of the page before clicking
 anything.
 **EXPECT** — **Family experience** answers "what does a family actually do?" in three numbered
 sentences, then says what Alloy does on its own:
@@ -56,11 +56,11 @@ completed packet arrives for staff review in **Processing › Work**.
 > **The question this panel exists to answer:** you configure *obligations*; Alloy works out the
 > conversation from them. There is no prompt here for you to write, and there should not be.
 
-**0.3 DO** — Read **Ready to use** and **Used by** beside it.
+**0.3. DO** — Read **Ready to use** and **Used by** beside it.
 **EXPECT** — Three ticks, and **Enrollment · Enrolling stage — required · blocking**. Since it is now
 published, it does **not** say "saved, not published yet".
 
-**0.4 DO** — Scroll to **What families complete**.
+**0.4. DO** — Scroll to **What families complete**.
 **EXPECT** — Three obligation cards, each saying what it is and then what actually happens:
 
 | # | Card | What it should tell you |
@@ -69,7 +69,7 @@ published, it does **not** say "saved, not published yet".
 | 2 | **Family Handbook** — Read & acknowledge | the real document's name, **Acknowledgment required · Signature required**, and a **View document** link |
 | 3 | **Immunization record** — Upload a document | **Family sends in a document · Filed as Immunization record**, then *…They are not asked to type its contents…* |
 
-**0.5 DO** — Note what is *not* dominating this screen: **Add step** is the primary way to compose
+**0.5. DO** — Note what is *not* dominating this screen: **Add step** is the primary way to compose
 (and it asks what you need from the family, not which form to attach), the order is yours to change,
 and **Direct distribution and session history** is one collapsed row near the bottom.
 
@@ -79,21 +79,21 @@ and **Direct distribution and session history** is one collapsed row near the bo
 
 ---
 
-**0.6 DO** — On the **Admissions Information** card, click **Manage information**.
+**0.6. DO** — On the **Admissions Information** card, click **Manage information**.
 **EXPECT** — One Form editor, with exactly two buttons: **✎ Edit** and **▷ Preview**. There is no
 *Structure* and no *Paperwork* — they were two pictures of one Form and both are gone.
 
-**0.7 DO** — Look down the form without clicking.
+**0.7. DO** — Look down the form without clicking.
 **EXPECT** — Every question carries **Required** or **Optional**, and exactly four carry a blue
 **Alloy** mark.
 
-**0.8 DO** — Click **Student Date of Birth:** (it has the Alloy mark).
+**0.8. DO** — Click **Student Date of Birth:** (it has the Alloy mark).
 **EXPECT** — The right inspector shows that question's settings, and under **Store answer in**:
 > **Alloy already knows this when available**
 > Date of birth — the family is asked only if it is missing, can correct it, and the answer updates
 > the record.
 
-**0.9 DO** — Click **Parent/Guardian #1 Phone Number:** — also Alloy-marked. Then click
+**0.9. DO** — Click **Parent/Guardian #1 Phone Number:** — also Alloy-marked. Then click
 **Student Name:**, which is not.
 **EXPECT** — The first reads like 0.8. The second reads:
 > **Stored with this form**
@@ -106,13 +106,13 @@ and **Direct distribution and session history** is one collapsed row near the bo
 > Worth a moment: **Student Name** is currently form-only. If you expect a child's name to update the
 > child record, that is a configuration change you can make — and a fair thing to flag.
 
-**0.10 DO** — Click **▷ Preview**, then **✎ Edit**, then **← Forms**.
+**0.10. DO** — Click **▷ Preview**, then **✎ Edit**, then **← Forms**.
 **EXPECT** — *Form preview — how this information appears when presented as a form.* That is the Form
 as a form; it is **not** the guided conversation, which is assembled from all three obligations.
 
 ---
 
-**0.11 DO** — Back on the packet, look at the **Family Handbook** card and click **View document**.
+**0.11. DO** — Back on the packet, look at the **Family Handbook** card and click **View document**.
 **EXPECT** — The real 2026–2027 Handbook opens. The card says *Acknowledgment required · Signature
 required* and describes the family being shown the actual document and finishing by agreeing and
 signing.
@@ -123,7 +123,7 @@ signing.
 > The card names the document and its filing date but does **not** show a page count — Alloy does not
 > currently store one for this document. Tell us if you want it.
 
-**0.12 DO** — Look at the **Immunization record** card.
+**0.12. DO** — Look at the **Immunization record** card.
 **EXPECT** — *Family sends in a document · Filed as Immunization record*, and the sentence that the
 family sends in their existing record and is **not asked to type its contents** — they can view or
 replace it before they finish.
