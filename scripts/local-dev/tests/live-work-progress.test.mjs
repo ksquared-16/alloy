@@ -7,6 +7,18 @@ import { join } from "node:path";
 import os from "node:os";
 import assert from "node:assert/strict";
 
+/*
+ * Dispatch is not part of this test's contract.
+ *
+ * `approveMissionExecution` schedules a REAL `dispatchReadyAssignments` on a
+ * ~10ms timer, which on this host discovers actual lanes and providers. The
+ * assertions below finish first, so the symptom was a passing transcript
+ * attached to a process that never exits - 12m52s in one measured case.
+ * Verified: with this off the assertions are unchanged and the process exits.
+ */
+process.env.VACILANDO_AUTO_DISPATCH = "0";
+
+
 const root = mkdtempSync(join(os.tmpdir(), "vac-progress-"));
 process.env.ALLOY_RUNTIME_ROOT = root;
 

@@ -182,3 +182,12 @@ jobs:
       - name: Governed run wait contract
         working-directory: .
         run: node scripts/local-dev/tests/development-governed-run-wait.test.mjs
+
+      # A test must not be able to dispatch real work by accident. 22 of the 27
+      # dispatch-capable tests relied on default auto-dispatch, which fires a real
+      # dispatchReadyAssignments on a 10ms timer: the assertions finish first, so
+      # the symptom was a passing transcript attached to a process that never
+      # exits. This requires each such test to declare how it handles dispatch.
+      - name: Test dispatch safety
+        working-directory: .
+        run: node scripts/local-dev/tests/development-dispatch-safety.test.mjs
