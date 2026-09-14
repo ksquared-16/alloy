@@ -241,6 +241,16 @@ jobs:
             scripts/local-dev/tests/development-migration-parity.test.mjs \
             scripts/local-dev/tests/certification-aware-migration-target.test.mjs
 
+      # A refusal that cannot be told apart from five other refusals is not a
+      # diagnosis, and the only recovery it leaves a worker is to guess and
+      # refile - which, on a privileged write, means retrying it. Three
+      # consecutive host.install_toolkit requests failed for three different
+      # reasons and reported two indistinguishable strings while the validator
+      # had already computed the sentence that ends the confusion.
+      - name: Governed failure carries its diagnosis
+        working-directory: .
+        run: node --test scripts/local-dev/tests/development-validation-detail-propagation.test.mjs
+
       # Evidence that misattributes itself is worse than no evidence: a reader
       # who follows the stored action id lands on a different observation and
       # has no way to know. Measured: 5 of 5 committed census artifacts carrying

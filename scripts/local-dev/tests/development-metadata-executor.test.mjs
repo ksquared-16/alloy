@@ -407,5 +407,62 @@ test("I3 - the build works in a LINKED WORKTREE, which is where every candidate 
   }
 });
 
+/* ── W: the wrapper's own git, which no test had ever constructed ────────── */
+
+const { metadataPromotionGit } = await import("../lib/vacilando/trusted-host-actions.mjs");
+
+test("W1 - the git the promotion runs on actually resolves", () => {
+  /*
+   * It was an inline arrow closing over `defaultGit`, which that module never
+   * imported. Nothing fails at import time - a ReferenceError on a free
+   * variable fires when the closure RUNS, and the only thing that ran it was a
+   * real dispatch of an operator-approved action. So every case here stayed
+   * green and the live write threw
+   * `metadata_promote_threw: defaultGit is not defined` AFTER approval.
+   *
+   * Calling it once is the whole lock.
+   */
+  const repo = mkdtempSync(join(tmpdir(), "metapromote-wrapper-"));
+  try {
+    const g = metadataPromotionGit(repo);
+    assert.equal(typeof g, "function");
+    const init = g(["init", "-q"]);
+    assert.equal(init.status, 0, `the wrapper's git could not run: ${init.stderr || ""}`);
+    const r = g(["rev-parse", "--absolute-git-dir"]);
+    assert.equal(r.status, 0, r.stderr || "");
+    assert.ok(r.stdout.trim().length > 0);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("W2 - it keeps a caller's own directory and forwards the index env", () => {
+  // The two things the inline arrow did that a naive replacement would lose.
+  const a = mkdtempSync(join(tmpdir(), "metapromote-a-"));
+  const b = mkdtempSync(join(tmpdir(), "metapromote-b-"));
+  try {
+    const g = metadataPromotionGit(a);
+    g(["init", "-q"]);
+    defaultGit(["init", "-q"], b);
+    const inB = g(["rev-parse", "--absolute-git-dir"], b);
+    assert.equal(inB.status, 0, inB.stderr || "");
+    assert.ok(inB.stdout.includes(b.split("/").pop()),
+      "an inner call naming its own directory must keep it");
+
+    defaultGit(["config", "user.email", "t@example.com"], a);
+    defaultGit(["config", "user.name", "t"], a);
+    writeFileSync(join(a, "f.txt"), "x\n");
+    defaultGit(["add", "f.txt"], a);
+    defaultGit(["commit", "-qm", "c"], a);
+    const idx = join(a, "alt-index");
+    const rt = g(["read-tree", "HEAD"], null, { env: { GIT_INDEX_FILE: idx } });
+    assert.equal(rt.status, 0, rt.stderr || "");
+    assert.ok(existsSync(idx), "opts must be forwarded, or the index isolation is gone again");
+  } finally {
+    rmSync(a, { recursive: true, force: true });
+    rmSync(b, { recursive: true, force: true });
+  }
+});
+
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
 process.exit(fail ? 1 : 0);
