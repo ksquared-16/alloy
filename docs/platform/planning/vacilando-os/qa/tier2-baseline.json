@@ -28,7 +28,7 @@
       "exit_code": 1,
       "failing_assertions": null,
       "ms": 103,
-      "classification": "FIXTURE"
+      "classification": "LIVE_HOST_DEPENDENCY"
     },
     {
       "file": "continuous-improvement.test.mjs",
@@ -36,7 +36,7 @@
       "exit_code": 1,
       "failing_assertions": null,
       "ms": 87,
-      "classification": "FIXTURE"
+      "classification": "LIVE_HOST_DEPENDENCY"
     },
     {
       "file": "deliverable-evidence-integrity.test.mjs",
@@ -212,7 +212,7 @@
       "exit_code": 1,
       "failing_assertions": null,
       "ms": 124,
-      "classification": "FIXTURE"
+      "classification": "LIVE_HOST_DEPENDENCY"
     },
     {
       "file": "mission-runtime.test.mjs",
@@ -228,7 +228,7 @@
       "exit_code": 1,
       "failing_assertions": null,
       "ms": 83,
-      "classification": "FIXTURE"
+      "classification": "LIVE_HOST_DEPENDENCY"
     },
     {
       "file": "trusted-host-actions.test.mjs",
@@ -261,6 +261,70 @@
       "failing_assertions": null,
       "ms": 89,
       "classification": "OTHER"
+    }
+  ],
+  "classification_note": "The four files first classified FIXTURE on their shared `if (!cond) throw` shape were reclassified after reading their actual failure text: 'POST improvements', 'timeline story created', 'director shows managed recovery', 'all complete, got complete,waiting,...'. They need a live surface, not a shared fixture helper. A common assertion helper is not evidence of a common root.",
+  "next_red_clusters": [
+    {
+      "rank": 1,
+      "name": "Governed dispatch and authorization correctness",
+      "files": [
+        "development-action-authorization-identity.test.mjs",
+        "trusted-host-actions.test.mjs",
+        "development-director-execution-bridge.test.mjs",
+        "development-mission-delegation-integration.test.mjs",
+        "development-production-apply-owner.test.mjs",
+        "development-autonomous-dispatch.test.mjs"
+      ],
+      "why": "Highest operator/runtime correctness and autonomy impact; these are the surfaces that decide whether governed work executes. Moderate shared-root probability around authorization identity and dispatch routing.",
+      "bounded": "Medium - six files, probably two roots."
+    },
+    {
+      "rank": 2,
+      "name": "Lane and provider runtime",
+      "files": [
+        "development-lane-output.test.mjs",
+        "development-lane-telemetry.test.mjs",
+        "development-provider-lifecycle.test.mjs",
+        "development-session-bootstrap.test.mjs",
+        "development-execution-recovery.test.mjs",
+        "development-offline-lane.test.mjs"
+      ],
+      "why": "Direct autonomy impact: lane binding, provider lifecycle and recovery. development-offline-lane fails on lane_worktree_unregistered, a known host-state coupling, so some of this cluster may be environment rather than defect.",
+      "bounded": "Medium - separate host-state coupling from real defects first."
+    },
+    {
+      "rank": 3,
+      "name": "Deliverable review",
+      "files": [
+        "deliverable-evidence-integrity.test.mjs",
+        "deliverable-review.test.mjs",
+        "deliverable-feedback-loop-cert.test.mjs"
+      ],
+      "why": "PROVEN shared root: all three import ../lib/vacilando/deliverable-review.mjs and fail on the same create-precondition. Smallest bounded fix with the highest confidence of one cause.",
+      "bounded": "Small - one module, three files."
+    },
+    {
+      "rank": 4,
+      "name": "Live-surface tests mis-tiered into Tier 2",
+      "files": [
+        "assignment-dispatch.test.mjs",
+        "continuous-improvement.test.mjs",
+        "mission-dashboard-closeout.test.mjs",
+        "productize-improve-interp.test.mjs"
+      ],
+      "why": "These need a running surface. The correct action is probably reclassification into Tier 3, not repair - they are deterministic only where that surface exists.",
+      "bounded": "Small - a partition rule change, but it lives on main."
+    },
+    {
+      "rank": 5,
+      "name": "Host-state coupled",
+      "files": [
+        "vacilando-status-perf.test.mjs",
+        "trusted-host-immutable-artifact.test.mjs"
+      ],
+      "why": "vacilando-status-perf fails with 'Runtime root already owned by pid 4407 on :3030'; trusted-host-immutable-artifact requires the real Alloy checkout to be dirty. Both couple to shared host state and cannot be deterministic in Tier 2.",
+      "bounded": "Small - Tier 3 reclassification."
     }
   ]
 }
