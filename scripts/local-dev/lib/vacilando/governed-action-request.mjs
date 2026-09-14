@@ -1591,7 +1591,23 @@ function releaseRunAfterGovernedFailure(rec, { nowMs, root } = {}) {
     });
   }
   patchRunFields(rec.run_id, { governed_action: pub }, { nowMs, root });
-  patchRunResourceWait(rec.run_id, null, root);
+  /*
+   * THE WAIT IS RESOLVED, NOT DELETED.
+   *
+   * This nulled the wait outright, immediately after the transition above had
+   * marked it `resolution_state: "resolved"` - so on the one path where an
+   * operator most wants to know what the run had been waiting for, the record
+   * was marked resolved and then thrown away a line later.
+   *
+   * Clearing was right when leaving a wait left it reading `waiting` forever;
+   * seventeen terminal runs carrying live "Waiting on Director" text was a real
+   * defect. The resolved-wait contract solved that without destroying anything:
+   * an EXECUTING or NEEDS_INPUT run can no longer carry an ACTIVE wait, because
+   * the exit marks it. Deleting on top of that only removes the evidence.
+   *
+   * An owner that genuinely wants the wait gone still calls
+   * patchRunResourceWait directly; this path does not want that.
+   */
   /*
    * A REFUSAL IS A SETTLEMENT, AND `failRequest` says so a few lines below about
    * its own timing. The projection stamp did not agree: every one of the twenty
