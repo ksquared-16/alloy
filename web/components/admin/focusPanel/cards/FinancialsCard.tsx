@@ -263,6 +263,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
      */
     const [adjustOpen, setAdjustOpen] = useState(false);
     const [adjustAgreementId, setAdjustAgreementId] = useState("");
+    /* WHICH OBLIGATION this reduces. A credit that names nothing reduces nothing — see below. */
+    const [adjustSourceChargeId, setAdjustSourceChargeId] = useState("");
     const [adjustCategory, setAdjustCategory] = useState<"credit" | "adjustment">("credit");
     const [adjustDirection, setAdjustDirection] = useState<"decrease" | "increase">("decrease");
     const [adjustAmount, setAdjustAmount] = useState("");
@@ -498,6 +500,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         setReverseError(null);
         setAdjustAmount("");
         setAdjustReason("");
+        setAdjustSourceChargeId("");
         setReverseReason("");
     }, []);
 
@@ -506,6 +509,31 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         () => (vm?.subjects ?? []).filter((sub) => sub.agreementId),
         [vm],
     );
+
+    /**
+     * The obligations this reduction could be against.
+     *
+     * A reduction attaches to what it reduces through `source_charge_id`, and every authority that
+     * asks what a charge still owes nets it that way. A credit written without one appears on the
+     * ledger's signed total — so the family looks like they owe less — while the obligation it was
+     * meant to reduce is untouched and remains fully collectible. Two readings of the same
+     * household, one of them wrong, which is what the representative-household oracle found.
+     *
+     * Only the selected child's own posted obligations are offered: a reduction is netted against an
+     * enrolment-backed charge, and a correction or a credit is not an obligation to reduce.
+     */
+    const adjustableCharges = useMemo(() => {
+        const member = adjustableSubjects.find((sub) => sub.agreementId === adjustAgreementId)?.customerMemberId;
+        return (vm?.rows ?? []).filter(
+            (r) =>
+                r.status === "posted"
+                && r.amountCents > 0
+                && !r.correctsChargeId
+                && !r.reversedByChargeId
+                && r.subjectMemberId != null
+                && r.subjectMemberId === member,
+        );
+    }, [adjustAgreementId, adjustableSubjects, vm]);
 
     const openAddAdjustment = useCallback(() => {
         closeMovePanels();
@@ -518,6 +546,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
          */
         const scoped = adjustableSubjects.find((sub) => sub.customerMemberId === subjectFilter);
         setAdjustAgreementId(scoped?.agreementId ?? adjustableSubjects[0]?.agreementId ?? "");
+        setAdjustSourceChargeId("");
         setAdjustOpen(true);
     }, [adjustableSubjects, closeAdjustPanels, closeMovePanels, subjectFilter]);
 
@@ -545,6 +574,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     mode: "preview",
                     payload: {
                         enrollment_agreement_id: adjustAgreementId,
+                        source_charge_id: adjustSourceChargeId,
                         charge_category: adjustCategory,
                         amount_cents: amountCents,
                         reason: adjustReason,
@@ -569,7 +599,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         } finally {
             setRunning(false);
         }
-    }, [actionEntity, adjustAgreementId, adjustCategory, adjustEffectiveDate, adjustOpen, adjustReason, adjustSignedCents, running]);
+    }, [actionEntity, adjustAgreementId, adjustCategory, adjustEffectiveDate, adjustOpen, adjustReason, adjustSignedCents, adjustSourceChargeId, running]);
 
     const confirmAdjustment = useCallback(async () => {
         const amountCents = adjustSignedCents();
@@ -579,6 +609,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         try {
             await runAction("billing.adjust_account", {
                 enrollment_agreement_id: adjustAgreementId,
+                source_charge_id: adjustSourceChargeId,
                 charge_category: adjustCategory,
                 amount_cents: amountCents,
                 reason: adjustReason,
@@ -600,7 +631,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
             setRunning(false);
             await load();
         }
-    }, [adjustAgreementId, adjustCategory, adjustEffectiveDate, adjustOpen, adjustPreview, adjustReason, adjustSignedCents, closeAdjustPanels, load, runAction, running]);
+    }, [adjustAgreementId, adjustCategory, adjustEffectiveDate, adjustOpen, adjustPreview, adjustReason, adjustSignedCents, adjustSourceChargeId, closeAdjustPanels, load, runAction, running]);
 
     const previewReversal = useCallback(async () => {
         if (!reversePending || running) return;
@@ -2113,12 +2144,37 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                 value={adjustAgreementId}
                                 onChange={(e) => {
                                     setAdjustAgreementId(e.target.value);
+                                    // The charges on offer belong to the enrolment; changing it changes them.
+                                    setAdjustSourceChargeId("");
                                     setAdjustPreview(null);
                                 }}
                             >
                                 {adjustableSubjects.map((sub) => (
                                     <option key={sub.agreementId} value={sub.agreementId}>
                                         {sub.displayName}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Against charge</span>
+                            <select
+                                data-testid="adjustment-source-charge"
+                                value={adjustSourceChargeId}
+                                onChange={(e) => {
+                                    setAdjustSourceChargeId(e.target.value);
+                                    setAdjustPreview(null);
+                                }}
+                            >
+                                <option value="">Choose the charge this is about…</option>
+                                {adjustableCharges.map((r) => (
+                                    <option key={r.chargeId} value={r.chargeId}>
+                                        {(r.description ?? r.categoryLabel)}
+                                        {r.date ? ` · ${r.date}` : ""}
+                                        {` · ${(r.outstandingCents / 100).toLocaleString(undefined, {
+                                            style: "currency",
+                                            currency,
+                                        })} outstanding`}
                                     </option>
                                 ))}
                             </select>
@@ -2221,7 +2277,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                             <button
                                 type="button"
                                 data-testid="adjustment-preview-button"
-                                disabled={running || !adjustReason.trim() || !adjustAgreementId}
+                                disabled={running || !adjustReason.trim() || !adjustAgreementId || !adjustSourceChargeId}
                                 onClick={() => void previewAdjustment()}
                             >
                                 Preview
