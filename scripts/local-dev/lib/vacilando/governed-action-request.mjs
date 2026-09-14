@@ -1648,14 +1648,35 @@ function describeExecutionFailure(out) {
   const outer = String(out?.error || "").trim();
   const v = out?.validation;
   const inner = String(v?.error || "").trim();
-  const detail = String(v?.detail || "").trim();
   const fallback = String(out?.action?.failureReason || "").trim();
+
+  /*
+   * BOTH HALVES OF THE FAILURE SURFACE, NOT JUST THE VALIDATION ONE.
+   *
+   * There are two ways a trusted-host action fails and they carry their detail
+   * in different places:
+   *
+   *   input validation   { error, validation: { error, detail } }
+   *   EXECUTION          { error, detail, action.result.detail }   <- failTrustedAction
+   *
+   * The first version of this function read only `validation.detail`, so the
+   * execution half stayed exactly as broken as before. Measured: an
+   * operator-approved write to main failed and the operator was shown
+   * `metadata_promote_threw`, while `defaultGit is not defined` — the sentence
+   * that names the bug — sat on the action record and reached nobody. Closing
+   * one half of a two-half defect and reporting the defect closed is its own
+   * failure mode.
+   */
+  const detail = String(v?.detail || out?.detail || out?.action?.result?.detail || "").trim();
 
   const parts = [];
   if (outer) parts.push(outer);
   if (inner && inner !== outer) parts.push(inner);
   let text = parts.join(": ");
-  if (detail) text = text ? `${text} \u2014 ${detail}` : detail;
+  // A detail that merely repeats the code adds nothing but noise.
+  if (detail && detail !== outer && detail !== inner) {
+    text = text ? `${text} \u2014 ${detail}` : detail;
+  }
   if (!text) text = fallback;
   return redact(text) || "trusted-host execution failed";
 }
