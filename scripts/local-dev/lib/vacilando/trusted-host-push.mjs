@@ -72,11 +72,26 @@ function normSha(v) {
   return String(v || "").trim().toLowerCase();
 }
 
-export function defaultGit(args, cwd, { timeout = 60_000 } = {}) {
+/**
+ * `env` IS HONOURED. It used to be destructured away and `process.env` passed
+ * verbatim, so a caller that asked for a different environment silently got the
+ * ambient one.
+ *
+ * That is not a cosmetic gap. The main-write executor builds its tree through
+ * `git(args, cwd, { env: { GIT_INDEX_FILE: <temp> } })` precisely so it never
+ * touches the index of the worktree it was pointed at - and that intent was
+ * being dropped right here, so `read-tree`/`update-index`/`write-tree` ran
+ * against the real index of the operator-named worktree and discarded whatever
+ * was staged in it. Measured: the temp index file was never created.
+ *
+ * Merged over `process.env` rather than replacing it, because git still needs
+ * PATH, HOME and the credential environment to function.
+ */
+export function defaultGit(args, cwd, { timeout = 60_000, env = null } = {}) {
   return spawnSync("git", ["-C", cwd, ...args], {
     encoding: "utf8",
     timeout,
-    env: process.env,
+    env: env ? { ...process.env, ...env } : process.env,
     maxBuffer: 8 * 1024 * 1024,
   });
 }

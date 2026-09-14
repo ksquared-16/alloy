@@ -297,5 +297,67 @@ test("S6 - main_after is not a copy of main_before", () => {
   assert.notEqual(ok.main_after, ok.main_before, "a successful write moves it");
 });
 
+/* ── I: the tree is built somewhere else ─────────────────────────────────── */
+
+const { defaultGit } = await import("../lib/vacilando/trusted-host-push.mjs");
+const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs");
+const { tmpdir } = await import("node:os");
+const { join } = await import("node:path");
+
+test("I1 - the real git honours GIT_INDEX_FILE, so the build never touches the named worktree", () => {
+  /*
+   * The executor builds its tree through
+   * `git(args, cwd, { env: { GIT_INDEX_FILE: <temp> } })` so it never disturbs
+   * the index of the worktree it was pointed at. `defaultGit` destructured only
+   * `timeout` and passed `process.env` verbatim, so that intent was dropped and
+   * read-tree/update-index/write-tree ran against the operator-named worktree's
+   * REAL index - discarding whatever was staged there.
+   *
+   * A git stub cannot catch this: the loss is in the real implementation. So
+   * this case uses a throwaway repository and measures the actual files.
+   */
+  const repo = mkdtempSync(join(tmpdir(), "metapromote-repo-"));
+  const idxDir = mkdtempSync(join(tmpdir(), "metapromote-idx-"));
+  const idx = join(idxDir, "index");
+  try {
+    const g = (...a) => defaultGit(a, repo);
+    g("init", "-q");
+    g("config", "user.email", "t@example.com");
+    g("config", "user.name", "t");
+    writeFileSync(join(repo, "a.txt"), "one\n");
+    g("add", "a.txt");
+    g("commit", "-qm", "first");
+
+    // Something is staged in the worktree, as it would be for a real operator.
+    writeFileSync(join(repo, "b.txt"), "staged work\n");
+    g("add", "b.txt");
+    const stagedBefore = defaultGit(["diff", "--cached", "--name-only"], repo).stdout.trim();
+    assert.equal(stagedBefore, "b.txt", "precondition: b.txt is staged");
+
+    const r = defaultGit(["read-tree", "HEAD"], repo, { env: { GIT_INDEX_FILE: idx } });
+    assert.equal(r.status, 0, r.stderr || "");
+    assert.ok(existsSync(idx), "the alternate index must actually be used");
+
+    const stagedAfter = defaultGit(["diff", "--cached", "--name-only"], repo).stdout.trim();
+    assert.equal(stagedAfter, "b.txt",
+      "a governed build must not discard what the named worktree had staged");
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+    rmSync(idxDir, { recursive: true, force: true });
+  }
+});
+
+test("I2 - an env override does not strip the ambient environment git needs", () => {
+  // Replacing process.env outright would leave git without PATH or HOME.
+  const repo = mkdtempSync(join(tmpdir(), "metapromote-env-"));
+  try {
+    defaultGit(["init", "-q"], repo);
+    const r = defaultGit(["rev-parse", "--git-dir"], repo, { env: { GIT_INDEX_FILE: join(repo, "x") } });
+    assert.equal(r.status, 0, `git could not run with an env override: ${r.stderr || ""}`);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
 process.exit(fail ? 1 : 0);
