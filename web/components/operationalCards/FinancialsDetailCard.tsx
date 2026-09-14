@@ -100,7 +100,12 @@ export default function FinancialsDetailCard({
                     <Stat label="Past due" value={pastDue ? pastDue.amount : "None"} tone={pastDue ? "due" : "ok"} />
                     <Stat label="Responsibility" value={period.familyResponsibility} />
                     <Stat label="Paid" value={period.paymentsReceived.replace("−", "")} />
-                    <Stat label="Autopay" value={evidence.payment.autopayLabel ?? "None"} tone={evidence.payment.autopayHealthy ? "ok" : "due"} />
+                    {/*
+                     * "None" claimed an absence nothing could support. Payment setup has no producer
+                     * yet, so the honest value is that it has not been recorded — and it is not
+                     * toned as a problem, because an unknown is not a fault.
+                     */}
+                    <Stat label="Autopay" value={evidence.payment.autopayLabel ?? "Not recorded"} tone={evidence.payment.autopayHealthy ? "ok" : undefined} />
                     <Stat label="Next" value={evidence.payment.nextChargeLabel ?? "—"} />
                 </div>
 
