@@ -1,3 +1,10 @@
+---
+title: Department abstraction convergence
+status: sprint
+owner: business process / platform model
+raised_by: Access & Identity V2 — Department product retirement + Business Process authority convergence
+---
+
 # Department abstraction convergence — retire the product, keep the identity
 
 **Status:** convergence design, no implementation.
@@ -209,3 +216,33 @@ would churn 20 mounted callers to buy naming, and risks a second lifecycle syste
 - `departmentScope` stays as-is. Renaming an access dimension enforced in 40 files is its own slice.
 - One principal is department-restricted on the deployed primary. Nothing in this plan narrows or
   widens that.
+
+---
+
+## 13. Debt recorded by the implementation slice
+
+Three items, none of which this slice was authorized to resolve, all of which it had to name rather
+than absorb.
+
+**`DEPARTMENT_METADATA_ENVELOPE_DEBT`** — `departments.metadata` is one jsonb column carrying six
+distinct lifecycle documents (`lifecycle_builder_v1`, `lifecycle_activation_v1`,
+`lifecycle_builder_stage_field_rules_v1`, `lifecycle_progression_requirements_v1`,
+`lifecycle_actions_matrix_order_v1`) alongside `opportunity_attention_rules`, which belongs to a
+different owner entirely. Storage was deliberately not split here. What the slice did instead was
+make **authority follow the semantic owner of each write rather than the shared column**, so the
+envelope is now a storage problem rather than an authorization one.
+
+**`ATTENTION_SLA_METADATA_AUTHORITY_DEBT`** — raised by the split above. `PATCH
+/api/admin/departments/[departmentId]` carrying `metadata` is the org-wide attention/SLA write and
+has no truthful capability. `settings.manage` is held by admin *and* ops while the handler is
+admin-only, so reusing it would widen access; `business_process.configure` would turn a
+process-design key into a generic JSON metadata-write key. That shape keeps the role gate it already
+had — no more reachable than before — and is the third and final entry in the architecture lock's
+`KNOWN_ROLE_GATED` list. When attention/SLA gets an owner, the cap returns to two.
+
+**`DEPARTMENT_SCOPE_TERMINOLOGY_DEBT`** — `departmentScope`, `allowedDepartmentIds` and
+`departmentIdAllowed` mean *operational-domain scope*, and are enforced in roughly forty files. The
+mechanism is correct and load-bearing; only the noun is legacy. Renaming a scope primitive at that
+blast radius deserves a dedicated compatibility slice, and the certification proves the dimension
+still binds under the new capabilities: the same principal holding both keys and restricted to one
+domain answers 400 inside it and 404 outside it.
