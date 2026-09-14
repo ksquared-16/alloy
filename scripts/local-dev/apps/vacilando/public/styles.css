@@ -1726,6 +1726,9 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-proj-edit{margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft);}
 .gw-proj-edit input{width:100%;min-height:44px;font:inherit;padding:8px 10px;
   border:1px solid var(--line-strong);border-radius:8px;background:var(--card);color:var(--ink);}
+.gw-field-check{display:grid;grid-template-columns:auto 1fr;gap:2px 9px;align-items:center;margin-top:12px;}
+.gw-field-check input{width:18px;height:18px;margin:0;}
+.gw-field-check .gw-field-hint{grid-column:2;margin-top:0;}
 .gw-proj-recheck,.gw-proj-lifecycle{margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft);}
 .gw-proj-lifecycle p{margin:0 0 8px;}
 .gw-repo-id{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:8px 0 0;font-size:12px;}

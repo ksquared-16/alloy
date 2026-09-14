@@ -5109,6 +5109,35 @@ function renderProjectDetail(repo, state, { busy, err, ok }) {
         value="${esc(val("worktree_parent", repo.worktree_parent))}"
         placeholder="${esc(defaultWorktreeParent(repo.root))}">
     </label>
+    ${/*
+       * PROMOTION IS A FIELD NOW, AND IT IS THE EXCEPTION THAT PROVES THE RULE.
+       *
+       * Everything else the capabilities block shows is RESOLVED — a database
+       * target, a port, a hosted host — and a text box holding a copy of a
+       * resolved value would be a second authority. Promotion is different: it
+       * is the one convention a project DECIDES rather than inherits, and until
+       * now the surface could show it and not set it, so a newly registered
+       * project could never be given governed promotion without opening
+       * repositories.json. That is the thing this whole slice exists to end.
+       *
+       * The branch box only appears once promotion is on: a promotion branch
+       * with governed promotion off is a value with nothing reading it.
+       */ ""}
+    <label class="gw-field gw-field-check">
+      <input id="gw-proj-gp" type="checkbox" data-gw-proj-gp
+        ${(draft.governed_promotion ?? repo.promotion?.governed_promotion) ? "checked" : ""}>
+      <span class="gw-field-label">Governed promotion</span>
+      <span class="gw-field-hint">Vacilando opens and merges this project's promotions, and refuses
+        a merge into a protected branch.</span>
+    </label>
+    ${(draft.governed_promotion ?? repo.promotion?.governed_promotion) ? `<label class="gw-field">
+      <span class="gw-field-label" id="gw-proj-pb-l">Promotes to</span>
+      <input id="gw-proj-pb" type="text" autocapitalize="off" autocorrect="off" spellcheck="false"
+        data-gw-proj-pb aria-labelledby="gw-proj-pb-l"
+        value="${esc(val("promotion_branch", repo.promotion?.promotion_branch || repo.default_branch))}">
+      <span class="gw-field-hint">The branch promotions merge into. For a project with no separate
+        trunk this is the canonical branch.</span>
+    </label>` : ""}
   </div>`;
 
   const lifecycle = retired
