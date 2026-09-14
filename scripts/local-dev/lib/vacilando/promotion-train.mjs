@@ -36,6 +36,7 @@
  * a second staging with worse governance.
  */
 
+import { ALLOY_REPOSITORY_ID, executionProfileFor } from "./repository-registry.mjs";
 import { LIFECYCLE } from "./migration-parity.mjs";
 
 export const TRAIN_SCHEMA = "vacilando.promotion_train.v1";
@@ -574,7 +575,10 @@ export function trainIntegrationDecision({ invariants = null, aggregate = null, 
 export const STAGING_MERGE_ACTION = "repository.merge_pull_request";
 export const TRAIN_PR_ACTION = "promotion.open_pr";
 
-export function stagingMergeRequest(train = {}, { repository = "ksquared-16/alloy" } = {}) {
+export function stagingMergeRequest(train = {}, { repository = null } = {}) {
+  // Alloy's slug comes from Alloy's profile. A caller for another repository
+  // passes its own; nothing here assumes one.
+  repository = repository || executionProfileFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID }).remote_slug;
   if (!train.may_land) {
     return { ok: false, reason: "train_not_ready", blockers: train.blockers || [] };
   }

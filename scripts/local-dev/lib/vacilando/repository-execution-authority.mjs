@@ -26,6 +26,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { ALLOY_REPOSITORY_ID, promotionPolicyFor } from "./repository-registry.mjs";
 import { join } from "node:path";
 
 /** What a registered action does with repository content. */
@@ -176,8 +177,18 @@ export function assertRepositoryIdentity({ actionType, provenance, expectedRepoH
   return { ok: true, provenance: prov };
 }
 
-/** The promoted ref this host treats as release truth. */
-export const PROMOTED_REF = "origin/staging";
+/**
+ * The promoted ref this host treats as release truth.
+ *
+ * Alloy's, and it now says so. As a bare module constant every repository
+ * inherited it; `promotedRefFor` resolves it per project, and a repository whose
+ * profile declares no promotion gets NULL rather than Alloy's trunk.
+ */
+export const PROMOTED_REF = promotionPolicyFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID }).promoted_ref;
+
+export function promotedRefFor(repositoryRecord) {
+  return promotionPolicyFor(repositoryRecord || { profile: "alloy", repository_id: ALLOY_REPOSITORY_ID }).promoted_ref;
+}
 
 /**
  * The repository SHA a request is being DECIDED AGAINST, read once at filing.

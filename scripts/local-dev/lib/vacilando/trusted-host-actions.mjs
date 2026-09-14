@@ -99,6 +99,11 @@ import {
 import { appendTimelineEvent } from "./timeline.mjs";
 import { attachEvidence } from "./evidence.mjs";
 import { completedReuseDecision } from "./action-repeatability.mjs";
+import { ALLOY_REPOSITORY_ID as ALLOY_REPO_ID, executionProfileFor } from "./repository-registry.mjs";
+
+/** Alloy's database target, from Alloy's profile rather than from a literal. */
+const alloyDatabaseTarget = () =>
+  executionProfileFor({ profile: "alloy", repository_id: ALLOY_REPO_ID }).database_target;
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim()
   || join(os.homedir(), ".local", "state", "alloy-dev");
@@ -1057,7 +1062,16 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
     || action.inputs.database_target
     || action.inputs.environment
     || action.target
-    || "alloy_deployed_primary";
+    /*
+     * THE LAST RESORT NAMES ITS OWNER.
+     *
+     * This read `|| "alloy_deployed_primary"` — a literal, so any project whose
+     * request omitted a target silently acquired ALLOY'S DATABASE. The fallback
+     * still exists, because a census with no environment cannot run at all; what
+     * changes is that it is now Alloy's profile answering for Alloy, and a future
+     * project supplies its own rather than inheriting this one.
+     */
+    || alloyDatabaseTarget();
   const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile, String(censusEnvironment)], {
     env: {
       ...process.env,

@@ -9,6 +9,12 @@
  * decisions, and trusted-host actions.
  */
 import { stampRepositoryAuthority } from "./repository-execution-authority.mjs";
+import { executionProfileFor as executionProfileForRepo } from "./repository-registry.mjs";
+
+/** Alloy's database target, owned by Alloy's profile. */
+const alloyDatabaseTarget = () =>
+  executionProfileForRepo({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID_FOR_TARGET }).database_target;
+const ALLOY_REPOSITORY_ID_FOR_TARGET = "repo_alloy";
 import { createHash, randomBytes } from "node:crypto";
 import { measureMergePullRequestGates } from "./trusted-host-repository-housekeeping.mjs";
 import { describeWait } from "./run-wait.mjs";
@@ -529,7 +535,9 @@ export function presentationForGovernedAction(req = {}) {
      */
     const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
     const versions = list.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean);
-    const target = inputs.target || inputs.environment || req.target || "alloy_deployed_primary";
+    // The literal here meant any project omitting a target acquired Alloy's
+  // database. Alloy's profile answers for Alloy; another project supplies its own.
+  const target = inputs.target || inputs.environment || req.target || alloyDatabaseTarget();
     const sha = String(inputs.expectedSha || inputs.expected_sha || "");
     return {
       approve_label: "Authorize PRODUCTION migration",
@@ -709,7 +717,7 @@ function productionMigrationProposal(req) {
   const list = Array.isArray(i.migrations) ? i.migrations : [];
   const versions = list.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean);
   const files = list.map((m) => (typeof m === "string" ? m : (m?.path || m?.migration_path || m?.version || ""))).filter(Boolean);
-  const target = i.target || i.environment || req.target || "alloy_deployed_primary";
+  const target = i.target || i.environment || req.target || alloyDatabaseTarget();
   const sha = String(i.expectedSha || i.expected_sha || "");
   const facts = [
     factRow("Environment", "PRODUCTION — deployed primary"),
