@@ -98,6 +98,25 @@ test("7 — a record may narrow its profile, and says when it did", () => {
   assert.deepEqual([...narrowed.protected_branches], ["main", "master", "production", "prod"]);
 });
 
+test("7b — governed promotion is a decision a record may make, and could not", () => {
+  /*
+   * Every other dimension in `promotionPolicyFor` honoured a record-level
+   * override from the start. This one read the profile and nothing else, so a
+   * project stating `governed_promotion: true` was still told false. Nothing
+   * could set the field, so nothing noticed — until the real Vacilando project
+   * was registered and given a promotion policy through the Projects surface.
+   */
+  const opted = R.promotionPolicyFor({ ...genericRec, promotion: { governed_promotion: true, promotion_branch: "main" } });
+  assert.equal(opted.governed_promotion, true, "a project may decide this for itself");
+  assert.equal(opted.promotion_branch, "main");
+  assert.equal(opted.source, "repository_record");
+  // And the incumbent answers are unmoved.
+  assert.equal(R.promotionPolicyFor(alloyRec).governed_promotion, true);
+  assert.equal(R.promotionPolicyFor(genericRec).governed_promotion, false, "silence is still no");
+  assert.equal(R.promotionPolicyFor({ ...alloyRec, promotion: { governed_promotion: false } }).governed_promotion, false,
+    "and a record may narrow it off, which is the other half of owning it");
+});
+
 /* ── the consumers actually read it ───────────────────────────────────────── */
 
 test("8 — the merge guard's exported constants are derived, not declared", () => {

@@ -56,6 +56,27 @@ export function projectIdFor(rec) {
 }
 
 /**
+ * A stable, readable project identity from the operator's own name for it.
+ *
+ * `prj_vacilando`, not `prj_` plus a fingerprint: the id appears in the Projects
+ * detail, in scope resolution and in every governed record that names a project,
+ * and an operator has to be able to recognise it. Collisions take a numeric
+ * suffix rather than silently reusing an identity.
+ */
+export function mintProjectId(name, store = null) {
+  const slug = String(name || "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "project";
+  const taken = new Set();
+  for (const rec of Object.values(store?.repositories || {})) {
+    const id = rec?.project_id || (rec?.repository_id === ALLOY_REPOSITORY_ID ? ALLOY_PROJECT_ID : null);
+    if (id) taken.add(id);
+  }
+  let candidate = `prj_${slug}`;
+  for (let n = 2; taken.has(candidate); n += 1) candidate = `prj_${slug}_${n}`;
+  return candidate;
+}
+
+/**
  * Profiles. A profile is the set of conventions a repository actually has —
  * never a set of conditionals sprinkled through the codebase.
  *
@@ -354,7 +375,22 @@ export function promotionPolicyFor(rec) {
   const base = profile.promotion || REPOSITORY_PROFILES.generic.promotion;
   const override = rec?.promotion || null;
   return Object.freeze({
-    governed_promotion: Boolean(profile.governed_promotion),
+    /*
+     * THE RECORD DECIDES THIS ONE, AND UNTIL NOW IT COULD NOT.
+     *
+     * Every other dimension here already honoured a record-level override; this
+     * line read the PROFILE and nothing else, so a project that stated
+     * `governed_promotion: true` was still told false. The defect was invisible
+     * while no write path could set the field: registering the real Vacilando
+     * repository and trying to give it governed promotion is what surfaced it.
+     *
+     * Governed promotion is the one convention a project DECIDES rather than
+     * inherits — Alloy's profile still says true, and a generic project that
+     * has not said anything still gets false.
+     */
+    governed_promotion: override?.governed_promotion !== undefined
+      ? Boolean(override.governed_promotion)
+      : Boolean(profile.governed_promotion),
     promotion_branch: override?.promotion_branch ?? base.promotion_branch,
     protected_branches: Object.freeze([...(override?.protected_branches ?? base.protected_branches)]),
     promoted_ref: override?.promoted_ref ?? base.promoted_ref,
@@ -683,6 +719,21 @@ export async function registerLocalRepository({
   const rec = {
     schema_version: REPOSITORY_SCHEMA,
     repository_id: `repo_${repositoryFingerprint(info.git_common_dir)}`,
+    /*
+     * A PROJECT IDENTITY, MINTED HERE, BECAUSE NOTHING ELSE MINTED ONE.
+     *
+     * S0 gave Alloy `prj_alloy` and gave every other project null, and no write
+     * path set the field — not registration, not update. The live registration
+     * of the real Vacilando repository is what surfaced it: the project
+     * registered correctly, resolved none of Alloy's conventions, and had no
+     * identity of its own, so `prj_vacilando` was unreachable through the
+     * product. A project model where exactly one project has an identity is
+     * half a model.
+     *
+     * Alloy is untouched: its record predates this and `projectIdFor` still
+     * answers `prj_alloy` for it by repository id.
+     */
+    project_id: mintProjectId(named.name, readRepositoryStore(root)),
     name: named.name,
     root: info.root,
     git_common_dir: info.git_common_dir,
@@ -754,6 +805,43 @@ export function updateRepository(repositoryId, patch = {}, { nowMs = Date.now(),
     if (!contained.ok) return { ok: false, error: "worktree_parent_outside_approved_roots" };
     if (p.startsWith(rec.root + sep)) return { ok: false, error: "worktree_parent_inside_repository" };
     rec.worktree_parent = p;
+  }
+  /*
+   * THE PROMOTION POLICY IS SETTABLE, BECAUSE OTHERWISE IT IS ONLY EDITABLE.
+   *
+   * The Projects surface could SHOW a project's promotion policy and not change
+   * it, so a newly registered project could never be given governed promotion
+   * without opening repositories.json — which is the thing the Projects slice
+   * exists to end. Registering the real Vacilando repository is what made that
+   * concrete: canonical branch main, promotion branch main, and no way to say so.
+   *
+   * Narrow on purpose. Four named fields, each validated; `source` is derived by
+   * promotionPolicyFor and is not accepted, and a policy that states nothing is
+   * removed rather than stored as an empty object that would read as an override.
+   */
+  if (patch.promotion !== undefined) {
+    const inbound = patch.promotion || {};
+    const unknown = Object.keys(inbound)
+      .filter((k) => !["governed_promotion", "promotion_branch", "protected_branches", "promoted_ref"].includes(k));
+    if (unknown.length) return { ok: false, error: "invalid_promotion_field", fields: unknown };
+    const branch = (v) => /^[A-Za-z0-9._\/-]{1,120}$/.test(String(v));
+    const next = {};
+    if (inbound.governed_promotion !== undefined) next.governed_promotion = Boolean(inbound.governed_promotion);
+    if (inbound.promotion_branch !== undefined && inbound.promotion_branch !== null) {
+      if (!branch(inbound.promotion_branch)) return { ok: false, error: "invalid_branch" };
+      next.promotion_branch = String(inbound.promotion_branch);
+    }
+    if (inbound.promoted_ref !== undefined && inbound.promoted_ref !== null) {
+      if (!branch(inbound.promoted_ref)) return { ok: false, error: "invalid_branch" };
+      next.promoted_ref = String(inbound.promoted_ref);
+    }
+    if (inbound.protected_branches !== undefined) {
+      if (!Array.isArray(inbound.protected_branches)) return { ok: false, error: "invalid_protected_branches" };
+      if (inbound.protected_branches.some((b) => !branch(b))) return { ok: false, error: "invalid_branch" };
+      next.protected_branches = inbound.protected_branches.map(String).slice(0, 16);
+    }
+    if (Object.keys(next).length) rec.promotion = next;
+    else delete rec.promotion;
   }
   rec.updated_at = iso(nowMs);
   writeStore(store, root);

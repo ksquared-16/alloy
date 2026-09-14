@@ -1386,7 +1386,10 @@ export function createVacilandoServer() {
               return sendJson(res, out.ok ? 200 : 404, out);
             }
             if (m[2] === "update") {
-              const allowed = ["name", "default_branch", "worktree_parent"];
+              // `promotion` joined the list so a project can be GIVEN governed
+              // promotion here; the registry validates its four fields and
+              // derives `source` itself.
+              const allowed = ["name", "default_branch", "worktree_parent", "promotion"];
               const extra = Object.keys(body.value || {}).filter((k) => !allowed.includes(k));
               if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
               const out = R.updateRepository(repoId, body.value || {});
