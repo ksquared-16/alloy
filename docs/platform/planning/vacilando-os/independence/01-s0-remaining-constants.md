@@ -40,3 +40,39 @@ is only legible in a small diff. The environments block (S1) is the next
 ownership-complete unit: target, base URL, credential source and slug move
 together or not at all, because a half-moved environment has two authorities —
 exactly the state S0 exists to end.
+
+---
+
+# S1 — repository execution profile
+
+S1 moved the **execution conventions** behind the same record/profile authority
+S0 established. Values are unchanged for Alloy; the generic profile resolves
+none of them.
+
+## Moved behind repository authority in S1
+
+| convention | was | now |
+|---|---|---|
+| first agent port `3011` | `DEFAULT_FIRST_AGENT_PORT` in `managed-slots` | `executionProfileFor(rec).first_agent_port`; **null** without managed slots |
+| worktree namespace `alloy-worktrees` | a default argument in six modules | `worktreeParentFor(rec)`; **null** for a profile with no namespace |
+| GitHub slug `ksquared-16/alloy` | `DEFAULT_REPOS`, and a default parameter in `promotion-train` | `executionProfileFor(rec).remote_slug` |
+| hosted domain `staging.workwithalloy.com` | two literals in `deployed-target-registry` | `executionProfileFor(rec).hosted_host` |
+| database target `alloy_deployed_primary` | three `||` fallbacks that silently gave any project Alloy's database | `alloyDatabaseTarget()`, from Alloy's profile |
+
+`3011` was deliberately **not** renamed to a generic default. It is Alloy's
+port; a repository with no managed slot range has none.
+
+## Still Alloy-specific, and whose slice
+
+| occurrence | files | slice | why |
+|---|---|---|---|
+| `ALLOY_RUNTIME_ROOT` | 90 | **S3** | rename with a deprecation alias |
+| `ALLOY_SERVER_ENV_SOURCE` and env-source mechanics | 10 | **S2** | host credential plumbing, not project config |
+| `/Users/Kelly/Alloy` fallbacks | 7 | **S3** | below the registry since S0; deletable once every host is seeded |
+| `alloy_deployed_primary` in operator-only denylists (`executor-authority`, `trusted-host-authz`) | 2 | **keep** | these are *never-auto-approve* names, a safety list every project benefits from — not Alloy configuration |
+| `alloy_deployed_primary` in production-apply / ledger-repair target lists | 3 | **S2** | they name an environment, and an environment moves whole |
+| `alloy-worktrees` in observation/hygiene default arguments | ~6 | **S2** | read-only observers; converting them needs the record threaded through, which is S2's plumbing |
+| `3011–3016` in `policies.mjs` prose and `reconciliation-observe` | 2 | **S2** | documentation text and an observer's scan range |
+| `alloy_deployed_primary` in a conversation string | 1 | **cosmetic** | operator prose, not configuration |
+
+Nothing is unassigned.

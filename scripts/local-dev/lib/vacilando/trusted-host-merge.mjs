@@ -15,7 +15,7 @@ import { spawnSync } from "node:child_process";
 // leaves this machine, and one guard in one place is the point.
 import { canonicalGatewayRuntimeRoot, liveMergePermitted } from "./trusted-host-remote-guard.mjs";
 import { firstMeaningfulLine } from "./trusted-host-push.mjs";
-import { ALLOY_REPOSITORY_ID, promotionPolicyFor } from "./repository-registry.mjs";
+import { ALLOY_REPOSITORY_ID, executionProfileFor, promotionPolicyFor } from "./repository-registry.mjs";
 
 export { canonicalGatewayRuntimeRoot, liveMergePermitted };
 
@@ -48,7 +48,8 @@ export function mergeBranchPolicyFor(repositoryRecord) {
   if (repositoryRecord) return promotionPolicyFor(repositoryRecord);
   return ALLOY_POLICY;
 }
-const DEFAULT_REPOS = Object.freeze(["ksquared-16/alloy"]);
+// Alloy's slug, owned by Alloy's profile rather than by this module.
+const DEFAULT_REPOS = Object.freeze([executionProfileFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID }).remote_slug]);
 
 /**
  * The canonical form of a GitHub repository reference.

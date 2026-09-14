@@ -90,6 +90,28 @@ export const REPOSITORY_PROFILES = Object.freeze({
       protected_branches: [],
       promoted_ref: null,
     },
+    /*
+     * EXECUTION CONVENTIONS, AND THE GENERIC ANSWER IS AGAIN "NONE".
+     *
+     * Slots, ports, a worktree namespace, a deployed target and a hosted
+     * domain are things ALLOY has. They lived as module constants and as
+     * default arguments, which made them the runtime's: a repository with no
+     * managed slots still had 3011 waiting for it, and a repository with no
+     * deployment still resolved Alloy's.
+     *
+     * Absence is a valid answer and is stated here as one. 3011 is not a
+     * default port that Alloy happens to use — it is Alloy's port, and a
+     * repository without a managed slot range has none at all.
+     */
+    execution: {
+      managed_slots: false,
+      first_agent_port: null,
+      worktree_namespace: null,
+      remote_slug: null,
+      deployed_target: null,
+      database_target: null,
+      hosted_host: null,
+    },
   },
   alloy: {
     id: "alloy",
@@ -108,6 +130,16 @@ export const REPOSITORY_PROFILES = Object.freeze({
       protected_branches: ["main", "master", "production", "prod"],
       promoted_ref: "origin/staging",
     },
+    // Alloy's actual execution conventions, stated once and owned here.
+    execution: {
+      managed_slots: true,
+      first_agent_port: 3011,
+      worktree_namespace: "alloy-worktrees",
+      remote_slug: "ksquared-16/alloy",
+      deployed_target: "alloy_staging_web",
+      database_target: "alloy_deployed_primary",
+      hosted_host: "staging.workwithalloy.com",
+    },
   },
 });
 
@@ -124,6 +156,45 @@ export function profileFor(id) {
  * protected names — which refuses rather than inheriting, and that refusal is
  * the point: Alloy being the primary consumer must not make Alloy the default.
  */
+/**
+ * The execution conventions that govern a repository.
+ *
+ * Record first, then profile, floor generic — the same shape as
+ * `promotionPolicyFor`, deliberately, so there is one resolution rule to learn
+ * and one place a fallback could hide. Nothing here names Alloy; it resolves
+ * whatever profile it is handed, and an unknown one gets the empty set.
+ */
+export function executionProfileFor(rec) {
+  const profile = profileFor(rec?.profile);
+  const base = profile.execution || REPOSITORY_PROFILES.generic.execution;
+  const override = rec?.execution || null;
+  const pick = (k) => (override && override[k] !== undefined ? override[k] : base[k]);
+  return Object.freeze({
+    managed_slots: Boolean(pick("managed_slots")),
+    first_agent_port: pick("first_agent_port") ?? null,
+    worktree_namespace: pick("worktree_namespace") ?? null,
+    remote_slug: rec?.remote_slug ?? pick("remote_slug") ?? null,
+    deployed_target: pick("deployed_target") ?? null,
+    database_target: pick("database_target") ?? null,
+    hosted_host: pick("hosted_host") ?? null,
+    source: override ? "repository_record" : `profile:${profile.id}`,
+  });
+}
+
+/**
+ * Where a repository's worktrees live.
+ *
+ * The record's own `worktree_parent` wins — it is per-repository and already
+ * stored. Otherwise the profile's namespace under ~/Code, and for a profile
+ * with no namespace, NULL. `~/Code/alloy-worktrees` appeared as a default
+ * argument in six modules, which made Alloy's namespace every repository's.
+ */
+export function worktreeParentFor(rec) {
+  if (rec?.worktree_parent) return String(rec.worktree_parent).replace(/\/+$/, "");
+  const ns = executionProfileFor(rec).worktree_namespace;
+  return ns ? join(homedir(), "Code", ns) : null;
+}
+
 export function promotionPolicyFor(rec) {
   const profile = profileFor(rec?.profile);
   const base = profile.promotion || REPOSITORY_PROFILES.generic.promotion;
@@ -343,6 +414,7 @@ export function publicRepository(rec, { laneCount = 0 } = {}) {
     supports_governed_promotion: profile.governed_promotion,
     branch_policy: rec.branch_policy || profile.branch_policy,
     promotion: promotionPolicyFor(rec),
+    execution: executionProfileFor(rec),
     validation_commands: rec.validation_commands || [],
     instruction_files: profile.instruction_files,
     state: rec.state,
