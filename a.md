@@ -18,7 +18,8 @@ This is the **third** dispatch of this brief, not the second. Prior passes are c
 `92bc1ee78` (2026-09-11) and `b6bd3a105` (2026-09-13). `b6bd3a105` already traced the brief to its
 source and recommended withdrawal; it was answered by another byte-identical re-issue.
 
-**The one new finding this pass contributes is §3: the branch named for the fix contains none of it.**
+**The one new finding this pass contributes is §3: the branch named for the fix contains none of it —
+and §3a, the remedy appeared as uncommitted work in the tree while I was writing this.**
 
 ## 1. Provenance — re-verified at `477645367`
 
@@ -103,6 +104,51 @@ mission-runtime                      operator-views
 seed-productization-scenario.mjs     workspace-runtime-v3-1
 workspace-runtime-v3-2               workspace-runtime-v3-3
 ```
+
+## 3a. ADDENDUM — the remedy exists, uncommitted, and arrived mid-session
+
+**Written after §3 and §4 below; §3's measurement stands but its conclusion is now too strong.**
+
+At 20:27 during this session an untracked file appeared in the tree:
+`scripts/local-dev/tests/development-dispatch-safety.test.mjs` (5,523 bytes, author not me). It is a
+repo-lock implementing **exactly §4.3** — a single shared guard instead of 24 independent edits — and
+it is better than what §4 asked for. Rather than forcing dispatch off everywhere, it requires each
+dispatch-capable test to *declare* one of four classes:
+
+`AUTO_DISPATCH_DISABLED` (setting the env var is itself the declaration) · `DISPATCH_AWAITED` ·
+`HOST_INTEGRATION` · `CERTIFICATION`
+
+Its reasoning is sound on a point §4.2 missed: the env check short-circuits **before** `opts.await`,
+so a blanket guard would silently neuter the tests that exist to exercise dispatch. It also
+back-asserts that the runtime still honours the variable, so the declarations cannot become
+decorative — and it records the symptom that makes this expensive: `director-collaboration-dx6`
+printed its ok line, passed every assertion, then stayed alive **12m52s** on the leaked timer.
+A passing transcript attached to a hung process.
+
+**Status — derived, not executed.** `node` is blocked by this session's Bash permission gate, so I
+measured the lock by its own regexes (it is pure `fs` + regex, no imports that dispatch):
+
+| Quantity | Value |
+|---|---|
+| Dispatch-capable `*.test.mjs` (its `capable` set, excluding SELF) | **27** |
+| Declaring one of the four classes | **5** |
+| **Undeclared → named in the failure message** | **22** |
+
+**The lock currently fails, by design.** It is the forcing function, not the fix; the 22 files still
+have to be annotated. The five that pass all use the env-var form.
+
+Consequences for the rest of this note:
+
+- §3 remains factually correct — `runtime/test-dispatch-safety` still has **no commit** of the remedy
+  (the only commit ahead of `origin/staging` is this document). But "nothing is in flight" is wrong:
+  work is in progress, just untracked.
+- **§4.3 is satisfied in design and should not be re-specified.** The live risk is different now: an
+  untracked 5.5 KB lock in an *unmanaged* worktree (§5) is one `git clean` from gone. **Getting it
+  committed is more urgent than anything else in §4.**
+- §4.1 (operator-side withdrawal) is **unchanged** — the lock prevents future leaks; it does not
+  withdraw this mission, which will otherwise re-dispatch a fourth time.
+
+I did not modify, stage, or commit that file — it is another worker's in-flight work.
 
 ## 4. Recommendation
 
