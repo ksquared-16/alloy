@@ -167,3 +167,32 @@ yet established.
 **Still open:** what removed it. The candidates are a draft discard/reset, a re-seed from the
 publication (which never had the requirement), or another lane writing the same department's draft.
 Nothing in this lane's commits touches stage requirements.
+
+---
+
+## Acceptance pass — the eleven questions, answered from the screen alone
+
+Self-executed 2026-09-14 against *Enrollment Paperwork 2026–2027* on slot 4, reading only what the
+product displays. Every answer below is quoted or paraphrased from visible text; no code or database
+was consulted during the pass.
+
+| # | Question | Answered by | The answer on screen |
+| --- | --- | --- | --- |
+| 1 | What does a family have to complete? | Packet › **Family experience** and **What families complete** | Three obligations: Admissions Information (*Collect information*), Family Handbook (*Read & acknowledge*), Immunization record (*Upload a document*) |
+| 2 | In what order? | **Family experience**, numbered 1–3, and the step list | Admissions → Handbook → Immunization |
+| 3 | Which information will Alloy reuse? | Step 1 card; **Alloy** marks on the form | "4 connected to Alloy"; *Alloy confirms information it already knows* |
+| 4 | Which will the family be asked for? | Step 1 card | What is missing, plus the 76 "stored with the form only" |
+| 5 | Which answers update Alloy records? | Form editor: the 4 questions marked **Alloy**; inspector | *Alloy already knows this when available … the answer updates the record* |
+| 6 | Which stay only with the Form? | Form editor: unmarked questions; inspector | *Stored with this form — Not written to the child or family record* |
+| 7 | What document must the family read? | Step 2 card, **View document** | "26 27 Family Handbook — 09/10/2026" |
+| 8 | Do they acknowledge/sign it? | Step 2 card | *Acknowledgment required · Signature required* |
+| 9 | What document must they upload? | Step 3 card | *Family sends in a document · Filed as Immunization record* |
+| 10 | What happens after they submit? | **Family experience**, closing line | *the completed packet arrives for staff review in Processing › Work, with the answers, the signed acknowledgment and the uploaded document attached* |
+| 11 | Where would I change any of the above? | **What families complete** → per-step actions | **Manage information** / **Preview form** on step 1; **View document** on step 2; requiredness and *Store answer in* inside the Form editor |
+
+**11/11 answerable without knowing Alloy internals.** The screen uses no `form_definition_id`, no
+adapter, no binding or shared-value vocabulary — checked in the rendered text, not just by reading
+the source.
+
+The one thing the screen reports as *not* configured is **Used by**: no business process requires
+this packet, which is true and is the open finding recorded above.
