@@ -1,0 +1,81 @@
+{
+  "trusted_host_action_id": "tha_cab5961c556d7a",
+  "query_hash": "d92eca815e401c87bb21f685778906d1d558bd14b9df7bf8eeeba27f247d3d5f",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T22:14:28.487Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_cab5961c556d7a",
+    "query_hash": "d92eca815e401c87bb21f685778906d1d558bd14b9df7bf8eeeba27f247d3d5f",
+    "authorization_id": "grnt_df02c2cd38554773",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T22:14:29.751Z",
+    "question_ids": [
+      "definitions",
+      "values",
+      "definitions_used",
+      "document_context",
+      "canonical_peer",
+      "not_null_probe",
+      "nonvacuity"
+    ],
+    "questions": {
+      "definitions": {
+        "question_id": "definitions",
+        "row_count": null,
+        "rows": [
+          "rows=0 orgs=0 doc_types=0 required=0 ai_extractable=0 first=none last_created=none last_updated=never"
+        ]
+      },
+      "values": {
+        "question_id": "values",
+        "row_count": null,
+        "rows": [
+          "rows=0 orgs=0 with_definition_id=0 orphaned_by_key_only=0 first=none last=none"
+        ]
+      },
+      "definitions_used": {
+        "question_id": "definitions_used",
+        "row_count": null,
+        "rows": [
+          "definitions=0 referenced_by_a_value=0"
+        ]
+      },
+      "document_context": {
+        "question_id": "document_context",
+        "row_count": null,
+        "rows": [
+          "documents=180 distinct_doc_types_on_documents=4"
+        ]
+      },
+      "canonical_peer": {
+        "question_id": "canonical_peer",
+        "row_count": null,
+        "rows": [
+          "field_definitions=424"
+        ]
+      },
+      "not_null_probe": {
+        "question_id": "not_null_probe",
+        "row_count": null,
+        "rows": [
+          "agent_v2_field_visibility_apply_audit.field_definition_id=NO ~ agent_v2_field_visibility_proposals.field_definition_id=NO ~ document_field_values.field_definition_id=YES ~ field_values.field_definition_id=NO"
+        ]
+      },
+      "nonvacuity": {
+        "question_id": "nonvacuity",
+        "row_count": null,
+        "rows": [
+          "definitions_table=true values_table=true orgs=3"
+        ]
+      }
+    },
+    "row_count": 7
+  }
+}

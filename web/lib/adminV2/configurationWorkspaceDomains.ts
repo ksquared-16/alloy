@@ -204,12 +204,6 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 description: "Performance packs, targets, and where indicators appear.",
             },
             {
-                href: settings("documents/document-fields"),
-                label: "Document fields",
-                description: "Fields on enrollment documents.",
-                advanced: true,
-            },
-            {
                 href: settings("config-proposals"),
                 label: "Configuration proposals",
                 description: "Review proposed layout changes.",

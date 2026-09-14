@@ -73,7 +73,6 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
                     { href: "/settings/fields?entity=customer", label: "Customer fields" },
                     { href: "/settings/fields?entity=opportunity", label: "Lead fields" },
                     { href: "/settings/fields", label: "All fields" },
-                    { href: "/settings/documents/document-fields", label: "Document fields" },
                 ],
             },
             { href: "/settings/statuses", label: "Statuses" },
@@ -318,7 +317,6 @@ function AdminLayoutInner({ children, userEmail, role }: { children: ReactNode; 
             "/admin/system/opportunity-fields",
             "/admin/system/vendor-fields",
             "/admin/system/schedule-fields",
-            "/admin/system/document-fields",
         ];
         if (customFieldPaths.includes(pathname)) {
             setNestedCollapsed((prev) => (prev["Data model::Fields"] === false ? prev : { ...prev, "Data model::Fields": false }));
