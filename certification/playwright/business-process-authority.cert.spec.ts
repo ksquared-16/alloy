@@ -36,6 +36,7 @@ const NO_DEPT = "99999999-0000-4000-8000-000000000201";
 const FOREIGN_DEPT = "99999999-0000-4000-8000-0000000002f0";
 
 const PERSONAS = {
+    scoped: { email: "cert.bpscoped@northwind.invalid" },
     configurer: { email: "cert.bpconfig@northwind.invalid" },
     activator: { email: "cert.bpactivate@northwind.invalid" },
     composed: { email: "cert.bpowner@northwind.invalid" },
@@ -107,6 +108,10 @@ test.describe("Business Process authority, and a retired Department product", ()
 
     test("PHASE 1 — each capability opens its own family and no other", async ({ browser }) => {
         const owns: Record<keyof typeof PERSONAS, Door[]> = {
+            // Holds both keys, but is restricted to one domain. Against the deliberately absent
+            // NO_DEPT it is refused by SCOPE (404), never by authority — which is why it is excluded
+            // from the capability matrix below and proven separately in PHASE 6.
+            scoped: [],
             configurer: CONFIGURE,
             activator: ACTIVATE,
             composed: ALL,
@@ -114,6 +119,7 @@ test.describe("Business Process authority, and a retired Department product", ()
             portalOnly: [],
         };
         for (const [name, p] of Object.entries(PERSONAS) as [keyof typeof PERSONAS, { email: string }][]) {
+            if (name === "scoped") continue;
             const s = await signIn(browser, p.email);
             expect(s.signedIn, `${name} could not sign in`).toBe(true);
             for (const door of ALL) {
@@ -199,21 +205,113 @@ test.describe("Business Process authority, and a retired Department product", ()
         await s.close();
     });
 
-    test("PHASE 6 — a capability does not bypass department scope, or an org boundary", async ({ browser }) => {
+    test("PHASE 6 — a capability does not bypass department scope", async ({ browser }) => {
         /*
-         * The product language no longer says Department. The SCOPE dimension is unchanged and still
-         * binds: `departmentIdAllowed` runs in every one of these handlers. A foreign id must not
-         * become reachable merely because the caller now holds a capability instead of a title.
+         * THE CLAIM THIS SLICE MUST NOT QUIETLY BREAK.
+         *
+         * The product language stopped saying Department. The SCOPE dimension did not move, and
+         * `departmentIdAllowed` still runs in every one of these handlers. `cert.bpscoped` holds
+         * BOTH business process keys and is restricted to one operational domain, so the only thing
+         * separating the two ids below is scope.
+         *
+         * The fixture provisions two plain grouping rows for exactly this: without a domain the
+         * principal MAY reach and one it may not, "restricted" proves nothing. A refusal against a
+         * merely non-existent id would be indistinguishable from a lookup miss.
+         *
+         * Doors are the ones whose scope check precedes body validation, so the answer is about
+         * scope and not about an empty payload. 404 is the canonical refusal here — an out-of-scope
+         * domain must not even be admitted to exist.
+         */
+        const ALLOWED = "c0000000-0000-4000-8000-0000000000a1";
+        const DENIED = "c0000000-0000-4000-8000-0000000000a2";
+        const doors: Door[] = ["builder", "requirements", "activate"];
+
+        const s = await signIn(browser, PERSONAS.scoped.email);
+        expect(s.signedIn, "the scoped persona must reach the portal").toBe(true);
+
+        for (const door of doors) {
+            const inScope = await knock(s.request, door, ALLOWED);
+            record("scopedAllowed", door, inScope);
+            expect(
+                inScope,
+                `a capability holder must NOT be refused inside its own operational domain at ${door}; got ${inScope}`,
+            ).not.toBe(403);
+            expect(
+                inScope,
+                `its own domain must not read as out of scope at ${door}; got ${inScope}`,
+            ).not.toBe(404);
+
+            const outOfScope = await knock(s.request, door, DENIED);
+            record("scopedDenied", door, outOfScope);
+            expect(
+                outOfScope,
+                `an out-of-scope operational domain must be refused at ${door}; got ${outOfScope}`,
+            ).toBe(404);
+        }
+        await s.close();
+    });
+
+    test("PHASE 7 — a foreign organization's id is refused even holding both keys", async ({ browser }) => {
+        /*
+         * No widening across the org boundary. The composed persona has scope "all" INSIDE its own
+         * tenant, so this is the org check answering rather than the department dimension. Doors are
+         * restricted to those whose scope/lookup precedes body validation: `actionsMatrix` parses
+         * its rows first and would answer 400 about the payload, which proves nothing about tenancy.
          */
         const s = await signIn(browser, PERSONAS.composed.email);
-        for (const door of ["builder", "requirements", "actionsMatrix", "activate"] as Door[]) {
+        for (const door of ["builder", "requirements", "activate"] as Door[]) {
             const status = await knock(s.request, door, FOREIGN_DEPT);
             record("composedForeign", door, status);
             expect(
                 [403, 404].includes(status),
-                `a foreign operational domain must be refused at ${door}; got ${status}`,
+                `a foreign organization's id must be refused at ${door}; got ${status}`,
             ).toBe(true);
         }
         await s.close();
+    });
+
+    test("PHASE 8 — no Departments product destination survives, and Business Process still works", async ({ page }) => {
+        /*
+         * THE RETIREMENT, SEEN RATHER THAN GREPPED.
+         *
+         * This runs as the seeded operator (the `certify` project's stored session), because an
+         * unauthenticated probe answers 307 to /login for every path and would "prove" the
+         * retirement of pages that still exist.
+         *
+         * The convergence census found the settings entry registered in CONFIGURATION_WORKSPACE_DOMAINS
+         * and then filtered straight back out by `advanced: true` — present in the table, absent from
+         * the rail. So a nav assertion alone was never enough: the typed URL has to be gone too.
+         */
+        await page.goto("/organization", { waitUntil: "domcontentloaded" });
+        const nav = page.getByRole("main").or(page.locator("body"));
+        await expect(
+            nav.getByRole("link", { name: /^Departments$/ }),
+            "the configuration navigation must not offer a Departments destination",
+        ).toHaveCount(0);
+
+        // The typed URL, as an authenticated operator. Retired means not-found, not a rendered page.
+        for (const url of ["/settings/departments", "/adminV2/settings/departments"]) {
+            const res = await page.goto(url, { waitUntil: "domcontentloaded" });
+            const status = res?.status() ?? 0;
+            const body = await page.locator("body").innerText().catch(() => "");
+            expect(
+                status === 404 || /not found|404/i.test(body),
+                `${url} must be retired for a signed-in operator; got ${status}`,
+            ).toBe(true);
+            expect(
+                body,
+                `${url} must not still render the Departments management screen`,
+            ).not.toMatch(/Teams and organizational structure/);
+        }
+
+        // The legacy URL lands on the canonical owner rather than dead-ending.
+        await page.goto("/legacy-admin/system/departments", { waitUntil: "domcontentloaded" });
+        expect(page.url(), "the legacy Departments URL must land on Business Process").toContain("/organization/processes");
+
+        // And the surfaces this slice must NOT have broken still load.
+        for (const url of ["/organization/processes", "/organization/access"]) {
+            const res = await page.goto(url, { waitUntil: "domcontentloaded" });
+            expect(res?.status(), `${url} must still serve`).toBeLessThan(400);
+        }
     });
 });

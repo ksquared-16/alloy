@@ -167,7 +167,17 @@ export const CUSTOM = {
     bpActivator: "mcert_bp_activator",
     bpComposed: "mcert_bp_composed",
     bpTitular: "mcert_bp_titular",
+    /*
+     * The scope persona. Holds BOTH business process keys and is restricted to ONE operational
+     * domain, which is the claim the Department convergence must not quietly break: the product
+     * language stopped saying Department, and the scope dimension still binds.
+     */
+    bpScoped: "mcert_bp_scoped",
 };
+
+/** The two fixture operational domains the scope proof needs. Exported so the spec names them. */
+export const BP_DEPT_ALLOWED = "c0000000-0000-4000-8000-0000000000a1";
+export const BP_DEPT_DENIED = "c0000000-0000-4000-8000-0000000000a2";
 
 export const P = {
     director:    { id: "c0000000-0000-4000-8000-00000000d001", email: "cert.director@northwind.invalid",   role: "school_director" },
@@ -213,6 +223,7 @@ export const P = {
     bpActivator:        { id: "c0000000-0000-4000-8000-00000000d037", email: "cert.bpactivate@northwind.invalid",  role: CUSTOM.bpActivator },
     bpComposed:         { id: "c0000000-0000-4000-8000-00000000d038", email: "cert.bpowner@northwind.invalid",     role: CUSTOM.bpComposed },
     bpTitular:          { id: "c0000000-0000-4000-8000-00000000d039", email: "cert.bptitular@northwind.invalid",   role: CUSTOM.bpTitular },
+    bpScoped:           { id: "c0000000-0000-4000-8000-00000000d040", email: "cert.bpscoped@northwind.invalid",    role: CUSTOM.bpScoped },
 };
 
 async function principal(p) {
@@ -285,6 +296,7 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.bpComposed,   role_label: "Process owner",      description: "Designs and activates. The old admin behaviour, composed.", is_system: false, is_active: true },
         /* The label is the trap. It holds nothing. */
         { org_id: ORG, role_key: CUSTOM.bpTitular,    role_label: "Admin",              description: "Named Admin, granted no Business Process capability.",      is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.bpScoped,     role_label: "Domain process owner", description: "Designs and activates, inside one operational domain only.", is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
 
@@ -328,6 +340,7 @@ export async function setup() {
         [CUSTOM.bpActivator, ["portal.access", "business_process.activate"]],
         [CUSTOM.bpComposed, ["portal.access", "business_process.configure", "business_process.activate"]],
         [CUSTOM.bpTitular, ["portal.access"]],
+        [CUSTOM.bpScoped, ["portal.access", "business_process.configure", "business_process.activate"]],
     ]) {
         const { error } = await sb.rpc("replace_role_permission_grants", {
             p_org_id: ORG,
@@ -342,6 +355,33 @@ export async function setup() {
     }
 
     for (const p of Object.values(P)) await principal(p);
+
+    /*
+     * TWO OPERATIONAL DOMAINS, so "restricted" can mean something.
+     *
+     * The certification tenant ships one department. A scope proof needs a domain the principal MAY
+     * reach and one it may not, so the fixture provisions both and grants access to exactly one.
+     * They are plain grouping rows — no lifecycle marker — because the point is the scope dimension,
+     * not the process they would carry.
+     */
+    const { error: deptErr } = await sb.from("departments").upsert(
+        [
+            { id: BP_DEPT_ALLOWED, org_id: ORG, key: "mcert_bp_allowed", name: "Cert domain — allowed", sort_order: 900, is_active: true, metadata: { scaffold_note: "access cert fixture" } },
+            { id: BP_DEPT_DENIED, org_id: ORG, key: "mcert_bp_denied", name: "Cert domain — denied", sort_order: 901, is_active: true, metadata: { scaffold_note: "access cert fixture" } },
+        ],
+        { onConflict: "id" },
+    );
+    if (deptErr) throw new Error(`departments: ${deptErr.message}`);
+
+    const { error: apErr } = await sb.from("user_access_profiles").insert({
+        user_id: P.bpScoped.id, org_id: ORG, department_scope: "restricted", site_scope: "all", attendance_capture_scope: "site",
+    });
+    if (apErr) throw new Error(`user_access_profiles: ${apErr.message}`);
+
+    const { error: udaErr } = await sb.from("user_department_access").insert({
+        user_id: P.bpScoped.id, org_id: ORG, department_id: BP_DEPT_ALLOWED,
+    });
+    if (udaErr) throw new Error(`user_department_access: ${udaErr.message}`);
     const { error: urErr } = await sb.from("user_roles").insert(
         Object.values(P).map((p) => ({ user_id: p.id, org_id: p.org ?? ORG, role: p.role })),
     );
@@ -351,6 +391,7 @@ export async function setup() {
 
 export async function teardown() {
     const ids = Object.values(P).map((p) => p.id);
+    await sb.from("user_department_access").delete().in("user_id", ids);
     await sb.from("user_site_access").delete().in("user_id", ids);
     await sb.from("user_access_profiles").delete().in("user_id", ids);
     await sb.from("user_roles").delete().in("user_id", ids);
@@ -358,6 +399,7 @@ export async function teardown() {
         await sb.from("role_permission_grants").delete().eq("org_id", ORG).eq("role_key", rk);
         await sb.from("role_definitions").delete().eq("org_id", ORG).eq("role_key", rk);
     }
+    await sb.from("departments").delete().in("id", [BP_DEPT_ALLOWED, BP_DEPT_DENIED]);
     for (const id of ids) await sb.auth.admin.deleteUser(id).catch(() => undefined);
 }
 
