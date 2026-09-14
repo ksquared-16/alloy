@@ -118,7 +118,11 @@ test("11 — there is exactly ONE postgres client resolver in this repository", 
   const other = readFileSync(`${ROOT}/web/scripts/applyCanonicalPhase6Migrations.ts`, "utf8");
   assert.doesNotMatch(other, /execFileSync\(\s*["']psql["']/, "no bare psql may remain");
   assert.match(other, /resolvePostgresClient\(\)/);
-  assert.match(other, /execFileSync\(client\.path/);
+  assert.match(other, /execFileSync\(psqlBin/);
+  // And it must typecheck: `process.exit` narrowing does not reach inside a
+  // closure, so the path is bound once rather than asserted non-null.
+  assert.doesNotMatch(other, /@ts-expect-error/, "an unused directive is itself a typecheck error");
+  assert.doesNotMatch(other, /resolvedClient!\./, "silencing the checker is not answering it");
 });
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
