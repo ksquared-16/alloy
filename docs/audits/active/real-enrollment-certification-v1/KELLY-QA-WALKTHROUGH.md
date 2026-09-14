@@ -11,6 +11,9 @@ Open **http://127.0.0.1:3014/workspace** and keep this beside the browser. Work 
 > Refresh, and nothing an engineer edits can reload the page under you. If the page *does* reload
 > itself, that is a real finding — say so, because it should now be impossible.
 
+> **Start with PART 0.** It is five minutes and it asks you one question: does the admin experience
+> make sense? Parts A–G are the long certification pass and they wait on your answer.
+
 Each step is **DO** (what to click or type) and **EXPECT** (what you should see).
 If EXPECT does not match, stop at that step number and report it.
 
@@ -18,6 +21,128 @@ If EXPECT does not match, stop at that step number and report it.
 > render, or anything below says STOP.
 
 The QA child is **Pathb Certopp** (household *Certopp Family*).
+
+# PART 0 — Does the admin experience make sense?
+
+**Read this part first, and answer the question at the end.** It is short on purpose: five minutes,
+four screens, one judgement. Parts A–G below are the long certification pass and they can wait until
+you have said yes to this.
+
+You are not checking that buttons work here. You are deciding whether this is *the place you would
+go* to configure what a family must do during Enrollment.
+
+---
+
+**0.1 DO** — Open **/workspace** → **Processing** (left rail) → **Studio** → **Packets**.
+**EXPECT** — One packet card, and only one: **Enrollment Paperwork 2026–2027**, *3 steps · Active*,
+with *Admissions Information · Family Handbook · Immunization record* underneath.
+
+> If you see **Cert Packet…**, **Mo500…**, **Handbook probe** or **Enrollment — enrolling**, stop:
+> the certification leftovers are back.
+
+**0.2 DO** — Open **Enrollment Paperwork 2026–2027** and read the top of the page before clicking
+anything.
+**EXPECT** — **Family experience** answers "what does a family actually do?" in three numbered
+sentences, then says what Alloy does on its own:
+
+1. Alloy collects Admissions Information, reusing information it already knows where it can.
+2. The family reads and acknowledges Family Handbook, and signs it.
+3. The family uploads Immunization record.
+
+…followed by: Alloy guides them conversationally, reuses what it knows, lets them correct it, asks
+them to review before they finish — *that behaviour is managed by Alloy* — and when they finish, the
+completed packet arrives for staff review in **Processing › Work**.
+
+> **The question this panel exists to answer:** you configure *obligations*; Alloy works out the
+> conversation from them. There is no prompt here for you to write, and there should not be.
+
+**0.3 DO** — Read **Ready to use** and **Used by** beside it.
+**EXPECT** — Three ticks, and **Enrollment · Enrolling stage — required · blocking**. Since it is now
+published, it does **not** say "saved, not published yet".
+
+**0.4 DO** — Scroll to **What families complete**.
+**EXPECT** — Three obligation cards, each saying what it is and then what actually happens:
+
+| # | Card | What it should tell you |
+|---|------|--------------------------|
+| 1 | **Admissions Information** — Collect information | **80 questions · 4 connected to Alloy · 76 stored with the form only · 65 required**, then *Alloy confirms information it already knows and asks the family for what is missing…* |
+| 2 | **Family Handbook** — Read & acknowledge | the real document's name, **Acknowledgment required · Signature required**, and a **View document** link |
+| 3 | **Immunization record** — Upload a document | **Family sends in a document · Filed as Immunization record**, then *…They are not asked to type its contents…* |
+
+**0.5 DO** — Note what is *not* dominating this screen: **Add step** is the primary way to compose
+(and it asks what you need from the family, not which form to attach), the order is yours to change,
+and **Direct distribution and session history** is one collapsed row near the bottom.
+
+> **Say so if that ordering feels wrong to you.** It is a deliberate product claim: a packet
+> required by a process is configured here and *launched* by the process, so sending links by hand is
+> a secondary capability rather than the main model.
+
+---
+
+**0.6 DO** — On the **Admissions Information** card, click **Manage information**.
+**EXPECT** — One Form editor, with exactly two buttons: **✎ Edit** and **▷ Preview**. There is no
+*Structure* and no *Paperwork* — they were two pictures of one Form and both are gone.
+
+**0.7 DO** — Look down the form without clicking.
+**EXPECT** — Every question carries **Required** or **Optional**, and exactly four carry a blue
+**Alloy** mark.
+
+**0.8 DO** — Click **Student Date of Birth:** (it has the Alloy mark).
+**EXPECT** — The right inspector shows that question's settings, and under **Store answer in**:
+> **Alloy already knows this when available**
+> Date of birth — the family is asked only if it is missing, can correct it, and the answer updates
+> the record.
+
+**0.9 DO** — Click **Parent/Guardian #1 Phone Number:** — also Alloy-marked. Then click
+**Student Name:**, which is not.
+**EXPECT** — The first reads like 0.8. The second reads:
+> **Stored with this form**
+> Not written to the child or family record. The family is always asked for it.
+
+> **This is the decision this screen exists for.** **Required/Optional** decides what a family must
+> answer; **Store answer in** decides whether their answer becomes Alloy data or stays with the form.
+> Both are changed right here.
+>
+> Worth a moment: **Student Name** is currently form-only. If you expect a child's name to update the
+> child record, that is a configuration change you can make — and a fair thing to flag.
+
+**0.10 DO** — Click **▷ Preview**, then **✎ Edit**, then **← Forms**.
+**EXPECT** — *Form preview — how this information appears when presented as a form.* That is the Form
+as a form; it is **not** the guided conversation, which is assembled from all three obligations.
+
+---
+
+**0.11 DO** — Back on the packet, look at the **Family Handbook** card and click **View document**.
+**EXPECT** — The real 2026–2027 Handbook opens. The card says *Acknowledgment required · Signature
+required* and describes the family being shown the actual document and finishing by agreeing and
+signing.
+
+> It should read as a **document obligation**, not as a form. Alloy does build a hidden one-question
+> form to record the agreement, but you should never be shown it or asked to pick it.
+>
+> The card names the document and its filing date but does **not** show a page count — Alloy does not
+> currently store one for this document. Tell us if you want it.
+
+**0.12 DO** — Look at the **Immunization record** card.
+**EXPECT** — *Family sends in a document · Filed as Immunization record*, and the sentence that the
+family sends in their existing record and is **not asked to type its contents** — they can view or
+replace it before they finish.
+
+> This is the one to read twice. We ask a parent to **send in** their immunization record. We do
+> **not** ask them to retype the Oregon vaccine grid. That is correct for this version; reading doses
+> out of the document is Health & Safety's to own, later.
+
+---
+
+## THE ACCEPTANCE QUESTION
+
+> ### Does this now feel like the place where you configure what a family must do during Enrollment?
+
+**If NO** — stop here and say what is wrong. Do not run Parts A–G. Product feedback at this point is
+worth more than another certification pass.
+
+**If YES** — go straight on to **Part D** for the live end-to-end run. Parts A–C are the admin detail
+behind what you just accepted, and you can skip them.
 
 ---
 
