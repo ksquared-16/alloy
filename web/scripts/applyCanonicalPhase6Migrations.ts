@@ -10,6 +10,9 @@
 
 import { config as loadEnv } from "dotenv";
 import { execFileSync } from "node:child_process";
+// @ts-expect-error -- plain ESM helper shared with the governed runner; there is
+// deliberately only ONE postgres client resolver in this repository.
+import { POSTGRES_CLIENT_MISSING_DETAIL, resolvePostgresClient } from "./lib/resolvePostgresClient.mjs";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -36,14 +39,32 @@ function resolveDatabaseUrl(): string {
     return url.toString();
 }
 
+/*
+ * RESOLVED, NOT ASSUMED — the same repair the governed fixture runner needed.
+ *
+ * Homebrew's libpq is keg-only, so this host has a working psql that `command -v
+ * psql` cannot see. Spawning a bare "psql" is what made the first hosted
+ * execution of the registered fixture die as `spawnSync psql ENOENT`, thirteen
+ * milliseconds in, with a message naming the probe rather than the client. This
+ * script carries the identical defect and would fail the identical way.
+ *
+ * Reusing the existing resolver rather than writing a second one: two resolvers
+ * would drift, and the one that drifts is the one nobody is testing.
+ */
+const client = resolvePostgresClient();
+if (!client) {
+    console.error(`postgres_client_missing: ${POSTGRES_CLIENT_MISSING_DETAIL}`);
+    process.exit(1);
+}
+
 function psql(sql: string): string {
-    return execFileSync("psql", [resolveDatabaseUrl(), "-v", "ON_ERROR_STOP=1", "-c", sql], {
+    return execFileSync(client.path, [resolveDatabaseUrl(), "-v", "ON_ERROR_STOP=1", "-c", sql], {
         encoding: "utf8",
     });
 }
 
 function psqlFile(relPath: string): void {
-    execFileSync("psql", [resolveDatabaseUrl(), "-v", "ON_ERROR_STOP=1", "-f", relPath], {
+    execFileSync(client.path, [resolveDatabaseUrl(), "-v", "ON_ERROR_STOP=1", "-f", relPath], {
         stdio: "inherit",
     });
 }

@@ -108,5 +108,18 @@ test("10 — how the client was found is audited; where the database is, is not"
   assert.doesNotMatch(RUNNER, /postgres_client_path/);
 });
 
+test("11 — there is exactly ONE postgres client resolver in this repository", () => {
+  /*
+   * applyCanonicalPhase6Migrations.ts carried the identical bare-psql defect and
+   * would have failed the identical way on this host. It now reuses this
+   * resolver rather than growing a second one — two resolvers drift, and the one
+   * that drifts is the one nobody is testing.
+   */
+  const other = readFileSync(`${ROOT}/web/scripts/applyCanonicalPhase6Migrations.ts`, "utf8");
+  assert.doesNotMatch(other, /execFileSync\(\s*["']psql["']/, "no bare psql may remain");
+  assert.match(other, /resolvePostgresClient\(\)/);
+  assert.match(other, /execFileSync\(client\.path/);
+});
+
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
 process.exit(fail ? 1 : 0);
