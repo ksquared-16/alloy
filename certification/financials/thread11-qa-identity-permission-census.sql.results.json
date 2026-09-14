@@ -1,0 +1,70 @@
+{
+  "trusted_host_action_id": "tha_dfeca69c534315",
+  "query_hash": "d16a524bc2360e3d119d3c1e8f1e9c73d85805a58b8797ae0c5e9dca8a67a95c",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T16:16:28.006Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_dfeca69c534315",
+    "query_hash": "d16a524bc2360e3d119d3c1e8f1e9c73d85805a58b8797ae0c5e9dca8a67a95c",
+    "authorization_id": "grnt_e6e442c5e9274529",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T16:16:28.845Z",
+    "question_ids": [
+      "identity",
+      "grants",
+      "definitions",
+      "org_grant_map"
+    ],
+    "questions": {
+      "identity": {
+        "question_id": "identity",
+        "row_count": null,
+        "rows": [
+          "deployed_qa_user_exists ~ 1",
+          "roles_in_cert_org ~ 1",
+          "role ~ admin"
+        ]
+      },
+      "grants": {
+        "question_id": "grants",
+        "row_count": null,
+        "rows": [
+          "fin.adjust ~ admin ~ allowed=true",
+          "fin.read ~ admin ~ allowed=true",
+          "fin.responsibility ~ admin ~ allowed=true",
+          "fin.write ~ admin ~ allowed=true"
+        ]
+      },
+      "definitions": {
+        "question_id": "definitions",
+        "row_count": null,
+        "rows": [
+          "fin.adjust ~ defined=true ~ active=true",
+          "fin.read ~ defined=true ~ active=true",
+          "fin.responsibility ~ defined=true ~ active=true",
+          "fin.write ~ defined=true ~ active=true"
+        ]
+      },
+      "org_grant_map": {
+        "question_id": "org_grant_map",
+        "row_count": null,
+        "rows": [
+          "fin.adjust ~ admin ~ allowed=true",
+          "fin.read ~ admin ~ allowed=true",
+          "fin.read ~ regional_lead ~ allowed=true",
+          "fin.read ~ school_director ~ allowed=true",
+          "fin.responsibility ~ admin ~ allowed=true",
+          "fin.write ~ admin ~ allowed=true"
+        ]
+      }
+    },
+    "row_count": 17
+  }
+}
