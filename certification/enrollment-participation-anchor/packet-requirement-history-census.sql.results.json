@@ -1,0 +1,405 @@
+{
+  "trusted_host_action_id": "tha_b4dc45703aa44a",
+  "query_hash": "ac9a0249d2b9e17f6f11643eb340edb254d4b8892e16751eb4d67f2668b891d2",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T20:43:24.902Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_b4dc45703aa44a",
+    "query_hash": "ac9a0249d2b9e17f6f11643eb340edb254d4b8892e16751eb4d67f2668b891d2",
+    "authorization_id": "grnt_5e9bcbb447fd4c83",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T20:43:25.927Z",
+    "question_ids": [
+      "r_context",
+      "r_draft",
+      "r_revision"
+    ],
+    "questions": {
+      "r_context": {
+        "question_id": "r_context",
+        "row_count": null,
+        "rows": [
+          {
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "org_exists": true,
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "department_exists": true,
+            "revisions_total": 31,
+            "packet_definition_id": "c03425c9-2b05-4847-8495-2b2713e36243"
+          }
+        ]
+      },
+      "r_draft": {
+        "question_id": "r_draft",
+        "row_count": null,
+        "rows": [
+          {
+            "draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "draft_revision": 79,
+            "base_revision_id": "6cb57e99-33af-412d-8bfe-c587137370dd",
+            "draft_status": "validated",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          }
+        ]
+      },
+      "r_revision": {
+        "question_id": "r_revision",
+        "row_count": null,
+        "rows": [
+          {
+            "revision_number": 1,
+            "revision_id": "81a1393c-cf51-4c95-b2b7-c482c8bf3497",
+            "published_at": "2026-08-06T23:54:14.818119+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 10,
+            "revision_id": "38a12079-c252-4bda-8127-dd390ed5aad2",
+            "published_at": "2026-08-11T23:50:19.669331+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 11,
+            "revision_id": "1985e358-7fa4-4ca6-a219-4719b42eed51",
+            "published_at": "2026-08-12T18:05:14.377499+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 12,
+            "revision_id": "0a39c12f-74fa-4131-bf02-328d006d6d0e",
+            "published_at": "2026-08-13T19:52:25.481768+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 13,
+            "revision_id": "998c28eb-b86e-446c-8a29-c3fb1b5b26fe",
+            "published_at": "2026-08-17T17:22:58.394744+00:00",
+            "published_by": null,
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 14,
+            "revision_id": "1759c8d1-738c-4503-99cf-17baa4551c1e",
+            "published_at": "2026-08-26T16:18:05.238276+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 15,
+            "revision_id": "5b984ae8-d398-4a17-b37c-1fa267153cea",
+            "published_at": "2026-08-26T16:23:29.901539+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 16,
+            "revision_id": "17b62b87-10b7-478a-ba45-93675a514327",
+            "published_at": "2026-08-26T16:26:32.881452+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 17,
+            "revision_id": "70ef910c-dd4d-46c7-b806-2f20bccdbd3a",
+            "published_at": "2026-08-26T16:42:35.259764+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 18,
+            "revision_id": "57a24292-9f2e-44c6-b0ca-bac2e74613ad",
+            "published_at": "2026-08-27T21:42:04.459106+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 19,
+            "revision_id": "5724629a-4ce9-4efa-a679-65ce7097158f",
+            "published_at": "2026-08-28T05:39:38.178695+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 2,
+            "revision_id": "8323ff7b-5228-42cb-a03f-d834ff4e8105",
+            "published_at": "2026-08-06T23:55:18.846435+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 20,
+            "revision_id": "26b25e94-8603-46ac-8ead-52bb664f9af2",
+            "published_at": "2026-08-28T05:50:13.274749+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 21,
+            "revision_id": "1fce9d3f-fd9e-461c-a02c-405bc3c3cb11",
+            "published_at": "2026-08-28T17:58:56.047923+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 22,
+            "revision_id": "9fe108a9-6bbb-4e82-9418-029ec63cdf5b",
+            "published_at": "2026-08-28T18:01:02.766585+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 23,
+            "revision_id": "8bea6339-490e-413f-94ba-0aab21ce9c6e",
+            "published_at": "2026-09-04T16:30:38.33225+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 24,
+            "revision_id": "1b1a669d-4766-434f-ab4a-1f8d1fa60a2d",
+            "published_at": "2026-09-04T16:31:40.606195+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 25,
+            "revision_id": "727f9ea0-8338-4d39-a270-1b1e2446d089",
+            "published_at": "2026-09-10T01:25:01.628793+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 26,
+            "revision_id": "c185e435-a09e-4b86-9134-8cc5123714fa",
+            "published_at": "2026-09-10T01:28:07.353219+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 27,
+            "revision_id": "49781035-4a89-451e-9ad5-bd207f1fef6d",
+            "published_at": "2026-09-11T19:55:28.403734+00:00",
+            "published_by": "87945998-0246-4e6e-804a-8dcbce737875",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 28,
+            "revision_id": "715f5787-033e-41f8-8976-949935db20d9",
+            "published_at": "2026-09-11T19:59:41.337668+00:00",
+            "published_by": "87945998-0246-4e6e-804a-8dcbce737875",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 29,
+            "revision_id": "a9f9e9cb-2e48-41bc-8159-1632c1f5ddde",
+            "published_at": "2026-09-12T01:14:03.268328+00:00",
+            "published_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 3,
+            "revision_id": "f69ccc18-98ea-4fff-854f-17e75a74c18d",
+            "published_at": "2026-08-07T17:28:06.236629+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 30,
+            "revision_id": "4e2f43df-17ed-43a2-b0b1-5a593ddfbea2",
+            "published_at": "2026-09-12T02:51:02.238213+00:00",
+            "published_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 31,
+            "revision_id": "6cb57e99-33af-412d-8bfe-c587137370dd",
+            "published_at": "2026-09-12T15:13:49.226667+00:00",
+            "published_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 4,
+            "revision_id": "d6ea055d-d6b0-4967-a144-84ab31737daa",
+            "published_at": "2026-08-07T17:28:21.256281+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 5,
+            "revision_id": "f202beeb-54e8-4a8e-bfd2-8880217e4304",
+            "published_at": "2026-08-07T20:10:12.912121+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 6,
+            "revision_id": "7a448d4c-9513-4dc9-b0a6-d2a226e29b3d",
+            "published_at": "2026-08-08T21:22:52.710311+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 7,
+            "revision_id": "556603bc-9b1f-4530-a74c-f99b6d4d31fb",
+            "published_at": "2026-08-08T21:25:50.622401+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 8,
+            "revision_id": "8aa7d236-9f84-4eac-9159-e52f5da6bec2",
+            "published_at": "2026-08-11T16:25:37.970114+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          },
+          {
+            "revision_number": 9,
+            "revision_id": "47638d81-dd56-4dd1-9b59-c643b7145e8f",
+            "published_at": "2026-08-11T23:38:43.9327+00:00",
+            "published_by": "b2562c99-24dd-404b-b692-a0c4676d5bdf",
+            "source_draft_id": "67879abb-bca4-4cf3-a835-0970229d86e5",
+            "mentions_packet_id": false,
+            "mentions_packet_kind": false,
+            "mentions_packet_definition_key": false,
+            "mentions_enrollment_packet_requirement_id": true
+          }
+        ]
+      }
+    },
+    "row_count": 33
+  }
+}

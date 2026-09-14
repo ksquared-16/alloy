@@ -197,6 +197,21 @@ export type StageRequirementV1 = {
 export type StageRequirementsV1 = {
     readonly version: 1;
     readonly requirements: readonly StageRequirementV1[];
+    /**
+     * Rows this parser could not read, kept verbatim so a save cannot destroy them.
+     *
+     * Skipping an unreadable row is right for READING — see `parseStageRequirementsV1`. It became
+     * data loss because every writer persists the WHOLE configuration document, serialized from
+     * what it just parsed: a row the parser dropped was therefore deleted by the next save of any
+     * unrelated part of the process, with nothing said to anyone. `saveDraft` even documents itself
+     * as "lossless by construction… fields this branch does not understand survive", which was true
+     * of every section except this one.
+     *
+     * Passthrough only. Nothing reads these, no runtime honours them, and authoring a stage's
+     * section still replaces it outright — they exist so that editing a stage's NAME cannot silently
+     * discard a requirement written by something this branch does not understand.
+     */
+    readonly unreadable?: readonly unknown[];
 };
 
 const LEVELS: ReadonlySet<string> = new Set(["recommended", "required", "enforced"]);
@@ -314,23 +329,38 @@ export function parseStageRequirementsV1(raw: unknown): StageRequirementsV1 | nu
     if (!Array.isArray(o.requirements)) return null;
 
     const requirements: StageRequirementV1[] = [];
+    const unreadable: unknown[] = [];
     const seen = new Set<string>();
 
     for (const entry of o.requirements) {
-        if (entry == null || typeof entry !== "object" || Array.isArray(entry)) continue;
+        // Every `continue` below is a row this parser will not honour. Each one KEEPS the row so a
+        // later save re-emits it, because the alternative is deleting configuration nobody read.
+        if (entry == null || typeof entry !== "object" || Array.isArray(entry)) {
+            unreadable.push(entry);
+            continue;
+        }
         const row = entry as Record<string, unknown>;
 
         const requirement_id = trimmedString(row.requirement_id);
-        if (!requirement_id || seen.has(requirement_id)) continue;
+        if (!requirement_id || seen.has(requirement_id)) {
+            unreadable.push(entry);
+            continue;
+        }
 
         const ref = parseRef(row.kind, row);
-        if (!ref) continue;
+        if (!ref) {
+            unreadable.push(entry);
+            continue;
+        }
 
         const levelRaw = trimmedString(row.level);
         // Level is required, not defaulted. Inferring "required" would silently promote
         // a row an author never classified, and inferring "recommended" would silently
         // demote one — both change enforcement behaviour without anyone saying so.
-        if (!LEVELS.has(levelRaw)) continue;
+        if (!LEVELS.has(levelRaw)) {
+            unreadable.push(entry);
+            continue;
+        }
 
         const scopeRaw = trimmedString(row.scope);
         const enforcementRaw = trimmedString(row.enforcement);
@@ -354,14 +384,23 @@ export function parseStageRequirementsV1(raw: unknown): StageRequirementsV1 | nu
         });
     }
 
-    return { version: 1, requirements };
+    return unreadable.length > 0 ? { version: 1, requirements, unreadable } : { version: 1, requirements };
 }
 
 /** Serializes back to the payload shape, flattening the ref discriminant onto the row. */
 export function serializeStageRequirementsV1(value: StageRequirementsV1): Record<string, unknown> {
     return {
         version: 1,
-        requirements: value.requirements.map((r) => ({
+        /*
+         * Rows this branch could not read are re-emitted LAST, unchanged.
+         *
+         * Without this, the parser's decision to skip an unreadable row turned every unrelated save
+         * into a deletion: the writer persists the whole document from what it parsed, so a row that
+         * was merely not understood was gone, silently. Order is not significant to any consumer —
+         * requirements are addressed by `requirement_id` — so appending is safe and keeps authored
+         * rows first for anyone reading the raw JSON.
+         */
+        requirements: [...value.requirements.map((r) => ({
             requirement_id: r.requirement_id,
             kind: r.ref.kind,
             ...refFields(r.ref),
@@ -375,7 +414,7 @@ export function serializeStageRequirementsV1(value: StageRequirementsV1): Record
             ...(r.excluded_transition_keys
                 ? { excluded_transition_keys: [...r.excluded_transition_keys] }
                 : {}),
-        })),
+        })), ...(value.unreadable ?? [])],
     };
 }
 
