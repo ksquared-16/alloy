@@ -12,7 +12,17 @@ ERR_FILE="${3:?stderr file required}"
 # host had. Absent is not defaulted — it refuses.
 MIG_ENVIRONMENT="${4:-}"
 
-CANONICAL="${ALLOY_CANONICAL_ROOT:-${ALLOY_REPO:-/Users/Kelly/Alloy}}"
+# S3: the person-specific fallback is gone. `/Users/Kelly/Alloy` was the
+# answer of last resort here -- another operator's home directory, in a
+# trusted-host script that reaches a production database. The trusted
+# executor always exports ALLOY_CANONICAL_ROOT (the registry resolves it);
+# with neither variable set there is no canonical root, and refusing beats
+# resolving somebody else's checkout.
+CANONICAL="${ALLOY_CANONICAL_ROOT:-${ALLOY_REPO:-}}"
+if [[ -z "$CANONICAL" ]]; then
+  echo "no canonical repository root: set ALLOY_CANONICAL_ROOT or register the project" >&2
+  exit 64
+fi
 export ALLOY_REPO="$CANONICAL"
 export ALLOY_SERVER_ENV_SOURCE="${ALLOY_SERVER_ENV_SOURCE:-$CANONICAL/web/.env.local}"
 

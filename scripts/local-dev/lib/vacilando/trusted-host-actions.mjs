@@ -1053,6 +1053,8 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
     || action.inputs.worktreePath
     || resolveArtifactRoot(action.inputs);
   const hostCheckout = findRepoRoot();
+  // S3: nullable now. A census with no canonical root cannot run, and saying so
+  // here beats spawning a child with an undefined repository path.
   const canonical = resolveCanonicalRepoRoot();
   const envSource = resolveTrustedServerEnvSource();
   // A census names its database too. It used to inherit whichever credential the

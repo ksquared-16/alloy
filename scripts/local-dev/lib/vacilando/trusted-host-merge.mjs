@@ -16,6 +16,7 @@ import { spawnSync } from "node:child_process";
 import { canonicalGatewayRuntimeRoot, liveMergePermitted } from "./trusted-host-remote-guard.mjs";
 import { firstMeaningfulLine } from "./trusted-host-push.mjs";
 import { ALLOY_REPOSITORY_ID, executionProfileFor, promotionPolicyFor } from "./repository-registry.mjs";
+import { gatewayStateRoot } from "./runtime-roots.mjs";
 
 export { canonicalGatewayRuntimeRoot, liveMergePermitted };
 
@@ -561,13 +562,22 @@ function rollupFrom(pr = {}) {
  * an explicit root is honoured, and when it names the parent of a real gateway
  * store, the store is where it actually is.
  */
+/*
+ * S3: THIS FILE SOLVED IT ALONE, AND THAT IS WHY IT STAYED BROKEN ELSEWHERE.
+ *
+ * The probe this replaces was correct, and was the ONLY one in the tree. Sixty
+ * other executable sites read the same variable with one of two incompatible
+ * meanings and no probe at all, so the tree is right in exactly one of three
+ * configurations: unset breaks the forty that treat it as the state root, set
+ * to the parent breaks all sixty, and this host works only because it happens
+ * to be set to the child.
+ *
+ * The probe now lives in `runtime-roots.mjs` as `gatewayStateRoot()` -- this
+ * function's logic, with its marker directory -- so a caller can no longer get
+ * the depth wrong by not knowing the question existed.
+ */
 function runtimeRoot() {
-  const explicit = process.env.ALLOY_RUNTIME_ROOT?.trim();
-  if (!explicit) return canonicalGatewayRuntimeRoot();
-  if (existsSync(join(explicit, "vacilando", "governed-actions"))) return explicit;
-  const nested = join(explicit, "gateway");
-  if (existsSync(join(nested, "vacilando", "governed-actions"))) return nested;
-  return explicit;
+  return gatewayStateRoot();
 }
 
 function governedActionRequestsPath(root = runtimeRoot()) {

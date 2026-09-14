@@ -19,6 +19,7 @@ import { observeReconciliation } from "./lib/vacilando/reconciliation-observe.mj
 import { observeRetirementCandidates } from "./lib/vacilando/worktree-retirement-observe.mjs";
 import { groupRetirementCandidates } from "./lib/vacilando/worktree-retirement.mjs";
 import { requestGovernedAction } from "./lib/vacilando/governed-action-request.mjs";
+import { gatewayStateRoot } from "./lib/vacilando/runtime-roots.mjs";
 
 const argv = process.argv.slice(2);
 const json = argv.includes("--json");
@@ -39,7 +40,7 @@ if (apply && !target) {
   process.exit(2);
 }
 
-const root = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+const root = gatewayStateRoot();
 const worktreeParent = join(homedir(), "Code", "alloy-worktrees");
 const canonicalRoot = join(homedir(), "Alloy");
 const requestingWorktree = process.env.ALLOY_WORKTREE || process.cwd();

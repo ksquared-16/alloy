@@ -16,6 +16,7 @@ import "./lib/vacilando/bind-worker-cli-gateway-root.mjs";
 import { observeReconciliation } from "./lib/vacilando/reconciliation-observe.mjs";
 import { buildReconciliationPlan } from "./lib/vacilando/reconciliation-plan.mjs";
 import { requestGovernedAction } from "./lib/vacilando/governed-action-request.mjs";
+import { gatewayStateRoot } from "./lib/vacilando/runtime-roots.mjs";
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
@@ -27,7 +28,7 @@ if (unknown.length) {
   process.exit(2);
 }
 
-const root = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+const root = gatewayStateRoot();
 const worktreeParent = join(homedir(), "Code", "alloy-worktrees");
 
 function readProcesses() {
