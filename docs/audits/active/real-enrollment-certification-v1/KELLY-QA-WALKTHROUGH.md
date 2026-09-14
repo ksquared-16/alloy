@@ -11,6 +11,13 @@ Open **http://127.0.0.1:3014/workspace** and keep this beside the browser. Work 
 > Refresh, and nothing an engineer edits can reload the page under you. If the page *does* reload
 > itself, that is a real finding — say so, because it should now be impossible.
 
+> **A standing rule for anyone self-certifying this product, including Alloy's own agents:**
+> **inspection must not mutate live configuration.** When a control has to be exercised to prove it
+> works, exercise it on a temporary QA packet, not on the packet you are about to certify. A previous
+> pass proved the Handbook's signature control by toggling it on the live packet and wrote a
+> participant instruction that asserted a page count Alloy does not store. It was caught and undone;
+> it should not have been possible to do absent-mindedly.
+
 > **Start with PART 0.** It is five minutes and it asks you one question: does the admin experience
 > make sense? Parts A–G are the long certification pass and they wait on your answer.
 
@@ -121,7 +128,23 @@ a document type to file under, or a document to read plus whether a signature is
 **0.11. DO** — Use **Move up** / **Move down** on any step, then put it back.
 **EXPECT** — Order is yours, and it is the order the family meets them in.
 
-**0.12. DO** — Go to **Studio → Forms**.
+**0.12. DO** — Back on **Packets**, click **New packet**.
+**EXPECT** — A small dialog asking for a **Name**, optionally a **Description**, and *nothing about
+Forms*: *You will choose what families complete next — questions to answer, a document to read and
+agree to, or a document to send in.*
+
+> This is the last thing that was wrong. **New packet** used to open the old composer — pick some
+> Forms, pick a household, mint a link — so the product only made sense for a packet somebody else
+> had already created. Creating one now starts from the same obligation model you just inspected.
+>
+> You do not have to build one. If you want to: name it, **Create packet**, and you land in this
+> same editor with **no obligations yet** and *Needs setup — add at least one step*, where
+> **+ Add step** offers the same three choices. An empty packet is a draft — it cannot be sent and
+> is not ready — until it has at least one step.
+>
+> Sending a one-off packet to a family still exists, beside **New packet**, under its own name.
+
+**0.13. DO** — Go to **Studio → Forms**.
 **EXPECT** — **Admissions Information**, and a line above the list: *Forms collect information from
 families. Documents a family reads and agrees to, or sends in, are obligations configured inside a
 packet — they are not Forms and do not appear here.*
