@@ -54,7 +54,7 @@ import { executeRestoreQaSessionSync } from "./qa-session-restore-action.mjs";
 import { executeRestoreDeployedQaSessionSync } from "./deployed-qa-session-restore-action.mjs";
 import { executeProvisionQaIdentitySync } from "./qa-identity-provision-action.mjs";
 import { executeAssignQaAccessSync } from "./qa-access-assign-action.mjs";
-import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
+import { pushBranch, publicPushResult, defaultGit } from "./trusted-host-push.mjs";
 import { promoteRepositoryMetadata } from "./trusted-host-metadata-promote.mjs";
 import { executeProviderCeiling } from "./trusted-host-provider-ceiling.mjs";
 import { executeToolkitInstall } from "./toolkit-convergence.mjs";
@@ -2043,6 +2043,29 @@ export function executePromotedMigrationTrustedHostAction(action, { actor = "dir
  * builds no git command of its own: there is no generic `git push main` path
  * reachable from outside the governed action.
  */
+/**
+ * The git the main-write promotion runs on.
+ *
+ * NAMED AND EXPORTED SO SOMETHING CAN ACTUALLY CALL IT.
+ *
+ * This was an inline arrow closing over `defaultGit`, which this module never
+ * imported. Nothing failed at import time - a ReferenceError on a free variable
+ * fires when the closure RUNS, and the only thing that runs it is a real
+ * dispatch of an operator-approved action. So the whole path stayed green
+ * locally and threw `metadata_promote_threw: defaultGit is not defined` on the
+ * live write, after an operator had approved it.
+ *
+ * Every test called `promoteRepositoryMetadata` directly, so no test ever
+ * constructed this closure. Pulling it out of the wrapper gives the lock
+ * something to hold that does not require authorizing an action to reach.
+ *
+ * `wd || cwd` so an inner call that names its own directory keeps it, and the
+ * opts - carrying GIT_INDEX_FILE - are forwarded rather than dropped.
+ */
+export function metadataPromotionGit(cwd) {
+  return (args, wd, opts) => defaultGit(args, wd || cwd, opts);
+}
+
 export function executeRepositoryMetadataPromotionTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
   const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
   if (!authz.ok) return authz;
@@ -2057,7 +2080,7 @@ export function executeRepositoryMetadataPromotionTrustedHostAction(action, { ac
 
   let out;
   try {
-    out = promoteRepositoryMetadata(inputs, { git: (args, wd, opts) => defaultGit(args, wd || cwd, opts), cwd, nowMs });
+    out = promoteRepositoryMetadata(inputs, { git: metadataPromotionGit(cwd), cwd, nowMs });
   } catch (e) {
     out = { ok: false, code: "metadata_promote_threw", detail: String(e?.message || e).slice(0, 300) };
   }
