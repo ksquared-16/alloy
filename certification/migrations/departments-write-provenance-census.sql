@@ -85,7 +85,7 @@ from (
     -- Non-vacuity: a zero everywhere above must be distinguishable from "wrong tenant / empty read".
     select 'nonvacuity', 'guard',
            ('departments=' || (select count(*) from public.departments)::text
-            || ' orgs=' || (select count(*) from public.organizations)::text
+            || ' orgs=' || (select count(distinct org_id) from public.departments)::text
             || ' bp_revisions=' || (select count(*) from public.business_process_revisions)::text)::text,
            'z1'
 ) q
