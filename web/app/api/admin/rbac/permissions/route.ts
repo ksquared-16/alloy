@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requirePortalOrUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { ADMIN_ROLES_READ, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 /** GET: list active permissions. Portal (admin/ops) or Users & Roles managers. */
 export async function GET() {
-    const auth = await requirePortalOrUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ROLES_READ);
     if (!auth.ok) return auth.response;
 
     const supabase = createAdminClient();

@@ -4,6 +4,7 @@ import { requirePortalOrUsersRolesManageAuth, requireUsersRolesManageAuth } from
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { type RoleDefinitionRow } from "@/lib/admin/defaultRoleDefinitions";
+import { ADMIN_ROLES_READ, ADMIN_ROLES_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 /**
  * GET: list roles for org. Portal (admin/ops) or Users & Roles managers.
@@ -15,7 +16,7 @@ import { type RoleDefinitionRow } from "@/lib/admin/defaultRoleDefinitions";
  * `is_system` then `role_label`, which is the order the merge used to impose.
  */
 export async function GET() {
-    const auth = await requirePortalOrUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ROLES_READ);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
 
@@ -44,7 +45,7 @@ export async function GET() {
 
 /** POST: create role. Requires org admin or `settings.users_roles` permission. */
 export async function POST(request: NextRequest) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ROLES_WRITE);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
 

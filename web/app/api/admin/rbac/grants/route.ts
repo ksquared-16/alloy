@@ -3,10 +3,11 @@ import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContex
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requirePortalOrUsersRolesManageAuth, requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
+import { ADMIN_ROLES_READ, ADMIN_ROLES_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 /** GET: list permission_keys granted for org + role_key. Portal (admin/ops) or Users & Roles managers. */
 export async function GET(request: NextRequest) {
-    const auth = await requirePortalOrUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ROLES_READ);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
 
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
 
 /** PUT: replace all grants for org + role_key. Requires org admin or `settings.users_roles` permission. */
 export async function PUT(request: NextRequest) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ROLES_WRITE);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
 

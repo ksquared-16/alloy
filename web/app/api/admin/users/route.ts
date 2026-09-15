@@ -9,6 +9,7 @@ import { memberDirectoryLabel, projectMemberEmail } from "@/lib/access/memberDir
 import { displayRoleForAdminPicker, groupSortedRoleKeysByUserId } from "@/lib/admin/userRolesMembership";
 import { createMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
 import { fullNameFromParts } from "@/lib/access/operatorAccountName";
+import { ADMIN_USERS_READ, ADMIN_USERS_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 export type AdminUserRow = {
     user_id: string;
@@ -67,7 +68,7 @@ export type AdminUserRow = {
  * population anything it lacked. `OD-8` does not authorize `settings.users_roles`.
  */
 export async function GET() {
-    const auth = await requirePortalOrUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_USERS_READ);
     if (!auth.ok) return auth.response;
     const { access } = auth;
 
@@ -119,7 +120,7 @@ export async function GET() {
 
 /** POST: invite user to org. Requires org admin or `settings.users_roles` permission. Body: { email, role } (role = role_key from role_definitions). */
 export async function POST(request: Request) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_USERS_WRITE);
     if (!auth.ok) return auth.response;
     const { access } = auth;
 

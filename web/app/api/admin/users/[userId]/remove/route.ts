@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
+import { ADMIN_USERS_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 /**
  * POST: remove user from org (delete user_roles row). Requires org admin or `settings.users_roles`.
@@ -35,7 +35,7 @@ export async function POST(
     request: Request,
     context: { params: Promise<{ userId: string }> }
 ) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_USERS_WRITE);
     if (!auth.ok) return auth.response;
     const { orgId, userId: callerUserId } = auth.access;
 

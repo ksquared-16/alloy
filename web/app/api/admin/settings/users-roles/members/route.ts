@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { displayRoleForAdminPicker, groupSortedRoleKeysByUserId } from "@/lib/admin/userRolesMembership";
 import {
     projectMemberAuthentication,
@@ -11,6 +10,7 @@ import {
     type MemberLifecycleProjection,
     type MemberScopeProjection,
 } from "@/lib/access/memberIdentityProjection";
+import { ADMIN_USERS_READ, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +56,7 @@ export type UsersRolesMemberRow = {
  * Requires org admin or `settings.users_roles` permission (server-enforced).
  */
 export async function GET() {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_USERS_READ);
     if (!auth.ok) return auth.response;
 
     const { access } = auth;

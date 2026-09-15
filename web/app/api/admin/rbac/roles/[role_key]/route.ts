@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
+import { ADMIN_ROLES_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 /** PATCH: update role (role_label, is_active). Requires org admin or `settings.users_roles` permission. */
 export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ role_key: string }> }
 ) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ROLES_WRITE);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
 
