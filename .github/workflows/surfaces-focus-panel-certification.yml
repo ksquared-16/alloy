@@ -34,6 +34,25 @@
 # The list is deliberately explicit rather than a `focusPanel*` glob: the glob pulls in ~47
 # files, many of them carrying older failures this mission did not open and must not silently
 # adopt. Adding a file here is how this gate grows.
+#
+# ── AND WHY A SECOND, BROWSER LAYER ──
+#
+# Vitest runs in `environment: "node"`. No layout is computed there, so an equal-height
+# assertion passes against any implementation at all — and twice now one did:
+#
+#   1. equalising cards on literal `rowStart`, while column-aware placement staggers that
+#      coordinate for cards the operator composed side by side. Every same-rowStart test was
+#      green; the live Financials/Process pair stood 325px beside 299px.
+#   2. giving the measured wrapper its own solved height. Structurally sound, and on the live
+#      surface a card was boxed at 122px while rendering several hundred, with the row beneath
+#      drawn straight across it.
+#
+# Both reached staging. So geometry claims are certified by measuring geometry: the second step
+# mounts the REAL `FocusPanelCardGrid` in Chromium and reads DOM rectangles. It replaces none of
+# the suites above — they own layers the browser cannot see, and it owns the one they cannot.
+#
+# It touches no server, no tenant and no network: the fixture is bundled with esbuild and served
+# through `setContent`, and it waits on a measured settle rather than a sleep.
 name: Surfaces / Focus Panel certification
 
 on:
@@ -60,3 +79,16 @@ jobs:
       - run: npm ci
       - name: Run Surfaces / Focus Panel certification suites
         run: npm run test:surfaces-focus-panel
+      - name: Install Chromium for browser geometry certification
+        run: npx playwright install --with-deps chromium
+      - name: Certify Focus Panel browser geometry
+        run: npm run test:focus-panel-geometry
+      - name: Upload geometry failure evidence
+        # Only on failure: a green run must not produce an artifact bundle.
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focus-panel-geometry-failure
+          path: web/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
