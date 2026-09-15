@@ -146,6 +146,16 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     } | null>(null);
     const [payAmount, setPayAmount] = useState<string>("");
     const [payMethod, setPayMethod] = useState<string>("cash");
+    /*
+     * WHOSE MONEY THIS IS — asked, never inferred.
+     *
+     * The record path wrote no payer at all, so every cash payment on every account was money from
+     * nobody. `payments.payer_entity_type` / `payer_entity_id` have existed since Thread 6 and
+     * `payment.record` already accepts them; the operator was simply never given a way to say. The
+     * empty string means "not stated", which stays a legitimate answer: a cheque arriving in the
+     * post with no name on it is better recorded as unattributed than as a guess.
+     */
+    const [payPayerPersonId, setPayPayerPersonId] = useState<string>("");
     /**
      * THE REFUND THE OPERATOR IS COMPOSING.
      *
@@ -1122,7 +1132,11 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     return { ok: false as const, error: err ?? "That could not be done." };
                 }
                 // A card collection keeps the panel open: the operator still has to enter a card.
-                if (actionKey !== "payment.collect_card") setPayTarget(null);
+                if (actionKey !== "payment.collect_card") {
+                    setPayTarget(null);
+                    /* The next payment is a fresh question about who paid, not a carried answer. */
+                    setPayPayerPersonId("");
+                }
                 /*
                  * THE RESULT IS THE EXECUTION RESULT, not a `detail` inside it.
                  *
@@ -1702,6 +1716,35 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                             </option>
                             <option value="other">Other</option>
                         </select>
+                        {/*
+                         * ── WHO ACTUALLY PAID — a different question from who owes it ───────────
+                         *
+                         * Candidates are household membership, not responsibility, and the list is
+                         * ordered by primary contact rather than by who carries the obligation:
+                         * ordering it by responsibility is how an operator records the responsible
+                         * party as the payer without noticing. A grandparent settling a bill is a
+                         * payer and is responsible for nothing.
+                         *
+                         * Naming a payer confers no responsibility, and attributing the money to
+                         * somebody's SHARE remains a separate, explicit act.
+                         */}
+                        {vm.payerCandidates.length ? (
+                            <select
+                                value={payPayerPersonId}
+                                aria-label="Who paid"
+                                data-financials-payment-payer="true"
+                                onChange={(e) => setPayPayerPersonId(e.target.value)}
+                            >
+                                <option value="">Who paid? (optional)</option>
+                                {vm.payerCandidates.map((c) => (
+                                    <option key={c.personId} value={c.personId}>
+                                        {c.name}
+                                        {c.roleType ? ` · ${c.roleType.replace(/_/g, " ")}` : ""}
+                                        {c.alsoResponsible ? " · also responsible" : ""}
+                                    </option>
+                                ))}
+                            </select>
+                        ) : null}
                         <span className="alloy-os-financials__preview-actions">
                             <button
                                 type="button"
@@ -1736,6 +1779,15 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                                 amount_cents: cents,
                                                 payment_method: payMethod,
                                                 charge_label: payTarget.label,
+                                                /* Identity of the payer. Omitted entirely when
+                                                   nobody was named — never defaulted to whoever
+                                                   happens to be responsible. */
+                                                ...(payPayerPersonId
+                                                    ? {
+                                                          payer_entity_type: "person",
+                                                          payer_entity_id: payPayerPersonId,
+                                                      }
+                                                    : {}),
                                             },
                                             subject,
                                         );

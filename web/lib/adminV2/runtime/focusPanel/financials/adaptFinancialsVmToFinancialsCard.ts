@@ -183,19 +183,19 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                     : []),
             ],
             /*
-             * NOT KNOWING IS NOT THE SAME AS NONE.
+             * NOT KNOWING IS NOT THE SAME AS NONE — and it is no longer unknown.
              *
-             * `vm.paymentSetup` is hardcoded null and has no producer anywhere in the codebase, so
-             * "No payment method on file" was not a fact about any tenant — it was a constant read
-             * back as evidence. The card asserted it for every household, including ones that may
-             * well have a method, and an operator acting on it would have been acting on nothing.
+             * `vm.paymentSetup` used to be a hardcoded null with no producer, so "No payment method
+             * on file" was a constant read back as evidence about every household. It is now
+             * derived by `resolvePaymentSetup`, which looks at the organisation's merchant and the
+             * household's stored methods, and returns null when there is genuinely nothing
+             * established to say. Silence still means unknown; it simply is not the only answer.
              *
-             * Until something owns payment setup, the card says only what it can support. The
-             * unknown state is silence, not a claim of absence. See the
-             * PAYMENT_SETUP_AND_PAYER_PRODUCTIZATION follow-up.
+             * HEALTHY MEANS A METHOD IS ON FILE, which is what this line reports. It is deliberately
+             * not autopay — see the payment band below.
              */
             paymentLine: vm.paymentSetup ?? null,
-            paymentHealthy: Boolean(vm.paymentSetup),
+            paymentHealthy: (vm.paymentCapabilities?.methodsOnFile.length ?? 0) > 0,
         },
         subjects: vm.subjects.map((s) => s.displayName).filter((n): n is string => Boolean(n)),
         period: {
@@ -254,8 +254,18 @@ export function adaptFinancialsVmToFinancialsCard(input: {
         ledger: [],
         payers,
         payment: {
-            autopayLabel: vm.paymentSetup,
-            autopayHealthy: Boolean(vm.paymentSetup),
+            /*
+             * AUTOPAY IS NOT A PAYMENT METHOD, and this used to say it was: it read the payment
+             * setup line — a hardcoded null at the time — into the autopay slot, so a family with a
+             * card on file would have been labelled as having autopay, and every family was labelled
+             * as not having it. Two different questions had one answer.
+             *
+             * There is no canonical autopay anywhere in the platform: no table, no column, no
+             * writer. `resolvePaymentSetup` reports that as `unsupported` with the reason, and the
+             * label here is that reason's short form — never a state derived from something else.
+             */
+            autopayLabel: null,
+            autopayHealthy: false,
             nextChargeLabel: null,
         },
         /*
