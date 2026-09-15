@@ -582,6 +582,7 @@ export function InlineOpportunityFocusPanel() {
                       statusKey: drawer.opportunityQueuePreviewSeed?.statusKey ?? null,
                       stageWorkRuntime: operational.stageWorkRuntime,
                       publishedStageInputs: operational.publishedStageInputs,
+                      operationalProjection: operational.operationalProjection,
                       situation: operational.situation
                           ? {
                                 stageKey: operational.situation.stageKey,
@@ -606,6 +607,7 @@ export function InlineOpportunityFocusPanel() {
             drawer.opportunityQueuePreviewSeed?.statusKey,
             operational.stageWorkRuntime,
             operational.publishedStageInputs,
+            operational.operationalProjection,
             operational.situation,
             operational.action,
             operational.actionAbsence,

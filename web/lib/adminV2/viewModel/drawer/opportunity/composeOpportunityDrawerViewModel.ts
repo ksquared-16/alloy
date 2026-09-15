@@ -1,4 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjection";
+import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
+import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
+
+/** A title the projection can name the subject by; never a fabricated one. */
+const strOrEmpty = (v: unknown): string => (typeof v === "string" ? v : "");
 
 import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
 import {
@@ -228,8 +234,58 @@ export async function composeOpportunityDrawerViewModel(
         },
     };
 
+    /*
+     * THE SETTLED FRAME'S OPERATIONAL PROJECTION — the same chokepoint the commit frame runs.
+     *
+     * The drawer VM is the steady-state carrier: once Settlement arrives, the cards take their
+     * context from here rather than from the provisioning answer. Projecting in both producers is
+     * what makes that a change of TRANSPORT rather than a change of AUTHORITY — before this, the
+     * settled frame republished the raw configuration and the browser re-derived the card's truth
+     * from it, which is why removing the payload from the answer alone would have freed nothing.
+     *
+     * `selectedParticipantId` is deliberately absent. It marks one child for emphasis and is
+     * ephemeral browser state; the renderer applies it over the supplied projection, which is
+     * presentation, not a decision about what may run.
+     */
+    const tProjection = Date.now();
+    const projectedViewModel: OpportunityDrawerViewModel = {
+        ...viewModel,
+        workspace: {
+            ...viewModel.workspace,
+            operational_projection: projectFocusPanelOperational({
+                context: buildOperationalContext({
+                    subjectId: String(viewModel.entity.id),
+                    title: strOrEmpty(viewModel.above_fold.record?.title),
+                    subjectVm: viewModel,
+                    truth: viewModel.above_fold.record,
+                    // No projection function reads perspective — verified across both card
+                    // projectors — and the server has no viewer lens to state.
+                    perspective: null,
+                    // `StatusControlVm` is a union; only the dropdown variant names a label.
+                    statusLabel:
+                        viewModel.header?.status && "label" in viewModel.header.status
+                            ? viewModel.header.status.label
+                            : null,
+                    /*
+                     * THE VM'S OWN VERDICT, not a second interpretation.
+                     *
+                     * `resolveOpportunityVmStatusCanMutate` — the client's rule — prefers
+                     * `header.status_can_mutate` and falls back to the gate only when the VM is
+                     * absent. Here the VM exists, so reading its verdict is exactly what the browser
+                     * would have concluded, including any narrowing for a closed record. The commit
+                     * frame has no VM and so uses the gate rule; that difference is the frames', not
+                     * two permission models.
+                     */
+                    canMutate: viewModel.header?.status_can_mutate ?? hasPortalAdminMutateAccess(gate.roleKeys ?? []),
+                    selectedParticipationId: null,
+                }),
+            }),
+        },
+    };
+    phases.operational_projection_ms = Date.now() - tProjection;
+
     // `phases` is referenced by viewModel.timing.phases_ms — these post-literal writes still surface.
     phases.serialization_ms = Date.now() - tSerialize0;
     phases.total_ms = Date.now() - composeStart;
-    return finishCompose({ ok: true, viewModel });
+    return finishCompose({ ok: true, viewModel: projectedViewModel });
 }

@@ -61,8 +61,21 @@ function statusFromViewModel(vm: CurrentWorkViewModel): {
     return { statusChip: null, statusTone: "neutral" };
 }
 
-export function buildCurrentWorkCardEvidence(context: OperationalContext): CurrentWorkCardEvidence {
-    const vm = projectCurrentWork(context);
+export function buildCurrentWorkCardEvidence(
+    context: OperationalContext,
+    options?: {
+        /**
+         * An already-projected view model, supplied by the server projection.
+         *
+         * The browser passes this so the card renders a decision it did not make. Absent, the
+         * builder projects — which is what the SERVER chokepoint does when it calls this, and what
+         * the authoring surfaces do. One authority either way: whoever calls it is the one place
+         * projection happens for that frame.
+         */
+        viewModel?: CurrentWorkViewModel | null;
+    },
+): CurrentWorkCardEvidence {
+    const vm = options?.viewModel ?? projectCurrentWork(context);
     const { statusChip, statusTone } = statusFromViewModel(vm);
 
     if (vm.isEmpty) {

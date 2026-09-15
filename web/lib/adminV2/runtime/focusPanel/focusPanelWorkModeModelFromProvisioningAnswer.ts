@@ -31,6 +31,7 @@ import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
+import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import type {
     FocusPanelCardReadiness,
     FocusPanelWorkModeModel,
@@ -48,6 +49,8 @@ export type FocusPanelWorkModeFromAnswerInput = {
     /** Commit-critical Current Work projection (answer-owned). */
     stageWorkRuntime: StageWorkRuntimeProjection | null;
     publishedStageInputs: PublishedStageInputsForCurrentWork | null;
+    /** The server's projection for this subject. The cards read this; they never re-derive it. */
+    operationalProjection?: FocusPanelOperationalProjection | null;
     /** Situation (U-P5) from the answer's currentBusinessState. */
     situation: { stageKey: string; stageLabel: string; purpose: string | null } | null;
     /** Truthful primary Action (U-O5). */
@@ -136,6 +139,8 @@ export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeF
         // Registry supporting actions are Settlement; the truthful primary command is carried in `signals.work`.
         recordHeaderActions: null,
         publishedStageInputs: input.publishedStageInputs,
+        // Carried, never recomputed: the server already decided this subject's card truth.
+        operationalProjection: input.operationalProjection ?? null,
         capabilities: { canMutate: input.canMutate, maskedChannels: false },
         status: "ready",
     };
