@@ -411,6 +411,36 @@ export type ProvisioningAnswer =
               lensSet: LensSetEntry[];
               activeWorkView: { id: string; label: string };
           } | null;
+          /**
+           * THE COHORT THIS REFUSAL DID NOT INVALIDATE.
+           *
+           * `navigationFrame` above exists because "a refusal must not also remove the way out" — it
+           * carries the lens set the answer had already resolved. This is the same sentence one level
+           * deeper, and it repairs the half that was left: the lens set survived a refusal and the
+           * ROWS did not, so a subject that could not compose unmounted a queue that was never in
+           * question. Measured on Firefly: the same Work Unit and Work View answered `operational`
+           * with seven rows, and `error` with zero, on nothing but the addition of a `subject_id`.
+           *
+           * Present ONLY for refusals raised after the cohort resolved — the six subject-level sites.
+           * `null`/absent for everything before it (`unauthorized`, `work_unit_not_found`,
+           * `no_business_process`, `no_active_view`, `grain_ambiguous`, `grain_unsupported`,
+           * `records_unavailable`), where there is genuinely no cohort and inventing one would be the
+           * false affordance this field exists to prevent.
+           *
+           * The terminal stays `error`. This does not soften the refusal — the subject truly cannot
+           * compose, and the Focus Panel is the owner that says so. It only stops the refusal from
+           * being charged to the Work View.
+           */
+          queueFrame?: {
+              rows: ProvisioningRow[];
+              rowGrain: RowGrain;
+              subjectGrain: { grain: OperationalGrain; subjectType: OperationalSubjectType };
+              presentation: OperationalPresentation;
+              businessProcess: { key: string; name: string };
+              actionsProjection: WorkUnitActionsProjection;
+              /** The subject the caller named, so the queue can keep it selected while it refuses. */
+              requestedSubjectId: string | null;
+          } | null;
           timings: ProvisioningTimings;
       }
     /**
@@ -1290,6 +1320,145 @@ export async function composeWorkUnitProvisioningAnswer(
      * This is not a weakening of the guard. An id that names no member of this lens still fails, and
      * nothing is ever substituted — the refusal below is untouched for genuine non-members.
      */
+    // The FAMILY NAMES the child page can honestly cite. `baseRows` are the in-scope opportunities the
+    // answer already fetched (for the child grain they ARE the scope), so this is a pure lookup — no
+    // extra read, and no invented name when the row carries none.
+    const familyNamesByOpportunityId = new Map<string, string | null>(
+        childRows
+            ? ((baseRows ?? []) as Array<Record<string, unknown>>).map((o) => [
+                  String(o.id),
+                  strOrNull(o.name) ?? strOrNull(o.title),
+              ])
+            : [],
+    );
+
+    /*
+     * ── THE COHORT, RESOLVED ONCE, FOR BOTH OUTCOMES ─────────────────────────────────────────────
+     *
+     * The rows this answer publishes, built in ONE place and reachable from two exits: the
+     * operational return below, and a subject-level refusal (`cohortRefusal`).
+     *
+     * This exists because `fail()` is scope-blind. Six refusal sites fire AFTER the Work Unit, the
+     * lens set and the evaluated page have all resolved, and each of them used to discard that
+     * resolved cohort — so one unconfigurable subject unmounted a seven-row queue that was never in
+     * question. The queue is not a second owner and this is not a fallback path: it is the SAME
+     * mapping, memoised, so the refusal cannot drift from the operational answer by construction.
+     *
+     * CONCURRENCY. Nothing here starts work. `enrichedPromise` (kicked off above) and
+     * `presentationPromise` are already in flight, and `focusPanelStageWorkPromise` is started
+     * BELOW every refusal site — so awaiting this on the refusal path serialises nothing on the
+     * operational path, which awaits exactly what it awaited before, in the same order.
+     */
+    let cohortRowsMemo: Promise<{
+        enriched: readonly Record<string, unknown>[];
+        rows: ProvisioningRow[];
+        presentation: OperationalPresentation;
+    }> | null = null;
+    const cohortRowsOnce = () =>
+        (cohortRowsMemo ??= (async () => {
+        const enriched = await enrichedPromise;
+        // Child rows are published from the PROVIDER's own normalization — the same rows membership was
+        // decided over — with a PI-NATIVE presentation context. Leaving `context` null was not the neutral
+        // choice it looked like: a queue row renders entirely from its context, so thirteen children
+        // rendered as thirteen raw participation UUIDs. The context carries only what a child row knows,
+        // and leaves every Settlement-owned signal null rather than borrowing the family's.
+        const stageLabelsByKey = Object.fromEntries(
+            stages.filter((s) => s.key.trim() && s.label.trim()).map((s) => [s.key.trim(), s.label.trim()]),
+        );
+        const rowsUnsorted: ProvisioningRow[] = childRows
+            ? childRows.slice(0, PROVISIONING_ROW_PAGE_CAP).map((r) => {
+                  const placed = r as ChildProvisioningRowWithPlacement;
+                  return {
+                      id: String(r.participationId ?? ""),
+                      stageKey: r.stageKey,
+                      statusKey: r.statusKey,
+                      updatedAt: r.updatedAt,
+                      title: r.title,
+                      context: childQueueRowContext({
+                          row: placed,
+                          stageLabel: (r.stageKey ? stageLabelsByKey[r.stageKey] : null) ?? r.stageKey ?? "",
+                          stageLabelsByKey,
+                          lifecycleKey: process.key,
+                          familyName: r.contextId ? familyNamesByOpportunityId.get(r.contextId) ?? null : null,
+                      }),
+                      ...(placed.placementWaitlistRow
+                          ? {
+                                _placement_waitlist_row: placed.placementWaitlistRow,
+                                placementCandidateId: placed.placementCandidateId ?? null,
+                            }
+                          : {}),
+                  };
+              })
+            : enriched.map((r) => ({
+                  id: String((r as Record<string, unknown>).id),
+                  stageKey: strOrNull((r as Record<string, unknown>).stage_key),
+                  statusKey: strOrNull((r as Record<string, unknown>).status_key),
+                  updatedAt: strOrNull((r as Record<string, unknown>).updated_at),
+                  title: strOrNull((r as Record<string, unknown>).name),
+                  context: queueRowContextOf(r as Record<string, unknown>),
+              }));
+        // Join: await the presentation branch that ran CONCURRENTLY with projection + enrichment above.
+        // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
+        const presentation = await presentationPromise;
+        timings.presentation_ms = now() - tPres;
+
+        // Published Queue Row variant groupBy + sortCriteria drive child-grain Waitlist order.
+        // Canonical config owner = the matched published variant (not a second Work View authority).
+        let rows: ProvisioningRow[] = rowsUnsorted;
+        if (childRows && rowsUnsorted.length > 0 && presentation.queue.rowVariants.length > 0) {
+            const stageKey = rowsUnsorted[0]?.stageKey ?? null;
+            const matched = resolveQueueRowVariant(presentation.queue.rowVariants, {
+                stageKey,
+                workViewId: activeView.id,
+                processKey: process.key,
+                grain: "child",
+            });
+            if (matched) {
+                const groupBy = normalizeGroupByCriteria(matched);
+                const criteria = normalizeSortCriteria(matched);
+                if (groupBy.length || criteria.length) {
+                    rows = applyQueueRowVariantGroupAndSortCriteria(
+                        rowsUnsorted as unknown as Array<Record<string, unknown>>,
+                        groupBy,
+                        criteria,
+                    ) as unknown as ProvisioningRow[];
+                }
+            }
+        }
+            return { enriched, rows, presentation };
+        })());
+
+    /*
+     * A SUBJECT-LEVEL REFUSAL THAT KEEPS ITS COHORT.
+     *
+     * Mirrors the `navigationFrame` precedent exactly: that field exists because "a refusal must not
+     * also remove the way out", and it carried the lens set through the error terminal so the
+     * operator kept an exit. It carried no rows, so the exit survived and the queue did not.
+     *
+     * `queueFrame` is that same sentence one level deeper — the resolved cohort, propagated across
+     * the error boundary. The terminal stays `error` and the message stays verbatim: the subject
+     * genuinely cannot compose, and the Focus Panel is where that is said.
+     */
+    const cohortRefusal = async (code: ProvisioningErrorCode, message: string): Promise<ProvisioningAnswer> => {
+        const { rows, presentation } = await cohortRowsOnce();
+        const actionsProjection = await actionsProjectionPromise;
+        const refused = fail(code, message, workUnit, navFrame);
+        if (refused.terminal !== "error") return refused;
+        return {
+            ...refused,
+            queueFrame: {
+                rows,
+                rowGrain: grain.grain,
+                subjectGrain,
+                presentation,
+                businessProcess: { key: process.key, name: process.name },
+                actionsProjection,
+                requestedSubjectId: req.requestedSubjectId ?? null,
+            },
+        };
+    };
+
+
     const requested = req.requestedSubjectId
         ? subjectRows.find((s) => s.entityId === req.requestedSubjectId) ??
           resolveTargetedWorkViewMember({
@@ -1310,11 +1479,9 @@ export async function composeWorkUnitProvisioningAnswer(
         // active lens, or in another work unit. It means THIS surface cannot honestly present it, which
         // is exactly what the honest terminal below already exists to say. Substituting is never the
         // truthful answer; the default subject remains reachable by asking for it without a subject id.
-        return fail(
+        return await cohortRefusal(
             "subject_unavailable",
             `the requested subject is not present in this work unit's evaluated page — refusing to substitute a different subject`,
-            workUnit,
-            navFrame,
         );
     }
     const chosen =
@@ -1322,11 +1489,9 @@ export async function composeWorkUnitProvisioningAnswer(
         resolveDefaultOperationalSubject(subjectRows, strategy, { currentUserId: req.currentUserId ?? null });
     if (!chosen) {
         // Rows exist but no subject could be chosen — honest, never a fabricated subject.
-        return fail(
+        return await cohortRefusal(
             "subject_unavailable",
             "the configured strategy resolved no subject from the evaluated page",
-            workUnit,
-            navFrame,
         );
     }
     // ── U-P5/U-O4 current business state + U-O5 truthful primary action. ──
@@ -1338,18 +1503,6 @@ export async function composeWorkUnitProvisioningAnswer(
         childSubjectRow ??
         page.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId) ??
         familyMembership.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId)!;
-
-    // The FAMILY NAMES the child page can honestly cite. `baseRows` are the in-scope opportunities the
-    // answer already fetched (for the child grain they ARE the scope), so this is a pure lookup — no
-    // extra read, and no invented name when the row carries none.
-    const familyNamesByOpportunityId = new Map<string, string | null>(
-        childRows
-            ? ((baseRows ?? []) as Array<Record<string, unknown>>).map((o) => [
-                  String(o.id),
-                  strOrNull(o.name) ?? strOrNull(o.title),
-              ])
-            : [],
-    );
 
     // Child Waitlist: attach Placement ranking (derived position / wait_since / program) onto rows.
     // Membership stays PI-owned; ranking authority is placement_candidates + overrides.
@@ -1439,7 +1592,7 @@ export async function composeWorkUnitProvisioningAnswer(
         if (!composed.ok) {
             // Same refusal the family path makes, for the same reason: a surface cannot describe a
             // position the Business Process does not define.
-            return fail("no_truthful_primary_action", composed.reason, workUnit, navFrame);
+            return await cohortRefusal("no_truthful_primary_action", composed.reason);
         }
         childComposition = composed.composition;
         stage = childComposition.stage;
@@ -1463,11 +1616,9 @@ export async function composeWorkUnitProvisioningAnswer(
         const missionStageKey = mission.primaryMissionStageKey;
         const found = stages.find((s) => s.key === missionStageKey) ?? null;
         if (!found || !missionStageKey) {
-            return fail(
+            return await cohortRefusal(
                 "no_truthful_primary_action",
                 `subject holds no resolvable Mission stage (context="${contextStageKey}", epp=[${mission.missionStageKeys.join(",")}])`,
-                workUnit,
-                navFrame,
             );
         }
         // ── ONE definition of "can a family surface be entered here" ──
@@ -1483,7 +1634,7 @@ export async function composeWorkUnitProvisioningAnswer(
             missionDerivedFromEffectiveParticipants: mission.derivedFromEffectiveParticipants,
         });
         if (!operability.ok) {
-            return fail("no_truthful_primary_action", operability.reason, workUnit, navFrame);
+            return await cohortRefusal("no_truthful_primary_action", operability.reason);
         }
 
         const foundPlan = found.stage_operating_plan_v1 ?? null;
@@ -1492,11 +1643,9 @@ export async function composeWorkUnitProvisioningAnswer(
         if (!foundPlan || !template) {
             // Unreachable — the operability rule above already refused exactly this case. Kept as a
             // type narrowing so it can never silently degrade into a different answer.
-            return fail(
+            return await cohortRefusal(
                 "no_truthful_primary_action",
                 `stage "${found.key}" offers no work templates — the answer will not claim operational on identity alone`,
-                workUnit,
-                navFrame,
             );
         }
         stage = found;
@@ -1560,75 +1709,7 @@ export async function composeWorkUnitProvisioningAnswer(
           }).catch(() => null /* stage-work is additive to the commit — never fail the operational answer on it */);
 
     // ── JOIN: enrichment (queue rows) + presentation + actions + stage-work, all kicked off above. ──
-    const enriched = await enrichedPromise;
-    // Child rows are published from the PROVIDER's own normalization — the same rows membership was
-    // decided over — with a PI-NATIVE presentation context. Leaving `context` null was not the neutral
-    // choice it looked like: a queue row renders entirely from its context, so thirteen children
-    // rendered as thirteen raw participation UUIDs. The context carries only what a child row knows,
-    // and leaves every Settlement-owned signal null rather than borrowing the family's.
-    const stageLabelsByKey = Object.fromEntries(
-        stages.filter((s) => s.key.trim() && s.label.trim()).map((s) => [s.key.trim(), s.label.trim()]),
-    );
-    const rowsUnsorted: ProvisioningRow[] = childRows
-        ? childRows.slice(0, PROVISIONING_ROW_PAGE_CAP).map((r) => {
-              const placed = r as ChildProvisioningRowWithPlacement;
-              return {
-                  id: String(r.participationId ?? ""),
-                  stageKey: r.stageKey,
-                  statusKey: r.statusKey,
-                  updatedAt: r.updatedAt,
-                  title: r.title,
-                  context: childQueueRowContext({
-                      row: placed,
-                      stageLabel: (r.stageKey ? stageLabelsByKey[r.stageKey] : null) ?? r.stageKey ?? "",
-                      stageLabelsByKey,
-                      lifecycleKey: process.key,
-                      familyName: r.contextId ? familyNamesByOpportunityId.get(r.contextId) ?? null : null,
-                  }),
-                  ...(placed.placementWaitlistRow
-                      ? {
-                            _placement_waitlist_row: placed.placementWaitlistRow,
-                            placementCandidateId: placed.placementCandidateId ?? null,
-                        }
-                      : {}),
-              };
-          })
-        : enriched.map((r) => ({
-              id: String((r as Record<string, unknown>).id),
-              stageKey: strOrNull((r as Record<string, unknown>).stage_key),
-              statusKey: strOrNull((r as Record<string, unknown>).status_key),
-              updatedAt: strOrNull((r as Record<string, unknown>).updated_at),
-              title: strOrNull((r as Record<string, unknown>).name),
-              context: queueRowContextOf(r as Record<string, unknown>),
-          }));
-    // Join: await the presentation branch that ran CONCURRENTLY with projection + enrichment above.
-    // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
-    const presentation = await presentationPromise;
-    timings.presentation_ms = now() - tPres;
-
-    // Published Queue Row variant groupBy + sortCriteria drive child-grain Waitlist order.
-    // Canonical config owner = the matched published variant (not a second Work View authority).
-    let rows: ProvisioningRow[] = rowsUnsorted;
-    if (childRows && rowsUnsorted.length > 0 && presentation.queue.rowVariants.length > 0) {
-        const stageKey = rowsUnsorted[0]?.stageKey ?? null;
-        const matched = resolveQueueRowVariant(presentation.queue.rowVariants, {
-            stageKey,
-            workViewId: activeView.id,
-            processKey: process.key,
-            grain: "child",
-        });
-        if (matched) {
-            const groupBy = normalizeGroupByCriteria(matched);
-            const criteria = normalizeSortCriteria(matched);
-            if (groupBy.length || criteria.length) {
-                rows = applyQueueRowVariantGroupAndSortCriteria(
-                    rowsUnsorted as unknown as Array<Record<string, unknown>>,
-                    groupBy,
-                    criteria,
-                ) as unknown as ProvisioningRow[];
-            }
-        }
-    }
+    const { enriched, rows, presentation } = await cohortRowsOnce();
     // B: the actions projection ran concurrently above — join it here (no serial latency added).
     const actionsProjection = await actionsProjectionPromise;
     let focusPanelStageWork = await focusPanelStageWorkPromise;

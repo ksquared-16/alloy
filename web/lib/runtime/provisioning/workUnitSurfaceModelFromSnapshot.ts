@@ -150,6 +150,47 @@ function lensSetInDeclaredOrder(lensSet: readonly LensSetEntry[]): LensSetEntry[
  * coherent surface. `contextual` is the one that selected no cohort, and its branch is where the
  * runtime stops pretending otherwise — see it below.
  */
+
+/**
+ * ONE row mapping, reachable from both exits of the answer.
+ *
+ * The operational return and a subject-level refusal that kept its cohort (`queueFrame`) render the
+ * SAME rows, so they share this. Duplicating the mapping is how the refusal path would drift into a
+ * second queue owner — the thing the containment repair exists to avoid.
+ */
+function queueRowModelsFrom(
+    rows: readonly { id: string; context: unknown }[],
+    p: OperationalPresentation,
+    activeWorkViewId: string | null,
+    activeWorkViewLabel: string | null,
+    processKey: string | null,
+): QueueRowModel[] {
+    const queueRowVariants = p.queue.rowVariants;
+    return rows
+        .map((r) => {
+            const model = queueRowModelFromQueueItem({ id: r.id, _queue_row_context: r.context }, "opportunity");
+            if (model && queueRowVariants.length > 0) {
+                const presentation = resolveRowVariantPresentation(
+                    r.context,
+                    queueRowVariants,
+                    p.queue.rowVariantFixedControls,
+                    activeWorkViewId,
+                    activeWorkViewLabel
+                        ? activeWorkViewLabel.trim().toLowerCase().replace(/\s+/g, "_") || null
+                        : null,
+                    processKey,
+                    p.queue.rowSlots,
+                );
+                if (presentation) {
+                    model.rowConfig = presentation.rowConfig;
+                    if (presentation.focus) model.focus = presentation.focus;
+                }
+            }
+            return model;
+        })
+        .filter((r): r is QueueRowModel => r != null);
+}
+
 export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): WorkUnitSurfaceModel {
     // ── HONEST ERROR (U-O7) — one coherent error surface. Never a false-empty, and never partial
     //    operational content behind it: there are no rows and no subject.
@@ -162,14 +203,18 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
     //    reach a working Work View. A refusal states what is wrong; it must not also remove the exit.
     if (snapshot.terminal === "error") {
         const frame = snapshot.navigationFrame;
+        // The cohort this refusal did not invalidate — see `queueFrame` on the error terminal.
+        const qf = snapshot.queueFrame ?? null;
         return {
-            header: {
-                title: snapshot.workUnit?.name ?? "Work Unit",
-                subtitle: null,
-                identityIcon: null,
-                identityAccent: null,
-                kpis: [],
-            },
+            header: qf
+                ? headerFromPresentation(qf.presentation)
+                : {
+                      title: snapshot.workUnit?.name ?? "Work Unit",
+                      subtitle: null,
+                      identityIcon: null,
+                      identityAccent: null,
+                      kpis: [],
+                  },
             // EVERY count stays null: counts are SETTLEMENT (U-S6) and this answer never reached it. A
             // pill with no badge is honest; a zero would be a claim this answer cannot make — the same
             // rule the operational path below already follows for `count`.
@@ -184,18 +229,53 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
                 primaryGrainCount: null,
                 supportingGrainCount: null,
             })),
-            queue: {
-                rows: [],
-                totalCount: null,
-                loading: false,
-                // QueueRegion renders `error` (role="alert") — distinct from `empty` by construction.
-                error: snapshot.message,
-                errorKind: provisioningErrorKind(snapshot.code),
-                rowConfig: EMPTY_ROW_SLOTS,
-            },
+            queue: qf
+                ? {
+                      /*
+                       * THE COHORT SURVIVES THE REFUSAL.
+                       *
+                       * `error: null` is the whole repair at this layer. QueueRegion selects its
+                       * render state on exactly that field, so a null error means it renders ROWS —
+                       * the same rows, through the same mapping, that an operational answer would
+                       * have produced. The refusal is not discarded; it moves to `subjectRefusal`
+                       * below, where the Focus Panel owns it.
+                       */
+                      rows: queueRowModelsFrom(
+                          qf.rows,
+                          qf.presentation,
+                          frame?.activeWorkView.id ?? null,
+                          frame?.activeWorkView.label ?? null,
+                          qf.businessProcess.key,
+                      ),
+                      totalCount: null,
+                      loading: false,
+                      error: null,
+                      rowConfig: qf.presentation.queue.rowSlots,
+                  }
+                : {
+                      rows: [],
+                      totalCount: null,
+                      loading: false,
+                      // QueueRegion renders `error` (role="alert") — distinct from `empty` by construction.
+                      error: snapshot.message,
+                      errorKind: provisioningErrorKind(snapshot.code),
+                      rowConfig: EMPTY_ROW_SLOTS,
+                  },
             activeWorkViewId: frame?.activeWorkView.id ?? null,
-            selectedRecordId: null,
-            selectedSubject: { selectedRecordId: null, source: "empty" },
+            // Selection stays coherent: the operator asked for this subject and the row must stay lit
+            // while its panel explains why it cannot compose.
+            selectedRecordId: qf?.requestedSubjectId ?? null,
+            selectedSubject: qf?.requestedSubjectId
+                ? { selectedRecordId: qf.requestedSubjectId, source: "url" }
+                : { selectedRecordId: null, source: "empty" },
+            /*
+             * THE NARROWEST CORRECT OWNER. A subject that cannot compose is a Focus Panel fact, so it
+             * is carried as one. Absent when the answer carried no cohort — there the refusal really is
+             * the whole surface, and the queue branch above still says so.
+             */
+            subjectRefusal: qf
+                ? { kind: provisioningErrorKind(snapshot.code), message: snapshot.message }
+                : null,
             rightRailActions: [],
             departmentId: null,
             workUnitId: snapshot.workUnit?.id ?? null,
