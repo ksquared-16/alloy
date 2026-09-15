@@ -10,10 +10,15 @@ import {
     readDraft,
     readPosition,
     resolveResumeIndex,
+    readScroll,
+    readShellCache,
     writeDraft,
     writePosition,
+    writeScroll,
+    writeShellCache,
     type DraftRead,
     type QaScope,
+    type ShellCache,
 } from "@/lib/qa/runtime/directorQaSession";
 
 /**
@@ -64,6 +69,12 @@ const CLASSIFICATIONS = [
 
 export default function CoreFinancialsQaReader() {
     const [data, setData] = useState<Payload | null>(null);
+    /*
+     * The last shape of the page this tab saw: the scenario catalog and the environment labels, and
+     * no money. It lets a reload draw the walkthrough at once instead of showing a blank
+     * "Reading the environment…" for as long as the readiness read takes.
+     */
+    const [shell, setShell] = useState<ShellCache<Scenario> | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [index, setIndex] = useState(0);
     const [started, setStarted] = useState(false);
@@ -88,11 +99,25 @@ export default function CoreFinancialsQaReader() {
             setError(e instanceof Error ? e.message : "Could not reach the readiness endpoint.");
         }
     }, []);
+    /* Draw from cache first, then let the live read replace it. Cache never supplies a figure. */
+    useEffect(() => {
+        setShell(readShellCache<Scenario>(SUITE_KEY, "staging") ?? readShellCache<Scenario>(SUITE_KEY, "local"));
+    }, []);
     useEffect(() => { void load(); }, [load]);
+    useEffect(() => {
+        if (!data) return;
+        writeShellCache<Scenario>(data.suiteKey ?? SUITE_KEY, data.environment, {
+            scenarios: data.scenarios,
+            catalogVersion: data.catalogVersion,
+            environment: data.environment,
+        });
+    }, [data]);
 
     const walkthrough = useMemo(
-        () => (data?.scenarios ?? []).filter((s) => s.disposition === "HUMAN_WALKTHROUGH").sort((a, b) => a.order - b.order),
-        [data],
+        () => (data?.scenarios ?? shell?.scenarios ?? [])
+            .filter((s) => s.disposition === "HUMAN_WALKTHROUGH")
+            .sort((a, b) => a.order - b.order),
+        [data, shell],
     );
     const resultOf = useCallback(
         (k: string) => data?.results.find((r) => r.scenario_key === k)?.result ?? "not_run",
@@ -120,17 +145,31 @@ export default function CoreFinancialsQaReader() {
      * belongs to the acceptance authority, bound to the build and the catalog version, written only
      * when the Director submits.
      */
-    const scope: QaScope | null = useMemo(
-        () => (data
-            ? {
-                  suiteKey: data.suiteKey ?? SUITE_KEY,
-                  environment: data.environment,
-                  catalogVersion: data.catalogVersion,
-                  deployedRevision: data.deployedRevision,
-              }
-            : null),
-        [data],
-    );
+    const scope: QaScope | null = useMemo(() => {
+        if (data) {
+            return {
+                suiteKey: data.suiteKey ?? SUITE_KEY,
+                environment: data.environment,
+                catalogVersion: data.catalogVersion,
+                deployedRevision: data.deployedRevision,
+            };
+        }
+        /*
+         * From cache, so the draft for the scenario on screen is found before the network answers.
+         * The revision is unknown until the live read lands, and an unknown revision is keyed as
+         * itself rather than guessed — a draft filed under the wrong build is worse than one the
+         * Director is asked about.
+         */
+        if (shell) {
+            return {
+                suiteKey: SUITE_KEY,
+                environment: shell.environment,
+                catalogVersion: shell.catalogVersion,
+                deployedRevision: "unknown",
+            };
+        }
+        return null;
+    }, [data, shell]);
 
     /** Where the walkthrough should open, asked fresh so a click reflects the latest results. */
     const resume = useCallback(() => {
@@ -149,13 +188,42 @@ export default function CoreFinancialsQaReader() {
         const at = resume();
         setIndex(at.index);
         setStarted(at.started);
-    }, [scope, walkthrough.length, resume]);
+        /*
+         * A restore is not a move, so it records only when storage held nothing usable — otherwise
+         * it would rewrite the very value it just read, which is how the clobber got in.
+         */
+        if (at.source !== "stored" && scope && walkthrough[at.index]) {
+            writePosition(scope, walkthrough[at.index].key, at.started);
+        }
+    }, [scope, walkthrough, resume]);
 
-    /* REMEMBER, whenever the Director moves. Keyed by scenario key, so renumbering cannot move it. */
-    useEffect(() => {
-        if (!scope || !restoredRef.current || !current) return;
-        writePosition(scope, current.key, started);
-    }, [scope, current, started]);
+    /*
+     * ── POSITION IS WRITTEN BY THE EVENTS THAT MOVE IT, NEVER MIRRORED FROM STATE ───────────────
+     *
+     * This used to be an effect that wrote whatever `current` happened to be. Instrumenting the
+     * running reader showed what that costs: on EVERY mount the effect fired once in the same
+     * commit as the restore — before React had applied the restored index — and wrote
+     * `{scenarioKey: "financial_subject", started: false}` over the Director's real position, then
+     * corrected it about ten milliseconds later. Every single load put "scenario 01, not started"
+     * into storage for a window, and any reload, tab close or navigation landing in that window
+     * took the walkthrough back to the beginning AND to the landing surface.
+     *
+     * An effect cannot distinguish "the Director moved" from "React rendered a default", and that
+     * is precisely the distinction the locked behaviour turns on: only Previous, Next and an
+     * explicit start/resume may change the scenario. A readiness refresh, a baseline change and a
+     * rerender must not. So the write now happens where the intent is — in the handler — and there
+     * is no code path by which a render can record a position.
+     */
+    const goTo = useCallback(
+        (nextIndex: number, nextStarted: boolean) => {
+            const bounded = Math.max(0, Math.min(walkthrough.length - 1, nextIndex));
+            const target = walkthrough[bounded];
+            setIndex(bounded);
+            setStarted(nextStarted);
+            if (scope && target) writePosition(scope, target.key, nextStarted);
+        },
+        [scope, walkthrough],
+    );
 
     /* LOAD the draft for whichever scenario is open. Never mistaken for typing — see the ref. */
     useEffect(() => {
@@ -168,6 +236,39 @@ export default function CoreFinancialsQaReader() {
         setClassification(found.draft.classification);
         setCarriedFrom(found.carriedFrom);
     }, [scope, current]);
+
+    /*
+     * ── NOTHING TYPED IS EVER LOST TO A RELOAD THAT ARRIVES MID-SENTENCE ────────────────────────
+     *
+     * The debounce below means the last fraction of a second of typing is not yet in storage. On a
+     * development server a reload can arrive at any moment, and losing the end of a sentence is
+     * exactly the experience of being reset — the scenario came back and the thought did not.
+     *
+     * So the draft is flushed synchronously when the page is going away or being hidden. `pagehide`
+     * rather than `unload`, because `unload` is unreliable on a restored page; `visibilitychange`
+     * because switching to the product tab is the most common way this page stops being watched.
+     */
+    useEffect(() => {
+        if (!scope || !current) return;
+        const flush = () => {
+            writeDraft(scope, current.key, { observation, expected, classification });
+            writeScroll(scope, current.key, window.scrollY);
+        };
+        const onHidden = () => { if (document.visibilityState === "hidden") flush(); };
+        window.addEventListener("pagehide", flush);
+        document.addEventListener("visibilitychange", onHidden);
+        return () => {
+            window.removeEventListener("pagehide", flush);
+            document.removeEventListener("visibilitychange", onHidden);
+        };
+    }, [scope, current, observation, expected, classification]);
+
+    /* Coming back to the right scenario at the top of a long page is still losing your place. */
+    useEffect(() => {
+        if (!scope || !current || !started) return;
+        const y = readScroll(scope, current.key);
+        if (y > 0) window.scrollTo({ top: y });
+    }, [scope, current, started]);
 
     /* SAVE the draft as it is typed, debounced so a keystroke is not a write. */
     useEffect(() => {
@@ -227,9 +328,9 @@ export default function CoreFinancialsQaReader() {
 
             <div className="mx-auto max-w-3xl px-6 pb-24 pt-6">
                 {error && !data ? <p className="text-sm text-alloy-ember" data-qa-error="true">{error}</p> : null}
-                {!data ? <p className="text-sm text-alloy-midnight/55">Reading the environment…</p> : null}
+                {!data && walkthrough.length === 0 ? <p className="text-sm text-alloy-midnight/55">Reading the environment…</p> : null}
 
-                {data && !started ? (
+                {walkthrough.length > 0 && !started ? (
                     <section className="space-y-5" data-qa-view="landing">
                         <div>
                             <h1 className="text-[22px] font-semibold tracking-tight text-alloy-midnight">
@@ -240,33 +341,33 @@ export default function CoreFinancialsQaReader() {
                             </p>
                         </div>
 
-                        {data.baselineChanged ? (
+                        {data?.baselineChanged ? (
                             <p className="rounded-lg border-l-[3px] border-alloy-ember bg-alloy-ember/5 px-3 py-2 text-[13px]"
                                 data-qa-baseline-changed="true">
                                 <strong className="font-semibold">Baseline changed.</strong>{" "}
-                                Results exist against {data.priorRevisions.length} other build(s). They stay readable
+                                Results exist against {data?.priorRevisions.length ?? 0} other build(s). They stay readable
                                 but do not count for this one — an acceptance is only ever true of the build it was given.
                             </p>
                         ) : null}
 
                         <Facts rows={[
-                            ["Environment", data.environment],
-                            ["Build", data.deployedRevision.slice(0, 12)],
-                            ["Scenario definitions", data.catalogVersion],
-                            ["Household", data.subject.householdLabel],
-                            ["Billing period", data.subject.periodLabel || "—"],
-                            ["Child", data.subject.billableChildren.map((c) => c.displayName).join(", ") || "none"],
-                            ["Responsible party", data.subject.namedParties.join(", ") || "none named yet"],
-                            ["Outstanding", money(data.subject.outstandingCents)],
-                            ["Collectible now", money(data.subject.collectibleCents)],
-                            ["Ledger", `${data.subject.postedCount} posted · ${data.subject.draftCount} draft · ${data.subject.reductionCount} reductions · ${data.subject.paymentCount} payments`],
+                            ["Environment", data?.environment ?? shell?.environment ?? "…"],
+                            ["Build", data ? data.deployedRevision.slice(0, 12) : "reading…"],
+                            ["Scenario definitions", data?.catalogVersion ?? shell?.catalogVersion ?? "…"],
+                            ["Household", data?.subject.householdLabel ?? "reading…"],
+                            ["Billing period", data?.subject.periodLabel || (data ? "—" : "reading…")],
+                            ["Child", data ? (data.subject.billableChildren.map((c) => c.displayName).join(", ") || "none") : "reading…"],
+                            ["Responsible party", data ? (data.subject.namedParties.join(", ") || "none named yet") : "reading…"],
+                            ["Outstanding", data ? money(data.subject.outstandingCents) : "reading…"],
+                            ["Collectible now", data ? money(data.subject.collectibleCents) : "reading…"],
+                            ["Ledger", data ? `${data.subject.postedCount} posted · ${data.subject.draftCount} draft · ${data.subject.reductionCount} reductions · ${data.subject.paymentCount} payments` : "reading…"],
                             /*
                              * DATA AND NAVIGATION, SIDE BY SIDE. The account resolving is not the
                              * account being reachable, and reporting only the first is how a
                              * walkthrough gets certified that nobody can actually start.
                              */
-                            ["Data readiness", data.subject.resolved ? "Account reads cleanly" : `NOT READY — ${data.subject.unresolvedReason ?? "unreadable"}`],
-                            ["Navigation readiness", data.navigation.reachable
+                            ["Data readiness", !data ? "reading…" : data.subject.resolved ? "Account reads cleanly" : `NOT READY — ${data.subject.unresolvedReason ?? "unreadable"}`],
+                            ["Navigation readiness", !data ? "reading…" : data.navigation.reachable
                                 ? `Reachable via ${data.navigation.surface} · ${data.navigation.accountsInCohort} accounts listed`
                                 : `NOT REACHABLE — ${data.navigation.unreachableReason ?? "the account is not listed"}`],
                         ]} />
@@ -284,7 +385,7 @@ export default function CoreFinancialsQaReader() {
                         <button type="button" data-qa-start="true"
                             data-qa-resume-source={resume().source}
                             data-qa-resume-scenario={walkthrough[resume().index]?.key ?? ""}
-                            onClick={() => { const at = resume(); setIndex(at.index); setStarted(true); }}
+                            onClick={() => { const at = resume(); goTo(at.index, true); }}
                             className="rounded-lg bg-alloy-midnight px-4 py-2 text-[13px] font-medium text-white">
                             {tally.pass + tally.fail + tally.blocked > 0 ? "Resume walkthrough" : "Start walkthrough"}
                             {walkthrough[resume().index]
@@ -294,9 +395,9 @@ export default function CoreFinancialsQaReader() {
                     </section>
                 ) : null}
 
-                {data && started && current ? (
+                {walkthrough.length > 0 && started && current ? (
                     <article className="space-y-5" data-qa-scenario={current.key}>
-                        <button type="button" onClick={() => setStarted(false)}
+                        <button type="button" onClick={() => goTo(index, false)}
                             className="text-[12px] text-alloy-midnight/55 underline underline-offset-2">
                             ← All scenarios
                         </button>
@@ -310,7 +411,7 @@ export default function CoreFinancialsQaReader() {
                             <p className="mt-2 text-[13px] leading-relaxed text-alloy-midnight/60">{current.whyItMatters}</p>
                         </div>
 
-                        {readiness && !readiness.ready ? (
+                        {data && readiness && !readiness.ready ? (
                             <div className="rounded-lg border-l-[3px] border-alloy-ember bg-alloy-ember/5 px-3 py-2 text-[13px]"
                                 data-qa-not-ready="true">
                                 <strong className="font-semibold">Scenario not ready.</strong>
@@ -322,12 +423,14 @@ export default function CoreFinancialsQaReader() {
 
                         <Section label="Starting state, read live just now">
                             <Facts rows={[
-                                ["Household", data.subject.householdLabel],
-                                ["Period", data.subject.periodLabel || "—"],
-                                ["Outstanding", money(data.subject.outstandingCents)],
-                                ["Collectible now", money(data.subject.collectibleCents)],
-                                ["Posted / draft", `${data.subject.postedCount} / ${data.subject.draftCount}`],
-                                ["Responsibility", data.subject.namedParties.join(", ") || "none named"],
+                                /* Read live when the scenario opens. Never cached — a cached balance
+                                   is a stale balance, and the starting state is the whole point. */
+                                ["Household", data?.subject.householdLabel ?? "reading…"],
+                                ["Period", data ? (data.subject.periodLabel || "—") : "reading…"],
+                                ["Outstanding", data ? money(data.subject.outstandingCents) : "reading…"],
+                                ["Collectible now", data ? money(data.subject.collectibleCents) : "reading…"],
+                                ["Posted / draft", data ? `${data.subject.postedCount} / ${data.subject.draftCount}` : "reading…"],
+                                ["Responsibility", data ? (data.subject.namedParties.join(", ") || "none named") : "reading…"],
                             ]} />
                         </Section>
 
@@ -390,8 +493,8 @@ export default function CoreFinancialsQaReader() {
                         </Section>
 
                         <div className="flex justify-between gap-2 border-t border-alloy-midnight/10 pt-4">
-                            <Btn onClick={() => setIndex(Math.max(0, index - 1))} disabled={index === 0} id="prev">← Previous</Btn>
-                            <Btn onClick={() => setIndex(Math.min(walkthrough.length - 1, index + 1))}
+                            <Btn onClick={() => goTo(index - 1, true)} disabled={index === 0} id="prev">← Previous</Btn>
+                            <Btn onClick={() => goTo(index + 1, true)}
                                 disabled={index >= walkthrough.length - 1} id="next">Next scenario →</Btn>
                         </div>
                     </article>
