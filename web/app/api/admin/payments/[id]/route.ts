@@ -10,6 +10,7 @@ import {
 } from "@/lib/admin/paymentStatusSync";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertPaymentDrawerReadable, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { FIN_POST, requireSchedulingJobsCapability } from "@/lib/access/schedulingJobsAuthority";
 
 /** PATCH: update status_key, paid_at, notes. Editable fields only. */
 export async function PATCH(
@@ -20,6 +21,8 @@ export async function PATCH(
     if (forbidden) return forbidden;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireSchedulingJobsCapability(ctx, FIN_POST);
+    if (denied) return denied;
 
     const { id } = await params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });

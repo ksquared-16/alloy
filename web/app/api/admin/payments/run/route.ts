@@ -4,6 +4,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { requireAdmin } from "@/lib/adminAuth";
 import { emitEvent } from "@/lib/emitEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { FIN_POST, requireSchedulingJobsCapability } from "@/lib/access/schedulingJobsAuthority";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,8 @@ export async function POST(request: NextRequest) {
   if (forbidden) return forbidden;
   const ctx = await getAdminContextCached();
   if (!ctx.ok) return adminContextFailureResponse(ctx);
+  const denied = requireSchedulingJobsCapability(ctx, FIN_POST);
+  if (denied) return denied;
 
   let body: Record<string, unknown>;
   try {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import type { CommercialCategory } from "@/lib/commercial/commercialProducts";
+import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 const SELECT_COLS =
     "id, org_id, key, label, sort_order, is_active, metadata, created_at, updated_at";
@@ -23,6 +24,8 @@ function mapRow(r: Record<string, unknown>): CommercialCategory {
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     const { id } = await params;
     let body: Record<string, unknown> = {};
@@ -55,6 +58,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     const { id } = await params;
     const supabase = createAdminClient();

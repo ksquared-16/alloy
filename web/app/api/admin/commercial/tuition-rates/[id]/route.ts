@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import type { TuitionRateRow } from "@/lib/commercial/tuitionRates";
+import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 const SELECT_COLS =
     "id, org_id, location_id, variant_id, cadence_key, payer_type, rate_cents, is_active, not_offered, effective_start, effective_end, revenue_category_id, metadata, created_at, updated_at";
@@ -41,6 +42,8 @@ export async function PATCH(
             { status: ctx.status },
         );
     }
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     const { id } = await params;
 
@@ -107,6 +110,8 @@ export async function DELETE(
             { status: ctx.status },
         );
     }
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     const { id } = await params;
     const supabase = createAdminClient();

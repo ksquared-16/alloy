@@ -33,7 +33,7 @@ function post(body: unknown): NextRequest {
 beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAdminOrOps.mockResolvedValue(null);
-    mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, userId, role: "admin" });
+    mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, userId, role: "admin", permissionKeys: ["fin.write"] });
     mockCreateAdminClient.mockReturnValue({ from: vi.fn() });
     svc.listFinancialServices.mockResolvedValue([{ id: "svc_1", key: "meals", label: "Meals" }]);
     svc.createFinancialService.mockResolvedValue({ id: "svc_2" });

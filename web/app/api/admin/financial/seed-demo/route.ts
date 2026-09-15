@@ -10,6 +10,7 @@ import {
     createFinancialService,
     listFinancialServices,
 } from "@/lib/financials/services/financialServicesStore";
+import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 /**
  * Idempotent demo-data seed for the Financials configuration screens (Financial
@@ -232,6 +233,8 @@ export async function POST() {
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     const supabase = createAdminClient();
     try {

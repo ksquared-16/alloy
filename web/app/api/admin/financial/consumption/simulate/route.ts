@@ -8,6 +8,7 @@ import {
 } from "@/lib/childcareOperational/operationalEnrollmentApi";
 import { draftConsumption, previewConsumption } from "@/lib/operationalConsumption/consumptionService";
 import type { OperationalFactDto } from "@/lib/operationalConsumption/consumptionTypes";
+import { FINANCIALS_READ_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 /**
  * Operational Consumption Simulator (Slice 1). Resolves a normalized operational
@@ -91,6 +92,8 @@ export async function POST(request: NextRequest) {
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_READ_PERMISSION_KEY);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try {

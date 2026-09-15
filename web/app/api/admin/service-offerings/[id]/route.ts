@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { evaluateDeletionEligibility } from "@/lib/admin/deletionEligibility";
+import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 /** DELETE: hard delete (admin only). Enforces lifecycle eligibility. */
 export async function DELETE(
@@ -41,6 +42,8 @@ export async function PATCH(
 ) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     const { id } = await params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });

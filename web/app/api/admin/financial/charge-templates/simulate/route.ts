@@ -11,6 +11,7 @@ import {
     operationalEnrollmentErrorResponse,
     resolveOperationalEnrollmentTodayYmd,
 } from "@/lib/childcareOperational/operationalEnrollmentApi";
+import { FINANCIALS_READ_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 /**
  * Charge Template Simulator (Commercial Model, Slice D). Resolves a configured
@@ -38,6 +39,8 @@ export async function POST(request: NextRequest) {
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_READ_PERMISSION_KEY);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try {

@@ -2,8 +2,8 @@
   "reviewed": "2026-09-10",
   "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
   "ratchet": {
-    "max_pending": 547,
-    "$comment": "Lowered 693 -> 679 by the Access & Identity V2 Financials slice: twelve financial record-data handlers converted to fin.read and two GL-account mutations to fin.write, plus two entries overturned from a reasoned `none` (see their `supersedes`). Lowered 679 -> 656 by the Forms authority cleanup: 23 handlers that were already enforcing authorization moved from pending to declared. The enforcement did not become stricter - it stopped being invisible to this table. Lowered 656 -> 655 by Attendance Productization V1 Thread 8: declaring the new pickup-authority handler against `attendance.read` made the burndown able to see that `app/api/admin/childcare-attendance/route.ts` GET already ran the same `assertAttendanceReadAllowed` gate while still marked pending, so it was drained rather than left claiming less than it enforces. Lowered again to 631 by the POS + Processing authority cleanup, which drained 24 net from the same 656 baseline: 25 handlers declared against forms.author and the four new processing.* keys, less one returned to pending - `processing/cases/[caseId]/identity/review` GET, which flows through the shared operator context but never required the old role gate, so declaring a capability there would have claimed an enforcement that does not exist and adding one would have tightened an open read. Attendance's reduction and this one are independent and both count: 656 - 1 - 24 = 631. The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack. Lowered 602 -> 593 by Department Product Retirement + Business Process Authority Convergence V1: eight handlers moved pending -> declared under business_process.configure / .activate, and the generic department DELETE left the table entirely because the route was retired — it had no mounted caller and could not have worked on a real operational domain, whose department_id is NOT NULL on four live tables. Lowered 593 -> 583 by Operational Intelligence Authority Convergence V1: ten OI mutation handlers moved pending -> declared under reports.write, activating a key the catalog has carried since the permission grid and that was enforced nowhere. No folder capability was created; the ops default package was corrected in the same slice so activation could not widen ops. Lowered 583 -> 580 by Discounts Authority Disposition V1: the three Discount Program mutations moved pending -> declared under ops.jobs.write, the Jobs owner. The Jobs/Booking vertical remains supported, so the model was rehomed rather than retired; its legacy-only authoring surface is recorded as JOBS_DISCOUNT_PROGRAM_PRODUCTIZATION_DEBT. Lowered 580 -> 576 by Document Field Legacy Retirement V1: 4 handlers across 2 route files left the table with the routes. They were not rehomed and not marked pending - the subsystem is retired. Deployed census found zero definitions and zero captured values ever, against 180 documents and 424 canonical field definitions, and no runtime read anywhere. Lowered 576 -> 565 by Business Process Family Convergence V2: eleven handlers across enrollment-process (6) and lifecycle-catalog (5) moved pending -> declared onto the EXISTING business_process.configure / .activate keys. No new capability key and no grant change - the V1 default package already carried both, admin-only, with ops withheld. The split is the point: five definition-editing handlers took configure and six operational handlers took activate, including stage-work-unit DELETE, which sits in the same route file as two configure handlers. Lowered 565 -> 547 by Configuration Presentation Convergence V1: eighteen handlers across workspace-kpi-placements, surfaces, queue-row-layout, record-drawer-layouts, field-sections, config and business-process-layout-assignments moved pending -> declared onto the EXISTING enforced keys layouts.manage / sections.manage / fields.manage. No new key and no grant change. This is AUTHORITY PATH CONVERGENCE, not activation: all three keys were already enforced by the promoted Configuration Authority model, and the canonical operation contract in configurationProposalPermissions.ts already authorised these same material effects under these same keys. Five of the twenty-three surveyed sites were deliberately NOT migrated and are reported to the Director: the three agent/* apply routes, whose intended owner `agent.suggestion.apply` is recorded as a future key in aiEnrichmentPermissions.ts, and the two entity-labels handlers, whose org-wide vocabulary has no truthful owner among the established keys."
+    "max_pending": 493,
+    "$comment": "Lowered 693 -> 679 by the Access & Identity V2 Financials slice: twelve financial record-data handlers converted to fin.read and two GL-account mutations to fin.write, plus two entries overturned from a reasoned `none` (see their `supersedes`). Lowered 679 -> 656 by the Forms authority cleanup: 23 handlers that were already enforcing authorization moved from pending to declared. The enforcement did not become stricter - it stopped being invisible to this table. Lowered 656 -> 655 by Attendance Productization V1 Thread 8: declaring the new pickup-authority handler against `attendance.read` made the burndown able to see that `app/api/admin/childcare-attendance/route.ts` GET already ran the same `assertAttendanceReadAllowed` gate while still marked pending, so it was drained rather than left claiming less than it enforces. Lowered again to 631 by the POS + Processing authority cleanup, which drained 24 net from the same 656 baseline: 25 handlers declared against forms.author and the four new processing.* keys, less one returned to pending - `processing/cases/[caseId]/identity/review` GET, which flows through the shared operator context but never required the old role gate, so declaring a capability there would have claimed an enforcement that does not exist and adding one would have tightened an open read. Attendance's reduction and this one are independent and both count: 656 - 1 - 24 = 631. The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack. Lowered 602 -> 593 by Department Product Retirement + Business Process Authority Convergence V1: eight handlers moved pending -> declared under business_process.configure / .activate, and the generic department DELETE left the table entirely because the route was retired — it had no mounted caller and could not have worked on a real operational domain, whose department_id is NOT NULL on four live tables. Lowered 593 -> 583 by Operational Intelligence Authority Convergence V1: ten OI mutation handlers moved pending -> declared under reports.write, activating a key the catalog has carried since the permission grid and that was enforced nowhere. No folder capability was created; the ops default package was corrected in the same slice so activation could not widen ops. Lowered 583 -> 580 by Discounts Authority Disposition V1: the three Discount Program mutations moved pending -> declared under ops.jobs.write, the Jobs owner. The Jobs/Booking vertical remains supported, so the model was rehomed rather than retired; its legacy-only authoring surface is recorded as JOBS_DISCOUNT_PROGRAM_PRODUCTIZATION_DEBT. Lowered 580 -> 576 by Document Field Legacy Retirement V1: 4 handlers across 2 route files left the table with the routes. They were not rehomed and not marked pending - the subsystem is retired. Deployed census found zero definitions and zero captured values ever, against 180 documents and 424 canonical field definitions, and no runtime read anywhere. Lowered 576 -> 565 by Business Process Family Convergence V2: eleven handlers across enrollment-process (6) and lifecycle-catalog (5) moved pending -> declared onto the EXISTING business_process.configure / .activate keys. No new capability key and no grant change - the V1 default package already carried both, admin-only, with ops withheld. The split is the point: five definition-editing handlers took configure and six operational handlers took activate, including stage-work-unit DELETE, which sits in the same route file as two configure handlers. Lowered 565 -> 547 by Configuration Presentation Convergence V1: eighteen handlers across workspace-kpi-placements, surfaces, queue-row-layout, record-drawer-layouts, field-sections, config and business-process-layout-assignments moved pending -> declared onto the EXISTING enforced keys layouts.manage / sections.manage / fields.manage. No new key and no grant change. This is AUTHORITY PATH CONVERGENCE, not activation: all three keys were already enforced by the promoted Configuration Authority model, and the canonical operation contract in configurationProposalPermissions.ts already authorised these same material effects under these same keys. Five of the twenty-three surveyed sites were deliberately NOT migrated and are reported to the Director: the three agent/* apply routes, whose intended owner `agent.suggestion.apply` is recorded as a future key in aiEnrichmentPermissions.ts, and the two entity-labels handlers, whose org-wide vocabulary has no truthful owner among the established keys. Lowered 547 -> 502 by Financial Configuration Authority V1: 45 Financials mutations that were ORG-CONTEXT-ONLY - reachable by any portal-admitted principal - moved pending -> declared onto the EXISTING fin.write (40), fin.read (3, non-persisting simulations) and fin.post (2, payment truth) keys. This is security hardening rather than convergence: nobody is losing authority they were granted, only reach they were never given. The same slice repaired a cross-tenant escape in pricing/matrix/[id] PATCH, which mutated by id alone on a service-role client. Lowered 502 -> 499 by the same slice after a closer read: three pricing [id] PATCH handlers were ORG-CONTEXT-ONLY, not role-gated. Each sits in a file whose DELETE does carry a role gate, and a file-level authority reading had attributed that gate to the whole file. Lowered 499 -> 493: six more commercial-catalogue mutations (addons, service offerings, service plan templates) that a narrower Financials path regex had missed."
   },
   "inherited": {
     "$comment": "Handlers that entered web/app/api from OTHER programs while this branch was frozen, and are therefore not part of the Access backlog `ratchet.max_pending` bounds. The effective assertion is `pending - inherited <= max_pending`, so the program-owned backlog stays ratcheted at its committed ceiling and the ceiling is NOT raised. Every entry must still exist, still be exported, and still be `pending`: a deleted route, a removed method, or a handler that has since been classified `declared` or `none` FAILS until it is removed from this list. The list may only shrink. Nothing here asserts anything about a handler's authorization - these are W-15 backlog items awaiting OD-7 exactly like every other `pending` entry, and none of them is exempt from it. Shape follows the sibling gate scripts/checkServiceClientPrincipal.mjs, whose `baseline` list is the same idea for the same backlog. 2026-08-19, OD-2 reconciliation: merging current origin/staging brought five handlers this table had never seen. Three are participant token routes and took the settled `none` classification of their fourteen siblings rather than being seeded pending. The two on app/api/admin/communications/ingress-routes are Communications' and are enumerated here — gated by requireAdminOrgContextLight, an admission helper, consulting no catalog capability, exactly like the seventeen before them. The ceiling was NOT raised to absorb them. 2026-08-20, post-merge staging repair: the Communications lane merged app/api/communications/unsubscribe between this census's last run and the PR #475 merge, so staging's build failed on an undeclared route. Enumerated here rather than classified `none`: it is gated by an HMAC-signed recipient token, which is plausibly the same 'the credential is in the request' doctrine as the public-form family, but no sibling carries a settled review for signed unsubscribe tokens and this census does not assert another program's authorization model on inference. The ceiling was NOT raised.",
@@ -276,7 +276,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION in the commercial catalogue. Was ungated; the DELETE beside it carries a role gate, which is a separate authority question this slice does not answer."
       }
     },
     "app/api/admin/addons/route.ts": {
@@ -284,7 +287,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION in the commercial catalogue. Was ungated; the DELETE beside it carries a role gate, which is a separate authority question this slice does not answer."
       }
     },
     "app/api/admin/agent/v0/queue-definition/route.ts": {
@@ -676,10 +682,16 @@
     },
     "app/api/admin/commercial/addons/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/addons/route.ts": {
@@ -687,7 +699,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/billing-cadences/route.ts": {
@@ -697,10 +712,16 @@
     },
     "app/api/admin/commercial/categories/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/categories/route.ts": {
@@ -708,15 +729,24 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/deposits/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/deposits/route.ts": {
@@ -724,20 +754,32 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/execution/preview/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "requireFinancialsCapability",
+        "reason": "A POST by HTTP method and a READ by consequence: it computes a prospective result and persists nothing, so the truthful owner is the Financials read key. Gating it on write would deny a legitimate viewer a calculation; leaving it open would expose an organization's pricing to anyone with a login."
       }
     },
     "app/api/admin/commercial/fees/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/fees/route.ts": {
@@ -745,15 +787,24 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/policies/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/policies/route.ts": {
@@ -761,15 +812,24 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/products/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/products/route.ts": {
@@ -777,15 +837,24 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/revenue-categories/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/revenue-categories/route.ts": {
@@ -793,15 +862,24 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/tuition-rates/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/tuition-rates/route.ts": {
@@ -809,7 +887,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/communication-scheduled-sends/[id]/route.ts": {
@@ -1691,12 +1772,18 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/financial/charge-templates/simulate/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "requireFinancialsCapability",
+        "reason": "A POST by HTTP method and a READ by consequence: it computes a prospective result and persists nothing, so the truthful owner is the Financials read key. Gating it on write would deny a legitimate viewer a calculation; leaving it open would expose an organization's pricing to anyone with a login."
       }
     },
     "app/api/admin/financial/consumption/obligations/route.ts": {
@@ -1704,12 +1791,18 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/financial/consumption/simulate/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "requireFinancialsCapability",
+        "reason": "A POST by HTTP method and a READ by consequence: it computes a prospective result and persists nothing, so the truthful owner is the Financials read key. Gating it on write would deny a legitimate viewer a calculation; leaving it open would expose an organization's pricing to anyone with a login."
       }
     },
     "app/api/admin/financial/gl-config/route.ts": {
@@ -1722,7 +1815,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/financial/rate-config/route.ts": {
@@ -1732,17 +1828,26 @@
     },
     "app/api/admin/financial/rate-plans/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/financial/rate-rules/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/financial/seed-demo/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/financial/services/route.ts": {
@@ -1750,7 +1855,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/financials/accounts/[id]/route.ts": {
@@ -2886,7 +2994,10 @@
     },
     "app/api/admin/payments/[id]/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.post",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Changes money TRUTH rather than the rules that produce it, so it takes the posting key the schedules and jobs money operations already use. Deliberately NOT fin.write: configuring a rate and executing a payment are different consequences and are separately grantable."
       }
     },
     "app/api/admin/payments/route.ts": {
@@ -2896,7 +3007,10 @@
     },
     "app/api/admin/payments/run/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.post",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Changes money TRUTH rather than the rules that produce it, so it takes the posting key the schedules and jobs money operations already use. Deliberately NOT fin.write: configuring a rate and executing a payment are different consequences and are separately grantable."
       }
     },
     "app/api/admin/person-child-relationships/[id]/roles/[roleKey]/route.ts": {
@@ -3108,7 +3222,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. Was ungated: the file's DELETE carries a role gate, so a file-level reading of authority reported this PATCH as role-gated when nothing guarded it at all."
       }
     },
     "app/api/admin/pricing-dimension-values/route.ts": {
@@ -3116,7 +3233,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing-dimensions/[id]/route.ts": {
@@ -3124,7 +3244,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. Was ungated: the file's DELETE carries a role gate, so a file-level reading of authority reported this PATCH as role-gated when nothing guarded it at all."
       }
     },
     "app/api/admin/pricing-dimensions/route.ts": {
@@ -3132,7 +3255,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing-modes/[id]/route.ts": {
@@ -3140,7 +3266,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. Was ungated: the file's DELETE carries a role gate, so a file-level reading of authority reported this PATCH as role-gated when nothing guarded it at all."
       }
     },
     "app/api/admin/pricing-modes/route.ts": {
@@ -3148,12 +3277,18 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing/first-clean-prices/[id]/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing/first-clean-prices/route.ts": {
@@ -3161,12 +3296,18 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing/matrix/[id]/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing/matrix/route.ts": {
@@ -3174,7 +3315,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing/options/route.ts": {
@@ -3184,7 +3328,10 @@
     },
     "app/api/admin/pricing/recurring-prices/[id]/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing/recurring-prices/route.ts": {
@@ -3192,7 +3339,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/processing/cases/[caseId]/approve/route.ts": {
@@ -3674,7 +3824,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION in the commercial catalogue. Was ungated; the DELETE beside it carries a role gate, which is a separate authority question this slice does not answer."
       }
     },
     "app/api/admin/service-offerings/route.ts": {
@@ -3682,7 +3835,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION in the commercial catalogue. Was ungated; the DELETE beside it carries a role gate, which is a separate authority question this slice does not answer."
       }
     },
     "app/api/admin/service-plan-templates/[id]/route.ts": {
@@ -3690,7 +3846,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION in the commercial catalogue. Was ungated; the DELETE beside it carries a role gate, which is a separate authority question this slice does not answer."
       }
     },
     "app/api/admin/service-plan-templates/route.ts": {
@@ -3698,7 +3857,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION in the commercial catalogue. Was ungated; the DELETE beside it carries a role gate, which is a separate authority question this slice does not answer."
       }
     },
     "app/api/admin/settings/users-roles/members/route.ts": {
