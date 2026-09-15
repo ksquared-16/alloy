@@ -246,6 +246,7 @@ export default function OpportunityFocusPanelBody({
                 perspective,
                 stageWorkRuntime: commitCritical.stageWorkRuntime,
                 publishedStageInputs: commitCritical.publishedStageInputs,
+                operationalProjection: commitCritical.operationalProjection,
                 situation: commitCritical.situation,
                 primaryAction: commitCritical.primaryAction,
                 subjectIdentityTruth: commitCritical.subjectIdentityTruth,

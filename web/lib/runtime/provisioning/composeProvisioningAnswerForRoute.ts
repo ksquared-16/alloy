@@ -21,6 +21,7 @@ import {
 } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import { resolveWorkUnitRouteIdentity } from "@/lib/admin/resolveWorkUnitRouteIdentity";
 import { parseCardFocusAspect } from "@/lib/runtime/kernel/attentionCardFocus";
+import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
 
 export type RouteProvisioningResult =
     | { ok: true; answer: ProvisioningAnswer }
@@ -77,6 +78,19 @@ export async function composeProvisioningAnswerForRoute(input: {
         // persisted. Without the actor the rows reach the queue with no image and fall back to
         // initials for children who do have a photo (R-019).
         documentActor: documentActorFromAdminGate(gate),
+        /*
+         * THE SAME VERDICT THE BROWSER WOULD HAVE REACHED.
+         *
+         * `useAdminAuth` computes `hasPortalAdminMutateAccess(roleKeys)` from this same gate, and the
+         * operational projections read it — an outcome cannot be completed without edit access. The
+         * server now projects, so the server must state it, and it states it from the gate rather
+         * than re-deriving so the two answers cannot drift apart.
+         *
+         * A later Settlement may NARROW this for a closed record (`status_can_mutate` on the drawer
+         * VM). That narrowing is unchanged by this migration: at commit the browser used
+         * `authCanMutate` too, because the drawer VM has not arrived yet.
+         */
+        canMutate: hasPortalAdminMutateAccess(gate.roleKeys ?? []),
         workUnitSlug,
         requestedWorkViewId,
         requestedSubjectId: input.requestedSubjectId,

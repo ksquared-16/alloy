@@ -5,6 +5,7 @@ import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opport
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
+import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import type { OperationalSummaryRiskHint } from "@/lib/ai/enrichmentContracts";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import type {
@@ -162,6 +163,13 @@ export type OpportunityDrawerViewModel = {
         stage_work_runtime: StageWorkRuntimeProjection | null;
         /** Published builder stage config for Current Work (operating plan + catalog + field rules). */
         published_stage_inputs?: PublishedStageInputsForCurrentWork | null;
+        /**
+         * The server's operational projection for this subject, settled frame.
+         *
+         * The same contract the provisioning answer carries at commit, produced by the same server
+         * chokepoint — so the browser switching transport frames cannot change projection authority.
+         */
+        operational_projection?: FocusPanelOperationalProjection | null;
         /**
          * Deferred-load state for the Current Work region. When absent (legacy / full compose that
          * resolved inline) consumers fall back to `stage_work_runtime` presence. When `pending` the

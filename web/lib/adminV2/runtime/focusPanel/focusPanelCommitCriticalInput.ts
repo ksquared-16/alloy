@@ -1,4 +1,5 @@
 import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
+import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
@@ -10,6 +11,8 @@ export type FocusPanelCommitCriticalInput = {
     statusKey: string | null;
     stageWorkRuntime: StageWorkRuntimeProjection | null;
     publishedStageInputs: PublishedStageInputsForCurrentWork | null;
+    /** The server's operational projection for this subject, commit frame. */
+    operationalProjection?: FocusPanelOperationalProjection | null;
     situation: { stageKey: string; stageLabel: string; purpose: string | null } | null;
     primaryAction: { actionRef: string; label: string } | null;
     /**
