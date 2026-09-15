@@ -20,7 +20,7 @@ import { isManagedSlot } from "./managed-slots.mjs";
 // cycle survives today only by accident of hoisting order.
 import { LANE_BOOTSTRAP_CONTRACT_VERSION, laneBootstrapStamp } from "./lane-bootstrap-contract.mjs";
 import { instructionBaselineVersion } from "./agent-configuration.mjs";
-import { stateRoot } from "./runtime-roots.mjs";
+import { gatewayStateRoot } from "./runtime-roots.mjs";
 
 export const DEVELOPMENT_LANE_SCHEMA = "vacilando.development_lane.v1";
 export const DURABLE_LANE_ID_RE = /^lane_[a-f0-9]{12}$/;
@@ -35,7 +35,21 @@ export const WORK_CLASS_RUNTIME_SELF = "runtime_self";
 export const RUNTIME_SELF_RESOURCE_PRIORITY = -10;
 
 function runtimeRoot() {
-  return stateRoot();
+  /*
+   * THE GATEWAY ROOT, NOT ITS PARENT -- and S3 got this backwards at first.
+   *
+   * This reads `<root>/vacilando/development-lanes.json`, so the root it wants
+   * is the one that CONTAINS `vacilando/`, which is the Gateway's. S3 mapped it
+   * to `stateRoot()` because the old expression's FALLBACK named the parent --
+   * but that fallback was the latent half of the two-depth defect, right only
+   * when the variable was unset. On this host the variable is set to the child,
+   * so the old code landed correctly and the "fix" moved it one level up.
+   *
+   * The live Gateway reported ZERO LANES. `durableLanesEnabled()` three lines
+   * below is the tell that was there all along: it tests that the configured
+   * root ends in `/gateway`.
+   */
+  return gatewayStateRoot();
 }
 
 export function durableLanesEnabled() {

@@ -378,7 +378,7 @@ try {
   const VA = await import("./lib/vacilando/validation-admission.mjs");
   const claims = VA.readClaimStore({}).claims || [];
   const unbrokered = VR.classifyUnbrokered(workloads, { claims });
-  const bypassPath = join(stateRoot(),
+  const bypassPath = join(gatewayStateRoot(),
     "vacilando", "validation-bypass", "events.jsonl");
   if (existsSync(bypassPath)) {
     // Bounded: only today's tail matters for a health verdict.

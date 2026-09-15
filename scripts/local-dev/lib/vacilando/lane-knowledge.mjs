@@ -60,7 +60,8 @@ export const LANE_KNOWLEDGE_SCHEMA = "vacilando.lane_knowledge.v1";
  * between two stores that is not theirs to know about.
  */
 function runtimeRoot() {
-  return stateRoot();
+  // `<root>/vacilando/...`: the Gateway's root, not its parent. See development-lane.
+  return gatewayStateRoot();
 }
 
 /**
