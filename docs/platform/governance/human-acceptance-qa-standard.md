@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-15
+supersedes: []
+---
+
 # Human acceptance QA — the platform standard
 
 **Status:** approved directionally by the Director, Thread 11A Repair Pass 3.

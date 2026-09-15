@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-09-15
+supersedes: []
+---
+
 # Payment setup and the payer model
 
 **Status:** census complete; non-provider model productized (Thread 11A Repair Pass 3).
