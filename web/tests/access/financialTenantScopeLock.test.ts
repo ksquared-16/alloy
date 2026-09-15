@@ -22,38 +22,39 @@
  * product disposition is recorded separately as LEGACY_PRICING_SURFACE_DEBT.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { globSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const webRoot = resolve(__dirname, "../..");
 
 /** The audited Financials mutation surface. Bounded on purpose — this is not a repository-wide scan. */
 const SURFACE = [
-    "app/api/admin/commercial/**/route.ts",
-    "app/api/admin/financial/**/route.ts",
-    "app/api/admin/financials/**/route.ts",
-    "app/api/admin/pricing/**/route.ts",
-    "app/api/admin/pricing-dimensions/**/route.ts",
-    "app/api/admin/pricing-dimension-values/**/route.ts",
-    "app/api/admin/pricing-modes/**/route.ts",
-    "app/api/admin/payments/**/route.ts",
+    "app/api/admin/commercial",
+    "app/api/admin/financial",
+    "app/api/admin/financials",
+    "app/api/admin/pricing",
+    "app/api/admin/pricing-dimensions",
+    "app/api/admin/pricing-dimension-values",
+    "app/api/admin/pricing-modes",
+    "app/api/admin/payments",
 ];
 
-/**
- * Tables with no tenant column in their lineage. Platform-global reference data, so "constrain the
- * organization" has no meaning for them. Adding a table here is a claim that it has NO org_id; if one
- * is ever added, this list is wrong and the entry must go.
- */
 const GLOBAL_BY_DESIGN = new Set(["pricing_first_clean_prices", "pricing_recurring_prices"]);
 
 const MUTATION = /\.(update|delete|upsert|insert)\(/;
 
 function files(): string[] {
     const out: string[] = [];
-    for (const pattern of SURFACE) {
-        for (const f of globSync(pattern, { cwd: webRoot })) out.push(join(webRoot, f));
-    }
+    const walk = (dir: string) => {
+        let entries: string[];
+        try { entries = readdirSync(dir); } catch { return; }
+        for (const entry of entries) {
+            const full = join(dir, entry);
+            if (statSync(full).isDirectory()) walk(full);
+            else if (entry === "route.ts") out.push(full);
+        }
+    };
+    for (const rel of SURFACE) walk(join(webRoot, rel));
     return [...new Set(out)];
 }
 

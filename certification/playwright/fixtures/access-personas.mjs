@@ -139,6 +139,7 @@ export const CUSTOM = {
     sjPoster: "mcert_sj_poster",
     sjTitular: "mcert_sj_titular",
     sjFinWrite: "mcert_sj_finwrite",
+    finAdjuster: "mcert_fin_adjuster",
 
     /*
      * ── CONFIGURATION: THE SENSITIVITY SPLIT ──
@@ -221,6 +222,7 @@ export const P = {
     sjScheduler:    { id: "c0000000-0000-4000-8000-00000000d024", email: "cert.sjscheduler@northwind.invalid",   role: CUSTOM.sjScheduler },
     sjJobber:       { id: "c0000000-0000-4000-8000-00000000d025", email: "cert.sjjobber@northwind.invalid",      role: CUSTOM.sjJobber },
     sjPoster:       { id: "c0000000-0000-4000-8000-00000000d026", email: "cert.sjposter@northwind.invalid",      role: CUSTOM.sjPoster },
+    finAdjuster:    { id: "c0000000-0000-4000-8000-00000000d045", email: "cert.finadjust@northwind.invalid",     role: CUSTOM.finAdjuster },
     sjTitular:      { id: "c0000000-0000-4000-8000-00000000d027", email: "cert.sjtitular@northwind.invalid",     role: CUSTOM.sjTitular },
     sjFinWrite:     { id: "c0000000-0000-4000-8000-00000000d028", email: "cert.sjfinwrite@northwind.invalid",    role: CUSTOM.sjFinWrite },
 
@@ -294,6 +296,7 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.sjScheduler, role_label: "Schedule coordinator", description: "Manages schedules. Posts no money.",                is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.sjJobber,    role_label: "Job coordinator",      description: "Manages jobs. Raises no charges.",                  is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.sjPoster,    role_label: "Financial poster",     description: "Posts receipts, payouts, journals and charges.",    is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.finAdjuster, role_label: "Financial adjuster", description: "Holds fin.adjust and nothing else in Financials.", is_system: false, is_active: true },
         /* The label is the trap. It holds nothing. */
         { org_id: ORG, role_key: CUSTOM.sjTitular,   role_label: "Admin",                description: "Named Admin, granted no schedule, job or posting authority.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.sjFinWrite,  role_label: "Financials manager",   description: "Holds fin.write, as ops does. Not a posting authority.",      is_system: false, is_active: true },
@@ -348,6 +351,8 @@ export async function setup() {
         [CUSTOM.sjScheduler, ["portal.access", "scheduling.write"]],
         [CUSTOM.sjJobber, ["portal.access", "ops.jobs.write"]],
         [CUSTOM.sjPoster, ["portal.access", "fin.post"]],
+        /* fin.adjust alone — the reduction family, deliberately without fin.write. */
+        [CUSTOM.finAdjuster, ["portal.access", "fin.adjust"]],
         [CUSTOM.sjTitular, ["portal.access"]],
         [CUSTOM.sjFinWrite, ["portal.access", "fin.write", "fin.read"]],
 
