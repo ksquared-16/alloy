@@ -21,7 +21,7 @@
  * cannot keep, so the test for adding one is a read seam, not an ambition.
  *
  *   Overview    the landing: money-related figures from the registered Financials metric pack
- *   Accounts    households carrying posted money, from the position cohort
+ *   Accounts    every household that HAS a financial account — eligible subjects joined to position
  *   Charges     draft charges waiting to be posted, and the path to acting on them
  *   Payments    money in, and money in that is not settling anything
  *   Subsidy     expected funding, submitted-claim suppression, and unresolved variance

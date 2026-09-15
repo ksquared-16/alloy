@@ -257,6 +257,16 @@ export async function readNavigation(
 export function checkAccountState(check: AccountStateCheck, s: SubjectSnapshot, vmExtras: VmExtras): boolean {
     switch (check) {
         case "is_financially_addressable":
+            /*
+             * THE ACCOUNT RESOLVING IS THE WHOLE TEST.
+             *
+             * This used to also require a billable child, which quietly made an enrolment agreement
+             * the price of being a financial subject — on the harness whose first scenario is "a
+             * household with no money is still a financial subject". The canonical account reader
+             * says the opposite in as many words, so the precondition now says what it means.
+             */
+            return s.resolved;
+        case "has_billable_enrollment":
             return s.resolved && s.billableChildren.length > 0;
         case "has_posted_obligation":
             return vmExtras.hasLiveObligation;
