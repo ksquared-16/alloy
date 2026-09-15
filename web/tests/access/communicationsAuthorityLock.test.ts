@@ -37,6 +37,7 @@ const CAPABILITY_SYMBOLS = [
     "COMMUNICATIONS_TEMPLATES_MANAGE",
     "COMMUNICATIONS_PROVIDER_CONFIGURE",
     "COMMUNICATIONS_BULK_SEND",
+    "COMMUNICATIONS_ASSIGN",
 ] as const;
 type CapabilitySymbol = (typeof CAPABILITY_SYMBOLS)[number];
 
@@ -54,16 +55,6 @@ const METHODS = ["GET", "POST", "PATCH", "PUT", "DELETE"] as const;
  * number is lowered deliberately — which is a decision someone has to make in the open.
  */
 const EXEMPT: Record<string, { classification: string; evidence: RegExp[] }> = {
-    /*
-     * Assignment is not a Communications authority. It decides who owns a piece of work, and the
-     * same unresolved question governs work items, cases and jobs — see
-     * docs/platform/governance/assignments-authority-model-debt.md. What bounds it meanwhile is
-     * that it is dark, and that it can neither send nor alter a message.
-     */
-    "app/api/admin/communications/conversations/[id]/assign/route.ts": {
-        classification: "BLOCKED_DECISION — ASSIGNMENTS_AUTHORITY_MODEL_DEBT",
-        evidence: [/ASSIGNMENTS_AUTHORITY_MODEL_DEBT/, /isCommsV2FlagEnabled\("comms_v2_assignment"\)/],
-    },
     /*
      * The four token bearers. These have no session to resolve a capability from — the caller is
      * Twilio, Resend, or a family clicking a link in an email — so their authority is cryptographic
@@ -93,8 +84,14 @@ const EXEMPT: Record<string, { classification: string; evidence: RegExp[] }> = {
     },
 };
 
-/** Asserted exactly, so the exception list cannot grow without a deliberate edit here. */
-const ALLOWED_EXEMPT_COUNT = 5;
+/**
+ * Asserted exactly, so the exception list cannot grow without a deliberate edit here.
+ *
+ * 5 until Assignments Authority Model V1 gave conversation assignment a truthful owner. It was the
+ * single BLOCKED_DECISION entry; `communications.assign` replaced the exemption with a capability,
+ * so the list shrank — which is the only direction it may move.
+ */
+const ALLOWED_EXEMPT_COUNT = 4;
 
 /**
  * NON-VACUITY FLOOR. A classifier that silently stops matching passes every assertion below it
@@ -179,7 +176,7 @@ describe("RL-11 — the Communications surface names its authority", () => {
         expect(ambiguous).toEqual([]);
     });
 
-    it("uses all five capabilities, so none is seeded but dormant", () => {
+    it("uses all six capabilities, so none is seeded but dormant", () => {
         /*
          * A key that exists in `permission_definitions`, appears in the role editor and gates
          * nothing is worse than no key: it tells an administrator they have withheld an authority

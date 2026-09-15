@@ -5,81 +5,112 @@ last_reviewed: 2026-09-15
 supersedes: []
 ---
 
-# ASSIGNMENTS_AUTHORITY_MODEL_DEBT
+# Assignment authority — the model, and what is still blocked
 
-**Status:** `BLOCKED_DECISION` — open, bounded, and deliberately not closed by the Communications lock.
-**Raised:** 2026-09-15, by Communications Authority Coverage V1.
-**Owner of the decision:** Director. This is not an engineering choice.
+**Raised:** 2026-09-15 by Communications Authority Coverage V1, as a single `BLOCKED_DECISION`.
+**Resolved:** 2026-09-15 by Assignments Authority Model V1 — the *model* is decided and two product
+families are implemented. Three families remain blocked, each named below.
 
-## What is unresolved
+## The ruling
 
-Who may decide that a piece of work belongs to a particular person.
+**Assignment is an operation pattern, not an authority.**
 
-The Communications authority model gave that surface five capabilities and gated 48 of its 49 admin
-handlers on one of them. The 49th is
-`POST /api/admin/communications/conversations/[id]/assign` — claim, assign, reassign, unassign,
-route — and it still calls `requireAdminOrOps()`, which resolves portal admission and nothing else.
+Several products contain an action called "assign". That shared verb does not make them one power,
+so there is **no** `assignments.manage`, `assignments.write`, `assignments.assign`, or any other
+platform-wide assignment capability. Authority belongs to the product whose business truth changes.
 
-Its authority is therefore **unresolved, not enforced**. That is stated plainly here and in the
-route's own header rather than dressed up as a decision, because an acknowledged unfinished mutation
-is a different thing from an unknown one.
+`tests/access/assignmentAuthorityLock.test.ts` (RL-12) asserts that no such key exists in the
+capability catalog, in any migration, or anywhere under `app/api` or `lib` — in six spellings. A
+future slice that wants one must delete that list first, which is a conversation rather than a
+commit.
 
-## Why it was excluded rather than gated
+## What the census found
 
-Assignment is not a Communications authority. It decides ownership of work, and the *same* question
-governs at least four surfaces that do not share a capability vocabulary:
+Searching by business effect rather than by the word, the entire schema carries **five**
+assignee-bearing columns, belonging to four products:
 
-| Surface | The same question |
-|---|---|
-| Communications | who owns this conversation |
-| Work items | who owns this work item |
-| Cases / Processing | who owns this case |
-| Jobs / Scheduling | who is assigned this job |
+| column | product | disposition |
+|---|---|---|
+| `communication_threads.assigned_user_id` / `assigned_team_id` | Communications | **implemented** — `communications.assign` |
+| `jobs.assigned_vendor_id` | Jobs | **implemented** — existing `ops.jobs.write` |
+| `schedules.assigned_vendor_id` | Jobs | **implemented** — existing `ops.jobs.write` |
+| `operational_tasks.assigned_to_user_id` | Work | **blocked** — no `work.*` vocabulary exists |
+| `opportunities.assigned_to` | CRM | **blocked** — unresolved CRM/People model |
 
-Two bad answers were available and both were rejected:
+Two findings are worth keeping because they contradict what the names suggest:
 
-- **Invent `communications.assign`.** Settles a platform-wide model as a side effect of a
-  Communications slice, and settles it in the one place least able to see the other three surfaces.
-  The next surface then either copies a key that does not fit or invents a second, and the product
-  acquires four incompatible assignment models by accretion — which is how Communications came to
-  have five powers and two keys in the first place.
-- **Fold it into `communications.send`.** Says an operator who may answer a family may also decide
-  who answers every family. Those are different powers; the model exists because they are.
+- **There is no staff assignment in this product.** No table assigns a person to a shift, a room or
+  a schedule. The only staff-shaped table is `staff_presence_events`, which is attendance capture.
+  The Director's hypothesised `STAFF ASSIGNER` / `SCHEDULE MANAGER` split does not apply, because
+  the operation it would split does not exist. What the product schedules is **vendors**, for
+  **jobs**.
+- **`schedule_assignments` is not staff scheduling.** It binds a schedule *pattern* to an enrollment
+  agreement — which child follows which timetable. Despite the name, `scheduling.write` does not own
+  it.
 
-The doctrine this follows: *a role-title site is preferable to a falsely delegated capability if the
-authority model is unresolved.* An honest `requireAdminOrOps()` that the lock names and the
-certification asserts is safer than a confident capability that encodes the wrong model everywhere.
+Deliberately **not** treated as assignment: `financial_responsibility_allocations.assigned_amount_cents`
+(who owes what is Financials truth, owned by `fin.responsibility`), and the UI-layout "placement"
+tables (`action_placements`, `metric_placements`, `workspace_kpi_placement`,
+`business_process_layout_assignments`), which are Configuration and already declared under
+`layouts.manage`.
 
-## What bounds the exposure meanwhile
+## Why Communications got a new key and Jobs did not
 
-1. **It is dark.** The handler's first statement is
-   `if (!isCommsV2FlagEnabled("comms_v2_assignment")) return 404`. `comms_v2_assignment` is a
-   NON-CORE flag, so it defaults **off** and is unset in every environment. Mounted certification
-   asserts this directly: the persona holding all five Communications capabilities receives 404.
-2. **It cannot send and cannot alter a message.** It writes assignment fields on
-   `communication_threads` and one immutable `conversation_assignment_events` row.
-3. **It is named, not overlooked.** `tests/access/communicationsAuthorityLock.test.ts` carries it as
-   the single `BLOCKED_DECISION` exemption, with evidence: the exemption stops applying if either the
-   debt marker or the flag check leaves the file. It cannot be quietly widened and cannot be
-   forgotten.
+The test applied to both was the same: **does existing authority already permit the same effect?**
 
-## What would close it
+- **Jobs — yes, so no new key.** `jobs/[id]/route.ts` PATCH carries `assigned_vendor_id` in its
+  `ALLOWED_KEYS`, so an `ops.jobs.write` holder can already set the assigned vendor. A separate
+  `jobs.assign` would have withheld nothing from anyone and split for symmetry.
+- **Communications — no, and bundling would have opened an escalation path.**
+  `decideCommunicationsSendScope` checks assignment *before* site scope and returns
+  `assigned_to_actor`, deliberately, so a site-restricted operator can be handed one organization
+  conversation by name. `CONVERSATION_ASSIGNMENT_ACTIONS` includes `claim`, which assigns a thread
+  to the **actor**. Under one key, any site-restricted holder of `communications.send` could claim
+  any conversation in the organization and answer it — escaping their own site scope, one
+  conversation at a time, with nobody granting them anything.
 
-A Director decision on one question: **is assignment one authority across the platform, or one per
-surface?** Everything else follows mechanically.
+The schedule-side vendor routes are **Jobs**, not Scheduling: `scheduling.write` owns *when* a job
+happens (its PATCH allows `start_at`, `end_at`, `timezone`, `status`, `status_key`, `metadata` and
+cannot set a vendor at all), so routing assignment through it would have widened Scheduling into
+deciding who performs the work.
 
-- **One authority.** A single key — `work.assign`, say — enforced identically by Communications,
-  Work Items, Processing and Scheduling. Cheapest to reason about; requires the four surfaces to
-  agree that "assign" means the same act everywhere.
-- **One per surface.** Four keys. Honest if the surfaces genuinely differ (routing a conversation to
-  a team is arguably not the same act as scheduling a technician), and more work to keep coherent.
+## Assignment is not Access delegation
 
-Either answer is implementable. What cannot be done is to let the answer be set by whichever lane
-happens to touch an assignment route next — which is precisely what excluding this route prevents.
+Mandatory distinction, answered per family rather than by the word:
+
+Conversation assignment changes **scope**, not capabilities. `decideCommunicationsSendScope` refuses
+`no_send_permission` before it ever looks at assignment, so an assignee who lacks
+`communications.send` still cannot reply. Assignment widens which conversations a principal may act
+on; it never grants the capability. **The W-18 assignment ceiling is therefore not engaged**, and
+RL-12 asserts that no implemented assignment handler invokes it. Only Access *role* assignment
+changes capability bundles, and that already obeys the ceiling.
+
+## Still blocked, and by what
+
+| family | route | blocked by |
+|---|---|---|
+| Work | `operational-tasks` POST, `[id]` PATCH | `WORK_AUTHORITY_MODEL_DEBT` — the catalog contains no `work.*` key of any kind. Any owner would be invented, and inventing one settles the Work authority model as a side effect of an assignment slice. |
+| CRM | `opportunities/[id]` PATCH | `BLOCKED_BY_CRM_MODEL` — `assigned_to` moves inside a general record PATCH. Declaring that handler is a decision about the whole CRM record, not about assignment. |
+| Enrollment operational | `child-placements` POST, `schedule-assignments` POST | `ENROLLMENT_PLACEMENT_AUTHORITY_DEBT` — `enrollment.*` holds only `pricing.override` and `requirement_exception.manage`; no placement vocabulary exists. |
+
+Each is carried by name in RL-12's `ASSIGNMENTS` registry with its reason, and that list is
+shrink-only.
+
+## The flag is not the boundary
+
+`comms_v2_assignment` was the only effective boundary on conversation assignment: the handler's
+first statement returned 404 when it was off, and `requireAdminOrOps()` — portal admission — was all
+that stood behind it when it was on.
+
+It is now gated on `communications.assign` whether the flag is on or off. The flag stays because
+rollout is a product decision, and it remains **OFF** in every real environment: authorization is
+fixed, product readiness is a separate question and was not assessed here. Certification enables it
+in `web/.env.certification.local` only, so the capability can actually be exercised — with the flag
+off every persona would see 404 and the matrix would prove nothing.
 
 ## Do not
 
-- Do not gate this route on a Communications capability to make the lock's exemption list shorter.
-  The exemption is the honest record; a wrong gate is not an improvement on it.
-- Do not enable `comms_v2_assignment` in any environment before the decision is made. The flag is
-  the only thing currently standing between this handler and any principal who can enter the portal.
+- Do not create a generic assignment capability to shorten RL-12's blocked list.
+- Do not gate an assignment route on a capability from another product because the verb matches.
+- Do not invoke the W-18 delegation ceiling for operational assignment.
+- Do not enable `comms_v2_assignment` as a *security* change; that work is done.
