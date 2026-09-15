@@ -30,6 +30,8 @@ import {
 
 type CacheState = {
     doc: LayoutDoc | null;
+    /** Published record identity this slot holds — `id` + `version` together, never version alone. */
+    id: string | null;
     /** Published version this slot holds, so a publish announcing the SAME version need not refetch. */
     version: number | null;
     promise: Promise<LayoutDoc | null> | null;
@@ -83,7 +85,7 @@ function scopeKey(ctx: FocusPanelSummaryDocContextValue): string {
 function slotFor(key: string): CacheState {
     let slot = cacheByScope.get(key);
     if (!slot) {
-        slot = { doc: null, version: null, promise: null, loaded: false, settledAt: 0 };
+        slot = { doc: null, id: null, version: null, promise: null, loaded: false, settledAt: 0 };
         cacheByScope.set(key, slot);
     }
     return slot;
@@ -114,22 +116,23 @@ function queryFor(ctx: FocusPanelSummaryDocContextValue): string {
  * operational surface teardown. A genuinely absent published doc (`ok` with `doc: null`) is a
  * different answer and is allowed to settle.
  */
-type FetchOutcome = { ok: boolean; doc: LayoutDoc | null; version: number | null };
+type FetchOutcome = { ok: boolean; doc: LayoutDoc | null; id: string | null; version: number | null };
 
 async function fetchPublishedDoc(ctx: FocusPanelSummaryDocContextValue): Promise<FetchOutcome> {
     try {
         const res = await fetch(`/api/admin/entity-layouts/focus-panel-summary${queryFor(ctx)}`);
-        if (!res.ok) return { ok: false, doc: null, version: null };
+        if (!res.ok) return { ok: false, doc: null, id: null, version: null };
         const json = (await res.json().catch(() => null)) as
-            | { published?: { doc?: LayoutDoc; version?: number } | null }
+            | { published?: { doc?: LayoutDoc; id?: string; version?: number } | null }
             | null;
         return {
             ok: true,
             doc: json?.published?.doc ?? null,
+            id: json?.published?.id ?? null,
             version: typeof json?.published?.version === "number" ? json.published.version : null,
         };
     } catch {
-        return { ok: false, doc: null, version: null };
+        return { ok: false, doc: null, id: null, version: null };
     }
 }
 
@@ -150,6 +153,7 @@ function startLoad(ctx: FocusPanelSummaryDocContextValue, key: string, slot: Cac
             return slot.doc;
         }
         slot.doc = outcome.doc;
+        slot.id = outcome.id;
         slot.version = outcome.version;
         slot.loaded = true;
         slot.settledAt = Date.now();
@@ -193,6 +197,39 @@ function invalidateForPublish(detail: { version?: number | null } | null | undef
 }
 
 /** Invalidate every scope (a publish replaces the one document every scope reads) and refetch. */
+/**
+ * The published Summary records this client currently holds, as `id:version`.
+ *
+ * Sent with a provisioning request so the answer can skip re-sending a document we already have. The
+ * SERVER decides whether that is safe by comparing against the record IT resolved for the subject's
+ * scope — this is only a claim about the client, exactly as `dept_config` is (S6-1).
+ */
+export function heldFocusPanelSummaryIdentities(): string[] {
+    const seen = new Set<string>();
+    for (const slot of cacheByScope.values()) {
+        if (slot.doc != null && slot.id && typeof slot.version === "number") {
+            seen.add(`${slot.id}:${slot.version}`);
+        }
+    }
+    // Bounded: this rides a URL that is also the provisioning coalescing key.
+    return [...seen].slice(0, 8);
+}
+
+/**
+ * The document for one published record identity, wherever we already hold it.
+ *
+ * Scope selects WHICH record applies; it does not change what a record IS. So when the answer says
+ * "you already hold record X v153" for a scope whose slot is empty, reusing X's document is exact
+ * rather than approximate — and it is what keeps an omitted document from costing a new fetch.
+ */
+function heldDocForIdentity(id: string | null, version: number | null): LayoutDoc | null {
+    if (!id || typeof version !== "number") return null;
+    for (const slot of cacheByScope.values()) {
+        if (slot.id === id && slot.version === version && slot.doc != null) return slot.doc;
+    }
+    return null;
+}
+
 function invalidateAll(): void {
     generation += 1;
     cacheByScope.clear();
@@ -335,7 +372,7 @@ export function FocusPanelSummaryDocProvider({
      * resolved-nothing-published (the code default is correct). The scope fetch still runs and, once
      * settled, replaces the seed — so a publish-event invalidation always wins over a stale seed.
      */
-    seed?: { doc: LayoutDoc | null } | null;
+    seed?: { id?: string | null; version?: number | null; doc?: LayoutDoc | null } | null;
     children: ReactNode;
 }) {
     const ctx = useMemo<FocusPanelSummaryDocContextValue>(
@@ -344,13 +381,20 @@ export function FocusPanelSummaryDocProvider({
     );
     const fetched = usePublishedFocusPanelSummaryDocForScope(enabled, ctx);
     const value = useMemo(() => {
+        /*
+         * S5-3. The seed may now carry IDENTITY WITHOUT A DOCUMENT, because the answer established
+         * we already hold that published record. Resolving it from what we hold is the whole point:
+         * treating a doc-less seed as "loaded" would render an empty Summary, and refetching it
+         * would just move the 27 KB from one request to another.
+         */
+        const seedDoc = seed?.doc ?? heldDocForIdentity(seed?.id ?? null, seed?.version ?? null);
         // While the scope fetch is in flight, the commit-critical seed is the answer.
-        if (!fetched.loaded && seed) return { doc: seed.doc, loaded: true };
+        if (!fetched.loaded && seedDoc != null) return { doc: seedDoc, loaded: true };
         // If the fetch settles empty but provisioning already resolved a published doc,
         // keep the seed — dropping it would strip nestedSurfaces (Household/Children)
         // and reflow composition away from the committed publish.
-        if (fetched.loaded && fetched.doc == null && seed?.doc != null) {
-            return { doc: seed.doc, loaded: true };
+        if (fetched.loaded && fetched.doc == null && seedDoc != null) {
+            return { doc: seedDoc, loaded: true };
         }
         return fetched;
     }, [fetched, seed]);

@@ -260,7 +260,20 @@ export type SubjectIdentityTruth = Record<string, unknown>;
  * RESOLVED: nothing published applies, the code default IS the composition. A null projection means
  * unresolved (read failed) — the client degrades to its own fetch, never an operational failure.
  */
-export type FocusPanelSummaryDocProjection = { doc: LayoutDoc | null };
+/**
+ * The published Summary composition the answer carries, WITH its identity.
+ *
+ * `doc` is omitted when the client stated it already holds this exact published record — see
+ * `summaryConfigHeldIds` on the request. Identity is the authoritative `entity_layouts` row
+ * (`id` + `version`), never a hash of the document and never a version on its own: two different
+ * published records can share a version number, and a scope that resolves a different record must
+ * never be served another record's document.
+ */
+export type FocusPanelSummaryDocProjection = {
+    id: string | null;
+    version: number | null;
+    doc?: LayoutDoc | null;
+};
 
 export type ProvisioningAnswer =
     | {
@@ -569,6 +582,8 @@ export type ProvisioningRequest = {
      * subject's department metadata differ from the live record the client holds.
      */
     departmentConfigHeldIds?: readonly string[];
+    /** S5-3 — published Summary records the CLIENT states it already holds, as `id:version`. */
+    summaryConfigHeldIds?: readonly string[];
 };
 
 /**
@@ -1920,13 +1935,34 @@ export async function composeWorkUnitProvisioningAnswer(
     // client doc provider sends (`workViewId` + committed stage; Business Process / status stay
     // wildcard), so the carried doc and any later client re-fetch resolve identically.
     const summaryLayoutRows = await focusPanelSummaryRowsPromise;
+    const summaryRecord = summaryLayoutRows
+        ? resolvePublishedFocusPanelSummaryRecord(summaryLayoutRows, {
+              workViewId: contextFrame.workViewId,
+              stageKey: stage.key,
+          })
+        : null;
+    /*
+     * S5-3. The client may state which published Summary records it already holds; the answer drops
+     * the duplicate document only when the record IT RESOLVED for this scope is one of them.
+     *
+     * The comparison is `id:version`, and the server does it against its own resolution — a claim is
+     * never taken as permission. That is what makes scope safe without the client having to know the
+     * scope: a subject whose stage resolves a DIFFERENT published variant yields a different id, so
+     * the claim cannot match and the document is included.
+     *
+     * Unlike department metadata (S6-1) there is no pin here to refuse: the Summary resolver reads
+     * published org layouts and selects a variant, with no governing-revision overlay, so the record
+     * the client holds and the record this answer resolved are the same kind of thing.
+     */
+    const summaryHeldByClient =
+        summaryRecord != null
+        && typeof summaryRecord.version === "number"
+        && (req.summaryConfigHeldIds ?? []).includes(`${summaryRecord.id}:${summaryRecord.version}`);
     const focusPanelSummaryDoc: FocusPanelSummaryDocProjection | null = summaryLayoutRows
         ? {
-              doc:
-                  resolvePublishedFocusPanelSummaryRecord(summaryLayoutRows, {
-                      workViewId: contextFrame.workViewId,
-                      stageKey: stage.key,
-                  })?.doc ?? null,
+              id: summaryRecord?.id ?? null,
+              version: typeof summaryRecord?.version === "number" ? summaryRecord.version : null,
+              ...(summaryHeldByClient ? {} : { doc: summaryRecord?.doc ?? null }),
           }
         : null;
 

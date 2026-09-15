@@ -14,6 +14,7 @@
  */
 import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import { retainedDepartmentConfigIds } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
+import { heldFocusPanelSummaryIdentities } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
 
 /**
@@ -47,6 +48,7 @@ export function provisioningAnswerUrl(
      * differ from the live department configuration.
      */
     departmentConfigHeldIds?: readonly string[],
+    summaryConfigHeldIds?: readonly string[],
 ): string {
     const q = new URLSearchParams();
     if (lens) q.set("work_view_id", lens);
@@ -58,6 +60,7 @@ export function provisioningAnswerUrl(
     if (cohort === "none") q.set("cohort", "none");
     if (cohort === "none" && aspect) q.set("aspect", aspect);
     if (departmentConfigHeldIds && departmentConfigHeldIds.length) q.set("dept_config", [...departmentConfigHeldIds].sort().join(","));
+    if (summaryConfigHeldIds && summaryConfigHeldIds.length) q.set("summary_cfg", [...summaryConfigHeldIds].sort().join(","));
     const qs = q.toString();
     return `/api/admin/work-units/${encodeURIComponent(target)}/provisioning-answer${qs ? `?${qs}` : ""}`;
 }
@@ -85,6 +88,7 @@ export function prefetchWorkUnitProvisioning(
     const url = provisioningAnswerUrl(
         slug, opts.lens, opts.subject, opts.cohort, opts.aspect,
         retainedDepartmentConfigIds(),
+        heldFocusPanelSummaryIdentities(),
     );
     const now = opts.now ?? Date.now();
     const existing = cache.get(url);

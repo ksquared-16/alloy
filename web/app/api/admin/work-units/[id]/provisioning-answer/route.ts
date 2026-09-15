@@ -43,6 +43,12 @@ export async function GET(
         // malformed value means "the client stated nothing" and the answer embeds as it always has.
         // This is a CLIENT ASSERTION, never permission — the composer still decides whether this
         // subject's department configuration is actually the live one.
+        // S5-3 — `id:version` pairs, parsed strictly. Anything malformed is "stated nothing".
+        summaryConfigHeldIds: (url.get("summary_cfg") ?? "")
+            .split(",")
+            .map((v) => v.trim())
+            .filter((v) => /^[0-9a-f-]{36}:\d{1,9}$/i.test(v))
+            .slice(0, 8),
         departmentConfigHeldIds: (url.get("dept_config") ?? "")
             .split(",")
             .map((v) => v.trim())
