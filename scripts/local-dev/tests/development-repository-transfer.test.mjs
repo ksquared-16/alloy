@@ -41,6 +41,7 @@ const LIB = new URL("../lib/vacilando/", import.meta.url).pathname;
 const R = await import("../lib/vacilando/repository-registry.mjs");
 const T = await import("../lib/vacilando/repository-transfer.mjs");
 const REG = await import("../lib/vacilando/trusted-host-action-registry.mjs");
+const TH = await import("../lib/vacilando/trusted-host-actions.mjs");
 const viewModule = await import("../apps/vacilando/public/gateway-view.mjs");
 
 /* ── two throwaway repositories, registered like any other project ────────── */
@@ -582,6 +583,93 @@ test("28 — the manifest a mission approves is the same shape the UI builds", (
       mode: "copy", entries: normalized.normalized.entries,
     }),
   );
+});
+
+/* ── the LIVE governed wrapper, driven end to end ─────────────────────────── */
+
+/**
+ * Request through the real validator, then mark the record authorized on disk
+ * and drive the real wrapper.
+ *
+ * The same convention `production-apply-executor` uses: a Director approval
+ * cannot be minted inside a test, but everything after it -- dispatch, the
+ * executor branch, the capability -- is the live path, and that is the part an
+ * unrun wrapper hides.
+ */
+function authorizedActionFor(inputs, missionId) {
+  /*
+   * Named through the REGISTRY's own constant rather than the capability's
+   * re-export, so the test is bound to the key governance dispatches on. If
+   * they ever diverge, this is where it shows.
+   */
+  assert.equal(REG.ACTION_TYPES.REPOSITORY_TRANSFER_FILES, T.TRANSFER_ACTION_KEY,
+    "the capability and the registry must name the same action");
+  const req = TH.requestTrustedHostAction({
+    missionId, assignmentId: missionId.replace("msn_", "run_"),
+    actionType: REG.ACTION_TYPES.REPOSITORY_TRANSFER_FILES, inputs,
+  });
+  assert.equal(req.ok, true, `could not request: ${JSON.stringify(req).slice(0, 240)}`);
+  const file = join(ROOT, "vacilando", "trusted-host-actions", `${req.action.id}.json`);
+  const rec = JSON.parse(readFileSync(file, "utf8"));
+  rec.authorizationState = "authorized";
+  rec.authorizationId = "authz-s3a-test";
+  rec.state = "authorized";
+  rec.authorizationIdentity = { scope: missionId, actionType: T.TRANSFER_ACTION_KEY, resolved: true };
+  writeFileSync(file, JSON.stringify(rec), "utf8");
+  return req.action.id;
+}
+
+test("29 — the live dispatch wrapper runs, and actually moves the bytes", () => {
+  /*
+   * THE COVERAGE THAT CI DEMANDED, AND IT WAS RIGHT TO.
+   *
+   * Every case above exercises the capability directly. None of them had ever
+   * run the GOVERNED WRAPPER -- request, authorize, executeTrustedHostAction --
+   * and the ratchet's own words are that an unrun wrapper "is how five defects
+   * reached operator approval". My four-legs fix was found by a different gate
+   * for the same reason: the legs were individually present and had never been
+   * driven together.
+   *
+   * So this drives the real chain against the throwaway projects and asserts
+   * the bytes landed, rather than asserting that a function exists.
+   */
+  write(SRC, "wrapper/live.txt", "through the wrapper\n");
+  const entries = [{ source: "wrapper/live.txt", destination: "wrapper/live.txt" }];
+  const fingerprint = T.planFingerprint(planOf(entries));
+
+  const actionId = authorizedActionFor({
+    sourceRepositoryId: "repo_from", destinationRepositoryId: "repo_to",
+    planId: "plan_s3a_wrapper", planFingerprint: fingerprint, entries,
+  }, "msn_s3a_wrapper");
+
+  const out = TH.executeTrustedHostAction(actionId, { actor: "director", nowMs: Date.now(), grant: { grant_id: "g_s3a" } });
+  assert.equal(out.ok, true, `the live wrapper refused: ${JSON.stringify(out).slice(0, 240)}`);
+  assert.equal(readFileSync(join(DST, "wrapper/live.txt"), "utf8"), "through the wrapper\n",
+    "the wrapper reported success without moving the bytes");
+
+  // The evidence the action contract promised is the evidence it recorded.
+  // The wrapper returns { ok, action, result }; the evidence the contract
+  // promised is the completed action's result.
+  const ev = out.result || {};
+  assert.equal(ev.source_project, "prj_from", `evidence names the wrong source: ${JSON.stringify(ev).slice(0, 200)}`);
+  assert.equal(ev.destination_project, "prj_to");
+  assert.equal(ev.plan_fingerprint, fingerprint);
+  assert.match(String(ev.git_effect || ""), /no commit, push, merge or promotion/);
+});
+
+test("30 — the live wrapper refuses a plan edited after approval", () => {
+  // The same chain, with the manifest widened after the fingerprint was bound.
+  write(SRC, "wrapper/extra.txt", "snuck in\n");
+  const approved = [{ source: "wrapper/live.txt", destination: "wrapper/replay.txt" }];
+  const fingerprint = T.planFingerprint(planOf(approved));
+  const actionId = authorizedActionFor({
+    sourceRepositoryId: "repo_from", destinationRepositoryId: "repo_to",
+    planId: "plan_s3a_wrapper2", planFingerprint: fingerprint,
+    entries: [...approved, { source: "wrapper/extra.txt", destination: "wrapper/extra.txt" }],
+  }, "msn_s3a_wrapper2");
+  const out = TH.executeTrustedHostAction(actionId, { actor: "director", nowMs: Date.now(), grant: { grant_id: "g_s3a" } });
+  assert.equal(out.ok, false, "a widened manifest must not execute through the wrapper either");
+  assert.ok(!existsSync(join(DST, "wrapper/extra.txt")), "and nothing from it was written");
 });
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
