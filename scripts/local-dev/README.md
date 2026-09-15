@@ -339,6 +339,29 @@ Six permanent slots are supported. **Coding is parallel by default.** Orchestrat
 
 **Dev servers** are slot-owned (`metadata` → `pids/<worktree>.pid` → port). `alloy-dev-start` refuses duplicates; `alloy-dev-stop` / sprint finish stop only the owned PID/tree — never `pkill node` / `pkill next`.
 
+#### BUILD BEFORE RESTART — a lane serving QA
+
+A lane serving a **known-good production QA build** (`alloy-dev-start --production`) is serving a
+human. Source changing is not a reason to stop it. The order is:
+
+1. obtain host admission — a build is class B and the broker decides when, not you;
+2. run the build and let it **succeed**;
+3. verify the artifact is complete — `web/.next/BUILD_ID` exists;
+4. only then cut over: `alloy-dev-stop` immediately followed by `alloy-dev-start --production`.
+
+**A refused, cancelled or killed build must leave the running QA environment untouched.** Stopping
+first inverts that: `next start` refuses a `.next` with no `BUILD_ID`, so a build that never lands
+takes QA down with it and nothing can bring it back until the host admits one.
+
+This is not hypothetical. On 2026-09-15 slot 4 stopped its QA server expecting a build that then
+could not run — the host was at 3.5% free memory against a 4.8 GB reserve, roughly thirty attempts
+were refused or `SIGKILL`ed, and a cancelled build left `.next` without a `BUILD_ID`. QA was down
+for the rest of the session over a change that was already committed and typechecked.
+
+Nothing new is needed to obey this: `vac run build` is the admission owner and `alloy-dev-start`
+already refuses to start without an artifact (`production build missing: …/.next`). The rule is the
+ORDER, not a mechanism. Do not add a deployment system to enforce it.
+
 **Entry points for class C:** `alloy-validate … playwright` (and `command -- … playwright …`) acquire `browser-certification` before launch. Capture scripts should use `lib/browser-cert-lease.mjs` (`withBrowserCertLease`). Override: `ALLOY_BROWSER_CERT_OVERRIDE=i-accept-parallel-browser-certification`.
 
 New local-dev tooling must be evaluated for **multiplicative cost across N slots** before it ships on the hot path.
