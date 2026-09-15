@@ -562,6 +562,13 @@ export type ProvisioningRequest = {
     requestedSubjectEntityType?: string | null;
     /** Contextual only — the card + row inside the panel (the kernel's ASPECT). */
     requestedAspect?: { cardKey: string; itemId: string | null } | null;
+    /**
+     * S6-1 — the CLIENT states it already holds this department's published configuration.
+     *
+     * A claim, not permission: only this composer knows whether a pinned revision makes this
+     * subject's department metadata differ from the live record the client holds.
+     */
+    departmentConfigHeldIds?: readonly string[];
 };
 
 /**
@@ -1693,6 +1700,8 @@ export async function composeWorkUnitProvisioningAnswer(
                   stageKey: stage.key,
                   stageLabel: stage.label,
                   departmentMetadata: deptRow?.metadata,
+                  clientHoldsLiveDepartmentConfig:
+                      (req.departmentConfigHeldIds ?? []).includes(String(wuRow.department_id ?? "")),
                   customerMemberId: childSubjectRow.subjectId,
                   processInstanceId: childSubjectRow.participationId,
                   opportunityCustomerMemberId: childSubjectRow.legacyOcmId,
@@ -1706,6 +1715,8 @@ export async function composeWorkUnitProvisioningAnswer(
               stageKey: stage.key,
               stageLabel: stage.label,
               departmentMetadata: deptRow?.metadata,
+              clientHoldsLiveDepartmentConfig:
+                      (req.departmentConfigHeldIds ?? []).includes(String(wuRow.department_id ?? "")),
           }).catch(() => null /* stage-work is additive to the commit — never fail the operational answer on it */);
 
     // ── JOIN: enrichment (queue rows) + presentation + actions + stage-work, all kicked off above. ──

@@ -5,6 +5,7 @@ import type {
     StageWorkItemProjection,
     StageWorkRuntimeProjection,
 } from "@/lib/lifecycle/stageWorkRuntimeTypes";
+import { retainedDepartmentConfigForDepartment } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
 import { workIntentProjectionForStageWorkItem } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import { completionOutcomesForPicker } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
@@ -712,7 +713,24 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
                   templateOverlay: templateConfig,
                   readinessProjection,
                   runtimeCompletedKeys: configCompletedKeys,
-                  departmentMetadata: context.publishedStageInputs?.departmentMetadata ?? null,
+                  /*
+                   * S6-1 PRECEDENCE — EMBEDDED WINS, retained fills the gap.
+                   *
+                   * This is deliberately the opposite of "canonical owner first", and the lifecycle
+                   * is why. The answer only omits this when the server has established that THIS
+                   * subject's department configuration IS the live record. When it is present it may
+                   * be pin-composed (D-96: live metadata with `lifecycle_builder_v1` replaced by a
+                   * governing revision's payload), and letting the retained live copy override that
+                   * would silently defeat the pin — the exact regression the pin exists to prevent.
+                   *
+                   * So: embedded is authoritative for the subject; retained answers only when the
+                   * answer deliberately left the gap. One value wins; they are never merged.
+                   */
+                  departmentMetadata:
+                      context.publishedStageInputs?.departmentMetadata
+                      ?? retainedDepartmentConfigForDepartment(
+                          context.publishedStageInputs?.departmentMetadataRef?.departmentId ?? null,
+                      ),
               })
             : undefined;
 

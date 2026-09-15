@@ -13,6 +13,7 @@
  * K2 fetch normally.
  */
 import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import { retainedDepartmentConfigIds } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
 import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
 
 /**
@@ -34,6 +35,18 @@ export function provisioningAnswerUrl(
     subject?: string | null,
     cohort?: "none" | null,
     aspect?: string | null,
+    /**
+     * S6-1. The client asserting that it already holds usable published department configuration for
+     * this Work Unit's department, so the answer need not re-send ~30 KB of it.
+     *
+     * It rides the URL ON PURPOSE. This string is the coalescing key, the intent-warm key and the
+     * consume-once key, and the answer's CONTENT depends on this flag — so it has to be part of the
+     * identity, or a "client holds it" answer could later be served to a client that does not. The
+     * assertion is only ever a claim about the CLIENT; whether omitting is actually safe is decided
+     * server-side, because only the server knows if a pinned revision makes this subject's copy
+     * differ from the live department configuration.
+     */
+    departmentConfigHeldIds?: readonly string[],
 ): string {
     const q = new URLSearchParams();
     if (lens) q.set("work_view_id", lens);
@@ -44,6 +57,7 @@ export function provisioningAnswerUrl(
     // aspect rides along for the same reason: it is what the contextual answer composes its card from.
     if (cohort === "none") q.set("cohort", "none");
     if (cohort === "none" && aspect) q.set("aspect", aspect);
+    if (departmentConfigHeldIds && departmentConfigHeldIds.length) q.set("dept_config", [...departmentConfigHeldIds].sort().join(","));
     const qs = q.toString();
     return `/api/admin/work-units/${encodeURIComponent(target)}/provisioning-answer${qs ? `?${qs}` : ""}`;
 }
@@ -68,7 +82,10 @@ export function prefetchWorkUnitProvisioning(
 ): Promise<ProvisioningAnswer> | null {
     const slug = target.trim();
     if (!slug || typeof window === "undefined") return null;
-    const url = provisioningAnswerUrl(slug, opts.lens, opts.subject, opts.cohort, opts.aspect);
+    const url = provisioningAnswerUrl(
+        slug, opts.lens, opts.subject, opts.cohort, opts.aspect,
+        retainedDepartmentConfigIds(),
+    );
     const now = opts.now ?? Date.now();
     const existing = cache.get(url);
     if (existing && isFresh(existing, now)) {

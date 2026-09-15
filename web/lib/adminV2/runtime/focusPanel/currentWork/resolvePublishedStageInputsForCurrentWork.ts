@@ -51,7 +51,15 @@ export type PublishedStageInputsForCurrentWork = {
     fieldRules: LifecycleStageFieldRules | null;
     processKey: string | null;
     stageKey: string;
-    departmentMetadata: Record<string, unknown>;
+    /** Null when the client already holds the live department configuration (S6-1). */
+    departmentMetadata: Record<string, unknown> | null;
+    /**
+     * Present ONLY when `departmentMetadata` was omitted: the department whose live configuration the
+     * client said it holds. It is what makes the omission scope-exact — the composition resolves the
+     * retained copy for THIS department or falls back, and can never be fooled into using another
+     * department's configuration.
+     */
+    departmentMetadataRef?: { departmentId: string } | null;
     processStages: Array<{ key: string; label: string }>;
     processTracks?: ProcessTracksV1 | null;
     operatorGuidance?: string | null;
@@ -104,6 +112,18 @@ export function resolvePublishedStageInputsForCurrentWork(params: {
      * branch answers first and those legacy keys are never consulted.
      */
     governingBuilderPayload?: Record<string, unknown> | null;
+    /**
+     * S6-1 — the client asserted it already holds this department's published configuration.
+     *
+     * It is only an INPUT to the decision. The copy may be dropped from the answer solely when this
+     * subject's department metadata IS the live department record — i.e. when no pinned revision is
+     * governing. With a pin (D-96) the value carried here is the live metadata with
+     * `lifecycle_builder_v1` REPLACED by the pinned payload, so substituting the client's live copy
+     * would silently defeat the pin. That case keeps embedding, whatever the client claims.
+     */
+    clientHoldsLiveDepartmentConfig?: boolean;
+    /** The department this resolution belongs to — carried back when the copy is omitted. */
+    departmentId?: string | null;
 }): PublishedStageInputsForCurrentWork | null {
     const stageKey = trimOrNull(params.builderStageKey);
     if (!stageKey) return null;
@@ -134,6 +154,8 @@ export function resolvePublishedStageInputsForCurrentWork(params: {
     const departmentMetadata = placement
         ? { ...liveMetadata, [LIFECYCLE_BUILDER_METADATA_KEY]: placement.payload }
         : liveMetadata;
+
+    const omitDepartmentMetadata = params.clientHoldsLiveDepartmentConfig === true && !placement;
 
     const { plan, processKey, stageRecord } = resolveEffectiveStageOperatingPlan({
         departmentMetadata,
@@ -179,7 +201,10 @@ export function resolvePublishedStageInputsForCurrentWork(params: {
         fieldRules: fieldRules.rules,
         processKey: processKey ?? process?.key ?? null,
         stageKey,
-        departmentMetadata,
+        // Omitted only when the client holds it AND it is genuinely the live record (no pin).
+        departmentMetadata: omitDepartmentMetadata ? null : departmentMetadata,
+        departmentMetadataRef:
+            omitDepartmentMetadata && params.departmentId ? { departmentId: params.departmentId } : null,
         processStages,
         processTracks: process?.tracks_v1 ?? null,
         operatorGuidance: stage?.operator_guidance?.trim() || null,
