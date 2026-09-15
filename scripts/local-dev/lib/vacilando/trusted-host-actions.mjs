@@ -3052,6 +3052,16 @@ export function executeInstallToolkitTrustedHostAction(action, { actor = "direct
     // object, exactly as it does for the provider ceiling. Raw names are kept
     // as fallbacks for a request that skipped normalization.
     out = executeToolkitInstall({
+      /*
+       * THE FOURTH LEG. A governed action has four: the registry definition, the
+       * mode, the dispatch branch, and THIS — the executor's call site. The S6
+       * bootstrap wired three, and a LIVE generation-2 cutover executed as a
+       * generation-1 no-op that reported success: the validator normalized the
+       * artifact identity, the dispatcher branched on it, and this line forwarded
+       * one field, so `artifact` arrived null.
+       */
+      artifact: i.artifact ?? null,
+      expectedCurrent: i.expectedCurrent ?? i.expected_current_identity ?? null,
       expectedStagingSha: i.expectedStagingSha ?? i.expected_staging_sha ?? null,
     });
   } catch (e) {
