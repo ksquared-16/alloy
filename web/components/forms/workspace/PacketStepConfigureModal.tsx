@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
 
-import PrimaryButton from "@/components/PrimaryButton";
 import ProcessingAlloyDialog from "@/app/adminV2/pos/ProcessingAlloyDialog";
 import { CLASSIFICATION_KEY_LABELS, OPERATOR_CLASSIFIED_KEYS } from "@/lib/pos/processingCase/classification/operatorCorrection";
 import { openGovernedDocument } from "@/lib/forms/packets/openGovernedDocument";
-import { opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
+import { opActionLinkAccent, opPrimaryActionButton } from "@/lib/operational/ui/operationalVisualTokens";
 
 /**
  * How an obligation was decided, and where to change it.
@@ -78,66 +77,71 @@ export const STEP_TYPE_LABEL: Readonly<Record<ConfigurableStep["kind"], string>>
 });
 
 /**
- * The two questions every obligation must answer, in the same shape for all three kinds.
+ * HIERARCHY, NOT DOCUMENTATION IN EVERY CONTROL.
  *
- * "What determines completion?" and "what data, if any, is extracted or mapped?" were the questions
- * an administrator could not answer from this screen — and the gap was widest on the document
- * obligations, where it is easy to assume that filing a document means reading it. Every line below
- * is traced to something actually persisted; nothing here is aspirational.
+ * Every setting used to carry its own justifying paragraph, so a drawer with six settings was six
+ * paragraphs tall and scrolled past the bottom of the screen. The paragraphs were TRUE, which is
+ * why they are not deleted — they moved behind `help`, one disclosure per field, opened by the
+ * person who is actually asking "why".
+ *
+ * A field is therefore a label and a VALUE. What it means is one click away, and only for whoever
+ * wants it.
  */
-function CompletionContract({ completeWhen, retains }: { completeWhen: string; retains: string[] }) {
-    return (
-        <>
-            <Row label="What makes this complete">
-                <p className={opMetadata} data-testid="packet-step-complete-when">
-                    {completeWhen}
-                </p>
-            </Row>
-            <Row label="What Alloy retains or updates">
-                <ul className="space-y-0.5" data-testid="packet-step-retains">
-                    {retains.map((line) => (
-                        <li key={line} className="text-[11px] leading-snug text-alloy-midnight/70">
-                            <span aria-hidden className="mr-1 text-alloy-midnight/30">
-                                •
-                            </span>
-                            {line}
-                        </li>
-                    ))}
-                </ul>
-            </Row>
-        </>
-    );
-}
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+const valueClass = "text-sm text-alloy-midnight";
+const helpTextClass = "text-[11px] leading-snug text-alloy-midnight/65";
+
+function Field({
+    label,
+    children,
+    help,
+}: {
+    label: string;
+    children: React.ReactNode;
+    help?: React.ReactNode;
+}) {
     return (
-        <div className="border-t border-alloy-midnight/[0.07] pt-3 first:border-t-0 first:pt-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">{label}</p>
-            <div className="mt-1">{children}</div>
+        <div className="grid grid-cols-[104px_minmax(0,1fr)] items-start gap-x-3 border-t border-alloy-midnight/[0.07] py-2.5 first:border-t-0 first:pt-0">
+            <p className="pt-0.5 text-[11px] font-medium text-alloy-midnight/50">{label}</p>
+            <div className="min-w-0">
+                {children}
+                {help ? (
+                    <details className="mt-1 group">
+                        <summary className="cursor-pointer list-none text-[11px] font-medium text-alloy-midnight/40 hover:text-alloy-bend-pine">
+                            <span className="group-open:hidden">Why</span>
+                            <span className="hidden group-open:inline">Hide</span>
+                        </summary>
+                        <div className="mt-1 space-y-1">
+                            {typeof help === "string" ? <p className={helpTextClass}>{help}</p> : help}
+                        </div>
+                    </details>
+                ) : null}
+            </div>
         </div>
     );
 }
 
-/** Behaviour the platform owns. Described truthfully; never offered as a toggle a runtime ignores. */
-function ManagedByAlloy({ lines }: { lines: string[] }) {
+/** What Alloy actually keeps. Traced to something persisted; nothing here is aspirational. */
+function Retains({ lines }: { lines: readonly string[] }) {
     return (
-        <div className="rounded-lg border border-alloy-midnight/10 bg-alloy-stone/[0.06] px-2.5 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
-                Managed by Alloy
-            </p>
-            <ul className="mt-1 space-y-0.5">
-                {lines.map((l) => (
-                    <li key={l} className="text-[11px] leading-snug text-alloy-midnight/70">
-                        <span aria-hidden className="mr-1 text-alloy-bend-pine">
-                            ✓
-                        </span>
-                        {l}
-                    </li>
-                ))}
-            </ul>
-        </div>
+        <ul className="space-y-0.5" data-testid="packet-step-retains">
+            {lines.map((line) => (
+                <li key={line} className={helpTextClass}>
+                    <span aria-hidden className="mr-1 text-alloy-midnight/30">
+                        •
+                    </span>
+                    {line}
+                </li>
+            ))}
+        </ul>
     );
 }
+
+const FORM_RETAINS = Object.freeze([
+    "Answers connected to Alloy update the child or family record",
+    "Answers that are not connected stay with this Form's submission",
+    "The submission itself is kept as evidence of what was answered",
+]);
 
 export function PacketStepConfigureModal({
     open,
@@ -226,18 +230,32 @@ export function PacketStepConfigureModal({
             open={open}
             onClose={onClose}
             title={step.label || COMPLETION_METHOD[step.kind]}
-            subtitle={`${STEP_TYPE_LABEL[step.kind]} · configured here`}
+            subtitle={COMPLETION_METHOD[step.kind]}
             testId="packet-step-configure"
+            footer={
+                <>
+                    <button
+                        type="button"
+                        className="text-sm font-medium text-alloy-midnight/60"
+                        onClick={onClose}
+                        disabled={busy}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        className={opPrimaryActionButton}
+                        disabled={busy}
+                        data-testid="packet-step-configure-save"
+                        onClick={() => void save()}
+                    >
+                        {busy ? "Saving…" : "Save configuration"}
+                    </button>
+                </>
+            }
         >
-            <div className="space-y-3" data-testid="packet-step-configure-body">
-                <Row label="Completion method">
-                    <p className="text-sm font-medium text-alloy-midnight">{COMPLETION_METHOD[step.kind]}</p>
-                    <p className={clsx("mt-0.5", opMutedMeta)}>
-                        A step&rsquo;s completion method cannot be changed. Remove this step and add the kind you want.
-                    </p>
-                </Row>
-
-                <Row label="Step name the family sees">
+            <div className="space-y-0.5" data-testid="packet-step-configure-body">
+                <Field label="Step name">
                     <input
                         className={inputClass}
                         value={label}
@@ -245,51 +263,46 @@ export function PacketStepConfigureModal({
                         data-testid="packet-step-configure-label"
                         onChange={(e) => setLabel(e.target.value)}
                     />
-                </Row>
+                </Field>
 
                 {step.kind === "form" ? (
                     <>
-                        <Row label="Where its questions live">
-                            <p className="text-sm font-medium text-alloy-midnight">
-                                {step.form_name ?? "A Form"} — <span className="font-normal">configured in Forms</span>
-                            </p>
-                            <p className={clsx("mt-0.5", opMutedMeta)}>
-                                The Form owns its questions, which are required, their answer types, and whether each
-                                answer updates an Alloy record or stays with the form. This packet owns only that the
-                                Form is included, its order, and the name above.
-                            </p>
+                        <Field
+                            label="Questions"
+                            help="The Form owns its questions, which are required, their answer types, and whether each answer updates an Alloy record or stays with the form. This packet owns only that the Form is included, its order, and the step name above."
+                        >
+                            <p className={valueClass}>{step.form_name ?? "A Form"}</p>
                             {step.form_definition_id && onManageForm ? (
                                 <button
                                     type="button"
-                                    className="mt-2 text-xs font-semibold text-alloy-blue hover:underline"
+                                    className={clsx(opActionLinkAccent, "mt-1")}
                                     data-testid="packet-step-configure-manage-form"
                                     onClick={() => onManageForm(step.form_definition_id!, step.form_name)}
                                 >
-                                    Manage form →
+                                    Manage form
                                 </button>
                             ) : null}
-                        </Row>
-                        <ManagedByAlloy
-                            lines={[
-                                "Uses information Alloy already knows, and asks only for what is missing",
-                                "Families can correct existing information before they finish",
-                                "Guided conversationally, with a review before completion",
-                            ]}
-                        />
-                        <CompletionContract
-                            completeWhen="The family has answered the questions this Form requires, and submitted it."
-                            retains={[
-                                "Answers connected to Alloy update the child or family record",
-                                "Answers that are not connected stay with this Form's submission",
-                                "The submission itself is kept as evidence of what was answered",
-                            ]}
-                        />
+                        </Field>
+                        <Field
+                            label="Alloy handles"
+                            help="Guided conversationally, with a review before completion. Families can correct existing information before they finish."
+                        >
+                            <p className={valueClass}>Reuses known information · asks only for what is missing</p>
+                        </Field>
+                        <Field label="Complete when">
+                            <p className={valueClass} data-testid="packet-step-complete-when">
+                                The family has answered the questions this Form requires, and submitted it.
+                            </p>
+                        </Field>
+                        <Field label="Data" help={<Retains lines={FORM_RETAINS} />}>
+                            <p className={valueClass}>Connected answers update the record · the rest stay with the form</p>
+                        </Field>
                     </>
                 ) : null}
 
                 {step.kind === "document_acknowledgment" ? (
                     <>
-                        <Row label="Document the family reads">
+                        <Field label="Document">
                             <select
                                 className={inputClass}
                                 value={ackDocumentId}
@@ -307,25 +320,24 @@ export function PacketStepConfigureModal({
                             {step.acknowledgment_document_id ? (
                                 <button
                                     type="button"
-                                    className="mt-2 text-xs font-semibold text-alloy-blue hover:underline"
+                                    className={clsx(opActionLinkAccent, "mt-1")}
                                     data-testid="packet-step-configure-view-document"
                                     onClick={async () => {
                                         const opened = await openGovernedDocument(step.acknowledgment_document_id!);
                                         if (!opened.ok) setErr(opened.message);
                                     }}
                                 >
-                                    View document →
+                                    View document
                                 </button>
                             ) : null}
-                        </Row>
-                        <Row label="Acknowledgment">
-                            <p className="text-sm font-medium text-alloy-midnight">Required</p>
-                            <p className={clsx("mt-0.5", opMutedMeta)}>
-                                Agreeing is what this obligation is. A read-and-acknowledge step with no acknowledgment
-                                would be a document nobody is asked to accept.
-                            </p>
-                        </Row>
-                        <Row label="Signature">
+                        </Field>
+                        <Field
+                            label="Acknowledgment"
+                            help="Agreeing is what this obligation is. A read-and-acknowledge step with no acknowledgment would be a document nobody is asked to accept."
+                        >
+                            <p className={valueClass}>Required</p>
+                        </Field>
+                        <Field label="Signature">
                             <label className="flex items-center gap-2 text-sm text-alloy-midnight">
                                 <input
                                     type="checkbox"
@@ -335,44 +347,49 @@ export function PacketStepConfigureModal({
                                     data-testid="packet-step-configure-signature"
                                     onChange={(e) => setRequiresSignature(e.target.checked)}
                                 />
-                                Require a signature
+                                Required
                             </label>
-                        </Row>
-                        <CompletionContract
-                            completeWhen={
-                                requiresSignature
+                        </Field>
+                        <Field label="Complete when">
+                            <p className={valueClass} data-testid="packet-step-complete-when">
+                                {requiresSignature
                                     ? "The family acknowledges this document and provides the required signature."
-                                    : "The family acknowledges this document."
-                            }
-                            retains={[
-                                "Which document was acknowledged",
-                                "The acknowledgment, with the time it was given",
-                                ...(requiresSignature
-                                    ? ["The signature — the name typed or the signature drawn — and a signed PDF of what was agreed"]
-                                    : []),
-                                "The packet session it belongs to, so the acknowledgment is attributable",
-                                "No child or household fields are updated from this document",
-                            ]}
-                        />
-                        <Row label="Data mapping">
-                            {/*
-                             * The question this answers is "how is the data getting mapped?", and the honest
-                             * answer is that it is not. An attestation obligation records that a document was
-                             * agreed to; nothing reads the Handbook's text into Alloy.
-                             */}
-                            <p className="text-sm font-medium text-alloy-midnight">None</p>
-                            <p className={clsx("mt-0.5", opMutedMeta)}>
-                                This step records acknowledgment of the document. It does not extract or map the
-                                document&rsquo;s contents into Alloy records. The family is shown the document before
-                                acknowledging it.
+                                    : "The family acknowledges this document."}
                             </p>
-                        </Row>
+                        </Field>
+                        <Field
+                            label="Data"
+                            help={
+                                <>
+                                    <p className={helpTextClass}>
+                                        This step records acknowledgment of the document. It does not extract or map the
+                                        document&rsquo;s contents into Alloy records. The family is shown the document
+                                        before acknowledging it.
+                                    </p>
+                                    <Retains
+                                        lines={[
+                                            "Which document was acknowledged",
+                                            "The acknowledgment, with the time it was given",
+                                            ...(requiresSignature
+                                                ? ["The signature, and a signed PDF of what was agreed"]
+                                                : []),
+                                            "The packet session it belongs to, so the acknowledgment is attributable",
+                                        ]}
+                                    />
+                                </>
+                            }
+                        >
+                            <p className={valueClass}>Attestation only · no record fields updated</p>
+                        </Field>
                     </>
                 ) : null}
 
                 {step.kind === "document_upload" ? (
                     <>
-                        <Row label="Filed as">
+                        <Field
+                            label="Filed as"
+                            help="This decides what the uploaded document is filed as, so staff and the rest of Alloy can find it by what it is rather than by its filename."
+                        >
                             <select
                                 className={inputClass}
                                 value={documentTypeKey}
@@ -387,50 +404,45 @@ export function PacketStepConfigureModal({
                                     </option>
                                 ))}
                             </select>
-                            <p className={clsx("mt-0.5", opMutedMeta)}>
-                                This decides what the uploaded document is filed as, so staff and the rest of Alloy can
-                                find it by what it is rather than by its filename.
+                        </Field>
+                        <Field
+                            label="Alloy handles"
+                            help="Every step in a packet must be completed before the packet is. Requiredness belongs to the packet as a whole, not to this step, so there is no toggle here."
+                        >
+                            <p className={valueClass}>Family can view or replace their file before finishing</p>
+                        </Field>
+                        <Field label="Complete when">
+                            <p className={valueClass} data-testid="packet-step-complete-when">
+                                The family provides the document. Receiving it is what completes this step.
                             </p>
-                        </Row>
-                        <Row label="Required">
-                            <p className={opMetadata}>
-                                Every step in a packet must be completed before the packet is. Requiredness belongs to
-                                the packet as a whole, not to this step, so there is no toggle here.
+                        </Field>
+                        <Field
+                            label="Data"
+                            help={
+                                <>
+                                    <p className={helpTextClass}>
+                                        Alloy keeps the document as evidence. Information from it is not extracted into
+                                        the child&rsquo;s Health record, and filing a document under a type is not the
+                                        same as reading what is inside it.
+                                    </p>
+                                    <Retains
+                                        lines={[
+                                            `The document itself, filed as ${documentClassificationLabelFor(documentTypeKey)} against the child`,
+                                            "Which packet session and step it arrived from",
+                                            "The most recent file, if the family replaced an earlier one",
+                                        ]}
+                                    />
+                                </>
+                            }
+                        >
+                            <p className={valueClass}>
+                                Document kept as evidence · nothing extracted from it
                             </p>
-                        </Row>
-                        <ManagedByAlloy
-                            lines={[
-                                "The family uploads their existing document",
-                                "They can view what they sent",
-                                "They can replace it before they finish",
-                            ]}
-                        />
-                        <CompletionContract
-                            completeWhen="The family provides the document. Receiving it is what completes this step."
-                            retains={[
-                                `The document itself, filed as ${documentClassificationLabelFor(documentTypeKey)} against the child`,
-                                "Which packet session and step it arrived from",
-                                "The most recent file, if the family replaced an earlier one",
-                            ]}
-                        />
-                        <Row label="Information extraction">
-                            {/*
-                             * Classification is not extraction, and the difference matters: knowing a document IS
-                             * an immunization record tells Alloy nothing about which doses a child received.
-                             * Structured dose truth is Health's to own (D-H5), and claiming it here would be the
-                             * most expensive kind of wrong.
-                             */}
-                            <p className="text-sm font-medium text-alloy-midnight">Not configured</p>
-                            <p className={clsx("mt-0.5", opMutedMeta)}>
-                                Alloy keeps the document as evidence. Information from it is not extracted into the
-                                child&rsquo;s Health record, and filing a document under a type is not the same as
-                                reading what is inside it.
-                            </p>
-                        </Row>
+                        </Field>
                     </>
                 ) : null}
 
-                <Row label="What the family is told">
+                <Field label="Family instructions">
                     <textarea
                         className={clsx(inputClass, "min-h-[64px]")}
                         value={instructions}
@@ -439,22 +451,13 @@ export function PacketStepConfigureModal({
                         data-testid="packet-step-configure-instructions"
                         onChange={(e) => setInstructions(e.target.value)}
                     />
-                </Row>
+                </Field>
 
                 {err ? (
-                    <p className="text-[12px] font-medium text-alloy-ember" data-testid="packet-step-configure-error">
+                    <p className="pt-2 text-[12px] font-medium text-alloy-ember" data-testid="packet-step-configure-error">
                         {err}
                     </p>
                 ) : null}
-
-                <div className="flex justify-end gap-2 pt-1">
-                    <button type="button" className="text-sm font-medium text-alloy-midnight/60" onClick={onClose} disabled={busy}>
-                        Cancel
-                    </button>
-                    <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={() => void save()}>
-                        {busy ? "Saving…" : "Save configuration"}
-                    </PrimaryButton>
-                </div>
             </div>
         </ProcessingAlloyDialog>
     );

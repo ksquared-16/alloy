@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from "react";
 import clsx from "clsx";
-import PrimaryButton from "@/components/PrimaryButton";
 import { CLASSIFICATION_KEY_LABELS, OPERATOR_CLASSIFIED_KEYS } from "@/lib/pos/processingCase/classification/operatorCorrection";
 import { PACKET_STEP_KINDS, PACKET_STEP_KIND_LABELS, type PacketStepKind } from "@/lib/forms/packets/packetStepKind";
-import { opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
+import { opMetadata, opMutedMeta, opPrimaryActionButton } from "@/lib/operational/ui/operationalVisualTokens";
 
 /**
  * "What do you need from the family?" — the step-authoring vocabulary, in the administrator's words.
@@ -219,9 +218,9 @@ export function PacketAddStepChooser({
                 {docsError ? <p className="mt-2 text-sm text-alloy-ember">{docsError}</p> : null}
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                    <PrimaryButton
+                    <button
                         type="button"
-                        className="!px-3 !py-2 text-sm"
+                        className={opPrimaryActionButton}
                         disabled={busy || incomplete}
                         data-testid="packet-document-step-add"
                         onClick={() => {
@@ -229,7 +228,7 @@ export function PacketAddStepChooser({
                         }}
                     >
                         Add this step
-                    </PrimaryButton>
+                    </button>
                     <button
                         type="button"
                         className="text-sm font-semibold text-alloy-midnight/60"
@@ -245,15 +244,15 @@ export function PacketAddStepChooser({
 
     if (!open) {
         return (
-            <PrimaryButton
+            <button
                 type="button"
-                className="!px-3 !py-2 text-sm"
+                className={opPrimaryActionButton}
                 disabled={busy}
                 data-testid="packet-add-step"
                 onClick={() => setOpen(true)}
             >
                 Add step
-            </PrimaryButton>
+            </button>
         );
     }
 

@@ -1,18 +1,24 @@
 "use client";
 
+import { useState } from "react";
 import clsx from "clsx";
-import PrimaryButton from "@/components/PrimaryButton";
 import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
 import type { PacketStepFormOption } from "@/lib/admin/forms/packetDefinitionStepForms";
 import { applyRecentFormToSteps } from "@/lib/admin/forms/packetStepRecentFormPlacement";
 import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
 import { packetStepReadinessLabel } from "@/lib/forms/packets/packetOrchestrationPresentation";
 import { PACKET_STEP_KIND_LABELS, type PacketStepKind } from "@/lib/forms/packets/packetStepKind";
-import { STEP_TYPE_LABEL } from "@/components/forms/workspace/PacketStepConfigureModal";
 import { openGovernedDocument } from "@/lib/forms/packets/openGovernedDocument";
 import { CLASSIFICATION_KEY_LABELS } from "@/lib/pos/processingCase/classification/operatorCorrection";
 import { PacketAddStepChooser, type NewDocumentStep } from "@/components/forms/workspace/PacketAddStepChooser";
-import { opGroupedRowInner, opGroupedSurface, opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
+import {
+    opActionLinkAccent,
+    opGroupedRowInner,
+    opGroupedSurface,
+    opMetadata,
+    opMutedMeta,
+    opPrimaryActionButton,
+} from "@/lib/operational/ui/operationalVisualTokens";
 
 /** What one obligation actually does, derived server-side from the configuration. */
 export type StepExperienceCard = {
@@ -73,6 +79,45 @@ type Props = {
     onRemoveStep: (index: number) => void;
 };
 
+/**
+ * The ONE line under a step's name.
+ *
+ * The facts are already computed server-side for each obligation; the row's job is to show the few
+ * that let an operator recognise the step, not to restate the whole contract. A form leads with its
+ * shape ("80 questions · 65 required · …"); a document obligation leads with what it asks for and
+ * what becomes of it. The rest is Configure's to explain.
+ */
+function stepSummary(
+    kind: PacketStepKind,
+    draft: StepDraft,
+    card: StepExperienceCard | undefined,
+): string {
+    /*
+     * The row already NAMES the obligation, so a fact that only restates it is a word the operator
+     * reads twice and learns nothing from: "Upload a document · Family sends in a document · Filed
+     * as Immunization record". The type label keeps the naming; the summary keeps the specifics.
+     */
+    const kindLabel = PACKET_STEP_KIND_LABELS[kind].toLowerCase();
+    const restatesKind = (f: string) => {
+        const t = f.trim().toLowerCase();
+        return t === kindLabel || t === "family sends in a document";
+    };
+    const facts = (card?.facts ?? []).filter((f) => !restatesKind(f));
+    if (facts.length) return facts.join(" · ");
+    if (kind === "document_upload") {
+        const label =
+            CLASSIFICATION_KEY_LABELS[(draft.document_type_key ?? "") as keyof typeof CLASSIFICATION_KEY_LABELS] ??
+            "an enrollment document";
+        return `Filed as ${label}`;
+    }
+    if (kind === "document_acknowledgment") {
+        const doc = draft.acknowledgment_document_title?.trim();
+        const signature = draft.requires_signature ? "Acknowledgment + signature required" : "Acknowledgment required";
+        return doc ? `${doc} · ${signature}` : signature;
+    }
+    return draft.form_definition_id ? "Form selected" : "No form selected yet";
+}
+
 /** Ordered step composition editor for packet builder (OW-4). */
 export function PacketStepCompositionEditor({
     steps,
@@ -89,6 +134,14 @@ export function PacketStepCompositionEditor({
     onMoveStep,
     onRemoveStep,
 }: Props) {
+    /*
+     * Composition controls are EDIT-ON-DEMAND.
+     *
+     * A configured step does not need its form dropdown and label input on screen forever; showing
+     * them permanently is what turned three rows into a form-filling page. A row that has not
+     * chosen a form yet still opens with them, because that row has nothing else to say.
+     */
+    const [editingRow, setEditingRow] = useState<number | null>(null);
     return (
         <div data-testid="packet-step-composition">
             <p className={opMetadata}>
@@ -103,201 +156,209 @@ export function PacketStepCompositionEditor({
                     const kind: PacketStepKind = s.kind ?? "form";
                     const isDocumentStep = kind !== "form";
                     const card = experience?.find((c) => c.sequence === idx);
+                    const summary = stepSummary(kind, s, card);
+                    const composing = !isDocumentStep && (editingRow === idx || !s.form_definition_id);
                     return (
                         <li key={s.packet_item_id ?? `draft-${idx}-${s.form_definition_id || "empty"}`} className={opGroupedRowInner}>
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">
-                                    Step {idx + 1}
-                                </span>
-                                <span className="text-xs font-medium text-alloy-midnight/60">
-                                    {PACKET_STEP_KIND_LABELS[kind]}
-                                </span>
-                                {/*
-                                 * WHAT KIND OF THING THIS IS, beside what the family does with it.
-                                 *
-                                 * "Why don't I see the other forms in Studio → Forms?" is the right
-                                 * question to ask of a screen that called all three steps forms. Two
-                                 * of them are not Forms and never were; saying so here is what makes
-                                 * the Forms list's contents correct rather than mysterious.
-                                 */}
+                            {/*
+                              * ONE ROW, ONE SCAN.
+                              *
+                              * This row used to carry a step number, an obligation label, a second
+                              * implementation-flavoured type badge, a readiness badge, a form
+                              * dropdown, a label input, a facts line AND a paragraph of behaviour —
+                              * for every step, permanently. Three obligations became a page of
+                              * prose the operator had to reread on every visit to find one verb.
+                              *
+                              * What stays here is what answers "what is this, and is it ready".
+                              * Everything that explains HOW it behaves now lives behind Configure,
+                              * which is the surface whose whole job is to explain it.
+                              */}
+                            <div className="flex items-start gap-3">
                                 <span
-                                    className="rounded-full border border-alloy-midnight/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/50"
-                                    data-testid={`packet-step-type-${idx}`}
+                                    className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-alloy-midnight/[0.06] text-[11px] font-semibold text-alloy-midnight/60"
+                                    aria-hidden
                                 >
-                                    {STEP_TYPE_LABEL[kind]}
+                                    {idx + 1}
                                 </span>
-                                {!isDocumentStep && s.form_definition_id ?
-                                    <FormsReviewBadge
-                                        label={packetStepReadinessLabel(published)}
-                                        tone={published ? "success" : "warning"}
-                                    />
-                                :   null}
-                            </div>
-                            {isDocumentStep ?
-                                /*
-                                 * A document step shows WHAT IT ASKS FOR, and never the form that
-                                 * executes it. Offering a Form dropdown here would put the adapter
-                                 * back into the administrator's model, which is the one thing this
-                                 * vocabulary exists to prevent.
-                                 */
-                                <div className="mt-2">
-                                    <p className="text-sm font-medium text-alloy-midnight">
-                                        {s.step_label?.trim() || selected?.name || "Untitled step"}
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                                        <p className="min-w-0 text-sm font-medium text-alloy-midnight">
+                                            {s.step_label?.trim() || selected?.name || "Untitled step"}
+                                        </p>
+                                        {/*
+                                          * ONE type treatment, in product language. "Read &
+                                          * acknowledge" and "DOCUMENT ACKNOWLEDGMENT" were two
+                                          * names for one fact, competing for the same glance.
+                                          */}
+                                        <span
+                                            className="shrink-0 text-[11px] font-medium text-alloy-midnight/50"
+                                            data-testid={`packet-step-type-${idx}`}
+                                        >
+                                            {PACKET_STEP_KIND_LABELS[kind]}
+                                        </span>
+                                    </div>
+                                    <p
+                                        className={clsx("mt-0.5", opMutedMeta)}
+                                        data-testid={`packet-step-summary-${idx}`}
+                                    >
+                                        {summary}
                                     </p>
-                                    <p className={clsx("mt-0.5", opMutedMeta)}>
-                                        {kind === "document_upload" ?
-                                            `Filed as ${CLASSIFICATION_KEY_LABELS[
-                                                (s.document_type_key ?? "") as keyof typeof CLASSIFICATION_KEY_LABELS
-                                            ] ?? "an enrollment document"}`
-                                        : s.acknowledgment_document_title ?
-                                            `Reads ${s.acknowledgment_document_title}${s.requires_signature ? ", and signs" : ""}`
-                                        :   `Reads a document${s.requires_signature ? ", and signs" : ""}`}
-                                    </p>
-                                    {kind === "document_acknowledgment" && (card?.acknowledgment_document_id || s.acknowledgment_document_id) ? (
-                                        /*
-                                         * The administrator should be able to see the document the family
-                                         * will be shown, from the step that asks for it — a signed URL to
-                                         * the real file, not a description of it.
-                                         */
+                                    {/* Status is not an action: it appears only when it needs to. */}
+                                    {!isDocumentStep && s.form_definition_id && !published ? (
+                                        <p className="mt-1">
+                                            <FormsReviewBadge label={packetStepReadinessLabel(published)} tone="warning" />
+                                        </p>
+                                    ) : null}
+
+                                    {composing ? (
+                                        <div className="mt-2 grid gap-3 lg:grid-cols-2">
+                                            <label className="space-y-1 text-sm">
+                                                <span className={opMutedMeta}>Form</span>
+                                                <select
+                                                    className={inputClass}
+                                                    value={s.form_definition_id}
+                                                    disabled={busy}
+                                                    data-testid={`packet-step-form-select-${idx}`}
+                                                    onChange={(e) => {
+                                                        const v = e.target.value;
+                                                        onStepsChange((rows) =>
+                                                            rows.map((r, j) =>
+                                                                j === idx ?
+                                                                    { ...r, form_definition_id: v, packet_item_id: undefined }
+                                                                :   r
+                                                            )
+                                                        );
+                                                    }}
+                                                >
+                                                    <option value="">Select form…</option>
+                                                    {forms.map((f) => (
+                                                        <option key={f.id} value={f.id} disabled={!f.has_published_version}>
+                                                            {f.name} {!f.has_published_version ? "(not published)" : ""}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </label>
+                                            <label className="space-y-1 text-sm">
+                                                <span className={opMutedMeta}>Step label (optional)</span>
+                                                <input
+                                                    className={inputClass}
+                                                    value={s.step_label}
+                                                    disabled={busy}
+                                                    onChange={(e) => {
+                                                        const v = e.target.value;
+                                                        onStepsChange((rows) =>
+                                                            rows.map((r, j) => (j === idx ? { ...r, step_label: v } : r))
+                                                        );
+                                                    }}
+                                                />
+                                            </label>
+                                        </div>
+                                    ) : null}
+
+                                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                        {kind === "document_acknowledgment" &&
+                                        (card?.acknowledgment_document_id || s.acknowledgment_document_id) ? (
+                                            <button
+                                                type="button"
+                                                className={opActionLinkAccent}
+                                                data-testid={`packet-step-view-document-${idx}`}
+                                                onClick={async () => {
+                                                    const id = card?.acknowledgment_document_id || s.acknowledgment_document_id;
+                                                    const opened = await openGovernedDocument(String(id));
+                                                    if (!opened.ok) window.alert(opened.message);
+                                                }}
+                                            >
+                                                View document
+                                            </button>
+                                        ) : null}
+                                        {selected && !isDocumentStep ? (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    className={opActionLinkAccent}
+                                                    data-testid={`packet-step-open-form-${idx}`}
+                                                    onClick={() =>
+                                                        dispatchAdminV2OpenProcessingModal({
+                                                            mode: "studio",
+                                                            studioTab: "forms",
+                                                            formId: selected.id,
+                                                            formName: selected.name,
+                                                        })
+                                                    }
+                                                >
+                                                    Manage form
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className={opActionLinkAccent}
+                                                    data-testid={`packet-step-preview-form-${idx}`}
+                                                    onClick={() =>
+                                                        dispatchAdminV2OpenProcessingModal({
+                                                            mode: "studio",
+                                                            studioTab: "forms",
+                                                            formId: selected.id,
+                                                            formName: selected.name,
+                                                            formMode: "preview",
+                                                        })
+                                                    }
+                                                >
+                                                    Preview
+                                                </button>
+                                            </>
+                                        ) : null}
+                                        {s.packet_item_id && onConfigureStep ? (
+                                            <button
+                                                type="button"
+                                                className={opActionLinkAccent}
+                                                data-testid={`packet-step-configure-${idx}`}
+                                                disabled={busy}
+                                                onClick={() => onConfigureStep(idx)}
+                                            >
+                                                Configure
+                                            </button>
+                                        ) : null}
+                                        {!isDocumentStep && !composing ? (
+                                            <button
+                                                type="button"
+                                                className={opActionLinkAccent}
+                                                data-testid={`packet-step-change-form-${idx}`}
+                                                disabled={busy}
+                                                onClick={() => setEditingRow(idx)}
+                                            >
+                                                Change form
+                                            </button>
+                                        ) : null}
+                                        <span aria-hidden className="text-alloy-midnight/20">
+                                            |
+                                        </span>
                                         <button
                                             type="button"
-                                            className="mt-1.5 text-xs font-semibold text-alloy-blue hover:underline"
-                                            data-testid={`packet-step-view-document-${idx}`}
-                                            onClick={async () => {
-                                                const id = card?.acknowledgment_document_id || s.acknowledgment_document_id;
-                                                const opened = await openGovernedDocument(String(id));
-                                                if (!opened.ok) window.alert(opened.message);
-                                            }}
+                                            className={opActionLinkAccent}
+                                            aria-label={`Move step ${idx + 1} up`}
+                                            disabled={busy || idx === 0}
+                                            onClick={() => onMoveStep(idx, -1)}
                                         >
-                                            View document →
+                                            ↑
                                         </button>
-                                    ) : null}
+                                        <button
+                                            type="button"
+                                            className={opActionLinkAccent}
+                                            aria-label={`Move step ${idx + 1} down`}
+                                            disabled={busy || idx >= steps.length - 1}
+                                            onClick={() => onMoveStep(idx, 1)}
+                                        >
+                                            ↓
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="text-xs font-semibold text-alloy-ember hover:underline disabled:text-alloy-midnight/30 disabled:no-underline"
+                                            disabled={busy || steps.length <= 1}
+                                            onClick={() => onRemoveStep(idx)}
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
                                 </div>
-                            :   <div className="mt-2 grid gap-3 lg:grid-cols-2">
-                                <label className="space-y-1 text-sm">
-                                    <span className={opMutedMeta}>Form</span>
-                                    <select
-                                        className={inputClass}
-                                        value={s.form_definition_id}
-                                        disabled={busy}
-                                        onChange={(e) => {
-                                            const v = e.target.value;
-                                            onStepsChange((rows) =>
-                                                rows.map((r, j) =>
-                                                    j === idx ?
-                                                        { ...r, form_definition_id: v, packet_item_id: undefined }
-                                                    :   r
-                                                )
-                                            );
-                                        }}
-                                    >
-                                        <option value="">Select form…</option>
-                                        {forms.map((f) => (
-                                            <option key={f.id} value={f.id} disabled={!f.has_published_version}>
-                                                {f.name} {!f.has_published_version ? "(not published)" : ""}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-                                <label className="space-y-1 text-sm">
-                                    <span className={opMutedMeta}>Step label (optional)</span>
-                                    <input
-                                        className={inputClass}
-                                        value={s.step_label}
-                                        disabled={busy}
-                                        onChange={(e) => {
-                                            const v = e.target.value;
-                                            onStepsChange((rows) => rows.map((r, j) => (j === idx ? { ...r, step_label: v } : r)));
-                                        }}
-                                    />
-                                </label>
-                            </div>
-                            }
-                            {card ? (
-                                <div className="mt-2" data-testid={`packet-step-experience-${idx}`}>
-                                    <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] font-medium text-alloy-midnight/70">
-                                        {card.facts.map((f, i) => (
-                                            <span key={f}>
-                                                {i > 0 ? <span className="mr-1.5 text-alloy-midnight/25">·</span> : null}
-                                                {f}
-                                            </span>
-                                        ))}
-                                    </p>
-                                    {/* What the family meets. Platform-owned behaviour, described rather than offered as a toggle. */}
-                                    <p className={clsx("mt-1.5", opMutedMeta)}>{card.behavior}</p>
-                                </div>
-                            ) : null}
-                            {selected && !isDocumentStep ?
-                                <p className="mt-2 flex flex-wrap gap-3">
-                                    {/*
-                                     * Open the FORM EDITOR, not a queue.
-                                     *
-                                     * This used to link to `${ADMIN_FORMS_UI_BASE}/<id>`, which is
-                                     * the Work-queue base — an operator clicking "open" on a step
-                                     * landed somewhere they could not edit the form. A step is a
-                                     * thing you configure, so clicking it goes to where it is
-                                     * configured.
-                                     */}
-                                    <button
-                                        type="button"
-                                        className="text-xs font-semibold text-alloy-blue hover:underline"
-                                        data-testid={`packet-step-open-form-${idx}`}
-                                        onClick={() =>
-                                            dispatchAdminV2OpenProcessingModal({
-                                                mode: "studio",
-                                                studioTab: "forms",
-                                                formId: selected.id,
-                                                formName: selected.name,
-                                            })
-                                        }
-                                    >
-                                        Manage information →
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="text-xs font-semibold text-alloy-midnight/60 hover:underline"
-                                        data-testid={`packet-step-preview-form-${idx}`}
-                                        onClick={() =>
-                                            dispatchAdminV2OpenProcessingModal({
-                                                mode: "studio",
-                                                studioTab: "forms",
-                                                formId: selected.id,
-                                                formName: selected.name,
-                                                formMode: "preview",
-                                            })
-                                        }
-                                    >
-                                        Preview form
-                                    </button>
-                                </p>
-                            :   null}
-                            <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold">
-                                {/* Every obligation is configurable from the card that describes it. */}
-                                {s.packet_item_id && onConfigureStep ? (
-                                    <button
-                                        type="button"
-                                        className="text-alloy-blue"
-                                        data-testid={`packet-step-configure-${idx}`}
-                                        disabled={busy}
-                                        onClick={() => onConfigureStep(idx)}
-                                    >
-                                        Configure
-                                    </button>
-                                ) : null}
-                                <button type="button" className="text-alloy-blue" disabled={busy || idx === 0} onClick={() => onMoveStep(idx, -1)}>
-                                    Move up
-                                </button>
-                                <button
-                                    type="button"
-                                    className="text-alloy-blue"
-                                    disabled={busy || idx >= steps.length - 1}
-                                    onClick={() => onMoveStep(idx, 1)}
-                                >
-                                    Move down
-                                </button>
-                                <button type="button" className="text-alloy-ember" disabled={busy || steps.length <= 1} onClick={() => onRemoveStep(idx)}>
-                                    Remove
-                                </button>
                             </div>
                         </li>
                     );
@@ -306,9 +367,9 @@ export function PacketStepCompositionEditor({
 
             <div className="mt-4 flex flex-wrap items-start gap-2">
                 <PacketAddStepChooser busy={busy} onAddFormStep={onAddStep} onAddDocumentStep={onAddDocumentStep} />
-                <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={onSaveSteps}>
+                <button type="button" className={opPrimaryActionButton} disabled={busy} onClick={onSaveSteps}>
                     Save steps
-                </PrimaryButton>
+                </button>
             </div>
 
             {savedStepCount > 0 ?

@@ -31,8 +31,13 @@ export type PacketExperienceVM = {
 export function PacketExperienceOverview({ vm }: { vm: PacketExperienceVM | null }) {
     if (!vm) return null;
 
+    /*
+     * `items-start`: with the family-experience restatement behind a disclosure this column is two
+     * lines tall, and a stretched grid cell turned that into a tall empty card that pushed "What
+     * families complete" down for no content at all.
+     */
     return (
-        <div className="grid gap-4 lg:grid-cols-2" data-testid="packet-experience-overview">
+        <div className="grid items-start gap-4 lg:grid-cols-2" data-testid="packet-experience-overview">
             <section className="rounded-[14px] border border-alloy-stone/20 bg-white p-4">
                 <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
                     Family experience
@@ -41,31 +46,36 @@ export function PacketExperienceOverview({ vm }: { vm: PacketExperienceVM | null
                     {vm.familyExperience.length} step{vm.familyExperience.length === 1 ? "" : "s"}, in this order
                     {vm.contentSummary ? ` — ${vm.contentSummary}` : ""}.
                 </p>
-                <ol className="mt-2 space-y-1.5" data-testid="packet-family-experience">
-                    {vm.familyExperience.map((line, i) => (
-                        <li key={line} className="flex gap-2 text-[12px] leading-snug text-alloy-midnight/80">
-                            <span className="shrink-0 font-semibold text-alloy-midnight/40">{i + 1}.</span>
-                            <span>{line}</span>
-                        </li>
-                    ))}
-                </ol>
                 {/*
-                 * Said out loud because it is the question the screen kept failing to answer: the
-                 * guided conversation is not configured here, and there is no prompt to author.
+                 * THE ORDERED LIST MOVED BEHIND A DISCLOSURE, because it is now said twice.
+                 *
+                 * "What families complete" renders the same three obligations immediately below, in
+                 * the same order, with their configuration and their verbs. Repeating them here as
+                 * prose pushed the thing an operator came to read below the fold, so the summary
+                 * line stays and the restatement — with the two paragraphs that followed it —
+                 * opens on request. Nothing was deleted; it stopped being said first.
                  */}
-                <p className={clsx("mt-3", opMutedMeta)}>
-                    Alloy guides the family through these conversationally, reuses what it already knows, lets them
-                    correct it, and asks them to review before they finish. That behaviour is managed by Alloy.
-                </p>
-                {/*
-                 * "And then what?" is the last question this screen used to leave unanswered — the
-                 * answer existed only inside the collapsed operational section, which is the wrong
-                 * place for the end of the experience it is describing.
-                 */}
-                <p className={clsx("mt-2", opMutedMeta)} data-testid="packet-after-submit">
-                    When they finish, the completed packet arrives for staff review in Processing &rsaquo; Work, with
-                    the answers, the signed acknowledgment and the uploaded document attached.
-                </p>
+                <details className="mt-2" data-testid="packet-family-experience-disclosure">
+                    <summary className="cursor-pointer list-none text-[11px] font-medium text-alloy-midnight/45 hover:text-alloy-bend-pine">
+                        What this reads like to a family
+                    </summary>
+                    <ol className="mt-2 space-y-1.5" data-testid="packet-family-experience">
+                        {vm.familyExperience.map((line, i) => (
+                            <li key={line} className="flex gap-2 text-[12px] leading-snug text-alloy-midnight/80">
+                                <span className="shrink-0 font-semibold text-alloy-midnight/40">{i + 1}.</span>
+                                <span>{line}</span>
+                            </li>
+                        ))}
+                    </ol>
+                    <p className={clsx("mt-3", opMutedMeta)}>
+                        Alloy guides the family through these conversationally, reuses what it already knows, lets them
+                        correct it, and asks them to review before they finish. That behaviour is managed by Alloy.
+                    </p>
+                    <p className={clsx("mt-2", opMutedMeta)} data-testid="packet-after-submit">
+                        When they finish, the completed packet arrives for staff review in Processing &rsaquo; Work,
+                        with the answers, the signed acknowledgment and the uploaded document attached.
+                    </p>
+                </details>
             </section>
 
             <div className="space-y-4">

@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
+
 import type { ReactNode } from "react";
 import clsx from "clsx";
+import { PacketExperiencePreview } from "@/components/forms/workspace/PacketExperiencePreview";
 import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
 import {
     TechnicalDetailDisclosure,
@@ -48,6 +51,7 @@ import {
     opOrientationSurface,
     opRegionSeparator,
     opStackPage,
+    opSecondaryActionButton,
 } from "@/lib/operational/ui/operationalVisualTokens";
 
 type SavedItem = {
@@ -137,6 +141,8 @@ export function PacketBuilderWorkspaceLayout({
     experience,
     onConfigureStep,
 }: Props) {
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const previewSteps = experience?.steps ?? [];
     const statusRow = {
         is_active: defActive,
         step_count: stepCount,
@@ -154,6 +160,23 @@ export function PacketBuilderWorkspaceLayout({
                     <span className={opMetadata}>
                         {stepCount} step{stepCount === 1 ? "" : "s"}
                     </span>
+                    {/*
+                     * The answer to "okay, show me".
+                     *
+                     * It sits in the orientation band rather than beside Save, because it is not
+                     * part of editing — it is how an operator checks that what they configured is
+                     * what they meant, which is the question they have as soon as they stop typing.
+                     */}
+                    {previewSteps.length ? (
+                        <button
+                            type="button"
+                            className={clsx(opSecondaryActionButton, "ml-auto !py-1.5 text-[13px]")}
+                            data-testid="packet-preview-experience"
+                            onClick={() => setPreviewOpen(true)}
+                        >
+                            Preview experience
+                        </button>
+                    ) : null}
                 </div>
                 {defDesc ?
                     <p className={clsx("mt-2", opMetadata)}>{defDesc}</p>
@@ -161,11 +184,29 @@ export function PacketBuilderWorkspaceLayout({
             </div>
 
             <div className={clsx(opCaseFileCanvas, "mt-5", opStackPage)} data-testid="packet-builder-workspace">
-                <IntakeWorkspaceRegion
-                    title="Packet overview"
-                    lead="Name, description, and whether this workflow accepts new intake."
+                {/*
+                 * EDIT-ON-DEMAND, once the packet has a name.
+                 *
+                 * Name, description and intake state are decided once and revisited rarely, but the
+                 * editable form for all three sat permanently above the obligations — so the thing
+                 * the operator came to read started below the fold, under a form they were not
+                 * using. It collapses here, in the same <details> shape this page already uses for
+                 * direct distribution, and opens for a packet that has not been named yet because
+                 * that packet has nothing else to show.
+                 */}
+                <details
+                    className="rounded-[14px] border border-alloy-stone/20 bg-white p-4"
+                    open={!defName.trim()}
                     data-testid="packet-region-overview"
                 >
+                    <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-2 text-[12px] font-semibold text-alloy-midnight/70">
+                        Packet overview
+                        <span className="font-normal text-alloy-midnight/45">
+                            {defName.trim() || "Unnamed packet"}
+                            {defActive ? " · accepting new runs" : " · not accepting new runs"}
+                        </span>
+                    </summary>
+                    <div className="mt-3">
                     <div className="grid gap-3 sm:grid-cols-2">
                         <label className="space-y-1 text-sm sm:col-span-2">
                             <span className={opMutedMeta}>Name</span>
@@ -214,7 +255,8 @@ export function PacketBuilderWorkspaceLayout({
                             Save overview
                         </button>
                     </div>
-                </IntakeWorkspaceRegion>
+                    </div>
+                </details>
 
                 {/*
                  * "What families complete" replaced "Included forms".
@@ -351,6 +393,12 @@ export function PacketBuilderWorkspaceLayout({
                     </TechnicalDetailDisclosure>
                 </div>
             </div>
+            <PacketExperiencePreview
+                open={previewOpen}
+                onClose={() => setPreviewOpen(false)}
+                packetName={defName}
+                steps={previewSteps}
+            />
         </>
     );
 }

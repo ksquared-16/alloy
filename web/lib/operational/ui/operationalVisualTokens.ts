@@ -237,6 +237,32 @@ export const opProvenanceLegend = "text-[11px] leading-snug text-alloy-midnight/
 export const opActionLink =
     "text-xs font-semibold text-alloy-blue hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-blue/40";
 
+/*
+ * BEND PINE IS THE OPERATOR ACTION COLOUR.
+ *
+ * Alloy Blue (#00458C) reads as Midnight Navy on a dense configuration surface, and the workspace
+ * AROUND these surfaces — the packets list, its New packet button — is already Bend Pine. A screen
+ * whose primary verbs are navy while its container's are green looks like two products. These
+ * tokens name the green that is already in the palette (alloy-bend-pine #00A283, alias
+ * alloy-juniper); nothing here introduces a colour.
+ *
+ * Scope is deliberate: ACTIONS only. Informational and status elements keep their own tones — a
+ * readiness badge is not an action, and recolouring it would destroy the signal that makes the
+ * action colour mean anything.
+ */
+
+/** Inline text action on an operator surface — Configure, View document, Manage form. */
+export const opActionLinkAccent =
+    "text-xs font-semibold text-alloy-bend-pine hover:underline disabled:text-alloy-midnight/30 disabled:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-bend-pine/40";
+
+/** Solid primary action — Add step, Save steps, Save configuration. */
+export const opPrimaryActionButton =
+    "inline-flex items-center justify-center gap-1 rounded-lg bg-alloy-bend-pine px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-alloy-bend-pine/90 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-bend-pine/40";
+
+/** Quiet companion to the primary action — Cancel, Preview experience beside a solid verb. */
+export const opSecondaryActionButton =
+    "inline-flex items-center justify-center gap-1 rounded-lg border border-alloy-bend-pine/30 bg-white px-3 py-2 text-sm font-semibold text-alloy-bend-pine transition-colors hover:bg-alloy-bend-pine/[0.06] disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-bend-pine/40";
+
 // ---------------------------------------------------------------------------
 // Case-file section variants (CaseFileSection)
 // ---------------------------------------------------------------------------
