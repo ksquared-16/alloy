@@ -444,12 +444,47 @@ BEGIN
         RAISE EXCEPTION 'COMMSAUTH ABORT: a new organization''s admin would not receive %.', array_to_string(v_missing, ', ');
     END IF;
 
-    -- THE HALF THAT MATTERS MOST: ops must NOT gain the three management keys.
-    SELECT COALESCE(array_agg(k ORDER BY k), ARRAY[]::text[]) INTO v_leaked
-      FROM unnest(ARRAY['communications.templates.manage','communications.provider.configure','communications.bulk.send']) AS k
+    -- THE HALF THAT MATTERS MOST: ops must not have gained anything it was withheld.
+    --
+    -- THE WHOLE LIST, NOT ONLY THIS SLICE'S THREE. Every key here is one the migration that
+    -- introduced it deliberately kept from ops, and reproducing all of them is what stops a later
+    -- redefinition quietly restoring one -- an ops EXCLUSION is an ABSENCE, and an absence is
+    -- exactly the kind of thing that comes back without anyone noticing. Re-stating only this
+    -- slice's additions would let THIS migration be the one that loses `fin.adjust` or
+    -- `health.manage` from the withheld set while still passing its own guard. The wording is the
+    -- one the RL-8 grant-seed lock reads.
+    SELECT array_agg(k ORDER BY k) INTO v_leaked
+      FROM unnest(ARRAY[
+          'admin.users.write', 'admin.roles.write',
+          'admin.access_scope.write', 'attendance.devices.manage',
+          'communications.templates.manage', 'communications.provider.configure', 'communications.bulk.send',
+          'enrollment.pricing.override', 'enrollment.requirement_exception.manage',
+          'fin.adjust', 'fin.responsibility', 'fin.subsidy',
+          'health.view', 'health.manage',
+          'forms.author', 'forms.submissions',
+          'processing.archive', 'processing.documents.manage', 'processing.dev_cleanup',
+          'scheduling.write', 'ops.jobs.write', 'fin.post',
+          'option_sets.delete', 'layouts.lifecycle', 'fields.delete',
+          'business_process.configure', 'business_process.activate',
+          'reports.write'
+      ]) AS k
      WHERE strpos(v_ops, '''' || k || '''') > 0;
-    IF array_length(v_leaked,1) IS NOT NULL THEN
-        RAISE EXCEPTION 'COMMSAUTH ABORT: the ops enumeration gained %, which the approved policy withholds.', array_to_string(v_leaked, ', ');
+    IF v_leaked IS NOT NULL THEN
+        RAISE EXCEPTION
+            'ACCESSV2 ABORT: the ops enumeration grants %, which the migration that introduced each of those keys explicitly withheld from ops. This would widen ops, not preserve it.',
+            v_leaked;
+    END IF;
+
+    -- The two reads and the one Forms write ops already had. Narrowing those was never approved,
+    -- and a reproduced enumeration is exactly how they would go missing.
+    IF strpos(v_ops, '''admin.users.read''') = 0 OR strpos(v_ops, '''admin.roles.read''') = 0 THEN
+        RAISE EXCEPTION 'COMMSAUTH ABORT: ops lost a directory or role-catalog read it has always held.';
+    END IF;
+    IF strpos(v_ops, '''forms.submissions.confirm''') = 0 THEN
+        RAISE EXCEPTION 'COMMSAUTH ABORT: ops lost forms.submissions.confirm, the one Forms write it already had.';
+    END IF;
+    IF strpos(v_admin, '''settings.users_roles''') > 0 OR strpos(v_ops, '''settings.users_roles''') > 0 THEN
+        RAISE EXCEPTION 'COMMSAUTH ABORT: the seed still grants the retired settings.users_roles umbrella.';
     END IF;
 
     -- Ops keeps what it had. Narrowing ordinary communications was not approved.

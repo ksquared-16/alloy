@@ -26,6 +26,14 @@ function read(rel: string): string {
     return readFileSync(p, "utf8");
 }
 
+/*
+ * THE GATE THIS PINNED HAS BEEN REPLACED, AND THE PIN IS NOW TIGHTER.
+ *
+ * This asserted `await requireAdminOrOps()` as the admin pattern. That helper resolves portal
+ * admission and nothing else, so what the assertion really locked in was that the route asked for
+ * no functional authority. Naming the capability instead means this contract now fails if the route
+ * is gated on the WRONG authority, which the old form could not detect.
+ */
 describe("B7 migration — generalize communication_scheduled_sends", () => {
     const sql = migrationSql();
 
@@ -108,7 +116,8 @@ describe("B7 routes — admin pattern + org scoping via service", () => {
     ]) {
         const src = read(rel);
         it(`${rel} uses the admin pattern and delegates org-scoped work`, () => {
-            expect(src).toMatch(/await requireAdminOrOps\(\)/);
+            // Scheduling and cancelling a campaign is the bulk blast radius, not an ordinary send.
+            expect(src).toMatch(/await requireCommunicationsAuthority\(COMMUNICATIONS_BULK_SEND\)/);
             expect(src).toMatch(/if \(!ctx\.ok\) return adminContextFailureResponse\(ctx\)/);
             expect(src).toMatch(/ctx\.orgId/);
             expect(src).not.toMatch(/executeCommunicationsSend|twilio|resend/i);

@@ -92,6 +92,18 @@ const APPROVED_ADDITIONS: Record<string, string> = {
         "20260914113000 — posting a financial consequence that arises from operational work: a customer receipt, a vendor payout, a completion journal entry, a manual receivable charge. Financials-owned though enforced from under schedules/ and jobs/, because authority follows the business consequence rather than the URL folder",
     "processing.dev_cleanup":
         "20260912113000 — the Processing test-data reset; necessary and not sufficient, because the route and the planner both refuse in production whoever holds it",
+    /*
+     * The three Communications authorities. `communications.read` and `communications.send` are NOT
+     * here: both predate the artifact, and `communications.read` is recorded as a RECOVERY in
+     * `enforced` — catalogued, granted and consulted by nothing until this slice, the same story the
+     * artifact already tells about `fin.read` and `crm.customers.read`.
+     */
+    "communications.templates.manage":
+        "20260915180000 — authoring and lifecycle of organization templates; its own key because folding it into communications.send would mean anyone who may answer a family may also rewrite every template the organization sends",
+    "communications.provider.configure":
+        "20260915180000 — the delivery services and channel bindings messages travel over; selects credential REFERENCES and is never authority to read secret material",
+    "communications.bulk.send":
+        "20260915180000 — organization-wide, announcement and campaign sends, separated from communications.send because the blast radius is materially different and no product statement ever said one implied the other",
 };
 
 describe("W-11 — the catalog is discovered completely", () => {
@@ -184,8 +196,10 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         // Financials workspace and the financial action package gave `fin.read` and `fin.write`
         // theirs, which the artifact records as `financials_restatement`; 24 until the Forms
         // authority cleanup gave `crm.customers.read` its first enforcement site anywhere — the CRM
-        // entity search under Forms, which had been gated on the literal `admin` role.
-        expect(enforced.length).toBe(25 + added.length);
+        // entity search under Forms, which had been gated on the literal `admin` role; 25 until the
+        // Communications authority model recovered `communications.read`, whose 22 read handlers had
+        // been asking for portal admission and calling it authority.
+        expect(enforced.length).toBe(26 + added.length);
         /*
          * A health key that is SEEDED but not ENFORCED would be the D-H6 failure mode: the catalogue
          * would advertise a boundary the product does not apply. Both keys must have call sites.
@@ -212,7 +226,13 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         // recorded IN: `settings.users_roles.read` is retired, so nothing consults it any more. That
         // is not a gate the product lost — it is a gate the product replaced with four narrower ones,
         // and the honest record of a retirement is a key that no longer has a site.
-        expect(unenforced.length).toBe(27);
+        //
+        // 27 until the Communications authority model recovered `communications.read` — the same
+        // story once more: catalogued since Phase 0, granted to `admin` and `ops` in every
+        // organization, offered in the role editor, and consulted by nothing, while 22 read handlers
+        // asked `requireAdminOrOps()` and admitted any principal who could enter the portal. Its
+        // three companion keys are additions rather than recoveries, so they never appeared here.
+        expect(unenforced.length).toBe(26);
     });
 
     it("C13 resolves against the measurement: nothing enforces a workflows key", () => {
