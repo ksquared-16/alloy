@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * THE BRIDGE, CERTIFIED WHERE THE BRIDGE ACTUALLY RUNS.
+ * THE GENERATION-2 DISPATCH PATH, CERTIFIED AT THE DISPATCHER.
  *
  * The toolkit that is RUNNING was built from this repository, so it is the only
  * thing that can perform the FIRST install of a Vacilando-built artifact. Its
@@ -272,5 +272,33 @@ test("16 — launchd's ACTUAL host entrypoint resolves in the gen2 layout", () =
   assert.ok(existsSync(join(root, "current", "vac")), "root executables must stay addressable");
 });
 
+/* ── 17: the leg the other sixteen could not see ──────────────────────────── */
+
+test("17 — the EXECUTOR's call site forwards the artifact, not just the staging sha", () => {
+  /*
+   * THE CASE THAT WOULD HAVE CAUGHT THE LIVE NO-OP.
+   *
+   * Sixteen cases above drive executeToolkitInstall directly, and all sixteen
+   * passed while a live generation-2 cutover executed as a generation-1 no-op
+   * and reported success. The validator normalized the artifact correctly; the
+   * dispatcher branched on it correctly; the EXECUTOR'S CALL SITE forwarded one
+   * field and dropped the rest.
+   *
+   * A test that starts one layer below the caller cannot see a caller that drops
+   * its arguments. So this reads the call site itself: whatever else it does, it
+   * must hand on `artifact` and `expectedCurrent`, or generation 2 is
+   * unreachable from the only path that actually runs it.
+   */
+  const src = readFileSync(join(HERE, "..", "lib", "vacilando", "trusted-host-actions.mjs"), "utf8");
+  const at = src.indexOf("out = executeToolkitInstall({");
+  assert.ok(at > 0, "the executor no longer calls executeToolkitInstall — this guard needs rewriting");
+  const call = src.slice(at, src.indexOf("});", at));
+  const code = call.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").map((l) => l.replace(/\/\/.*$/, "")).join("\n");
+  assert.match(code, /artifact:/, "the executor drops `artifact`; generation 2 can never run");
+  assert.match(code, /expectedCurrent:/, "the executor drops `expectedCurrent`; the CAS precondition is lost");
+  assert.match(code, /expectedStagingSha:/, "generation 1 must keep working");
+});
+
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
 process.exit(fail ? 1 : 0);
+
