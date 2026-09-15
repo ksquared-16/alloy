@@ -161,4 +161,88 @@ describe("W-18 delegation ceiling", () => {
                 + CEILING_OWNER + " or justify it here as system bootstrap",
         ).toEqual([]);
     });
+
+    /*
+     * ── THE SECOND HALF OF THE SAME INVARIANT ───────────────────────────────
+     *
+     * Bounding CAPABILITY -> ROLE while leaving ROLE -> USER unbounded is not a delegation ceiling,
+     * and for one promoted release it was exactly that: an actor holding three capabilities conferred
+     * eighty by assigning a role, and again by creating a member holding one. Authority can be
+     * delegated two ways, so both ways are enumerated here.
+     */
+    it("every SQL writer of role MEMBERSHIP either bounds the authority it confers or only reduces it", () => {
+        const ASSIGNMENT_CEILING = "assert_assignment_delegation_ceiling";
+
+        /*
+         * Functions that can only ever REDUCE a principal's authority. Removal is not delegation:
+         * an administrator must be able to take away a role richer than their own, or every
+         * over-provisioned member becomes permanent. Listed by name so that a function which later
+         * learns to ADD is no longer covered by this exemption.
+         */
+        const REDUCE_ONLY = new Set([
+            "remove_member_role_audited",
+            "remove_member_access_audited",
+        ]);
+
+        const writers = new Map<string, string>();
+        for (const file of readdirSync(migrations).filter((f) => f.endsWith(".sql"))) {
+            const sql = readFileSync(join(migrations, file), "utf8");
+            const fn = /CREATE OR REPLACE FUNCTION\s+(?:public\.)?(\w+)\s*\([\s\S]*?(\$\w*\$)([\s\S]*?)\2\s*;/gi;
+            let m: RegExpExecArray | null;
+            // The LAST definition wins, because a later migration replaces an earlier one — reading
+            // an superseded body would let a repaired function fail this lock forever.
+            while ((m = fn.exec(sql)) !== null) {
+                if (/insert\s+into\s+public\.user_roles/i.test(m[3])) writers.set(m[1], m[3]);
+            }
+        }
+
+        expect(writers.size, "the scan found no membership writers — it has stopped reading the tree")
+            .toBeGreaterThan(0);
+
+        const unbounded = [...writers.entries()]
+            .filter(([name]) => !REDUCE_ONLY.has(name))
+            .filter(([, body]) => !body.includes(ASSIGNMENT_CEILING))
+            .map(([name]) => name);
+
+        expect(
+            unbounded,
+            "a SQL function adds role membership without calling " + ASSIGNMENT_CEILING + ". Role "
+                + "assignment confers the role's whole package, so an unbounded writer is a complete "
+                + "bypass of the grant ceiling — bound it, or justify it here as reduction-only.",
+        ).toEqual([]);
+
+        // Non-vacuity in the other direction: the three writers that CAN increase authority are all
+        // present and all bound. A scan that silently matched nothing would pass the assertion above.
+        for (const owner of [
+            "assign_member_role_audited",
+            "create_membership_with_access_profile",
+            "replace_membership_with_access_profile",
+        ]) {
+            expect(writers.has(owner), owner + " is no longer a membership writer — the scan has drifted")
+                .toBe(true);
+            expect(writers.get(owner), owner + " stopped calling the assignment ceiling")
+                .toContain(ASSIGNMENT_CEILING);
+        }
+    });
+
+    it("no route writes user_roles directly — membership changes stay behind the RPCs", () => {
+        // The same choke-point argument as the grants table. A handler that inserts membership itself
+        // would confer a role package with nothing measuring it.
+        const offenders: string[] = [];
+        const walk = (dir: string) => {
+            for (const entry of readdirSync(dir, { withFileTypes: true })) {
+                const full = join(dir, entry.name);
+                if (entry.isDirectory()) walk(full);
+                else if (entry.name.endsWith(".ts")) {
+                    const src = readFileSync(full, "utf8");
+                    if (/from\("user_roles"\)[\s\S]{0,120}?\.(insert|upsert|update|delete)\(/.test(src)) {
+                        offenders.push(full.slice(full.indexOf("web/") + 4));
+                    }
+                }
+            }
+        };
+        walk(join(__dirname, "..", "..", "app", "api"));
+        expect(offenders, "an API route writes user_roles directly instead of through the bounded RPCs")
+            .toEqual([]);
+    });
 });

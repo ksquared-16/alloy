@@ -1,0 +1,69 @@
+{
+  "trusted_host_action_id": "tha_ed71a345376859",
+  "query_hash": "1b828c13673ed55f145f2b0a1dc7472fe2b07bf0313555e44d4c373031fa3a0b",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-15T15:20:29.082Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_ed71a345376859",
+    "query_hash": "1b828c13673ed55f145f2b0a1dc7472fe2b07bf0313555e44d4c373031fa3a0b",
+    "authorization_id": "grnt_6d5082114a174ccd",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-15T15:20:30.153Z",
+    "question_ids": [
+      "m915140000",
+      "ledger_version",
+      "ledger_head",
+      "ledger_total"
+    ],
+    "questions": {
+      "m915140000": {
+        "question_id": "m915140000",
+        "row_count": null,
+        "rows": [
+          "permission_definitions ~ catalogued_active ~ the_two_new_authorities ~ true",
+          "permission_definitions ~ retired ~ umbrella_pair_inactive ~ true",
+          "role_permission_grants ~ retired ~ no_umbrella_grant_survives ~ true",
+          "seed_access_administration_split ~ function ~ exists ~ true",
+          "seed_default_rbac ~ admin_enumeration ~ names_all_six_authorities ~ true",
+          "seed_default_rbac ~ ops_enumeration ~ keeps_both_reads ~ true",
+          "seed_default_rbac ~ ops_enumeration ~ withholds_all_four_writes ~ true",
+          "replace_role_permission_grants ~ guard ~ lockout_rekeyed_to_role_administration ~ true",
+          "replace_role_permission_grants ~ guard ~ delegation_ceiling_survives ~ true",
+          "role_permission_grants ~ tenants ~ every_admin_holds_all_six ~ true",
+          "role_permission_grants ~ tenants ~ every_ops_holds_both_reads ~ true",
+          "role_permission_grants ~ tenants ~ no_ops_holds_any_write ~ true"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20260915130000 ~ registered ~ present ~ true",
+          "20260915140000 ~ registered ~ present ~ true"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20260915140000
+        ]
+      },
+      "ledger_total": {
+        "question_id": "ledger_total",
+        "row_count": null,
+        "rows": [
+          441
+        ]
+      }
+    },
+    "row_count": 16
+  }
+}

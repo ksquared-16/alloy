@@ -60,7 +60,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ us
         audit: accessMutationAudit(access),
     });
     if (!result.ok) {
-        return NextResponse.json({ error: result.error }, { status: result.kind === "unknown_role" ? 400 : 500 });
+        // A ceiling refusal is about WHO is asking, so it answers 403; an unknown role is about the
+        // request, so it answers 400. Neither is a 500, which would tell the operator the server broke.
+        const status = result.kind === "unknown_role" ? 400 : result.kind === "forbidden" ? 403 : 500;
+        return NextResponse.json({ error: result.error }, { status });
     }
 
     /*
