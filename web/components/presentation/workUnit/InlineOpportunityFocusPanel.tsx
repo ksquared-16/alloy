@@ -513,6 +513,35 @@ export function InlineOpportunityFocusPanel() {
      * `operationalSubjectId` is non-null here (guarded above), and a genuine record switch still
      * changes it, so the keyed swap still remounts and settles when the operator moves.
      */
+    /*
+     * ── F-4: THE BODY IS ONE SURFACE, NOT ONE PER SUBJECT ────────────────────────────────────────
+     *
+     * This was `String(operationalSubjectId)`, which made the wrapper a NEW element on every record
+     * switch. Everything above about the pending → enriched transition stays true and is why a key
+     * exists at all — but keying it on the SUBJECT bought that within-subject stability by paying a
+     * full teardown across subjects.
+     *
+     * Measured on Firefly with a mount counter (not inferred from the DOM): four subject selections
+     * produced FOUR mounts and THREE unmounts of the card tree. Every card therefore started from
+     * nothing on every selection, which is why no card-level reuse was observable anywhere in the
+     * Phase 1 audit, and why a revisit 12.1s later re-fetched a 126 KB answer that was still inside
+     * its own 60s TTL.
+     *
+     * A constant keeps the property that key was introduced for — one element, so the pending →
+     * enriched transition remains a PROP CHANGE and cannot re-run a card's load — and drops the one
+     * it should never have had. Subject identity is state INSIDE this surface, not the identity OF
+     * it.
+     *
+     * WHAT STILL GUARANTEES SUBJECT COHERENCE. The remount was also acting as a crude reset, so
+     * removing it must not let one subject's body render under another's name. It does not: every
+     * self-fetching card already clears before it loads (`setVm(null); void load();` in
+     * FinancialsCard, and the same shape in Attendance, Health, Scheduling and Assignment), and the
+     * hold/reveal contract below (`holdPriorPayload` / `heldPrior`) is the only sanctioned way prior
+     * content stays on screen. That contract is unchanged here.
+     *
+     * The subject still rides the DOM as an attribute so the committed subject is provable in the
+     * browser without the element identity having to carry it.
+     */
     const bodyRenderKey = String(operationalSubjectId);
     const isActivityMode = focusPanelMode === "activity";
     const activityBodyFillClass = "flex min-h-0 flex-1 flex-col overflow-hidden";
@@ -724,9 +753,10 @@ export function InlineOpportunityFocusPanel() {
                               "min-h-0 flex-1 overflow-y-auto bg-white px-4 pt-1 pb-3 [scrollbar-gutter:stable]"
                     }
                 >
-                    {/* Keyed `swap` wrapper — remounts + settles the body on a record switch. */}
+                    {/* STABLE body surface. Subject changes inside it; it is not rebuilt per subject. */}
                     <div
-                        key={bodyRenderKey}
+                        key="focus-panel-body"
+                        data-focus-panel-body-subject={bodyRenderKey}
                         // The `"pending"` arm this used to carry was already unreachable: the subject
                         // is guarded non-null far above, so the key was never the literal "pending".
                         className={`${MOTION_SETTLE.className}${isActivityMode ? ` ${activityBodyFillClass}` : ""}`}
