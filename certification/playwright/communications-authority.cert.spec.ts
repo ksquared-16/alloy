@@ -330,20 +330,24 @@ test.describe("Communications authority — five capabilities, mounted", () => {
         await s.close();
     });
 
-    test("conversation assignment is excluded, and says so rather than pretending", async ({ browser }) => {
+    test("conversation assignment has its own authority, and the five do not reach it", async ({ browser }) => {
         /*
-         * ASSIGNMENTS_AUTHORITY_MODEL_DEBT, certified as a DARK route rather than a gated one.
-         * Assignment decides who owns a piece of work, and the same unresolved question governs work
-         * items, cases and jobs — answering it here would settle a platform model as a side effect of
-         * a Communications lock. What bounds it meanwhile is the flag: 404, for everyone, including
-         * the persona holding all five Communications capabilities.
+         * WAS: "excluded, and says so rather than pretending" — asserting 404, because
+         * `comms_v2_assignment` was the only boundary and the route was dark. Assignments Authority
+         * Model V1 gave it a truthful owner, `communications.assign`, so the assertion inverts: the
+         * persona holding all five OTHER Communications capabilities is refused on AUTHORITY, and a
+         * 404 here would now mean the flag had quietly become the boundary again.
+         *
+         * Certification enables the flag deliberately (see `assignment-authority.cert.spec.ts`); it
+         * stays off everywhere real, because rollout is a product decision and authorization is not.
          */
         const s = await signIn(browser, P.commsFull.email);
         const res = await s.request.post(
             "/api/admin/communications/conversations/00000000-0000-4000-8000-0000000000ff/assign",
             { data: { action: "claim" } },
         );
-        expect(res.status(), "the excluded route must be dark, not quietly reachable").toBe(404);
+        expect(res.status(), "404 would mean the feature flag is refusing, not the capability").toBe(403);
+        expect(await res.text()).toContain("communications.assign");
         await s.close();
     });
 });
