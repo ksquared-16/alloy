@@ -83,11 +83,36 @@ describe("F7 · one truth, two grains", () => {
 
     it("leads the Accounts detail with the workspace grain", () => {
         const src = read(ACCOUNTS);
-        const workspaceAt = src.indexOf("FinancialsAccountWorkspaceDetail key=");
-        const cardAt = src.indexOf("FinancialsAccountDetail\n");
-        expect(workspaceAt, "the workspace detail is rendered").toBeGreaterThan(-1);
-        // The command-bearing card remains available, but subordinate to it.
+        expect(src.indexOf("<FinancialsAccountWorkspaceDetail"), "the workspace detail is rendered")
+            .toBeGreaterThan(-1);
+        // The command-bearing card remains available, composed rather than re-implemented.
         expect(src).toContain("data-financials-account-actions");
+        expect(src).toContain("<FinancialsAccountDetail");
+    });
+
+    /*
+     * SELECTION COMMITS; IT DOES NOT REMOUNT.
+     *
+     * This assertion used to require `FinancialsAccountWorkspaceDetail key=` — and that `key` was
+     * the defect. Keying the detail by the selected id remounted it on every click, so a remounted
+     * component had no state to render and the whole surface fell back to "Reading the account…",
+     * discarding the household and the section structure that were already known at the instant of
+     * the click along with the figures that genuinely had to be fetched.
+     *
+     * The lock is now on the fact rather than on the spelling: one persistent instance, which is
+     * what lets the shell render immediately and the money arrive into it.
+     */
+    it("does not remount the account detail on selection", () => {
+        const src = read(ACCOUNTS);
+        const openTag = src.slice(
+            src.indexOf("<FinancialsAccountWorkspaceDetail"),
+            src.indexOf("<FinancialsAccountWorkspaceDetail") + 400,
+        );
+        expect(openTag, "a key would throw the rendered shell away on every click").not.toMatch(/\bkey=/);
+        const detail = read(WORKSPACE_DETAIL);
+        expect(detail, "and the subject is committed synchronously").toContain("wantedRef");
+        expect(detail, "with late responses for a previous account dropped")
+            .toMatch(/wantedRef\.current !== wanted/);
     });
 });
 

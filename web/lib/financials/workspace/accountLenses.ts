@@ -1,0 +1,190 @@
+/**
+ * LOOKING AT ONE ACCOUNT FROM SEVERAL ANGLES — presentation, and no arithmetic whatsoever.
+ *
+ * An operator working an account asks narrower questions than "show me everything": what have we
+ * billed, what have they paid, what did we take off, what is somebody else funding. Answering those
+ * by opening four nested detail surfaces is what made the workspace a report rather than a place to
+ * work.
+ *
+ * ── THE ONE RULE THIS MODULE KEEPS ─────────────────────────────────────────────────────────────
+ *
+ * These are FILTERS over the canonical rows the account reader already produced. Nothing here adds,
+ * subtracts, totals or re-derives money. A lens that computed its own subtotal would be a second
+ * financial answer with no owner, which is the thing the whole Financials spine is built to prevent
+ * — so this file returns row subsets and counts of rows, never sums of cents.
+ *
+ * ── AND WHY CLASSIFICATION IS BORROWED, NOT RESTATED ───────────────────────────────────────────
+ *
+ * Which categories are funding, which are reductions and which are adjustments is already decided
+ * by the account reader, and `isCollectibleOffsetRow` is its exported predicate. A second copy of
+ * those category lists here would drift the first time somebody added a category, and the two
+ * surfaces would then disagree about what a row IS while agreeing about what it costs.
+ */
+
+import {
+    isCollectibleOffsetRow,
+    type FinancialsLedgerRow,
+} from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
+
+/** The angles. `payments` reads receipts rather than ledger rows — money in, not money owed. */
+export const ACCOUNT_LENSES = ["all", "charges", "credits", "funding", "payments"] as const;
+export type AccountLens = (typeof ACCOUNT_LENSES)[number];
+
+export const ACCOUNT_LENS_LABELS: Record<AccountLens, string> = {
+    all: "All",
+    charges: "Charges",
+    payments: "Payments",
+    credits: "Credits & adjustments",
+    funding: "Funding",
+};
+
+/** A payment, as much of it as a lens needs to filter and count. */
+export type LensPayment = {
+    paymentId: string;
+    payerLabel?: string | null;
+    receivedAt?: string | null;
+    direction?: string | null;
+};
+
+/**
+ * What KIND of ledger row this is, in the operator's vocabulary.
+ *
+ * Funding is tested first and deliberately: a subsidy offset is both a reduction and a funding row
+ * by category, and an operator asking "what is the agency covering" does not want it filed under
+ * discounts. One row, one lens, and the order encodes which question it answers best.
+ */
+export function ledgerLensOf(row: FinancialsLedgerRow): Exclude<AccountLens, "all" | "payments"> {
+    if (FUNDING_KEYS.has(row.categoryKey)) return "funding";
+    if (isCollectibleOffsetRow(row)) return "credits";
+    return "charges";
+}
+
+/*
+ * The one category list this module owns, and it exists because the reader's funding set is not
+ * exported. It is asserted equal to the reader's in the test beside this file, so a category added
+ * there and not here fails rather than silently misfiling rows.
+ */
+const FUNDING_KEYS = new Set(["subsidy_offset"]);
+
+export type LedgerFilter = {
+    lens: AccountLens;
+    /** A child on the account, or `household` for rows that belong to no child. Null = every subject. */
+    subject: string | null;
+    /** A billing period key. Null = every period. */
+    periodKey: string | null;
+};
+
+export const NO_FILTER: LedgerFilter = Object.freeze({ lens: "all", subject: null, periodKey: null });
+
+/** The token a row with no child subject filters under. Household rows are childless BY CONSTRUCTION. */
+export const HOUSEHOLD_SUBJECT = "household";
+
+export function subjectTokenOf(row: FinancialsLedgerRow): string {
+    return row.subjectMemberId ? row.subjectMemberId : HOUSEHOLD_SUBJECT;
+}
+
+export function filterLedger(
+    rows: readonly FinancialsLedgerRow[],
+    filter: LedgerFilter,
+): FinancialsLedgerRow[] {
+    return rows.filter((row) => {
+        /* The payments lens is not a view of the ledger at all — it reads receipts. */
+        if (filter.lens === "payments") return false;
+        if (filter.lens !== "all" && ledgerLensOf(row) !== filter.lens) return false;
+        if (filter.subject && subjectTokenOf(row) !== filter.subject) return false;
+        if (filter.periodKey && (row.periodKey ?? "") !== filter.periodKey) return false;
+        return true;
+    });
+}
+
+export function filterPayments(
+    payments: readonly LensPayment[],
+    filter: { payerLabel: string | null },
+): LensPayment[] {
+    if (!filter.payerLabel) return [...payments];
+    return payments.filter((p) => (p.payerLabel ?? "") === filter.payerLabel);
+}
+
+/**
+ * How many rows each lens would show, so a lens that would be empty can say so before it is opened.
+ *
+ * Counts of ROWS, never sums of cents — see the module note. A tab badge that totalled money would
+ * be this file quietly becoming a second reconciliation.
+ */
+export function lensCounts(
+    rows: readonly FinancialsLedgerRow[],
+    payments: readonly LensPayment[],
+    within: Omit<LedgerFilter, "lens">,
+): Record<AccountLens, number> {
+    const scoped = rows.filter(
+        (row) =>
+            (!within.subject || subjectTokenOf(row) === within.subject)
+            && (!within.periodKey || (row.periodKey ?? "") === within.periodKey),
+    );
+    const counts: Record<AccountLens, number> = {
+        all: scoped.length,
+        charges: 0,
+        credits: 0,
+        funding: 0,
+        payments: payments.length,
+    };
+    for (const row of scoped) counts[ledgerLensOf(row)] += 1;
+    return counts;
+}
+
+// ── THE CONTEXT FILTERS, AND WHEN THEY MAY BE SHOWN ─────────────────────────────────────────────
+
+export type FilterOption = { value: string; label: string; count: number };
+
+/**
+ * A filter is offered only when it would actually divide the rows.
+ *
+ * One child, one period, one payer: the control would be a dropdown with a single choice, which
+ * reads as a capability the surface does not have. `hasChoice` is the gate every caller uses.
+ */
+export function hasChoice(options: readonly FilterOption[]): boolean {
+    return options.length > 1;
+}
+
+export function subjectOptions(rows: readonly FinancialsLedgerRow[]): FilterOption[] {
+    const byToken = new Map<string, FilterOption>();
+    for (const row of rows) {
+        const value = subjectTokenOf(row);
+        const label = row.subjectMemberId ? (row.subjectName ?? "Child") : "Household";
+        const found = byToken.get(value);
+        if (found) found.count += 1;
+        else byToken.set(value, { value, label, count: 1 });
+    }
+    /* Household last: a child is the more common question, and it keeps the order stable. */
+    return [...byToken.values()].sort((a, b) => {
+        if ((a.value === HOUSEHOLD_SUBJECT) !== (b.value === HOUSEHOLD_SUBJECT)) {
+            return a.value === HOUSEHOLD_SUBJECT ? 1 : -1;
+        }
+        return a.label.localeCompare(b.label);
+    });
+}
+
+/** Newest period first — an operator is nearly always working the current one. */
+export function periodOptions(rows: readonly FinancialsLedgerRow[]): FilterOption[] {
+    const byKey = new Map<string, FilterOption>();
+    for (const row of rows) {
+        const value = row.periodKey ?? "";
+        if (!value) continue;
+        const found = byKey.get(value);
+        if (found) found.count += 1;
+        else byKey.set(value, { value, label: value, count: 1 });
+    }
+    return [...byKey.values()].sort((a, b) => b.value.localeCompare(a.value));
+}
+
+export function payerOptions(payments: readonly LensPayment[]): FilterOption[] {
+    const byLabel = new Map<string, FilterOption>();
+    for (const p of payments) {
+        const value = (p.payerLabel ?? "").trim();
+        if (!value) continue;
+        const found = byLabel.get(value);
+        if (found) found.count += 1;
+        else byLabel.set(value, { value, label: value, count: 1 });
+    }
+    return [...byLabel.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
