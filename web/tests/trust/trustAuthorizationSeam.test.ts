@@ -322,8 +322,23 @@ describe("fails closed", () => {
 describe("authorization, reasoning mode and availability are distinct", () => {
     it("deterministic reasoning stays allowed when provider-backed reasoning is not permitted", () => {
         vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "false");
+        /*
+         * THE PRINCIPAL NOW HOLDS THE AI KEY, AND THAT IS THE POINT OF THE CASE.
+         *
+         * This used to pass `permissionKeys: []`, and was admitted anyway by the
+         * portal role title — which is the defect AI + Agent Authority V2
+         * removed. Using the AI enrichment surface requires `ai.enrichment.use`
+         * whether the reasoning is provider-backed or deterministic; an empty
+         * package is now refused at the door, so testing the reasoning-mode
+         * distinction from there would only re-test the door.
+         *
+         * The distinction this case is named for is untouched and is what it
+         * still asserts: being authorized to use AI does NOT imply being
+         * permitted a live provider. The key is held, the org runs the stub, so
+         * deterministic reasoning is open and provider-backed is not.
+         */
         const d = resolve("attention_draft_enrichment", {
-            access: { ...accessOk, permissionKeys: [] },
+            access: { ...accessOk, permissionKeys: [AI_ENRICHMENT_USE_PERMISSION_KEY] },
             metadata: orgMetadata({ provider: "stub", consumer: "attention_draft_enrichment" }),
         });
 
@@ -500,13 +515,19 @@ describe("changing one authority input changes the decision predictably", () => 
         expect(isTrustAuthorizationPermitted(with_)).toBe(true);
     });
 
-    it("the required permission key reflects strict mode", () => {
-        vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "false");
-        expect(resolve("task_assist_propose").evidence.required_permission_key).toBeNull();
-        vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "true");
-        expect(resolve("task_assist_propose").evidence.required_permission_key).toBe(
-            AI_ENRICHMENT_USE_PERMISSION_KEY,
-        );
+    it("names the required permission key unconditionally — there is no strict mode", () => {
+        /*
+         * The evidence used to report `null` when the flag was unset, which was
+         * truthful then and is a lie now: it said "no key is required" in
+         * exactly the environments where the role title was standing in for one.
+         * The requirement no longer varies, so neither does the evidence.
+         */
+        for (const v of ["false", "true", "0", "yes"]) {
+            vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", v);
+            expect(resolve("task_assist_propose").evidence.required_permission_key).toBe(
+                AI_ENRICHMENT_USE_PERMISSION_KEY,
+            );
+        }
     });
 });
 
