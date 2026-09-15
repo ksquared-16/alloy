@@ -154,6 +154,7 @@ export const CUSTOM = {
     cfgFieldManager: "mcert_cfg_field_manager",
     cfgFieldDeleter: "mcert_cfg_field_deleter",
     cfgTitular: "mcert_cfg_titular",
+    cfgSectionManager: "mcert_cfg_section_manager",
 
     /*
      * DEPARTMENT PRODUCT RETIREMENT + BUSINESS PROCESS AUTHORITY CONVERGENCE V1.
@@ -230,6 +231,7 @@ export const P = {
     cfgFieldManager:    { id: "c0000000-0000-4000-8000-00000000d033", email: "cert.cfgfldmgr@northwind.invalid",   role: CUSTOM.cfgFieldManager },
     cfgFieldDeleter:    { id: "c0000000-0000-4000-8000-00000000d034", email: "cert.cfgflddel@northwind.invalid",   role: CUSTOM.cfgFieldDeleter },
     cfgTitular:         { id: "c0000000-0000-4000-8000-00000000d035", email: "cert.cfgtitular@northwind.invalid",  role: CUSTOM.cfgTitular },
+    cfgSectionManager:  { id: "c0000000-0000-4000-8000-00000000d044", email: "cert.cfgsecmgr@northwind.invalid",    role: CUSTOM.cfgSectionManager },
     bpConfigurer:       { id: "c0000000-0000-4000-8000-00000000d036", email: "cert.bpconfig@northwind.invalid",    role: CUSTOM.bpConfigurer },
     bpActivator:        { id: "c0000000-0000-4000-8000-00000000d037", email: "cert.bpactivate@northwind.invalid",  role: CUSTOM.bpActivator },
     bpComposed:         { id: "c0000000-0000-4000-8000-00000000d038", email: "cert.bpowner@northwind.invalid",     role: CUSTOM.bpComposed },
@@ -304,6 +306,7 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.cfgFieldDeleter,    role_label: "Field remover",       description: "Deletes field definitions. Configures none.",         is_system: false, is_active: true },
         /* The label is the trap. It holds nothing. */
         { org_id: ORG, role_key: CUSTOM.cfgTitular,         role_label: "Admin",               description: "Named Admin, granted no configuration authority.",    is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.cfgSectionManager, role_label: "Section manager",   description: "Manages field sections and nothing else in Configuration.", is_system: false, is_active: true },
 
         { org_id: ORG, role_key: CUSTOM.bpConfigurer, role_label: "Process designer",   description: "Designs business processes. Activates none of them.",      is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.bpActivator,  role_label: "Process activator",  description: "Switches a process on and off. Designs none of them.",      is_system: false, is_active: true },
@@ -355,6 +358,8 @@ export async function setup() {
         [CUSTOM.cfgFieldManager, ["portal.access", "fields.manage"]],
         [CUSTOM.cfgFieldDeleter, ["portal.access", "fields.delete"]],
         [CUSTOM.cfgTitular, ["portal.access"]],
+        /* sections.manage has always been catalogued and granted; this is the first persona to hold it alone. */
+        [CUSTOM.cfgSectionManager, ["portal.access", "sections.manage"]],
         [CUSTOM.bpConfigurer, ["portal.access", "business_process.configure"]],
         [CUSTOM.bpActivator, ["portal.access", "business_process.activate"]],
         [CUSTOM.bpComposed, ["portal.access", "business_process.configure", "business_process.activate"]],
