@@ -5200,11 +5200,44 @@ html[data-alloy-os-runtime-split="true"]
 }
 .alloy-os-fp-grid-area {
   display: flex;
-  /* The card must not stretch to its wrapper: the wrapper's height IS the card's, and a
-   * stretched child would make any height we ever set read back as the measured content
-   * height. Height flows content -> wrapper -> layout, never the other way. */
-  align-items: flex-start;
+  /*
+   * The wrapper OWNS THE BAND. It never owns the measurement.
+   *
+   * This was `flex-start`, reasoning that a stretched child would make any height set here read
+   * straight back as the measured content height. That was exactly right while this wrapper was
+   * the measured element. It is not any more: the card is measured through `.alloy-os-fp-card-intrinsic`
+   * below, with this height neutralised for the read, so stretching can no longer feed the
+   * assignment back — and cards sharing an authored band can finally be drawn the same height.
+   */
+  align-items: stretch;
   min-width: 0;
+  min-height: 0;
+}
+
+/*
+ * THE INTRINSIC NODE — one per authored area, rendered by the grid.
+ *
+ * `min-height: 100%` resolves against the wrapper's assigned band height, so the card FILLS its
+ * band; and because it is a floor rather than a fixed height, content that outgrows the band
+ * pushes straight through it. That is the whole overlap fix: a box pinned with `height` cannot
+ * report that its content no longer fits, so PR #989's late-arriving card content was drawn over
+ * by the row beneath it. A floor can, and the ResizeObserver watching this node sees it.
+ *
+ * The measurement takes the wrapper's height away for one synchronous read, which leaves this
+ * percentage with no definite parent to resolve against — so it collapses to the content's own
+ * height, which is the number the band solver is entitled to.
+ */
+.alloy-os-fp-card-intrinsic {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+/* The card itself takes the room, so the chrome an operator sees is the band's height. */
+.alloy-os-fp-card-intrinsic > * {
+  flex: 1 1 auto;
   min-height: 0;
 }
 .alloy-os-fp-grid-area > * {
