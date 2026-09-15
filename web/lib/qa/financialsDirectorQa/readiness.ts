@@ -16,6 +16,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { buildFinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
+import { resolveFinancialSubjectCohort } from "@/lib/financials/workspace/resolveFinancialSubjects";
 
 import { CATALOG_VERSION, SCENARIOS, type AccountStateCheck, type Scenario } from "./scenarioCatalog";
 
@@ -52,11 +53,32 @@ export type SubjectSnapshot = {
     billableChildren: Array<{ customerMemberId: string; displayName: string }>;
 };
 
+/**
+ * TWO LEVELS, BECAUSE A HARNESS THAT ONLY CHECKS ONE OF THEM CERTIFIES A SCENARIO NOBODY CAN RUN.
+ *
+ * `DATA_READY` — the account's facts satisfy the scenario's preconditions. That is what this
+ * harness has always measured, and it is measured through the canonical reader.
+ *
+ * `NAVIGATION_READY` — an operator can actually REACH the subject through the product path the
+ * scenario names. This was the gap: Scenario 01 reported ready because the API resolved the
+ * household, while Financials → Accounts did not list it, so the very first step of the walkthrough
+ * could not be performed. Resolvability is not navigability, and a harness that conflates them
+ * reports green on a surface that is unusable.
+ */
+export type ReadinessLevel = "DATA_READY" | "NAVIGATION_READY";
+
 export type ScenarioReadiness = {
     scenarioKey: string;
+    /** Both levels. The single answer a client gates "Start" on, unchanged in meaning. */
     ready: boolean;
+    /** The account's facts satisfy the preconditions. */
+    dataReady: boolean;
+    /** The operator can reach the subject on the surface the scenario navigates to. */
+    navigationReady: boolean;
     /** Every unmet precondition, in the words the Director needs to act on it. */
     unmet: string[];
+    /** Why the scenario cannot be reached, when it cannot. Separate from `unmet` on purpose. */
+    unreachable: string[];
 };
 
 export type HarnessReadiness = {
@@ -64,7 +86,29 @@ export type HarnessReadiness = {
     deployedRevision: string;
     environment: string;
     subject: SubjectSnapshot;
+    navigation: NavigationSnapshot;
     scenarios: ScenarioReadiness[];
+};
+
+/**
+ * CAN AN OPERATOR GET THERE — asked of the resolver the product actually navigates through.
+ *
+ * Deliberately NOT "is the Alvarez household visible". Hardcoding one household's visibility would
+ * make this pass the moment somebody special-cased that household, which is the failure mode a
+ * readiness test exists to catch. It asks the Accounts cohort contract — the same
+ * `resolveFinancialSubjectCohort` the rail is composed from — whether THIS subject is in it under
+ * these rights. A subject that is in the cohort is on the rail; one that is not, is not.
+ */
+export type NavigationSnapshot = {
+    reachable: boolean;
+    /** Why not, in the Director's words. Null when reachable. */
+    unreachableReason: string | null;
+    /** The product path this was tested against, in the labels the build renders. */
+    surface: string;
+    /** How many household accounts the rail would list under these rights. */
+    accountsInCohort: number;
+    /** True when the cohort hit its scan cap — "absent" would then be an unsafe conclusion. */
+    truncated: boolean;
 };
 
 /** The build this process is actually running. Unknown is reported, never guessed. */
@@ -152,6 +196,56 @@ export async function readSubject(
             displayName: String(s.displayName),
         })),
     };
+}
+
+/**
+ * Read whether the subject is reachable on the surface the walkthrough navigates to.
+ *
+ * The rights are the CALLER'S, passed in from the authenticated route gate rather than assumed —
+ * a navigation answer computed under rights nobody holds is not an answer about navigation. A
+ * resolver that throws is reported as unreachable with its own message: "we could not ask" and
+ * "they are not there" are different answers, and only one of them means the surface is broken.
+ */
+export async function readNavigation(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        customerId?: string;
+        siteScope?: "all" | "restricted";
+        allowedSiteLocationIds?: readonly string[];
+        activeSiteLocationId?: string | null;
+    },
+): Promise<NavigationSnapshot> {
+    const surface = "Financials \u2192 Accounts";
+    const customerId = args.customerId ?? QA_SUBJECT.customerId;
+    try {
+        const cohort = await resolveFinancialSubjectCohort(supabase, {
+            orgId: args.orgId,
+            siteScope: args.siteScope ?? "all",
+            allowedSiteLocationIds: args.allowedSiteLocationIds ?? [],
+            activeSiteLocationId: args.activeSiteLocationId ?? null,
+        });
+        const present = cohort.subjects.some((s) => s.customerId === customerId);
+        return {
+            reachable: present,
+            unreachableReason: present
+                ? null
+                : cohort.truncated
+                  ? `${surface} reached its scan cap before this account, so it cannot be shown to be listed.`
+                  : `${surface} does not list this account, so the walkthrough cannot start.`,
+            surface,
+            accountsInCohort: cohort.subjects.length,
+            truncated: cohort.truncated,
+        };
+    } catch (err) {
+        return {
+            reachable: false,
+            unreachableReason: `${surface} could not be resolved: ${err instanceof Error ? err.message : String(err)}`,
+            surface,
+            accountsInCohort: 0,
+            truncated: false,
+        };
+    }
 }
 
 /**
@@ -264,6 +358,7 @@ export function resolveReadiness(
     subject: SubjectSnapshot,
     extras: VmExtras,
     acceptedScenarioKeys: ReadonlySet<string>,
+    navigation: NavigationSnapshot,
 ): ScenarioReadiness[] {
     return SCENARIOS.map((scenario: Scenario) => {
         const unmet: string[] = [];
@@ -281,7 +376,30 @@ export function resolveReadiness(
         if (!subject.resolved) {
             unmet.push(subject.unresolvedReason ?? "The account could not be read.");
         }
-        return { scenarioKey: scenario.key, ready: unmet.length === 0, unmet };
+
+        /*
+         * NAVIGATION IS A SEPARATE ANSWER, AND IT GATES THE SAME BUTTON.
+         *
+         * A scenario that names no product path cannot be blocked by one — the deferred and
+         * out-of-scope entries declare `navigate: []` and are left alone. Every walkthrough enters
+         * through the account the first scenario opens, so reachability of the subject is
+         * reachability of the scenario.
+         */
+        const unreachable: string[] = [];
+        if (scenario.navigate.length > 0 && !navigation.reachable) {
+            unreachable.push(navigation.unreachableReason ?? `${navigation.surface} cannot be reached.`);
+        }
+
+        const dataReady = unmet.length === 0;
+        const navigationReady = unreachable.length === 0;
+        return {
+            scenarioKey: scenario.key,
+            ready: dataReady && navigationReady,
+            dataReady,
+            navigationReady,
+            unmet,
+            unreachable,
+        };
     });
 }
 

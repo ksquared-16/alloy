@@ -31,6 +31,7 @@ import {
     useFinancialsOverviewMetrics,
     useFinancialsPaymentFlow,
     useFinancialsPosition,
+    useFinancialsSubjects,
 } from "@/app/adminV2/financials/useFinancialsReads";
 import {
     defaultFinancialsSection,
@@ -86,6 +87,12 @@ export default function FinancialsWorkspaceContainer({ onClose }: { onClose?: ()
         siteId,
         section === "accounts" || section === "subsidy" || section === "charges",
     );
+    /*
+     * ACCOUNTS READS WHO EXISTS, not only what has been billed. The rail is the left side of a join
+     * — eligible financial subjects against the position cohort — so a household with no
+     * transaction yet is still reachable. Only Accounts pays for it.
+     */
+    const subjects = useFinancialsSubjects(siteId, section === "accounts");
     const flow = useFinancialsPaymentFlow(siteId, section === "payments");
     /*
      * Overview reads the activity feed too, because a landing page that cannot say what MOVED is
@@ -133,6 +140,7 @@ export default function FinancialsWorkspaceContainer({ onClose }: { onClose?: ()
                 queue={queue}
                 metrics={metrics}
                 position={position}
+                subjects={subjects}
                 flow={flow}
                 activity={activity}
                 scopeLabel={scopeLabel}

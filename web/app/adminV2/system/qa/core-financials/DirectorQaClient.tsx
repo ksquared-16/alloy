@@ -12,7 +12,23 @@ import type { Scenario } from "@/lib/qa/financialsDirectorQa/scenarioCatalog";
  * a result. "Next" is navigation, not acceptance, which is why it never writes anything.
  */
 
-type Readiness = { scenarioKey: string; ready: boolean; unmet: string[] };
+type Readiness = {
+    scenarioKey: string;
+    ready: boolean;
+    /** The account's facts satisfy the preconditions. */
+    dataReady: boolean;
+    /** The operator can actually reach the subject on the surface the scenario navigates to. */
+    navigationReady: boolean;
+    unmet: string[];
+    unreachable: string[];
+};
+type Navigation = {
+    reachable: boolean;
+    unreachableReason: string | null;
+    surface: string;
+    accountsInCohort: number;
+    truncated: boolean;
+};
 type ResultRow = {
     scenario_key: string;
     result: string;
@@ -48,6 +64,7 @@ type Payload = {
     subject: Subject;
     subjectReference: { customerId: string; householdLabel: string; site: string; fixturePath: string };
     scenarios: Scenario[];
+    navigation: Navigation;
     readiness: Readiness[];
     results: ResultRow[];
     baselineChanged: boolean;
@@ -129,6 +146,7 @@ export default function DirectorQaClient() {
     if (!data) return <Shell><p className="text-sm text-alloy-midnight/60">Reading the environment…</p></Shell>;
 
     const s = data.subject;
+    const nav = data.navigation;
 
     // ── LANDING ─────────────────────────────────────────────────────────────────────────────────
     if (view.mode === "landing") {
@@ -156,7 +174,22 @@ export default function DirectorQaClient() {
                     <Row k="Deployed revision" v={data.deployedRevision} mono />
                     <Row k="Scenario definitions" v={data.catalogVersion} mono />
                     <Row k="Fixture" v={data.subjectReference.fixturePath} mono />
-                    <Row k="Readiness" v={s.resolved ? "Account reads cleanly" : `NOT READY — ${s.unresolvedReason}`} />
+                    <Row k="Data readiness" v={s.resolved ? "Account reads cleanly" : `NOT READY — ${s.unresolvedReason}`} />
+                    {/*
+                     * NAVIGATION IS REPORTED BESIDE THE DATA, never folded into it. A harness that
+                     * says "ready" on the strength of an API read has certified a walkthrough whose
+                     * first step may be impossible.
+                     */}
+                    <Row
+                        k="Navigation readiness"
+                        v={
+                            nav
+                                ? nav.reachable
+                                    ? `Reachable via ${nav.surface} (${nav.accountsInCohort} accounts listed)`
+                                    : `NOT REACHABLE — ${nav.unreachableReason ?? "the account is not listed"}`
+                                : "—"
+                        }
+                    />
                 </Panel>
 
                 <Panel title="Test subject" testId="subject">
@@ -255,7 +288,7 @@ export default function DirectorQaClient() {
                 <Callout tone="warn" testId="scenario-not-ready">
                     <strong>SCENARIO NOT READY.</strong>
                     <ul className="mt-1 list-disc pl-5">
-                        {currentReadiness!.unmet.map((u) => <li key={u}>{u}</li>)}
+                        {[...currentReadiness!.unmet, ...(currentReadiness!.unreachable ?? [])].map((u) => <li key={u}>{u}</li>)}
                     </ul>
                     <p className="mt-1">
                         Run the scenario this one depends on first. Testing against the wrong starting state produces a

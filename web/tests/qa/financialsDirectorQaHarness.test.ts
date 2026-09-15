@@ -15,6 +15,7 @@ import {
     checkAccountState,
     resolveReadiness,
     QA_SUBJECT,
+    type NavigationSnapshot,
     type SubjectSnapshot,
     type VmExtras,
 } from "@/lib/qa/financialsDirectorQa/readiness";
@@ -42,6 +43,16 @@ const emptySubject = (over: Partial<SubjectSnapshot> = {}): SubjectSnapshot => (
     billableChildren: [{ customerMemberId: QA_SUBJECT.childWithAgreement.id, displayName: "Ana Alvarez" }],
     ...over,
 });
+/** The subject is on the rail. Navigation is a separate axis and is stated, never assumed. */
+const reachable: NavigationSnapshot = {
+    reachable: true, unreachableReason: null, surface: "Financials \u2192 Accounts",
+    accountsInCohort: 4, truncated: false,
+};
+const unreachable: NavigationSnapshot = {
+    reachable: false,
+    unreachableReason: "Financials \u2192 Accounts does not list this account, so the walkthrough cannot start.",
+    surface: "Financials \u2192 Accounts", accountsInCohort: 3, truncated: false,
+};
 const noExtras: VmExtras = {
     hasLiveObligation: false, hasRoomToReduce: false, hasObligationAtZero: false,
     inboundPayments: 0, activeApplications: 0, unappliedCents: 0,
@@ -111,25 +122,25 @@ describe("the harness never writes Financials", () => {
 
 describe("scenario readiness", () => {
     it("refuses a scenario whose account precondition is unmet, and says what is missing", () => {
-        const readiness = resolveReadiness(emptySubject(), noExtras, new Set());
+        const readiness = resolveReadiness(emptySubject(), noExtras, new Set(), reachable);
         const postCharge = readiness.find((r) => r.scenarioKey === "post_charge")!;
         expect(postCharge.ready).toBe(false);
         expect(postCharge.unmet.join(" ")).toMatch(/draft/i);
     });
 
     it("opens a scenario once the account satisfies it", () => {
-        const readiness = resolveReadiness(emptySubject({ draftCount: 1 }), noExtras, new Set());
+        const readiness = resolveReadiness(emptySubject({ draftCount: 1 }), noExtras, new Set(), reachable);
         expect(readiness.find((r) => r.scenarioKey === "post_charge")!.ready).toBe(true);
     });
 
     it("holds a dependent scenario until its predecessor is accepted", () => {
         const subject = emptySubject({ responsibilityAllocatedCents: 7500, namedParties: ["Dana Alvarez"] });
         const extras = { ...noExtras, hasLiveObligation: true };
-        const blocked = resolveReadiness(subject, extras, new Set()).find((r) => r.scenarioKey === "expected_funding")!;
+        const blocked = resolveReadiness(subject, extras, new Set(), reachable).find((r) => r.scenarioKey === "expected_funding")!;
         expect(blocked.ready).toBe(false);
         expect(blocked.unmet.join(" ")).toContain("manage_responsibility");
 
-        const open = resolveReadiness(subject, extras, new Set(["manage_responsibility"]))
+        const open = resolveReadiness(subject, extras, new Set(["manage_responsibility"]), reachable)
             .find((r) => r.scenarioKey === "expected_funding")!;
         expect(open.ready).toBe(true);
     });
@@ -140,9 +151,66 @@ describe("scenario readiness", () => {
      */
     it("refuses everything when the account could not be read", () => {
         const broken = emptySubject({ resolved: false, unresolvedReason: "the account could not be read" });
-        const readiness = resolveReadiness(broken, noExtras, new Set());
+        const readiness = resolveReadiness(broken, noExtras, new Set(), reachable);
         expect(readiness.every((r) => !r.ready)).toBe(true);
         expect(readiness[0].unmet.join(" ")).toMatch(/could not be read/i);
+    });
+
+    /*
+     * ── THE GAP THIS PROGRAM SHIPPED WITH ──────────────────────────────────────────────────────
+     *
+     * Scenario 01 reported READY on the strength of the account resolving through the API, while
+     * Financials → Accounts did not list the household, so its first instruction — open Accounts,
+     * select the household — could not be carried out. Resolvability is not navigability. These
+     * hold the two apart.
+     */
+    it("separates data readiness from navigation readiness", () => {
+        const [entry] = resolveReadiness(emptySubject({ draftCount: 1 }), noExtras, new Set(), unreachable)
+            .filter((r) => r.scenarioKey === "post_charge");
+        expect(entry.dataReady, "the account's facts satisfy the scenario").toBe(true);
+        expect(entry.navigationReady, "but the operator cannot reach it").toBe(false);
+        expect(entry.ready, "and a scenario nobody can start is not ready").toBe(false);
+        expect(entry.unmet, "the data axis stays clean — the gap is not a precondition").toEqual([]);
+        expect(entry.unreachable.join(" ")).toMatch(/does not list this account/i);
+    });
+
+    it("reports both axes as ready when the subject resolves and is listed", () => {
+        const entry = resolveReadiness(emptySubject({ draftCount: 1 }), noExtras, new Set(), reachable)
+            .find((r) => r.scenarioKey === "post_charge")!;
+        expect(entry.dataReady).toBe(true);
+        expect(entry.navigationReady).toBe(true);
+        expect(entry.ready).toBe(true);
+        expect(entry.unreachable).toEqual([]);
+    });
+
+    /*
+     * A scenario that names no product path cannot be blocked by one. The deferred and
+     * out-of-scope entries declare `navigate: []`, and failing them on navigation would be the
+     * harness inventing a dependency the catalog never claimed.
+     */
+    it("never blocks a scenario that navigates nowhere on navigation", () => {
+        const readiness = resolveReadiness(emptySubject(), noExtras, new Set(), unreachable);
+        for (const entry of readiness) {
+            const navigatesNowhere = scenarioByKey(entry.scenarioKey)!.navigate.length === 0;
+            expect(entry.navigationReady, entry.scenarioKey).toBe(navigatesNowhere);
+        }
+    });
+
+    /*
+     * THE READINESS TEST MUST NOT BE A HARDCODED HOUSEHOLD.
+     *
+     * `readNavigation` asks the Accounts cohort resolver whether the subject is in it. If anyone
+     * replaces that with a literal — an id, a name, a "demo" flag — the check stops measuring the
+     * contract that powers the rail and starts measuring itself.
+     */
+    it("resolves navigation through the Accounts cohort contract, not a named household", () => {
+        const src = read("lib/qa/financialsDirectorQa/readiness.ts");
+        expect(src).toContain("resolveFinancialSubjectCohort");
+        const body = src.slice(src.indexOf("export async function readNavigation"));
+        const fn = body.slice(0, body.indexOf("\n}\n"));
+        expect(fn).toContain("cohort.subjects.some");
+        expect(fn, "no household is named inside the navigation check").not.toMatch(/Alvarez/i);
+        expect(fn, "and no fixture id is pinned there either").not.toMatch(/fd000000-/);
     });
 
     it("reads the sibling precondition as an absence of billing, not an absence of the child", () => {
