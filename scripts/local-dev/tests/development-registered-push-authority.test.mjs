@@ -301,5 +301,25 @@ test("13 — the PROTECTED set is the target project's, and Alloy is not weakene
   }
 });
 
+test("14 — the PROMOTION BASE is the target project's too", () => {
+  /*
+   * The third copy of one defect, and the shape is identical each time. The
+   * allowlist refused `ksquared-16/vacilando`; the push guard refused its
+   * `main`; and `promotion.open_pr` refused a pull request into it with "base
+   * must be one of: staging" -- true of Alloy, false of a project whose
+   * declared promotion branch is `main`.
+   */
+  const alloy = R.getRepository(R.ALLOY_REPOSITORY_ID);
+  assert.deepEqual([...M.allowedTargetBranchesFor(alloy)], ["staging"], "Alloy still promotes into staging");
+  const governed = { repository_id: "repo_g", profile: "generic", promotion: { governed_promotion: true, promotion_branch: "main" } };
+  assert.deepEqual([...M.allowedTargetBranchesFor(governed)], ["main"]);
+  // Ungoverned and unregistered both keep the incumbent floor.
+  assert.deepEqual([...M.allowedTargetBranchesFor({ repository_id: "repo_p", profile: "generic" })], ["staging"]);
+  assert.deepEqual([...M.allowedTargetBranchesFor(null)], ["staging"]);
+  // And the remote resolves back to its record, which is what makes it per-target.
+  assert.equal(M.repositoryRecordForRemote("ksquared-16/second")?.repository_id, "repo_second");
+  assert.equal(M.repositoryRecordForRemote("nobody/nothing"), null);
+});
+
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
 process.exit(fail ? 1 : 0);

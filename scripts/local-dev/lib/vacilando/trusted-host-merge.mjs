@@ -16,7 +16,8 @@ import { spawnSync } from "node:child_process";
 import { canonicalGatewayRuntimeRoot, liveMergePermitted } from "./trusted-host-remote-guard.mjs";
 import { firstMeaningfulLine } from "./trusted-host-push.mjs";
 import {
-  ALLOY_REPOSITORY_ID, eligibleRepositoryRemotes, executionProfileFor, promotionPolicyFor,
+  ALLOY_REPOSITORY_ID, canonicalRemoteFor, eligibleRepositoryRemotes, executionProfileFor,
+  listRepositories, promotionPolicyFor,
 } from "./repository-registry.mjs";
 import { gatewayStateRoot } from "./runtime-roots.mjs";
 
@@ -120,6 +121,38 @@ export function isAllowlistedRepository(value) {
  * floor that keeps an unseeded host working, and the environment extras kept as
  * an explicit compatibility path for hosts that still set them.
  */
+/**
+ * The branches a promotion may target, FOR THIS REPOSITORY.
+ *
+ * `ALLOWED_TARGET_BRANCHES` is Alloy's promotion trunk, and using it for every
+ * project is the third copy of one defect. The allowlist refused
+ * `ksquared-16/vacilando`; the push guard refused its `main`; and this refused
+ * a pull request into it with "base must be one of: staging" -- a sentence true
+ * of Alloy and false of a project whose declared promotion branch is `main`.
+ *
+ * A registered project with governed promotion promotes into ITS OWN trunk. An
+ * unregistered or ungoverned target keeps Alloy's answer, which is the floor
+ * every earlier slice preserved.
+ */
+export function allowedTargetBranchesFor(repositoryRecord) {
+  if (!repositoryRecord) return ALLOWED_TARGET_BRANCHES;
+  const policy = promotionPolicyFor(repositoryRecord);
+  if (policy.governed_promotion && policy.promotion_branch) return Object.freeze([policy.promotion_branch]);
+  return ALLOWED_TARGET_BRANCHES;
+}
+
+/** The registered record whose canonical remote is this target, or null. */
+export function repositoryRecordForRemote(remote) {
+  const want = normalizeRepositorySlug(remote);
+  if (!want) return null;
+  try {
+    for (const rec of listRepositories({ includeRetired: false })) {
+      if (canonicalRemoteFor(rec) === want) return rec;
+    }
+  } catch { /* an unreadable registry yields the floor, not a bypass */ }
+  return null;
+}
+
 export function allowlistedRepositories() {
   const extra = String(process.env.VACILANDO_GITHUB_REPOSITORY || process.env.ALLOY_GITHUB_REPOSITORY || "")
     .split(",")

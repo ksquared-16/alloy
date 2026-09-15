@@ -20,7 +20,10 @@
  */
 import { spawnSync } from "node:child_process";
 
-import { isAllowlistedRepository, normalizeRepositorySlug, repositoryRefusalDetail, ALLOWED_TARGET_BRANCHES } from "./trusted-host-merge.mjs";
+import {
+  allowedTargetBranchesFor, isAllowlistedRepository, normalizeRepositorySlug,
+  repositoryRecordForRemote, repositoryRefusalDetail, ALLOWED_TARGET_BRANCHES,
+} from "./trusted-host-merge.mjs";
 import { BRANCH_RE, PROTECTED_REFS, SHA_RE } from "./trusted-host-push.mjs";
 import { liveRemoteMutationPermitted } from "./trusted-host-remote-guard.mjs";
 import { firstMeaningfulLine } from "./trusted-host-push.mjs";
@@ -52,12 +55,14 @@ export function validateOpenPrInputs(inputs = {}) {
     return { ok: false, code: "repository_not_allowlisted", detail: repositoryRefusalDetail(repository) };
   }
 
-  const base = String(inputs.base || inputs.base_branch || inputs.baseBranch || "staging").trim();
-  if (!ALLOWED_TARGET_BRANCHES.includes(base)) {
+  // The base a promotion may target belongs to the TARGET project, not to Alloy.
+  const allowedBases = allowedTargetBranchesFor(repositoryRecordForRemote(repository));
+  const base = String(inputs.base || inputs.base_branch || inputs.baseBranch || allowedBases[0] || "staging").trim();
+  if (!allowedBases.includes(base)) {
     return {
       ok: false,
       code: "base_branch_not_allowed",
-      detail: `base must be one of: ${ALLOWED_TARGET_BRANCHES.join(", ")}`,
+      detail: `base must be one of: ${allowedBases.join(", ")}`,
     };
   }
 
