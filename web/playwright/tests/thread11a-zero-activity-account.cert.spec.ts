@@ -12,7 +12,18 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 
-const STORAGE = "/Users/vacilando/.local/state/alloy-dev/gateway/auth/slot2/storage-state.json";
+/*
+ * WHERE THIS RUNS. The slot's own dev server and session by default, so the proof is capturable
+ * from the lane that wrote it; overridable to hosted staging — the surface Director QA is actually
+ * performed on — so the same steps certify the deployed build rather than one laptop's port.
+ */
+const HOSTED = process.env.THREAD11A_HOSTED === "1";
+const STORAGE = process.env.THREAD11A_STORAGE?.trim()
+    || (HOSTED
+        ? "/Users/vacilando/.local/state/alloy-dev/gateway/auth/deployed/alloy_staging_web/storage-state.json"
+        : "/Users/vacilando/.local/state/alloy-dev/gateway/auth/slot2/storage-state.json");
+const BASE_URL = process.env.THREAD11A_BASE_URL?.trim()
+    || (HOSTED ? "https://staging.workwithalloy.com" : "http://127.0.0.1:3012");
 /* The operator's own path, in the labels the build renders: /workspace → Financials → Accounts. */
 const WORKSPACE = "/workspace";
 const FINANCIALS_RAIL = '[aria-label^="Financials \u2014"]';
@@ -20,7 +31,7 @@ const FINANCIALS_RAIL = '[aria-label^="Financials \u2014"]';
 /** The certification fixture's zero-activity household. */
 const ALVAREZ = "fd000000-0000-4000-8000-0000000c0001";
 
-test.use({ storageState: STORAGE, baseURL: "http://127.0.0.1:3012" });
+test.use({ storageState: STORAGE, baseURL: BASE_URL });
 /* The workspace shell, the overlay and two server projections. Generous, and bounded. */
 test.describe.configure({ timeout: 180_000 });
 
@@ -80,15 +91,17 @@ test("the zero-activity household is listed, selectable, and reads as a legitima
     const addCharge = page.getByText("Add charge", { exact: false }).first();
     await expect(addCharge).toBeVisible({ timeout: 45_000 });
     await addCharge.scrollIntoViewIfNeeded();
-    await page.screenshot({
-        path: "../certification/financials/thread11a-zero-activity-add-charge.png",
-    });
+    if (!HOSTED) {
+        await page.screenshot({ path: "../certification/financials/thread11a-zero-activity-add-charge.png" });
+    }
 
     /* The repo's certification directory; Playwright runs with `web/` as its working directory. */
-    await page.screenshot({
-        path: "../certification/financials/thread11a-zero-activity-account-detail.png",
-        fullPage: true,
-    });
+    if (!HOSTED) {
+        await page.screenshot({
+            path: "../certification/financials/thread11a-zero-activity-account-detail.png",
+            fullPage: true,
+        });
+    }
 });
 
 test("a cold reload reaches the same account by the same path", async ({ page }) => {
@@ -120,5 +133,7 @@ test("accounts that carry money are unchanged by the join", async ({ page }) => 
         expect(amount, `${id} is not zeroed by the join`).not.toBe("$0.00");
     }
 
-    await page.screenshot({ path: "../certification/financials/thread11a-accounts-rail.png", fullPage: true });
+    if (!HOSTED) {
+        await page.screenshot({ path: "../certification/financials/thread11a-accounts-rail.png", fullPage: true });
+    }
 });
