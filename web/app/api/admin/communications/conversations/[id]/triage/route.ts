@@ -3,6 +3,10 @@ import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_SEND,
+} from "@/lib/communications/communicationsAuthority";
+import {
     TRIAGE_OPERATOR_ACTIONS,
     triageAttentionStateForAction,
     type TriageActionKey,
@@ -17,6 +21,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_SEND);
+    if (!auth.ok) return auth.response;
 
     const { id: threadId } = await context.params;
     let body: { action?: string };

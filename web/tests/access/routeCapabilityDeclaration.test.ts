@@ -456,10 +456,41 @@ describe("W-15 — gate sizing is conservative where it matters", () => {
         // Bucketing on the grammar alone credited 80 handlers with capability gates, on the strength
         // of literals like `customer_id.is.null` and `person.email`. Passing a catalog that holds
         // nothing must therefore empty the bucket — if it does not, the grammar is still judging.
-        const real = gateInventory(table) as { capability: unknown[] };
+        const real = gateInventory(table) as {
+            capability: { route: string; method: string; keys: string[] }[];
+            none: unknown[];
+            authenticated: unknown[];
+            gateHelper: unknown[];
+        };
         const withNoCatalog = gateInventory(table, new Set()) as { capability: unknown[] };
         expect(withNoCatalog.capability).toHaveLength(0);
-        expect(real.capability.length).toBeLessThan(20);
+
+        /*
+         * THIS ASSERTED `< 20`, AND THE NUMBER WAS MEASURING THE WRONG DIRECTION.
+         *
+         * It was a magnitude bound from a tree where almost nothing carried a capability gate, so
+         * it read as "the grammar cannot be crediting everything". But the count it bounds is the
+         * number of handlers that DO name a catalogued capability — the quantity this whole
+         * programme exists to raise. Gating the Communications surface took it from 1 to 49, and a
+         * ceiling that has to be lifted every time authority coverage improves is a ratchet pointed
+         * backwards: the next person raises it without reading it.
+         *
+         * The property it stood in for is stated directly instead. Every key credited must be one
+         * the catalog holds — that is what "the catalog is the judge" means — and the bucket must
+         * still be a proper subset of the pending handlers, which is what "the grammar is not
+         * crediting everything" means. Both fail if the grammar starts judging again; neither
+         * fails because the platform enforced more of its own capabilities.
+         */
+        const catalog = discoverCatalog();
+        for (const entry of real.capability) {
+            expect(entry.keys.length, `${entry.route} ${entry.method} credited with no key`).toBeGreaterThan(0);
+            for (const key of entry.keys) {
+                expect(catalog.has(key), `${entry.route} ${entry.method}: "${key}" is not a catalog key`).toBe(true);
+            }
+        }
+        const pending = real.capability.length + real.gateHelper.length + real.authenticated.length + real.none.length;
+        expect(real.capability.length).toBeGreaterThan(0);
+        expect(real.capability.length).toBeLessThan(pending);
     });
 
     it("never reports a handler the table has already declared", () => {

@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 /**
  * THE canonical document-access decision.
  *
@@ -77,6 +78,29 @@ export const DOCUMENT_READ_ROLES: readonly string[] = ["owner", "admin", "ops", 
 
 /** Explicit permission that grants document read independent of legacy role. */
 export const DOCUMENT_READ_PERMISSION = "documents.read";
+
+/**
+ * Explicit permission to CREATE, REPLACE or REMOVE a document.
+ *
+ * Catalogued and granted to `admin` and `ops` in every organization since the permission grid, and
+ * — until the CRM/People slice — enforced by nothing at all. Its first callers are the person
+ * profile-photo mutations, which are documents-backed: they write the `documents` table and object
+ * storage, and the GET beside them is already declared `documents.read`. Putting them under a CRM
+ * key because they hang off a person would have said that whoever may edit a household may also
+ * write documents, which is a different power with a different owner.
+ */
+export const DOCUMENT_WRITE_PERMISSION = "documents.write";
+
+/** Refuse unless the caller may write documents, naming the key it wanted. */
+export function requireDocumentWrite(
+    ctx: { permissionKeys?: readonly string[] | null },
+): NextResponse | null {
+    if ((ctx.permissionKeys ?? []).includes(DOCUMENT_WRITE_PERMISSION)) return null;
+    return NextResponse.json(
+        { error: "Forbidden", required_permission: DOCUMENT_WRITE_PERMISSION },
+        { status: 403 },
+    );
+}
 
 /**
  * Document statuses that must never be signed regardless of actor.

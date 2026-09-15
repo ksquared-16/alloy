@@ -4,6 +4,10 @@ import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { executeLegacyCommunicationsSendAdapter } from "@/lib/communications/executeLegacyCommunicationsSendAdapter";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_SEND,
+} from "@/lib/communications/communicationsAuthority";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -17,6 +21,8 @@ export async function POST(req: Request) {
     }
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_SEND);
+    if (!auth.ok) return auth.response;
 
     let body: Record<string, unknown>;
     try {

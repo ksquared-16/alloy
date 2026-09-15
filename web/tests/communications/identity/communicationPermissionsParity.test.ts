@@ -4,19 +4,20 @@ import { hasCommunicationsSendPermission } from "@/lib/communications/communicat
 
 describe("communications send permission parity", () => {
     it("denies send without communications.send or legacy alias", () => {
-        expect(hasCommunicationsSendPermission(["staff"], [])).toBe(false);
+        expect(hasCommunicationsSendPermission([])).toBe(false);
     });
 
-    it("allows admin bypass", () => {
-        expect(hasCommunicationsSendPermission(["admin"], [])).toBe(true);
+    it("gives the administrator title no send authority of its own", () => {
+        // Was "allows admin bypass". The bypass is the thing that went.
+        expect(hasCommunicationsSendPermission([])).toBe(false);
     });
 
     it("allows communications.send grant", () => {
-        expect(hasCommunicationsSendPermission(["staff"], ["communications.send"])).toBe(true);
+        expect(hasCommunicationsSendPermission(["communications.send"])).toBe(true);
     });
 
     it("allows legacy ops.messaging.write alias", () => {
-        expect(hasCommunicationsSendPermission(["staff"], ["ops.messaging.write"])).toBe(true);
+        expect(hasCommunicationsSendPermission(["ops.messaging.write"])).toBe(true);
     });
 });
 

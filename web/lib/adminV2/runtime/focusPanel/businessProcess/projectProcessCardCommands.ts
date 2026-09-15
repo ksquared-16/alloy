@@ -105,7 +105,13 @@ export type ProcessCardCommandProjection = {
     configuredRefs: string[];
 };
 
-const EMPTY: ProcessCardCommandProjection = {
+/**
+ * The projection for a surface with nothing configured to say.
+ *
+ * Exported because the card needs the same empty value when no server projection has arrived yet —
+ * a locally-invented empty would be a second definition of "no commands".
+ */
+export const EMPTY_COMMAND_PROJECTION: ProcessCardCommandProjection = {
     configured: false,
     commands: [],
     drift: [],
@@ -167,7 +173,7 @@ function configuredRefs(context: OperationalContext): Array<{ ref: string; slot:
  * draft, so an unpublished edit cannot move this card.
  */
 export function projectProcessCardCommands(context: OperationalContext): ProcessCardCommandProjection {
-    if (!context.publishedStageInputs) return EMPTY;
+    if (!context.publishedStageInputs) return EMPTY_COMMAND_PROJECTION;
 
     const surface = projectCurrentWork(context).surface;
     const buttons = resolveCurrentWorkActionButtons(surface);

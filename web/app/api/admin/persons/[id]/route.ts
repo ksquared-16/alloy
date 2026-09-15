@@ -5,6 +5,10 @@ import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { parsePersonEmployeePlacementPatchBody } from "@/lib/admin/personEmployeePlacementFields";
 import {
+    requireCrmPeopleCapability,
+    CRM_CUSTOMERS_WRITE,
+} from "@/lib/access/crmPeopleAuthority";
+import {
     COMPLETION_REQUIREMENT_VALIDATION_ERROR,
     enforcePersonCompletionOnPatch,
 } from "@/lib/completion/enforcePersonCompletionOnPatch";
@@ -50,9 +54,8 @@ export async function PATCH(
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_WRITE);
+    if (capDenied) return capDenied;
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });

@@ -4,8 +4,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { processDueCommunicationScheduledSends } from "@/lib/communications/communicationScheduledSendsService";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_BULK_SEND,
+} from "@/lib/communications/communicationsAuthority";
 
 function isCronAuthorized(request: NextRequest): boolean {
     const envTok = (process.env.INTERNAL_CRON_TOKEN ?? "").trim();
@@ -46,8 +49,8 @@ export async function POST(request: NextRequest) {
     if (cronOk) {
         orgIdFilter = null;
     } else {
-        const forbidden = await requireAdminOrOps();
-        if (forbidden) return forbidden;
+        const auth = await requireCommunicationsAuthority(COMMUNICATIONS_BULK_SEND);
+        if (!auth.ok) return auth.response;
         const ctx = await getAdminContextCached();
         if (!ctx.ok) return adminContextFailureResponse(ctx);
         orgIdFilter = ctx.orgId;

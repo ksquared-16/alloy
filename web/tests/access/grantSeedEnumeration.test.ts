@@ -62,7 +62,7 @@ const M6 = "20260807170000_w12_seed_default_rbac_enumerated_grants.sql";
  * capability a NEW organization never receives — the cliff `20260910183000` was written to end.
  * Forms moved it here.
  */
-const LIVE_SEED = "20260915140000_access_administration_split.sql";
+const LIVE_SEED = "20260915200000_organization_vocabulary_authority.sql";
 
 /**
  * The migration that owns the COMPLETENESS contract — the admin-is-the-whole-catalog rule, the nine
@@ -127,6 +127,29 @@ const OPS_WITHHELD = [
      */
     "admin.access_scope.write",
     "attendance.devices.manage",
+    /*
+     * Defining the organization's vocabulary. Withheld from ops for the reason the slice states:
+     * three of the four included families denied ops by role title already, and the fourth was
+     * reachable by any portal-admitted principal, which is accidental reach rather than a package
+     * decision. Nothing in the product ever said ops defines the words the organization uses.
+     */
+    "configuration.vocabulary.manage",
+    /*
+     * The three Communications authorities, withheld for the reason the model was split.
+     *
+     * `ops` keeps `communications.read` and `communications.send` — answering a family is the work.
+     * It does not thereby acquire the right to rewrite every organization template, reconfigure the
+     * delivery infrastructure those messages travel over, or address the whole tenant at once.
+     *
+     * This is not a narrowing of `ops`. All three keys came into existence with
+     * `20260915180000`, and no role is given a capability merely because one was created. What DID
+     * change for `ops` is nothing: before the split these routes asked for no functional authority
+     * at all, so every portal principal reached them. Withholding here is the first time the answer
+     * is a decision rather than an accident.
+     */
+    "communications.templates.manage",
+    "communications.provider.configure",
+    "communications.bulk.send",
     "enrollment.pricing.override",
     "enrollment.requirement_exception.manage",
     "fin.adjust",

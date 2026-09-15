@@ -2,6 +2,7 @@ import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntim
 import type { TourBookingStatusKey } from "@/lib/tours/bookings/types";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
+import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import type { RecordLifecycleRailModel } from "@/lib/admin/drawer/resolveRecordLifecycleRailModel";
 import type { FamilyCommunicationWorkspacePreviewVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { PersonEmploymentComposition } from "@/lib/employment/buildPersonEmploymentComposition";
@@ -368,6 +369,21 @@ export type OperationalContext = {
      * Same source as /processes stage bootstrap (operating plan + action catalog + field rules).
      */
     publishedStageInputs?: PublishedStageInputsForCurrentWork | null;
+    /**
+     * THE SERVER'S OPERATIONAL PROJECTION FOR THIS SUBJECT — the card's truth, already decided.
+     *
+     * Both transport frames carry it: the provisioning answer at commit, the drawer VM once
+     * Settlement arrives. The card reads THIS and never re-derives from `publishedStageInputs`,
+     * which is what lets that configuration stop travelling at all.
+     *
+     * The frame-selection layer decides which transport is current. It does not decide projection:
+     * one server chokepoint owns both frames, so switching frames cannot change what a command is
+     * called or whether it can run.
+     *
+     * Optional because contexts built for the composer/lab supply no server frame; those callers
+     * are authoring surfaces, not the operational Focus Panel.
+     */
+    operationalProjection?: FocusPanelOperationalProjection | null;
     /**
      * SETTLEMENT-only projections. These feed drill/enrichment cards (the `workflow_steps` lifecycle
      * rail, the activity-mode communications workspace) that are RESERVED at commit and filled by the

@@ -10,6 +10,7 @@ import {
     type StatusDefinitionDeleteAction,
 } from "@/lib/admin/statusDefinitionDeletePlan";
 import { logDbTiming } from "@/lib/admin/dbQueryTiming";
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 const ALLOWED_PATCH_KEYS = ["status_label", "sort_order", "is_active", "metadata"] as const;
 
@@ -25,9 +26,8 @@ export async function PATCH(
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const capDenied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (capDenied) return capDenied;
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -128,9 +128,8 @@ export async function DELETE(
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const capDenied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (capDenied) return capDenied;
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });

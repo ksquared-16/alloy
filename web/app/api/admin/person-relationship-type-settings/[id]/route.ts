@@ -4,6 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { apiOk, apiError } from "@/lib/api/apiResponse";
 import { mergeRelationshipPresentationMetadata } from "@/lib/dataModel/relationshipVocabularyPresentation";
+import { requireOrganizationVocabularyCapability } from "@/lib/access/organizationVocabularyAuthority";
 
 const ALLOWED_PATCH_KEYS = ["label", "description", "sort_order", "is_active"] as const;
 
@@ -30,9 +31,8 @@ export async function PATCH(
             { request }
         );
     }
-    if (ctx.role !== "admin") {
-        return apiError("FORBIDDEN", "Forbidden", 403, undefined, { request });
-    }
+    const capDenied = requireOrganizationVocabularyCapability(ctx);
+    if (capDenied) return capDenied;
 
     const { id } = await context.params;
     if (!id) return apiError("BAD_REQUEST", "Missing id", 400, undefined, { request });
