@@ -37,8 +37,20 @@
  * it replaces.
  */
 
-import "server-only";
-
+/*
+ * NO `server-only` MARKER, DELIBERATELY — and this was learned the hard way.
+ *
+ * C1 added one to express intent. It took the whole Focus Panel down: this module is reached from
+ * shared graphs that the client also imports, and a `server-only` module anywhere in that graph
+ * fails the Ecmascript parse with "Error: ./…focusPanelOperationalProjection.ts:40 import
+ * server-only". Neither typecheck graph sees it and no required check caught it; the panel simply
+ * did not render.
+ *
+ * The marker was never earning anything here. This module holds pure computation — no secrets, no
+ * database, no request. What makes the projection server-OWNED is that the two producers are the
+ * only callers, and that is enforced by the tests below it, not by a bundler directive that can
+ * break the product.
+ */
 import { buildBusinessProcessCardEvidence } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
 import { projectProcessCardCommands } from "@/lib/adminV2/runtime/focusPanel/businessProcess/projectProcessCardCommands";
 import { projectCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/projectCurrentWork";

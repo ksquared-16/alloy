@@ -145,10 +145,16 @@ import {
 } from "@/lib/runtime/provisioning/childGrainSurfaceComposition";
 import { resolveChildGrainFocusPanelScope } from "@/lib/runtime/provisioning/childGrainScope";
 import type { ChildParticipationIdentity } from "@/lib/lifecycle/childParticipationIdentity";
-import {
-    projectFocusPanelOperational,
-    type FocusPanelOperationalProjection,
-} from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjection";
+import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjection";
+/*
+ * The TYPE comes from the contract, never from the server-only implementation.
+ *
+ * `ProvisioningAnswer` is imported as a type by client components, and a type import from a
+ * `server-only` module still pulls that module into the client graph — which took the whole Focus
+ * Panel down with "Ecmascript file had an error" at `import "server-only"`. Neither typecheck graph
+ * sees this; only a real render does.
+ */
+import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */

@@ -360,7 +360,14 @@ describe("the chokepoint delegates and never re-implements", () => {
         expect(body).not.toMatch(/\?\s*[^.]/); // no ternaries (optional chaining is fine)
     });
 
-    it("is server-owned", () => {
-        expect(code).toContain('import "server-only"');
+    it("does NOT carry a server-only marker, which took the panel down", () => {
+        /*
+         * The marker was in C1 and had to go: this module is reached from graphs the client also
+         * imports, and `server-only` anywhere in that graph fails the Ecmascript parse — the Focus
+         * Panel rendered nothing. No typecheck and no required gate saw it; a browser render did.
+         *
+         * Ownership is enforced by WHO CALLS IT — the two server producers — not by a directive.
+         */
+        expect(code).not.toContain('import "server-only"');
     });
 });
