@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { resolveOptionsByIndustry, resolveOptionsByVertical } from "@/lib/admin/personTypeSettings";
 import { apiOk, apiError } from "@/lib/api/apiResponse";
+import { requireOrganizationVocabularyCapability } from "@/lib/access/organizationVocabularyAuthority";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -116,9 +117,8 @@ export async function POST(request: NextRequest) {
             { request }
         );
     }
-    if (ctx.role !== "admin") {
-        return apiError("FORBIDDEN", "Forbidden", 403, undefined, { request });
-    }
+    const capDenied = requireOrganizationVocabularyCapability(ctx);
+    if (capDenied) return capDenied;
 
     let body: { key?: string; label?: string; description?: string; sort_order?: number; is_active?: boolean } = {};
     try {

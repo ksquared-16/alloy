@@ -265,6 +265,18 @@ export const CUSTOM = {
     crmWriter: "mcert_crm_writer",
     crmWriteOnly: "mcert_crm_write_only",
     crmTitular: "mcert_crm_titular",
+
+    /*
+     * ── ORGANIZATION VOCABULARY, AND THE NEIGHBOURS IT MUST NOT REACH ──
+     *
+     * `configuration.vocabulary.manage` exists because no adjacent Configuration authority truthfully
+     * meant it. These roles are what turns that argument into a product answer: a vocabulary manager
+     * who cannot touch fields or option sets, and a field manager and an option-set manager who
+     * cannot touch vocabulary. `vocabTitular` is labelled Configuration Administrator and holds
+     * nothing — eight of these mutations were gated on the word "admin".
+     */
+    vocabManager: "mcert_vocab_manager",
+    vocabTitular: "mcert_vocab_titular",
     oiReader: "mcert_oi_reader",
     oiTitular: "mcert_oi_titular",
 };
@@ -351,6 +363,8 @@ export const P = {
     crmWriter:       { id: "c0000000-0000-4000-8000-00000000d064", email: "cert.crmwriter@northwind.invalid",      role: CUSTOM.crmWriter },
     crmWriteOnly:    { id: "c0000000-0000-4000-8000-00000000d065", email: "cert.crmwriteonly@northwind.invalid",   role: CUSTOM.crmWriteOnly },
     crmTitular:      { id: "c0000000-0000-4000-8000-00000000d066", email: "cert.crmtitular@northwind.invalid",     role: CUSTOM.crmTitular },
+    vocabManager:    { id: "c0000000-0000-4000-8000-00000000d067", email: "cert.vocabmgr@northwind.invalid",       role: CUSTOM.vocabManager },
+    vocabTitular:    { id: "c0000000-0000-4000-8000-00000000d068", email: "cert.vocabtitular@northwind.invalid",   role: CUSTOM.vocabTitular },
 };
 
 async function principal(p) {
@@ -455,6 +469,8 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.crmWriteOnly,   role_label: "Family record writer (write only)", description: "Holds write and not read — the separation, from the other side.", is_system: false, is_active: true },
         /* The title control. Named for authority over customers, granted none of it. */
         { org_id: ORG, role_key: CUSTOM.crmTitular,     role_label: "Customer Administrator",      description: "Titled for authority, holding none of it.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.vocabManager,   role_label: "Vocabulary manager",          description: "Defines the organization's words. Changes none of its records.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.vocabTitular,   role_label: "Configuration Administrator", description: "Titled for configuration authority, holding none of it.", is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
 
@@ -592,6 +608,11 @@ export async function setup() {
         [CUSTOM.crmWriteOnly, ["portal.access", "crm.customers.write"]],
         /* Labelled "Customer Administrator". Holds admission and nothing else. */
         [CUSTOM.crmTitular, ["portal.access"]],
+
+        /* Vocabulary ALONE: no fields, no option sets, no CRM records, no assignment execution. */
+        [CUSTOM.vocabManager, ["portal.access", "configuration.vocabulary.manage"]],
+        /* Labelled "Configuration Administrator". Holds admission and nothing else. */
+        [CUSTOM.vocabTitular, ["portal.access"]],
     ]) {
         const { error } = await sb.rpc("replace_role_permission_grants", {
             p_org_id: ORG,
