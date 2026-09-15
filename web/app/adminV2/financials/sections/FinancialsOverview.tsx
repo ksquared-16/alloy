@@ -138,7 +138,17 @@ export default function FinancialsOverview({
 
     return (
         <WorkspaceOverviewStack data-testid="financials-overview">
-            <WorkspaceOverviewActivityBand testId="financials-overview-activity-kpis" busy={metrics.loading}>
+            {/*
+             * NOT "TODAY'S ACTIVITY", which is the band's default eyebrow and is false here.
+             * Outstanding and Collectible now are positions, not a day's movement — they are what
+             * money is doing at this instant, over whatever window the metric pack resolved. A
+             * heading that says today would put a window on figures that do not have one.
+             */}
+            <WorkspaceOverviewActivityBand
+                eyebrow="Money right now"
+                testId="financials-overview-activity-kpis"
+                busy={metrics.loading}
+            >
                 {HEADLINE.map(({ key, icon, accent, attentionWhenPositive }, index) => {
                     const metric = resolved.get(key);
                     return (
