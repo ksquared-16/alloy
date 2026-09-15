@@ -212,8 +212,33 @@ export default function FinancialsCard({ model, context, receded = false, coordi
      * a superseded response is simply dropped rather than cancelled, so nothing else changes.
      */
     const requestSeq = useRef(0);
+    /*
+     * ── THE REQUEST'S OWN IDENTITY, WHICH IS NOT THE SAME AS ITS INPUTS ──────────────────────────
+     *
+     * Measured on Firefly: this card issued `financials/card?customer_id=50b19065…` TWICE per Work
+     * Unit entry, and they were the two slowest requests in the sample. One mounted instance, no
+     * remount — proven with a mount counter and a per-request correlation header, because the DOM
+     * card-role counts that suggested a second instance were three roles across six cards.
+     *
+     * The cause is that `load` depended on `[customerId, scopedMemberId]` while the request it
+     * builds depends on the FIRST of them that is present. The participant resolves after the
+     * household, so `scopedMemberId` went `null → a227e460…`, `load`'s identity changed, the mount
+     * effect re-ran — and produced a byte-identical request, because `customerId` had won the
+     * ternary both times.
+     *
+     * Keying on the composed query is therefore not a cache and not a dedupe layer: it is this
+     * effect depending on what it actually sends. An input change that cannot change the request no
+     * longer re-issues it, and a change that CAN (the member-scoped branch, when no household is
+     * present) still does.
+     */
+    const requestQuery = useMemo(() => {
+        if (customerId) return `customer_id=${encodeURIComponent(customerId)}`;
+        if (scopedMemberId) return `customer_member_id=${encodeURIComponent(scopedMemberId)}`;
+        return null;
+    }, [customerId, scopedMemberId]);
+
     const load = useCallback(async () => {
-        if (!customerId && !scopedMemberId) {
+        if (!requestQuery) {
             requestSeq.current += 1;
             setVm(null);
             return;
@@ -222,10 +247,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         const current = () => seq === requestSeq.current;
         setLoading(true);
         try {
-            const query = customerId
-                ? `customer_id=${encodeURIComponent(customerId)}`
-                : `customer_member_id=${encodeURIComponent(scopedMemberId as string)}`;
-            const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
+            const query = requestQuery;
+                const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
             const json = (await res.json()) as { ok?: boolean; vm?: FinancialsCardVM };
             if (!current()) return;
             setVm(json?.ok && json.vm ? json.vm : null);
@@ -236,7 +259,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
             // A superseded request must not clear the spinner belonging to the one that replaced it.
             if (current()) setLoading(false);
         }
-    }, [customerId, scopedMemberId]);
+    }, [requestQuery]);
 
     /*
      * ── MOVING MONEY BETWEEN OBLIGATIONS ─────────────────────────────────────────────────────────
