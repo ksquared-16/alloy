@@ -254,11 +254,39 @@ All four are asserted. Rules 1–3 each close a different half; any one of them 
 
 ### 4.7 Certification
 
-| claim | proof |
+| claim | automated owner |
 | --- | --- |
-| solver constraints, spans, convergence | unit — `focusPanelRowHeightSolver.test.ts` |
-| assignment applied, measurement neutralized | source contract — `focusPanelExpandedSurfaceGeometry.test.tsx` |
-| **cards actually align on screen** | **browser geometry, ≤1px** |
+| band derivation, chains, solver constraints, convergence | `web/tests/surfaces/focusPanelRowHeightSolver.test.ts` |
+| assignment applied, measurement neutralized, one planner | `web/tests/surfaces/focusPanelExpandedSurfaceGeometry.test.tsx` |
+| **cards actually align on screen, ≤1px** | **`web/playwright/geometry/focusPanelGeometry.spec.ts`** |
 
-Geometry is authoritative. jsdom computes no layout, so an equal-height assertion there would pass
-against any implementation at all.
+**Browser geometry certification** — required, and owned by:
+
+| | |
+| --- | --- |
+| spec | `web/playwright/geometry/focusPanelGeometry.spec.ts` |
+| fixture | `web/playwright/geometry/focusPanelGeometryFixture.tsx` — mounts the **real** `FocusPanelCardGrid` |
+| config | `web/playwright.geometry.config.ts` |
+| command | `npm run test:focus-panel-geometry` |
+| required check | `Surfaces / Focus Panel certification` → *Certify Focus Panel browser geometry* |
+
+Geometry is authoritative and is now measured, not argued. Vitest runs in `environment: "node"`,
+which computes no layout, so an equal-height assertion there passes against any implementation at
+all — and twice it did, for [§4.3](#43-rowstart-is-a-placement-coordinate-not-a-visual-row) and
+[§4.6](#46-intrinsic-child-vs-assigned-wrapper) respectively. Both reached staging.
+
+The browser layer **adds to** the suites above rather than replacing them; each owns a layer the
+others cannot see. It depends on no server, tenant, network or sleep: the fixture is bundled with
+esbuild and served through `setContent`, and it waits on three consecutive animation frames of
+unchanged geometry — a measured settle, which doubles as the loop guard.
+
+Its binding is proven by planting each shipped defect and watching it fail:
+
+| planted defect | result |
+| --- | --- |
+| bands grouped by literal `rowStart` equality | scenario A fails at 1180 / 1440 / 1680, and B with it |
+| measurement reads the assigned wrapper (PR #989) | 5 of 16 fail, including the shrink case |
+
+A scenario asserting that cards in **different** bands stay independent sits alongside them, so an
+implementation that simply equalised everything fails too. Between them, neither wrong
+implementation this work shipped can pass.
