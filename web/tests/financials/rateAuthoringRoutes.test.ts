@@ -53,7 +53,7 @@ function post(body: unknown): NextRequest {
 beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAdminOrOps.mockResolvedValue(null);
-    mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, userId, role: "admin" });
+    mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, userId, role: "admin", permissionKeys: ["fin.write"] });
     mockCreateAdminClient.mockReturnValue({ from: vi.fn() });
     mockResolveTodayYmd.mockResolvedValue("2026-06-29");
     svc.createRatePlan.mockResolvedValue({ id: "plan-1" });
