@@ -76,7 +76,7 @@ const HARD_FAILURE_RULES = [
     "Revoked credentials remain usable.",
     "Suspended Installations remain usable contrary to contract.",
     "A one-time credential secret can be recovered after leaving or reloading.",
-    "A real credential or private customer datum appears in external documentation.",
+    "A real Credential, token, customer datum, or private identifier appears in external documentation.",
     "Attendance is represented as a currently available public mutation.",
     "An unverified Classroom Coach capability is represented as fact.",
     "The Classroom Coach packet exposes internal security findings.",
@@ -177,14 +177,14 @@ export default function DeveloperPlatformQaWalkthrough() {
         () =>
             ALL_STEPS.flatMap((step) => {
                 const e = state.entries[step.id];
-                if (e?.result !== "FAIL" && e?.result !== "NEEDS_REVIEW") return [];
+                if (e?.result !== "FAIL" && e?.result !== "BLOCKED" && e?.result !== "NEEDS_REVIEW") return [];
                 return [{
                     step: step.id,
                     area: step.area,
                     observed: e.notes?.trim() || "(operator recorded no observation)",
                     expected: step.expected.join(" "),
                     notes: e.notes?.trim() ?? "",
-                    severity: e.severity ?? (e.result === "NEEDS_REVIEW" ? "P3" : "unassigned"),
+                    severity: e.severity ?? (e.result === "FAIL" ? "unassigned" : "P3"),
                     evidence: e.evidence?.trim() ?? "",
                     owner: ownerFor(step),
                     result: e.result,
@@ -194,9 +194,9 @@ export default function DeveloperPlatformQaWalkthrough() {
     );
 
     const answered = ALL_STEPS.length - tally.unanswered;
-    const hardGateFailures = ALL_STEPS.filter(
-        (s) => s.hardGate && state.entries[s.id]?.result === "FAIL",
-    );
+    const hardGates = ALL_STEPS.filter((s) => s.hardGate);
+    const hardGateFailures = hardGates.filter((s) => state.entries[s.id]?.result === "FAIL");
+    const hardGatePasses = hardGates.filter((s) => state.entries[s.id]?.result === "PASS");
 
     const markdown = useCallback(() => {
         const lines: string[] = [
@@ -206,14 +206,17 @@ export default function DeveloperPlatformQaWalkthrough() {
             `Exported: ${new Date().toISOString()}`,
             "",
             "```text",
-            "Developer Platform Human QA",
+            "DEVELOPER PLATFORM HUMAN QA",
             "",
-            `Total steps:   ${ALL_STEPS.length}`,
+            `Total steps: ${ALL_STEPS.length}`,
             `Passed:        ${tally.PASS}`,
             `Failed:        ${tally.FAIL}`,
             `Blocked:       ${tally.BLOCKED}`,
             `Needs Review:  ${tally.NEEDS_REVIEW}`,
             `Unanswered:    ${tally.unanswered}`,
+            "",
+            `Hard gates passed: ${hardGatePasses.length} of ${hardGates.length}`,
+            `Hard gates failed: ${hardGateFailures.length}`,
             "",
             `P0 defects:    ${severityTally.P0}`,
             `P1 defects:    ${severityTally.P1}`,
@@ -239,9 +242,10 @@ export default function DeveloperPlatformQaWalkthrough() {
                 for (const d of group) {
                     lines.push(
                         `- **${d.step}** · ${d.area} · ${d.result}`,
-                        `    - Observed: ${d.observed}`,
-                        `    - Expected: ${d.expected}`,
-                        `    - Evidence: ${d.evidence || "(none)"}`,
+                        `    - Observed behavior: ${d.observed}`,
+                        `    - Expected behavior: ${d.expected}`,
+                        `    - Operator notes: ${d.notes || "(none)"}`,
+                        `    - Evidence reference: ${d.evidence || "(none)"}`,
                         `    - Recommended owner: ${d.owner}`,
                     );
                 }
@@ -250,19 +254,21 @@ export default function DeveloperPlatformQaWalkthrough() {
         }
         for (const section of SECTIONS) {
             lines.push(`## Section ${section.id} — ${section.title}`, "");
+            // Every step, including the ones that passed: the report should
+            // preserve what was actually reviewed, not only what went wrong.
             for (const step of section.steps) {
                 const e = state.entries[step.id];
-                if (!e?.result && !e?.notes) continue;
                 lines.push(
                     `- **${step.id}** (${step.area}) — ${e?.result ?? "unanswered"}` +
                         (e?.severity ? ` · ${e.severity}` : "") +
+                        (step.hardGate ? " · hard gate" : "") +
                         (e?.notes ? `\n    - ${e.notes.replace(/\n/g, "\n    - ")}` : ""),
                 );
             }
             lines.push("");
         }
         return lines.join("\n");
-    }, [state, tally, severityTally, hardGateFailures, defects]);
+    }, [state, tally, severityTally, hardGates, hardGatePasses, hardGateFailures, defects]);
 
     const copy = useCallback(async (text: string, key: string) => {
         try {
@@ -473,14 +479,17 @@ curl -s -D - -o /dev/null "$BASE/api/v1/context" -H "authorization: Bearer $TOKE
 
             <section style={S.setup} id="summary">
                 <h2 style={S.h2}>Final QA summary</h2>
-                <pre style={S.summaryPre}>{`Developer Platform Human QA
+                <pre style={S.summaryPre}>{`DEVELOPER PLATFORM HUMAN QA
 
-Total steps:   ${ALL_STEPS.length}
+Total steps: ${ALL_STEPS.length}
 Passed:        ${tally.PASS}
 Failed:        ${tally.FAIL}
 Blocked:       ${tally.BLOCKED}
 Needs Review:  ${tally.NEEDS_REVIEW}
 Unanswered:    ${tally.unanswered}
+
+Hard gates passed: ${hardGatePasses.length} of ${hardGates.length}
+Hard gates failed: ${hardGateFailures.length}
 
 P0 defects:    ${severityTally.P0}
 P1 defects:    ${severityTally.P1}
@@ -636,7 +645,7 @@ function StepCard({
                         );
                     })}
                 </div>
-                {entry.result === "FAIL" && (
+                {(entry.result === "FAIL" || entry.result === "BLOCKED" || entry.result === "NEEDS_REVIEW") && (
                     <label style={S.label}>
                         Severity
                         <select
@@ -662,7 +671,7 @@ function StepCard({
                         onChange={(e) => onChange({ notes: e.target.value })}
                     />
                 </label>
-                {(entry.result === "FAIL" || entry.result === "NEEDS_REVIEW") && (
+                {(entry.result === "FAIL" || entry.result === "BLOCKED" || entry.result === "NEEDS_REVIEW") && (
                     <label style={S.label}>
                         Evidence reference (screenshot filename, request id, timestamp)
                         <input
