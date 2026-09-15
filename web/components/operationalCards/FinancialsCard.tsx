@@ -211,8 +211,13 @@ export default function FinancialsCard({
                             className="alloy-os-billing__autopay"
                             data-autopay-ok={evidence.payment.autopayHealthy ? "true" : undefined}
                         >
-                            {/* "No autopay" was asserted from a hardcoded null; unknown now reads as unknown. */}
-                            {evidence.payment.autopayLabel ?? "Autopay not recorded"}
+                            {/*
+                             * AUTOPAY DOES NOT EXIST IN THIS PLATFORM — no table, no column, no
+                             * writer. "Not recorded" implied somebody could have recorded it and
+                             * had not, which is a statement about this family; the truth is about
+                             * Alloy. See `resolvePaymentSetup`, which reports it `unsupported`.
+                             */}
+                            {evidence.payment.autopayLabel ?? "Autopay not available yet"}
                         </p>
                         {evidence.payment.nextChargeLabel ? (
                             <p className="alloy-os-billing__next">Next · {evidence.payment.nextChargeLabel}</p>
@@ -237,9 +242,17 @@ export default function FinancialsCard({
                                 </div>
                             ))}
                         </div>
-                        {/* Manage payment owns payers, split, methods, autopay and recovery — so it
-                            sits under the payment facts, not in a generic footer. */}
-                        <FooterAction onClick={onManagePayment}>Manage payment →</FooterAction>
+                        {/*
+                         * MANAGE PAYMENT OWNS payers, split, methods, autopay and recovery — so it
+                         * sits under the payment facts rather than in a generic footer. It is
+                         * offered ONLY when a host actually passed a handler: every write it would
+                         * make needs provider tokenisation, which is not configured, and a control
+                         * that opens onto nothing tells an operator a capability exists. The same
+                         * gate the detail card already keeps.
+                         */}
+                        {onManagePayment ? (
+                            <FooterAction onClick={onManagePayment}>Manage payment →</FooterAction>
+                        ) : null}
                     </section>
                     </div>
                 </div>

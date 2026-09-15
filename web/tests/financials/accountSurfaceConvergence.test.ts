@@ -109,13 +109,46 @@ describe("F7 · one truth, two grains", () => {
         expect(imports.some((l) => l.includes("FinancialsCard"))).toBe(false);
     });
 
-    it("leads the Accounts detail with the workspace grain", () => {
+    /*
+     * ── SUMMARY, THEN DETAIL. ONE HIERARCHY. ───────────────────────────────────────────────────
+     *
+     * The locked composition: the Focus Panel's Financials card is the account's single summary and
+     * action object, and the expanded detail sits directly beneath it. Both are composed, neither is
+     * reimplemented.
+     *
+     * This assertion previously required only that the workspace detail rendered, and the surface
+     * drifted into having TWO summaries — the detail carried its own metric band saying the same
+     * figures the card said, under different labels. Order is the thing being locked now, because
+     * order is what was wrong.
+     */
+    it("leads with the summary card and puts the detail directly beneath it", () => {
         const src = read(ACCOUNTS);
-        expect(src.indexOf("<FinancialsAccountWorkspaceDetail"), "the workspace detail is rendered")
-            .toBeGreaterThan(-1);
-        // The command-bearing card remains available, composed rather than re-implemented.
-        expect(src).toContain("data-financials-account-actions");
-        expect(src).toContain("<FinancialsAccountDetail");
+        const summaryAt = src.indexOf("<FinancialsAccountDetail");
+        const detailAt = src.indexOf("<FinancialsAccountWorkspaceDetail");
+        expect(summaryAt, "the command-bearing card is composed, not re-implemented").toBeGreaterThan(-1);
+        expect(detailAt, "the expanded detail is rendered").toBeGreaterThan(-1);
+        expect(summaryAt, "summary above, detail below").toBeLessThan(detailAt);
+    });
+
+    it("carries exactly one summary, not two", () => {
+        const detail = read(WORKSPACE_DETAIL);
+        expect(detail, "the detail no longer restates the card's figures").not.toContain("data-financials-state-band");
+        /* The figures belong to the card above; the detail holds the ledger and the arrangements. */
+        for (const restated of ["Gross charged", "Payments received", "Collectible now"]) {
+            expect(detail, `${restated} is the summary's to state`).not.toContain(restated);
+        }
+    });
+
+    /*
+     * The operator is already in the Financials workspace and has already chosen an account.
+     * Requiring `Details →` before showing its ledger asks them to say so twice.
+     */
+    it("shows the ledger without a further command", () => {
+        const src = read(ACCOUNTS);
+        expect(src, "no disclosure wraps the account surface").not.toContain("<details");
+        const detail = read(WORKSPACE_DETAIL);
+        expect(detail).toContain("data-financials-lenses");
+        expect(detail, "the ledger is rendered, not gated").toContain("LedgerTable");
     });
 
     /*
