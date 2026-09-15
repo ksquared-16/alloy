@@ -145,6 +145,11 @@ import {
 } from "@/lib/runtime/provisioning/childGrainSurfaceComposition";
 import { resolveChildGrainFocusPanelScope } from "@/lib/runtime/provisioning/childGrainScope";
 import type { ChildParticipationIdentity } from "@/lib/lifecycle/childParticipationIdentity";
+import {
+    projectFocusPanelOperational,
+    type FocusPanelOperationalProjection,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjection";
+import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
 export const PROVISIONING_ROW_PAGE_CAP = 100;
@@ -340,6 +345,17 @@ export type ProvisioningAnswer =
            * unresolved (degrades to the drawer-VM load; never an operational failure).
            */
           focusPanelStageWork: OpportunityStageWorkSlice | null;
+          /**
+           * THE OPERATIONAL PROJECTIONS, DECIDED HERE.
+           *
+           * Business Process and Current Work used to be projected in the browser from
+           * `focusPanelStageWork.published_stage_inputs`, which is why that ~78KB of configuration —
+           * measured byte-identical between consecutive subject selections — had to travel at all.
+           * The server runs the same canonical owners now and sends what it decided.
+           *
+           * Null when there is no operational subject to project for.
+           */
+          focusPanelOperationalProjection: FocusPanelOperationalProjection | null;
           /** A — commit-critical subject identity truth bindings, domain-declared + opaque to the platform (see {@link SubjectIdentityTruth}). */
           subjectIdentityTruth: SubjectIdentityTruth | null;
           /** A — the published Summary composition for the committed scope (see {@link FocusPanelSummaryDocProjection}). */
@@ -508,6 +524,18 @@ export type ProvisioningRequest = {
      * still valid — its rows simply carry no avatar and present initials.
      */
     documentActor?: DocumentActor | null;
+    /**
+     * The actor's mutate access, resolved ONCE by the caller's route gate.
+     *
+     * The operational projections read `capabilities.canMutate` — an outcome cannot be completed
+     * without edit access — so the server needs the same verdict the browser used to reach. It is
+     * the gate's `hasPortalAdminMutateAccess(roleKeys)`, which is exactly what `useAdminAuth`
+     * computes client-side, and it is resolved here rather than re-derived so the two cannot drift.
+     *
+     * Optional and defaulting to `false`: a caller that cannot state the actor's access gets the
+     * read-only projection, which is the safe direction to be wrong in.
+     */
+    canMutate?: boolean;
     workUnitSlug: string;
     /** Attention is an INPUT, never derived from the route inside this resource (K1 owns intent). */
     requestedWorkViewId?: string | null;
@@ -1900,6 +1928,49 @@ export async function composeWorkUnitProvisioningAnswer(
         childIdentity: childComposition?.identity ?? null,
         focusPanelStageWork,
         subjectIdentityTruth,
+        focusPanelOperationalProjection: (() => {
+            /*
+             * THE PROJECTION CHOKEPOINT. One call, here, where every ingredient already exists.
+             *
+             * The context is built by the SAME function the browser used
+             * (`buildCommitCriticalOperationalContext`), from the SAME answer-derived fields, so the
+             * projections cannot diverge from the ones the cards produced for themselves. Perspective
+             * is deliberately null: no projection reads it — verified across both card projectors —
+             * and inventing a server-side one would be guessing at a viewer's lens.
+             */
+            const stageSlice = focusPanelStageWork;
+            if (!stageSlice) return null;
+            const startedAt = now();
+            const projected = projectFocusPanelOperational({
+                context: buildCommitCriticalOperationalContext({
+                    // Business Process and Current Work are WORK-mode cards; the mode names the
+                    // Focus Panel surface, not the provisioning request kind.
+                    mode: "work",
+                    subjectId: chosen.entityId,
+                    title: strOrNull((subjectRow as Record<string, unknown>)?.title) ?? "",
+                    statusLabel: currentBusinessState?.stageLabel ?? null,
+                    statusKey: currentBusinessState?.stageKey ?? null,
+                    canMutate: req.canMutate ?? false,
+                    perspective: null,
+                    stageWorkRuntime: stageSlice.stage_work_runtime ?? null,
+                    publishedStageInputs: stageSlice.published_stage_inputs ?? null,
+                    situation: currentBusinessState
+                        ? {
+                              stageKey: currentBusinessState.stageKey,
+                              stageLabel: currentBusinessState.stageLabel,
+                              purpose: currentBusinessState.purpose ?? null,
+                          }
+                        : null,
+                    primaryAction: primaryAction
+                        ? { actionRef: primaryAction.actionRef, label: primaryAction.label }
+                        : null,
+                    subjectIdentityTruth,
+                    subjectGrain,
+                }),
+            });
+            markSpan("focus_panel_operational_projection", startedAt);
+            return projected;
+        })(),
         focusPanelSummaryDoc,
         presentation,
         settlement,
