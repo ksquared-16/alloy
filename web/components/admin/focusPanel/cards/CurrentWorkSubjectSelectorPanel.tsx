@@ -18,9 +18,10 @@ import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDr
 import type { CurrentWorkActionVM } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
 import {
     invalidateEligibleEnrollmentChildren,
+    loadEligibleEnrollmentChildren,
     peekEligibleEnrollmentChildren,
-    prefetchEligibleEnrollmentChildren,
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/eligibleEnrollmentChildrenWarmCache";
+import type { WarmEligibleEnrollmentChildren } from "@/lib/adminV2/runtime/focusPanel/currentWork/eligibleEnrollmentChildrenWarmCache";
 import {
     commandTimingMark,
     commandTimingMeasure,
@@ -209,36 +210,35 @@ export default function CurrentWorkSubjectSelectorPanel({
 
     useEffect(() => {
         let cancelled = false;
-        const applyPayload = (json: {
-            ok?: boolean;
-            data?: {
-                status?: string;
-                message?: string | null;
-                subjects?: EligibleChildOption[];
-            };
-            error?: { message?: string };
-        }, resOk: boolean) => {
-            if (cancelled) return;
-            if (!resOk || json.ok === false) {
-                setLoad({
-                    phase: "error",
-                    message: json.error?.message ?? "Could not load children for this family.",
-                });
-                return;
-            }
-            const subjects = json.data?.subjects ?? [];
-            const status = json.data?.status;
-            if (status === "none" || subjects.length === 0) {
+        /*
+         * S8-3. ONE OWNER FOR THIS REQUEST.
+         *
+         * This panel used to peek the warm cache and, on a miss, issue its own raw fetch — which is
+         * the normal case in the race that matters: intent warms, the operator clicks before the warm
+         * settles, the peek finds nothing, and a second equivalent backend operation starts. It now
+         * asks `loadEligibleEnrollmentChildren`, which either joins the in-flight warm or starts the
+         * one request there is.
+         *
+         * Joining costs the panel nothing, because the owner returns the authoritative outcome rather
+         * than a value-or-null: the envelope's own `error.message` still reaches the operator, a
+         * refusal is still distinct from "no eligible child", and a failure is still retryable because
+         * the owner never caches one.
+         */
+        const requestedId = opportunityId;
+
+        const applyValue = (value: WarmEligibleEnrollmentChildren) => {
+            if (cancelled || requestedId !== opportunityId) return;
+            if (value.status === "none" || value.subjects.length === 0) {
                 setLoad({
                     phase: "none",
                     message:
-                        json.data?.message?.trim()
+                        value.message?.trim()
                         || "No eligible child is available for Waitlist on this family.",
                 });
                 return;
             }
-            setLoad({ phase: "ready", subjects });
-            setSelectedIds((prev) => (prev.length > 0 ? prev : subjects.map((s) => s.id)));
+            setLoad({ phase: "ready", subjects: value.subjects });
+            setSelectedIds((prev) => (prev.length > 0 ? prev : value.subjects.map((s) => s.id)));
             if (!subjectsRenderedMark.current) {
                 subjectsRenderedMark.current = true;
                 commandTimingMark(commandKey, "subjects_ready");
@@ -246,57 +246,33 @@ export default function CurrentWorkSubjectSelectorPanel({
             }
         };
 
-        // Warm path: already painted from peek — re-verify in background (single fetch, de-duped).
+        // Warm path: already painted from peek — re-verify in the background through the same owner.
+        // A background refusal leaves the painted subjects alone; it is not news the operator asked for.
         if (warmSeed?.load.phase === "ready") {
             if (!subjectsRenderedMark.current) {
                 subjectsRenderedMark.current = true;
                 commandTimingMark(commandKey, "subjects_ready");
                 commandTimingMeasure(commandKey, "shell_to_subjects", "shell_visible", "subjects_ready");
             }
-            void prefetchEligibleEnrollmentChildren(opportunityId)?.then((value) => {
-                if (cancelled || !value) return;
-                applyPayload(
-                    {
-                        ok: true,
-                        data: {
-                            status: value.status,
-                            message: value.message,
-                            subjects: value.subjects,
-                        },
-                    },
-                    true,
-                );
+            void loadEligibleEnrollmentChildren(opportunityId).then((outcome) => {
+                if (outcome.ok) applyValue(outcome.value);
             });
             return () => {
                 cancelled = true;
             };
         }
 
-        (async () => {
-            try {
-                const res = await fetch(
-                    `/api/admin/opportunities/${encodeURIComponent(opportunityId)}/eligible-enrollment-children`,
-                    { credentials: "include" },
-                );
-                const json = (await res.json().catch(() => ({}))) as {
-                    ok?: boolean;
-                    data?: {
-                        status?: string;
-                        message?: string | null;
-                        subjects?: EligibleChildOption[];
-                    };
-                    error?: { message?: string };
-                };
-                applyPayload(json, res.ok);
-            } catch {
-                if (!cancelled) {
-                    setLoad({
-                        phase: "error",
-                        message: "Could not load children for this family.",
-                    });
-                }
+        void loadEligibleEnrollmentChildren(opportunityId).then((outcome) => {
+            if (cancelled || requestedId !== opportunityId) return;
+            if (!outcome.ok) {
+                setLoad({
+                    phase: "error",
+                    message: outcome.message ?? "Could not load children for this family.",
+                });
+                return;
             }
-        })();
+            applyValue(outcome.value);
+        });
         return () => {
             cancelled = true;
         };
