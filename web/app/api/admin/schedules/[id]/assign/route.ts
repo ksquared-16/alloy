@@ -2,18 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
+import { getAdminAuthCached } from "@/lib/adminAuth";
 import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertExistingScheduleMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { OPS_JOBS_WRITE, requireSchedulingJobsCapability } from "@/lib/access/schedulingJobsAuthority";
 
+/*
+ * AUTHORITY: `ops.jobs.write`. Assigning a vendor to a schedule decides WHO PERFORMS the job occurrence, which is Jobs truth, not Scheduling truth. `scheduling.write` owns WHEN — its PATCH allows only start_at, end_at, timezone, status, status_key and metadata, and cannot set a vendor at all — so gating this on it would widen Scheduling into vendor selection. `ops.jobs.write` already owns the identical effect at job grain (`jobs/[id]/assign-vendor`, and `assigned_vendor_id` is in the job PATCH's ALLOWED_KEYS), so this widens nothing. The route itself agrees: it refuses a schedule with no job_id.
+ */
 /** POST: assign a vendor to this schedule. Body: { vendor_id }. Workflow(s) with event_type "schedule_vendor_assigned" create/update assignment with status "offered". */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireSchedulingJobsCapability(ctx, OPS_JOBS_WRITE);
+    if (denied) return denied;
     const auth = await getAdminAuthCached();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id: scheduleId } = await context.params;

@@ -237,6 +237,17 @@ export const CUSTOM = {
     commsPortalOnly: "mcert_comms_portal_only",
     /* The union half: held ALONGSIDE commsReader, never alone. Carries no admission of its own. */
     commsUnionBulk: "mcert_comms_union_bulk",
+
+    /*
+     * THE CONVERSATION ASSIGNER — the persona that proves assignment is its own authority.
+     *
+     * It can route the organization's inbox and cannot answer a single message. If assignment had
+     * been folded into `communications.send`, this role could not exist, and the scope-escalation
+     * path would still be open: `claim` assigns a thread to the ACTOR, and an assigned thread
+     * bypasses site scope, so every site-restricted sender could have helped themselves to any
+     * conversation in the organization.
+     */
+    commsAssigner: "mcert_comms_assigner",
     oiReader: "mcert_oi_reader",
     oiTitular: "mcert_oi_titular",
 };
@@ -318,6 +329,7 @@ export const P = {
      * provider, which neither role holds. `also` is the second role; see the user_roles insert.
      */
     commsUnion:      { id: "c0000000-0000-4000-8000-00000000d061", email: "cert.commsunion@northwind.invalid",     role: CUSTOM.commsReader, also: [CUSTOM.commsUnionBulk] },
+    commsAssigner:   { id: "c0000000-0000-4000-8000-00000000d062", email: "cert.commsassign@northwind.invalid",    role: CUSTOM.commsAssigner },
 };
 
 async function principal(p) {
@@ -416,6 +428,7 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.commsTitular,   role_label: "Communications Administrator", description: "Titled for authority, holding none of it.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.commsPortalOnly,role_label: "Portal only",                  description: "The census persona: admission and nothing else.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.commsUnionBulk, role_label: "Campaign sender (union half)", description: "Second role in the multi-role union proof.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsAssigner,  role_label: "Conversation assigner",       description: "Routes the inbox. Answers nothing.", is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
 
@@ -540,6 +553,8 @@ export async function setup() {
         [CUSTOM.commsPortalOnly, ["portal.access"]],
         /* Supplies bulk to the union persona and carries no admission of its own. */
         [CUSTOM.commsUnionBulk, ["communications.bulk.send"]],
+        /* Assignment ALONE. No send, no read, no management — the separation, held by a person. */
+        [CUSTOM.commsAssigner, ["portal.access", "communications.assign"]],
     ]) {
         const { error } = await sb.rpc("replace_role_permission_grants", {
             p_org_id: ORG,

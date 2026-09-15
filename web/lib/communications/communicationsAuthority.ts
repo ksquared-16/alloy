@@ -36,13 +36,33 @@ export const COMMUNICATIONS_TEMPLATES_MANAGE = "communications.templates.manage"
 export const COMMUNICATIONS_PROVIDER_CONFIGURE = "communications.provider.configure" as const;
 /** Organization-wide, announcement and campaign sends, whose blast radius is materially larger. */
 export const COMMUNICATIONS_BULK_SEND = "communications.bulk.send" as const;
+/**
+ * Claiming, assigning, reassigning, unassigning and routing a conversation.
+ *
+ * SEPARATE FROM SENDING BECAUSE IT GRANTS SCOPE. `decideCommunicationsSendScope`
+ * checks assignment BEFORE site scope — `assigned_user_id === actorUserId` returns
+ * `allowed: true` with reason `assigned_to_actor`, deliberately, so a site-restricted
+ * operator can be handed one organization conversation by name. And the action list
+ * includes `claim`, which assigns a thread to the ACTOR. Bundled with
+ * `communications.send`, any site-restricted sender could therefore claim any
+ * conversation in the organization and answer it, escaping their own site scope one
+ * conversation at a time with nobody granting them anything.
+ *
+ * It cannot confer the ability to send: that same function returns
+ * `no_send_permission` before it looks at assignment. Assignment widens SCOPE for a
+ * principal who already holds send; it never grants the capability. That is why this
+ * is a Communications authority and not an Access delegation, and why the W-18
+ * assignment ceiling is not engaged by it.
+ */
+export const COMMUNICATIONS_ASSIGN = "communications.assign" as const;
 
 export type CommunicationsCapability =
     | typeof COMMUNICATIONS_READ
     | typeof COMMUNICATIONS_SEND
     | typeof COMMUNICATIONS_TEMPLATES_MANAGE
     | typeof COMMUNICATIONS_PROVIDER_CONFIGURE
-    | typeof COMMUNICATIONS_BULK_SEND;
+    | typeof COMMUNICATIONS_BULK_SEND
+    | typeof COMMUNICATIONS_ASSIGN;
 
 export type CommunicationsAuth =
     | { ok: true; access: AdminAccessContextSuccess }
@@ -82,11 +102,14 @@ export async function requireCommunicationsAuthority(
 /**
  * NON-IMPLICATION IS THE MODEL, and it is stated here so it can be asserted.
  *
- * None of these five implies another. A sender may not rewrite the organization's templates; a
+ * None of these six implies another. A sender may not rewrite the organization's templates; a
  * template author may not deliver what they wrote; a provider administrator may not message a
  * family; a bulk sender does not thereby configure delivery. Composition is done with GRANTS, by
  * giving a role more than one key — never with implication hidden in the backend, which would make
  * the role editor's distinctions a fiction.
+ *
+ * `communications.assign` is the newest member and the one whose separation is load-bearing rather
+ * than tidy: it is the only one of the six that changes what ANOTHER principal may reach.
  */
 export const COMMUNICATIONS_CAPABILITIES: readonly CommunicationsCapability[] = Object.freeze([
     COMMUNICATIONS_READ,
@@ -94,4 +117,5 @@ export const COMMUNICATIONS_CAPABILITIES: readonly CommunicationsCapability[] = 
     COMMUNICATIONS_TEMPLATES_MANAGE,
     COMMUNICATIONS_PROVIDER_CONFIGURE,
     COMMUNICATIONS_BULK_SEND,
+    COMMUNICATIONS_ASSIGN,
 ]);
