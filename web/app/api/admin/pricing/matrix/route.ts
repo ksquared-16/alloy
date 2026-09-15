@@ -177,6 +177,13 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
     const insert = {
+        /*
+         * THE TENANT, on the way in. `pricing_matrix.org_id` is NOT NULL with no default and no
+         * trigger, so omitting it did not create an unowned row — it made every create fail on a
+         * constraint violation, which is why the table is empty. Naming the authenticated
+         * organization is both the tenant predicate for an insert and the repair for that.
+         */
+        org_id: ctx.orgId,
         vertical_id,
         service_offering_id,
         service_plan_template_id: service_plan_template_id || null,

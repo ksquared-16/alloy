@@ -42,6 +42,16 @@ export async function PATCH(
         .from("pricing_matrix")
         .update(updates)
         .eq("id", id)
+        /*
+         * THE TENANT PREDICATE, not decoration.
+         *
+         * This runs on `createAdminClient()` — a service-role client, so RLS is not enforcing
+         * anything here. Matching on `id` alone let a principal in one organization rewrite another
+         * organization's price by knowing its row id. `pricing_matrix.org_id` is NOT NULL and is a
+         * foreign key to `orgs`, so the row's tenant is unambiguous and `ctx.orgId` is the
+         * authenticated organization rather than caller input.
+         */
+        .eq("org_id", ctx.orgId)
         .select("id, amount_cents, is_active, updated_at")
         .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { evaluateDeletionEligibility } from "@/lib/admin/deletionEligibility";
+import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 /** DELETE: hard delete (admin only). Enforces lifecycle eligibility. */
 export async function DELETE(
@@ -24,7 +25,7 @@ export async function DELETE(
     }
 
     const supabase = createAdminClient();
-    const { error } = await supabase.from("pricing_modes").delete().eq("id", id);
+    const { error } = await supabase.from("pricing_modes").delete().eq("id", id).eq("org_id", ctx.orgId);
     if (error) {
         const msg = error.code === "23503" ? "Cannot delete: record is in use." : error.message;
         return NextResponse.json({ error: msg }, { status: 400 });
@@ -36,6 +37,11 @@ export async function DELETE(
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+
+
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+
+    if (denied) return denied;
 
     const { id } = await params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -54,7 +60,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     (updates as { updated_at: string }).updated_at = new Date().toISOString();
 
     const supabase = createAdminClient();
-    const { data, error } = await supabase.from("pricing_modes").update(updates).eq("id", id).select("id, mode_key, mode_name, updated_at").single();
+    const { data, error } = await supabase.from("pricing_modes").update(updates).eq("id", id).eq("org_id", ctx.orgId).select("id, mode_key, mode_name, updated_at").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(data ?? { ok: true });
 }
