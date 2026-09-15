@@ -1887,8 +1887,10 @@ export async function composeWorkUnitProvisioningAnswer(
             statusKey: currentBusinessState?.stageKey ?? null,
             canMutate: req.canMutate ?? false,
             perspective: null,
-            stageWorkRuntime: stageSlice?.stage_work_runtime ?? null,
-            publishedStageInputs: stageSlice?.published_stage_inputs ?? null,
+            stageWorkRuntime: focusPanelStageWork?.stage_work_runtime ?? null,
+            // SERVER-SIDE PROJECTION INPUT. It is stripped from the answer below; the projection is
+            // what travels, and it is produced here from this.
+            publishedStageInputs: focusPanelStageWork?.published_stage_inputs ?? null,
             situation: currentBusinessState
                 ? {
                       stageKey: currentBusinessState.stageKey,
@@ -1901,7 +1903,7 @@ export async function composeWorkUnitProvisioningAnswer(
                 : null,
             subjectIdentityTruth,
             subjectGrain,
-        }),
+    });
 
     const answer: ProvisioningAnswer = {
         terminal: "operational",
