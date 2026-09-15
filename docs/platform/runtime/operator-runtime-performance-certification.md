@@ -1316,3 +1316,75 @@ measured defect is that it already carries ~138KB to say ~565 bytes. The orderin
 lifecycle that ships projections rather than configuration.
 
 §21.7's contract is unchanged and still **TARGET, NOT YET MET**.
+
+## 23. Process inversion — consumer audit, census tool, and a NO-GO
+
+### 23.1 Every operational consumer of `publishedStageInputs`, classified
+
+Fifteen non-test files reference it. Only **two** execute projection over it, and both are client
+components:
+
+| consumer | class |
+| --- | --- |
+| `BusinessProcessCard.tsx` — `buildBusinessProcessCardEvidence`, `projectProcessCardCommands`, `adaptBusinessProcessEvidenceToProcessCard`, all in `useMemo` | **PROCESS_PROJECTION** |
+| `CurrentWorkCard.tsx` — `projectCurrentWork`, `resolveWorkItemHandoff` | **OTHER_INITIAL_RUNTIME** |
+| `OperationalSubjectContext` · `InlineOpportunityFocusPanel` · `ProvisionedWorkUnitSurface` · `OpportunityFocusPanelBody` | plumbing — carry it to the two above |
+| `BusinessProcessCard` direct field read (`operatingPlan.work_templates`, `commandProjection`) | telemetry only — `logProcessCardCommandProjection` |
+| `lib/**` — `buildCurrentWorkSurfaceVM` (12), `resolveCurrentWorkChecklistTruthFromPublishedRules` (14), `projectProcessCardCommands`, overlays, `buildOperationalContext` | the projection itself; no independent consumer |
+
+**CONFIGURATION_UI: none. DETAIL/COMMAND: none. UNKNOWN: none.**
+
+### 23.2 The projection engine is client-side wholesale
+
+`focusPanelWorkModeModelFromProvisioningAnswer` — which builds the commit-critical card models — is
+itself called from `OpportunityFocusPanelBody.tsx`, a client component. And
+`COMMIT_CRITICAL_CARD_SPECS` holds `current_work`, `household`, `children`, `readiness_kpi`;
+**`business_process` is not in it at all.**
+
+So the provisioning answer is not an operational answer that happens to be large. It is a
+**data-transfer format for a projection engine that runs in the browser**. That is the same defect
+as the three missing producers, seen from the other end.
+
+### 23.3 Why Process inversion alone cannot remove the payload — the NO-GO
+
+`CurrentWorkCard` projects over the same `publishedStageInputs`. Inverting Process alone therefore
+removes **no** configuration from the answer: the payload must stay for the other card. What it
+would add is a *second* projection site — the exact "another Process Card model" this run forbids —
+for zero measured payload improvement.
+
+**NO-GO for Attendance / Health / Financials producers**, and NO-GO for Process inversion as a
+standalone slice. Both were gated on this audit, and the audit says the unit of work is wrong:
+
+> The sliceable unit is not "Process". It is **the client projection engine** —
+> `BusinessProcessCard` and `CurrentWorkCard` together — because they are the only two consumers,
+> and the payload cannot move until both do.
+
+`current_work` is not in the live Firefly composition (the census saw `business_process`,
+`financials`, `attendance`, `children`, `health_safety`, `household`), so the two can ship in
+sequence. But the payload removal in §Phase 5 lands only after the second.
+
+### 23.4 The census tool — shipped
+
+`lib/runtime/provisioning/recursivePayloadCensus.ts`, with
+`tests/surfaces/recursivePayloadCensus.test.ts`. Both superseded figures came from the same
+mistake, so the measurement is now code rather than a pipeline someone re-derives.
+
+Validated against the real captured answers:
+
+| method | identical | differing | share |
+| --- | --- | --- | --- |
+| **recursive** | 126,387B | **565B** | **99.6%** |
+| top-level (kept only to demonstrate the error) | 51,001B | 77,257B | 39.8% |
+
+It reproduces the superseded **40%** exactly, which is the proof that figure was method and not
+measurement.
+
+`internalDuplicationBytes` also found what the manual pass missed: **`operatingPlan` (5,223B) is
+carried three times** in one answer — standalone, inside
+`departmentMetadata.lifecycle_builder_v1.processes[0].stages[0].stage_operating_plan_v1`, and
+inside `process.stages[0].stage_operating_plan_v1`. The `process` ≈ `processes[0]` pair is *not*
+reported, correctly: they differ by ~50 bytes and are near-copies rather than exact ones.
+
+### 23.5 Status
+
+`PROCESS PRODUCER — NOT SHIPPED.` §21.7 remains **TARGET, NOT YET MET**.
