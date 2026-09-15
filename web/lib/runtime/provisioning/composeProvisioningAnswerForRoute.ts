@@ -22,6 +22,8 @@ import {
 import { resolveWorkUnitRouteIdentity } from "@/lib/admin/resolveWorkUnitRouteIdentity";
 import { parseCardFocusAspect } from "@/lib/runtime/kernel/attentionCardFocus";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
+import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
+import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 
 export type RouteProvisioningResult =
     | { ok: true; answer: ProvisioningAnswer }
@@ -97,6 +99,53 @@ export async function composeProvisioningAnswerForRoute(input: {
         mode: contextual ? "contextual_focus" : "operational",
         requestedAspect: aspect ? { cardKey: aspect.card_key, itemId: aspect.item_id } : null,
     });
+
+    /*
+     * SERVER-ONLY PRODUCER EXECUTION LIVES HERE, ABOVE THE CONTRACT BOUNDARY.
+     *
+     * Attendance needs a database read, so its domain owner carries `import "server-only"`. Running
+     * it from `workUnitProvisioningAnswer` put that value graph under a module whose TYPES the
+     * browser imports (`ProvisioningAnswer`), and the bundler followed it: Ecmascript parse failure
+     * at `buildAttendanceCardVM.ts:1`, the Focus Panel rendering nothing, and all thirteen required
+     * checks green. Twice.
+     *
+     * This module is `server-only` itself and no client type-imports it, so it is the correct owner.
+     * The rule it enforces: CONTRACTS may cross to the browser, SERVER IMPLEMENTATIONS may not.
+     *
+     * The context is rebuilt from the ANSWER — the same fields, through the same builder the browser
+     * used — rather than threaded out of the assembler, so the assembler keeps no producer edge.
+     */
+    if (answer.terminal === "operational" && answer.focusPanelOperationalProjection) {
+        answer.focusPanelOperationalProjection = {
+            ...answer.focusPanelOperationalProjection,
+            cards: await projectFocusPanelCardProducers({
+                supabase,
+                orgId: gate.orgId,
+                context: buildCommitCriticalOperationalContext({
+                    mode: "work",
+                    subjectId: answer.recordOfAttention?.id ?? "",
+                    title: "",
+                    statusLabel: answer.currentBusinessState?.stageLabel ?? null,
+                    statusKey: answer.currentBusinessState?.stageKey ?? null,
+                    canMutate: hasPortalAdminMutateAccess(gate.roleKeys ?? []),
+                    perspective: null,
+                    stageWorkRuntime: answer.focusPanelStageWork?.stage_work_runtime ?? null,
+                    situation: answer.currentBusinessState
+                        ? {
+                              stageKey: answer.currentBusinessState.stageKey,
+                              stageLabel: answer.currentBusinessState.stageLabel,
+                              purpose: answer.currentBusinessState.purpose ?? null,
+                          }
+                        : null,
+                    primaryAction: answer.primaryAction
+                        ? { actionRef: answer.primaryAction.actionRef, label: answer.primaryAction.label }
+                        : null,
+                    subjectIdentityTruth: answer.subjectIdentityTruth ?? null,
+                    subjectGrain: answer.subjectGrain,
+                }),
+            }),
+        };
+    }
 
     return { ok: true, answer };
 }
