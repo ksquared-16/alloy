@@ -21,7 +21,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
-  existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync,
+  chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -29,9 +29,25 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LIB = join(HERE, "..", "lib", "vacilando");
+
+/*
+ * THE END-TO-END SECTION NEEDS ITS ROOTS BEFORE THE MODULES LOAD.
+ *
+ * `TOOLKIT_ROOT` is a module-level const read from ALLOY_TOOLKIT_ROOT at import
+ * time, and the executor's call site deliberately does NOT accept a toolkit
+ * root from the request — accepting one would be accepting transport. So the
+ * only honest way to drive the real caller without touching this host's live
+ * runtime is to point the environment at throwaway directories first.
+ */
+const E2E_TOOLKIT = mkdtempSync(join(tmpdir(), "bridge-e2e-toolkit-"));
+const E2E_RUNTIME = mkdtempSync(join(tmpdir(), "bridge-e2e-runtime-"));
+process.env.ALLOY_TOOLKIT_ROOT = E2E_TOOLKIT;
+process.env.ALLOY_RUNTIME_ROOT = E2E_RUNTIME;
+
 const A = await import(join(LIB, "toolkit-artifact.mjs"));
 const I = await import(join(LIB, "toolkit-artifact-install.mjs"));
 const C = await import(join(LIB, "toolkit-convergence.mjs"));
+const TH = await import(join(LIB, "trusted-host-actions.mjs"));
 
 let pass = 0, fail = 0;
 const test = (n, fn) => {
@@ -40,7 +56,7 @@ const test = (n, fn) => {
 };
 
 /* A specimen artifact, built here so the bridge needs no network to be certified. */
-function specimen() {
+function specimen(version = "20260915-cccccccccccc") {
   const src = mkdtempSync(join(tmpdir(), "bridge-src-"));
   for (const d of ["lib", "bin"]) mkdirSync(join(src, d), { recursive: true });
   writeFileSync(join(src, "lib", "vacilando-gateway-host.mjs"), "export const h=1;\n");
@@ -53,7 +69,7 @@ function specimen() {
   const sha = execFileSync("shasum", ["-a", "256", tar], { encoding: "utf8" }).split(" ")[0];
   const sourceSha = "c".repeat(40);
   const manifest = {
-    schema: "vacilando.toolkit_artifact.v1", version: "20260915-cccccccccccc",
+    schema: "vacilando.toolkit_artifact.v1", version,
     source_repository: "ksquared-16/vacilando", source_sha: sourceSha,
     source_sha_short: sourceSha.slice(0, 12), artifact: "a.tar.gz", artifact_sha256: sha,
     built_at: new Date().toISOString(),
@@ -297,6 +313,156 @@ test("17 — the EXECUTOR's call site forwards the artifact, not just the stagin
   assert.match(code, /artifact:/, "the executor drops `artifact`; generation 2 can never run");
   assert.match(code, /expectedCurrent:/, "the executor drops `expectedCurrent`; the CAS precondition is lost");
   assert.match(code, /expectedStagingSha:/, "generation 1 must keep working");
+});
+
+
+/* ── 18-21: THE WHOLE FOUR-LEG PATH, DRIVEN FROM ABOVE THE CALL SITE ─────────
+ *
+ * Case 17 reads the call site. That is a structural guard, and structural
+ * guards go stale: they describe the code rather than exercise it. These four
+ * start where PRODUCTION starts — `requestTrustedHostAction` then
+ * `executeTrustedHostAction` — and cross all four legs in one go: the registry
+ * definition, the governed mode, the dispatch branch, and the executor's call
+ * site. Nothing below the caller is stubbed, injected or bypassed.
+ *
+ * WHAT MAKES EACH OBSERVATION UNAMBIGUOUS. If `artifact` is dropped anywhere on
+ * that path, `executeToolkitInstall` takes the generation-1 branch and shells
+ * out to `<toolkit>/current/alloy-toolkit install origin/staging`. That binary
+ * does not exist in a throwaway root, so the defect surfaces as
+ * `install_command_failed` — never as a generation-2 code. Every assertion
+ * below therefore fails loudly on the exact regression this slice repairs.
+ *
+ * THE ONE THING SUBSTITUTED IS THE HOST'S `gh`, NOT THE CODE. The production
+ * downloader runs `gh run download` as the host, with the host's credentials.
+ * Putting a recording stub first on PATH keeps that call site completely
+ * unchanged while removing the network — and it is what proves case 18's
+ * ordering claim, because the stub records every invocation.
+ */
+
+const E2E = specimen("20260915-e2e000000000");
+
+/** The host's `gh`, replaced on PATH only. The production call site is untouched. */
+const GH_DIR = mkdtempSync(join(tmpdir(), "bridge-gh-"));
+const GH_LOG = join(GH_DIR, "invocations.log");
+writeFileSync(GH_LOG, "");
+writeFileSync(join(GH_DIR, "gh"),
+  "#!/bin/sh\n"
+  + `echo "$@" >> ${GH_LOG}\n`
+  + 'dir=""; prev=""\n'
+  + 'for a in "$@"; do if [ "$prev" = "--dir" ]; then dir="$a"; fi; prev="$a"; done\n'
+  + `[ -n "$dir" ] && cp ${E2E.tar} "$dir/a.tar.gz" && cp ${E2E.mp} "$dir/a.json"\n`
+  + "exit 0\n");
+chmodSync(join(GH_DIR, "gh"), 0o755);
+process.env.PATH = `${GH_DIR}:${process.env.PATH}`;
+const ghInvocations = () => readFileSync(GH_LOG, "utf8").split("\n").filter(Boolean).length;
+
+/** A generation-1 layout in the throwaway toolkit root, as this host has. */
+const E2E_GEN1 = join(E2E_TOOLKIT, "aaaaaaaaaaaa");
+mkdirSync(join(E2E_GEN1, "lib"), { recursive: true });
+writeFileSync(join(E2E_GEN1, "INSTALL-MANIFEST"),
+  `source_repo=/Users/x/Alloy\nsource_ref=origin/staging\nsource_commit=${"a".repeat(40)}\nsource_commit_short=aaaaaaaaaaaa\n`);
+execFileSync("ln", ["-sfn", E2E_GEN1, join(E2E_TOOLKIT, "current")]);
+
+/** The single-use grant a repository-authorized action carries in production. */
+const grant = () => ({
+  grant_id: `g_${Math.random().toString(16).slice(2, 10)}`,
+  status: "ISSUED", action_key: "host.install_toolkit",
+  approved_by: "operator", approved_at: new Date().toISOString(),
+  expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+});
+
+/** Drive the real production caller, start to finish. */
+function governedInstall(inputs, missionId) {
+  const req = TH.requestTrustedHostAction({ missionId, actionType: "host.install_toolkit", inputs });
+  assert.equal(req.ok, true, `the governed request was refused: ${JSON.stringify(req).slice(0, 200)}`);
+  const out = TH.executeTrustedHostAction(req.action.id, { actor: "director", grant: grant() });
+  return { req, out };
+}
+
+const e2eInputs = (over = {}) => ({
+  artifact: {
+    version: E2E.manifest.version, source_repository: E2E.manifest.source_repository,
+    source_sha: E2E.manifest.source_sha, artifact_sha256: E2E.manifest.artifact_sha256,
+    ci_run_id: "777", ...(over.artifact || {}),
+  },
+  expected_current_identity: over.expected_current_identity ?? "aaaaaaaaaaaa",
+  reason: over.reason ?? "S6D end-to-end certification of the governed path",
+  ...(over.extra || {}),
+});
+
+test("18 — an UNSANCTIONED PRODUCER is refused through the governed action, before any fetch", () => {
+  const before = ghInvocations();
+  const { out } = governedInstall(
+    e2eInputs({ artifact: { source_repository: "someone/else" }, extra: {} }), "msn_e2e_unsanctioned");
+  assert.equal(out.ok, false);
+  assert.equal(out.error, "producer_not_sanctioned",
+    "this code exists only past the generation-2 branch; anything else means `artifact` was dropped on the way");
+  assert.equal(ghInvocations(), before, "the host fetched bytes from an unsanctioned producer");
+  assert.equal(out.action.state, "failed");
+  assert.equal(execFileSync("readlink", [join(E2E_TOOLKIT, "current")], { encoding: "utf8" }).trim(), E2E_GEN1,
+    "a refused install moved current");
+});
+
+test("19 — expectedCurrent REACHES the installer: a CAS mismatch refuses and nothing moves", () => {
+  /*
+   * THE CASE THAT CANNOT PASS IF `expectedCurrent` IS DROPPED. With it, the
+   * installer compares the stated identity against what is installed and
+   * refuses. Without it the precondition is simply absent — and the install
+   * SUCCEEDS, silently landing on a host somebody else already moved. So a
+   * refusal here is the evidence; a success is the regression.
+   */
+  const before = readdirSync(E2E_TOOLKIT).sort();
+  const { out } = governedInstall(
+    e2eInputs({ expected_current_identity: "somebody-elses-identity" }), "msn_e2e_cas");
+  assert.equal(out.ok, false, "the CAS precondition never reached the installer");
+  assert.equal(out.error, "installed_identity_moved");
+  assert.deepEqual(readdirSync(E2E_TOOLKIT).sort(), before, "a refused install changed the toolkit root");
+  assert.equal(execFileSync("readlink", [join(E2E_TOOLKIT, "current")], { encoding: "utf8" }).trim(), E2E_GEN1);
+});
+
+test("20 — the governed action carries NO transport, whatever the caller sends", () => {
+  /*
+   * Requested, deliberately not executed. What is being certified is what the
+   * governed request STORES — the object the executor reads — so executing it
+   * would prove nothing extra and would move `current` out from under case 21.
+   */
+  const req = TH.requestTrustedHostAction({
+    missionId: "msn_e2e_transport", actionType: "host.install_toolkit",
+    inputs: e2eInputs({
+      extra: { url: "https://evil.example/x.tar.gz", binPath: "/tmp/evil", toolkitRoot: "/tmp/evil-root", downloader: "curl" },
+    }),
+  });
+  assert.equal(req.ok, true, `the governed request was refused: ${JSON.stringify(req).slice(0, 200)}`);
+  const stored = JSON.stringify(req.action.inputs).toLowerCase();
+  for (const k of ["url", "binpath", "toolkitroot", "downloader", "evil"]) {
+    assert.equal(stored.includes(k), false, `the stored governed request carries transport: ${k}`);
+  }
+});
+
+test("21 — GENERATION 2 ACTUALLY INSTALLS through the production caller", () => {
+  /*
+   * The live no-op, inverted into a passing observation. This is the same
+   * request shape that reported `already_converged` against an untouched
+   * generation-1 runtime; here it must MOVE `current` onto the artifact and say
+   * so in the generation-2 vocabulary.
+   *
+   * It runs last because it is the only case that mutates the throwaway root.
+   */
+  const { out } = governedInstall(e2eInputs(), "msn_e2e_install");
+  assert.equal(out.ok, true, `the generation-2 install did not complete: ${JSON.stringify(out).slice(0, 300)}`);
+  assert.ok(ghInvocations() > 0, "the sanctioned artifact was never fetched");
+
+  const current = execFileSync("readlink", [join(E2E_TOOLKIT, "current")], { encoding: "utf8" }).trim();
+  assert.notEqual(current, E2E_GEN1, "current still points at generation 1 — the install was a no-op");
+
+  const identity = A.installedIdentity(join(E2E_TOOLKIT, "current"));
+  assert.equal(identity.generation, A.GENERATION.VACILANDO_ARTIFACT);
+  assert.equal(identity.version, E2E.manifest.version);
+  assert.equal(identity.source_repository, "ksquared-16/vacilando");
+
+  assert.ok(existsSync(E2E_GEN1), "the generation-1 rollback target was deleted");
+  assert.ok(existsSync(join(E2E_TOOLKIT, "current", "lib", "vacilando-gateway-host.mjs")),
+    "the path launchd actually runs is missing from the installed runtime");
 });
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
