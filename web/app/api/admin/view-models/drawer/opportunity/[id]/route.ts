@@ -66,6 +66,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
              * `stage_work=0` restores the deferred contract.
              */
             deferStageWork: sp.get("stage_work") === "0",
+            /*
+             * NOT TRUSTED — RESOLVED. This is handed to the canonical participant resolver, which
+             * refuses a participation that does not belong to this record (`not_found`) rather than
+             * answering with somebody else's child. So naming another family's participation yields
+             * no scope and no child-scoped projection, which is the authorization boundary here.
+             */
+            attentionSubjectId: (sp.get("attention_subject_id") ?? "").trim() || null,
         });
 
         if (!result.ok) {

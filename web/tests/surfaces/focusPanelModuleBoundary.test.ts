@@ -62,6 +62,25 @@ const BROWSER_CARD_OWNERS = [
     "components/admin/focusPanel/FocusPanelCardGrid.tsx",
 ] as const;
 
+/**
+ * The Focus Panel's TRANSPORT modules — the client code that issues the settled Drawer request and
+ * files its answer.
+ *
+ * The cards above are the visible half. This is the half that runs before there is anything to show,
+ * and it was not covered: measured against the entries above, none of these modules is reached from
+ * any certified card graph, so a `server-only` edge introduced here would be exactly as invisible as
+ * the two defects that shipped. The transport owner carries the subject of attention into the request
+ * and therefore reaches the drawer view-model graph — which is precisely the kind of module that
+ * tempts an import from a server composer.
+ */
+const BROWSER_TRANSPORT_OWNERS = [
+    "lib/presentation/runtime/useRecordWorkRuntime.ts",
+    "lib/adminV2/viewModel/drawer/shadow/fetchOpportunityDrawerViewModelClient.ts",
+    "lib/adminV2/viewModel/drawer/drawerViewModelSessionCache.ts",
+    "lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerVmCacheScope.ts",
+    "lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel.ts",
+] as const;
+
 /** A module that declares itself server-only. The marker is the whole point. */
 function declaresServerOnly(absolutePath: string): boolean {
     if (!/\.(ts|tsx|js|jsx|mjs)$/.test(absolutePath)) return false;
@@ -122,6 +141,18 @@ describe("the browser-importable contract graph reaches no server implementation
                 serverOnly,
                 `${entry} reaches server-only module(s). A card's graph is shipped to the browser\n` +
                     `verbatim; anything server-only in it fails to evaluate and the surface renders nothing.`,
+            ).toEqual([]);
+        }, 120_000);
+    }
+
+    for (const entry of BROWSER_TRANSPORT_OWNERS) {
+        it(`${entry}`, async () => {
+            const graph = await resolvedModuleGraph(entry);
+            const serverOnly = graph.filter(declaresServerOnly).map((p) => p.replace(`${webRoot}/`, ""));
+            expect(
+                serverOnly,
+                `${entry} reaches server-only module(s). This runs in the browser before any card is\n` +
+                    `drawn, so a server-only edge here takes the surface down before it can report why.`,
             ).toEqual([]);
         }, 120_000);
     }

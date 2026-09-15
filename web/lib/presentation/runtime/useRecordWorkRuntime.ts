@@ -16,7 +16,7 @@
  * configured Focus Panel cards stayed empty until a click. Sourcing the subject from committed Focus
  * makes the VM load on the first operational frame. Do not reintroduce a subject read from the drawer.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     logCurrentWorkInit,
     nextCurrentWorkInstanceId,
@@ -58,6 +58,7 @@ import {
 } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { OPPORTUNITY_QUEUE_UPDATED_EVENT, parseOpportunityQueueUpdatedDetail } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { fetchOpportunityDrawerHeaderActionsFromRecord } from "@/lib/admin/opportunityDrawerHeaderActionsPrefetch";
+import { useAttentionSubject } from "@/lib/runtime/kernel/useAttentionCardFocus";
 import { patchOpportunityDrawerVmDisplayRecord } from "@/lib/adminV2/viewModel/drawer/vmRuntime/patchOpportunityDrawerVmDisplayRecord";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import {
@@ -149,6 +150,37 @@ export async function prewarmRecordWork(subjectId: string): Promise<void> {
 }
 
 export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntimeState {
+    /*
+     * THE SUBJECT OF ATTENTION TRAVELS WITH THE REQUEST — this runtime is the Focus Panel's settled
+     * transport owner, and it is the only place that may add it.
+     *
+     * The commit frame already resolves the selected participation (the panel body passes it as
+     * `selectedParticipationId`); the settled frame could not, because the Drawer route accepted only
+     * department/work-unit. A frame that cannot name the child cannot project child-scoped truth, and
+     * a producer asked to anyway falls back to the sole participant — which measurably resolved the
+     * WRONG child on a multi-child family.
+     *
+     * Cards do not add query parameters. They read what this request returns.
+     *
+     * Null outside the RuntimeKernel (the modal drawer product renders above it) — that is the
+     * ordinary family-grain answer, identical to the behaviour before attention was carried at all.
+     */
+    const attentionSubjectId = useAttentionSubject();
+
+    /*
+     * This owner knows the attention subject and nothing else about the workspace — it deliberately
+     * never reads `AdminDrawerContext`, so it has no department or work unit to name. Empty strings
+     * are the honest answer and the URL builder omits them; the attention subject is the one scope
+     * this request is actually asserting.
+     */
+    const transportContext = useMemo(
+        () =>
+            attentionSubjectId
+                ? { work_unit_id: "", department_id: "", attention_subject_id: attentionSubjectId }
+                : null,
+        [attentionSubjectId],
+    );
+
     const [displayVm, setDisplayVm] = useState<OpportunityDrawerViewModel | null>(null);
     const [coldLoading, setColdLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -182,6 +214,15 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
             {
                 departmentId: vm.workspace.department_id ?? null,
                 workUnitId: vm.workspace.work_unit_id ?? null,
+                /*
+                 * UNDER THE CHILD IT WAS FETCHED FOR.
+                 *
+                 * This VM was requested with an attention subject, so it carries child-scoped
+                 * operational truth. Writing it at the unscoped key would hand Child A's answer to
+                 * the next family-grain reader — the leak the attention segment exists to stop. The
+                 * request's own subject is the only correct place to file the response.
+                 */
+                attentionSubjectId,
             },
         );
         prefetchDrawerLayoutRuntimeBody({
@@ -194,7 +235,7 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         });
         const applyMs = typeof performance !== "undefined" ? Math.round(performance.now() - startedAt) : 0;
         logDrawerVmRuntime("payload_ready", { opportunity_id: vm.entity.id, reason, generation: vm.generation, payload_apply_ms: applyMs });
-    }, []);
+    }, [attentionSubjectId]);
 
     // ── Subject resolution — the ONE effect that turns a committed subject into a VM. Latest-wins via
     //    the generation guard; the prior VM is held (never cleared) so a subject swap shows the prior
@@ -244,7 +285,7 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         });
         logDrawerVmRuntime("cold_fetch_start", { opportunity_id: validSubject, runtime: "opportunity", hold_prior: Boolean(displayVm) });
 
-        void loadOpportunityDrawerViaViewModel(validSubject, null).then(async (result) => {
+        void loadOpportunityDrawerViaViewModel(validSubject, transportContext).then(async (result) => {
             if (gen !== fetchGenRef.current) return; // superseded by a newer subject — never lands (its begin owns the reveal)
             if (!result.ok) {
                 setColdLoading(false);
@@ -279,7 +320,9 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         // On success, applyVm changes displayVm → this effect re-runs → this cleanup ends the reveal
         // (flushing deferred prewarm). Also covers subject swap + unmount. Idempotent.
         return () => endWorkUnitPrimaryReveal();
-    }, [validSubject, displayVm, applyVm]);
+        // `transportContext` is in the deps deliberately: when attention moves to another child the
+        // settled frame is answering about a DIFFERENT subject and must be re-requested, not reused.
+    }, [validSubject, displayVm, applyVm, transportContext]);
 
     const patchDisplayRecord = useCallback(
         (patchFn: (prev: Record<string, unknown>) => Record<string, unknown>) => {
@@ -322,7 +365,7 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
             invalidateVmCachesForSubject(validSubject);
             invalidateOpportunityStageWorkCache({ opportunityId: validSubject });
         }
-        const result = await loadOpportunityDrawerViaViewModel(validSubject, null);
+        const result = await loadOpportunityDrawerViaViewModel(validSubject, transportContext);
         if (subjectGen !== fetchGenRef.current || reloadGen !== reloadGenRef.current) return;
         if (!result.ok || !isOpportunityDrawerViewModelPreload(result.preload)) return;
         const completeVm = await completeVmWithStageWork(result.preload.viewModel, {
@@ -331,7 +374,7 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         if (subjectGen !== fetchGenRef.current || reloadGen !== reloadGenRef.current) return;
         // Same atomic contract as the initial load — reload reveals a complete VM, not a resize.
         applyVm(completeVm, forceFresh ? "reload_fresh" : "reload");
-    }, [validSubject, applyVm, invalidateVmCachesForSubject]);
+    }, [validSubject, applyVm, invalidateVmCachesForSubject, transportContext]);
 
     // ── Targeted refresh: record-patch + queue-updated events (same contracts as the drawer path). ──
     useEffect(() => {
