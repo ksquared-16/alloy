@@ -23,42 +23,35 @@ const ALL_CONFIG_ASSIST_KEYS: readonly ConfigurationProposalPermissionKey[] = [
     "data_quality.view",
 ];
 
-/** Default true so org admins work before/without permission seed migration; set env to false to require grants. */
-function legacyRoleFallbackEnabled(): boolean {
-    const v = process.env.CONFIG_LAYOUT_ASSIST_LEGACY_ROLE_FALLBACK?.trim().toLowerCase();
-    if (v === "false" || v === "0" || v === "no") return false;
-    if (v === "true" || v === "1" || v === "yes") return true;
-    return true;
-}
-
+/*
+ * THE GRANT IS THE ANSWER. THERE IS NO SECOND ONE.
+ *
+ * A role-title fallback used to stand here, DEFAULTING ON — unset meant
+ * enabled, and `CONFIG_LAYOUT_ASSIST_LEGACY_ROLE_FALLBACK` is set in tests and
+ * in no deployed configuration, so it was live everywhere. Holding the
+ * `admin` ROLE KEY satisfied `fields.manage`, `layouts.manage`,
+ * `sections.manage`, `option_sets.manage`, `config_assist.generate` and
+ * `config_assist.apply` whether or not the organization's package granted any
+ * of them, and `ops` likewise satisfied the review-class keys.
+ *
+ * It was written for a real reason — "so org admins work before/without
+ * permission seed migration" — and that reason has expired: the seed landed in
+ * 20260523150000, and the deployed primary carries all three `config_assist.*`
+ * keys active, granted to admin in 3 of 3 organizations. The fallback now only
+ * hides whether the grants are right.
+ *
+ * Two defects came with it. It made the capability decorative, since an
+ * organization could withhold `fields.manage` from its own admin role and
+ * change nothing; and it made authorization depend on deployment configuration,
+ * so the same principal could be admitted in one environment and refused in
+ * another with identical grants.
+ */
 export function hasConfigLayoutAssistPermission(
     access: Pick<AdminAccessContextSuccess, "roleKeys" | "permissionKeys">,
     permissionKey: string
 ): boolean {
     const key = permissionKey.trim();
-    if (key && access.permissionKeys.includes(key)) {
-        return true;
-    }
-    if (!legacyRoleFallbackEnabled()) {
-        return false;
-    }
-    if (
-        key === CONFIG_ASSIST_PERMISSION_GENERATE ||
-        key === CONFIG_ASSIST_PERMISSION_APPLY ||
-        key.startsWith("fields.") ||
-        key === "sections.manage" ||
-        key === "layouts.manage" ||
-        key === "option_sets.manage"
-    ) {
-        return access.roleKeys.includes("admin");
-    }
-    if (key === CONFIG_ASSIST_PERMISSION_REVIEW || key === "data_quality.view") {
-        return (
-            access.roleKeys.includes("admin") ||
-            access.roleKeys.includes("ops")
-        );
-    }
-    return false;
+    return Boolean(key) && access.permissionKeys.includes(key);
 }
 
 export function assertConfigLayoutAssistPermission(
