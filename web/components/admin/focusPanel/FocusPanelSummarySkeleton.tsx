@@ -19,7 +19,7 @@
  * Only Summary is a composed grid; other modes reserve a simple stable placeholder.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
@@ -54,6 +54,42 @@ import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanel
  * contract uses this token rather than inventing a height.
  */
 export const FOCUS_PANEL_RESERVED_MIN_HEIGHT = "7.5rem";
+
+/**
+ * THE RESERVED-GEOMETRY CONTRACT, as a hook — for cards that legitimately clear their data.
+ *
+ * Financials proved the shape in Slice 4 and this is the same contract, not a competing one: keep the
+ * card's footprint while its data is cleared, so every card below it does not move down and back.
+ * Extracted only once a third and fourth adopter existed (Attendance, Health & Safety); a card with
+ * ONE occurrence should still just express it inline.
+ *
+ * Geometry only. This reserves space — it never keeps the previous subject's values on screen, and
+ * it never changes when a card clears or what it clears.
+ *
+ * `hasContent` is the card's own truth: true once its data is settled, false while cleared/pending.
+ * The remembered footprint is per card instance, so a legitimate unmount (a subject refusal removing
+ * the card) simply starts again from the shared floor — no external state survives it.
+ */
+export function useReservedCardGeometry(hasContent: boolean): {
+    ref: React.RefObject<HTMLDivElement | null>;
+    style: React.CSSProperties | undefined;
+    reserved: boolean;
+} {
+    const ref = useRef<HTMLDivElement | null>(null);
+    const lastLoadedHeight = useRef<number | null>(null);
+    useEffect(() => {
+        if (!hasContent || !ref.current) return;
+        const h = Math.round(ref.current.getBoundingClientRect().height);
+        if (h > 0) lastLoadedHeight.current = h;
+    }, [hasContent]);
+    return {
+        ref,
+        style: hasContent
+            ? undefined
+            : { minHeight: lastLoadedHeight.current ?? FOCUS_PANEL_RESERVED_MIN_HEIGHT },
+        reserved: !hasContent,
+    };
+}
 
 function ReservedSettlementRegion() {
     return (

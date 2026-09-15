@@ -1,5 +1,6 @@
 "use client";
 
+import { useReservedCardGeometry } from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
 import { useCallback, useEffect, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
@@ -59,6 +60,12 @@ export default function AttendanceCard({ model, context, receded = false, coordi
        and Health details use. Not a second surface and not a bigger copy of today. */
     const [showHistory, setShowHistory] = useState(false);
     const [loading, setLoading] = useState(false);
+    /*
+     * S4-1. Attendance clears its day when the subject changes and renders a one-line pending state,
+     * so its footprint collapsed exactly as Financials' did. The Slice 3 fixture hid it only because
+     * this tenant's attendance content is itself one line. Geometry only — the day still clears.
+     */
+    const reservedGeometry = useReservedCardGeometry(vm != null);
     const [running, setRunning] = useState<string | null>(null);
     const [commandError, setCommandError] = useState<string | null>(null);
 
@@ -176,6 +183,7 @@ export default function AttendanceCard({ model, context, receded = false, coordi
     if (vm) {
         return (
             <div
+                ref={reservedGeometry.ref}
                 className="alloy-os-attendance"
                 data-attendance-card="true"
                 data-attendance-subject={memberId ?? undefined}
@@ -212,7 +220,14 @@ export default function AttendanceCard({ model, context, receded = false, coordi
     }
 
     return (
-        <div className="alloy-os-attendance" data-attendance-card="true" data-attendance-subject={memberId ?? undefined}>
+        <div
+            ref={reservedGeometry.ref}
+            className="alloy-os-attendance"
+            data-attendance-card="true"
+            data-attendance-subject={memberId ?? undefined}
+            data-attendance-reserved={reservedGeometry.reserved ? "true" : undefined}
+            style={reservedGeometry.style}
+        >
             <UniversalCard
                 title={model.title}
                 insight={insightFor(vm, name, Boolean(memberId), loading)}
