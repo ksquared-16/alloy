@@ -15,6 +15,7 @@
 import type { BusinessProcessCardEvidence } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
 import type { ProcessCardCommandProjection } from "@/lib/adminV2/runtime/focusPanel/businessProcess/projectProcessCardCommands";
 import type { CurrentWorkViewModel } from "@/lib/adminV2/runtime/focusPanel/currentWork/projectCurrentWork";
+import type { FocusPanelCardProducerResults } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 
 export type FocusPanelOperationalProjection = {
     businessProcess: {
@@ -23,4 +24,12 @@ export type FocusPanelOperationalProjection = {
         commands: ProcessCardCommandProjection;
     };
     currentWork: CurrentWorkViewModel;
+    /**
+     * The cards that need their own read, produced inside this same lifecycle.
+     *
+     * Absent on a frame that projected before the producers ran — the browser treats that as
+     * "provisioning", never as "no attendance". Each carries its own readiness so one failure is
+     * bounded to one card.
+     */
+    cards?: FocusPanelCardProducerResults | null;
 };
