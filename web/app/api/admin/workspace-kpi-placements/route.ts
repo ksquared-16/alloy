@@ -10,6 +10,7 @@ import {
     validatePlacementPatchBody,
 } from "@/lib/kpi/placementMutationValidation";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
+import { LAYOUTS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 
 export const dynamic = "force-dynamic";
 
@@ -24,13 +25,23 @@ const SELECT_COLS =
 export async function GET(request: NextRequest) {
     const gate = await loadAdminRouteGate();
     if (!gate.ok) return adminRouteGateFailureResponse(gate);
-    const ctx = { ok: true as const, orgId: gate.orgId, role: gate.role, userId: gate.userId };
+    /*
+     * `permissionKeys` is carried deliberately. This literal used to drop it, and the org-wide
+     * configuration listing below now asks a capability rather than a role title — without the keys
+     * the gate would refuse every caller, including the admin it used to admit.
+     */
+    const ctx = {
+        ok: true as const,
+        orgId: gate.orgId,
+        role: gate.role,
+        userId: gate.userId,
+        permissionKeys: gate.access.permissionKeys,
+    };
 
     const listOrg = request.nextUrl.searchParams.get("list")?.trim() === "org";
     if (listOrg) {
-        if (ctx.role !== "admin") {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
+        const denied = requireConfigurationCapability(ctx, LAYOUTS_MANAGE);
+        if (denied) return denied;
 
         const supabase = createAdminClient();
         const { data, error } = await supabase
@@ -122,9 +133,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, LAYOUTS_MANAGE);
+    if (denied) return denied;
 
     let body: unknown;
     try {
@@ -206,9 +216,8 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, LAYOUTS_MANAGE);
+    if (denied) return denied;
 
     let body: unknown;
     try {
@@ -271,9 +280,8 @@ export async function PATCH(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, LAYOUTS_MANAGE);
+    if (denied) return denied;
 
     const id = request.nextUrl.searchParams.get("id")?.trim() ?? "";
     if (!id) {

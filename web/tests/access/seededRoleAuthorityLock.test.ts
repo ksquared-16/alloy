@@ -122,6 +122,31 @@ const ACCESS_OWNED = [
      */
     join(webRoot, "app", "api", "admin", "enrollment-process"),
     join(webRoot, "app", "api", "admin", "lifecycle-catalog"),
+    /*
+     * The Configuration PRESENTATION surfaces, added when the direct routes stopped asking for the
+     * admin title and started asking the keys the Configuration model already owned. Seven trees,
+     * and they are listed rather than the whole folder set because two neighbours are deliberately
+     * NOT here:
+     *
+     *   - `agent/*` still decides from a role title on purpose. Those three routes apply a
+     *     structured configuration override through the AI agent path, and the intended owner for
+     *     that class is recorded in `lib/ai/aiEnrichmentPermissions.ts` as a FUTURE key,
+     *     `agent.suggestion.apply`. Converting them to layouts/fields would have silently answered
+     *     a question the platform has already written down as open.
+     *   - `entity-labels` renames entity types for the whole organization. It has no truthful owner
+     *     among the established keys, and a folder is not a reason to pick one.
+     *
+     * Neither is an exception list entry, because neither is claimed as finished. They are open
+     * Director questions, and this comment is where a future reader finds that out.
+     */
+    join(webRoot, "app", "api", "admin", "workspace-kpi-placements"),
+    join(webRoot, "app", "api", "admin", "surfaces"),
+    join(webRoot, "app", "api", "admin", "queue-row-layout"),
+    join(webRoot, "app", "api", "admin", "record-drawer-layouts"),
+    join(webRoot, "app", "api", "admin", "field-sections"),
+    join(webRoot, "app", "api", "admin", "config"),
+    join(webRoot, "app", "api", "admin", "business-process-layout-assignments"),
+    join(webRoot, "lib", "access", "configurationAuthority.ts"),
 ];
 
 /**

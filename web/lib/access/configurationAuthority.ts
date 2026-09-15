@@ -52,6 +52,14 @@ export const LAYOUTS_MANAGE = "layouts.manage" as const;
 export const LAYOUTS_LIFECYCLE = "layouts.lifecycle" as const;
 export const FIELDS_MANAGE = "fields.manage" as const;
 export const FIELDS_DELETE = "fields.delete" as const;
+/*
+ * SECTIONS IS NOT A NEW CAPABILITY. `sections.manage` has been in the catalog and in every default
+ * package alongside the keys above; what it lacked was a constant here, because the section routes
+ * were still deciding from a role title. The canonical configuration contract
+ * (`configLayoutAssist/configurationProposalPermissions.ts`) already authorises create_section,
+ * update_section, reorder_section and archive_section under exactly this key.
+ */
+export const SECTIONS_MANAGE = "sections.manage" as const;
 
 export type ConfigurationCapability =
     | typeof OPTION_SETS_MANAGE
@@ -59,7 +67,8 @@ export type ConfigurationCapability =
     | typeof LAYOUTS_MANAGE
     | typeof LAYOUTS_LIFECYCLE
     | typeof FIELDS_MANAGE
-    | typeof FIELDS_DELETE;
+    | typeof FIELDS_DELETE
+    | typeof SECTIONS_MANAGE;
 
 /** True when the caller's effective capabilities carry this configuration authority. */
 export function hasConfigurationCapability(
