@@ -13,6 +13,18 @@
  * synchronously on the click and navigated once the signed URL arrives; a blocked-open is reported
  * rather than assumed to have worked.
  *
+ * THIRD, AND THIS IS WHY THE SECOND FIX DID NOT WORK: `noopener` MAKES `window.open` RETURN NULL.
+ * That is the specified behaviour, not a browser quirk — severing the opener relationship is exactly
+ * what discards the handle. Opening with `"noopener,noreferrer"` therefore produced `tab === null`
+ * on EVERY browser and EVERY click, so the code below always took the "your browser blocked it"
+ * branch and the tab it had just opened was never navigated anywhere. Measured in Chromium against
+ * the production QA build: `window.open("", "_blank", "noopener,noreferrer")` -> null, while
+ * `window.open("", "_blank")` -> a handle, with no popup blocking in play. The first fix turned a
+ * silent no-op into a misleading error message; the document still never opened.
+ *
+ * So the handle is kept — it is the only way to navigate the tab — and `opener` is severed straight
+ * after the navigation is issued, which is the same protection `noopener` was there to provide.
+ *
  * One helper, so both call sites cannot drift apart again — which is exactly how they came to share
  * the same defect.
  */
@@ -24,7 +36,7 @@ export async function openGovernedDocument(documentId: string): Promise<OpenGove
     if (!id) return { ok: false, message: "There is no document on this step yet." };
 
     // Synchronously, while the click is still the reason anything is happening.
-    const tab = typeof window !== "undefined" ? window.open("", "_blank", "noopener,noreferrer") : null;
+    const tab = typeof window !== "undefined" ? window.open("", "_blank") : null;
 
     try {
         const res = await fetch(`/api/admin/documents/${encodeURIComponent(id)}/signed-url`, {
@@ -43,6 +55,8 @@ export async function openGovernedDocument(documentId: string): Promise<OpenGove
 
         if (tab) {
             tab.location.href = body.signedUrl;
+            // Severed only now: the handle had to survive long enough to navigate.
+            try { tab.opener = null; } catch { /* cross-origin once navigated; already harmless */ }
             return { ok: true };
         }
 

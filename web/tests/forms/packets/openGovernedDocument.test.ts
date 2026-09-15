@@ -79,6 +79,35 @@ describe("openGovernedDocument", () => {
         expect((result as { message: string }).message).toMatch(/blocked the new tab/i);
     });
 
+    /*
+     * THE REASON THE FIRST FIX DID NOT WORK, BOUND AS A TEST.
+     *
+     * Every test above stubs `window.open` and therefore chooses its own return value — which is
+     * precisely why a defect in the ARGUMENTS survived them. `noopener` makes the real
+     * `window.open` return null by specification, so opening with "noopener,noreferrer" meant the
+     * handle was always null, the tab was never navigated, and the person was told their browser
+     * had blocked a popup that it had in fact opened. Measured in Chromium: with the flag -> null,
+     * without it -> a handle.
+     */
+    it("keeps the tab handle — it must not ask for noopener", async () => {
+        const tab = { location: { href: "" }, close: vi.fn(), opener: {} as unknown };
+        const open = vi.fn(() => tab);
+        withWindow(open);
+        vi.stubGlobal("fetch", vi.fn(async () => ({
+            ok: true,
+            json: async () => ({ ok: true, signedUrl: "https://example.test/d.pdf" }),
+        })));
+
+        const result = await openGovernedDocument("doc-1");
+
+        expect(result).toEqual({ ok: true });
+        const features = String(open.mock.calls[0]?.[2] ?? "");
+        expect(features).not.toMatch(/noopener/i);
+        expect(tab.location.href).toBe("https://example.test/d.pdf");
+        // The protection noopener was there for, applied once the handle has done its job.
+        expect(tab.opener).toBeNull();
+    });
+
     it("refuses a step with no document rather than calling the API", async () => {
         const fetchSpy = vi.fn();
         vi.stubGlobal("fetch", fetchSpy);
