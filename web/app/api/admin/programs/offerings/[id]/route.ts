@@ -4,6 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import type { OfferingStatus } from "@/lib/programs/programOfferings";
 import { operatorFriendlyProgramOfferingError } from "@/lib/programs/operatorFriendlyProgramOfferingError";
+import { requireProgramsConfigurationCapability } from "@/lib/access/programsConfigurationAuthority";
 
 const VALID_STATUSES = new Set<OfferingStatus>([
     "active", "draft", "coming_soon", "seasonal", "retired", "archived",
@@ -26,6 +27,8 @@ export async function PATCH(
             { status: ctx.status },
         );
     }
+    const capDenied = requireProgramsConfigurationCapability(ctx);
+    if (capDenied) return capDenied;
     if (!["admin", "ops"].includes(ctx.role)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -191,6 +194,8 @@ export async function DELETE(
             { status: ctx.status },
         );
     }
+    const capDenied = requireProgramsConfigurationCapability(ctx);
+    if (capDenied) return capDenied;
     if (!["admin"].includes(ctx.role)) {
         return NextResponse.json({ error: "Forbidden — admin required" }, { status: 403 });
     }

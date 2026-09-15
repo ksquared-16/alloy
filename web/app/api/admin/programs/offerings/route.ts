@@ -4,6 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import type { ProgramOffering, AttendanceType, OfferingStatus } from "@/lib/programs/programOfferings";
 import { operatorFriendlyProgramOfferingError } from "@/lib/programs/operatorFriendlyProgramOfferingError";
+import { requireProgramsConfigurationCapability } from "@/lib/access/programsConfigurationAuthority";
 
 const VALID_ATTENDANCE_TYPES = new Set<AttendanceType>([
     "full_time", "part_time", "drop_in", "hourly", "before_school", "after_school", "custom",
@@ -90,6 +91,8 @@ export async function POST(request: NextRequest) {
             { status: ctx.status },
         );
     }
+    const capDenied = requireProgramsConfigurationCapability(ctx);
+    if (capDenied) return capDenied;
     if (!["admin", "ops"].includes(ctx.role)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requireProgramsConfigurationCapability } from "@/lib/access/programsConfigurationAuthority";
 import {
     LOCATION_PROGRAM_CATEGORY_IDENTITY_SELECT_ATTEMPTS,
     LOCATION_PROGRAM_CATEGORY_SELECT_ATTEMPTS,
@@ -260,6 +261,8 @@ export async function PATCH(request: NextRequest) {
             { status: ctx.status }
         );
     }
+    const capDenied = requireProgramsConfigurationCapability(ctx);
+    if (capDenied) return capDenied;
 
     let body: { updates?: Array<Record<string, unknown>> } = {};
     try {
@@ -316,6 +319,8 @@ export async function POST() {
             { status: ctx.status }
         );
     }
+    const capDenied = requireProgramsConfigurationCapability(ctx);
+    if (capDenied) return capDenied;
 
     return NextResponse.json(
         {
