@@ -129,6 +129,13 @@
       "note": "Recovered by the Forms authority cleanup (20260912020000). The CRM entity search under Forms was gated on the literal `admin` role; it reads persons, customers and customer_members, so it now enforces the CRM read capability that already existed and had never been enforced anywhere."
     },
     {
+      "key": "crm.customers.write",
+      "sites": [
+        "web/lib/access/crmPeopleAuthority.ts"
+      ],
+      "note": "RECOVERED 2026-09-15 by the CRM/People record model — the third key found in this exact state, after fin.read and communications.read. Catalogued since the permission grid, granted to admin and ops in every organization, offered in the role editor, and named by NO source file. The 18 record mutations it describes were decided by requireAdminOrOps(), by ctx.role !== \"admin\", and on four contact mutations by nothing at all."
+    },
+    {
       "key": "data_quality.view",
       "sites": [
         "web/lib/agent/configLayoutAssist/configurationProposalAccess.ts",
@@ -142,6 +149,13 @@
       "sites": [
         "web/lib/documents/assertDocumentAccess.ts"
       ]
+    },
+    {
+      "key": "documents.write",
+      "sites": [
+        "web/lib/documents/assertDocumentAccess.ts"
+      ],
+      "note": "RECOVERED 2026-09-15 by the same slice. Its first enforcement sites are the two person profile-photo mutations, which are documents-backed and whose GET was already declared documents.read. Granted to admin and ops everywhere and enforced nowhere until now."
     },
     {
       "key": "fields.editability.manage",
@@ -302,10 +316,8 @@
     "ai.telemetry.review",
     "billing.read",
     "billing.write",
-    "crm.customers.write",
     "crm.opportunities.read",
     "crm.opportunities.write",
-    "documents.write",
     "operational_expectations.authority.assign",
     "operational_expectations.authority.manage",
     "ops.contacts.read",

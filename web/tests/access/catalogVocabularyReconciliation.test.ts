@@ -199,7 +199,7 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         // entity search under Forms, which had been gated on the literal `admin` role; 25 until the
         // Communications authority model recovered `communications.read`, whose 22 read handlers had
         // been asking for portal admission and calling it authority.
-        expect(enforced.length).toBe(26 + added.length);
+        expect(enforced.length).toBe(28 + added.length);
         /*
          * A health key that is SEEDED but not ENFORCED would be the D-H6 failure mode: the catalogue
          * would advertise a boundary the product does not apply. Both keys must have call sites.
@@ -232,7 +232,10 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         // organization, offered in the role editor, and consulted by nothing, while 22 read handlers
         // asked `requireAdminOrOps()` and admitted any principal who could enter the portal. Its
         // three companion keys are additions rather than recoveries, so they never appeared here.
-        expect(unenforced.length).toBe(26);
+        // 26 until the CRM/People record model recovered `crm.customers.write` and
+        // `documents.write` — two more keys catalogued, granted everywhere, and consulted by
+        // nothing, whose routes were decided by portal admission and a role title instead.
+        expect(unenforced.length).toBe(24);
     });
 
     it("C13 resolves against the measurement: nothing enforces a workflows key", () => {
