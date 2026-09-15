@@ -62,7 +62,7 @@ const M6 = "20260807170000_w12_seed_default_rbac_enumerated_grants.sql";
  * capability a NEW organization never receives — the cliff `20260910183000` was written to end.
  * Forms moved it here.
  */
-const LIVE_SEED = "20260915190000_communications_assignment_authority.sql";
+const LIVE_SEED = "20260915200000_organization_vocabulary_authority.sql";
 
 /**
  * The migration that owns the COMPLETENESS contract — the admin-is-the-whole-catalog rule, the nine
@@ -127,6 +127,13 @@ const OPS_WITHHELD = [
      */
     "admin.access_scope.write",
     "attendance.devices.manage",
+    /*
+     * Defining the organization's vocabulary. Withheld from ops for the reason the slice states:
+     * three of the four included families denied ops by role title already, and the fourth was
+     * reachable by any portal-admitted principal, which is accidental reach rather than a package
+     * decision. Nothing in the product ever said ops defines the words the organization uses.
+     */
+    "configuration.vocabulary.manage",
     /*
      * The three Communications authorities, withheld for the reason the model was split.
      *

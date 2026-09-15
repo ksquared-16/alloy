@@ -102,6 +102,8 @@ const APPROVED_ADDITIONS: Record<string, string> = {
         "20260915180000 — authoring and lifecycle of organization templates; its own key because folding it into communications.send would mean anyone who may answer a family may also rewrite every template the organization sends",
     "communications.provider.configure":
         "20260915180000 — the delivery services and channel bindings messages travel over; selects credential REFERENCES and is never authority to read secret material",
+    "configuration.vocabulary.manage":
+        "20260915200000 — defining the organization's reusable labels, types and relationship vocabulary. Its own key because no existing Configuration authority truthfully meant it: fields.manage, option_sets.manage, layouts.manage and sections.manage each have established narrower meanings, and the Director declined to stretch one. Status definitions are deliberately NOT under it — editing one can rebind a process stage, so they take business_process.configure",
     "communications.bulk.send":
         "20260915180000 — organization-wide, announcement and campaign sends, separated from communications.send because the blast radius is materially different and no product statement ever said one implied the other",
 };
