@@ -62,6 +62,11 @@ function routeFileToPattern(routeFile: string): string {
     return (
         "/" +
         routeFile
+            // A declaration may narrow to one method — `…/route.ts#GET` — since the split gave the
+            // Users chapter a route whose POST belongs to a different authority. This file asks a
+            // different question ("is the route the chapter calls declared at all?"), which the
+            // method never changes: a chapter calling a module has joined to that module's record.
+            .replace(/#[A-Z]+$/, "")
             .replace(/^app\//, "")
             .replace(/\/route\.ts$/, "")
             .replace(/\[[^\]]+\]/g, "*")

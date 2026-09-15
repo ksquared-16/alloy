@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { removeMemberRole } from "@/lib/admin/memberRoleAssignmentWrite";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { ADMIN_USERS_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 /**
  * DELETE: remove ONE role from this membership, leaving the others alone.
@@ -19,7 +19,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
  * its own action, with its own audit.
  */
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ userId: string; roleKey: string }> }) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_USERS_WRITE);
     if (!auth.ok) return auth.response;
     const { access } = auth;
 

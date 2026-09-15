@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
 import { replaceMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
@@ -9,6 +8,7 @@ import {
     replacementRemovalRefusal,
     replacementRemovalRefusalMessage,
 } from "@/lib/access/memberRoleAssignment";
+import { ADMIN_USERS_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 /**
  * PATCH: replace **all** role rows for this user in this org with a single role_key.
@@ -22,7 +22,7 @@ import {
  * acknowledgement `IA-7` added was not sufficient on its own.
  */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ userId: string }> }) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_USERS_WRITE);
     if (!auth.ok) return auth.response;
     const { access } = auth;
 

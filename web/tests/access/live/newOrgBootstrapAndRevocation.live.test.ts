@@ -55,8 +55,26 @@ const describeLive = env ? describe : describe.skip;
  * the audit exists to make impossible, and a test allowed to bypass it would be proving the wrong
  * thing about the production path it stands in for.
  */
+/*
+ * THE SEEDED ADMINISTRATOR, AND THE RESTORE IS WHY IT MATTERS.
+ *
+ * `"live-cert-actor"` matched no membership, so `W-18`'s delegation ceiling — which refuses any key
+ * the actor does not already hold — refused every call made with it. The revocation test survived
+ * that (its subject is the DELETE, which removes keys and adds none), but the `afterAll` restore did
+ * not: putting `reports.write` back is an ADDITION, and it was refused silently because nothing
+ * checks the error of a cleanup.
+ *
+ * So this file quietly stopped restoring the tenant it promises to leave as it found it. The cert
+ * org's `admin` lost `reports.write` permanently, this test's own precondition began failing on
+ * every subsequent run, and the personas suite's "administrator holds every catalogued capability"
+ * failed with it — three reds from one unchecked cleanup.
+ *
+ * The administrator holds what it is restoring, so the ceiling permits the restore and still bounds
+ * it exactly as it bounds anyone. The `expect` below is the other half: a cleanup whose failure
+ * nobody reads is a cleanup that does not run.
+ */
 const AUDIT = {
-    p_actor_user_id: "live-cert-actor",
+    p_actor_user_id: "00000000-0000-4000-8000-000000000002",
     p_origin: "operator",
     p_correlation_id: "live-cert-revocation",
 } as const;
@@ -251,12 +269,37 @@ describeLive("a deliberate revocation survives the repair — live", () => {
 
     afterAll(async () => {
         if (restore) {
-            await supabase.rpc("replace_role_permission_grants", {
-                p_org_id: EXISTING_ORG,
-                p_role_key: "admin",
-                p_permission_keys: restore,
-                ...AUDIT,
-            });
+            /*
+             * THE CLEANUP CANNOT USE THE CANONICAL RPC, AND THE REASON IS A FINDING.
+             *
+             * `W-18`'s delegation ceiling refuses any key the ACTOR does not already hold. This test
+             * revokes `reports.write` from `admin` — the only role in this tenant that had it — so
+             * after the revocation NO principal holds it, and therefore no principal can grant it
+             * back. The restore is refused with `delegation_ceiling:reports.write`, whoever attempts
+             * it, including the organization's own administrator.
+             *
+             * That is recorded as DELEGATION_CEILING_UNRECOVERABLE_REVOCATION: a capability revoked
+             * from every role in an organization is unrecoverable through the product, because the
+             * ceiling has no floor. It is not a defect in this file, and this file must not paper
+             * over it by inventing an exemption in the RPC.
+             *
+             * So the cleanup writes the grant row directly, as a migration would — the infrastructure
+             * path, which is the only path that can currently undo a full revocation. The test's own
+             * subject is untouched: the REVOCATION still goes through the canonical RPC above, which
+             * is what it certifies.
+             */
+            const { error } = await supabase.from("role_permission_grants").upsert(
+                restore.map((permission_key) => ({
+                    org_id: EXISTING_ORG,
+                    role_key: "admin",
+                    permission_key,
+                    allowed: true,
+                })),
+                { onConflict: "org_id,role_key,permission_key" }
+            );
+            // A silent failure here poisons the shared tenant for every later run, which is exactly
+            // what happened once. The restore is asserted, not attempted.
+            expect(error, `the tenant was NOT restored: ${error?.message}`).toBeNull();
         }
         await supabase.from("orgs").delete().eq("id", "b0075100-0000-4000-8000-00000000b008");
     }, 120_000);

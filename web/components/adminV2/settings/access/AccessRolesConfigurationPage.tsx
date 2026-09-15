@@ -42,6 +42,7 @@
  */
 
 import AccessHistoryList from "@/components/adminV2/settings/access/AccessHistoryList";
+import type { AccessCommandKey } from "@/lib/access/accessChapterRoutes";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -114,7 +115,12 @@ function memberDisplayName(m: MemberRow): string {
 const CHIP_CLASS =
     "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap";
 
-export default function AccessRolesConfigurationPage() {
+export default function AccessRolesConfigurationPage({
+    commands,
+}: {
+    /** Enforced results from `availableAccessCommands` — see the note in the Users chapter. */
+    commands: readonly AccessCommandKey[];
+}) {
     const searchParams = useSearchParams();
     const initialRoleKey = searchParams.get("roleKey");
 
@@ -411,6 +417,19 @@ export default function AccessRolesConfigurationPage() {
     );
 
     const writable = authoritySetIsWritable(grantLoad);
+    /*
+     * TWO DIFFERENT REASONS A ROLE CANNOT BE SAVED, and they must stay separable.
+     *
+     * `writable` is W-56/`T-22`: the grid is showing a PARTIAL view of the role's grants, so saving
+     * it would silently revoke what the page failed to load. `canManageRoles` is authority: this
+     * principal holds `admin.roles.read` and may study every role, but may not change one.
+     *
+     * Collapsing them would make an authority refusal look like a loading fault and a loading fault
+     * look like a permissions problem — and the second is the dangerous direction, because an
+     * operator who believes they lack authority stops, while one who believes the page is still
+     * loading retries.
+     */
+    const canManageRoles = commands.includes("manage-roles");
 
     return (
         <div data-testid="access-roles-page">
@@ -418,10 +437,12 @@ export default function AccessRolesConfigurationPage() {
                 <p className="text-xs leading-snug text-alloy-midnight/55">
                     A role is a bundle of responsibilities. Everyone assigned this role can do what it says here.
                 </p>
-                <ConfigurationPrimaryButton className="gap-1" onClick={openNewRole} data-testid="access-roles-new">
-                    <Plus className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-                    New Role
-                </ConfigurationPrimaryButton>
+                {canManageRoles ?
+                    <ConfigurationPrimaryButton className="gap-1" onClick={openNewRole} data-testid="access-roles-new">
+                        <Plus className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+                        New Role
+                    </ConfigurationPrimaryButton>
+                :   null}
             </div>
 
             {error ?
@@ -540,7 +561,7 @@ export default function AccessRolesConfigurationPage() {
                                                     :   null}
                                                 </p>
                                             </div>
-                                            {!editingIdentity ?
+                                            {!editingIdentity && canManageRoles ?
                                                 <ConfigurationSecondaryButton
                                                     className="gap-1"
                                                     onClick={() => setEditingIdentity(true)}
@@ -686,7 +707,7 @@ export default function AccessRolesConfigurationPage() {
                                                                                                     || (opt === "read" && area.level === "view")
                                                                                                     || (opt === "write" && area.level === "manage"))
                                                                                             }
-                                                                                            disabled={!writable}
+                                                                                            disabled={!writable || !canManageRoles}
                                                                                             onChange={() => setAreaLevel(area, opt)}
                                                                                             data-testid={`access-role-area-${area.areaKey}-${opt}`}
                                                                                         />
@@ -746,7 +767,7 @@ export default function AccessRolesConfigurationPage() {
                                                                                                             type="radio"
                                                                                                             name={`access-perm-${row.id}`}
                                                                                                             checked={level === opt}
-                                                                                                            disabled={!writable}
+                                                                                                            disabled={!writable || !canManageRoles}
                                                                                                             onChange={() => setGridLevel(row.id, opt)}
                                                                                                             data-testid={`access-role-permission-${row.id}-${opt}`}
                                                                                                         />
@@ -785,13 +806,15 @@ export default function AccessRolesConfigurationPage() {
                                                 />
                                                 Show capability keys
                                             </label>
-                                            <ConfigurationPrimaryButton
-                                                disabled={saving || !writable}
-                                                onClick={() => void saveRole()}
-                                                data-testid="access-role-save"
-                                            >
-                                                {saving ? "Saving…" : "Save role"}
-                                            </ConfigurationPrimaryButton>
+                                            {canManageRoles ?
+                                                <ConfigurationPrimaryButton
+                                                    disabled={saving || !writable}
+                                                    onClick={() => void saveRole()}
+                                                    data-testid="access-role-save"
+                                                >
+                                                    {saving ? "Saving…" : "Save role"}
+                                                </ConfigurationPrimaryButton>
+                                            :   null}
                                         </div>
                                     </ConfigWorkspaceCard>
 

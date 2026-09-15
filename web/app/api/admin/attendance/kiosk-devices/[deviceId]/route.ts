@@ -9,11 +9,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import {
     revokeKioskDevice,
     rotateKioskDeviceCredential,
 } from "@/lib/childcareOperational/attendance/kiosk/kioskCredentialRotation";
+import { ATTENDANCE_DEVICES_MANAGE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 async function deviceInOrg(
     supabase: ReturnType<typeof createAdminClient>,
@@ -31,7 +31,7 @@ async function deviceInOrg(
 
 /** POST = rotate the credential. The new secret is returned once. */
 export async function POST(_request: NextRequest, context: { params: Promise<{ deviceId: string }> }) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ATTENDANCE_DEVICES_MANAGE);
     if (!auth.ok) return auth.response;
     const { access } = auth;
 
@@ -61,7 +61,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ d
 
 /** DELETE = revoke. The row is kept so authored facts keep their provenance. */
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ deviceId: string }> }) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ATTENDANCE_DEVICES_MANAGE);
     if (!auth.ok) return auth.response;
     const { access } = auth;
 

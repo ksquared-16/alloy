@@ -373,21 +373,27 @@ describe("K — a principal cannot grant itself admission", () => {
         /*
          * Self-escalation is refused by the route that writes grants, not by a rule about
          * `portal.access` in particular — which is the correct shape: `portal.access` is an ordinary
-         * capability row, and writing ANY grant requires `settings.users_roles`.
+         * capability row, and writing ANY grant requires role administration.
          *
          * That also means the escalation path this file has to rule out is "admitted principal edits
-         * its own role". `requireUsersRolesManageAuth` resolves the managing capability and, per
-         * `I-35`ᴮ, does not accept admission as a substitute — `canManageUsersAndRoles` destructures
-         * `portalEligible` away rather than consulting it.
+         * its own role". The route names `admin.roles.write`, and per `I-35`ᴮ the gate does not
+         * accept admission as a substitute.
          */
         const route = readFileSync(join(webRoot, "app/api/admin/rbac/roles/[role_key]/route.ts"), "utf8");
-        expect(route).toMatch(/requireUsersRolesManageAuth/);
+        expect(route).toMatch(/requireAccessAdministration\(ADMIN_ROLES_WRITE\)/);
 
         const gate = executableSource("lib/admin/canManageUsersAndRoles.ts");
         expect(gate).toMatch(/permissionKeys\.includes/);
-        // The admission predicate is discarded at the boundary of this gate, deliberately.
-        expect(gate).toMatch(/portalEligible:\s*_portalEligible/);
-        expect(gate).not.toMatch(/if\s*\(\s*(?:[A-Za-z_$][\w$]*\.)?portalEligible\s*\)\s*(?:return\s+true|\{\s*return\s+true)/);
+        /*
+         * ADMISSION IS NOT MENTIONED AT ALL NOW — a strengthening, not a relaxation.
+         *
+         * This used to assert the gate destructured `portalEligible` away, which was the best
+         * available proof while a helper in this module still loaded the bundle that carries it. The
+         * split deleted that helper: every gate here reads `getAdminAccessContextCached`, which does
+         * not expose admission, so the substitution this test rules out is now unexpressible rather
+         * than merely declined. The assertion follows the code to the stronger claim.
+         */
+        expect(gate).not.toMatch(/portalEligible/);
     });
 });
 

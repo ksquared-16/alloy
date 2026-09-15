@@ -128,7 +128,7 @@ export default function AccessWorkspaceSurface({
                     </div>
                 : section === "roles" ?
                     <div data-testid="access-chapter-roles">
-                        <AccessRolesConfigurationPage />
+                        <AccessRolesConfigurationPage commands={commands} />
                     </div>
                 :   <div data-testid="access-chapter-security">
                         <AccessSecurityPage />

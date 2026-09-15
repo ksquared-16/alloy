@@ -414,10 +414,22 @@ describe("W-17 — a seeded role key is not authority inside Access", () => {
     it("gives a custom role the SAME answer as a seeded role holding the same capability", () => {
         // The whole configurable claim, in one assertion: the decision follows the grant, and the
         // key that carried it is not consulted.
-        const seeded = { roleKeys: ["admin"], permissionKeys: ["settings.users_roles"] };
-        const custom = { roleKeys: ["cert_w17_whatever_they_called_it"], permissionKeys: ["settings.users_roles"] };
+        const seeded = { roleKeys: ["admin"], permissionKeys: ["admin.users.read"] };
+        const custom = { roleKeys: ["cert_w17_whatever_they_called_it"], permissionKeys: ["admin.users.read"] };
         expect(canManageUsersAndRoles(seeded)).toBe(true);
         expect(canManageUsersAndRoles(custom)).toBe(canManageUsersAndRoles(seeded));
+
+        // And it holds for each of the split's authorities independently — a custom role granted
+        // only scope administration is admitted to the workspace on exactly the same terms.
+        for (const key of ["admin.users.write", "admin.roles.read", "admin.roles.write", "admin.access_scope.write"]) {
+            expect(
+                canManageUsersAndRoles({ roleKeys: ["cert_w17_whatever_they_called_it"], permissionKeys: [key] }),
+                `${key} admits a seeded role but not a custom one`
+            ).toBe(canManageUsersAndRoles({ roleKeys: ["admin"], permissionKeys: [key] }));
+        }
+
+        // The retired umbrella admits nobody, whatever the role is called.
+        expect(canManageUsersAndRoles({ roleKeys: ["admin"], permissionKeys: ["settings.users_roles"] })).toBe(false);
     });
 
     it("gives a seeded role NO special treatment when it grants nothing relevant", () => {

@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { assignMemberRole } from "@/lib/admin/memberRoleAssignmentWrite";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { ADMIN_USERS_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 /**
  * POST: add ONE role to this membership, leaving the others alone.
@@ -17,7 +17,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
  * erase each other.
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ userId: string }> }) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_USERS_WRITE);
     if (!auth.ok) return auth.response;
     const { access } = auth;
 

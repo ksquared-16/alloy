@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import {
     readAccessHistory,
     ACCESS_HISTORY_DEFAULT_LIMIT,
@@ -9,6 +8,7 @@ import {
 } from "@/lib/access/accessHistoryReadModel";
 import type { AccessHistoryDisplayNames } from "@/lib/access/accessHistoryPresenter";
 import type { PermissionCatalogEntry } from "@/lib/admin/permissionGrid";
+import { ADMIN_USERS_READ, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +34,7 @@ export const dynamic = "force-dynamic";
  * editor would be invisible.
  */
 export async function GET(request: NextRequest) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_USERS_READ);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
 
