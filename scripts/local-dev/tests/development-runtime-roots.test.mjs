@@ -384,5 +384,30 @@ test("17 — no second root registry or project authority was introduced", () =>
   }
 });
 
+test("18 — a caller that appends `vacilando/` means the GATEWAY root", () => {
+  /*
+   * THE REGRESSION S3 SHIPPED, AND THE LIVE GATEWAY REPORTED ZERO LANES.
+   *
+   * The control-plane stores live at `<gateway>/vacilando/...`. The old
+   * expressions read the variable and fell back to the PARENT, and S3 mapped
+   * them to `stateRoot()` on the strength of that fallback — but the fallback
+   * was the latent half of the two-depth defect, right only when the variable
+   * was unset. On this host it is set to the child, so the old code landed
+   * correctly and the "fix" moved every lane read one level up.
+   *
+   * `durableLanesEnabled()` was the tell the whole time: it tests that the
+   * configured root ends in `/gateway`.
+   */
+  const laneSrc = readFileSync(`${LIB}development-lane.mjs`, "utf8");
+  const knowledgeSrc = readFileSync(`${LIB}lane-knowledge.mjs`, "utf8");
+  for (const [name, src] of [["development-lane", laneSrc], ["lane-knowledge", knowledgeSrc]]) {
+    const fn = src.slice(src.indexOf("function runtimeRoot()"), src.indexOf("}", src.indexOf("function runtimeRoot()")) + 1);
+    assert.ok(fn.includes("gatewayStateRoot"),
+      `${name} resolves the parent of the store it reads; the Gateway reports zero lanes`);
+  }
+  // The invariant in one line: the store lives one level below the state root.
+  assert.equal(RR.gatewayStateRoot(), join(RR.stateRoot(), "gateway"));
+});
+
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);
 process.exit(fail ? 1 : 0);
