@@ -42,12 +42,22 @@ describe("the hint is development-only and names an environment, never an accoun
     const page = () => read("../../app/login/page.tsx");
 
     it("renders only under isDev", async () => {
-        expect(await page()).toContain("{isDev && error === signInErrorMessage(null) && supabaseOrigin ?");
+        expect(await page()).toContain("{isDev && error === signInErrorMessage(null) ?");
     });
 
-    it("shows only the origin, never key material", async () => {
+    it("names an environment without naming an address", async () => {
+        /*
+         * THIS ASSERTION INVERTED, AND THE INVERSION IS THE POINT.
+         *
+         * It used to require the hint to print `getPublicSupabaseAuthDebug().origin`. On a
+         * certification host that origin is a loopback address on the SERVER, and printing it told a
+         * remote operator their browser should reach their own machine. The hint keeps its job —
+         * telling you that accounts are per environment — and loses the URL.
+         */
         const src = await page();
-        expect(src).toContain("getPublicSupabaseAuthDebug().origin");
+        const hint = src.slice(src.indexOf("This server signs in against its own"));
+        expect(hint.slice(0, 300)).not.toMatch(/\{supabaseOrigin\}|127\.0\.0\.1|NEXT_PUBLIC_SUPABASE_URL/);
+        expect(hint.slice(0, 300)).toMatch(/per\s+environment/i);
         expect(src).not.toMatch(/ANON_KEY\}|anonKey\}/);
     });
 
@@ -58,8 +68,47 @@ describe("the hint is development-only and names an environment, never an accoun
 
     it("says nothing that varies with the address typed", async () => {
         const src = await page();
-        const hint = src.slice(src.indexOf("Dev: this server signs in against"));
-        expect(hint.slice(0, 240)).not.toMatch(/email|account exists|user/i);
+        const hint = src.slice(src.indexOf("This server signs in against its own"));
+        expect(hint.slice(0, 300)).not.toMatch(/email|account exists|user/i);
+    });
+});
+
+describe("the login surface carries no internal connectivity detail", () => {
+    const page = () => read("../../app/login/page.tsx");
+
+    it("renders no diagnostics panel", async () => {
+        /*
+         * An operator browsing the tailnet address was shown "Password sign-in expects: POST
+         * http://127.0.0.1:54421/auth/v1/token" and reasonably concluded their browser was being
+         * pointed at their own machine. The diagnostics were real and useful; the login product was
+         * the wrong place for them, and they now live at /dev/supabase-connectivity.
+         */
+        const src = await page();
+        expect(src).not.toContain("login-supabase-env-debug");
+        expect(src).not.toContain("Password sign-in expects");
+        expect(src).not.toContain("Dev: Supabase connectivity");
+        expect(src).not.toContain("Server says:");
+        expect(src).not.toContain("STALE BUNDLE");
+    });
+
+    it("keeps the stale-bundle repair, which was never a diagnostic", async () => {
+        const src = await page();
+        expect(src).toContain('fetch("/api/dev/supabase-origin"');
+        expect(src).toContain("setServerSupabaseConfig");
+        expect(src).toContain("useServerConfig");
+    });
+
+    it("the repair cannot aim a remote browser at the host's loopback address", async () => {
+        /*
+         * The repair built its client from the server's RAW url. On a certification host that is
+         * loopback, so the fix for one browser-side defect introduced another: an unreachable target
+         * and the library's derived cookie name instead of the pinned one. Transport belongs to
+         * browserTransport, here as everywhere else.
+         */
+        const src = await page();
+        const repair = src.slice(src.indexOf("const supabase = useServerConfig"));
+        expect(repair.slice(0, 500)).toContain("browserSupabaseUrl(");
+        expect(repair.slice(0, 500)).toContain("authCookieNameFor(");
     });
 });
 
@@ -127,33 +176,43 @@ describe("an unreachable auth service is never reported as a wrong password", ()
 });
 
 describe("a stale client bundle announces itself", () => {
-    const page = () => read("../../app/login/page.tsx");
+    const panel = () => read("../../app/dev/supabase-connectivity/SupabaseConnectivityPanel.tsx");
     const route = () => read("../../app/api/dev/supabase-origin/route.ts");
 
     it("compares this page's target against the server's own view", async () => {
-        const src = await page();
+        const src = await panel();
         expect(src).toContain('fetch("/api/dev/supabase-origin"');
-        expect(src).toContain("d.origin !== serverOrigin");
+        expect(src).toContain("debug.origin !== serverOrigin");
     });
 
     it("always shows the server's view, so the line doubles as a build marker", async () => {
         /*
-         * "Did the reload take?" was guessed at repeatedly during this incident and the guesses kept
+         * "Did the reload take?" was guessed at repeatedly during that incident and the guesses kept
          * pointing at the wrong half. An absent line is now the answer.
          */
-        const src = await page();
-        expect(src).toContain("Server says:");
-        const marker = src.slice(src.indexOf("Server says:"));
-        expect(marker.slice(0, 200)).toContain("serverOrigin");
+        const src = await panel();
+        expect(src).toContain("Server-side origin");
+        expect(src).toContain("serverOrigin");
     });
 
     it("says so loudly rather than letting it present as a wrong password", async () => {
-        const src = await page();
-        expect(src).toContain("STALE BUNDLE");
+        const src = await panel();
+        expect(src).toContain("Stale bundle");
         // Names BOTH origins: one alone would not tell you which half is wrong.
-        const banner = src.slice(src.indexOf("STALE BUNDLE"));
-        expect(banner.slice(0, 400)).toContain("{d.origin}");
+        const banner = src.slice(src.indexOf("Stale bundle"));
+        expect(banner.slice(0, 400)).toContain("{debug.origin}");
         expect(banner.slice(0, 400)).toContain("{serverOrigin}");
+    });
+
+    it("separates the browser's transport from the database's identity", async () => {
+        /*
+         * The defect this whole change exists for: one origin, one label, and a reader who concluded
+         * the wrong thing. Three origins now, each named for what it is.
+         */
+        const src = await panel();
+        expect(src).toContain("Browser transport");
+        expect(src).toContain("Database identity");
+        expect(src).toContain("browserSupabaseUrl(");
     });
 
     it("the route refuses to exist in production", async () => {
@@ -182,7 +241,10 @@ describe("a stale bundle cannot send credentials to the wrong project", () => {
 
     it("signs in against the SERVER's config when the bundle disagrees", async () => {
         const src = await page();
-        expect(src).toContain("createBrowserClient(serverSupabaseConfig!.url, serverSupabaseConfig!.anonKey)");
+        // Still the server's config — now sent through the transport owners, so the repair
+        // cannot aim a remote browser at the host's loopback address.
+        expect(src).toContain("browserSupabaseUrl(serverSupabaseConfig!.url");
+        expect(src).toContain("serverSupabaseConfig!.anonKey");
     });
 
     it("only when they actually disagree, and only in development", async () => {
