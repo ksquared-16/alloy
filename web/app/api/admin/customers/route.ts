@@ -5,6 +5,10 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { fetchScopedCustomerIdsForRestrictedAdmin, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { CUSTOMER_CANONICAL_LIST_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
+import {
+    requireCrmPeopleCapability,
+    CRM_CUSTOMERS_READ,
+} from "@/lib/access/crmPeopleAuthority";
 
 type CustomerRow = {
     id: string;
@@ -37,6 +41,8 @@ export async function GET(request: NextRequest) {
             { status: ctx.status }
         );
     }
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_READ);
+    if (capDenied) return capDenied;
 
     const { searchParams } = new URL(request.url);
     const statusKey = (searchParams.get("status_key") ?? "").trim();
