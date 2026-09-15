@@ -26,8 +26,21 @@ const webRoot = resolve(__dirname, "../..");
 const migrations = join(repoRoot, "supabase", "migrations");
 
 function latestCeilingMigration(): string {
+    /*
+     * THE FILE THAT DEFINES THE CEILING, not the last file that mentions it.
+     *
+     * This selected on the string `delegation_ceiling:`, which a later migration's PROSE matched: the
+     * recovery-floor migration explains why both ordinary paths refuse and quotes the refusal it
+     * names. That file writes grants but defines no ceiling, so every assertion below was suddenly
+     * read against the wrong migration and reported the ceiling as missing from itself.
+     *
+     * A comment can say anything. The definition is the fact, so that is what this looks for.
+     */
     const files = readdirSync(migrations).filter((f) => f.endsWith(".sql")).sort();
-    const named = files.filter((f) => readFileSync(join(migrations, f), "utf8").includes("delegation_ceiling:"));
+    const named = files.filter((f) =>
+        /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.replace_role_permission_grants/i
+            .test(readFileSync(join(migrations, f), "utf8"))
+    );
     expect(named.length, "no migration defines the delegation ceiling").toBeGreaterThan(0);
     return readFileSync(join(migrations, named[named.length - 1]), "utf8");
 }
@@ -138,6 +151,19 @@ describe("W-18 delegation ceiling", () => {
              */
             "seed_access_administration_split",
         ]);
+
+        /*
+         * THE EXCEPTIONAL RECOVERY WRITER, classified rather than exempted.
+         *
+         * `restore_capability_to_role` writes grants and deliberately does NOT pass the ceiling — it
+         * exists precisely because the ceiling refuses when nobody is left to delegate. Listing it
+         * beside the bootstrap seeds would be the wrong claim: it is not bootstrap, it is the one
+         * governed exception, and its safety is a different argument. It is reachable only by
+         * `service_role`, only through a Tier D action that can never be approved automatically, and
+         * it refuses unless the capability is active, the target role has members, and NO principal
+         * in the organization effectively holds the capability — re-measured at execution.
+         */
+        const GOVERNED_RECOVERY = new Set(["restore_capability_to_role"]);
         const CEILING_OWNER = "replace_role_permission_grants";
 
         const writers = new Set<string>();
@@ -154,7 +180,9 @@ describe("W-18 delegation ceiling", () => {
             .toBeGreaterThan(0);
         expect(writers.has(CEILING_OWNER), "the ceiling-bearing function must still write the grants").toBe(true);
 
-        const unexpected = [...writers].filter((w) => w !== CEILING_OWNER && !SYSTEM_BOOTSTRAP.has(w));
+        const unexpected = [...writers].filter(
+            (w) => w !== CEILING_OWNER && !SYSTEM_BOOTSTRAP.has(w) && !GOVERNED_RECOVERY.has(w)
+        );
         expect(
             unexpected,
             "a new SQL function writes role grants without passing the ceiling; either route it through "
