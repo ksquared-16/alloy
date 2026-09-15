@@ -1599,7 +1599,7 @@ html[data-alloy-os-runtime="on"]
   grid-template-columns: repeat(var(--alloy-os-fp-cols, 2), minmax(0, 1fr));
   gap: 10px;
   padding: 10px;
-  align-items: start;
+  /* Row rhythm is set below for every mode; `start` here would silently win for work mode. */
   /* The ResizeObserver measures THIS element. It must fill its container (not size to its
    * content) so the measured width is the real surface width — otherwise a narrow/stacked
    * render shrinks the box, which RO re-measures as narrow, locking in the stacked layout
@@ -1609,20 +1609,26 @@ html[data-alloy-os-runtime="on"]
 }
 
 /*
- * Overview (Summary) row rhythm — cards in the same grid row equalize height so
- * the surface reads as calm aligned rows, not a masonry / Pinterest stagger.
- * Work mode keeps `start` alignment (it evolves on its own cadence).
+ * ROW RHYTHM — EVERY MODE, INCLUDING WORK.
+ *
+ * Cards sharing a grid row equalize height, so the surface reads as aligned rows rather than a
+ * masonry stagger. Two cards in a row are 50/50 and the same height; where one card spans two rows
+ * against two stacked beside it, the stack sums to the tall card's height because each cell
+ * stretches to its own row band.
+ *
+ * Work mode used to be excluded, on the reasoning that it "evolves on its own cadence". The
+ * exclusion is what made Enrollment and Financials — a plain two-card row — sit at visibly
+ * different heights, because `align-items: start` lets every cell size to its own content. The
+ * cadence argument did not survive contact with the layout it produced: the mode is configured
+ * through the same /surfaces grid as the others and is expected to align like them.
  */
-.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) {
+.alloy-os-focus-panel-grid {
   align-items: stretch;
 }
-.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
-  .alloy-os-focus-panel-grid__cell {
+.alloy-os-focus-panel-grid .alloy-os-focus-panel-grid__cell {
   display: flex;
 }
-.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
-  .alloy-os-focus-panel-grid__cell
-  > * {
+.alloy-os-focus-panel-grid .alloy-os-focus-panel-grid__cell > * {
   width: 100%;
 }
 
@@ -5066,12 +5072,19 @@ html[data-alloy-os-runtime-split="true"]
    * owner — the same rule every mode that uses it inherits, not a route-specific override. */
   padding-top: var(--alloy-os-fp-pad-top, 10px);
   background: var(--alloy-os-surface, #fff);
-  align-items: start;
-}
-/* Override the equal-height row rhythm: natural heights, not stretched cells. */
-.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
-  .alloy-os-focus-panel-grid__cell {
-  align-items: start;
+  /*
+   * NO `align-items` HERE, AND NO CELL OVERRIDE BELOW.
+   *
+   * This block used to re-declare `align-items: start` on the grid and again on every cell, under
+   * the heading "Override the equal-height row rhythm: natural heights, not stretched cells". It
+   * sits far below the rhythm rules, so it won — which meant the rhythm was declared and then
+   * quietly revoked for every mode that had it, while work mode had been excluded from it
+   * outright. The visible result was that NO mode aligned: Enrollment and Financials, a plain
+   * two-card row, rendered at different heights.
+   *
+   * The row rhythm is the contract the /surfaces grid is configured against, so it is declared once,
+   * for every mode, and not taken back here.
+   */
 }
 
 /* Cards share the Universal Card shell on the Focus Panel canvas.

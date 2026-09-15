@@ -163,7 +163,9 @@ export default function ProcessCard({
                 {/* 2 · CURRENT CASE WORK — and the actions whose SUBJECT is the case. */}
                 <div className="alloy-os-process__work">
                     <div className="alloy-os-process__work-main">
-                        <p className="alloy-os-process__work-label">Case · {evidence.currentStageLabel}</p>
+                        {/* The stage names itself. "Case ·" prefixed every card with the grain the panel is
+                            already scoped to, spending a line on something no operator was asking. */}
+                        <p className="alloy-os-process__work-label">{evidence.currentStageLabel}</p>
                         <p className="alloy-os-process__work-line">
                             {evidence.workLine}
                             {evidence.dueLine ? (
@@ -175,6 +177,26 @@ export default function ProcessCard({
                                 <span className="alloy-os-process__needed-label">Still needed</span>
                                 {evidence.stillNeeded.join(" · ")}
                             </p>
+                        ) : null}
+                        {/*
+                          * RESOLVING THE WORK READS AS A CONSEQUENCE OF THE STAGE, NOT A PEER OF THE
+                          * COMMANDS. It sits directly under the stage's own lines as a link: the other
+                          * commands start something, this one closes what those lines just described.
+                          * The runtime decided which command this is — the card is not filtering.
+                          */}
+                        {evidence.outcomeAction ? (
+                            <button
+                                type="button"
+                                className="alloy-os-process__outcome-link"
+                                data-process-action={evidence.outcomeAction.key ?? undefined}
+                                disabled={evidence.outcomeAction.disabled}
+                                title={evidence.outcomeAction.disabledReason ?? undefined}
+                                onClick={evidence.outcomeAction.onInvoke}
+                                onMouseEnter={evidence.outcomeAction.onIntent}
+                                onFocus={evidence.outcomeAction.onIntent}
+                            >
+                                {evidence.outcomeAction.label}
+                            </button>
                         ) : null}
                     </div>
                     <div className="alloy-os-process__work-actions">
