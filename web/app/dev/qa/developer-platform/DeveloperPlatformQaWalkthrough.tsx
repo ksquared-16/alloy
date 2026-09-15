@@ -159,6 +159,20 @@ export default function DeveloperPlatformQaWalkthrough() {
         (async () => {
             setPreparing(true);
             try {
+                /*
+                 * ASK BEFORE REBUILDING.
+                 *
+                 * This rebuilt on every load, which is destructive-then-recreate. For one operator
+                 * that is invisible; for anything that opens the page more than once in quick
+                 * succession it is a race, and a second load could observe the half-built state the
+                 * first was still writing. Rebuild only when the fixture is not already intact.
+                 */
+                const status = await fetch("/api/dev/qa/developer-platform", { cache: "no-store" });
+                const current = ((await status.json()) as { fixture: FixtureState }).fixture;
+                if (current.ok) {
+                    if (!cancelled) setFixture(current);
+                    return;
+                }
                 const res = await fetch("/api/dev/qa/developer-platform", {
                     method: "POST",
                     headers: { "content-type": "application/json" },
