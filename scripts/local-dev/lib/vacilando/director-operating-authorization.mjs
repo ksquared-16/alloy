@@ -402,6 +402,12 @@ export const ACTION_CLASS_INVENTORY = Object.freeze([
     executes_via: "operator only", why: "Same basis: this is the authority to grant authority.", bounds: null,
   }),
   Object.freeze({
+    class_id: "access.restore_capability", surface: "governance", action_key: "access.restore_capability", tier: D,
+    executes_via: "operator only",
+    why: "CLASSIFIED BEFORE IT IS REGISTERED, deliberately. The trusted-host action does not exist yet — its executor needs host-process SQL plumbing, and the canonical checkout governed runners execute from is far behind staging — but the tier is a decision, not a consequence of implementation order. Recording it here means `tierOf` answers never_automatic the moment the action is registered, so it cannot be introduced into a softer bucket by whoever wires the executor. Restoring a capability to a role IS delegation of authority, so it belongs beside the two rows above rather than with the repair-shaped database actions it superficially resembles. It exists because both ordinary delegation paths are correctly bounded: when the last principal holding a capability is gone, W-18 and the assignment ceiling BOTH refuse to recreate it, and no one in the tenant can. That makes the exception necessary and makes it dangerous — it is the only path in the product that confers authority nobody currently holds. Tier D is the point: no policy, preference or delegated agent may approve it, because the thing being approved is a grant of power to people who cannot presently be given it any other way.",
+    bounds: null,
+  }),
+  Object.freeze({
     class_id: "executor.grant_authority", surface: "governance", action_key: "executor.grant_authority", tier: D,
     executes_via: "operator only", why: "Same basis, at the executor rather than the policy.", bounds: null,
   }),
