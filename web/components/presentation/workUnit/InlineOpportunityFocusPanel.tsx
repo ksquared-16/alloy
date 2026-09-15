@@ -466,11 +466,35 @@ export function InlineOpportunityFocusPanel() {
      * mismatch.
      */
     const seedSubjectTitle = drawer.opportunityQueuePreviewSeed?.title?.trim() || null;
-    const bodyHoldsPriorSettlement = resolved == null && heldPrior != null;
-    const headerTitle =
-        (!bodyHoldsPriorSettlement ? seedSubjectTitle : null)
-        || childDisplayName
-        || (visible ? drawerTitle : null);
+    /*
+     * ── S3-1: ACKNOWLEDGED IDENTITY IS MONOTONIC ────────────────────────────────────────────────
+     *
+     * This chain used to suppress the seed title while the body held a prior payload
+     * (`!bodyHoldsPriorSettlement ? seedSubjectTitle : null`), so the header fell through to the
+     * HELD subject's name. Each half was defensible on its own; together they reversed the
+     * operator's acknowledged intent. Frame-sampled on Firefly, one A → B switch:
+     *
+     *     2ms  header "Specq0913 Family"   (A)
+     *    86ms  header "Kurzman Family"     (B)   ← the click is acknowledged
+     *   775ms  header "Specq0913 Family"   (A)   ← REVERTS to the previous subject
+     *  2216ms  header "Kurzman Family"     (B)
+     *
+     * The operator selected Kurzman and was told, for about 1.4 seconds, that they were looking at
+     * Specq0913 again. It reproduced whenever the incoming payload was slow enough for the resolved
+     * header to render during the hold — i.e. more often on slower connections, not less.
+     *
+     * The rule now: once chrome has acknowledged a selection, that identity does not move backwards.
+     * The seed comes from the clicked row keyed on LIVE attention, so it always carries the newest
+     * intent; a resolved payload may still ENRICH the chrome around it (context chips, summary
+     * line), but it can no longer rename the subject to a stale one.
+     *
+     * THE TWO IDENTITIES STAY SEPARATE, which is what makes this safe. Chrome answers "who did the
+     * operator select"; the held body answers "what valid content can remain visible while the
+     * replacement resolves". The hold/reveal contract below is untouched — nothing here relabels
+     * held content as belonging to the new subject, and the body still carries its own subject
+     * attribute for anything that needs to know which payload is on screen.
+     */
+    const headerTitle = seedSubjectTitle || childDisplayName || (visible ? drawerTitle : null);
     const seedTitle =
         childDisplayName || drawer.opportunityQueuePreviewSeed?.title?.trim() || opportunitySingular;
     const seedContextChips = useMemo(

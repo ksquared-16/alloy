@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FOCUS_PANEL_RESERVED_MIN_HEIGHT } from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import {
@@ -730,6 +731,33 @@ export default function FinancialsCard({ model, context, receded = false, coordi
 
 
 
+
+    /*
+     * ── S3-2: CLEAR THE DATA, KEEP THE FOOTPRINT ────────────────────────────────────────────────
+     *
+     * Clearing below is correct and stays: a previous household's balance must never linger under
+     * the next subject's name. What was wrong was the GEOMETRY of that clear. Frame-sampled on
+     * Firefly across one subject switch, this card went 409px → 69px → 409px — it was the only
+     * audited card that collapsed, and the ~340px round trip shoved every card beneath it down and
+     * back while the account loaded.
+     *
+     * The Focus Panel already has a reserved-geometry contract for exactly this transition
+     * (`FOCUS_PANEL_RESERVED_MIN_HEIGHT`, the floor `ReservedSettlementRegion` reserves). This card
+     * adopts it, and reserves its OWN last loaded footprint when it has one — geometry is not data,
+     * so remembering how much room the card occupied leaks nothing about the previous account, and
+     * it adapts per subject instead of freezing one height for every account. The shared token is
+     * the floor for the first load, where there is nothing to remember yet.
+     *
+     * A genuinely different next subject still resizes the card once, on arrival. That is honest;
+     * the artificial collapse to a one-line loader in between is what this removes.
+     */
+    const shellRef = useRef<HTMLDivElement | null>(null);
+    const loadedHeightRef = useRef<number | null>(null);
+    useEffect(() => {
+        if (!vm || !shellRef.current) return;
+        const h = Math.round(shellRef.current.getBoundingClientRect().height);
+        if (h > 0) loadedHeightRef.current = h;
+    }, [vm]);
 
     useEffect(() => {
         // Clear FIRST: the previous household's balance must not linger while the next resolves.
@@ -2499,6 +2527,10 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         );
         return (
             <div
+                // SAME SHELL REF as the fallback return below. The loaded card renders through THIS
+                // branch, so without the ref the footprint it is reserving on the next subject switch
+                // could never be measured — the reserved height silently fell back to the shared floor.
+                ref={shellRef}
                 className="alloy-os-financials"
                 data-financials-card="true"
                 data-financials-subject={subjectFilter}
@@ -2541,7 +2573,14 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     }
 
     return (
-        <div className="alloy-os-financials" data-financials-card="true" data-financials-subject={subjectFilter}>
+        <div
+            ref={shellRef}
+            className="alloy-os-financials"
+            data-financials-card="true"
+            data-financials-subject={subjectFilter}
+            data-financials-reserved={!vm ? "true" : undefined}
+            style={!vm ? { minHeight: loadedHeightRef.current ?? FOCUS_PANEL_RESERVED_MIN_HEIGHT } : undefined}
+        >
             <UniversalCard
                 title={model.title}
                 insight={insightFor(vm, reconciliation, loading, currency)}

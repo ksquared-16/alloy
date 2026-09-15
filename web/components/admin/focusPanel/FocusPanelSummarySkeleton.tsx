@@ -45,6 +45,16 @@ import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanel
  * and drops the animation and the fake bars: bars imply content that does not exist yet, which is
  * both construction and a small lie about what is known.
  */
+/**
+ * THE RESERVED-GEOMETRY FLOOR, stated once.
+ *
+ * Exported because reserved geometry is a Focus Panel CONTRACT, not a detail of this skeleton: a
+ * card that legitimately clears its data during a subject switch must keep a footprint, or every
+ * card below it moves. `FinancialsCard` consumes this for exactly that case. Anything adopting the
+ * contract uses this token rather than inventing a height.
+ */
+export const FOCUS_PANEL_RESERVED_MIN_HEIGHT = "7.5rem";
+
 function ReservedSettlementRegion() {
     return (
         <div
@@ -52,7 +62,7 @@ function ReservedSettlementRegion() {
             data-focus-panel-skeleton-card="true"
             data-focus-panel-settlement-reserved="true"
             aria-hidden="true"
-            style={{ minHeight: "7.5rem", padding: "0.875rem" }}
+            style={{ minHeight: FOCUS_PANEL_RESERVED_MIN_HEIGHT, padding: "0.875rem" }}
         />
     );
 }
