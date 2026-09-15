@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjection";
 import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
+import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
 
 /** A title the projection can name the subject by; never a fabricated one. */
@@ -250,17 +251,13 @@ export async function composeOpportunityDrawerViewModel(
      * presentation, not a decision about what may run.
      */
     const tProjection = Date.now();
-    const projectedViewModel: OpportunityDrawerViewModel = {
-        ...viewModel,
-        workspace: {
-            ...viewModel.workspace,
-            /*
-             * The settled frame stops carrying the configuration too — both frames or neither, or a
-             * change of transport would restore the architecture this migration removed.
-             */
-            published_stage_inputs: null,
-            operational_projection: projectFocusPanelOperational({
-                context: buildOperationalContext({
+    /*
+     * The context is hoisted because the CARD PRODUCERS need the same one.
+     *
+     * Two frames sharing a producer but building two contexts is how they came to disagree about the
+     * subject in the first place. One context, both consumers.
+     */
+    const settledOperationalContext = buildOperationalContext({
                     subjectId: String(viewModel.entity.id),
                     title: strOrEmpty(viewModel.above_fold.record?.title),
                     subjectVm: viewModel,
@@ -293,8 +290,40 @@ export async function composeOpportunityDrawerViewModel(
                      * settled frame able to project the subject it claims to.
                      */
                     selectedParticipationId: params.attentionSubjectId ?? null,
-                }),
-            }),
+    });
+
+    /*
+     * THE SETTLED FRAME'S CARD PRODUCERS — the half that could not exist until now.
+     *
+     * The commit frame has run these since the boundary repair. The settled frame could not: it had
+     * no way to be told which child the surface was scoped to, so a producer run here would have
+     * resolved the sole participant and attributed one child's attendance to another. With the
+     * subject of attention on the request that objection is gone, and running them in BOTH frames is
+     * what makes settlement a change of transport rather than a change of authority — a card whose
+     * truth survives the commit frame only would go blank the moment the drawer VM took over.
+     *
+     * Producer failure is bounded inside `projectFocusPanelCardProducers` (`Promise.allSettled`), so
+     * an Attendance outage costs the operator Attendance and not the drawer.
+     */
+    const settledCards = await projectFocusPanelCardProducers({
+        supabase,
+        orgId,
+        context: settledOperationalContext,
+    });
+
+    const projectedViewModel: OpportunityDrawerViewModel = {
+        ...viewModel,
+        workspace: {
+            ...viewModel.workspace,
+            /*
+             * The settled frame stops carrying the configuration too — both frames or neither, or a
+             * change of transport would restore the architecture this migration removed.
+             */
+            published_stage_inputs: null,
+            operational_projection: {
+                ...projectFocusPanelOperational({ context: settledOperationalContext }),
+                cards: settledCards,
+            },
         },
     };
     phases.operational_projection_ms = Date.now() - tProjection;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ApprovedAttendanceCard from "@/components/operationalCards/AttendanceCard";
@@ -62,6 +62,17 @@ export default function AttendanceCard({ model, context, receded = false, coordi
     const [running, setRunning] = useState<string | null>(null);
     const [commandError, setCommandError] = useState<string | null>(null);
 
+    /*
+     * WHICH CHILD'S FULL WINDOW IS ACTUALLY LOADED — null while the card holds the root's projection.
+     *
+     * The initial projection is deliberately FIVE days: a month of history on the critical path to
+     * draw a week of it is what the root lifecycle exists to stop. But `recentDays` bounds the fold's
+     * whole window, so the same five days are all the `history` the depth layer would get — and the
+     * detail opens on "Month" and offers "All". Reading depth out of the initial projection silently
+     * turned a month into five days with no error and a plausible-looking count.
+     */
+    const depthLoadedForRef = useRef<string | null>(null);
+
     const load = useCallback(async () => {
         if (!memberId) {
             setVm(null);
@@ -76,7 +87,10 @@ export default function AttendanceCard({ model, context, receded = false, coordi
             const json = (await res.json()) as { ok?: boolean; vm?: AttendanceCardVM };
             // Keyed on the member the request was FOR: a slower response for the child the operator
             // just left must never paint over the child they are looking at now.
-            setVm(json?.ok && json.vm?.participant?.customerMemberId === memberId ? json.vm : null);
+            const fresh = json?.ok && json.vm?.participant?.customerMemberId === memberId ? json.vm : null;
+            // The endpoint's window is the DEPTH window; record that this child now has it.
+            if (fresh) depthLoadedForRef.current = memberId;
+            setVm(fresh);
         } catch {
             setVm(null);
         } finally {
@@ -153,7 +167,20 @@ export default function AttendanceCard({ model, context, receded = false, coordi
     useEffect(() => {
         // Clear FIRST: the previous child's day must not linger while the next one resolves.
         setVm(provisioned?.state === "ready" ? provisioned.data : null);
+        // A new projection is the SHALLOW window by construction, whichever child it is for.
+        depthLoadedForRef.current = null;
     }, [provisioned]);
+
+    /*
+     * Opening the record over time is an INTERACTION, so it may fetch — that is the boundary the
+     * producers module already states: initial card truth is the root's, the history a card opens on
+     * demand stays with the endpoint. This keeps the initial request count at zero and still opens on
+     * the full window. The five days already in hand render immediately and fill in.
+     */
+    const openHistory = useCallback(() => {
+        setShowHistory(true);
+        if (memberId && depthLoadedForRef.current !== memberId) void load();
+    }, [load, memberId]);
 
     useReportPerspective(coordination, "attendance", showHistory ? "focused" : "base");
     useDismissSignal(coordination, "attendance", () => setShowHistory(false));
@@ -198,7 +225,7 @@ export default function AttendanceCard({ model, context, receded = false, coordi
                 data-attendance-subject={memberId ?? undefined}
             >
                 <ApprovedAttendanceCard
-                    onViewHistory={() => setShowHistory(true)}
+                    onViewHistory={openHistory}
                     evidence={adaptAttendanceVmToAttendanceCard(vm)}
                     /*
                      * NO COMMANDS WHEN THERE IS NOTHING TO COMMAND. A child with no attendable
