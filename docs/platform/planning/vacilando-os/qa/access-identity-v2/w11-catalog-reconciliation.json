@@ -72,10 +72,11 @@
       "key": "ai.enrichment.use",
       "sites": [
         "web/lib/ai/aiEnrichmentPermissions.ts",
+        "web/lib/ai/resolveTrustAuthorization.ts",
         "web/lib/bos/auth/index.ts",
         "web/lib/bos/bosCapabilityRegistry.ts"
       ],
-      "note": "conditional — only when AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true; otherwise the routes fall back to portal admin/ops"
+      "note": "UNCONDITIONAL since AI + Agent Authority V2. It was previously enforced only when AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true — a flag set in tests and in no deployed configuration — so every real environment fell back to the portal admin/ops role title and the capability was decorative. The flag now governs live provider invocation only, which is feature availability; it can narrow admission but never grant it."
     },
     {
       "key": "communications.read",
@@ -309,6 +310,14 @@
         "web/lib/admin/canManageUsersAndRoles.ts"
       ],
       "note": "W-13/AD-22 — acquired an enforcement site when `requirePortalOrUsersRolesManageAuth` stopped admitting on `portalEligible` and started reading the RBAC catalog read capability. Moved here from `deletion_candidates`: it was inert only because the gate above it was a role literal."
+    },
+    {
+      "key": "ops.workflows.write",
+      "sites": [
+        "web/lib/access/agentApplyAuthority.ts",
+        "web/app/api/admin/ai/workflow-assist/apply/route.ts"
+      ],
+      "note": "activated by AI + Agent Authority V2 — Workflow Assist apply requires it before writing `workflows` and `workflow_actions`. Catalogued and active since Phase 0, granted to admin in 3 of 3 organizations and ops in 2 of 3, and enforced by no source file until this slice. `ops.workflows.read` is deliberately NOT activated with it."
     }
   ],
   "deletion_candidates": [
@@ -333,13 +342,12 @@
     "ops.schedules.read",
     "ops.schedules.write",
     "ops.workflows.read",
-    "ops.workflows.write",
     "scheduling.read",
     "settings.users_roles.read"
   ],
   "deletion_candidates_by_vocabulary": {
     "legacy_ops_fin_admin_seed_set": {
-      "count": 18,
+      "count": 17,
       "seeded_by": "20260329165048_remote_schema.sql (seed_default_rbac), re-seeded by 20260729120000_…phase0….sql",
       "operator_meaning": "An operator has never been offered these as controls in a product surface, but since W-10 the grid projects the whole catalog, so they became visible controls that change nothing.",
       "keys": [
@@ -359,8 +367,7 @@
         "ops.opportunities.write",
         "ops.schedules.read",
         "ops.schedules.write",
-        "ops.workflows.read",
-        "ops.workflows.write"
+        "ops.workflows.read"
       ]
     },
     "grid_vocabulary": {

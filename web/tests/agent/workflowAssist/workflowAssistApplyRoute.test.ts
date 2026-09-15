@@ -64,6 +64,13 @@ describe("POST /api/admin/ai/workflow-assist/apply", () => {
             userId,
             role: "admin",
         });
+        mockGetAdminAccessContext.mockResolvedValue({
+            ok: true,
+            orgId,
+            userId,
+            permissionKeys: ["ops.workflows.write"],
+            roleKeys: ["admin"],
+        });
         mockExecuteWorkflowAssistApply.mockReset();
         mockExecuteWorkflowAssistApply.mockResolvedValue({
             ok: true,
@@ -76,8 +83,24 @@ describe("POST /api/admin/ai/workflow-assist/apply", () => {
         vi.unstubAllEnvs();
     });
 
-    it("returns 403 when requireAdmin rejects (ops / non-admin)", async () => {
-        mockRequireAdmin.mockResolvedValueOnce(NextResponse.json({ error: "Forbidden" }, { status: 403 }));
+    /*
+     * THE GRANT DECIDES, NOT THE TITLE.
+     *
+     * This asserted that `requireAdmin` refusing produced a 403, which tested
+     * the role title rather than the authority. The route now requires
+     * `ops.workflows.write` — the key that owns the `workflows` and
+     * `workflow_actions` tables this writes — so the honest cases are: a
+     * principal without it is refused however they are titled, and a principal
+     * with it is admitted however they are titled.
+     */
+    it("refuses a principal who does not hold ops.workflows.write", async () => {
+        mockGetAdminAccessContext.mockResolvedValue({
+            ok: true,
+            orgId,
+            userId,
+            permissionKeys: ["ai.enrichment.use", "fields.manage", "layouts.manage"],
+            roleKeys: ["admin"],
+        });
         const suggestion = validPauseSuggestion();
         const res = await POST(
             postJson({
@@ -88,7 +111,52 @@ describe("POST /api/admin/ai/workflow-assist/apply", () => {
             }),
         );
         expect(res.status).toBe(403);
+        expect(await res.json()).toMatchObject({ required_permission: "ops.workflows.write" });
+        // The mutation must not have happened, not merely been reported refused.
         expect(mockExecuteWorkflowAssistApply).not.toHaveBeenCalled();
+    });
+
+    it("admits a custom role that holds ops.workflows.write and is not an admin", async () => {
+        mockGetAdminAccessContext.mockResolvedValue({
+            ok: true,
+            orgId,
+            userId,
+            permissionKeys: ["ops.workflows.write"],
+            roleKeys: ["workflow_writer"],
+        });
+        const suggestion = validPauseSuggestion();
+        const res = await POST(
+            postJson({
+                version: 1,
+                suggestion_id: suggestion.suggestion_id,
+                proposal: suggestion,
+                confirm: true,
+            }),
+        );
+        expect(res.status).toBe(200);
+        expect(mockExecuteWorkflowAssistApply).toHaveBeenCalled();
+    });
+
+    it("does not require AI authority to commit an already-generated proposal", async () => {
+        // The route invokes no model; it commits a proposal from the body. A
+        // Workflow Writer must not also need `ai.enrichment.use`.
+        mockGetAdminAccessContext.mockResolvedValue({
+            ok: true,
+            orgId,
+            userId,
+            permissionKeys: ["ops.workflows.write"],
+            roleKeys: ["workflow_writer"],
+        });
+        const suggestion = validPauseSuggestion();
+        const res = await POST(
+            postJson({
+                version: 1,
+                suggestion_id: suggestion.suggestion_id,
+                proposal: suggestion,
+                confirm: true,
+            }),
+        );
+        expect(res.status).toBe(200);
     });
 
     it("returns 400 for invalid proposal shape", async () => {
@@ -152,4 +220,29 @@ describe("POST /api/admin/ai/workflow-assist/apply", () => {
         const arg = mockExecuteWorkflowAssistApply.mock.calls[0]![0] as { proposal: { suggestion_id: string } };
         expect(arg.proposal.suggestion_id).toBe(suggestion.suggestion_id);
     });
+});
+
+/*
+ * THE ACCESS CONTEXT IS NOW PART OF THE GATE.
+ *
+ * This route admitted on the role TITLE and needed only the admin context. It
+ * now resolves the caller's granted capabilities, so a suite that mocks only
+ * the admin context gets a 401 from the unmocked access lookup — which reads
+ * as "the route broke" when it means "the test has not said what this
+ * principal may do". Saying so explicitly is the point: the capability is the
+ * authority, so every case must declare it.
+ */
+const { mockGetAdminAccessContext } = vi.hoisted(() => ({
+    mockGetAdminAccessContext: vi.fn(),
+}));
+
+vi.mock("@/lib/admin/getAdminAccessContext", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/getAdminAccessContext")>(
+        "@/lib/admin/getAdminAccessContext"
+    );
+    return {
+        ...actual,
+        getAdminAccessContext: mockGetAdminAccessContext,
+        getAdminAccessContextCached: mockGetAdminAccessContext,
+    };
 });

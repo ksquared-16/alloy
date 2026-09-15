@@ -115,8 +115,20 @@ describe("RL-16 — Agent apply follows the domain mutation", () => {
         "%s is gated on its own domain authority",
         (route, owner) => {
             const src = codeOnly(route);
-            expect(src).toContain("requireAgentApplyDomainAuthority");
-            expect(src).toContain(owner);
+            /*
+             * THE CALL, NOT THE IMPORT.
+             *
+             * This first asserted the file merely CONTAINED the helper name, and
+             * a planted defect deleting the gate call outright passed — the
+             * import line alone satisfied it. A guard that survives the removal
+             * of the thing it guards is not a guard. The call expression itself,
+             * with the owner passed to it, is what must be present.
+             */
+            expect(src).toMatch(
+                new RegExp("requireAgentApplyDomainAuthority\\(\\s*access\\s*,\\s*" + owner + "\\s*\\)"),
+            );
+            // ...and its refusal must actually be returned, not computed and dropped.
+            expect(src).toMatch(/if \(capDenied\) return capDenied;/);
             // The role title must be gone from the admission decision.
             expect(src).not.toMatch(/if \(ctx\.role !== "admin"\)/);
             expect(src).not.toMatch(/await requireAdmin\(\)/);

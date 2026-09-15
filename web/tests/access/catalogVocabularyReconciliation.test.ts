@@ -237,19 +237,33 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         // 26 until the CRM/People record model recovered `crm.customers.write` and
         // `documents.write` — two more keys catalogued, granted everywhere, and consulted by
         // nothing, whose routes were decided by portal admission and a role title instead.
-        expect(unenforced.length).toBe(24);
+        // 23 since AI + Agent Authority V2 activated `ops.workflows.write`: Workflow Assist
+        // apply now gates on it before writing `workflows` and `workflow_actions`, so it is no
+        // longer a control that changes nothing.
+        expect(unenforced.length).toBe(23);
     });
 
-    it("C13 resolves against the measurement: nothing enforces a workflows key", () => {
-        // `01…§2.3`'s C13 — Phase 0 grants `ops.workflows.*` to every org's admin; W-3 removed the grid
-        // row; W-10's projection returned it. The plan's M2 amendment binds the outcome to this
-        // measurement: the row returns iff W-11 seeds a workflows key that something enforces. It does
-        // not, so both keys are on the deletion list and the row goes with them — reached by
-        // enumeration, not silently.
+    it("C13 resolves the other way for the WRITE key, because the measurement moved", () => {
+        /*
+         * `01…§2.3`'s C13 — Phase 0 grants `ops.workflows.*` to every org's admin; W-3 removed the
+         * grid row; W-10's projection returned it. The plan's M2 amendment binds the outcome to a
+         * MEASUREMENT rather than to a preference: the row returns iff something enforces a
+         * workflows key.
+         *
+         * For three sprints nothing did, so both keys sat on the deletion list. AI + Agent
+         * Authority V2 changed the measured fact: `ai/workflow-assist/apply` writes `workflows`
+         * and `workflow_actions`, and now requires `ops.workflows.write` to do it. The decision is
+         * not being overridden — its own condition has resolved, and this asserts the resolution
+         * rather than the stale half of it.
+         *
+         * READ IS UNCHANGED. This slice enforced the write key only; claiming the read key had
+         * also come alive would be the same theatre in the other direction.
+         */
         expect(scan.sitesByKey.get("ops.workflows.read") ?? []).toEqual([]);
-        expect(scan.sitesByKey.get("ops.workflows.write") ?? []).toEqual([]);
         expect(artifact.deletion_candidates).toContain("ops.workflows.read");
-        expect(artifact.deletion_candidates).toContain("ops.workflows.write");
+
+        expect(scan.sitesByKey.get("ops.workflows.write") ?? []).not.toEqual([]);
+        expect(artifact.deletion_candidates).not.toContain("ops.workflows.write");
     });
 
     it("the one enforced key with no catalog row is still the only one", () => {
