@@ -418,6 +418,25 @@ export default function DeveloperPlatformQaWalkthrough() {
                         82 acceptance checks across thirteen sections. Your progress is saved in this
                         browser as you go, so you can stop and come back.
                     </p>
+                    {/*
+                      * The account, named before anything else.
+                      *
+                      * This QA runs against the synthetic certification database, so an operator's
+                      * real Alloy credentials do not exist here at all — and the failure looks like
+                      * a broken login rather than the wrong environment. Saying which account to
+                      * use costs two lines and saves that investigation.
+                      */}
+                    <div style={S.identityNote}>
+                        <p style={S.identityLine}>
+                            <strong>QA operator:</strong> <code>qa-slot8-product@example.com</code>
+                        </p>
+                        <p style={S.identityDetail}>
+                            This QA runs against the synthetic <strong>alloy-cert</strong> environment.
+                            Your normal Alloy account will not work here — it does not exist in this
+                            database. The certification-only password is on this machine at{" "}
+                            <code>~/.config/alloy-dev/slot8-qa-cert-password</code>.
+                        </p>
+                    </div>
                     {fixture?.ok === false ? (
                         <div style={S.blocked}>
                             <strong>QA environment BLOCKED — {fixture.code}</strong>
@@ -944,6 +963,9 @@ const S: Record<string, React.CSSProperties> = {
     h3: { fontSize: 14, margin: "18px 0 6px" },
     start: { marginTop: 28, padding: 24, border: "1px solid #e4e7ec", borderRadius: 12, background: "#fcfcfd" },
     startLead: { margin: "0 0 14px", fontSize: 14, color: "#475467", lineHeight: 1.6 },
+    identityNote: { margin: "0 0 14px", padding: "12px 14px", border: "1px solid #b2cced", background: "#eff8ff", borderRadius: 8 },
+    identityLine: { margin: 0, fontSize: 13.5, color: "#101828" },
+    identityDetail: { margin: "6px 0 0", fontSize: 13, color: "#344054", lineHeight: 1.6 },
     startReady: { margin: "0 0 14px", fontSize: 13, color: "#0f7b4f", fontWeight: 600 },
     startBtn: { marginTop: 14, border: 0, background: "#175cd3", color: "#fff", borderRadius: 8, padding: "10px 22px", fontSize: 15, fontWeight: 600, cursor: "pointer" },
     blocked: { padding: "12px 14px", border: "1px solid #fda29b", background: "#fef3f2", borderRadius: 8, fontSize: 13, color: "#912018", margin: "0 0 14px" },
