@@ -3,8 +3,8 @@ owner: platform
 status: canonical
 classification: PARTNER_READY
 audience: Classroom Coach engineering, Alloy product and engineering
-last_reviewed: 2026-09-14
-verified_against: 66fa281e176d33a7a2e848cb1321a18dbcd2c1e2
+last_reviewed: 2026-09-15
+document_version: 1.0
 supersedes: []
 ---
 
@@ -91,9 +91,11 @@ on nothing:
 - **D-1 — direction — is unresolved.** Whether Classroom Coach is inbound to
   Alloy, outbound from Alloy, or both, is not established. It determines which
   side builds what, and no design should proceed past it.
-- **Alloy is PARTNER_READY, not PUBLIC_READY.** Two open internal security
-  prerequisites (SEC-0, SEC-0c) gate describing the platform as production-safe.
-  Neither is reachable from `/api/v1`; both are named in the specification.
+- **Alloy classifies the platform PARTNER_READY rather than for unrestricted
+  public release.** Outstanding items are internal hardening work on surfaces
+  unrelated to `/api/v1`, tracked internally. They do not affect the contract
+  described in the specification, and the public API is certified independently
+  of them.
 
 ## 3. Proposed integration domains
 
@@ -130,8 +132,8 @@ this is committed work; it is the shape the platform already supports.
    OpenAPI coverage. The pattern is established by Locations.
 3. **Governed external mutation, starting with attendance ingestion** — the
    scope, the internal adapter and the authority model already exist; what is
-   missing is the public endpoint, its idempotency contract, and the two open
-   security prerequisites closing.
+   missing is the public endpoint and its idempotency contract, alongside the
+   internal hardening Alloy tracks before exposing any external mutation.
 4. **Correlation management** — exposing the existing substrate so a partner can
    assert its own identifiers rather than relying on Alloy-side mapping.
 5. **Event delivery / webhooks** — unratified. Would need a delivery guarantee

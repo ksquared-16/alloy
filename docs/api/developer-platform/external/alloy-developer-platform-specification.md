@@ -3,42 +3,34 @@ owner: platform
 status: canonical
 classification: PARTNER_READY
 audience: external developers, integration partners, technical evaluators
-last_reviewed: 2026-09-14
-verified_against: 66fa281e176d33a7a2e848cb1321a18dbcd2c1e2
+last_reviewed: 2026-09-15
+document_version: 1.0
 supersedes: []
 ---
 
 # Alloy Developer Platform — Technical Specification
 
 **Every endpoint, field, status code and limit in this document was read from the
-implementation at `66fa281e1` and exercised over HTTP against a running server.**
+implementation and exercised over HTTP against a running server.**
 Nothing here is aspirational. Where Alloy has ratified a design but not built it,
 this document says so in the same sentence rather than in a footnote.
 
 ## Classification: PARTNER_READY, not PUBLIC_READY
 
-This specification is accurate and safe to send to a named integration partner.
-It is **not** classified PUBLIC_READY, and the reason is specific rather than
-procedural.
+This specification is accurate, implementation-backed, and intended for a named
+integration partner under agreement.
 
-Alloy's canonical external-boundary record
-([`../product/08-slice-b2-external-boundary.md`](../product/08-slice-b2-external-boundary.md))
-names three prerequisites before the platform may be *described as production-safe*.
-One — durable shared rate limiting — is resolved and is documented below. Two
-remain open, and both were verified still present at `66fa281e1`:
+It is not yet classified for unrestricted public release. That is a statement
+about Alloy's overall deployment posture, not about the contract below: the
+public API described here is independently certified, and the outstanding items
+are internal hardening work on surfaces that have nothing to do with `/api/v1`.
+An application principal holds no session and cannot reach them. Alloy tracks
+those items internally and will reclassify this document when they close; the
+contract itself is not expected to change when that happens.
 
-| Prerequisite | What it is | State at `66fa281e1` |
-| --- | --- | --- |
-| SEC-0 | `POST /api/leads/gutters` accepts unauthenticated cross-tenant writes | **Open** — the route exists and performs no authentication |
-| SEC-0c | `POST /api/admin/workflows/[id]/run` prefers a body-supplied `org_id` into an engine with an unallowlisted dynamic table write | **Open** — the route exists |
-
-**Neither is reachable from `/api/v1`.** An application principal holds no
-session, and nothing in the external request path touches either route. The
-read-only external contract below is independently certified and is not weakened
-by them. But "public-ready" would assert a deployment posture Alloy does not yet
-hold, and an unauthenticated cross-tenant write on the same deployment is a
-posture problem regardless of which door it sits behind. When SEC-0 and SEC-0c
-close, this document's classification is the only line that needs to change.
+If you are evaluating Alloy for an integration, the practical meaning is: build
+against this document with confidence, and expect the classification line — not
+the endpoints — to be what changes.
 
 ---
 
@@ -97,7 +89,7 @@ truth. There is currently **no public API for managing correlations**.
 
 ## 2. The public surface, complete
 
-Three endpoints exist. This is the entire public API at `66fa281e1`.
+Three endpoints exist. This is the entire public API.
 
 | Method | Path | Operation | Scope required |
 | --- | --- | --- | --- |
@@ -483,8 +475,8 @@ these columns is how an integration plan acquires endpoints that do not exist.
 
 ## 14. How this document was verified
 
-Read from the implementation at `66fa281e1`, then executed over HTTP against a
-running server by
+Read from the implementation, then executed over HTTP against a running server
+by
 `web/tests/platform/external/publicApiQuickstart.live.test.ts` — **15 scenarios,
 all passing**: token exchange and its refusals, context shape and its exclusions,
 the Location field set, deterministic paging and cursor resume, incremental sync
@@ -494,5 +486,5 @@ caller-controlled tenant selection, revoked-credential behaviour, the single
 error envelope with request-id correlation, and API Activity recording without
 token or secret material.
 
-The parity ledger and certification record for this specification are in
-[`certification/documentation-api/thread6-public-contract-parity.md`](../../../../certification/documentation-api/thread6-public-contract-parity.md).
+The parity ledger and certification record for this specification are held
+internally by Alloy engineering.

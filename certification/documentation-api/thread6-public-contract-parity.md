@@ -125,3 +125,23 @@ quality, and is the single line that changes when they close.
   adapter. Discovery request issued.
 - `environment.execute_registered_reconciliation` still registered without a mode
   mapping or fulfil dispatch — Runtime/Vacilando lane.
+
+## Sanitization repair (2026-09-15, human QA lane)
+
+The Developer Platform human QA walkthrough introduced two gates this record's own
+artifacts failed: DP-QA-52 (the specification must not expose unresolved security
+findings or internal vulnerability identifiers) and DP-QA-69 (the partner packet
+must not contain internal security identifiers, staging SHAs or PR numbers).
+
+Both partner-facing artifacts named SEC-0 and SEC-0c, and the specification
+additionally described **what is wrong with each route and which route it is** —
+an accurate map of two live internal weaknesses, in a document written to be
+handed to an external company. The classification rationale has been rewritten to
+say what a partner needs (the contract is certified; outstanding items are
+internal hardening on surfaces unrelated to `/api/v1`) without naming the
+findings or the routes, and the staging SHA has been replaced with a document
+version.
+
+**The specific detail is not lost — it lives here**, in an internal record, which
+is where it always belonged. The finding itself stands unchanged: SEC-0 and
+SEC-0c are open, neither is reachable from `/api/v1`, and both gate PUBLIC_READY.
