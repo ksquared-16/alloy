@@ -252,6 +252,11 @@ export async function composeOpportunityDrawerViewModel(
         ...viewModel,
         workspace: {
             ...viewModel.workspace,
+            /*
+             * The settled frame stops carrying the configuration too — both frames or neither, or a
+             * change of transport would restore the architecture this migration removed.
+             */
+            published_stage_inputs: null,
             operational_projection: projectFocusPanelOperational({
                 context: buildOperationalContext({
                     subjectId: String(viewModel.entity.id),

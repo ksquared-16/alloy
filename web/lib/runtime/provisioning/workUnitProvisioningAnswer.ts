@@ -1932,7 +1932,22 @@ export async function composeWorkUnitProvisioningAnswer(
         primaryAction,
         primaryActionAbsence: childComposition?.primaryActionAbsence ?? familyMissionPrimaryAbsence,
         childIdentity: childComposition?.identity ?? null,
-        focusPanelStageWork,
+        /*
+         * THE SLICE WITHOUT ITS RAW INPUTS.
+         *
+         * `published_stage_inputs` was ~78,355B of published configuration — measured byte-identical
+         * between consecutive subject selections — carried so the BROWSER could project the cards
+         * from it. The server projects now, below, and no browser reader remains, so the
+         * configuration stops travelling. The runtime halves of the slice stay: they are this
+         * subject's own state, not configuration.
+         */
+        focusPanelStageWork: focusPanelStageWork
+            ? {
+                  stage_work_runtime: focusPanelStageWork.stage_work_runtime,
+                  work_intent_runtime: focusPanelStageWork.work_intent_runtime,
+                  published_stage_inputs: null,
+              }
+            : null,
         subjectIdentityTruth,
         focusPanelOperationalProjection: (() => {
             /*

@@ -395,23 +395,23 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
         for (const row of projection.withheld) {
             logProcessCardCommandWithheld({ processKey, stageKey, ...row });
         }
-        // Both halves together: what configuration named, and what the row became.
-        const psi = context.publishedStageInputs as
-            | { operatingPlan?: { work_templates?: Array<Record<string, unknown>> }; commandProjection?: unknown }
-            | null
-            | undefined;
+        /*
+         * WHAT CONFIGURATION NAMED, AND WHAT THE ROW BECAME — both halves, from the projection.
+         *
+         * This used to read `context.publishedStageInputs` to echo the raw operating plan and the
+         * process's own command selection beside the result. That echo was the LAST browser reader
+         * of ~78KB of configuration, and it was redundant: `configuredRefs` already states what
+         * configuration named, `commandKeys` what the row became, and `drift`/`withheld` the
+         * difference — all decided by the same server projection the card renders.
+         *
+         * Diagnostics follow authority. The comparison is unchanged and the dedupe identity is
+         * untouched, so `window.__ALLOY_PROCESS_COMMAND_PROJECTION` reads exactly as before.
+         */
         logProcessCardCommandProjection({
             processKey,
             stageKey,
             configuredRefs: projection.configuredRefs,
             commandKeys: projection.commands.map((c) => c.key),
-            planTemplates: (psi?.operatingPlan?.work_templates ?? []).map((t) => ({
-                label: String((t as { label?: unknown }).label ?? ""),
-                helpful: (((t as { helpful_actions?: Array<{ action_ref?: string }> }).helpful_actions) ?? []).map(
-                    (h) => String(h.action_ref ?? ""),
-                ),
-            })),
-            commandProjection: psi?.commandProjection ?? null,
         });
     }, [
         projection.drift,
