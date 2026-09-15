@@ -26,26 +26,14 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { buildAttendanceCardVM, type AttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
+import { buildAttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
+import type { AttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
+import type {
+    FocusPanelCardProducerResults,
+    ProducerResult,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
-/**
- * One producer's outcome, in the root's vocabulary rather than the card's.
- *
- * `unavailable` and `error` are different facts and the card says different things about them: no
- * subject to read for (a family row with no scoped child) is ordinary, and a failed read is not.
- * Collapsing them would make a genuine outage indistinguishable from an empty one.
- */
-export type ProducerState = "ready" | "unavailable" | "error";
-
-export type ProducerResult<T> = {
-    state: ProducerState;
-    data: T | null;
-};
-
-export type FocusPanelCardProducerResults = {
-    attendance: ProducerResult<AttendanceCardVM>;
-};
 
 const unavailable = <T,>(): ProducerResult<T> => ({ state: "unavailable", data: null });
 

@@ -15,7 +15,7 @@
 import type { BusinessProcessCardEvidence } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
 import type { ProcessCardCommandProjection } from "@/lib/adminV2/runtime/focusPanel/businessProcess/projectProcessCardCommands";
 import type { CurrentWorkViewModel } from "@/lib/adminV2/runtime/focusPanel/currentWork/projectCurrentWork";
-import type { FocusPanelCardProducerResults } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
+import type { AttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
 
 export type FocusPanelOperationalProjection = {
     businessProcess: {
@@ -32,4 +32,28 @@ export type FocusPanelOperationalProjection = {
      * bounded to one card.
      */
     cards?: FocusPanelCardProducerResults | null;
+};
+
+/**
+ * One producer's outcome, in the root's vocabulary rather than the card's.
+ *
+ * `unavailable` and `error` are different facts: no subject to read for is ordinary, a failed read
+ * is not, and collapsing them would make an outage indistinguishable from an empty one.
+ */
+export type ProducerState = "ready" | "unavailable" | "error";
+
+export type ProducerResult<T> = { state: ProducerState; data: T | null };
+
+/**
+ * DECLARED HERE, NOT IN THE PRODUCER MODULE — and this was learned twice.
+ *
+ * `focusPanelCardProducers` imports `buildAttendanceCardVM` as a VALUE, and that module is
+ * `server-only`. A contract the cards import must not have an edge to it: the first time this
+ * happened the whole Focus Panel failed to parse while every required check stayed green.
+ *
+ * The VM types are reached by `import type` alone, which TypeScript erases — the same way
+ * `AttendanceCard` has always named them.
+ */
+export type FocusPanelCardProducerResults = {
+    attendance: ProducerResult<AttendanceCardVM>;
 };
