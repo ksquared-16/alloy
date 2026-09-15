@@ -22,19 +22,17 @@
  * and each catches things this cannot. It owns only the claims the browser uniquely settles.
  */
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
-// `__dirname`, not `import.meta.url`: this package is CommonJS and Playwright's TypeScript
-// transform emits `require`, which an ESM-detected module cannot host.
-const here = __dirname;
-const webRoot = resolve(here, "../..");
+import { loadFixture } from "./harness";
 
 /** ≤1px, the rounding tolerance the frozen doctrine names. */
 const TOLERANCE = 1;
 /** Frames a settle may take. Convergence, not micro-performance — CI timing must not flake. */
 const SETTLE_FRAME_BUDGET = 120;
+
+const FIXTURE = "focusPanelGeometryFixture.tsx";
+const STYLES = ["app/adminV2/components/alloyOsRuntime.css"];
 
 type CardGeometry = {
     top: number;
@@ -48,68 +46,9 @@ type CardGeometry = {
     overflow: number;
 };
 
-/**
- * Bundle the fixture — and with it the real grid, hook and planner — once per worker.
- *
- * esbuild resolves `@/…` to the web root exactly as Next and vitest do, so the module graph
- * under test is the shipped one. If this ever silently stopped pulling in the real planner the
- * discriminating scenarios below would fail, which is the point of having them.
- */
-let bundled: string | null = null;
-async function fixtureBundle(): Promise<string> {
-    if (bundled) return bundled;
-    // Dynamic: this package is ESM and Playwright transpiles a static import of esbuild to
-    // `require`, which does not exist here.
-    const esbuild = await import("esbuild");
-    const built = await esbuild.build({
-        entryPoints: [resolve(here, "focusPanelGeometryFixture.tsx")],
-        bundle: true,
-        write: false,
-        format: "iife",
-        jsx: "automatic",
-        absWorkingDir: webRoot,
-        alias: { "@": webRoot },
-        nodePaths: [resolve(webRoot, "node_modules")],
-        define: { "process.env.NODE_ENV": '"development"' },
-        loader: { ".css": "empty" },
-        logLevel: "silent",
-    });
-    bundled = built.outputFiles![0].text;
-    return bundled;
-}
-
-/** The REAL runtime stylesheet. The band fill and the intrinsic node live in it, not here. */
-const runtimeCss = () => readFileSync(resolve(webRoot, "app/adminV2/components/alloyOsRuntime.css"), "utf8");
-
-async function pageHtml(): Promise<string> {
-    const bundle = await fixtureBundle();
-    return `<!doctype html><html><head><meta charset="utf-8"><style>
-*{box-sizing:border-box}
-body{margin:0;font:14px system-ui,sans-serif}
-#root{width:100%}
-${runtimeCss()}
-</style></head><body>
-<script>
-// Instrumented before the bundle runs, so every observation the engine reacts to is counted.
-window.__obs = { resize: 0, mutation: 0 };
-(function () {
-  var RO = window.ResizeObserver;
-  window.ResizeObserver = function (cb) { return new RO(function () { window.__obs.resize++; return cb.apply(this, arguments); }); };
-  var MO = window.MutationObserver;
-  window.MutationObserver = function (cb) { return new MO(function () { window.__obs.mutation++; return cb.apply(this, arguments); }); };
-})();
-</script>
-<div id="root"></div>
-<script>${bundle.replace(/<\/script>/g, "<\\/script>")}</script>
-</body></html>`;
-}
-
 /** Load the fixture and wait for a measured settle — never a sleep. */
 async function mount(page: Page, width: number): Promise<void> {
-    const errors: string[] = [];
-    page.on("pageerror", (error) => errors.push(String(error)));
-    await page.setViewportSize({ width, height: 1200 });
-    await page.setContent(await pageHtml(), { waitUntil: "load" });
+    const errors = await loadFixture(page, FIXTURE, STYLES, width);
     await page.waitForFunction(() => document.querySelectorAll("[data-fp-grid-area]").length > 0);
     const settled = await settle(page);
     expect(errors, "the fixture must mount without a page error").toEqual([]);

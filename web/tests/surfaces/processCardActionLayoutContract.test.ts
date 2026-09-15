@@ -47,31 +47,38 @@ function processActionItemRule(): string {
     return CSS.slice(start, CSS.indexOf("}", start) + 1);
 }
 
-describe("process card action row is one row, and hides no command", () => {
+describe("process card commands form one compact region, and hide nothing", () => {
     /*
-     * THE CONTRACT CHANGED; THE FAILURE IT GUARDS AGAINST DID NOT.
+     * THE CONTRACT CHANGED TWICE; THE FAILURE IT GUARDS AGAINST NEVER DID.
      *
-     * This block used to assert `flex-wrap: wrap`. Wrapping was itself a correction — it replaced a
-     * `nowrap` + `overflow-x: auto` rail that CLIPPED, measured at `scrollWidth 409` against
-     * `clientWidth 300` on a deployed Waitlist card, with a hidden scrollbar and so no signal the
-     * command existed. Six of six sampled cards were clipped.
+     * Three rules have stood here, each correct at the width it was designed against:
      *
-     * Wrapping kept every command reachable and produced a stagger instead: three commands on one
-     * line, two on the next, each sized to its own label. Equal columns give one row without
-     * bringing the clipping back — a wide set ellipsizes INSIDE each column, which is visible and
-     * hoverable, rather than disappearing past an edge.
+     *   1. `nowrap` + `overflow-x: auto` — CLIPPED. Measured `scrollWidth 409` against
+     *      `clientWidth 300` on a deployed Waitlist card, hidden scrollbar, no signal the command
+     *      existed. Six of six sampled cards.
+     *   2. `flex-wrap: wrap`, content-sized — every command reachable, lines of differing width.
+     *   3. one row of equal columns — consistent, and at the authored Business Process width it
+     *      ellipsized labels mid-word. Legible clipping is still clipping, and equal columns CAUSE
+     *      it: four commands take a quarter of the track each whether their labels fit or not.
      *
-     * So the assertions below still forbid every hiding mechanism the old rule forbade. Only the
-     * means of fitting changed.
+     * So wrapping returns, deliberately. The stagger objection that removed it was overruled by
+     * product: a second line costs an operator nothing, a truncated label costs them the command.
+     * Consistency is height and padding, never width.
+     *
+     * Every hiding mechanism the earlier rules forbade is still forbidden below. Only the means of
+     * fitting changed, and geometry itself is proven where geometry exists —
+     * `playwright/geometry/processCommandRegion.spec.ts` measures real boxes at 300/340/420/560/700px.
      */
-    it("lays the commands out as one row of columns", () => {
+    it("lays the commands out as a wrapping region, not a fixed row", () => {
         const rule = processActionRowRule();
-        expect(rule).toMatch(/display:\s*grid/);
-        expect(rule).toMatch(/grid-auto-flow:\s*column/);
+        expect(rule).toMatch(/display:\s*flex/);
+        expect(rule).toMatch(/flex-wrap:\s*wrap/);
     });
 
-    it("gives every command the same share, so the row reads as one set", () => {
-        expect(processActionRowRule()).toMatch(/grid-auto-columns:\s*minmax\(0,\s*1fr\)/);
+    it("does not restore the equal-column grid that forced truncation", () => {
+        const rule = processActionRowRule();
+        expect(rule).not.toMatch(/grid-auto-columns:\s*minmax\(0,\s*1fr\)/);
+        expect(rule).not.toMatch(/grid-auto-flow:\s*column/);
     });
 
     it("does not restore the nowrap rail", () => {
@@ -93,19 +100,30 @@ describe("process card action row is one row, and hides no command", () => {
     });
 });
 
-describe("process card commands fill their column rather than sizing to their labels", () => {
+describe("process card commands size to their labels", () => {
     /*
-     * `flex: 0 0 auto` was right for a wrapping flex row: it kept a command's label whole instead of
-     * absorbing a neighbour's overflow, the behaviour that produced "hange lead locatio". In a grid
-     * of equal columns the column owns the width, so the command fills it and truncates visibly
-     * inside its own share — which is the consistency the row was missing.
+     * `flex: 0 0 auto` keeps a command's own label whole instead of absorbing a neighbour's
+     * overflow — the behaviour that produced "hange lead locatio". A command too wide for what is
+     * left of the line takes the next line whole rather than being compressed into a truncation.
+     *
+     * The ellipsis below is NOT the sizing rule: bounded by `max-width: 100%`, it engages only when
+     * a SINGLE label is wider than the entire region, which no configured command is today. Without
+     * it such a label would render outside the card.
      */
-    it("fills its column", () => {
-        expect(processActionItemRule()).toMatch(/width:\s*100%/);
+    it("sizes to its label and never shrinks", () => {
+        const rule = processActionItemRule();
+        expect(rule).toMatch(/flex:\s*0 0 auto/);
+        expect(rule).toMatch(/width:\s*auto/);
     });
 
-    it("truncates visibly rather than widening its column or spilling", () => {
+    it("does not stretch every command to the same width", () => {
+        // `(?<!-)` so `max-width: 100%` — the last-resort bound asserted below — does not match.
+        expect(processActionItemRule()).not.toMatch(/(?<!-)width:\s*100%/);
+    });
+
+    it("stays inside the card even when one label exceeds the whole region", () => {
         const rule = processActionItemRule();
+        expect(rule).toMatch(/max-width:\s*100%/);
         expect(rule).toMatch(/text-overflow:\s*ellipsis/);
         expect(rule).toMatch(/overflow:\s*hidden/);
     });
