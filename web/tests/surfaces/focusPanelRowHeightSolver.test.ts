@@ -15,7 +15,7 @@
  * authored BAND, not the coordinate.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -186,6 +186,46 @@ describe("11 — one band interpretation, shared", () => {
         // The grid is the only consumer of the hook, and both surfaces render the grid.
         const grid = readSrc("components/admin/focusPanel/FocusPanelCardGrid.tsx");
         expect(grid).toContain("useColumnAwareStack");
+    });
+
+    it("keeps the planner to ONE consumer, so a second reading cannot be introduced", () => {
+        /*
+         * PR #809 removed a fork where the builder read the published grid one way and the
+         * Work Unit read it as lanes. This is the vertical equivalent, locked: band identity
+         * reaches the product through exactly one chain.
+         *
+         *     focusPanelVisualBands + focusPanelRowHeights
+         *         -> useColumnAwareStack        (the only importer)
+         *             -> FocusPanelCardGrid     (the only caller)
+         *                 -> builder AND runtime
+         *
+         * A second importer anywhere on that chain is a second interpretation, whatever it
+         * computes, so it fails here rather than on a tenant's panel.
+         */
+        const roots = ["components", "app", "lib"];
+        const files: string[] = [];
+        const walk = (dir: string) => {
+            for (const entry of readdirSync(resolve(repoRoot, dir), { withFileTypes: true })) {
+                if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+                const rel = `${dir}/${entry.name}`;
+                if (entry.isDirectory()) walk(rel);
+                else if (/\.tsx?$/.test(entry.name)) files.push(rel);
+            }
+        };
+        for (const root of roots) walk(root);
+
+        const importersOf = (needle: string, self: string) =>
+            files.filter((rel) => !rel.endsWith(self) && readSrc(rel).includes(needle));
+
+        expect(importersOf("focusPanelVisualBands", "focusPanelVisualBands.ts")).toEqual([
+            "lib/adminV2/runtime/focusPanel/composition/focusPanelRowHeights.ts",
+        ]);
+        expect(importersOf("solveRowHeights", "focusPanelRowHeights.ts")).toEqual([
+            "components/admin/focusPanel/useColumnAwareStack.ts",
+        ]);
+        expect(importersOf("useColumnAwareStack", "useColumnAwareStack.ts")).toEqual([
+            "components/admin/focusPanel/FocusPanelCardGrid.tsx",
+        ]);
     });
 });
 
