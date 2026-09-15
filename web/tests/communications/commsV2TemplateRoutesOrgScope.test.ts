@@ -25,13 +25,22 @@ function read(rel: string): string {
     return readFileSync(p, "utf8");
 }
 
+/*
+ * THE GATE THIS PINNED HAS BEEN REPLACED, AND THE PIN IS NOW TIGHTER.
+ *
+ * This asserted `await requireAdminOrOps()` as the admin pattern. That helper resolves portal
+ * admission and nothing else, so what the assertion really locked in was that the route asked for
+ * no functional authority. Naming the capability instead means this contract now fails if the route
+ * is gated on the WRONG authority, which the old form could not detect.
+ */
 describe("B2 template routes — auth + org scoping + scope guards", () => {
     for (const rel of ROUTE_FILES) {
         describe(rel, () => {
             const src = read(rel);
 
-            it("uses requireAdminOrOps -> getAdminContextCached -> createAdminClient", () => {
-                expect(src).toMatch(/await requireAdminOrOps\(\)/);
+            it("names a Communications capability -> getAdminContextCached -> createAdminClient", () => {
+                // Templates read under `communications.read`, author under `communications.templates.manage`.
+                expect(src).toMatch(/await requireCommunicationsAuthority\(COMMUNICATIONS_(READ|TEMPLATES_MANAGE)\)/);
                 expect(src).toMatch(/getAdminContextCached\(\)/);
                 expect(src).toMatch(/if \(!ctx\.ok\) return adminContextFailureResponse\(ctx\)/);
                 expect(src).toMatch(/createAdminClient\(\)/);

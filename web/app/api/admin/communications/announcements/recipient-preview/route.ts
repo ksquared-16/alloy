@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { runAnnouncementRecipientPreview } from "@/lib/communications/v2/runAnnouncementRecipientPreview";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_BULK_SEND,
+} from "@/lib/communications/communicationsAuthority";
 
 /**
  * Communications V2 — stateless announcement recipient preview.
@@ -12,8 +15,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /** POST …/announcements/recipient-preview — count-only audience resolution from draft spec. */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_BULK_SEND);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

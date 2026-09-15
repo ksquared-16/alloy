@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import type { TemplateChannel } from "@/lib/communications/v2/templateSchema";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+    COMMUNICATIONS_TEMPLATES_MANAGE,
+} from "@/lib/communications/communicationsAuthority";
 import {
     buildTemplateVersionInsertPayload,
     computeTemplateTokenPaths,
@@ -16,7 +20,7 @@ import {
 
 /**
  * Communications V2 — template fetch + update (Phase 1 / B2).
- * Pattern: requireAdminOrOps -> getAdminContextCached -> createAdminClient.
+ * Pattern: `communications.read` / `communications.templates.manage` -> getAdminContextCached -> createAdminClient.
  * service_role writes; org_id enforced on every query.
  */
 
@@ -27,8 +31,8 @@ const VERSION_COLS = "id, template_id, version_number, subject, body, token_path
 
 /** GET /api/admin/communications/templates/[id] — template + current version + all versions. */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
@@ -68,8 +72,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
  * changes, append a new version and repoint current_version_id (simple, no rollback).
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_TEMPLATES_MANAGE);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

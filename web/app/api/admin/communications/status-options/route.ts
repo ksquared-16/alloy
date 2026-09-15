@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { buildStatusOptions, grainToEntityType, type StatusDefinitionRow } from "@/lib/communications/v2/statusOptions";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
 
 /**
  * Communications V2 — status options for the Announcement Audience Builder (B8C).
@@ -10,13 +13,13 @@ import { buildStatusOptions, grainToEntityType, type StatusDefinitionRow } from 
  * authoritative track (family → case-track status_key, child → OCM outcome_status_key).
  * Reads only status_definitions — never a pipeline-stage table or the legacy status column;
  * no buckets, no keyword matching, no send/schedule/provider.
- * Pattern: requireAdminOrOps -> getAdminContextCached -> createAdminClient.
+ * Pattern: `communications.read` -> getAdminContextCached -> createAdminClient.
  */
 
 /** GET /api/admin/communications/status-options?grain=family|child */
 export async function GET(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

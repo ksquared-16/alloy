@@ -11,9 +11,12 @@ import {
     validateCommunicationScheduledSendUpdateBody,
 } from "@/lib/communications/communicationScheduledSendsService";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { assertCommunicationsSendAllowed } from "@/lib/communications/communicationPermissions";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_BULK_SEND,
+} from "@/lib/communications/communicationsAuthority";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
     return v != null && typeof v === "object" && !Array.isArray(v);
@@ -45,8 +48,8 @@ function parseCancelPatch(body: unknown): { ok: false; error: string; message: s
  * - Edit/reschedule: `{ scheduled_for, body_snapshot, subject_snapshot? }` (pending; failed resets to pending)
  */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_BULK_SEND);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

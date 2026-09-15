@@ -9,19 +9,23 @@ import {
     validateCommunicationScheduledSendCreateBody,
 } from "@/lib/communications/communicationScheduledSendsService";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import {
     assertCommunicationsSendAllowed,
 } from "@/lib/communications/communicationPermissions";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_BULK_SEND,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
 
 /**
  * GET `/api/admin/communication-scheduled-sends?entity_type=opportunities&entity_id=<uuid>`
  * POST `/api/admin/communication-scheduled-sends` — create pending row (no send).
  */
 export async function GET(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
@@ -66,8 +70,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_BULK_SEND);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

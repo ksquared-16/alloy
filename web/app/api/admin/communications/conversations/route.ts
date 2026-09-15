@@ -4,6 +4,10 @@ import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { enrichCommandCenterConversations } from "@/lib/communications/v2/commandCenterConversationEnrichment";
 import { prepareCommandCenterQueue } from "@/lib/communications/v2/commandCenterViewModel";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
 
 /**
  * GET /api/admin/communications/conversations — org-scoped conversation summaries for the
@@ -31,6 +35,8 @@ export async function GET() {
     }
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const supabase = createAdminClient();
     const { data: threads, error } = await supabase
