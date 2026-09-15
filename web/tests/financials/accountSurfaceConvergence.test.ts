@@ -170,7 +170,14 @@ describe("F7 · one truth, two grains", () => {
         expect(css).toContain(".alloy-accounts-command-host");
         expect(css, "the account stays behind a scrim rather than being replaced")
             .toMatch(/\.alloy-accounts-command-host:has\(> \[data-financials-overlay\]\)::before/);
-        expect(css, "and the command's own actions stay reachable").toMatch(/max-height: min\(78svh/);
+        /*
+         * BOUNDED, not a pinned number. This asserted `78svh` and then failed when the bound was
+         * raised to fit the Add Charge footer — pinning the value locks the accident rather than
+         * the rule. The rule is that the layer is bounded to the viewport at all, so a small screen
+         * scrolls the layer instead of pushing the actions off it.
+         */
+        expect(css, "and the command's own actions stay reachable")
+            .toMatch(/\[data-financials-overlay\]\s*\{[^}]*max-height: min\(\d+svh/);
         /* One Add Charge implementation: the workspace composes the card, it does not rebuild it. */
         expect(src).not.toContain("AddChargeCommand");
     });
@@ -228,11 +235,19 @@ describe("F7 · one truth, two grains", () => {
      */
     it("lets the Add Charge body grow to its content inside the bounded layer", () => {
         const css = read("app/adminV2/components/alloyOsRuntime.css");
-        expect(css).toMatch(
-            /\.alloy-accounts-command-host > \[data-financials-overlay\] \.alloy-os-financials__preview\s*\{[^}]*max-height: none/,
-        );
-        expect(css, "and the layer itself stays bounded for smaller viewports")
-            .toMatch(/\.alloy-accounts-command-host > \[data-financials-overlay\]\s*\{[^}]*max-height: min\(/);
+        /*
+         * Two caps had to go, and the second was the one that hid the footer: `UniversalCard` bounds
+         * its body at 324px, and measured at 1280x720 the Add Charge form wanted 547px, so the
+         * action row sat at y=721 — one pixel below the fold. Inside this layer both grow and the
+         * LAYER does the bounding, so a laptop shows the whole form and a smaller viewport scrolls
+         * the layer with the actions still reachable.
+         */
+        const block = css.slice(css.indexOf(".alloy-accounts-command-host > [data-financials-overlay] .alloy-os-financials__preview"));
+        const uncapped = block.slice(0, block.indexOf("}") + 1);
+        expect(uncapped, "the command body is uncapped here").toContain("max-height: none");
+        expect(uncapped, "and both inner caps are released").toContain(".alloy-os-ucard__body");
+        expect(css, "while the layer itself stays bounded for smaller viewports")
+            .toMatch(/\[data-financials-overlay\]\s*\{[^}]*max-height: min\(/);
     });
 
     /*

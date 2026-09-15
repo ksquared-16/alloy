@@ -10394,7 +10394,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     width: min(38rem, calc(100vw - 3rem));
     /* The body scrolls; the command's own actions stay reachable, which is the one thing a
        focused layer may never lose. */
-    max-height: min(78svh, 42rem);
+    max-height: min(86svh, 46rem);
     overflow-y: auto;
     overscroll-behavior: contain;
     background: #fff;
@@ -10467,7 +10467,15 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
  * simply grows to its content, and the action footer therefore stays on screen without scrolling at
  * a normal laptop height. A smaller viewport still scrolls, which is the point of the bound.
  */
-.alloy-accounts-command-host > [data-financials-overlay] .alloy-os-financials__preview {
+.alloy-accounts-command-host > [data-financials-overlay] .alloy-os-financials__preview,
+/*
+ * `UniversalCard` caps its body at 324px and scrolls it. Measured with the Add Charge form open at
+ * 1280x720: the body wanted 547px, so it scrolled inside a layer that had room, and the action row
+ * sat at y=721 — one pixel below the fold, which is why the footer was missing rather than merely
+ * low. Inside this layer the body grows and the LAYER does the bounding, so the actions stay on
+ * screen at a laptop height and a smaller viewport scrolls the layer with the footer still reachable.
+ */
+.alloy-accounts-command-host > [data-financials-overlay] .alloy-os-ucard__body {
     max-height: none;
     overflow-y: visible;
 }
