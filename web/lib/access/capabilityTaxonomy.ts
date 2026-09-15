@@ -108,10 +108,19 @@ export const CAPABILITY_AREAS: readonly CapabilityArea[] = Object.freeze([
     { key: "enrollment", label: "Enrollment", description: "Exceptions to configured enrollment policy — pricing overrides and requirement exceptions.", order: 25 },
     { key: "reports", label: "Reports", description: "Reports and analytics.", order: 70 },
     { key: "workflows", label: "Workflows", description: "Operational workflows.", order: 80 },
+    /*
+     * BUSINESS PROCESS is the operator's noun, not Lifecycle and not Department.
+     * `docs/platform/core/business-process-system.md` records it as shipped product language, and
+     * the configuration workspace labels the surface "Processes". The two rows here were role-title
+     * gates under `/api/admin/departments` until the Department convergence; they are grouped by
+     * what an administrator is deciding — who may DESIGN a process, and who may SWITCH THE TENANT
+     * ONTO one — rather than by the legacy path they still answer on.
+     */
+    { key: "business_process", label: "Business Processes", description: "Designing business processes, and choosing which configuration is live.", order: 85 },
     { key: "expectations", label: "Operational expectations", description: "Authoring and ratifying operational expectations.", order: 90 },
     { key: "configuration", label: "Configuration", description: "How records look and behave — fields, layouts, sections, option sets and configuration assistance.", order: 100 },
     { key: "settings", label: "Settings", description: "Organization settings.", order: 110 },
-    { key: "users_roles", label: "Users & roles", description: "Who can sign in, and what their role allows.", order: 120 },
+    { key: "users_roles", label: "Users & roles", description: "Who can sign in, what their role allows, and where they may operate.", order: 120 },
 ] as const);
 
 /** A technical group with no honest operator-facing home yet. Recorded, never renamed into one. */
@@ -133,6 +142,7 @@ export const UNMAPPED = "__unmapped__" as const;
  */
 const GROUP_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
     portal: "portal",
+    business_process: "business_process",
     billing: "billing",
     enrollment: "enrollment",
     financials: "financials",
@@ -177,7 +187,39 @@ const ROW_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
     "operational_expectations.author": "expectations",
     "operational_expectations.ratify": "expectations",
     "operational_expectations.authority": "expectations",
+    /*
+     * THE UMBRELLA'S ROW BECAME FOUR, AND THREE OF THEM BELONG HERE.
+     *
+     * `settings.users_roles` was one row filed under Users & roles. The Access Administration Split
+     * retired it, and the replacement keys are grouped `system` in the catalog — a technical group
+     * this taxonomy maps nowhere, so without these entries an administrator would find the authority
+     * to invite a colleague, define a role, or change where someone works in a trailing "unmapped"
+     * bucket rather than under the heading they went looking for.
+     *
+     * Three rows, not one, because an area is the unit a preset applies to: granting Users & roles
+     * must set them together only when the operator says so, and each stays individually settable.
+     */
+    /*
+     * THE RETIRED ROW KEEPS ITS FILING, because the row still exists.
+     *
+     * `settings.users_roles` is inactive, not deleted — `mutation_events` refer to it and the audit
+     * would be unreadable without it. While it is in the catalog it is a grid row, and a grid row
+     * has to land somewhere: dropping this entry files "who can sign in" under Settings, beside
+     * organization preferences, which is the precise confusion the override was written to prevent.
+     */
     "settings.users_roles": "users_roles",
+    "admin.users": "users_roles",
+    "admin.roles": "users_roles",
+    "admin.access_scope": "users_roles",
+    /*
+     * `attendance.devices` is deliberately NOT filed here, and this absence is the record.
+     *
+     * It is the split's fourth authority, but it is not access administration in an operator's
+     * vocabulary — someone asking "who may register a kiosk" looks under Attendance, and there is no
+     * Attendance area because no decision has created one. Filing it under Users & roles to avoid an
+     * unmapped row would be the flattering name this file's header refuses. It renders, named as
+     * unmapped, until `ACCESS_ADMINISTRATIVE_SCOPE_DEBT`'s review gives it a home.
+     */
 });
 
 /**

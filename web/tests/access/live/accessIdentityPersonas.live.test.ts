@@ -63,8 +63,19 @@ const describeLive = env ? describe : describe.skip;
  * D2 — the canonical grant path refuses a change that names no actor. These fixtures stand in for
  * real operator edits, so they name one rather than being exempted from the contract they certify.
  */
+/*
+ * The seeded administrator of the certification org — a real membership, not a label.
+ *
+ * `W-18`'s delegation ceiling resolves `p_actor_user_id` against `user_roles` and refuses any key
+ * the actor does not already hold. `"live-cert-actor"` matches no membership, so it holds nothing
+ * and every persona this file provisions was refused with `delegation_ceiling:…`. Provisioning as
+ * the administrator is the truthful fix and not an exemption: the ceiling is applied to this actor
+ * exactly as to any other, and it passes because an administrator really does hold the capabilities
+ * it is handing out. The alternative — an origin-based bypass — would be caller-selectable, which
+ * is the hole the ceiling was written to close.
+ */
 const LIVE_AUDIT = {
-    p_actor_user_id: "live-cert-actor",
+    p_actor_user_id: "00000000-0000-4000-8000-000000000002",
     p_origin: "operator",
     p_correlation_id: "live-cert-personas",
 } as const;

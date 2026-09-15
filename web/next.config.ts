@@ -213,7 +213,6 @@ const nextConfig: NextConfig = {
       { source: "/legacy-admin/system/opportunity-fields", destination: "/organization/data-model?section=fields&entity=opportunity", permanent: false },
       { source: "/legacy-admin/system/vendor-fields", destination: "/organization/data-model?section=fields", permanent: false },
       { source: "/legacy-admin/system/schedule-fields", destination: "/organization/data-model?section=fields", permanent: false },
-      { source: "/legacy-admin/system/document-fields", destination: "/settings/documents/document-fields", permanent: false },
       { source: "/legacy-admin/system/entity-labels", destination: "/organization/data-model?section=entities", permanent: false },
       { source: "/legacy-admin/system/statuses", destination: "/settings/statuses", permanent: false },
       { source: "/legacy-admin/system/option-sets", destination: "/settings/option-sets", permanent: false },
@@ -230,7 +229,7 @@ const nextConfig: NextConfig = {
       // here or the path 404s — and `components/admin/AdminLayout.tsx` still links to it. Same
       // destination, one hop instead of two; no URL changes where it lands.
       { source: "/legacy-admin/users", destination: "/organization/access", permanent: false },
-      { source: "/legacy-admin/system/departments", destination: "/settings/departments", permanent: false },
+      { source: "/legacy-admin/system/departments", destination: "/organization/processes", permanent: false },
       { source: "/legacy-admin/system/work-units", destination: "/settings/work-units", permanent: false },
       { source: "/legacy-admin/system/pipelines", destination: "/organization/processes", permanent: false },
       { source: "/legacy-admin/system/customer-person-roles", destination: "/settings/relationships", permanent: false },
@@ -244,7 +243,6 @@ const nextConfig: NextConfig = {
       { source: "/admin/system/opportunity-fields", destination: "/settings/fields?entity=opportunity", permanent: false },
       { source: "/admin/system/vendor-fields", destination: "/settings/fields", permanent: false },
       { source: "/admin/system/schedule-fields", destination: "/settings/fields", permanent: false },
-      { source: "/admin/system/document-fields", destination: "/settings/documents/document-fields", permanent: false },
       { source: "/admin/system/entity-labels", destination: "/organization/data-model?section=entities", permanent: false },
       { source: "/admin/system/statuses", destination: "/settings/statuses", permanent: false },
       { source: "/admin/system/option-sets", destination: "/settings/option-sets", permanent: false },
@@ -253,7 +251,7 @@ const nextConfig: NextConfig = {
       { source: "/admin/system/layouts", destination: "/organization/surfaces", permanent: false },
       { source: "/admin/system/access-control", destination: "/organization/access", permanent: false },
       { source: "/admin/system/roles", destination: "/organization/access", permanent: false },
-      { source: "/admin/system/departments", destination: "/settings/departments", permanent: false },
+      { source: "/admin/system/departments", destination: "/organization/processes", permanent: false },
       { source: "/admin/system/work-units", destination: "/settings/work-units", permanent: false },
       { source: "/admin/system/pipelines", destination: "/organization/processes", permanent: false },
       { source: "/admin/system/customer-person-roles", destination: "/settings/relationships", permanent: false },
@@ -357,6 +355,20 @@ const nextConfig: NextConfig = {
       /**
        * Phase G: canonical operator workspace at `/workspace` (browser URL; serves AdminV2 tree).
        */
+      /**
+       * Core Financials Director QA — an internal operator surface.
+       *
+       * It lives under `/workspace` because that is `CANONICAL_OPERATOR_BASE`: the middleware's
+       * operator gate protects everything beneath it, and nothing redirects it away. The obvious
+       * choice, `/admin/system/qa/...`, does NOT work — the `/admin/*` family is retired, and
+       * `legacyAdminRedirectTarget` sends every path under it to a canonical surface, so a page
+       * there is unreachable no matter what it renders. That was proven on the hosted route, not
+       * guessed: `/admin/system` answered with `/organization` and `/admin/roster` with
+       * `/workspace`.
+       *
+       * The implementation stays under `/adminV2/*`, like every other operator surface here.
+       */
+      { source: "/workspace/qa/core-financials", destination: "/adminV2/system/qa/core-financials" },
       { source: "/workspace", destination: "/adminV2/workspace" },
       { source: "/workspace/work-unit/:workUnitSlug", destination: "/adminV2/workspace/work-unit/:workUnitSlug" },
       /**

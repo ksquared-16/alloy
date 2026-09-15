@@ -25,6 +25,7 @@ import {
     normalizeWorkUnitHeaderSurfaceConfig,
     type WorkUnitHeaderSurfaceConfig,
 } from "@/lib/presentation/runtime/workUnitHeaderSurfaceConfig";
+import { LAYOUTS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 
 const WORKSPACE_SURFACE = "workspace" as const;
 const WORKSPACE_ENTITY_TYPE = "workspace";
@@ -69,7 +70,8 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (ctx.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const denied = requireConfigurationCapability(ctx, LAYOUTS_MANAGE);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try {

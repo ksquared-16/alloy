@@ -65,6 +65,7 @@ import { closePullRequest, deleteRemoteBranch } from "./trusted-host-repository-
 import { applyReconciliationPlan, buildReconciliationPlan } from "./reconciliation-apply.mjs";
 import { executeWorktreeRetirement } from "./trusted-host-worktree-retirement.mjs";
 import { gatherObservation } from "./reconciliation-observe.mjs";
+import { executeTransfer } from "./repository-transfer.mjs";
 import {
   applyMigrationBatch,
   publicMigrationResult,
@@ -77,7 +78,7 @@ import {
 } from "./trusted-host-migrate.mjs";
 import { buildRegistrationSql } from "./trusted-host-register-application.mjs";
 import {
-  PRODUCTION_APPLY_TARGETS,
+  productionApplyTargets,
   validateProductionMigrationInputs,
 } from "./trusted-host-production-migrate.mjs";
 import {
@@ -98,6 +99,12 @@ import {
 
 import { appendTimelineEvent } from "./timeline.mjs";
 import { attachEvidence } from "./evidence.mjs";
+import { completedReuseDecision } from "./action-repeatability.mjs";
+import { ALLOY_REPOSITORY_ID as ALLOY_REPO_ID, executionProfileFor } from "./repository-registry.mjs";
+
+/** Alloy's database target, from Alloy's profile rather than from a literal. */
+const alloyDatabaseTarget = () =>
+  executionProfileFor({ profile: "alloy", repository_id: ALLOY_REPO_ID }).database_target;
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim()
   || join(os.homedir(), ".local", "state", "alloy-dev");
@@ -413,7 +420,9 @@ export function requestTrustedHostAction({
   const reusableStates = mayNotReplayFinished
     ? REUSABLE_IN_FLIGHT_STATES
     : [...REUSABLE_IN_FLIGHT_STATES, "completed"];
-  const existing = listTrustedHostActions(missionId).find((a) =>
+  let dedupeDisposition = null;
+  let dedupeWhy = null;
+  let existing = listTrustedHostActions(missionId).find((a) =>
     a.actionType === actionType
     && sameActionOwnership(a, { executionSessionId, assignmentId, inputs: validated.normalized })
     && (dedupeKey
@@ -429,6 +438,40 @@ export function requestTrustedHostAction({
         ? sameNormalizedInputs(a.inputs, validated.normalized)
         : a.inputs?.queryHash === validated.normalized.queryHash))
     && reusableStates.includes(a.state));
+  if (existing && existing.state === "completed") {
+    /*
+     * A COMPLETED ACTION IS ADOPTED ONLY IF A REPEAT MEANS "THE SAME ANSWER".
+     *
+     * It used to be adopted whenever the naive match found it, so a second
+     * intentional request in one Execution Run was answered from the first
+     * execution. Measured: two reconciliation requests in erun_dc7857293e0e0502
+     * shared `result_ref tha_5975676b98005f`; the runner's diagnostic opened
+     * `DELETE 0` both times, where a genuine second execution opens `DELETE 4`.
+     *
+     * The occurrence boundary is the governed request id, which is carried
+     * rather than invented — a retry of the SAME request still reuses, which is
+     * checked before the classification so repeatability never costs retry
+     * safety. No caller-supplied dedupeKey participates.
+     */
+    const decision = completedReuseDecision({
+      actionType,
+      existing,
+      requestId: authorizationContext?.requestId || null,
+      reuseAuthorized: typeof def.reuseAuthorized === "function"
+        ? def.reuseAuthorized(validated.normalized)
+        : null,
+    });
+    if (!decision.reuse) {
+      // Fall through to minting a new action. The disposition is recorded on it
+      // below, so why a second execution happened is answerable afterwards.
+      dedupeDisposition = decision.disposition;
+      dedupeWhy = decision.why;
+      existing = null;
+    } else {
+      dedupeDisposition = decision.disposition;
+      dedupeWhy = decision.why;
+    }
+  }
   if (existing) {
     /*
      * DEFENCE IN DEPTH: the reused action must be about the same thing.
@@ -482,6 +525,13 @@ export function requestTrustedHostAction({
       reason: identity.reason || null,
     },
     policyClassification: def.riskClass,
+    /*
+     * WHY THIS ACTION EXISTS RATHER THAN REUSING ONE. Internal provenance, not
+     * operator-facing noise: it is how "a second execution happened" is
+     * answerable without re-deriving the dedupe decision months later.
+     */
+    dedupeDisposition: dedupeDisposition || "first_occurrence",
+    dedupeWhy,
     authorizationState: "pending",
     authorizationId: null,
     executionState: "not_started",
@@ -892,6 +942,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   if (action.actionType === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) {
     return executeApplyReconciliationPlanTrustedHostAction(action, { actor, nowMs, grant });
   }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_TRANSFER_FILES) {
+    return executeTransferFilesTrustedHostAction(action, { actor, nowMs, grant });
+  }
   if (action.actionType === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
     return executeDeleteRemoteBranchTrustedHostAction(action, { actor, nowMs, grant });
   }
@@ -1004,6 +1057,8 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
     || action.inputs.worktreePath
     || resolveArtifactRoot(action.inputs);
   const hostCheckout = findRepoRoot();
+  // S3: nullable now. A census with no canonical root cannot run, and saying so
+  // here beats spawning a child with an undefined repository path.
   const canonical = resolveCanonicalRepoRoot();
   const envSource = resolveTrustedServerEnvSource();
   // A census names its database too. It used to inherit whichever credential the
@@ -1013,7 +1068,16 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
     || action.inputs.database_target
     || action.inputs.environment
     || action.target
-    || "alloy_deployed_primary";
+    /*
+     * THE LAST RESORT NAMES ITS OWNER.
+     *
+     * This read `|| "alloy_deployed_primary"` — a literal, so any project whose
+     * request omitted a target silently acquired ALLOY'S DATABASE. The fallback
+     * still exists, because a census with no environment cannot run at all; what
+     * changes is that it is now Alloy's profile answering for Alloy, and a future
+     * project supplies its own rather than inheriting this one.
+     */
+    || alloyDatabaseTarget();
   const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile, String(censusEnvironment)], {
     env: {
       ...process.env,
@@ -2004,7 +2068,7 @@ export function executePromotedMigrationTrustedHostAction(action, { actor = "dir
 
   const inputs = action.inputs || {};
   const target = String(inputs.target || inputs.environment || "").trim().toLowerCase();
-  if (!PRODUCTION_APPLY_TARGETS.includes(target)) {
+  if (!productionApplyTargets().includes(target)) {
     return failTrustedAction(
       action,
       "target_not_registered_production",
@@ -2630,6 +2694,83 @@ export function executeApplyReconciliationPlanTrustedHostAction(action, { actor 
   }, { nowMs });
 }
 
+/**
+ * Copy an approved manifest from one project repository into another.
+ *
+ * THE EXECUTOR RE-DERIVES, like every other apply here. It recomputes the plan
+ * fingerprint from the entries it was handed and refuses when it does not match
+ * the approved one, so a caller cannot widen a plan after approval by adding a
+ * path to the list. It then recomputes the preview against the live filesystem,
+ * so a source that changed since approval is caught even when the manifest did
+ * not change at all.
+ *
+ * BOTH PROJECTS RESOLVE THROUGH THE REGISTRY, inside `repository-transfer`.
+ * Nothing here knows where any project lives, which is what lets the same
+ * action serve any pair and keeps Alloy out of the destination's resolution.
+ */
+export function executeTransferFilesTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const i = action.inputs || {};
+  const plan = {
+    source_repository_id: i.sourceRepositoryId,
+    destination_repository_id: i.destinationRepositoryId,
+    mode: "copy",
+    entries: i.entries || [],
+  };
+  let out;
+  try {
+    out = executeTransfer(plan, { approvedFingerprint: i.planFingerprint });
+  } catch (e) {
+    return failTrustedAction(action, "transfer_failed", String(e?.message || e), { nowMs });
+  }
+  if (!out.ok) {
+    const detail = out.code === "transfer_refused"
+      ? (out.refusals || []).map((r) => `${r.source}: ${r.refusal}`).slice(0, 12).join("; ")
+      : `expected ${out.expected || "?"}, plan is ${out.actual || "?"}`;
+    return failTrustedAction(action, out.code, detail, { nowMs });
+  }
+  return completeTrustedAction(action, {
+    plan_id: i.planId,
+    plan_fingerprint: out.plan_fingerprint,
+    source_project: out.source.project_id,
+    destination_project: out.destination.project_id,
+    summary: out.summary,
+    applied: out.applied.map((a) => ({ destination: a.destination, disposition: a.disposition, written: a.written })),
+    git_effect: out.git_effect,
+    credentialsExposed: false,
+  }, { nowMs });
+}
+
+/**
+ * The leg that makes the action reachable from a mission.
+ *
+ * A registered action with an executor and no caller is not a capability -- it
+ * is a definition nobody can invoke, which this file has been bitten by before.
+ */
+export function fulfillTransferFilesForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.REPOSITORY_TRANSFER_FILES, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
 export function executeRetireWorktreeTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
   const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
   if (!authz.ok) return authz;
@@ -2911,6 +3052,16 @@ export function executeInstallToolkitTrustedHostAction(action, { actor = "direct
     // object, exactly as it does for the provider ceiling. Raw names are kept
     // as fallbacks for a request that skipped normalization.
     out = executeToolkitInstall({
+      /*
+       * THE FOURTH LEG. A governed action has four: the registry definition, the
+       * mode, the dispatch branch, and THIS — the executor's call site. The S6
+       * bootstrap wired three, and a LIVE generation-2 cutover executed as a
+       * generation-1 no-op that reported success: the validator normalized the
+       * artifact identity, the dispatcher branched on it, and this line forwarded
+       * one field, so `artifact` arrived null.
+       */
+      artifact: i.artifact ?? null,
+      expectedCurrent: i.expectedCurrent ?? i.expected_current_identity ?? null,
       expectedStagingSha: i.expectedStagingSha ?? i.expected_staging_sha ?? null,
     });
   } catch (e) {

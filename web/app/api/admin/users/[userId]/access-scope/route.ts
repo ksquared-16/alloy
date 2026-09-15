@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
@@ -10,6 +9,7 @@ import {
     type DepartmentScopeMode,
     type SiteScopeMode,
 } from "@/lib/admin/resolveAdminAccessCore";
+import { ADMIN_ACCESS_SCOPE_WRITE, ADMIN_USERS_READ, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 function normalizeDeptScope(raw: unknown): DepartmentScopeMode | null {
     const s = typeof raw === "string" ? raw.trim().toLowerCase() : "";
@@ -51,7 +51,7 @@ function uniqStrings(ids: unknown): string[] {
 
 /** GET: stored scope + effective dimensions for one org member (settings users/roles managers only). */
 export async function GET(_request: NextRequest, context: { params: Promise<{ userId: string }> }) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_USERS_READ);
     if (!auth.ok) return auth.response;
     const { access } = auth;
 
@@ -83,7 +83,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ us
  * Requires full payload; restricted scopes must include non-empty allow lists (deny-by-default safe UX).
  */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ userId: string }> }) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ACCESS_SCOPE_WRITE);
     if (!auth.ok) return auth.response;
     const { access } = auth;
 

@@ -13,6 +13,7 @@ import {
     parseJsonObject,
     resolveOperationalEnrollmentTodayYmd,
 } from "@/lib/childcareOperational/operationalEnrollmentApi";
+import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 /**
  * Versioned authoring for childcare rate plans (Operational Configuration V1,
@@ -31,6 +32,8 @@ export async function POST(request: NextRequest) {
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try {

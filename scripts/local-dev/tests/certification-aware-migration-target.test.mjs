@@ -23,8 +23,15 @@ import {
   describeConnection,
   resolveTrustedDatabaseTarget,
 } from "../lib/vacilando/trusted-host-database-target.mjs";
-import { PRODUCTION_APPLY_TARGETS } from "../lib/vacilando/trusted-host-production-migrate.mjs";
-import { LEDGER_REPAIR_TARGETS } from "../lib/vacilando/trusted-host-ledger-repair.mjs";
+/*
+ * These were two frozen `["alloy_deployed_primary"]` literals. S2 made them
+ * resolvers over the registry, so the governed target set is whatever the
+ * registered projects actually declare — which is why the fixture below has to
+ * register a project before it can assert what is governed.
+ */
+import { productionApplyTargets } from "../lib/vacilando/trusted-host-production-migrate.mjs";
+import { ledgerRepairTargets } from "../lib/vacilando/trusted-host-ledger-repair.mjs";
+import { ALLOY_REPOSITORY_ID, REPOSITORY_SCHEMA } from "../lib/vacilando/repository-registry.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..", "..");
@@ -208,7 +215,7 @@ test("every target a governed action accepts is a target this registry resolves"
    * WHICH class a target resolves to; that is routing's decision. It pins that
    * routing has an answer at all.
    */
-  const governed = [...new Set([...PRODUCTION_APPLY_TARGETS, ...LEDGER_REPAIR_TARGETS])];
+  const governed = [...new Set([...productionApplyTargets(), ...ledgerRepairTargets()])];
   assert.ok(governed.length > 0, "there must be something to check");
   for (const target of governed) {
     const r = resolveTrustedDatabaseTarget(target);

@@ -25,6 +25,7 @@
  * auto-answered — surfaced in Vacilando, but never answered on a guess.
  */
 import { createHash } from "node:crypto";
+import { instructedPathPrefixes as instructedPathPrefixesFor } from "./runtime-roots.mjs";
 
 export const PROVIDER_PROMPT_SCHEMA = "vacilando.provider_prompt.v1";
 
@@ -69,12 +70,22 @@ export const COMPOSITION_MARKERS = Object.freeze([
  * instruction hands them out. This is the positive authority that makes the
  * Trust Runtime case routine rather than merely harmless.
  */
-export const INSTRUCTED_PATH_PREFIXES = Object.freeze([
-  "/Users/Kelly/.local/share/alloy/toolkit/",
-  "/Users/Kelly/Code/alloy-worktrees/",
-  "/Users/Kelly/Alloy/",
-  "/Users/Kelly/.local/state/alloy-dev/",
-]);
+/*
+ * S3: A TRUST LIST THAT MATCHED NOTHING READ AS IF IT MATCHED EVERYTHING.
+ *
+ * These four prefixes were literals under `/Users/Kelly/...` -- another
+ * operator's home directory, inside a SECURITY authority. On any host but that
+ * one the positive authority covered zero paths, which is worse than a wrong
+ * rule: the Trust Runtime case it exists to make routine was being decided with
+ * the list silently empty.
+ *
+ * Every entry is derived now, from roots the runtime actually owns, so the list
+ * is true on whatever machine is running and a registered project contributes
+ * its own repository and worktree roots rather than the incumbent's.
+ */
+export function instructedPathPrefixes(options) {
+  return instructedPathPrefixesFor(options);
+}
 
 /** Capabilities that are always an operator decision, never adapter business. */
 export const OPERATOR_CAPABILITIES = Object.freeze([

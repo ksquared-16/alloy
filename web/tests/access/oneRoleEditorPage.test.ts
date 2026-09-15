@@ -84,9 +84,18 @@ const F18_CATALOG = [
     // A single-area group, for the exact readings.
     { key: "documents.read", group_key: "documents", label: "View documents" },
     { key: "documents.write", group_key: "documents", label: "Manage documents" },
-    // An area nothing in the platform consults — `W-50`/`IA-R8`'s case.
-    { key: "scheduling.read", group_key: "scheduling", label: "View scheduling" },
-    { key: "scheduling.write", group_key: "scheduling", label: "Manage scheduling" },
+    /*
+     * An area nothing in the platform consults — `W-50`/`IA-R8`'s case.
+     *
+     * This was `scheduling` until the Schedules + Jobs authority cleanup enforced
+     * `scheduling.write` on ten route handlers, at which point the group stopped being an example
+     * of "nothing enforces this" and started being an example of the opposite. `billing.*` is
+     * wholly unenforced today and carries the shape this test needs. The subject of the test is
+     * unchanged: an area with zero enforced rows must claim nothing and say how many rows it is
+     * holding back.
+     */
+    { key: "billing.read", group_key: "billing", label: "View billing" },
+    { key: "billing.write", group_key: "billing", label: "Manage billing" },
 ];
 
 /** Keys the role holds that no catalog row can draw — what `H2` must preserve. */
@@ -293,10 +302,10 @@ describe("W-57 / OD-8 — meaning first, and the meaning is the catalog's", () =
     it("an area nothing enforces claims nothing, and says how many rows it is holding back", () => {
         const rows = buildPermissionGridRows(F18_CATALOG);
         const areas = buildRoleAuthorityAreas(rows, F18_GRANTED);
-        const scheduling = areas.find((a) => a.groupKey === "scheduling")!;
-        expect(scheduling.enforcedTotal).toBe(0);
-        expect(scheduling.unenforced).toBeGreaterThan(0);
-        expect(scheduling.authority).toBe("none");
+        const inert = areas.find((a) => a.groupKey === "billing")!;
+        expect(inert.enforcedTotal).toBe(0);
+        expect(inert.unenforced).toBeGreaterThan(0);
+        expect(inert.authority).toBe("none");
     });
 
     it("collapse is exact at the edges", () => {

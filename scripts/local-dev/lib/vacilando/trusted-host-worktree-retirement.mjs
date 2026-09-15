@@ -24,6 +24,7 @@ import { join, sep } from "node:path";
 import { observeRetirementCandidates } from "./worktree-retirement-observe.mjs";
 import { retirementFingerprint } from "./worktree-retirement.mjs";
 import { archiveRetiredWorktree } from "./worktree-registration.mjs";
+import { ALLOY_REPOSITORY_ID, projectScope } from "./repository-registry.mjs";
 
 /** Canonical removal. No --force: Git refusing IS a safety gate, not an obstacle. */
 function gitWorktreeRemove(canonicalRoot, targetPath) {
@@ -68,12 +69,22 @@ export function executeWorktreeRetirement({
   expectedBranch = null,
   worktreeParent = null,
   canonicalRoot = null,
+  repositoryId = ALLOY_REPOSITORY_ID,
   requestingWorktree = null,
   s7State = null,
   nowMs = Date.now(),
 } = {}) {
-  const parent = worktreeParent || join(homedir(), "Code", "alloy-worktrees");
-  const repoRoot = canonicalRoot || join(homedir(), "Alloy");
+  /*
+   * Both of these were Alloy's directories written as `||` fallbacks, which
+   * meant a retirement request that named no repository removed a directory
+   * under Alloy's worktree parent — the one place on the host where removing
+   * the wrong thing costs somebody a sprint. The project record answers first;
+   * the filesystem guesses remain below it for an unseeded host, and S3 removes
+   * those with the rest of the `~/Alloy` fallbacks.
+   */
+  const scope = projectScope(repositoryId);
+  const parent = worktreeParent || scope.worktree_parent || join(homedir(), "Code", "alloy-worktrees");
+  const repoRoot = canonicalRoot || scope.root || join(homedir(), "Alloy");
   const name = String(worktree || "").replace(/\/+$/, "").split("/").pop();
   if (!name) return { ok: false, error: "missing_worktree_identity" };
 

@@ -40,12 +40,18 @@ export const DEPLOYED_STORAGE_NAMESPACE = "deployed";
  * Supabase credentials. It is a pointer, never a value: no secret, project
  * ref or key is stored here, and this module never reads one.
  */
+import { ALLOY_REPOSITORY_ID, executionProfileFor } from "./repository-registry.mjs";
+
+const ALLOY_EXECUTION = executionProfileFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID });
+
 export const DEPLOYED_TARGETS = Object.freeze({
   alloy_staging_web: Object.freeze({
     key: "alloy_staging_web",
     environment: "staging",
-    base_url: "https://staging.workwithalloy.com",
-    host: "staging.workwithalloy.com",
+    // Alloy's hosted domain, owned by Alloy's profile. A second project's
+    // target names its own; this registry holds targets, not conventions.
+    base_url: `https://${ALLOY_EXECUTION.hosted_host}`,
+    host: ALLOY_EXECUTION.hosted_host,
     // The managed identity this target's sessions belong to. A session minted
     // for a different account is not this target's session.
     qa_identity: "qa-slot1-product@example.com",

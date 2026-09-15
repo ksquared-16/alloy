@@ -182,8 +182,20 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                     ? [{ label: "Collectible now", value: money(vm.collectible.currentlyCollectibleCents, currency) }]
                     : []),
             ],
-            paymentLine: vm.paymentSetup ?? "No payment method on file",
-            paymentHealthy: Boolean(vm.paymentSetup),
+            /*
+             * NOT KNOWING IS NOT THE SAME AS NONE — and it is no longer unknown.
+             *
+             * `vm.paymentSetup` used to be a hardcoded null with no producer, so "No payment method
+             * on file" was a constant read back as evidence about every household. It is now
+             * derived by `resolvePaymentSetup`, which looks at the organisation's merchant and the
+             * household's stored methods, and returns null when there is genuinely nothing
+             * established to say. Silence still means unknown; it simply is not the only answer.
+             *
+             * HEALTHY MEANS A METHOD IS ON FILE, which is what this line reports. It is deliberately
+             * not autopay — see the payment band below.
+             */
+            paymentLine: vm.paymentSetup ?? null,
+            paymentHealthy: (vm.paymentCapabilities?.methodsOnFile.length ?? 0) > 0,
         },
         subjects: vm.subjects.map((s) => s.displayName).filter((n): n is string => Boolean(n)),
         period: {
@@ -242,8 +254,18 @@ export function adaptFinancialsVmToFinancialsCard(input: {
         ledger: [],
         payers,
         payment: {
-            autopayLabel: vm.paymentSetup,
-            autopayHealthy: Boolean(vm.paymentSetup),
+            /*
+             * AUTOPAY IS NOT A PAYMENT METHOD, and this used to say it was: it read the payment
+             * setup line — a hardcoded null at the time — into the autopay slot, so a family with a
+             * card on file would have been labelled as having autopay, and every family was labelled
+             * as not having it. Two different questions had one answer.
+             *
+             * There is no canonical autopay anywhere in the platform: no table, no column, no
+             * writer. `resolvePaymentSetup` reports that as `unsupported` with the reason, and the
+             * label here is that reason's short form — never a state derived from something else.
+             */
+            autopayLabel: null,
+            autopayHealthy: false,
             nextChargeLabel: null,
         },
         /*

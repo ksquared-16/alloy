@@ -267,15 +267,21 @@ describe("the real PATCH handler reaches both actions", () => {
     });
 
     it("inherits the handler's authorization boundary — no second entry point", () => {
-        // Both actions live inside the same PATCH, after the same admin/role/department-scope
+        // Both actions live inside the same PATCH, after the same capability and department-scope
         // guards. There is no separate export and no bypass.
+        //
+        // The authorization EXPRESSION changed when the Department convergence rehomed this route:
+        // it asked `ctx.role !== "admin"` and now asks for `business_process.configure`, because the
+        // builder is a Business Process operation and never was a department one. The INVARIANT this
+        // test exists for is unchanged and is what is asserted below — authorize, then scope, then
+        // dispatch, in that order, with no action reachable ahead of either guard.
         // Scoped to the PATCH body: the file also exports a GET, and an unscoped indexOf would
         // measure that handler's guards instead — the identity mistake that makes an assertion pass
         // vacuously.
         const patchAt = ROUTE.indexOf("export async function PATCH");
         expect(patchAt).toBeGreaterThan(-1);
         const patch = ROUTE.slice(patchAt);
-        const authAt = patch.indexOf('ctx.role !== "admin"');
+        const authAt = patch.indexOf("requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE)");
         const scopeAt = patch.indexOf("departmentIdAllowed(dim, departmentId)");
         const switchAt = patch.indexOf("switch (action)");
         expect(authAt).toBeGreaterThan(-1);

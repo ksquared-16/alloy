@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
+import { ADMIN_ROLES_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 /** PATCH: update role (role_label, is_active). Requires org admin or `settings.users_roles` permission. */
 export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ role_key: string }> }
 ) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ROLES_WRITE);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
 
@@ -80,6 +80,23 @@ export async function PATCH(
 
         if (saveErr) {
             const message = saveErr.message ?? "";
+            /*
+             * W-18 — the delegation ceiling refused this. Role editing reaches the same transaction
+             * owner as the grants route, so the same refusal surfaces here and means the same thing:
+             * the actor asked to introduce authority they do not hold, and nothing was written.
+             */
+            const beyond = message.match(/delegation_ceiling:([^\s"]+)/);
+            if (beyond) {
+                return NextResponse.json(
+                    {
+                        error:
+                            "You can only grant access you hold yourself. Not granted: "
+                            + beyond[1].split(",").join(", "),
+                        required_permission: beyond[1].split(",")[0],
+                    },
+                    { status: 403 },
+                );
+            }
             const invalid = message.match(/invalid_permission_keys:([^\s"]+)/);
             if (invalid) {
                 return NextResponse.json(

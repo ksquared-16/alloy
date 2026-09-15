@@ -73,7 +73,6 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
                     { href: "/settings/fields?entity=customer", label: "Customer fields" },
                     { href: "/settings/fields?entity=opportunity", label: "Lead fields" },
                     { href: "/settings/fields", label: "All fields" },
-                    { href: "/settings/documents/document-fields", label: "Document fields" },
                 ],
             },
             { href: "/settings/statuses", label: "Statuses" },
@@ -146,7 +145,6 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/settings", label: "Platform Configuration" },
             { href: "/settings/users-roles", label: "Users & Roles" },
             { href: "/legacy-admin/users", label: "Users" },
-            { href: "/settings/departments", label: "Departments" },
             { href: "/settings/work-units", label: "Work units (diagnostic)" },
             { href: "/legacy-admin/verticals", label: "Verticals" },
             { href: "/legacy-admin/system/verticals-industries", label: "Industries (diagnostic)" },
@@ -319,7 +317,6 @@ function AdminLayoutInner({ children, userEmail, role }: { children: ReactNode; 
             "/admin/system/opportunity-fields",
             "/admin/system/vendor-fields",
             "/admin/system/schedule-fields",
-            "/admin/system/document-fields",
         ];
         if (customFieldPaths.includes(pathname)) {
             setNestedCollapsed((prev) => (prev["Data model::Fields"] === false ? prev : { ...prev, "Data model::Fields": false }));

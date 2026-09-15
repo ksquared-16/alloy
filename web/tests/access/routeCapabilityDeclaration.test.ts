@@ -215,8 +215,8 @@ describe("W-15 prerequisite — the declaration binding falsifies a false claim"
         return p;
     };
 
-    const DECL = { status: "declared", capability: "settings.users_roles", helper: "requireUsersRolesManageAuth" };
-    const IMPORT = `import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";\n`;
+    const DECL = { status: "declared", capability: "admin.roles.read", helper: "requireAccessAdministration" };
+    const IMPORT = `import { ADMIN_ROLES_READ, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";\n`;
 
     afterAll(() => {
         rmSync(scratch, { recursive: true, force: true });
@@ -235,7 +235,7 @@ describe("W-15 prerequisite — the declaration binding falsifies a false claim"
         // The file is gated. This method is not. A file-grained join would call this compliant.
         const p = write(
             "sibling",
-            `${IMPORT}export async function GET() {\n  const auth = await requireUsersRolesManageAuth();\n  if (!auth.ok) return auth.response;\n  return Response.json({ ok: true });\n}\n` +
+            `${IMPORT}export async function GET() {\n  const auth = await requireAccessAdministration(ADMIN_ROLES_READ);\n  if (!auth.ok) return auth.response;\n  return Response.json({ ok: true });\n}\n` +
                 `export async function DELETE() { return Response.json({ deleted: true }); }\n`
         );
         expect((bindDeclaration(p, "fixture", "GET", DECL) as Binding).violations).toEqual([]);
@@ -248,7 +248,7 @@ describe("W-15 prerequisite — the declaration binding falsifies a false claim"
         // The most dangerous shape in the set: it reads as gated, greps as gated, and admits everyone.
         const p = write(
             "discarded",
-            `${IMPORT}export async function POST() {\n  const auth = await requireUsersRolesManageAuth();\n  return Response.json({ ok: true });\n}\n`
+            `${IMPORT}export async function POST() {\n  const auth = await requireAccessAdministration(ADMIN_ROLES_READ);\n  return Response.json({ ok: true });\n}\n`
         );
         const { violations } = bindDeclaration(p, "fixture", "POST", DECL) as Binding;
         expect(violations.map((v) => v.kind)).toContain("untested-verdict");
@@ -260,7 +260,7 @@ describe("W-15 prerequisite — the declaration binding falsifies a false claim"
         // would have convicted working code.
         const p = write(
             "degrade",
-            `${IMPORT}export async function POST() {\n  const auth = await requireUsersRolesManageAuth();\n  let result = null;\n  if (!auth.ok) { result = { skipped: true }; } else { result = { sent: true }; }\n  return Response.json(result);\n}\n`
+            `${IMPORT}export async function POST() {\n  const auth = await requireAccessAdministration(ADMIN_ROLES_READ);\n  let result = null;\n  if (!auth.ok) { result = { skipped: true }; } else { result = { sent: true }; }\n  return Response.json(result);\n}\n`
         );
         expect((bindDeclaration(p, "fixture", "POST", DECL) as Binding).violations).toEqual([]);
     });
@@ -272,7 +272,7 @@ describe("W-15 prerequisite — the declaration binding falsifies a false claim"
         // only way to satisfy the rule was to rewrite working code into an if-chain.
         const p = write(
             "switched",
-            `${IMPORT}export async function POST() {\n  const auth = await requireUsersRolesManageAuth();\n  switch (auth.status) {\n    case "denied": return Response.json({ error: true }, { status: 403 });\n    default: return Response.json({ ok: true });\n  }\n}\n`
+            `${IMPORT}export async function POST() {\n  const auth = await requireAccessAdministration(ADMIN_ROLES_READ);\n  switch (auth.status) {\n    case "denied": return Response.json({ error: true }, { status: 403 });\n    default: return Response.json({ ok: true });\n  }\n}\n`
         );
         expect((bindDeclaration(p, "fixture", "POST", DECL) as Binding).violations).toEqual([]);
     });
@@ -282,7 +282,7 @@ describe("W-15 prerequisite — the declaration binding falsifies a false claim"
         // has to be the thing being switched on, or the verdict is still discarded.
         const p = write(
             "switched-elsewhere",
-            `${IMPORT}export async function POST(request: Request) {\n  const auth = await requireUsersRolesManageAuth();\n  const kind = new URL(request.url).searchParams.get("kind");\n  switch (kind) {\n    default: return Response.json({ ok: true });\n  }\n}\n`
+            `${IMPORT}export async function POST(request: Request) {\n  const auth = await requireAccessAdministration(ADMIN_ROLES_READ);\n  const kind = new URL(request.url).searchParams.get("kind");\n  switch (kind) {\n    default: return Response.json({ ok: true });\n  }\n}\n`
         );
         expect((bindDeclaration(p, "fixture", "POST", DECL) as Binding).violations.map((v) => v.kind)).toContain(
             "untested-verdict"
@@ -292,7 +292,7 @@ describe("W-15 prerequisite — the declaration binding falsifies a false claim"
     it("join 3 — convicts a capability the named helper's module does not enforce", () => {
         const p = write(
             "wrongkey",
-            `${IMPORT}export async function GET() {\n  const auth = await requireUsersRolesManageAuth();\n  if (!auth.ok) return auth.response;\n  return Response.json({ ok: true });\n}\n`
+            `${IMPORT}export async function GET() {\n  const auth = await requireAccessAdministration(ADMIN_ROLES_READ);\n  if (!auth.ok) return auth.response;\n  return Response.json({ ok: true });\n}\n`
         );
         const { violations } = bindDeclaration(p, "fixture", "GET", {
             ...DECL,
@@ -305,7 +305,7 @@ describe("W-15 prerequisite — the declaration binding falsifies a false claim"
         const p = write("noaddress", `export async function GET() { return Response.json({}); }\n`);
         const { violations } = bindDeclaration(p, "fixture", "GET", {
             status: "declared",
-            capability: "settings.users_roles",
+            capability: "admin.roles.read",
         }) as Binding;
         expect(violations.map((v) => v.kind)).toContain("unaddressed-declaration");
     });
@@ -321,7 +321,7 @@ describe("W-15 prerequisite — the declaration binding falsifies a false claim"
         // Under-reporting here would leave a real handler unbindable, so the alias is followed.
         const p = write(
             "aliased",
-            `${IMPORT}async function handler() {\n  const auth = await requireUsersRolesManageAuth();\n  if (!auth.ok) return auth.response;\n  return Response.json({ ok: true });\n}\nexport { handler as POST };\n`
+            `${IMPORT}async function handler() {\n  const auth = await requireAccessAdministration(ADMIN_ROLES_READ);\n  if (!auth.ok) return auth.response;\n  return Response.json({ ok: true });\n}\nexport { handler as POST };\n`
         );
         expect((bindDeclaration(p, "fixture", "POST", DECL) as Binding).violations).toEqual([]);
     });
@@ -333,7 +333,7 @@ describe("W-15 prerequisite — the declaration binding falsifies a false claim"
         const p = write(
             "nestedtemplate",
             `${IMPORT}export async function GET() {\n` +
-                `  const auth = await requireUsersRolesManageAuth();\n` +
+                `  const auth = await requireAccessAdministration(ADMIN_ROLES_READ);\n` +
                 `  if (!auth.ok) return auth.response;\n` +
                 "  const label = `Visit ${auth.access.orgId}${auth.ok ? ` · job ${auth.access.orgId}` : \"\"}`;\n" +
                 `  return Response.json({ label });\n}\n`
@@ -346,7 +346,7 @@ describe("W-15 prerequisite — the declaration binding falsifies a false claim"
         // handler as unreadable makes it a reviewer's problem instead of an author's.
         write(
             "reexport-target",
-            `${IMPORT}export async function GET() {\n  const auth = await requireUsersRolesManageAuth();\n  if (!auth.ok) return auth.response;\n  return Response.json({ ok: true });\n}\n`
+            `${IMPORT}export async function GET() {\n  const auth = await requireAccessAdministration(ADMIN_ROLES_READ);\n  if (!auth.ok) return auth.response;\n  return Response.json({ ok: true });\n}\n`
         );
         // A relative specifier, as `resolveImport` accepts (the real drawer routes use `@/…`).
         const p = write("reexport", `export { GET } from "./reexport-target.route";\n`);
@@ -359,7 +359,7 @@ describe("W-15 prerequisite — the declaration binding falsifies a false claim"
     it("does not mistake a helper NAMED in a string or comment for a call", () => {
         const p = write(
             "mentioned",
-            `${IMPORT}export async function GET() {\n  // requireUsersRolesManageAuth() belongs here\n  const note = "requireUsersRolesManageAuth()";\n  return Response.json({ note });\n}\n`
+            `${IMPORT}export async function GET() {\n  // requireAccessAdministration(ADMIN_ROLES_READ) belongs here\n  const note = "requireAccessAdministration(ADMIN_ROLES_READ)";\n  return Response.json({ note });\n}\n`
         );
         const { violations } = bindDeclaration(p, "fixture", "GET", DECL) as Binding;
         expect(violations.map((v) => v.kind)).toContain("unbound-declaration");

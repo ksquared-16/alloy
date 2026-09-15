@@ -32,6 +32,7 @@ import { concurrentWeightedCost } from "./lib/vacilando/workload-observation.mjs
 import { hostCapability, computeCapacityPolicy } from "./lib/vacilando/capacity-policy.mjs";
 import { capacityStatus, CAPACITY_NAMES } from "./lib/vacilando/capacity-precedence.mjs";
 import { stewardStatus } from "./lib/vacilando/host-steward-cycle.mjs";
+import { gatewayStateRoot, stateRoot } from "./lib/vacilando/runtime-roots.mjs";
 
 function usage(code = 2) {
   process.stderr.write(`Usage: vac health [--json] [--check <name>] [--quiet]
@@ -98,7 +99,7 @@ const lanesRaw = await safely(async () => {
 const resilience = await safely(async () => {
   const { resilienceProjection, hostIdentity, ROLE } = await import("./lib/vacilando/control-plane-resilience.mjs");
   const { currentRuntimeGeneration } = await import("./lib/vacilando/control-plane-health.mjs");
-  const r = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const r = gatewayStateRoot();
   const { existsSync: ex, readFileSync: rf } = await import("node:fs");
   const leasePath = join(r, "vacilando", "resilience", "lease.json");
   const snapPath = join(r, "vacilando", "resilience", "snapshot.json");
@@ -114,7 +115,7 @@ const resilience = await safely(async () => {
 // that has never activated anything through the canary path, which is healthy.
 const activationState = await safely(async () => {
   const { readFileSync: rf, existsSync: ex } = await import("node:fs");
-  const r = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const r = gatewayStateRoot();
   const p = join(r, "vacilando", "toolchain-canary", "activation.json");
   return ex(p) ? JSON.parse(rf(p, "utf8")) : null;
 }, null);
@@ -131,13 +132,13 @@ const configAudit = await safely(async () => {
 // that is reported as healthy rather than missing.
 const maintenanceWindow = await safely(async () => {
   const { readMaintenanceWindow } = await import("./lib/vacilando/host-maintenance.mjs");
-  const r = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const r = gatewayStateRoot();
   return readMaintenanceWindow({ root: r }) || { phase: "NORMAL" };
 }, null);
 
 const maintenanceCadence = await safely(async () => {
   const { maintenanceCadenceDue } = await import("./lib/vacilando/host-steward-cycle.mjs");
-  const r = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const r = gatewayStateRoot();
   return maintenanceCadenceDue({ root: r });
 }, null);
 
@@ -203,7 +204,7 @@ const worktreeLifecycle = await safely(async () => {
   const { inventoryWorktreeLifecycle } = await import("./lib/vacilando/worktree-lifecycle.mjs");
   const { peekWorktreeDiskCache } = await import("./lib/vacilando/resources.mjs");
   const { execFileSync } = await import("node:child_process");
-  const wtRoot = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const wtRoot = gatewayStateRoot();
   const worktreeParent = join(homedir(), "Code", "alloy-worktrees");
   // The same inputs `vac worktree-retire` assembles, so the health projection and
   // the retirement preview cannot disagree about which worktrees exist.
@@ -229,7 +230,7 @@ const slotOwnership = await safely(async () => {
   // The REGISTRY is the slot authority; a lane's binding.slot is its cache.
   const { listRegisteredWorktrees } = await import("./lib/vacilando/worktree-registration.mjs");
   const registrySlots = {};
-  const regRoot = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const regRoot = gatewayStateRoot();
   for (const r of listRegisteredWorktrees({ root: regRoot }) || []) {
     const slot = Number(r?.slot);
     if (Number.isInteger(slot) && r?.name) registrySlots[slot] = r.name;
@@ -261,7 +262,7 @@ const sysctlRead = (key) => {
 };
 const devServerCount = (() => {
   try {
-    const root = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+    const root = gatewayStateRoot();
     const pidDir = join(root, "pids");
     if (!existsSync(pidDir)) return 0;
     return readdirSync(pidDir).filter((f) => f.endsWith(".pid")).filter((f) => {
@@ -377,7 +378,7 @@ try {
   const VA = await import("./lib/vacilando/validation-admission.mjs");
   const claims = VA.readClaimStore({}).claims || [];
   const unbrokered = VR.classifyUnbrokered(workloads, { claims });
-  const bypassPath = join(process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev"),
+  const bypassPath = join(gatewayStateRoot(),
     "vacilando", "validation-bypass", "events.jsonl");
   if (existsSync(bypassPath)) {
     // Bounded: only today's tail matters for a health verdict.
@@ -394,7 +395,7 @@ const RUN_BOUNDS = {
 };
 
 const ports = await safely(async () => {
-  const root = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const root = gatewayStateRoot();
   const out = [];
   const metaDir = join(root, "metadata");
   const registered = new Map();
@@ -426,7 +427,7 @@ const ports = await safely(async () => {
 }, []);
 
 const worktrees = await safely(async () => {
-  const root = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const root = gatewayStateRoot();
   const parent = join(homedir(), "Code", "alloy-worktrees");
   const onDisk = existsSync(parent)
     ? readdirSync(parent, { withFileTypes: true }).filter((d) => d.isDirectory() && /^wt/.test(d.name)).map((d) => d.name)
@@ -484,7 +485,7 @@ const report = composeReport({
     steward_status: (() => {
       try {
         return stewardStatus({
-          root: process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway"),
+          root: gatewayStateRoot(),
         });
       } catch { return null; }
     })(),

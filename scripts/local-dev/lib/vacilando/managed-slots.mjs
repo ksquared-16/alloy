@@ -44,6 +44,7 @@
  * topology resolver that fails open would hand out slots the host has no ports,
  * registrations or memory for.
  */
+import { ALLOY_REPOSITORY_ID, executionProfileFor } from "./repository-registry.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -73,7 +74,32 @@ export const DEFAULT_MANAGED_SLOT_COUNT = 6;
  */
 export const MANAGED_SLOT_HARD_MAX = 19;
 
-export const DEFAULT_FIRST_AGENT_PORT = 3011;
+/*
+ * 3011 IS ALLOY'S PORT, NOT A DEFAULT.
+ *
+ * As a bare constant it was the runtime's, so a repository with no managed slot
+ * range still had a first agent port waiting for it. Renaming it to
+ * DEFAULT_PROJECT_PORT_BASE would have kept exactly that mistake with a tidier
+ * name. It is now the alloy profile's value, and a repository without managed
+ * slots resolves NULL — there is no port because there is no slot range.
+ *
+ * The export keeps Alloy's value because every existing caller and shell
+ * (ALLOY_RC_DEFAULT_FIRST_AGENT_PORT) names it; S1 changes ownership, not value.
+ */
+const ALLOY_EXECUTION = executionProfileFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID });
+export const DEFAULT_FIRST_AGENT_PORT = ALLOY_EXECUTION.first_agent_port;
+
+/**
+ * The first agent port for a repository, or null when it has no slot range.
+ *
+ * Null is the answer, not an error and not Alloy's port: a caller that needs a
+ * port for a repository with no managed slots is asking the wrong question, and
+ * should find that out here rather than by binding 3011.
+ */
+export function firstAgentPortFor(repositoryRecord) {
+  const exec = executionProfileFor(repositoryRecord);
+  return exec.managed_slots ? exec.first_agent_port : null;
+}
 
 /**
  * THE CONTROL PLANE MUST NOT SIT INSIDE THE AGENT RANGE.

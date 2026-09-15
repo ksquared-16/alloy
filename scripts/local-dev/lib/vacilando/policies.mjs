@@ -11,6 +11,17 @@ import { join } from "node:path";
 
 import { listCommands } from "./commands/registry.mjs";
 import { managedSlotCount } from "./managed-slots.mjs";
+import { ALLOY_REPOSITORY_ID, projectScope } from "./repository-registry.mjs";
+
+/** Alloy's resolved scope, read at render time rather than frozen at import. */
+const ALLOY_SCOPE = () => projectScope(ALLOY_REPOSITORY_ID);
+
+/** "3011–3016 (slot 1–6)", or an honest sentence when a project has no slots. */
+function slotPortRangeText() {
+  const ports = ALLOY_SCOPE().slot_ports;
+  if (!ports.length) return "no managed slot ports";
+  return `${ports[0]}\u2013${ports[ports.length - 1]} (slot 1\u2013${ports.length})`;
+}
 
 const CONFIG = join(os.homedir(), ".config", "alloy-dev", "config");
 
@@ -67,13 +78,22 @@ export async function collectPolicies() {
         P("Cursor session", "cursor-agent · -p/--trust/--resume/json — authenticated", "cursor-agent --help", "provider adapter", "no", "director.ask"),
       ]},
       { title: "Worktree rules", rows: [
-        P("Worktree root", cfg("ALLOY_WORKTREE_ROOT", `${os.homedir()}/Code/alloy-worktrees`), "ALLOY_WORKTREE_ROOT", "alloy-worktree-create", "config", "sprint.start"),
+        /*
+         * THE BOARD MUST NOT RESTATE WHAT THE RUNTIME RESOLVES.
+         *
+         * These two rows carried `~/Code/alloy-worktrees` and `3011–3016` as
+         * prose. That is a second statement of a convention the execution
+         * profile owns, and a board that disagrees with the runtime is worse
+         * than a board with a gap: an operator reads it as the rule. Both now
+         * render what `projectScope` actually resolves.
+         */
+        P("Worktree root", cfg("ALLOY_WORKTREE_ROOT", ALLOY_SCOPE().worktree_parent || `${os.homedir()}/Code/alloy-worktrees`), "repository record / profile", "alloy-worktree-create", "config", "sprint.start"),
         P("Dependencies", "installed per-worktree; never symlinked", "README §5", "alloy-sprint-start", "no", "sprint.start"),
         P("Base ref", cfg("ALLOY_BASE_BRANCH", "origin/staging"), "alloy config / read-core", "alloy-worktree-create", "config", "sprint.start"),
       ]},
       { title: "Branch rules", rows: [
         P("Branch convention", "agent/<provider>/<slot>-<name>", "lib/common.sh alloy_branch_name", "alloy-worktree-create", "no", "sprint.start"),
-        P("Ports", "3011–3016 (slot 1–6); canonical 3000", "read-core ALLOY_FIRST_AGENT_PORT", "alloy-dev-start (fail-closed)", "config", "worker board"),
+        P("Ports", `${slotPortRangeText()}; canonical 3000`, "repository record / profile", "alloy-dev-start (fail-closed)", "config", "worker board"),
       ]},
       { title: "Commit / push / promotion", rows: [
         P("Commit", "coherent local commits; agents commit, never push implicitly", "CLAUDE.md / governance", "human", "no", "repository.push"),

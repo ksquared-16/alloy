@@ -38,15 +38,25 @@ import { join, relative } from "node:path";
 
 const orgId = "org-1";
 
-const { mockRequireUsersRolesManageAuth, mockRequirePortalOrUsersRolesManageAuth } = vi.hoisted(() => ({
-    mockRequireUsersRolesManageAuth: vi.fn(),
-    mockRequirePortalOrUsersRolesManageAuth: vi.fn(),
+/*
+ * ONE GATE NOW, CALLED WITH THE AUTHORITY THE OPERATION NEEDS.
+ *
+ * This file used to stub two functions, because the route had two: a manage gate for the write and
+ * a portal-or-read gate for the read. The four-authority split replaced both with
+ * `requireAccessAdministration(capability)`, so the stub records the capability it was asked for —
+ * which lets the subject of this file be asserted directly: the PUT must ask for the WRITE
+ * authority, not merely for some Access authority.
+ */
+const { mockRequireAccessAdministration } = vi.hoisted(() => ({
+    mockRequireAccessAdministration: vi.fn(),
 }));
 
-vi.mock("@/lib/admin/canManageUsersAndRoles", () => ({
-    requireUsersRolesManageAuth: mockRequireUsersRolesManageAuth,
-    requirePortalOrUsersRolesManageAuth: mockRequirePortalOrUsersRolesManageAuth,
-}));
+vi.mock("@/lib/admin/canManageUsersAndRoles", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/canManageUsersAndRoles")>(
+        "@/lib/admin/canManageUsersAndRoles",
+    );
+    return { ...actual, requireAccessAdministration: mockRequireAccessAdministration };
+});
 
 const { mockClient } = vi.hoisted(() => ({ mockClient: { value: null as unknown } }));
 vi.mock("@/lib/supabaseAdmin", () => ({ createAdminClient: vi.fn(() => mockClient.value) }));
@@ -155,7 +165,7 @@ const additiveOps = (ops: Op[]) => grantOps(ops).filter((o) => o.kind === "inser
 
 beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireUsersRolesManageAuth.mockResolvedValue({
+    mockRequireAccessAdministration.mockResolvedValue({
         ok: true,
         access: { ok: true, userId: "caller-1", orgId, roleKeys: ["admin"], permissionKeys: [] },
     });

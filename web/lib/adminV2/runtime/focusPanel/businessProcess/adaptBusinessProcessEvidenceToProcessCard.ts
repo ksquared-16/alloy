@@ -75,8 +75,18 @@ function childState(p: BusinessProcessParticipant): ProcessChildState {
         scoped: p.scoped,
         imageUrl: p.imageUrl,
         actions: [],
+        outcomeAction: null,
     } as ProcessChildState;
 }
+
+/**
+ * The command that resolves the stage's open work, named once.
+ *
+ * The runtime already speaks this identity (`buildCurrentWorkSurfaceVM` projects it, and the
+ * command projection asks for it by name); this constant keeps the Process Card's copy of that
+ * knowledge in one place instead of a literal buried in a filter.
+ */
+const RECORD_OUTCOME_COMMAND_KEY = "record_outcome";
 
 export function adaptBusinessProcessEvidenceToProcessCard(input: {
     evidence: BusinessProcessCardEvidence;
@@ -115,7 +125,18 @@ export function adaptBusinessProcessEvidenceToProcessCard(input: {
      * workspace's intent match key on; dropping it here would leave the card matching commands by
      * their label, which configuration is free to rename.
      */
-    const actions: ProcessAction[] = input.actions.map((a) => ({
+    /*
+     * RESOLVING THE CURRENT WORK IS NOT A PEER OF THE COMMANDS THAT START IT.
+     *
+     * `record_outcome` closes what the stage already says is open, so the card reads it under the
+     * stage's own line rather than as one more button in the row. The split happens HERE because
+     * the card is forbidden from filtering by key — it renders the set configuration gave it, in
+     * the order configuration gave it — and because this layer already speaks the command's
+     * canonical identity.
+     *
+     * Matched on `key`, never on label: configuration is free to rename "Record outcome".
+     */
+    const toProcessAction = (a: ProcessCardActionInput): ProcessAction => ({
         key: a.key,
         label: a.label,
         primary: a.primary,
@@ -138,7 +159,12 @@ export function adaptBusinessProcessEvidenceToProcessCard(input: {
                   })),
               }
             : {}),
-    }));
+    });
+
+    const isOutcomeCommand = (a: ProcessCardActionInput) => a.key === RECORD_OUTCOME_COMMAND_KEY;
+    const actions: ProcessAction[] = input.actions.filter((a) => !isOutcomeCommand(a)).map(toProcessAction);
+    const outcomeInput = input.actions.find(isOutcomeCommand) ?? null;
+    const outcomeAction: ProcessAction | null = outcomeInput ? toProcessAction(outcomeInput) : null;
 
     return {
         // Lab-only specimen label; never rendered inside the card.
@@ -166,6 +192,7 @@ export function adaptBusinessProcessEvidenceToProcessCard(input: {
         workLine: evidence.currentWork?.answerLine ?? "",
         dueLine: evidence.currentWork?.supportingLine ?? null,
         actions,
+        outcomeAction,
         stillNeeded: evidence.currentWork?.stillNeeded ?? [],
         activity,
         participantsLabel: evidence.participantsLabel,

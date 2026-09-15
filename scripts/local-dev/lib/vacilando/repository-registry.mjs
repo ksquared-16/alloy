@@ -38,6 +38,59 @@ export const REPOSITORY_NAME_MAX = 80;
 export const ALLOY_REPOSITORY_ID = "repo_alloy";
 
 /**
+ * The PROJECT identity of a repository.
+ *
+ * Not a second registry and not a second record: a project is what a repository
+ * is called when the question is "whose conventions are these?", and it is
+ * carried on the repository record so there is exactly one authority. Alloy has
+ * a fixed id for the same reason its repository_id is fixed — lanes, grants and
+ * audit rows already reference it, and a fingerprint would move between
+ * machines.
+ */
+export const ALLOY_PROJECT_ID = "prj_alloy";
+
+export function projectIdFor(rec) {
+  if (!rec) return null;
+  if (rec.project_id) return String(rec.project_id);
+  return rec.repository_id === ALLOY_REPOSITORY_ID ? ALLOY_PROJECT_ID : null;
+}
+
+/**
+ * A stable, readable project identity from the operator's own name for it.
+ *
+ * `prj_vacilando`, not `prj_` plus a fingerprint: the id appears in the Projects
+ * detail, in scope resolution and in every governed record that names a project,
+ * and an operator has to be able to recognise it. Collisions take a numeric
+ * suffix rather than silently reusing an identity.
+ */
+/**
+ * Give a record a project identity if it has none.
+ *
+ * Alloy is deliberately left alone: its record predates the field and
+ * `projectIdFor` answers `prj_alloy` for it by repository id, so writing one
+ * would change a persisted identity that every governed record already uses.
+ */
+export function ensureProjectIdentity(rec, store) {
+  if (!rec || rec.project_id) return rec?.project_id ?? null;
+  if (rec.repository_id === ALLOY_REPOSITORY_ID) return ALLOY_PROJECT_ID;
+  rec.project_id = mintProjectId(rec.name, store);
+  return rec.project_id;
+}
+
+export function mintProjectId(name, store = null) {
+  const slug = String(name || "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "project";
+  const taken = new Set();
+  for (const rec of Object.values(store?.repositories || {})) {
+    const id = rec?.project_id || (rec?.repository_id === ALLOY_REPOSITORY_ID ? ALLOY_PROJECT_ID : null);
+    if (id) taken.add(id);
+  }
+  let candidate = `prj_${slug}`;
+  for (let n = 2; taken.has(candidate); n += 1) candidate = `prj_${slug}_${n}`;
+  return candidate;
+}
+
+/**
  * Profiles. A profile is the set of conventions a repository actually has —
  * never a set of conditionals sprinkled through the codebase.
  *
@@ -57,6 +110,62 @@ export const REPOSITORY_PROFILES = Object.freeze({
     // is READ-ONLY: nothing here is ever executed.
     instruction_files: ["AGENTS.md", "CLAUDE.md", ".cursorrules"],
     branch_policy: { style: "free", prefix: "" },
+    /*
+     * PROMOTION POLICY, AND THE GENERIC ANSWER IS "NONE".
+     *
+     * These values lived as module constants in trusted-host-merge and in the
+     * execution-authority module, which made them GLOBAL: every repository
+     * Vacilando touched inherited Alloy's staging trunk and Alloy's protected
+     * names, whether or not it had either. A profile is the set of conventions
+     * a repository ACTUALLY has, so the generic profile declares that it has no
+     * promotion policy at all rather than quietly borrowing one.
+     */
+    promotion: {
+      promotion_branch: null,
+      protected_branches: [],
+      promoted_ref: null,
+    },
+    /*
+     * EXECUTION CONVENTIONS, AND THE GENERIC ANSWER IS AGAIN "NONE".
+     *
+     * Slots, ports, a worktree namespace, a deployed target and a hosted
+     * domain are things ALLOY has. They lived as module constants and as
+     * default arguments, which made them the runtime's: a repository with no
+     * managed slots still had 3011 waiting for it, and a repository with no
+     * deployment still resolved Alloy's.
+     *
+     * Absence is a valid answer and is stated here as one. 3011 is not a
+     * default port that Alloy happens to use — it is Alloy's port, and a
+     * repository without a managed slot range has none at all.
+     */
+    execution: {
+      managed_slots: false,
+      managed_slot_count: 0,
+      first_agent_port: null,
+      worktree_namespace: null,
+      remote_slug: null,
+      deployed_target: null,
+      database_target: null,
+      hosted_host: null,
+      /*
+       * WHERE THIS PROJECT'S SERVER CREDENTIALS LIVE, relative to its root.
+       *
+       * `ALLOY_SERVER_ENV_SOURCE` named ONE file — Alloy's `web/.env.local` —
+       * from generic runtime, with a guess chain ending in another person's
+       * home directory. It is not a host setting; it is a property of a
+       * project that HAS a server. A repository-only project has none, and
+       * null is the correct answer rather than a path that does not exist.
+       */
+      env_source_relpath: null,
+      /*
+       * Where this project keeps migrations, and what its local database stack
+       * is called. Both were literals — `supabase/migrations` in the promotion
+       * train, `alloy-cert` in the process classifier — and both are properties
+       * of a project that HAS a database. A repository-only project has neither.
+       */
+      migrations_relpath: null,
+      local_stack_name: null,
+    },
   },
   alloy: {
     id: "alloy",
@@ -67,11 +176,298 @@ export const REPOSITORY_PROFILES = Object.freeze({
     fixed_ports: true,
     instruction_files: ["CLAUDE.md", "AGENTS.md"],
     branch_policy: { style: "agent", prefix: "agent/" },
+    // Alloy's actual conventions, stated once. staging is the development
+    // trunk; main is release truth AND the GitHub default branch, which is why
+    // it is protected rather than promotable.
+    promotion: {
+      promotion_branch: "staging",
+      protected_branches: ["main", "master", "production", "prod"],
+      promoted_ref: "origin/staging",
+    },
+    // Alloy's actual execution conventions, stated once and owned here.
+    execution: {
+      managed_slots: true,
+      // Six permanent slots on 3011-3016. The count lived only in an observer's
+      // frozen port list, which meant the observer and the allocator could
+      // disagree about how many slots Alloy has.
+      managed_slot_count: 6,
+      first_agent_port: 3011,
+      worktree_namespace: "alloy-worktrees",
+      remote_slug: "ksquared-16/alloy",
+      deployed_target: "alloy_staging_web",
+      database_target: "alloy_deployed_primary",
+      hosted_host: "staging.workwithalloy.com",
+      env_source_relpath: "web/.env.local",
+      migrations_relpath: "supabase/migrations",
+      local_stack_name: "alloy-cert",
+    },
   },
 });
 
 export function profileFor(id) {
   return REPOSITORY_PROFILES[String(id || "generic")] || REPOSITORY_PROFILES.generic;
+}
+
+/**
+ * The promotion policy that governs a repository.
+ *
+ * Record first, then profile. A record may narrow what its profile allows; it
+ * may never widen it, and nothing falls back to Alloy. An unregistered or
+ * unknown repository resolves to the GENERIC policy — no promotion branch, no
+ * protected names — which refuses rather than inheriting, and that refusal is
+ * the point: Alloy being the primary consumer must not make Alloy the default.
+ */
+/**
+ * The execution conventions that govern a repository.
+ *
+ * Record first, then profile, floor generic — the same shape as
+ * `promotionPolicyFor`, deliberately, so there is one resolution rule to learn
+ * and one place a fallback could hide. Nothing here names Alloy; it resolves
+ * whatever profile it is handed, and an unknown one gets the empty set.
+ */
+export function executionProfileFor(rec) {
+  const profile = profileFor(rec?.profile);
+  const base = profile.execution || REPOSITORY_PROFILES.generic.execution;
+  const override = rec?.execution || null;
+  const pick = (k) => (override && override[k] !== undefined ? override[k] : base[k]);
+  return Object.freeze({
+    managed_slots: Boolean(pick("managed_slots")),
+    managed_slot_count: Number(pick("managed_slot_count") ?? 0) || 0,
+    first_agent_port: pick("first_agent_port") ?? null,
+    worktree_namespace: pick("worktree_namespace") ?? null,
+    remote_slug: rec?.remote_slug ?? pick("remote_slug") ?? null,
+    deployed_target: pick("deployed_target") ?? null,
+    database_target: pick("database_target") ?? null,
+    hosted_host: pick("hosted_host") ?? null,
+    env_source_relpath: pick("env_source_relpath") ?? null,
+    migrations_relpath: pick("migrations_relpath") ?? null,
+    local_stack_name: pick("local_stack_name") ?? null,
+    source: override ? "repository_record" : `profile:${profile.id}`,
+  });
+}
+
+/**
+ * Where a repository's worktrees live.
+ *
+ * The record's own `worktree_parent` wins — it is per-repository and already
+ * stored. Otherwise the profile's namespace under ~/Code, and for a profile
+ * with no namespace, NULL. `~/Code/alloy-worktrees` appeared as a default
+ * argument in six modules, which made Alloy's namespace every repository's.
+ */
+export function worktreeParentFor(rec) {
+  if (rec?.worktree_parent) return String(rec.worktree_parent).replace(/\/+$/, "");
+  const ns = executionProfileFor(rec).worktree_namespace;
+  return ns ? join(homedir(), "Code", ns) : null;
+}
+
+/**
+ * Where a repository's server environment file lives, as an absolute path.
+ *
+ * This is the owner of what `ALLOY_SERVER_ENV_SOURCE` used to be. That variable
+ * named one project's credential file from generic runtime: every consumer that
+ * asked for "the server environment" got ALLOY'S, whichever project the
+ * operation was actually for, and when the variable was unset the fallback
+ * guessed its way down to `/Users/Kelly/Alloy`.
+ *
+ * The record may state an absolute `env_source` of its own; otherwise the
+ * profile's relative path is joined to the project's root. A project with no
+ * root, or a profile with no server, resolves NULL — which is what a
+ * repository-only project actually has, and the reason this returns a path
+ * rather than accepting one.
+ */
+export function environmentSourceFor(rec) {
+  if (rec?.env_source) return String(rec.env_source);
+  const rel = executionProfileFor(rec).env_source_relpath;
+  if (!rel || !rec?.root) return null;
+  return join(String(rec.root).replace(/\/+$/, ""), rel);
+}
+
+/**
+ * The slot ports a repository actually has, in order.
+ *
+ * `reconciliation-observe` froze `[3011 … 3016]` as a module constant, so an
+ * observer scanning ANY project looked at Alloy's six ports. The range is
+ * first_agent_port + managed_slot_count, and a project with no managed slots
+ * has an EMPTY range rather than Alloy's.
+ */
+export function slotPortsFor(rec) {
+  const e = executionProfileFor(rec);
+  if (!e.managed_slots || !e.first_agent_port || !e.managed_slot_count) return Object.freeze([]);
+  return Object.freeze(
+    Array.from({ length: e.managed_slot_count }, (_, i) => e.first_agent_port + i),
+  );
+}
+
+/**
+ * Every deployed database target that belongs to a registered project.
+ *
+ * WHY THIS REPLACES TWO FROZEN LITERALS. `PRODUCTION_APPLY_TARGETS` and
+ * `LEDGER_REPAIR_TARGETS` were each `["alloy_deployed_primary"]`, written into
+ * the modules that guard them. The exact-name discipline was right and is kept:
+ * this returns EXACT NAMES a project actually declares, never a pattern and
+ * never a class flag, so "looks like production" still cannot point a mutation
+ * at the wrong database.
+ *
+ * What changes is who says which names those are. A project with no database
+ * contributes none, which is why a repository-only project has no applicable
+ * production target — it does not inherit Alloy's, and the guard refuses.
+ *
+ * TWO SOURCES, NEITHER OF THEM A LITERAL: the databases the known PROFILES
+ * declare, and the databases REGISTERED PROJECTS declare. The union is the
+ * answer.
+ *
+ * The first version read the registry alone and returned nothing when nothing
+ * was registered. That looked like admirable fail-closed behaviour and was
+ * wrong, because it answers the wrong question. This list is not "may this
+ * request proceed" — authorization decides that, and it is operator-only with
+ * Director approval either way. It is "which names does this capability ever
+ * address", and that does not depend on whether a particular host has been
+ * seeded. A CI runner with an empty runtime root is not a host where Alloy's
+ * production database stopped existing; it is a host that has not been told
+ * about it, and 19 ledger-repair cases failed saying so.
+ *
+ * The property that matters is unchanged and is what case 9 pins: a project
+ * whose profile declares NO database contributes nothing. A repository-only
+ * project still has no production target, because the generic profile has none
+ * to contribute — not because the registry happened to be empty.
+ */
+export function deployedDatabaseTargets({ root = runtimeRoot() } = {}) {
+  const seen = [];
+  const add = (t) => { if (t && !seen.includes(t)) seen.push(t); };
+  for (const profile of Object.values(REPOSITORY_PROFILES)) add(profile.execution?.database_target);
+  try {
+    for (const rec of Object.values(readRepositoryStore(root).repositories)) {
+      if (rec.state !== "ACTIVE") continue;
+      add(executionProfileFor(rec).database_target);
+    }
+  } catch { /* an unreadable store narrows the set; it never widens it */ }
+  return Object.freeze(seen);
+}
+
+/**
+ * EVERYTHING AN OPERATION NEEDS TO KNOW ABOUT THE PROJECT IT IS FOR.
+ *
+ * Vacilando runtime has to be able to answer five questions — which project is
+ * this for, which environment, which database, which deployment target, which
+ * worktree/observation scope — and until now it answered all five the same way:
+ * implicitly, as Alloy. A scanner defaulted to `~/Code/alloy-worktrees`, a
+ * migration defaulted to `alloy_deployed_primary`, a credential read defaulted
+ * to Alloy's `web/.env.local`. None of those defaults was wrong for Alloy; all
+ * of them were wrong for anything else, and silently.
+ *
+ * This is the one place those five are answered together, from the record that
+ * already owns them. It is deliberately NOT a new subsystem: every field is
+ * read straight off `executionProfileFor` / `worktreeParentFor` /
+ * `environmentSourceFor`, which are the existing authority.
+ *
+ * `known` is false for an unregistered id, and every scope field is null. That
+ * is the honest answer, and it is what makes an unscoped observation refuse
+ * instead of quietly scanning Alloy's worktrees.
+ */
+export function projectScope(repositoryId, { root = runtimeRoot() } = {}) {
+  let rec = null;
+  try { rec = repositoryId ? getRepository(repositoryId, root) : null; } catch { rec = null; }
+  const e = executionProfileFor(rec);
+  return Object.freeze({
+    known: Boolean(rec),
+    repository_id: rec?.repository_id ?? null,
+    project_id: projectIdFor(rec),
+    root: rec?.root ?? null,
+    worktree_parent: rec ? worktreeParentFor(rec) : null,
+    slot_ports: rec ? slotPortsFor(rec) : Object.freeze([]),
+    database_target: e.database_target,
+    deployed_target: e.deployed_target,
+    hosted_host: e.hosted_host,
+    env_source: rec ? environmentSourceFor(rec) : null,
+    migrations_relpath: e.migrations_relpath,
+    local_stack_name: e.local_stack_name,
+  });
+}
+
+/**
+ * The canonical remote identity of a registered repository, or null.
+ *
+ * ONE OWNER, THREE SOURCES, IN ORDER. A record may state `remote_slug`
+ * explicitly; failing that the normalised remote the registry already captured
+ * at registration answers; failing that the raw remote URL does. An operator
+ * who registered a project by pointing at a clone has already told Vacilando
+ * where it lives, and should not have to type it a second time in another form.
+ *
+ * `prj_vacilando` is exactly that case: its record carries
+ * `remote_normalized: "github.com/ksquared-16/vacilando"` and a null
+ * `remote_slug`, and this resolves `ksquared-16/vacilando` from it.
+ *
+ * AMBIGUITY RESOLVES TO NULL, never to a guess. A record with no remote is a
+ * local-only project, which is a legitimate thing to be and not a push target.
+ */
+export function canonicalRemoteFor(rec) {
+  const stated = executionProfileFor(rec).remote_slug;
+  const raw = stated || rec?.remote_normalized || rec?.remote || "";
+  const slug = String(raw)
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^git@([^:]+):/i, "$1/")
+    .replace(/^ssh:\/\//i, "")
+    .replace(/^github\.com\//i, "")
+    .replace(/\.git$/i, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+  // owner/name, and nothing else. A bare name, a path with extra segments, or
+  // anything carrying a scheme we did not strip is ambiguous and refused.
+  return /^[a-z0-9._-]+\/[a-z0-9._-]+$/.test(slug) ? slug : null;
+}
+
+/**
+ * Every registered repository whose remote may be a governed target.
+ *
+ * ELIGIBILITY IS NOT AUTHORIZATION. This answers "is this a repository
+ * Vacilando knows and may be asked about", and nothing more: whether a specific
+ * push proceeds is governance's decision, unchanged, downstream of this.
+ *
+ * Three conditions, each for its own reason. ACTIVE, because a retired project
+ * is one an operator took out of service. Validation healthy, because a record
+ * pointing at a checkout that is gone is a record that cannot be pushed to
+ * anyway. A canonical remote, because an ambiguous one is not an identity.
+ */
+export function eligibleRepositoryRemotes({ root = runtimeRoot() } = {}) {
+  const out = [];
+  let records = [];
+  try { records = Object.values(readRepositoryStore(root).repositories); } catch { records = []; }
+  for (const rec of records) {
+    if (rec?.state !== "ACTIVE") continue;
+    if (rec?.validation && rec.validation.ok === false) continue;
+    const slug = canonicalRemoteFor(rec);
+    if (slug && !out.includes(slug)) out.push(slug);
+  }
+  return Object.freeze(out);
+}
+
+export function promotionPolicyFor(rec) {
+  const profile = profileFor(rec?.profile);
+  const base = profile.promotion || REPOSITORY_PROFILES.generic.promotion;
+  const override = rec?.promotion || null;
+  return Object.freeze({
+    /*
+     * THE RECORD DECIDES THIS ONE, AND UNTIL NOW IT COULD NOT.
+     *
+     * Every other dimension here already honoured a record-level override; this
+     * line read the PROFILE and nothing else, so a project that stated
+     * `governed_promotion: true` was still told false. The defect was invisible
+     * while no write path could set the field: registering the real Vacilando
+     * repository and trying to give it governed promotion is what surfaced it.
+     *
+     * Governed promotion is the one convention a project DECIDES rather than
+     * inherits — Alloy's profile still says true, and a generic project that
+     * has not said anything still gets false.
+     */
+    governed_promotion: override?.governed_promotion !== undefined
+      ? Boolean(override.governed_promotion)
+      : Boolean(profile.governed_promotion),
+    promotion_branch: override?.promotion_branch ?? base.promotion_branch,
+    protected_branches: Object.freeze([...(override?.protected_branches ?? base.protected_branches)]),
+    promoted_ref: override?.promoted_ref ?? base.promoted_ref,
+    source: override ? "repository_record" : `profile:${profile.id}`,
+  });
 }
 
 function runtimeRoot() {
@@ -264,6 +660,7 @@ export function publicRepository(rec, { laneCount = 0 } = {}) {
   return {
     schema_version: REPOSITORY_SCHEMA,
     repository_id: rec.repository_id,
+    project_id: projectIdFor(rec),
     name: rec.name,
     root: rec.root,
     git_common_dir: rec.git_common_dir,
@@ -278,6 +675,8 @@ export function publicRepository(rec, { laneCount = 0 } = {}) {
     supports_slots: profile.slots,
     supports_governed_promotion: profile.governed_promotion,
     branch_policy: rec.branch_policy || profile.branch_policy,
+    promotion: promotionPolicyFor(rec),
+    execution: executionProfileFor(rec),
     validation_commands: rec.validation_commands || [],
     instruction_files: profile.instruction_files,
     state: rec.state,
@@ -365,8 +764,37 @@ export async function registerLocalRepository({
   }
 
   const existing = findRepositoryByCommonDir(info.git_common_dir, root);
-  if (existing) {
+  if (existing && existing.state === "ACTIVE") {
     return { ok: false, error: "repository_already_registered", repository: publicRepository(existing) };
+  }
+  if (existing) {
+    /*
+     * A RETIRED PROJECT IS RECONNECTED, NOT REFUSED.
+     *
+     * `findRepositoryByCommonDir` matched retired records too, so "Add project"
+     * on a path you had previously deactivated answered
+     * `repository_already_registered` and pointed at a record the list does not
+     * show by default. There was no way out of that from the product: the
+     * operator is looking at a repository Vacilando says it already has and
+     * cannot see.
+     *
+     * Retire has always meant disconnect, never delete — so registering the same
+     * path again is the operator reconnecting it, and the record, its lanes and
+     * its history come back rather than a duplicate being created beside them.
+     */
+    const store = readRepositoryStore(root);
+    const rec = store.repositories[existing.repository_id];
+    rec.state = "ACTIVE";
+    delete rec.retired_at;
+    if (name) {
+      const renamed = validateRepositoryName(name);
+      if (!renamed.ok) return renamed;
+      rec.name = renamed.name;
+    }
+    ensureProjectIdentity(rec, store);
+    rec.updated_at = iso(nowMs);
+    writeStore(store, root);
+    return { ok: true, repository: publicRepository(rec), reconnected: true };
   }
 
   const named = validateRepositoryName(name || info.root.split(sep).pop());
@@ -392,6 +820,21 @@ export async function registerLocalRepository({
   const rec = {
     schema_version: REPOSITORY_SCHEMA,
     repository_id: `repo_${repositoryFingerprint(info.git_common_dir)}`,
+    /*
+     * A PROJECT IDENTITY, MINTED HERE, BECAUSE NOTHING ELSE MINTED ONE.
+     *
+     * S0 gave Alloy `prj_alloy` and gave every other project null, and no write
+     * path set the field — not registration, not update. The live registration
+     * of the real Vacilando repository is what surfaced it: the project
+     * registered correctly, resolved none of Alloy's conventions, and had no
+     * identity of its own, so `prj_vacilando` was unreachable through the
+     * product. A project model where exactly one project has an identity is
+     * half a model.
+     *
+     * Alloy is untouched: its record predates this and `projectIdFor` still
+     * answers `prj_alloy` for it by repository id.
+     */
+    project_id: mintProjectId(named.name, readRepositoryStore(root)),
     name: named.name,
     root: info.root,
     git_common_dir: info.git_common_dir,
@@ -464,6 +907,43 @@ export function updateRepository(repositoryId, patch = {}, { nowMs = Date.now(),
     if (p.startsWith(rec.root + sep)) return { ok: false, error: "worktree_parent_inside_repository" };
     rec.worktree_parent = p;
   }
+  /*
+   * THE PROMOTION POLICY IS SETTABLE, BECAUSE OTHERWISE IT IS ONLY EDITABLE.
+   *
+   * The Projects surface could SHOW a project's promotion policy and not change
+   * it, so a newly registered project could never be given governed promotion
+   * without opening repositories.json — which is the thing the Projects slice
+   * exists to end. Registering the real Vacilando repository is what made that
+   * concrete: canonical branch main, promotion branch main, and no way to say so.
+   *
+   * Narrow on purpose. Four named fields, each validated; `source` is derived by
+   * promotionPolicyFor and is not accepted, and a policy that states nothing is
+   * removed rather than stored as an empty object that would read as an override.
+   */
+  if (patch.promotion !== undefined) {
+    const inbound = patch.promotion || {};
+    const unknown = Object.keys(inbound)
+      .filter((k) => !["governed_promotion", "promotion_branch", "protected_branches", "promoted_ref"].includes(k));
+    if (unknown.length) return { ok: false, error: "invalid_promotion_field", fields: unknown };
+    const branch = (v) => /^[A-Za-z0-9._\/-]{1,120}$/.test(String(v));
+    const next = {};
+    if (inbound.governed_promotion !== undefined) next.governed_promotion = Boolean(inbound.governed_promotion);
+    if (inbound.promotion_branch !== undefined && inbound.promotion_branch !== null) {
+      if (!branch(inbound.promotion_branch)) return { ok: false, error: "invalid_branch" };
+      next.promotion_branch = String(inbound.promotion_branch);
+    }
+    if (inbound.promoted_ref !== undefined && inbound.promoted_ref !== null) {
+      if (!branch(inbound.promoted_ref)) return { ok: false, error: "invalid_branch" };
+      next.promoted_ref = String(inbound.promoted_ref);
+    }
+    if (inbound.protected_branches !== undefined) {
+      if (!Array.isArray(inbound.protected_branches)) return { ok: false, error: "invalid_protected_branches" };
+      if (inbound.protected_branches.some((b) => !branch(b))) return { ok: false, error: "invalid_branch" };
+      next.protected_branches = inbound.protected_branches.map(String).slice(0, 16);
+    }
+    if (Object.keys(next).length) rec.promotion = next;
+    else delete rec.promotion;
+  }
   rec.updated_at = iso(nowMs);
   writeStore(store, root);
   return { ok: true, repository: publicRepository(rec) };
@@ -501,6 +981,9 @@ export function reactivateRepository(repositoryId, { nowMs = Date.now(), root = 
   if (!rec) return { ok: false, error: "repository_not_found" };
   rec.state = "ACTIVE";
   delete rec.retired_at;
+  // A record written before project identities existed gets one here rather
+  // than carrying a permanent null that nothing can ever fill.
+  ensureProjectIdentity(rec, store);
   rec.updated_at = iso(nowMs);
   writeStore(store, root);
   return { ok: true, repository: publicRepository(rec) };
@@ -608,6 +1091,7 @@ export async function ensureAlloyRepository({
     remote_normalized: info.remote_normalized || null,
     default_branch: config.base_ref || config.base_branch || "origin/staging",
     worktree_parent: String(config.worktree_root || join(homedir(), "Code", "alloy-worktrees")).replace(/\/+$/, ""),
+    project_id: ALLOY_PROJECT_ID,
     profile: "alloy",
     branch_policy: REPOSITORY_PROFILES.alloy.branch_policy,
     validation_commands: [],

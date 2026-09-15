@@ -8,6 +8,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateReadOnlySql } from "./trusted-host-sql-readonly.mjs";
+import { ALLOY_REPOSITORY_ID, environmentSourceFor, getRepository as getRepositoryRecord } from "./repository-registry.mjs";
 import { validateMergeInputs } from "./trusted-host-merge.mjs";
 import { validatePushInputs } from "./trusted-host-push.mjs";
 import { validateRepositoryMetadataInputs } from "./trusted-host-repository-metadata.mjs";
@@ -47,6 +48,7 @@ export const ACTION_TYPES = Object.freeze({
   REPOSITORY_CLOSE_PULL_REQUEST: "repository.close_pull_request",
   REPOSITORY_DELETE_REMOTE_BRANCH: "repository.delete_remote_branch",
   VACILANDO_APPLY_RECONCILIATION_PLAN: "vacilando.apply_reconciliation_plan",
+  REPOSITORY_TRANSFER_FILES: "repository.transfer_files",
   VACILANDO_RETIRE_WORKTREE: "vacilando.retire_worktree",
   CAPACITY_SET_PROVIDER_CEILING: "capacity.set_provider_ceiling",
   HOST_INSTALL_TOOLKIT: "host.install_toolkit",
@@ -164,11 +166,44 @@ export function sqlFromCensusArtifact(raw, abs) {
 
 /** Canonical Alloy checkout for trusted credentials (never the managed worker env). */
 export function resolveCanonicalRepoRoot() {
+  /*
+   * THE REGISTERED PROJECT IS ASKED FIRST.
+   *
+   * This resolved Alloy by guessing: two environment variables, then
+   * ~/Alloy, then a literal /Users/Kelly/Alloy, then whatever repository the
+   * process happened to start in. Every one of those is a machine-shaped
+   * assumption about ONE project, sitting in generic runtime, and the literal
+   * is another person's home directory.
+   *
+   * The registry is the authority on where a project lives, so it answers
+   * first. The old candidates remain BELOW it, unchanged: an unseeded registry
+   * on a fresh host must still resolve, and S0 changes ownership rather than
+   * behaviour.
+   */
+  let registered = null;
+  try {
+    const rec = getRepositoryRecord(ALLOY_REPOSITORY_ID);
+    registered = rec?.root || null;
+  } catch { registered = null; }
+  /*
+   * S3: THE PERSON-SPECIFIC LITERAL IS GONE.
+   *
+   * `/Users/Kelly/Alloy` sat in this list and was also the final `return` --
+   * another operator's home directory, in generic runtime, as the answer of
+   * last resort. S0 put the registry above it and left it below; the registry
+   * now holds Alloy's real root on this host and on every seeded host, so the
+   * guess has nothing left to do that is not a guess about somebody else's
+   * filesystem.
+   *
+   * `~/Alloy` stays: it is THIS operator's home, and an unseeded host must
+   * still resolve. What is removed is the part that could only ever be right
+   * for one person.
+   */
   const candidates = [
     process.env.ALLOY_CANONICAL_ROOT,
     process.env.ALLOY_REPO,
+    registered,
     join(process.env.HOME || "", "Alloy"),
-    "/Users/Kelly/Alloy",
     findRepoRoot(),
   ].filter(Boolean);
   for (const c of candidates) {
@@ -177,15 +212,64 @@ export function resolveCanonicalRepoRoot() {
       return root;
     }
   }
-  return "/Users/Kelly/Alloy";
+  /*
+   * FAIL CLOSED RATHER THAN NAME A STRANGER'S DIRECTORY. Returning a path that
+   * exists on nobody's machine made every downstream read fail somewhere far
+   * from here, with a message about a missing file rather than about an
+   * unresolvable project. The registry is the authority; when it and every
+   * candidate come up empty there is no canonical root, and saying so is the
+   * honest answer.
+   */
+  return null;
 }
 
+/**
+ * The server environment file belonging to ONE project, or null.
+ *
+ * This is the generic form, and the one new code should call. It asks the
+ * registry where the project lives and what its profile says its environment
+ * file is, and answers NULL when the project has neither. A repository-only
+ * project has no credentials, and a path that does not exist is a worse answer
+ * than no path: it sends a consumer looking for a file, finding none, and
+ * falling through to whatever the next candidate happens to be — which is how
+ * every project ended up sharing Alloy's.
+ */
+export function projectEnvSource(repositoryId) {
+  let rec = null;
+  try { rec = getRepositoryRecord(repositoryId); } catch { rec = null; }
+  if (!rec) return null;
+  return environmentSourceFor(rec) || null;
+}
+
+/**
+ * Alloy's server environment file, for the trusted host's own credentials.
+ *
+ * WHAT CHANGED IS THE OWNER, NOT THE VALUE. This resolved by reading
+ * `ALLOY_SERVER_ENV_SOURCE` and otherwise guessing a canonical root; the
+ * project record now answers first, and the guess chain remains below it so an
+ * unseeded host still resolves exactly as it did.
+ *
+ * `ALLOY_SERVER_ENV_SOURCE` IS DEPRECATED. It is kept as a per-host override
+ * for an operator who has already set it, and it is NOT generic runtime
+ * authority any more: it can only ever name Alloy's file, because only this
+ * Alloy-specific function reads it. Its removal belongs with the rest of the
+ * `ALLOY_`-prefixed runtime variables in **S3**, alongside `ALLOY_RUNTIME_ROOT`
+ * and the `/Users/Kelly/Alloy` fallbacks — a project with an environment gets
+ * it from `projectEnvSource` before then.
+ *
+ * @deprecated-input ALLOY_SERVER_ENV_SOURCE — removal assigned to S3.
+ */
 export function resolveTrustedServerEnvSource() {
   if (process.env.ALLOY_SERVER_ENV_SOURCE && existsSync(process.env.ALLOY_SERVER_ENV_SOURCE)) {
     return process.env.ALLOY_SERVER_ENV_SOURCE;
   }
+  const registered = projectEnvSource(ALLOY_REPOSITORY_ID);
+  if (registered && existsSync(registered)) return registered;
+  // S3: the canonical root may now be null rather than a stranger's directory,
+  // so there is a case with no answer. Null propagates instead of throwing on
+  // join(null, ...), and a caller with no env source refuses where it reads.
   const canonical = resolveCanonicalRepoRoot();
-  return join(canonical, "web", ".env.local");
+  return canonical ? join(canonical, "web", ".env.local") : null;
 }
 
 function defineDatabaseReadCensus() {
@@ -217,6 +301,19 @@ function defineDatabaseReadCensus() {
      */
     requiresArtifactRef: true,
     artifactInputKeys: ["queryArtifactPath", "query_artifact_path"],
+    /*
+     * THE CONTEXT THAT AUTHORISES REUSE IS THE QUERY ITSELF.
+     *
+     * A census is a measurement at a time, which is why its repeatability is
+     * CONTEXT_DEPENDENT rather than simply reusable: a before/after comparison
+     * genuinely needs two. But the dedupe match that reaches this point already
+     * required an identical `queryHash` — the same question, asked again, in
+     * the same run. That is a retry, and the answer keeps.
+     *
+     * Declared here rather than assumed in the classification, so the reason
+     * lives with the action that knows it.
+     */
+    reuseAuthorized: () => true,
     outputSchema: { resultJson: "object" },
     evidenceSchema: ["query_artifact", "query_hash", "validation_report", "result_json", "execution_audit"],
     validateInputs(inputs = {}) {
@@ -476,6 +573,81 @@ function defineEnvironmentExecuteRegisteredReconciliation() {
       const resolved = resolveReconciliationRequest(inputs);
       if (!resolved.ok) return { ok: false, code: resolved.code, detail: resolved.detail };
       return { ok: true, normalized: { ...resolved.normalized, runtimeRoot: inputs.runtimeRoot || null } };
+    },
+  };
+}
+
+function defineTransferFiles() {
+  return {
+    actionType: ACTION_TYPES.REPOSITORY_TRANSFER_FILES,
+    version: 1,
+    title: "Transfer approved files from one project repository to another",
+    requiredCapability: "trusted_host.repository.transfer_files",
+    riskClass: "privileged_write",
+    timeoutMs: 300_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    /*
+     * BOTH PROJECTS ARE REQUIRED INPUTS, and that is the governance point.
+     *
+     * A transfer writes into a repository that is NOT necessarily the one
+     * hosting the running Vacilando code, so authorizing against "the current
+     * repository" would authorize the wrong thing entirely. The Director sees
+     * the source it reads from and the destination it writes into, by project,
+     * before approving. The destination is the one that matters: that is where
+     * bytes land.
+     */
+    inputSchema: {
+      required: ["sourceRepositoryId", "destinationRepositoryId", "planId", "planFingerprint", "entries"],
+    },
+    outputSchema: { applied: "array", summary: "object" },
+    evidenceSchema: [
+      "plan_id", "plan_fingerprint", "source_project", "destination_project",
+      "summary", "applied", "git_effect", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      const source = String(inputs.sourceRepositoryId || "").trim();
+      const destination = String(inputs.destinationRepositoryId || "").trim();
+      const planId = String(inputs.planId || "").trim();
+      const fingerprint = String(inputs.planFingerprint || "").trim();
+      const entries = Array.isArray(inputs.entries) ? inputs.entries : null;
+      if (!source) return { ok: false, code: "missing_source_repository" };
+      if (!destination) return { ok: false, code: "missing_destination_repository" };
+      if (source === destination) return { ok: false, code: "source_and_destination_identical" };
+      if (!planId) return { ok: false, code: "missing_plan_id" };
+      if (!/^[0-9a-f]{32}$/.test(fingerprint)) return { ok: false, code: "invalid_plan_fingerprint" };
+      if (!entries || !entries.length) return { ok: false, code: "missing_entries" };
+      /*
+       * AN EXPLICIT MANIFEST, OR NOTHING. "Move the Vacilando files" must not be
+       * expressible here: every entry names one source and one destination, and
+       * a wildcard is not a path. The executor re-derives the fingerprint from
+       * these entries and refuses when it does not match what was approved, so
+       * a caller cannot widen an approved plan by editing the list.
+       */
+      for (const e of entries) {
+        const from = String(e?.source || "").trim();
+        const to = String(e?.destination || "").trim();
+        if (!from || !to) return { ok: false, code: "entry_missing_path" };
+        if (/[*?]|\*\*/.test(from) || /[*?]/.test(to)) return { ok: false, code: "entry_is_a_pattern_not_a_path" };
+        if (from.split("/").includes("..") || to.split("/").includes("..")) {
+          return { ok: false, code: "entry_path_traversal" };
+        }
+      }
+      return {
+        ok: true,
+        normalized: {
+          sourceRepositoryId: source,
+          destinationRepositoryId: destination,
+          planId,
+          planFingerprint: fingerprint,
+          mode: "copy",
+          entries: entries.map((e) => ({
+            source: String(e.source).trim(),
+            destination: String(e.destination).trim(),
+            replace_approved: e.replace_approved === true,
+            expected_sha256: e.expected_sha256 ? String(e.expected_sha256) : null,
+          })),
+        },
+      };
     },
   };
 }
@@ -1017,6 +1189,7 @@ const REGISTRY = new Map([
   [ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST, defineRepositoryClosePullRequest()],
   [ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH, defineRepositoryDeleteRemoteBranch()],
   [ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN, defineApplyReconciliationPlan()],
+  [ACTION_TYPES.REPOSITORY_TRANSFER_FILES, defineTransferFiles()],
   [ACTION_TYPES.VACILANDO_RETIRE_WORKTREE, defineRetireWorktree()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
   [ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION, defineDatabaseApplyPromotedMigration()],

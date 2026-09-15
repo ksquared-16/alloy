@@ -18,6 +18,7 @@ import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import "./lib/vacilando/bind-worker-cli-gateway-root.mjs";
+import { gatewayStateRoot } from "./lib/vacilando/runtime-roots.mjs";
 
 const argv = process.argv.slice(2);
 const json = argv.includes("--json");
@@ -26,7 +27,7 @@ if (unknown.length) {
   process.stderr.write(`vac scoreboard: unknown option ${unknown[0]}\nUsage: vac scoreboard [--json]\n`);
   process.exit(2);
 }
-const root = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+const root = gatewayStateRoot();
 
 function safe(fn, fallback = null) { try { return fn(); } catch { return fallback; } }
 function sh(cmd, args, opts = {}) {

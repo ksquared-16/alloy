@@ -36,6 +36,7 @@
  * a second staging with worse governance.
  */
 
+import { ALLOY_REPOSITORY_ID, executionProfileFor, projectScope } from "./repository-registry.mjs";
 import { LIFECYCLE } from "./migration-parity.mjs";
 
 export const TRAIN_SCHEMA = "vacilando.promotion_train.v1";
@@ -464,10 +465,21 @@ export function baseMoved({ trainBaseSha, baseRef = TRAIN_POLICY.base_ref, cwd, 
  * its own record so that the mistake cannot be reintroduced by someone reading
  * the train's evidence instead of the gate's.
  */
-export function trainMigrationLedger({ promoted = [], candidates = [], gitImpl, cwd } = {}) {
+export function trainMigrationLedger({ promoted = [], candidates = [], gitImpl, cwd, repositoryId = ALLOY_REPOSITORY_ID } = {}) {
   const git = guardedGit(gitImpl);
+  /*
+   * WHERE THIS PROJECT KEEPS MIGRATIONS.
+   *
+   * `supabase/migrations` was a literal, which made every project a Supabase
+   * project with that layout. It is a property of the repository, so the
+   * profile states it; a project that keeps none has no migration train, and
+   * the empty path below yields an empty ledger rather than listing a
+   * directory that does not exist.
+   */
+  const migrationsDir = projectScope(repositoryId).migrations_relpath;
   const at = (ref) => {
-    const r = git(["ls-tree", "-r", "--name-only", ref, "supabase/migrations"], { cwd });
+    if (!migrationsDir) return [];
+    const r = git(["ls-tree", "-r", "--name-only", ref, migrationsDir], { cwd });
     if (r?.status !== 0) return null;
     const v = [];
     for (const line of String(r.stdout || "").split("\n")) {
@@ -574,7 +586,10 @@ export function trainIntegrationDecision({ invariants = null, aggregate = null, 
 export const STAGING_MERGE_ACTION = "repository.merge_pull_request";
 export const TRAIN_PR_ACTION = "promotion.open_pr";
 
-export function stagingMergeRequest(train = {}, { repository = "ksquared-16/alloy" } = {}) {
+export function stagingMergeRequest(train = {}, { repository = null } = {}) {
+  // Alloy's slug comes from Alloy's profile. A caller for another repository
+  // passes its own; nothing here assumes one.
+  repository = repository || executionProfileFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID }).remote_slug;
   if (!train.may_land) {
     return { ok: false, reason: "train_not_ready", blockers: train.blockers || [] };
   }

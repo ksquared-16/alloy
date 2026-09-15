@@ -18,6 +18,7 @@ import { getLayoutById } from "@/lib/layout/entityLayoutsRepo";
 import { validateBusinessProcessLayoutAssignmentInput } from "@/lib/layout/validateBusinessProcessLayoutAssignment";
 import { isLayoutAssignmentSurfaceKey } from "@/lib/layout/businessProcessLayoutAssignmentTypes";
 import { seedEnrollmentBusinessProcessLayoutAssignments } from "@/lib/layout/seedEnrollmentBusinessProcessLayoutAssignments";
+import { LAYOUTS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 
 export async function GET(req: NextRequest) {
     const ctx = await getAdminContext();
@@ -36,9 +37,8 @@ export async function PUT(req: NextRequest) {
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, LAYOUTS_MANAGE);
+    if (denied) return denied;
 
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
     if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
@@ -110,9 +110,8 @@ export async function POST(req: NextRequest) {
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, LAYOUTS_MANAGE);
+    if (denied) return denied;
 
     const body = (await req.json().catch(() => ({}))) as { action?: string };
     if (body.action !== "seed_enrollment") {

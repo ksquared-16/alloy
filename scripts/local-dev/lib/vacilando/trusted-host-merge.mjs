@@ -15,13 +15,52 @@ import { spawnSync } from "node:child_process";
 // leaves this machine, and one guard in one place is the point.
 import { canonicalGatewayRuntimeRoot, liveMergePermitted } from "./trusted-host-remote-guard.mjs";
 import { firstMeaningfulLine } from "./trusted-host-push.mjs";
+import {
+  ALLOY_REPOSITORY_ID, eligibleRepositoryRemotes, executionProfileFor, promotionPolicyFor,
+} from "./repository-registry.mjs";
+import { gatewayStateRoot } from "./runtime-roots.mjs";
 
 export { canonicalGatewayRuntimeRoot, liveMergePermitted };
 
-export const ALLOWED_TARGET_BRANCHES = Object.freeze(["staging"]);
+/*
+ * THESE ARE ALLOY'S CONVENTIONS, AND THEY NOW SAY SO.
+ *
+ * As module constants they were GLOBAL: every repository Vacilando merged in
+ * inherited Alloy's staging trunk and Alloy's protected names, whether or not it
+ * had either. Alloy being the primary consumer is not a reason for Alloy's
+ * branch policy to be the runtime's default.
+ *
+ * They remain exported at Alloy's values because existing callers and tests
+ * name them, and S0 changes ownership rather than behaviour. The authority is
+ * `promotionPolicyFor`, resolved per repository; these are what it returns for
+ * the alloy profile.
+ */
 export const ALLOWED_MERGE_METHODS = Object.freeze(["merge", "squash", "rebase"]);
-export const BLOCKED_TARGET_BRANCHES = Object.freeze(["main", "master", "production", "prod"]);
-const DEFAULT_REPOS = Object.freeze(["ksquared-16/alloy"]);
+const ALLOY_POLICY = promotionPolicyFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID });
+export const ALLOWED_TARGET_BRANCHES = Object.freeze([ALLOY_POLICY.promotion_branch]);
+export const BLOCKED_TARGET_BRANCHES = Object.freeze([...ALLOY_POLICY.protected_branches]);
+
+/**
+ * The branch policy governing THIS merge.
+ *
+ * Resolved from the repository the merge names, defaulting to Alloy only while
+ * Alloy is the only registered repository with governed promotion — and saying
+ * which, so a future repository's refusal is legible rather than mysterious.
+ */
+export function mergeBranchPolicyFor(repositoryRecord) {
+  if (repositoryRecord) return promotionPolicyFor(repositoryRecord);
+  return ALLOY_POLICY;
+}
+/*
+ * PROFILE-DECLARED REMOTES, which is a floor and not the universe.
+ *
+ * S2 learned this shape the hard way: deriving a governed set from live host
+ * state alone made a CI runner with an empty registry look like a machine where
+ * Alloy's repository had ceased to exist, and 19 ledger cases failed saying so.
+ * The floor keeps an unseeded host working; it does not decide who else is
+ * eligible, and it is no longer the only source.
+ */
+const PROFILE_REPOS = Object.freeze([executionProfileFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID }).remote_slug]);
 
 /**
  * The canonical form of a GitHub repository reference.
@@ -59,12 +98,36 @@ export function isAllowlistedRepository(value) {
   return allowlistedRepositories().some((r) => normalizeRepositorySlug(r) === want);
 }
 
+/**
+ * The repositories governed actions may be ASKED about.
+ *
+ * THE REGISTRY IS THE TARGET AUTHORITY. This used to be Alloy's slug plus an
+ * environment variable, which meant a second registered project could never be
+ * pushed to however correctly it was configured -- the S4 seed committed into
+ * `prj_vacilando` and then had nowhere governed to go. An operator who has
+ * registered a project has already said which repository it is; requiring them
+ * to also name it in an env var is asking twice for the same fact.
+ *
+ * ELIGIBILITY IS NOT AUTHORIZATION, and the distinction is the whole design.
+ * Being in this set means "Vacilando knows this repository and will consider a
+ * request about it". Whether the request proceeds is decided afterwards by
+ * governed request creation, policy evaluation, approval and delegation rules,
+ * execution ownership, push protections, audit and repository-state validation
+ * -- none of which this function touches. Registering a project authorizes
+ * nothing; it makes a target addressable.
+ *
+ * Three sources, in descending authority: registered projects, the profile
+ * floor that keeps an unseeded host working, and the environment extras kept as
+ * an explicit compatibility path for hosts that still set them.
+ */
 export function allowlistedRepositories() {
   const extra = String(process.env.VACILANDO_GITHUB_REPOSITORY || process.env.ALLOY_GITHUB_REPOSITORY || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  return [...new Set([...DEFAULT_REPOS, ...extra])];
+  let registered = [];
+  try { registered = [...eligibleRepositoryRemotes()]; } catch { registered = []; }
+  return [...new Set([...registered, ...PROFILE_REPOS, ...extra])];
 }
 
 /**
@@ -192,12 +255,17 @@ export function validateMergeInputs(inputs = {}) {
         : `pull_request_number must be a positive integer; received ${JSON.stringify(rawPullRequest)}`,
     };
   }
-  const targetBranch = identity.targetBranch || "staging";
-  if (BLOCKED_TARGET_BRANCHES.includes(targetBranch) || targetBranch === "production") {
+  const policy = mergeBranchPolicyFor(inputs.repositoryRecord || null);
+  if (!policy.governed_promotion) {
+    // A repository whose profile has no governed promotion does not get Alloy's.
+    return { ok: false, code: "governed_promotion_not_configured", detail: "this repository's profile declares no governed promotion" };
+  }
+  const targetBranch = identity.targetBranch || policy.promotion_branch;
+  if (policy.protected_branches.includes(targetBranch) || targetBranch === "production") {
     return { ok: false, code: "production_target_rejected", detail: "Production and default-branch merges are not registered." };
   }
-  if (!ALLOWED_TARGET_BRANCHES.includes(targetBranch)) {
-    return { ok: false, code: "target_branch_not_allowed", detail: `target_branch must be one of: ${ALLOWED_TARGET_BRANCHES.join(", ")}` };
+  if (targetBranch !== policy.promotion_branch) {
+    return { ok: false, code: "target_branch_not_allowed", detail: `target_branch must be: ${policy.promotion_branch}` };
   }
   const expectedHeadSha = identity.expectedHeadSha
     || normSha(inputs.expected_head_sha || inputs.expectedHeadSha || inputs.head_sha);
@@ -528,13 +596,22 @@ function rollupFrom(pr = {}) {
  * an explicit root is honoured, and when it names the parent of a real gateway
  * store, the store is where it actually is.
  */
+/*
+ * S3: THIS FILE SOLVED IT ALONE, AND THAT IS WHY IT STAYED BROKEN ELSEWHERE.
+ *
+ * The probe this replaces was correct, and was the ONLY one in the tree. Sixty
+ * other executable sites read the same variable with one of two incompatible
+ * meanings and no probe at all, so the tree is right in exactly one of three
+ * configurations: unset breaks the forty that treat it as the state root, set
+ * to the parent breaks all sixty, and this host works only because it happens
+ * to be set to the child.
+ *
+ * The probe now lives in `runtime-roots.mjs` as `gatewayStateRoot()` -- this
+ * function's logic, with its marker directory -- so a caller can no longer get
+ * the depth wrong by not knowing the question existed.
+ */
 function runtimeRoot() {
-  const explicit = process.env.ALLOY_RUNTIME_ROOT?.trim();
-  if (!explicit) return canonicalGatewayRuntimeRoot();
-  if (existsSync(join(explicit, "vacilando", "governed-actions"))) return explicit;
-  const nested = join(explicit, "gateway");
-  if (existsSync(join(nested, "vacilando", "governed-actions"))) return nested;
-  return explicit;
+  return gatewayStateRoot();
 }
 
 function governedActionRequestsPath(root = runtimeRoot()) {

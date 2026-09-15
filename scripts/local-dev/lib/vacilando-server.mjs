@@ -1364,6 +1364,41 @@ export function createVacilandoServer() {
           return sendJson(res, 500, { ok: false, error: "repository_register_failed", detail: String(e && e.message || e) });
         }
       }
+      if (path === "/api/repositories/transfer/preview") {
+        /*
+         * PREVIEW IS READ-ONLY, AND THAT IS THE WHOLE CONTRACT.
+         *
+         * This is the operator's evidence before anything is approved: what
+         * would be copied, what is already identical, and what would be
+         * refused. It writes nothing -- the certification suite fails if a
+         * write primitive ever appears in the preview path -- so an operator
+         * can run it as often as they like on a plan they have not decided about.
+         *
+         * EXECUTION IS NOT HERE. Copying is a privileged_write held by the
+         * trusted host under `repository.transfer_files`, reached from a lane or
+         * a Director mission through the same registered capability. A browser
+         * route that both previewed and copied would be a second authorization
+         * path, which is exactly what this slice must not add.
+         */
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const allowed = ["source_repository_id", "destination_repository_id", "entries", "mode"];
+        const extra = Object.keys(body.value || {}).filter((k) => !allowed.includes(k));
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        try {
+          const T = await import("./vacilando/repository-transfer.mjs");
+          const plan = { ...(body.value || {}), mode: "copy" };
+          const preview = T.previewTransfer(plan);
+          if (!preview.ok) return sendJson(res, 400, preview);
+          return sendJson(res, 200, {
+            ...preview,
+            action_key: T.TRANSFER_ACTION_KEY,
+            blocking: T.blockingRefusals(preview).length,
+          });
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "transfer_preview_failed", detail: String(e && e.message || e) });
+        }
+      }
       if (path === "/api/repositories/clone") {
         // Honest unavailability rather than a button that does nothing.
         return sendJson(res, 501, {
@@ -1386,7 +1421,10 @@ export function createVacilandoServer() {
               return sendJson(res, out.ok ? 200 : 404, out);
             }
             if (m[2] === "update") {
-              const allowed = ["name", "default_branch", "worktree_parent"];
+              // `promotion` joined the list so a project can be GIVEN governed
+              // promotion here; the registry validates its four fields and
+              // derives `source` itself.
+              const allowed = ["name", "default_branch", "worktree_parent", "promotion"];
               const extra = Object.keys(body.value || {}).filter((k) => !allowed.includes(k));
               if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
               const out = R.updateRepository(repoId, body.value || {});

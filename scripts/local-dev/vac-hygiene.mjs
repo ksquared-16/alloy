@@ -21,6 +21,7 @@ import { observeHygiene } from "./lib/vacilando/hygiene-observe.mjs";
 import { reconcileInterrupted } from "./lib/vacilando/hygiene-reclaim.mjs";
 import { measureIntent } from "./lib/vacilando/hygiene-cycle.mjs";
 import { listFindings } from "./lib/vacilando/operational-findings.mjs";
+import { gatewayStateRoot } from "./lib/vacilando/runtime-roots.mjs";
 
 const argv = process.argv.slice(2);
 const KNOWN = ["--json", "--plan", "--apply", "--cycle", "--kind", "--target", "--reconcile", "--no-bytes"];
@@ -39,7 +40,7 @@ const cycle = flag("--cycle");
 const kind = value("--kind");
 const target = value("--target");
 const withBytes = !flag("--no-bytes");
-const root = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+const root = gatewayStateRoot();
 const requestingWorktree = process.env.ALLOY_WORKTREE || process.cwd();
 
 if (apply && !cycle && !(kind && target)) {

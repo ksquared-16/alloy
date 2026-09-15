@@ -26,10 +26,17 @@ const access = {
     allowedSiteLocationIds: null,
 };
 
-vi.mock("@/lib/admin/canManageUsersAndRoles", () => ({
-    requirePortalOrUsersRolesManageAuth: vi.fn(async () => ({ ok: true, access })),
-    requireUsersRolesManageAuth: vi.fn(async () => ({ ok: true, access })),
-}));
+/*
+ * The route's two gates became one capability-taking gate in the four-authority split. Admission is
+ * not this file's subject — W-61 is about the route not fabricating roles — so the stub admits, and
+ * the capability it is asked for is certified where that IS the subject.
+ */
+vi.mock("@/lib/admin/canManageUsersAndRoles", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/canManageUsersAndRoles")>(
+        "@/lib/admin/canManageUsersAndRoles"
+    );
+    return { ...actual, requireAccessAdministration: vi.fn(async () => ({ ok: true, access })) };
+});
 
 /** What the mocked `role_definitions` read resolves to for the next GET. */
 let roleRows: unknown[] = [];

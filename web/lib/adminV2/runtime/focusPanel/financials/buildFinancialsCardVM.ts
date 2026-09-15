@@ -41,6 +41,12 @@ import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamily
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import { readAccountReductions, type AccountReduction } from "@/lib/financials/reductions/readAccountReductions";
 import {
+    resolvePayerCandidates,
+    resolvePaymentSetup,
+    type PayerCandidate,
+    type PaymentSetupState,
+} from "@/lib/financials/payments/paymentSubjectModel";
+import {
     billingPeriodForDate,
     billingPeriodFromKey,
     placeInBillingPeriod,
@@ -61,6 +67,26 @@ import {
 const REDUCTION_CATEGORIES = new Set(["discount", "credit", "subsidy_offset"]);
 const FUNDING_CATEGORIES = new Set(["subsidy_offset"]);
 const ADJUSTMENT_CATEGORIES = new Set(["adjustment"]);
+
+/**
+ * Is this posted row a thing that happens TO an obligation, rather than an obligation?
+ *
+ * Funding, discounts, adjustments and corrections are all already counted inside the net of the
+ * charge they act on — `resolveAllocatableNet` sums them against their `source_charge_id`. Asking
+ * the collectibility resolver about them a second time counts them twice, and because a credit is
+ * negative and its REVERSAL is positive, the double count is asymmetric: the credit is refused as
+ * `not_allocatable` and silently contributes nothing, while its reversal contributes in full.
+ *
+ * Exported so the rule can be bound by a test rather than restated by one.
+ */
+export function isCollectibleOffsetRow(row: Pick<FinancialsLedgerRow, "categoryKey" | "correctsChargeId">): boolean {
+    return (
+        Boolean(row.correctsChargeId)
+        || FUNDING_CATEGORIES.has(row.categoryKey)
+        || REDUCTION_CATEGORIES.has(row.categoryKey)
+        || ADJUSTMENT_CATEGORIES.has(row.categoryKey)
+    );
+}
 
 /** Statuses that count toward what is owed. `draft` is not yet owed; `void` never was. */
 const OWED_STATUSES = new Set(["posted", "partially_paid", "paid"]);
@@ -288,8 +314,26 @@ export type FinancialsCardVM = {
      *
      * Deliberately NOT the `unavailable` list: that records why the PLATFORM cannot answer, which is
      * a development finding and never operator copy.
+     *
+     * DERIVED, not declared. This was the literal `null` for the whole life of the card, and the
+     * adapter read it as "no payment method on file" — a claim about a family made from a constant
+     * nobody had ever computed. It now comes from `resolvePaymentSetup`, which looks.
      */
     paymentSetup: string | null;
+    /**
+     * WHAT THIS ORGANISATION CAN ACTUALLY DO WITH MONEY, per capability, with a reason when it
+     * cannot. `unsupported` (Alloy has no implementation) and `not_configured` (it has one and this
+     * organisation has not set it up) are deliberately different answers.
+     */
+    paymentCapabilities: PaymentSetupState | null;
+    /**
+     * WHO COULD HAVE PAID — household membership, never responsibility.
+     *
+     * Distinct from `payers`, which is persisted responsibility. A grandparent settling a bill is a
+     * payer and is responsible for nothing; defaulting one to the other is the collapse the payment
+     * model forbids.
+     */
+    payerCandidates: PayerCandidate[];
     /**
      * Whether this organization's merchant can actually take a bank debit.
      *
@@ -426,6 +470,8 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         chargeTemplates: [],
         unavailable: [],
         paymentSetup: null,
+        paymentCapabilities: null,
+        payerCandidates: [],
         achAvailable: false,
         openCollections: [],
         unavailableReason: null,
@@ -1022,14 +1068,36 @@ export async function buildFinancialsCardVM(
     const responsibilityRead = await readResponsibility(supabase, args.orgId, rows.map((r) => r.chargeId));
 
     /*
-     * COLLECTIBILITY, SUMMED FROM THE PERIOD'S POSTED CHARGES.
+     * COLLECTIBILITY, SUMMED FROM THE PERIOD'S POSTED OBLIGATIONS.
      *
-     * One resolver call per posted charge, added up — not a second implementation of the rule. Only
-     * posted charges are asked about, because a draft owes nothing yet and asking would report a
-     * suppression against money that is not owed.
+     * One resolver call per posted obligation, added up — not a second implementation of the rule.
+     * Only posted charges are asked about, because a draft owes nothing yet and asking would report
+     * a suppression against money that is not owed.
+     *
+     * ── AND ONLY OBLIGATIONS, WHICH IS NOT THE SAME AS "EVERY POSTED ROW" ──────────────────────
+     *
+     * A reduction and a correction are posted rows too, and they are already counted INSIDE the net
+     * of the charge they reduce — `resolveAllocatableNet` sums them against their `source_charge_id`.
+     * Asking the resolver about them again counts them twice.
+     *
+     * That used to be invisible because it was silent: a reduction is negative, the resolver refuses
+     * a non-tuition charge worth nothing or less with `not_allocatable`, and the catch below turned
+     * the refusal into a zero. So credits vanished from this total and nothing looked wrong.
+     *
+     * REVERSING a reduction is what exposed it. The reversal appends a POSITIVE `adjustment` row,
+     * which reads to the resolver as an ordinary obligation — so the credit contributed nothing on
+     * the way down and its reversal contributed in full on the way up. A household owing $93.00 was
+     * reported as $173.00 collectible, overstated by exactly the reversed credits, while the account
+     * side's own reconciliation had it right the whole time. Two canonical authorities, one wrong
+     * answer, and a demand for money the family did not owe.
+     *
+     * The filter is the same distinction `reconcileRows` already makes: gross is what is owed, and
+     * funding, discounts, adjustments and corrections are things that happen TO it.
      */
     const collectible = { outstandingCents: 0, expectedSubsidyCents: 0, submittedClaimSuppressionCents: 0, actualSubsidyReceivedCents: 0, unresolvedVarianceCents: 0, currentlyCollectibleCents: 0 };
-    for (const row of rows.filter((r) => r.lifecycleStatus === "posted" && r.periodKey === period.key)) {
+    for (const row of rows.filter(
+        (r) => r.lifecycleStatus === "posted" && r.periodKey === period.key && !isCollectibleOffsetRow(r),
+    )) {
         try {
             const position = await resolveFamilyCollectible(supabase, { orgId: args.orgId, chargeId: row.chargeId });
             collectible.outstandingCents += position.outstandingCents;
@@ -1039,8 +1107,10 @@ export async function buildFinancialsCardVM(
             collectible.unresolvedVarianceCents += position.unresolvedVarianceCents;
             collectible.currentlyCollectibleCents += position.currentlyCollectibleCents;
         } catch {
-            // A charge the resolver cannot speak for (a reduction row, a void) contributes nothing
-            // rather than failing the account — the same rule every other read on this card follows.
+            // A charge the resolver cannot speak for (a void, a charge with no allocatable net)
+            // contributes nothing rather than failing the account — the same rule every other read
+            // on this card follows. Reduction rows no longer reach here: they are excluded above,
+            // by what they ARE, rather than being silently absorbed by a refusal.
         }
     }
     vm.collectible = collectible;
@@ -1210,6 +1280,41 @@ export async function buildFinancialsCardVM(
         .eq("is_active", true)
         .maybeSingle();
     vm.achAvailable = (merchantRow as { ach_readiness: string | null } | null)?.ach_readiness === "ready";
+
+    /*
+     * ── PAYMENT SETUP, AND WHO COULD HAVE PAID — derived, where a literal used to sit ───────────
+     *
+     * `paymentSetup` was `null` for the life of this reader, with no producer anywhere, and the
+     * card adapter turned that constant into "no payment method on file" and an unhealthy autopay
+     * badge. A hardcoded null was being read as a fact about a family's money.
+     *
+     * Both reads fail soft and independently. Payment setup is context: an operator must still be
+     * able to see what is OWED when the provider tables cannot be read, and a payer chooser that
+     * could not load must not make the account look like it has nobody who can pay — the surfaces
+     * below distinguish "could not be read" from "there are none".
+     */
+    try {
+        vm.paymentCapabilities = await resolvePaymentSetup(supabase, {
+            orgId: args.orgId,
+            customerId: vm.account.customerId,
+        });
+        vm.paymentSetup = vm.paymentCapabilities.summaryLine;
+    } catch {
+        vm.paymentCapabilities = null;
+        vm.paymentSetup = null;
+    }
+
+    try {
+        const payers = await resolvePayerCandidates(supabase, {
+            orgId: args.orgId,
+            customerId: vm.account.customerId ?? "",
+            /* Reported as an overlap on each candidate. Never used to order or default the choice. */
+            responsiblePersonIds: (vm.responsibility?.parties ?? []).map((party) => String(party.personId)),
+        });
+        vm.payerCandidates = payers.candidates;
+    } catch {
+        vm.payerCandidates = [];
+    }
 
     /*
      * The collections still in flight for the charges this card is about. Scoped to those charges so

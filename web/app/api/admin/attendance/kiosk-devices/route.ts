@@ -11,12 +11,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { listKioskDevicesForOrg } from "@/lib/childcareOperational/attendance/kiosk/kioskDeviceAdministration";
 import { registerKioskDevice } from "@/lib/childcareOperational/attendance/kiosk/kioskCredentialRotation";
+import { ATTENDANCE_DEVICES_MANAGE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 export async function GET() {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ATTENDANCE_DEVICES_MANAGE);
     if (!auth.ok) return auth.response;
 
     try {
@@ -31,7 +31,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ATTENDANCE_DEVICES_MANAGE);
     if (!auth.ok) return auth.response;
     const { access } = auth;
 

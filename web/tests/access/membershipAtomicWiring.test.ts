@@ -127,14 +127,33 @@ describe("W-5 — membership writers use the atomic path", () => {
 });
 
 describe("W-5 — helper maps RPC outcomes", () => {
-    it("calls the create RPC with the membership triple", async () => {
+    it("calls the create RPC with the membership triple AND the delegating actor", async () => {
+        /*
+         * The actor is a fourth argument now, and it is not audit decoration. Creating a member with
+         * an initial role confers that role's whole package, so the RPC bounds it against the actor's
+         * own authority — the bypass that made "create a user, give them admin" a way around W-18's
+         * grant ceiling. A helper that stopped sending it would restore the bypass silently.
+         */
         const { client, calls } = fakeClient({ data: membershipRow });
-        const res = await createMembershipWithAccessProfile(client, { userId: "u1", orgId: "o1", role: "ops" });
+        const res = await createMembershipWithAccessProfile(client, {
+            userId: "u1", orgId: "o1", role: "ops",
+            audit: { actorUserId: "test-actor", origin: "operator" as const, correlationId: "test-corr" },
+        });
 
         expect(res.ok).toBe(true);
         expect(calls).toHaveLength(1);
         expect(calls[0].fn).toBe("create_membership_with_access_profile");
-        expect(calls[0].args).toEqual({ p_user_id: "u1", p_org_id: "o1", p_role: "ops" });
+        expect(calls[0].args).toEqual({
+            p_user_id: "u1", p_org_id: "o1", p_role: "ops", p_actor_user_id: "test-actor",
+        });
+    });
+
+    it("sends a null actor only when the caller names none — bootstrap, decided in SQL", async () => {
+        // The exemption is not the helper's to grant: it forwards the absence, and the RPC accepts it
+        // only for the first membership of an organization that has none.
+        const { client, calls } = fakeClient({ data: membershipRow });
+        await createMembershipWithAccessProfile(client, { userId: "u1", orgId: "o1", role: "admin" });
+        expect(calls[0].args).toMatchObject({ p_actor_user_id: null });
     });
 
     it("classifies a unique violation as duplicate", async () => {

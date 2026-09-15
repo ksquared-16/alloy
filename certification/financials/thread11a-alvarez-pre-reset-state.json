@@ -1,0 +1,806 @@
+{
+  "capturedAt": "2026-09-14T19:42:34.866Z",
+  "deployedSha": "78df95d0b3dcf0f914254fd9161da2c3bf8701a2",
+  "organization": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+  "customerId": "fd000000-0000-4000-8000-0000000c0001",
+  "period": {
+    "key": "2026-09",
+    "start": "2026-09-01",
+    "end": "2026-09-30",
+    "label": "September 2026"
+  },
+  "reconciliation": {
+    "grossCents": 11800,
+    "discountsCents": -34800,
+    "fundingCents": 0,
+    "adjustmentsCents": 29900,
+    "responsibilityCents": 6900,
+    "paymentsCents": 1300,
+    "balanceCents": 5600,
+    "scheduledCents": 0,
+    "draftCents": 0
+  },
+  "collectible": {
+    "outstandingCents": 7500,
+    "expectedSubsidyCents": 4500,
+    "submittedClaimSuppressionCents": 0,
+    "actualSubsidyReceivedCents": 0,
+    "unresolvedVarianceCents": 0,
+    "currentlyCollectibleCents": 7500
+  },
+  "responsibility": {
+    "parties": [
+      {
+        "personId": "fd000000-0000-4000-8000-0000000b0002",
+        "name": "Dana Alvarez",
+        "assignedCents": 7500,
+        "attributedCents": 0,
+        "remainingCents": 7500
+      }
+    ],
+    "unassignedCents": 0,
+    "allocatedCents": 7500,
+    "hasUnresolvedCharges": true
+  },
+  "expectedFunding": [
+    {
+      "label": "Northwind Employer Benefit (demo)",
+      "sourceType": "employer_sponsorship",
+      "expectedCents": 4500,
+      "percentBasisPoints": null
+    }
+  ],
+  "subjects": [
+    {
+      "customerMemberId": "fd000000-0000-4000-8000-0000000d0001",
+      "agreementId": "fd000000-0000-4000-8000-0000000a0001",
+      "displayName": "Ana Alvarez",
+      "agreementStatus": "active"
+    }
+  ],
+  "counts": {
+    "rows": 33,
+    "reductions": 28,
+    "payments": 2
+  },
+  "rows": [
+    {
+      "chargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "period": "2026-10",
+      "status": "posted",
+      "category": "one_time",
+      "description": "Field trip",
+      "amountCents": 4000,
+      "appliedCents": 1000,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "ab25a3ba-d828-495e-bd65-af6cc6bfa254",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "consumable_fee",
+      "description": "Materials",
+      "amountCents": 1800,
+      "appliedCents": 1300,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "0cf987cc-50fb-490b-b63a-e900fe23ec8f",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "fee",
+      "description": "Registration fee",
+      "amountCents": 7500,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "5d2544e6-e16b-49e9-9d40-779f5d4b773b",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "late_pickup",
+      "description": "Late pickup",
+      "amountCents": 2500,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "0150e87e-acf6-4621-a58f-d18de929f0de",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -3800,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "019a1a61-65a0-4889-bf17-4bd7d15c0bde",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -4000,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "110dd2e6-716e-4435-b462-00a5710b3c38",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -100,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "1c55b2bb-a3e2-4ea3-981c-a6e9eedab037",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -100,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "22b5f377-8724-4674-aa4b-15281a0a10d8",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "adjustment",
+      "description": "adjustment",
+      "amountCents": 3800,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "3a2bfeff-e088-46d9-b78b-546a82163e3d",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -3700,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "3fb79cba-bd45-4d97-b2fe-ee8020aa37d7",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "adjustment",
+      "description": "adjustment",
+      "amountCents": 3700,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "4afe4bd6-b558-4c3d-ae90-ae42613e1949",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -100,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "4c805d3b-6d3f-427b-bb3c-12a85e9e1370",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -4000,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "7607d10b-63ad-425c-a734-9ed8a4027fbd",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -3900,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "76d72cf9-96bb-44fa-b541-2a744bb490d6",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -100,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "782a4705-0b1f-46b3-9cb3-c84f027ac5b9",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "adjustment",
+      "description": "adjustment",
+      "amountCents": 4000,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "7e688426-18ee-4205-9e7e-8b856061a4d0",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -3400,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "aae2e28e-91b1-42dc-86da-451766fe9f01",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "adjustment",
+      "description": "adjustment",
+      "amountCents": 3900,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "abd3b06b-9371-4a6f-a58a-1fa0a234d3b7",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "adjustment",
+      "description": "adjustment",
+      "amountCents": 3400,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "b9d42390-2ad6-4869-835c-ee975094c09b",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -100,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "ba0cc538-c8cc-4f6d-b713-d75fcf767d8a",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "reversal of charge 5d2544e6-e16b-49e9-9d40-779f5d4b773b",
+      "amountCents": -2500,
+      "appliedCents": 0,
+      "correctsChargeId": "5d2544e6-e16b-49e9-9d40-779f5d4b773b",
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "bad819e3-58ef-41a8-90e7-2f6b2b7d2c67",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -100,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "bd58ff2a-de1d-4a96-9e66-fd5213584d15",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -100,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "c9e3aca0-39a0-4a74-a197-ad8a79271558",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "adjustment",
+      "description": "adjustment",
+      "amountCents": 3500,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "d6eb9fd9-92c6-40ce-aa9c-24831095ac5d",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -3500,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "e0622026-8423-4fa2-bb2c-32269ea202cd",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -100,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "e1fde0c3-3a18-4dd6-a563-43fdb85c3c8a",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -3600,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "e26efeb4-1763-4e49-a696-3bb7fb8ed1d3",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -100,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "e2b0be9d-f593-4227-90e4-349ff672ffae",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -100,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "eafe657d-f376-4f88-97a4-510782e9ab31",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -100,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "f5bbd2cb-7718-4c9d-a18e-fa8e7a51fe29",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "adjustment",
+      "description": "adjustment",
+      "amountCents": 3600,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "f7205f07-88b3-4ff6-9933-1e8441d85d8e",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "credit",
+      "description": "credit",
+      "amountCents": -1300,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    },
+    {
+      "chargeId": "fa7c1507-fdfe-4b05-b639-578800c1b39e",
+      "period": "2026-09",
+      "status": "posted",
+      "category": "adjustment",
+      "description": "adjustment",
+      "amountCents": 4000,
+      "appliedCents": 0,
+      "correctsChargeId": null,
+      "subjectMemberId": "fd000000-0000-4000-8000-0000000d0001"
+    }
+  ],
+  "payments": [
+    {
+      "paymentId": "3eb831f4-1b99-497a-b22c-9b7aec9fdaf4",
+      "direction": "outbound",
+      "amountCents": 500,
+      "appliedCents": 0,
+      "unappliedCents": 0,
+      "reference": "CORE-QA-0001",
+      "refundsPaymentId": "2a6b8dcf-2e67-412d-93f5-22f7ab6da4bb",
+      "applications": []
+    },
+    {
+      "paymentId": "2a6b8dcf-2e67-412d-93f5-22f7ab6da4bb",
+      "direction": "inbound",
+      "amountCents": 2800,
+      "appliedCents": 2300,
+      "unappliedCents": 0,
+      "reference": "CORE-QA-0001",
+      "refundsPaymentId": null,
+      "applications": [
+        {
+          "allocationId": "811bc71d-d3e0-407b-9fb2-492ab5e4ce23",
+          "chargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+          "chargeLabel": "field_trip",
+          "chargeServiceDate": "2026-09-14",
+          "appliedCents": 1000,
+          "status": "active",
+          "allocatedAt": "2026-09-14T18:56:15.503+00:00",
+          "reversedAt": null,
+          "reversalReason": null
+        },
+        {
+          "allocationId": "50ea9657-1637-45dd-b1a8-42102daad7da",
+          "chargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+          "chargeLabel": "field_trip",
+          "chargeServiceDate": "2026-09-14",
+          "appliedCents": 1000,
+          "status": "reversed",
+          "allocatedAt": "2026-09-14T18:55:37.965+00:00",
+          "reversedAt": "2026-09-14T18:55:53.87+00:00",
+          "reversalReason": "core QA: failed-reapply scenario"
+        },
+        {
+          "allocationId": "e3608cbb-00ca-4f4b-9971-f595d7a1aca1",
+          "chargeId": "782a4705-0b1f-46b3-9cb3-c84f027ac5b9",
+          "chargeLabel": "adjustment",
+          "chargeServiceDate": "2026-09-14",
+          "appliedCents": 1000,
+          "status": "reversed",
+          "allocatedAt": "2026-09-14T18:54:59.653+00:00",
+          "reversedAt": "2026-09-14T18:55:30.192+00:00",
+          "reversalReason": "core QA: move this payment to another obligation"
+        },
+        {
+          "allocationId": "5feea3cc-cc79-4f1b-b24b-9e63b0ce5486",
+          "chargeId": "3fb79cba-bd45-4d97-b2fe-ee8020aa37d7",
+          "chargeLabel": "adjustment",
+          "chargeServiceDate": "2026-09-14",
+          "appliedCents": 1000,
+          "status": "reversed",
+          "allocatedAt": "2026-09-14T18:49:49.1+00:00",
+          "reversedAt": "2026-09-14T18:54:47.694+00:00",
+          "reversalReason": "core QA: release money so it can be placed elsewhere"
+        },
+        {
+          "allocationId": "1cfbb43c-f803-4a06-8998-73b2e7daf3b3",
+          "chargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+          "chargeLabel": "field_trip",
+          "chargeServiceDate": "2026-09-14",
+          "appliedCents": 1000,
+          "status": "reversed",
+          "allocatedAt": "2026-09-14T18:42:13.762+00:00",
+          "reversedAt": "2026-09-14T18:49:33.512+00:00",
+          "reversalReason": "core QA: release money so it can be placed elsewhere"
+        },
+        {
+          "allocationId": "9dec7ec3-7acd-4b1f-b83d-8d4340d47736",
+          "chargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+          "chargeLabel": "field_trip",
+          "chargeServiceDate": "2026-09-14",
+          "appliedCents": 1000,
+          "status": "reversed",
+          "allocatedAt": "2026-09-14T18:41:47.098+00:00",
+          "reversedAt": "2026-09-14T18:41:58.575+00:00",
+          "reversalReason": "core QA: failed-reapply scenario"
+        },
+        {
+          "allocationId": "70b828d6-7e9c-4203-b72c-b1a787d10a96",
+          "chargeId": "22b5f377-8724-4674-aa4b-15281a0a10d8",
+          "chargeLabel": "adjustment",
+          "chargeServiceDate": "2026-09-14",
+          "appliedCents": 1000,
+          "status": "reversed",
+          "allocatedAt": "2026-09-14T18:41:10.82+00:00",
+          "reversedAt": "2026-09-14T18:41:39.11+00:00",
+          "reversalReason": "core QA: move this payment to another obligation"
+        },
+        {
+          "allocationId": "aec58a1b-fd6a-4f34-b64c-ef675e608a5a",
+          "chargeId": "ab25a3ba-d828-495e-bd65-af6cc6bfa254",
+          "chargeLabel": "materials_fee",
+          "chargeServiceDate": "2026-09-14",
+          "appliedCents": 1300,
+          "status": "active",
+          "allocatedAt": "2026-09-14T18:36:37.628+00:00",
+          "reversedAt": null,
+          "reversalReason": null
+        },
+        {
+          "allocationId": "ea5155fe-b005-4676-8e12-ae26e4e74855",
+          "chargeId": "5d2544e6-e16b-49e9-9d40-779f5d4b773b",
+          "chargeLabel": "late_pickup_fee",
+          "chargeServiceDate": "2026-09-14",
+          "appliedCents": 1000,
+          "status": "reversed",
+          "allocatedAt": "2026-09-14T18:35:36.351+00:00",
+          "reversedAt": "2026-09-14T18:35:56.626+00:00",
+          "reversalReason": "core QA: move this payment to another obligation"
+        },
+        {
+          "allocationId": "629cc7a9-e643-43c7-9a7d-0c8f99ef97ff",
+          "chargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+          "chargeLabel": "field_trip",
+          "chargeServiceDate": "2026-09-14",
+          "appliedCents": 1300,
+          "status": "reversed",
+          "allocatedAt": "2026-09-14T17:13:50.19+00:00",
+          "reversedAt": "2026-09-14T18:36:30.691+00:00",
+          "reversalReason": "core QA: move this payment to another obligation"
+        },
+        {
+          "allocationId": "f59791e0-b015-435a-bce9-215ecd88a669",
+          "chargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+          "chargeLabel": "field_trip",
+          "chargeServiceDate": "2026-09-14",
+          "appliedCents": 1800,
+          "status": "reversed",
+          "allocatedAt": "2026-09-14T17:13:27.942+00:00",
+          "reversedAt": "2026-09-14T17:13:50.19+00:00",
+          "reversalReason": "core QA: refund part of an overpayment"
+        },
+        {
+          "allocationId": "f4890b79-8119-4e52-8db0-6ef7f2949a06",
+          "chargeId": "0cf987cc-50fb-490b-b63a-e900fe23ec8f",
+          "chargeLabel": "registration_fee",
+          "chargeServiceDate": "2026-09-14",
+          "appliedCents": 1000,
+          "status": "reversed",
+          "allocatedAt": "2026-09-14T17:12:25.415+00:00",
+          "reversedAt": "2026-09-14T17:12:41.694+00:00",
+          "reversalReason": "core QA: failed-reapply scenario"
+        },
+        {
+          "allocationId": "75eb455a-1372-4e91-8524-e7e7ab1fe250",
+          "chargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+          "chargeLabel": "field_trip",
+          "chargeServiceDate": "2026-09-14",
+          "appliedCents": 1000,
+          "status": "reversed",
+          "allocatedAt": "2026-09-14T17:11:30.622+00:00",
+          "reversedAt": "2026-09-14T17:12:16.599+00:00",
+          "reversalReason": "core QA: move this payment to another obligation"
+        },
+        {
+          "allocationId": "300e4b9c-0fbc-4eea-ad2e-58f9cad3619c",
+          "chargeId": "ab25a3ba-d828-495e-bd65-af6cc6bfa254",
+          "chargeLabel": "materials_fee",
+          "chargeServiceDate": "2026-09-14",
+          "appliedCents": 1800,
+          "status": "reversed",
+          "allocatedAt": "2026-09-14T17:10:18.764+00:00",
+          "reversedAt": "2026-09-14T17:13:07.903+00:00",
+          "reversalReason": "core QA: failed-reapply scenario"
+        }
+      ]
+    }
+  ],
+  "reductions": [
+    {
+      "applicationId": "fa8d9c2a-affb-4ed5-a31e-e1602997cf55",
+      "amountCents": 3400,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "c3019044-dd0b-4eb1-87b3-6bd42889fdfc",
+      "amountCents": -3400,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": "fa8d9c2a-affb-4ed5-a31e-e1602997cf55"
+    },
+    {
+      "applicationId": "bedbcd13-a918-4562-87b5-a523bd6fa87c",
+      "amountCents": -100,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "d0662f37-22f5-42cf-9fe1-e844a8a1e7d2",
+      "amountCents": 3500,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "4f32cba0-03d1-4c1f-87a9-bf73c093e536",
+      "amountCents": -3500,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": "d0662f37-22f5-42cf-9fe1-e844a8a1e7d2"
+    },
+    {
+      "applicationId": "0d8bb1af-6663-4fa2-a7da-56efc86dcba8",
+      "amountCents": -100,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "a834a3c0-41c8-4d37-a0f5-d134877bdd2a",
+      "amountCents": 3600,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "2b659806-2106-4b27-94e8-b6017b46e8d8",
+      "amountCents": -3600,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": "a834a3c0-41c8-4d37-a0f5-d134877bdd2a"
+    },
+    {
+      "applicationId": "418117e0-31d4-4c4b-ac82-af831b3d6c38",
+      "amountCents": -100,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "78414a2c-e331-4ef2-80bc-ec776861b324",
+      "amountCents": 3700,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "a8787a62-2c26-4728-be35-c4c23db29c83",
+      "amountCents": -3700,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": "78414a2c-e331-4ef2-80bc-ec776861b324"
+    },
+    {
+      "applicationId": "c9106c80-45ea-4211-9e90-abc0aeb3b5e2",
+      "amountCents": -100,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "26841244-2b5a-4da1-9d2d-946aa965345b",
+      "amountCents": 3800,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "816507e2-fd45-490f-a3e1-85f6c16b1e32",
+      "amountCents": -3800,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": "26841244-2b5a-4da1-9d2d-946aa965345b"
+    },
+    {
+      "applicationId": "5fe5361b-849f-4325-a3f6-10e084cbb90b",
+      "amountCents": -100,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "cea2a0e2-5b27-4ff7-b08e-40bd30985e7c",
+      "amountCents": 3900,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "f3b16638-11d1-4d80-8ac9-bbc61a884cad",
+      "amountCents": -1300,
+      "sourceChargeId": "ab25a3ba-d828-495e-bd65-af6cc6bfa254",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "e41da264-76e6-4ac8-a2e3-2fe1940f627b",
+      "amountCents": -100,
+      "sourceChargeId": "ab25a3ba-d828-495e-bd65-af6cc6bfa254",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "c6ccaa5a-0388-420b-b90a-4ff451286a22",
+      "amountCents": -100,
+      "sourceChargeId": "ab25a3ba-d828-495e-bd65-af6cc6bfa254",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "64406871-0445-474b-8308-da34e59ef8aa",
+      "amountCents": -100,
+      "sourceChargeId": "ab25a3ba-d828-495e-bd65-af6cc6bfa254",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "3b6faeff-96c9-4541-9bc3-22a95dd2a150",
+      "amountCents": -100,
+      "sourceChargeId": "ab25a3ba-d828-495e-bd65-af6cc6bfa254",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "4b5a89e8-ae95-4f9d-ad60-26c05ba45226",
+      "amountCents": -100,
+      "sourceChargeId": "ab25a3ba-d828-495e-bd65-af6cc6bfa254",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "e52a4ab3-ce1b-46ba-b998-a85c40a6f5f5",
+      "amountCents": -3900,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": "cea2a0e2-5b27-4ff7-b08e-40bd30985e7c"
+    },
+    {
+      "applicationId": "b4ef83a2-8a47-4f1a-886d-b9e064a224ed",
+      "amountCents": -100,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "0bfd061f-ad28-462e-9605-0cbaee53b18f",
+      "amountCents": 4000,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "cba40a23-1f0f-4507-9d8b-cdcfb5952988",
+      "amountCents": -4000,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": "0bfd061f-ad28-462e-9605-0cbaee53b18f"
+    },
+    {
+      "applicationId": "e9aa1c38-3771-4e69-9f24-598db9e00a56",
+      "amountCents": 4000,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": null
+    },
+    {
+      "applicationId": "b1d30507-6ce6-4d43-958d-460e18e47286",
+      "amountCents": -4000,
+      "sourceChargeId": "06afb999-4d3e-4e6c-ac7b-b60d250da094",
+      "chargeStatus": "posted",
+      "reversedByApplicationId": "e9aa1c38-3771-4e69-9f24-598db9e00a56"
+    }
+  ]
+}

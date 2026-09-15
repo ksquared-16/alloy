@@ -48,7 +48,20 @@ export const ORG = "00000000-0000-4000-8000-000000000001";
  * is the attribution lie D2 exists to prevent. `origin: "system"` is what makes the presenter render it
  * as a system actor rather than as a departed colleague.
  */
-export const FIXTURE_ACTOR = "fixture:access-personas";
+/*
+ * W-18. THIS USED TO BE THE STRING "fixture:access-personas", AND THE DELEGATION CEILING REFUSED IT.
+ *
+ * Rightly. A synthetic actor holds no roles, so it holds no authority, so it may delegate none —
+ * and provisioning a persona with `fin.read` is a delegation like any other. The fixture had been
+ * relying on the unbounded grant path this slice closed.
+ *
+ * The fix is not an exemption. `p_origin` is a PARAMETER, so "trust me, I am the system" is
+ * caller-selectable and would hand every caller the bypass. Instead the fixture now provisions as
+ * the seeded organization administrator, which is what it has always been pretending to be: a human
+ * with the authority to hand these capabilities out. D2 attributes the provisioning to that
+ * principal, which is truer than attributing it to a script name.
+ */
+export const FIXTURE_ACTOR = "00000000-0000-4000-8000-000000000002";
 export const FIXTURE_ORIGIN = "system";
 export const OTHER_ORG = "aaaa1111-0000-4000-8000-000000000001";
 export const PASSWORD = "alloy-local-cert";
@@ -122,7 +135,82 @@ export const CUSTOM = {
     procPortalOnly: "mcert_proc_portal_only",
     procDocsWriter: "mcert_proc_docs_writer",
     procFormsAuthor: "mcert_proc_forms_author",
+
+    /*
+     * ── SCHEDULES, JOBS, AND THE MONEY THEY POST ──
+     *
+     * Three capabilities that deliberately do not imply one another. The matrix exists for the
+     * DENIALS: a schedule manager must not be able to post a cash receipt, a job manager must not
+     * be able to raise a charge, and a financial poster must not be able to edit a schedule.
+     *
+     * `sjTitular` is the role-name control — labelled "Admin", holding nothing.
+     * `sjFinWrite` is the reason fin.post exists: it holds the `fin.write` that ops holds in every
+     * organization, and must still be refused all four money postings.
+     */
+    sjScheduler: "mcert_sj_scheduler",
+    sjJobber: "mcert_sj_jobber",
+    sjPoster: "mcert_sj_poster",
+    sjTitular: "mcert_sj_titular",
+    sjFinWrite: "mcert_sj_finwrite",
+    finAdjuster: "mcert_fin_adjuster",
+    ceilingActor: "mcert_ceiling_actor",
+    ceilingSupply: "mcert_ceiling_supply",
+    axUserAdmin: "mcert_ax_user_admin",
+    axRoleAdmin: "mcert_ax_role_admin",
+    axScopeAdmin: "mcert_ax_scope_admin",
+    axDeviceAdmin: "mcert_ax_device_admin",
+    axAuditor: "mcert_ax_auditor",
+
+    /*
+     * ── CONFIGURATION: THE SENSITIVITY SPLIT ──
+     *
+     * Six roles, one capability each, because the point of the split is what each one CANNOT do. A
+     * manage key must not delete, and it must not publish. `cfgTitular` is labelled "Admin" and
+     * holds nothing.
+     */
+    cfgOptionManager: "mcert_cfg_option_manager",
+    cfgOptionDeleter: "mcert_cfg_option_deleter",
+    cfgLayoutManager: "mcert_cfg_layout_manager",
+    cfgLayoutLifecycle: "mcert_cfg_layout_lifecycle",
+    cfgFieldManager: "mcert_cfg_field_manager",
+    cfgFieldDeleter: "mcert_cfg_field_deleter",
+    cfgTitular: "mcert_cfg_titular",
+    cfgSectionManager: "mcert_cfg_section_manager",
+
+    /*
+     * DEPARTMENT PRODUCT RETIREMENT + BUSINESS PROCESS AUTHORITY CONVERGENCE V1.
+     *
+     * The four roles that prove the split is real. `bpConfigurer` may design a process and may not
+     * switch the tenant onto it; `bpActivator` is the mirror; `bpComposed` holds both, which is how
+     * an organization reconstructs the old admin-only behaviour out of capabilities; and `bpTitular`
+     * is LABELLED Admin and holds nothing, which is the claim the whole program rests on.
+     */
+    bpConfigurer: "mcert_bp_configurer",
+    bpActivator: "mcert_bp_activator",
+    bpComposed: "mcert_bp_composed",
+    bpTitular: "mcert_bp_titular",
+    /*
+     * The scope persona. Holds BOTH business process keys and is restricted to ONE operational
+     * domain, which is the claim the Department convergence must not quietly break: the product
+     * language stopped saying Department, and the scope dimension still binds.
+     */
+    bpScoped: "mcert_bp_scoped",
+
+    /*
+     * OPERATIONAL INTELLIGENCE AUTHORITY CONVERGENCE V1.
+     *
+     * The pair that proves read and write are genuinely separable after the ops default correction:
+     * a reader who may open Operational Intelligence and change nothing, and a writer who may author
+     * it. `oiTitular` is labelled Admin and holds neither.
+     */
+    oiWriter: "mcert_oi_writer",
+    oiReader: "mcert_oi_reader",
+    oiTitular: "mcert_oi_titular",
 };
+
+/** The two fixture operational domains the scope proof needs. Exported so the spec names them. */
+export const BP_DEPT_ALLOWED = "c0000000-0000-4000-8000-0000000000a1";
+export const BP_DEPT_DENIED = "c0000000-0000-4000-8000-0000000000a2";
 
 export const P = {
     director:    { id: "c0000000-0000-4000-8000-00000000d001", email: "cert.director@northwind.invalid",   role: "school_director" },
@@ -150,6 +238,36 @@ export const P = {
     procPortalOnly: { id: "c0000000-0000-4000-8000-00000000d021", email: "cert.procportal@northwind.invalid",    role: CUSTOM.procPortalOnly },
     procDocsWriter: { id: "c0000000-0000-4000-8000-00000000d022", email: "cert.procdocswriter@northwind.invalid",role: CUSTOM.procDocsWriter },
     procFormsAuthor:{ id: "c0000000-0000-4000-8000-00000000d023", email: "cert.procformsauthor@northwind.invalid",role: CUSTOM.procFormsAuthor },
+
+    sjScheduler:    { id: "c0000000-0000-4000-8000-00000000d024", email: "cert.sjscheduler@northwind.invalid",   role: CUSTOM.sjScheduler },
+    sjJobber:       { id: "c0000000-0000-4000-8000-00000000d025", email: "cert.sjjobber@northwind.invalid",      role: CUSTOM.sjJobber },
+    sjPoster:       { id: "c0000000-0000-4000-8000-00000000d026", email: "cert.sjposter@northwind.invalid",      role: CUSTOM.sjPoster },
+    finAdjuster:    { id: "c0000000-0000-4000-8000-00000000d045", email: "cert.finadjust@northwind.invalid",     role: CUSTOM.finAdjuster },
+    ceilingActor:   { id: "c0000000-0000-4000-8000-00000000d046", email: "cert.ceiling@northwind.invalid",      role: CUSTOM.ceilingActor },
+    axUserAdmin:    { id: "c0000000-0000-4000-8000-00000000d047", email: "cert.axuser@northwind.invalid",      role: CUSTOM.axUserAdmin },
+    axRoleAdmin:    { id: "c0000000-0000-4000-8000-00000000d048", email: "cert.axrole@northwind.invalid",      role: CUSTOM.axRoleAdmin },
+    axScopeAdmin:   { id: "c0000000-0000-4000-8000-00000000d049", email: "cert.axscope@northwind.invalid",     role: CUSTOM.axScopeAdmin },
+    axDeviceAdmin:  { id: "c0000000-0000-4000-8000-00000000d050", email: "cert.axdevice@northwind.invalid",    role: CUSTOM.axDeviceAdmin },
+    axAuditor:      { id: "c0000000-0000-4000-8000-00000000d051", email: "cert.axaudit@northwind.invalid",     role: CUSTOM.axAuditor },
+    sjTitular:      { id: "c0000000-0000-4000-8000-00000000d027", email: "cert.sjtitular@northwind.invalid",     role: CUSTOM.sjTitular },
+    sjFinWrite:     { id: "c0000000-0000-4000-8000-00000000d028", email: "cert.sjfinwrite@northwind.invalid",    role: CUSTOM.sjFinWrite },
+
+    cfgOptionManager:   { id: "c0000000-0000-4000-8000-00000000d029", email: "cert.cfgoptmgr@northwind.invalid",   role: CUSTOM.cfgOptionManager },
+    cfgOptionDeleter:   { id: "c0000000-0000-4000-8000-00000000d030", email: "cert.cfgoptdel@northwind.invalid",   role: CUSTOM.cfgOptionDeleter },
+    cfgLayoutManager:   { id: "c0000000-0000-4000-8000-00000000d031", email: "cert.cfglaymgr@northwind.invalid",   role: CUSTOM.cfgLayoutManager },
+    cfgLayoutLifecycle: { id: "c0000000-0000-4000-8000-00000000d032", email: "cert.cfglaylife@northwind.invalid",  role: CUSTOM.cfgLayoutLifecycle },
+    cfgFieldManager:    { id: "c0000000-0000-4000-8000-00000000d033", email: "cert.cfgfldmgr@northwind.invalid",   role: CUSTOM.cfgFieldManager },
+    cfgFieldDeleter:    { id: "c0000000-0000-4000-8000-00000000d034", email: "cert.cfgflddel@northwind.invalid",   role: CUSTOM.cfgFieldDeleter },
+    cfgTitular:         { id: "c0000000-0000-4000-8000-00000000d035", email: "cert.cfgtitular@northwind.invalid",  role: CUSTOM.cfgTitular },
+    cfgSectionManager:  { id: "c0000000-0000-4000-8000-00000000d044", email: "cert.cfgsecmgr@northwind.invalid",    role: CUSTOM.cfgSectionManager },
+    bpConfigurer:       { id: "c0000000-0000-4000-8000-00000000d036", email: "cert.bpconfig@northwind.invalid",    role: CUSTOM.bpConfigurer },
+    bpActivator:        { id: "c0000000-0000-4000-8000-00000000d037", email: "cert.bpactivate@northwind.invalid",  role: CUSTOM.bpActivator },
+    bpComposed:         { id: "c0000000-0000-4000-8000-00000000d038", email: "cert.bpowner@northwind.invalid",     role: CUSTOM.bpComposed },
+    bpTitular:          { id: "c0000000-0000-4000-8000-00000000d039", email: "cert.bptitular@northwind.invalid",   role: CUSTOM.bpTitular },
+    bpScoped:           { id: "c0000000-0000-4000-8000-00000000d040", email: "cert.bpscoped@northwind.invalid",    role: CUSTOM.bpScoped },
+    oiWriter:           { id: "c0000000-0000-4000-8000-00000000d041", email: "cert.oiwriter@northwind.invalid",    role: CUSTOM.oiWriter },
+    oiReader:           { id: "c0000000-0000-4000-8000-00000000d042", email: "cert.oireader@northwind.invalid",    role: CUSTOM.oiReader },
+    oiTitular:          { id: "c0000000-0000-4000-8000-00000000d043", email: "cert.oititular@northwind.invalid",   role: CUSTOM.oiTitular },
 };
 
 async function principal(p) {
@@ -200,8 +318,76 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.procPortalOnly, role_label: "Processing bystander", description: "In the portal, holding no Processing capability.",        is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.procDocsWriter, role_label: "General doc writer",   description: "Holds documents.write, as ops does. Not a Processing authority.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.procFormsAuthor,role_label: "Packet author",        description: "Holds forms.author. Authors packets, works no case.",     is_system: false, is_active: true },
+
+        { org_id: ORG, role_key: CUSTOM.sjScheduler, role_label: "Schedule coordinator", description: "Manages schedules. Posts no money.",                is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.sjJobber,    role_label: "Job coordinator",      description: "Manages jobs. Raises no charges.",                  is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.sjPoster,    role_label: "Financial poster",     description: "Posts receipts, payouts, journals and charges.",    is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.finAdjuster, role_label: "Financial adjuster", description: "Holds fin.adjust and nothing else in Financials.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.ceilingActor, role_label: "Ceiling actor", description: "Limited access administrator for the W-18 proof.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.ceilingSupply, role_label: "Ceiling supply", description: "Supplies fin.write for the multi-role union proof.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.axUserAdmin, role_label: "User administrator", description: "Manages users and role assignment only.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.axRoleAdmin, role_label: "Role administrator", description: "Defines roles and their packages only.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.axScopeAdmin, role_label: "Scope administrator", description: "Changes where a user may operate only.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.axDeviceAdmin, role_label: "Device administrator", description: "Manages attendance kiosks only.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.axAuditor, role_label: "Access auditor", description: "Reads users and roles; mutates nothing.", is_system: false, is_active: true },
+        /* The label is the trap. It holds nothing. */
+        { org_id: ORG, role_key: CUSTOM.sjTitular,   role_label: "Admin",                description: "Named Admin, granted no schedule, job or posting authority.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.sjFinWrite,  role_label: "Financials manager",   description: "Holds fin.write, as ops does. Not a posting authority.",      is_system: false, is_active: true },
+
+        { org_id: ORG, role_key: CUSTOM.cfgOptionManager,   role_label: "Option set editor",   description: "Edits option sets. Deletes none.",                    is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.cfgOptionDeleter,   role_label: "Option set remover",  description: "Deletes option sets. Edits none.",                    is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.cfgLayoutManager,   role_label: "Layout editor",       description: "Edits a draft layout. Publishes nothing.",            is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.cfgLayoutLifecycle, role_label: "Layout publisher",    description: "Creates, duplicates, publishes, rolls back layouts.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.cfgFieldManager,    role_label: "Field editor",        description: "Configures fields. Deletes none.",                    is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.cfgFieldDeleter,    role_label: "Field remover",       description: "Deletes field definitions. Configures none.",         is_system: false, is_active: true },
+        /* The label is the trap. It holds nothing. */
+        { org_id: ORG, role_key: CUSTOM.cfgTitular,         role_label: "Admin",               description: "Named Admin, granted no configuration authority.",    is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.cfgSectionManager, role_label: "Section manager",   description: "Manages field sections and nothing else in Configuration.", is_system: false, is_active: true },
+
+        { org_id: ORG, role_key: CUSTOM.bpConfigurer, role_label: "Process designer",   description: "Designs business processes. Activates none of them.",      is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.bpActivator,  role_label: "Process activator",  description: "Switches a process on and off. Designs none of them.",      is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.bpComposed,   role_label: "Process owner",      description: "Designs and activates. The old admin behaviour, composed.", is_system: false, is_active: true },
+        /* The label is the trap. It holds nothing. */
+        { org_id: ORG, role_key: CUSTOM.bpTitular,    role_label: "Admin",              description: "Named Admin, granted no Business Process capability.",      is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.bpScoped,     role_label: "Domain process owner", description: "Designs and activates, inside one operational domain only.", is_system: false, is_active: true },
+
+        { org_id: ORG, role_key: CUSTOM.oiWriter,  role_label: "Intelligence author", description: "Authors Operational Intelligence - calculations, KPI targets, measurements.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.oiReader,  role_label: "Intelligence reader", description: "Reads Operational Intelligence. Changes none of it.",                    is_system: false, is_active: true },
+        /* The label is the trap. It holds nothing. */
+        { org_id: ORG, role_key: CUSTOM.oiTitular, role_label: "Admin",                description: "Named Admin, granted no Operational Intelligence authority.",           is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
+
+    /*
+     * THE PROVISIONING ACTOR MUST HOLD WHAT IT HANDS OUT.
+     *
+     * W-18 bounds every grant to the actor's own effective authority, and this fixture provisions
+     * through the same RPC an operator uses. It acts as the seeded organization administrator, so
+     * that role has to actually carry the capabilities the personas below receive — and in this
+     * tenant it had drifted: admin was missing `reports.write` (nine of ten orgs still had it),
+     * left over from earlier fixture history, so provisioning the OI persona was refused.
+     *
+     * Restating the admin package from the ACTIVE catalog is the truthful repair rather than
+     * patching whichever key is noticed next: a full administrator holds the catalog, and a fixture
+     * that quietly provisions more than its actor holds is relying on the hole this program closed.
+     * Deliberately not routed through the grants RPC — that call would be bounded by the very
+     * authority it is repairing.
+     */
+    const { data: activeKeys, error: catalogErr } = await sb
+        .from("permission_definitions")
+        .select("key")
+        .eq("is_active", true);
+    if (catalogErr) throw new Error(`catalog read for admin package: ${catalogErr.message}`);
+    const { error: adminPkgErr } = await sb.from("role_permission_grants").upsert(
+        (activeKeys ?? []).map((row) => ({
+            org_id: ORG,
+            role_key: "admin",
+            permission_key: row.key,
+            allowed: true,
+        })),
+        { onConflict: "org_id,role_key,permission_key" },
+    );
+    if (adminPkgErr) throw new Error(`admin package restore: ${adminPkgErr.message}`);
 
     for (const [rk, keys] of [
         [CUSTOM.viewer, ["fin.read"]],
@@ -225,6 +411,52 @@ export async function setup() {
         [CUSTOM.procPortalOnly, ["portal.access"]],
         [CUSTOM.procDocsWriter, ["portal.access", "documents.write", "documents.read"]],
         [CUSTOM.procFormsAuthor, ["portal.access", "forms.author"]],
+
+        [CUSTOM.sjScheduler, ["portal.access", "scheduling.write"]],
+        [CUSTOM.sjJobber, ["portal.access", "ops.jobs.write"]],
+        [CUSTOM.sjPoster, ["portal.access", "fin.post"]],
+        /* fin.adjust alone — the reduction family, deliberately without fin.write. */
+        [CUSTOM.finAdjuster, ["portal.access", "fin.adjust"]],
+        /*
+         * W-18. A LIMITED access administrator: it may edit roles and holds nothing else worth
+         * delegating. fin.post is deliberately absent — that is the capability the ceiling must
+         * refuse it, and the one the pre-fix exploit granted itself. It holds admin.roles.write
+         * rather than the retired umbrella: after the Access Administration Split that is the key
+         * that authorizes editing a role's package, and therefore the key W-18 bounds.
+         */
+        [CUSTOM.ceilingActor, ["portal.access", "admin.roles.read", "admin.roles.write"]],
+        /* The second role in the multi-role union proof. Supplies fin.write and nothing else. */
+        [CUSTOM.ceilingSupply, ["fin.write"]],
+        /*
+         * The four Access-administration authorities, each held ALONE. The point of the matrix is
+         * what each one CANNOT do: a user administrator who can also rewrite role packages, or a
+         * device administrator who can create users, would mean the split exists only on paper.
+         */
+        [CUSTOM.axUserAdmin, ["portal.access", "admin.users.read", "admin.users.write"]],
+        [CUSTOM.axRoleAdmin, ["portal.access", "admin.roles.read", "admin.roles.write"]],
+        [CUSTOM.axScopeAdmin, ["portal.access", "admin.users.read", "admin.access_scope.write"]],
+        [CUSTOM.axDeviceAdmin, ["portal.access", "attendance.devices.manage"]],
+        [CUSTOM.axAuditor, ["portal.access", "admin.users.read", "admin.roles.read"]],
+        [CUSTOM.sjTitular, ["portal.access"]],
+        [CUSTOM.sjFinWrite, ["portal.access", "fin.write", "fin.read"]],
+
+        [CUSTOM.cfgOptionManager, ["portal.access", "option_sets.manage"]],
+        [CUSTOM.cfgOptionDeleter, ["portal.access", "option_sets.delete"]],
+        [CUSTOM.cfgLayoutManager, ["portal.access", "layouts.manage"]],
+        [CUSTOM.cfgLayoutLifecycle, ["portal.access", "layouts.lifecycle"]],
+        [CUSTOM.cfgFieldManager, ["portal.access", "fields.manage"]],
+        [CUSTOM.cfgFieldDeleter, ["portal.access", "fields.delete"]],
+        [CUSTOM.cfgTitular, ["portal.access"]],
+        /* sections.manage has always been catalogued and granted; this is the first persona to hold it alone. */
+        [CUSTOM.cfgSectionManager, ["portal.access", "sections.manage"]],
+        [CUSTOM.bpConfigurer, ["portal.access", "business_process.configure"]],
+        [CUSTOM.bpActivator, ["portal.access", "business_process.activate"]],
+        [CUSTOM.bpComposed, ["portal.access", "business_process.configure", "business_process.activate"]],
+        [CUSTOM.bpTitular, ["portal.access"]],
+        [CUSTOM.bpScoped, ["portal.access", "business_process.configure", "business_process.activate"]],
+        [CUSTOM.oiWriter, ["portal.access", "reports.read", "reports.write"]],
+        [CUSTOM.oiReader, ["portal.access", "reports.read"]],
+        [CUSTOM.oiTitular, ["portal.access"]],
     ]) {
         const { error } = await sb.rpc("replace_role_permission_grants", {
             p_org_id: ORG,
@@ -238,7 +470,61 @@ export async function setup() {
         if (error) throw new Error(`${rk}: ${error.message}`);
     }
 
+    /*
+     * THE SEEDED ops ROLE MUST REFLECT THE CORRECTED DEFAULT PACKAGE.
+     *
+     * `20260915120000` removes `reports.write` from the ops default, but it preserves any grant an
+     * organization touched deliberately — and this tenant carries three mutation events naming that
+     * key, every one generated by certification fixtures calling
+     * `replace_role_permission_grants`. The migration therefore classified it B_DELIBERATE and
+     * correctly left it alone. That is the predicate working, not failing.
+     *
+     * It does mean the cert tenant's ops role is not representative of a default org, which is
+     * exactly what the ops compatibility phase needs to measure. So the fixture states the default
+     * it intends to certify rather than inheriting fixture history: ops keeps `reports.read` and
+     * does not hold `reports.write`.
+     *
+     * NOTE FOR WHOEVER RUNS THIS NEXT: this deletes the row directly, which does NOT invalidate the
+     * server's access-bundle cache the way a change through /organization/access would. A cert run
+     * immediately after a fresh setup can therefore still see the old permission set and report ops
+     * as able to author. Restart the cert server after setup, or make the change through the
+     * canonical route. The symptom looks exactly like a failed authority migration and is not one.
+     */
+    const { error: opsErr } = await sb.from("role_permission_grants")
+        .delete()
+        .eq("org_id", ORG)
+        .eq("role_key", "ops")
+        .eq("permission_key", "reports.write");
+    if (opsErr) throw new Error(`ops reports.write normalization: ${opsErr.message}`);
+
     for (const p of Object.values(P)) await principal(p);
+
+    /*
+     * TWO OPERATIONAL DOMAINS, so "restricted" can mean something.
+     *
+     * The certification tenant ships one department. A scope proof needs a domain the principal MAY
+     * reach and one it may not, so the fixture provisions both and grants access to exactly one.
+     * They are plain grouping rows — no lifecycle marker — because the point is the scope dimension,
+     * not the process they would carry.
+     */
+    const { error: deptErr } = await sb.from("departments").upsert(
+        [
+            { id: BP_DEPT_ALLOWED, org_id: ORG, key: "mcert_bp_allowed", name: "Cert domain — allowed", sort_order: 900, is_active: true, metadata: { scaffold_note: "access cert fixture" } },
+            { id: BP_DEPT_DENIED, org_id: ORG, key: "mcert_bp_denied", name: "Cert domain — denied", sort_order: 901, is_active: true, metadata: { scaffold_note: "access cert fixture" } },
+        ],
+        { onConflict: "id" },
+    );
+    if (deptErr) throw new Error(`departments: ${deptErr.message}`);
+
+    const { error: apErr } = await sb.from("user_access_profiles").insert({
+        user_id: P.bpScoped.id, org_id: ORG, department_scope: "restricted", site_scope: "all", attendance_capture_scope: "site",
+    });
+    if (apErr) throw new Error(`user_access_profiles: ${apErr.message}`);
+
+    const { error: udaErr } = await sb.from("user_department_access").insert({
+        user_id: P.bpScoped.id, org_id: ORG, department_id: BP_DEPT_ALLOWED,
+    });
+    if (udaErr) throw new Error(`user_department_access: ${udaErr.message}`);
     const { error: urErr } = await sb.from("user_roles").insert(
         Object.values(P).map((p) => ({ user_id: p.id, org_id: p.org ?? ORG, role: p.role })),
     );
@@ -248,6 +534,7 @@ export async function setup() {
 
 export async function teardown() {
     const ids = Object.values(P).map((p) => p.id);
+    await sb.from("user_department_access").delete().in("user_id", ids);
     await sb.from("user_site_access").delete().in("user_id", ids);
     await sb.from("user_access_profiles").delete().in("user_id", ids);
     await sb.from("user_roles").delete().in("user_id", ids);
@@ -255,6 +542,7 @@ export async function teardown() {
         await sb.from("role_permission_grants").delete().eq("org_id", ORG).eq("role_key", rk);
         await sb.from("role_definitions").delete().eq("org_id", ORG).eq("role_key", rk);
     }
+    await sb.from("departments").delete().in("id", [BP_DEPT_ALLOWED, BP_DEPT_DENIED]);
     for (const id of ids) await sb.auth.admin.deleteUser(id).catch(() => undefined);
 }
 

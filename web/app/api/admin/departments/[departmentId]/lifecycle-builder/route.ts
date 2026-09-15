@@ -71,6 +71,7 @@ import { evaluateStageGrainChange } from "@/lib/lifecycle/stageGrainChangePrefli
 import { resolveStageGrain } from "@/lib/lifecycle/stageGrainResolution";
 import { ensureBuilderCommandSetsOnSave } from "@/lib/lifecycle/ensureProcessCommandSetV1OnSave";
 import { validateProcessCommandSetsForPublish } from "@/lib/lifecycle/validateProcessCommandSetsForPublish";
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 function processIdInConfig(config: LifecycleBuilderV1, processId: string): boolean {
     const pid = processId.trim();
@@ -189,9 +190,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
 export async function PATCH(request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (denied) return denied;
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);

@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { assignMemberRole } from "@/lib/admin/memberRoleAssignmentWrite";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { ADMIN_USERS_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 /**
  * POST: add ONE role to this membership, leaving the others alone.
@@ -17,7 +17,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
  * erase each other.
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ userId: string }> }) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_USERS_WRITE);
     if (!auth.ok) return auth.response;
     const { access } = auth;
 
@@ -60,7 +60,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ us
         audit: accessMutationAudit(access),
     });
     if (!result.ok) {
-        return NextResponse.json({ error: result.error }, { status: result.kind === "unknown_role" ? 400 : 500 });
+        // A ceiling refusal is about WHO is asking, so it answers 403; an unknown role is about the
+        // request, so it answers 400. Neither is a 500, which would tell the operator the server broke.
+        const status = result.kind === "unknown_role" ? 400 : result.kind === "forbidden" ? 403 : 500;
+        return NextResponse.json({ error: result.error }, { status });
     }
 
     /*

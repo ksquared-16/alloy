@@ -27,15 +27,15 @@ const orgId = "22222222-2222-2222-2222-222222222222";
 const CALLER = "11111111-1111-1111-1111-111111111111";
 const OTHER = "33333333-3333-3333-3333-333333333333";
 
-const { mockRequireUsersRolesManageAuth } = vi.hoisted(() => ({
-    mockRequireUsersRolesManageAuth: vi.fn(),
+const { mockRequireAccessAdministration } = vi.hoisted(() => ({
+    mockRequireAccessAdministration: vi.fn(),
 }));
 
 vi.mock("@/lib/admin/canManageUsersAndRoles", async () => {
     const actual = await vi.importActual<typeof import("@/lib/admin/canManageUsersAndRoles")>(
         "@/lib/admin/canManageUsersAndRoles"
     );
-    return { ...actual, requireUsersRolesManageAuth: mockRequireUsersRolesManageAuth };
+    return { ...actual, requireAccessAdministration: mockRequireAccessAdministration };
 });
 
 vi.mock("@/lib/supabaseAdmin", () => ({ createAdminClient: vi.fn(() => ({})) }));
@@ -97,7 +97,7 @@ function pathsFor(targetUserId: string): { name: string; call: () => Promise<Res
 
 beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireUsersRolesManageAuth.mockResolvedValue({
+    mockRequireAccessAdministration.mockResolvedValue({
         ok: true,
         access: {
             ok: true,

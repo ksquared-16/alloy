@@ -2,8 +2,8 @@
   "reviewed": "2026-09-10",
   "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
   "ratchet": {
-    "max_pending": 631,
-    "$comment": "Lowered 693 -> 679 by the Access & Identity V2 Financials slice: twelve financial record-data handlers converted to fin.read and two GL-account mutations to fin.write, plus two entries overturned from a reasoned `none` (see their `supersedes`). Lowered 679 -> 656 by the Forms authority cleanup: 23 handlers that were already enforcing authorization moved from pending to declared. The enforcement did not become stricter - it stopped being invisible to this table. Lowered 656 -> 655 by Attendance Productization V1 Thread 8: declaring the new pickup-authority handler against `attendance.read` made the burndown able to see that `app/api/admin/childcare-attendance/route.ts` GET already ran the same `assertAttendanceReadAllowed` gate while still marked pending, so it was drained rather than left claiming less than it enforces. Lowered again to 631 by the POS + Processing authority cleanup, which drained 24 net from the same 656 baseline: 25 handlers declared against forms.author and the four new processing.* keys, less one returned to pending - `processing/cases/[caseId]/identity/review` GET, which flows through the shared operator context but never required the old role gate, so declaring a capability there would have claimed an enforcement that does not exist and adding one would have tightened an open read. Attendance's reduction and this one are independent and both count: 656 - 1 - 24 = 631. The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack."
+    "max_pending": 493,
+    "$comment": "Lowered 693 -> 679 by the Access & Identity V2 Financials slice: twelve financial record-data handlers converted to fin.read and two GL-account mutations to fin.write, plus two entries overturned from a reasoned `none` (see their `supersedes`). Lowered 679 -> 656 by the Forms authority cleanup: 23 handlers that were already enforcing authorization moved from pending to declared. The enforcement did not become stricter - it stopped being invisible to this table. Lowered 656 -> 655 by Attendance Productization V1 Thread 8: declaring the new pickup-authority handler against `attendance.read` made the burndown able to see that `app/api/admin/childcare-attendance/route.ts` GET already ran the same `assertAttendanceReadAllowed` gate while still marked pending, so it was drained rather than left claiming less than it enforces. Lowered again to 631 by the POS + Processing authority cleanup, which drained 24 net from the same 656 baseline: 25 handlers declared against forms.author and the four new processing.* keys, less one returned to pending - `processing/cases/[caseId]/identity/review` GET, which flows through the shared operator context but never required the old role gate, so declaring a capability there would have claimed an enforcement that does not exist and adding one would have tightened an open read. Attendance's reduction and this one are independent and both count: 656 - 1 - 24 = 631. The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack. Lowered 602 -> 593 by Department Product Retirement + Business Process Authority Convergence V1: eight handlers moved pending -> declared under business_process.configure / .activate, and the generic department DELETE left the table entirely because the route was retired — it had no mounted caller and could not have worked on a real operational domain, whose department_id is NOT NULL on four live tables. Lowered 593 -> 583 by Operational Intelligence Authority Convergence V1: ten OI mutation handlers moved pending -> declared under reports.write, activating a key the catalog has carried since the permission grid and that was enforced nowhere. No folder capability was created; the ops default package was corrected in the same slice so activation could not widen ops. Lowered 583 -> 580 by Discounts Authority Disposition V1: the three Discount Program mutations moved pending -> declared under ops.jobs.write, the Jobs owner. The Jobs/Booking vertical remains supported, so the model was rehomed rather than retired; its legacy-only authoring surface is recorded as JOBS_DISCOUNT_PROGRAM_PRODUCTIZATION_DEBT. Lowered 580 -> 576 by Document Field Legacy Retirement V1: 4 handlers across 2 route files left the table with the routes. They were not rehomed and not marked pending - the subsystem is retired. Deployed census found zero definitions and zero captured values ever, against 180 documents and 424 canonical field definitions, and no runtime read anywhere. Lowered 576 -> 565 by Business Process Family Convergence V2: eleven handlers across enrollment-process (6) and lifecycle-catalog (5) moved pending -> declared onto the EXISTING business_process.configure / .activate keys. No new capability key and no grant change - the V1 default package already carried both, admin-only, with ops withheld. The split is the point: five definition-editing handlers took configure and six operational handlers took activate, including stage-work-unit DELETE, which sits in the same route file as two configure handlers. Lowered 565 -> 547 by Configuration Presentation Convergence V1: eighteen handlers across workspace-kpi-placements, surfaces, queue-row-layout, record-drawer-layouts, field-sections, config and business-process-layout-assignments moved pending -> declared onto the EXISTING enforced keys layouts.manage / sections.manage / fields.manage. No new key and no grant change. This is AUTHORITY PATH CONVERGENCE, not activation: all three keys were already enforced by the promoted Configuration Authority model, and the canonical operation contract in configurationProposalPermissions.ts already authorised these same material effects under these same keys. Five of the twenty-three surveyed sites were deliberately NOT migrated and are reported to the Director: the three agent/* apply routes, whose intended owner `agent.suggestion.apply` is recorded as a future key in aiEnrichmentPermissions.ts, and the two entity-labels handlers, whose org-wide vocabulary has no truthful owner among the established keys. Lowered 547 -> 502 by Financial Configuration Authority V1: 45 Financials mutations that were ORG-CONTEXT-ONLY - reachable by any portal-admitted principal - moved pending -> declared onto the EXISTING fin.write (40), fin.read (3, non-persisting simulations) and fin.post (2, payment truth) keys. This is security hardening rather than convergence: nobody is losing authority they were granted, only reach they were never given. The same slice repaired a cross-tenant escape in pricing/matrix/[id] PATCH, which mutated by id alone on a service-role client. Lowered 502 -> 499 by the same slice after a closer read: three pricing [id] PATCH handlers were ORG-CONTEXT-ONLY, not role-gated. Each sits in a file whose DELETE does carry a role gate, and a file-level authority reading had attributed that gate to the whole file. Lowered 499 -> 493: six more commercial-catalogue mutations (addons, service offerings, service plan templates) that a narrower Financials path regex had missed. Access Administration Split V1 rehomed 20 handlers off the settings.users_roles umbrella onto four authorities: admin.users.write (user lifecycle + role assignment), admin.roles.write (role definition + delegated grants, bounded by W-18), admin.access_scope.write (where a person may operate) and attendance.devices.manage. Reads went to admin.users.read / admin.roles.read. The ratchet ceiling is unchanged: these were already declared, so this is a change of owner rather than a reduction in backlog."
   },
   "inherited": {
     "$comment": "Handlers that entered web/app/api from OTHER programs while this branch was frozen, and are therefore not part of the Access backlog `ratchet.max_pending` bounds. The effective assertion is `pending - inherited <= max_pending`, so the program-owned backlog stays ratcheted at its committed ceiling and the ceiling is NOT raised. Every entry must still exist, still be exported, and still be `pending`: a deleted route, a removed method, or a handler that has since been classified `declared` or `none` FAILS until it is removed from this list. The list may only shrink. Nothing here asserts anything about a handler's authorization - these are W-15 backlog items awaiting OD-7 exactly like every other `pending` entry, and none of them is exempt from it. Shape follows the sibling gate scripts/checkServiceClientPrincipal.mjs, whose `baseline` list is the same idea for the same backlog. 2026-08-19, OD-2 reconciliation: merging current origin/staging brought five handlers this table had never seen. Three are participant token routes and took the settled `none` classification of their fourteen siblings rather than being seeded pending. The two on app/api/admin/communications/ingress-routes are Communications' and are enumerated here — gated by requireAdminOrgContextLight, an admission helper, consulting no catalog capability, exactly like the seventeen before them. The ceiling was NOT raised to absorb them. 2026-08-20, post-merge staging repair: the Communications lane merged app/api/communications/unsubscribe between this census's last run and the PR #475 merge, so staging's build failed on an undeclared route. Enumerated here rather than classified `none`: it is gated by an HMAC-signed recipient token, which is plausibly the same 'the credential is in the request' doctrine as the public-form family, but no sibling carries a settled review for signed unsubscribe tokens and this census does not assert another program's authorization model on inference. The ceiling was NOT raised.",
@@ -211,9 +211,9 @@
     "app/api/admin/access/history/route.ts": {
       "GET": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth",
-        "reason": "D2 Access Change Audit. Reading who changed access requires the authority to change it: this is the same gate every Access mutation route and every Access chapter already uses, so no separate audit-read capability was invented. Org is taken from the authenticated context and never from the query, so a forged subject id narrows the result rather than reaching another tenant."
+        "capability": "admin.users.read",
+        "helper": "requireAccessAdministration",
+        "reason": "The access-change audit feed. It used to require the authority to CHANGE access, on the reasoning that reading who changed it should need the power to change it. The split makes that unsatisfiable — the feed spans users, roles and scope, and no single write key covers all three — so it moves to the user READ authority, which preserves exactly today's audience (admin and ops) and lets a read-only auditor see it."
       }
     },
     "app/api/admin/action-definitions/[id]/route.ts": {
@@ -284,7 +284,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION in the commercial catalogue. Was ungated; the DELETE beside it carries a role gate, which is a separate authority question this slice does not answer."
       }
     },
     "app/api/admin/addons/route.ts": {
@@ -292,7 +295,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION in the commercial catalogue. Was ungated; the DELETE beside it carries a role gate, which is a separate authority question this slice does not answer."
       }
     },
     "app/api/admin/agent/v0/queue-definition/route.ts": {
@@ -538,25 +544,29 @@
     "app/api/admin/attendance/kiosk-devices/[deviceId]/route.ts": {
       "DELETE": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
+        "capability": "attendance.devices.manage",
+        "helper": "requireAccessAdministration",
+        "reason": "Revokes a device."
       },
       "POST": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
+        "capability": "attendance.devices.manage",
+        "helper": "requireAccessAdministration",
+        "reason": "Updates a registered device."
       }
     },
     "app/api/admin/attendance/kiosk-devices/route.ts": {
       "GET": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
+        "capability": "attendance.devices.manage",
+        "helper": "requireAccessAdministration",
+        "reason": "Device inventory. No separate device READ key exists and none is minted here; the registered secret is never recoverable through this route."
       },
       "POST": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
+        "capability": "attendance.devices.manage",
+        "helper": "requireAccessAdministration",
+        "reason": "Registers a kiosk. A kiosk authors attendance facts, so this is Attendance authority; it lived under Access only because the screen did."
       }
     },
     "app/api/admin/business-process-layout-assignments/route.ts": {
@@ -564,15 +574,24 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Seeds the Enrollment process's layout assignments. Bulk provisioning of the same layout-binding rows as the PUT."
       },
       "PUT": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Binds an EXISTING entity layout to a business process. The mutated row is a layout assignment; no process definition - stage, action or work unit - is touched, which is why this is layouts.manage and not business_process.configure."
       }
     },
     "app/api/admin/business-process/configuration/publish/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Publishing a business process configuration, in the canonical business-process namespace. The convergence census found it carrying the same role-title gate as the lifecycle-* family it publishes for, so it converges with them rather than being left as the one place the old question survived."
       }
     },
     "app/api/admin/business-process/configuration/route.ts": {
@@ -667,10 +686,16 @@
     },
     "app/api/admin/commercial/addons/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/addons/route.ts": {
@@ -678,7 +703,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/billing-cadences/route.ts": {
@@ -688,10 +716,16 @@
     },
     "app/api/admin/commercial/categories/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/categories/route.ts": {
@@ -699,15 +733,24 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/deposits/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/deposits/route.ts": {
@@ -715,20 +758,32 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/execution/preview/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "requireFinancialsCapability",
+        "reason": "A POST by HTTP method and a READ by consequence: it computes a prospective result and persists nothing, so the truthful owner is the Financials read key. Gating it on write would deny a legitimate viewer a calculation; leaving it open would expose an organization's pricing to anyone with a login."
       }
     },
     "app/api/admin/commercial/fees/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/fees/route.ts": {
@@ -736,15 +791,24 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/policies/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/policies/route.ts": {
@@ -752,15 +816,24 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/products/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/products/route.ts": {
@@ -768,15 +841,24 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/revenue-categories/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/revenue-categories/route.ts": {
@@ -784,15 +866,24 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/tuition-rates/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/commercial/tuition-rates/route.ts": {
@@ -800,7 +891,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/communication-scheduled-sends/[id]/route.ts": {
@@ -1052,7 +1146,10 @@
     },
     "app/api/admin/config/field-definition-visibility/route.ts": {
       "PUT": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fields.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Merges a visibility patch onto `field_definitions`. It shares its implementation with the agent v2 apply path, and the canonical contract puts field-semantic edits on fields.manage."
       }
     },
     "app/api/admin/config/layout-integrity/route.ts": {
@@ -1062,7 +1159,10 @@
     },
     "app/api/admin/config/record-overview-layout/route.ts": {
       "PUT": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Writes `record_overview_layouts.config` for the org."
       }
     },
     "app/api/admin/configuration/programs/route.ts": {
@@ -1226,18 +1326,27 @@
         "status": "pending"
       },
       "PUT": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Which actions a process offers at which stage, edited from LifecycleActionsMatrix and BusinessProcessActionsQueueWorkspace — the latter is literally a Business Process surface."
       }
     },
     "app/api/admin/departments/[departmentId]/lifecycle-activation/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.activate",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Tears an activated lifecycle down through deleteActivationLifecycleForDepartment. This is the sanctioned way a business process is removed, and it is why the generic department DELETE was retired rather than capability-enabled: process teardown already had a correct owner."
       },
       "GET": {
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.activate",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Activation changes what the tenant is RUNNING, not what a process would do, so it is deliberately not implied by configure — the same reason layouts.lifecycle sits outside layouts.manage. A role may be trusted to design a process without being trusted to switch the tenant onto it."
       }
     },
     "app/api/admin/departments/[departmentId]/lifecycle-activation/validate/route.ts": {
@@ -1250,7 +1359,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Thirteen mounted callers, every one a Lifecycle or Business Process surface — the hub, the activation board, the create form, the stage editors, the track adoption card and the BOS command key resolver. This is the business process builder; the /departments prefix is the legacy namespace doctrine already accepted keeping (business-process-system.md: 'Builder API paths remain lifecycle-* internally — Accepted, rename deferred')."
       }
     },
     "app/api/admin/departments/[departmentId]/lifecycle-queue-filter-audit/route.ts": {
@@ -1263,7 +1375,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Stage field and information requirements, edited from LifecycleStageRequirementsEditor and LifecycleStageFieldRequirementsEditor. Designing what a stage demands is business process configuration."
       }
     },
     "app/api/admin/departments/[departmentId]/operational-bootstrap/route.ts": {
@@ -1292,14 +1407,14 @@
       }
     },
     "app/api/admin/departments/[departmentId]/route.ts": {
-      "DELETE": {
-        "status": "pending"
-      },
       "GET": {
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Authority follows the semantic owner of the write, not the shared JSON column. The handler splits on body shape: the process-owned columns (key, name, description, sort_order, is_active) require business_process.configure — their one mounted caller is the Lifecycle rename keeping departments.name in step with the process name. A body carrying `metadata` additionally keeps the admin role check, because its only live caller is the org-wide attention/SLA page, whose rules drive resolveOpportunityAttention and are catalogued under crm_attention. That is not a business process write; settings.manage would widen it to ops, and folding it into configure would turn a process-design key into a generic JSON metadata-write key. Recorded as ATTENTION_SLA_METADATA_AUTHORITY_DEBT."
       }
     },
     "app/api/admin/departments/[departmentId]/work-unit-queue-summaries/route.ts": {
@@ -1312,7 +1427,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Business Process provisioning, not department creation. The only mounted caller is clientCreateLifecycleViaBuilder, which POSTs here to mint the runtime identity a NEW business process needs and then immediately PATCHes lifecycle-builder with create_process; the operator types a process name and never sees a department. The department convergence census found no other mounted caller. Authority is the process family's, because a departments.* key would give a retired product abstraction capability vocabulary and make it look current again."
       }
     },
     "app/api/admin/dev/create-org/route.ts": {
@@ -1344,10 +1462,16 @@
     },
     "app/api/admin/discounts/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Delete a Discount Program. Kept as a capability target rather than retired, because the model is canonical for a supported vertical and the deployed census found zero applications - nothing historical is at risk today. Its mutability is recorded as JOBS_DISCOUNT_MUTABILITY_DEBT for Jobs product hardening, not resolved here."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Edit a Discount Program. Same owner and reasoning as the create."
       }
     },
     "app/api/admin/discounts/route.ts": {
@@ -1355,23 +1479,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
-      }
-    },
-    "app/api/admin/document-field-definitions/[id]/route.ts": {
-      "DELETE": {
-        "status": "pending"
-      },
-      "PATCH": {
-        "status": "pending"
-      }
-    },
-    "app/api/admin/document-field-definitions/route.ts": {
-      "GET": {
-        "status": "pending"
-      },
-      "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Create a Discount Program - a reusable benefit/qualifier/commitment definition consumed by job and quote pricing, booking validation and campaigns. Jobs/Booking is a supported vertical, so the authority is the Jobs owner's. Deliberately NOT fin.adjust, whose own catalogue text scopes it to 'what a family owes': the Financials program explicitly recorded discount_programs as a different vertical when it created financial_reduction_applications. No discounts.* family - a folder is not a product authority."
       }
     },
     "app/api/admin/documents/[id]/route.ts": {
@@ -1424,26 +1535,41 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Adding a lifecycle stage action - a base action, its label and its placements - is authoring the shape of the process, so it converges on the same configure key as the business-process configuration surface it edits alongside."
       }
     },
     "app/api/admin/enrollment-process/stage-runtime-config/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Canonical stage setup: statuses and the optional work-unit queue written in one transaction. This is the process definition itself. The `requireAdminOrOps()` call above it is not a second role gate - it resolves org context and no longer checks any role."
       }
     },
     "app/api/admin/enrollment-process/stage-work-unit/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.activate",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "DELIBERATELY SPLIT FROM POST/PATCH ON THIS SAME ROUTE FILE. It deactivates a running builder-owned enrollment pipeline work unit; the consequence is operational deactivation, not editing the process definition. Keeping the method triple together for route symmetry would have granted a configurer the power to take running work offline."
       },
       "GET": {
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Renaming a work unit and syncing stage statuses to queue lanes edits the process definition, so it pairs with POST on configure rather than with DELETE."
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Creating a per-stage work unit defines where stage work will live. It is process definition, which is why it takes configure while the DELETE on the same route file takes activate - authority follows the business consequence, not the pathname."
       }
     },
     "app/api/admin/enrollment-process/status-stages/route.ts": {
@@ -1451,7 +1577,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.configure",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Replacing the statuses assigned to a stage, or resetting stage metadata overrides, is definition editing in the same family as stage-runtime-config."
       }
     },
     "app/api/admin/enrollment-status-transition/context/route.ts": {
@@ -1487,28 +1616,41 @@
     },
     "app/api/admin/entity-layouts/[id]/duplicate/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.lifecycle",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Duplicating a layout has NO equivalent Config Layout Assist operation — its thirteen operation kinds contain no delete and no layout version lifecycle — so folding it into the manage key would have handed ops authority it has never held. Lifecycle, not placement."
       }
     },
     "app/api/admin/entity-layouts/[id]/publish/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.lifecycle",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Publishing a layout has NO equivalent Config Layout Assist operation — its thirteen operation kinds contain no delete and no layout version lifecycle — so folding it into the manage key would have handed ops authority it has never held. Folding this into layouts.manage would let an operator publish by being granted edit."
       }
     },
     "app/api/admin/entity-layouts/[id]/rollback/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.lifecycle",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Rolling back a layout has NO equivalent Config Layout Assist operation — its thirteen operation kinds contain no delete and no layout version lifecycle — so folding it into the manage key would have handed ops authority it has never held. Lifecycle, not placement."
       }
     },
     "app/api/admin/entity-layouts/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "pending",
+        "note": "MODEL_CONTRACT_DEFECT, not an authorization gap. This file's header states published rows are immutable and that a new version should be published instead, yet the handler deletes published rows and busts the `fps:` config read when it does. Giving a contradiction a capability would make it look sanctioned, so it keeps its role gate and is no more reachable than before. Owner: configuration/platform model. See docs/platform/planning/access-identity-v2/entity-layout-delete-model-contract.md"
       },
       "GET": {
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "AUTHORITY_PATH_CONVERGENCE. The direct route asked what the caller is CALLED while Config Layout Assist asked what they can DO, over the same configuration — an ops user could change this through the assisted path and was refused here. Parity proven against the assisted operation kinds, so converging is compatibility alignment, not an expansion."
       }
     },
     "app/api/admin/entity-layouts/effective/route.ts": {
@@ -1531,7 +1673,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.lifecycle",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Creating a layout has NO equivalent Config Layout Assist operation — its thirteen operation kinds contain no delete and no layout version lifecycle — so folding it into the manage key would have handed ops authority it has never held. A version state machine is not editing inside a layout."
       }
     },
     "app/api/admin/entity/[type]/[id]/route.ts": {
@@ -1546,18 +1691,27 @@
     },
     "app/api/admin/field-definitions/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fields.delete",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Deleting a field definition has NO equivalent Config Layout Assist operation — its thirteen operation kinds contain no delete and no layout version lifecycle — so folding it into the manage key would have handed ops authority it has never held. Its own key, never implied by manage."
       },
       "GET": {
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fields.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "AUTHORITY_PATH_CONVERGENCE. The direct route asked what the caller is CALLED while Config Layout Assist asked what they can DO, over the same configuration — an ops user could change this through the assisted path and was refused here. Parity proven against the assisted operation kinds, so converging is compatibility alignment, not an expansion. ALLOWED_PATCH_KEYS excludes field_type, so no schema authority hides here."
       }
     },
     "app/api/admin/field-definitions/batch-placement/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fields.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "AUTHORITY_PATH_CONVERGENCE. The direct route asked what the caller is CALLED while Config Layout Assist asked what they can DO, over the same configuration — an ops user could change this through the assisted path and was refused here. Parity proven against the assisted operation kinds, so converging is compatibility alignment, not an expansion."
       }
     },
     "app/api/admin/field-definitions/ensure-platform-field/route.ts": {
@@ -1565,7 +1719,8 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "pending",
+        "note": "PLATFORM_AUTHORITY_DELEGABILITY_UNRESOLVED. Installs is_system=true rows the organization can then never delete (DELETE refuses them) nor re-identify (PATCH freezes org_id, entity_type, field_key, field_type, is_system). Whether that one-way platform authority may be delegated to an arbitrary custom role has no doctrine behind it, so it keeps its role gate rather than being guessed into a key. See docs/platform/planning/access-identity-v2/platform-field-authority-delegability.md"
       }
     },
     "app/api/admin/field-definitions/route.ts": {
@@ -1573,15 +1728,24 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fields.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "AUTHORITY_PATH_CONVERGENCE. The direct route asked what the caller is CALLED while Config Layout Assist asked what they can DO, over the same configuration — an ops user could change this through the assisted path and was refused here. Parity proven against the assisted operation kinds, so converging is compatibility alignment, not an expansion."
       }
     },
     "app/api/admin/field-sections/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "sections.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Removes a field section - canonical `archive_section`. There is no sections.delete key, and inventing one would split a family the catalog deliberately keeps whole."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "sections.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Updates a field section - canonical `update_section`."
       }
     },
     "app/api/admin/field-sections/route.ts": {
@@ -1589,7 +1753,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "sections.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Creates a field section. The canonical configuration contract maps `create_section` to sections.manage."
       }
     },
     "app/api/admin/financial-charge-preview/route.ts": {
@@ -1609,12 +1776,18 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/financial/charge-templates/simulate/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "requireFinancialsCapability",
+        "reason": "A POST by HTTP method and a READ by consequence: it computes a prospective result and persists nothing, so the truthful owner is the Financials read key. Gating it on write would deny a legitimate viewer a calculation; leaving it open would expose an organization's pricing to anyone with a login."
       }
     },
     "app/api/admin/financial/consumption/obligations/route.ts": {
@@ -1622,12 +1795,18 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/financial/consumption/simulate/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "requireFinancialsCapability",
+        "reason": "A POST by HTTP method and a READ by consequence: it computes a prospective result and persists nothing, so the truthful owner is the Financials read key. Gating it on write would deny a legitimate viewer a calculation; leaving it open would expose an organization's pricing to anyone with a login."
       }
     },
     "app/api/admin/financial/gl-config/route.ts": {
@@ -1640,7 +1819,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/financial/rate-config/route.ts": {
@@ -1650,17 +1832,26 @@
     },
     "app/api/admin/financial/rate-plans/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/financial/rate-rules/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/financial/seed-demo/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/financial/services/route.ts": {
@@ -1668,7 +1859,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/financials/accounts/[id]/route.ts": {
@@ -1817,6 +2011,13 @@
       }
     },
     "app/api/admin/financials/statements/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      }
+    },
+    "app/api/admin/financials/subjects/route.ts": {
       "GET": {
         "status": "declared",
         "capability": "fin.read",
@@ -2221,22 +2422,34 @@
     },
     "app/api/admin/jobs/[id]/archive/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary job management. Same reuse-and-correct shape as scheduling.write: catalogued, granted, enforced nowhere until now."
       }
     },
     "app/api/admin/jobs/[id]/assign-vendor/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary job management. Same reuse-and-correct shape as scheduling.write: catalogued, granted, enforced nowhere until now."
       }
     },
     "app/api/admin/jobs/[id]/charges/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.post",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. MONEY. Served from under schedules/ or jobs/, but the business consequence is financial, and authority follows the consequence rather than the URL folder. Deliberately NOT scheduling.write (labelled \"Manage scheduling\", and the migration that minted it defines billing.read as a separate family in the same statement), NOT fin.write (held by ops and enforced elsewhere, so reuse would widen ops into four admin-only money operations), and NOT fin.adjust (scoped by its own description to corrections that REDUCE what a family owes)."
       }
     },
     "app/api/admin/jobs/[id]/location/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary job management. Same reuse-and-correct shape as scheduling.write: catalogued, granted, enforced nowhere until now."
       }
     },
     "app/api/admin/jobs/[id]/payment-collect-context/route.ts": {
@@ -2259,12 +2472,18 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary job management. Same reuse-and-correct shape as scheduling.write: catalogued, granted, enforced nowhere until now."
       }
     },
     "app/api/admin/jobs/[id]/unarchive/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary job management. Same reuse-and-correct shape as scheduling.write: catalogued, granted, enforced nowhere until now."
       }
     },
     "app/api/admin/jobs/[id]/vendors-for-assign/route.ts": {
@@ -2277,7 +2496,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "ops.jobs.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary job management. Same reuse-and-correct shape as scheduling.write: catalogued, granted, enforced nowhere until now."
       }
     },
     "app/api/admin/layout-proof/opportunities/route.ts": {
@@ -2379,27 +2601,42 @@
     },
     "app/api/admin/lifecycle-catalog/attach-records/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.activate",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Attaches existing opportunities to live lifecycle work units. It moves real records into running queues and changes nothing about the definition, so it is an activation-class operation."
       }
     },
     "app/api/admin/lifecycle-catalog/cleanup-test/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.activate",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Removes builder-owned test/simulation lifecycle departments. Bounded three ways and each was re-verified in this slice: the `isRemovableTestLifecycleDepartment` marker (with a skipped_protected counter), org scope on every query, and a dry_run that defaults ON unless the caller sends confirm:true. Operational consequence, so activate."
       }
     },
     "app/api/admin/lifecycle-catalog/delete/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.activate",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Removes a builder-owned lifecycle department, or a legacy process. It cannot destroy Business Process history or canonical revision truth: the activation-owned path is guarded by canDeleteActivationLifecycle and refuses anything it did not create, and the legacy path routes through editBuilderInDraft, so the removal lands in the DRAFT with publication_required and runtime keeps serving until a publish. Its dominant consequence is taking a lifecycle out of operation."
       }
     },
     "app/api/admin/lifecycle-catalog/repair-work-units/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.activate",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Not diagnostic. It inserts and updates lifecycle_wu_* rows and sets is_active:false on stale enrollment_pipeline records - it repairs running state, so it is gated rather than left open as a read."
       }
     },
     "app/api/admin/lifecycle-catalog/repair/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "business_process.activate",
+        "helper": "requireBusinessProcessCapability",
+        "reason": "Not diagnostic. repairLifecycleWorkspaceVisibility inserts and updates workspace tile rows, so the route mutates what operators can see and reach at runtime."
       }
     },
     "app/api/admin/lifecycle-catalog/route.ts": {
@@ -2451,7 +2688,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "KPI target configuration, called by the OI workspace and the analytics KPI panel. Same product, same authority - the metrics folder is not a second domain."
       }
     },
     "app/api/admin/metrics/oi-config/route.ts": {
@@ -2459,7 +2699,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "OI configuration sparse merge. INTERNAL/API: no caller anywhere, and org_settings.metadata.oi_config is absent on every deployed tenant. Kept and capability-gated rather than retired, because never-exercised is not proof of obsolete and deleting a route on inference is not this slice's mandate. Recorded as OI_CONFIG_NEVER_EXERCISED."
       }
     },
     "app/api/admin/metrics/oi-org-calc-measurements/[id]/observe/route.ts": {
@@ -2472,7 +2715,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Edit an OI measurement."
       }
     },
     "app/api/admin/metrics/oi-org-calc-measurements/route.ts": {
@@ -2480,7 +2726,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Create an OI measurement - the binding that makes a calculation reach an operator answer through answerRoomUtilization, answerFutureRoomCapacity and answerMeasureQuestion."
       }
     },
     "app/api/admin/metrics/resolve/route.ts": {
@@ -2679,26 +2928,41 @@
     },
     "app/api/admin/option-sets/[setKey]/items/[itemId]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "option_sets.delete",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Deleting an option-set item has NO equivalent Config Layout Assist operation — its thirteen operation kinds contain no delete and no layout version lifecycle — so folding it into the manage key would have handed ops authority it has never held. Its own key, never implied by manage."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "option_sets.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "AUTHORITY_PATH_CONVERGENCE. The direct route asked what the caller is CALLED while Config Layout Assist asked what they can DO, over the same configuration — an ops user could change this through the assisted path and was refused here. Parity proven against the assisted operation kinds, so converging is compatibility alignment, not an expansion."
       }
     },
     "app/api/admin/option-sets/[setKey]/items/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "option_sets.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "AUTHORITY_PATH_CONVERGENCE. The direct route asked what the caller is CALLED while Config Layout Assist asked what they can DO, over the same configuration — an ops user could change this through the assisted path and was refused here. Parity proven against the assisted operation kinds, so converging is compatibility alignment, not an expansion."
       }
     },
     "app/api/admin/option-sets/[setKey]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "option_sets.delete",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Deleting an option set has NO equivalent Config Layout Assist operation — its thirteen operation kinds contain no delete and no layout version lifecycle — so folding it into the manage key would have handed ops authority it has never held. Its own key, never implied by manage."
       },
       "GET": {
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "option_sets.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "AUTHORITY_PATH_CONVERGENCE. The direct route asked what the caller is CALLED while Config Layout Assist asked what they can DO, over the same configuration — an ops user could change this through the assisted path and was refused here. Parity proven against the assisted operation kinds, so converging is compatibility alignment, not an expansion."
       }
     },
     "app/api/admin/option-sets/route.ts": {
@@ -2706,7 +2970,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "option_sets.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sensitivity split. Creating an option set starts no lifecycle and no version state machine, so it is ordinary configuration in the same domain as editing one. Approved under the manage key."
       }
     },
     "app/api/admin/org-settings/route.ts": {
@@ -2724,12 +2991,18 @@
     },
     "app/api/admin/organization-calculations/[id]/archive/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Retire a calculation. Reversible - restore is its pair - so it carries no separate destructive key."
       }
     },
     "app/api/admin/organization-calculations/[id]/bind-runtime/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Mark which version is in use. Canonical, not historical: it is wired to a rendered control in the Calculation Library. Deployed consumer_bindings reading zero means unexercised, not obsolete."
       }
     },
     "app/api/admin/organization-calculations/[id]/evaluate/route.ts": {
@@ -2739,12 +3012,18 @@
     },
     "app/api/admin/organization-calculations/[id]/publish/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Freeze an immutable version. Deliberately NOT split under a narrower lifecycle key: the OI builders create and publish inside a single operator action, and the Calculation Library exposes publish, bind, archive and restore as peer controls on one panel, so OI treats them as one authority."
       }
     },
     "app/api/admin/organization-calculations/[id]/restore/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Un-retire a calculation, the reverse of archive."
       }
     },
     "app/api/admin/organization-calculations/[id]/route.ts": {
@@ -2752,7 +3031,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Edit a draft calculation's metadata. Ordinary OI authoring."
       }
     },
     "app/api/admin/organization-calculations/catalog/route.ts": {
@@ -2765,7 +3047,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "reports.write",
+        "helper": "requireAnalyticsManageAccess",
+        "reason": "Create an Operational Intelligence calculation. The Calculation Library is a tab inside OI, not a standalone product - /settings/calculations redirects there - so the authority is OI's, under the reports.* pair the catalog already names ANALYTICS_READ_PERMISSION / ANALYTICS_MANAGE_PERMISSION. No organization_calculations.* family was created: a folder is not a product."
       }
     },
     "app/api/admin/organization-calculations/runtime/route.ts": {
@@ -2791,7 +3076,10 @@
     },
     "app/api/admin/payments/[id]/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.post",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Changes money TRUTH rather than the rules that produce it, so it takes the posting key the schedules and jobs money operations already use. Deliberately NOT fin.write: configuring a rate and executing a payment are different consequences and are separately grantable."
       }
     },
     "app/api/admin/payments/route.ts": {
@@ -2801,7 +3089,10 @@
     },
     "app/api/admin/payments/run/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.post",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Changes money TRUTH rather than the rules that produce it, so it takes the posting key the schedules and jobs money operations already use. Deliberately NOT fin.write: configuring a rate and executing a payment are different consequences and are separately grantable."
       }
     },
     "app/api/admin/person-child-relationships/[id]/roles/[roleKey]/route.ts": {
@@ -3013,7 +3304,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. Was ungated: the file's DELETE carries a role gate, so a file-level reading of authority reported this PATCH as role-gated when nothing guarded it at all."
       }
     },
     "app/api/admin/pricing-dimension-values/route.ts": {
@@ -3021,7 +3315,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing-dimensions/[id]/route.ts": {
@@ -3029,7 +3326,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. Was ungated: the file's DELETE carries a role gate, so a file-level reading of authority reported this PATCH as role-gated when nothing guarded it at all."
       }
     },
     "app/api/admin/pricing-dimensions/route.ts": {
@@ -3037,7 +3337,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing-modes/[id]/route.ts": {
@@ -3045,7 +3348,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. Was ungated: the file's DELETE carries a role gate, so a file-level reading of authority reported this PATCH as role-gated when nothing guarded it at all."
       }
     },
     "app/api/admin/pricing-modes/route.ts": {
@@ -3053,12 +3359,18 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing/first-clean-prices/[id]/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing/first-clean-prices/route.ts": {
@@ -3066,12 +3378,18 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing/matrix/[id]/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing/matrix/route.ts": {
@@ -3079,7 +3397,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing/options/route.ts": {
@@ -3089,7 +3410,10 @@
     },
     "app/api/admin/pricing/recurring-prices/[id]/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/pricing/recurring-prices/route.ts": {
@@ -3097,7 +3421,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
     "app/api/admin/processing/cases/[caseId]/approve/route.ts": {
@@ -3284,12 +3611,27 @@
         "status": "pending"
       }
     },
+    "app/api/admin/qa/financials-director/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Internal Director QA readiness. Renders a real household's outstanding, collectible and responsibility figures through buildFinancialsCardVM, so it is gated exactly as the Financials card is — being a QA tool is not a reason to read money more cheaply than the product does."
+      },
+      "POST": {
+        "status": "none",
+        "reason": "Records a Director's human acceptance testimony only — scenario key, result, observation, classification, evidence reference — into qa_director_acceptance_results. It holds no amounts, references no financial row, and writes nothing a balance can be derived from. Role-gated by requireAdminOrOps; a Financials capability would misdescribe what it touches."
+      }
+    },
     "app/api/admin/queue-row-layout/[surfaceId]/route.ts": {
       "GET": {
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Layout V2 queue-row configuration for a surface. Feature-flagged separately; the authority question is the layout."
       }
     },
     "app/api/admin/queue-view-totals/route.ts": {
@@ -3318,42 +3660,45 @@
     "app/api/admin/rbac/grants/route.ts": {
       "GET": {
         "status": "declared",
-        "capability": "settings.users_roles.read",
-        "helper": "requirePortalOrUsersRolesManageAuth",
-        "note": "OD-7 read/write rule: a READ surface converts to its canonical `.read` capability. The gate is `requirePortalOrUsersRolesManageAuth`, which accepts `settings.users_roles.read` as well as the manage key — so declaring the manage key here UNDER-DESCRIBED the gate. No code changed and no admission moved; the declaration now names what the handler actually enforces."
+        "capability": "admin.roles.read",
+        "helper": "requireAccessAdministration",
+        "reason": "Reads a role's capability package."
       },
       "PUT": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
+        "capability": "admin.roles.write",
+        "helper": "requireAccessAdministration",
+        "reason": "Replaces a role's capability package. THE PRIVILEGE DELEGATION AUTHORITY — bounded by the W-18 ceiling, which refuses any capability the actor does not hold."
       }
     },
     "app/api/admin/rbac/permissions/route.ts": {
       "GET": {
         "status": "declared",
-        "capability": "settings.users_roles.read",
-        "helper": "requirePortalOrUsersRolesManageAuth",
-        "note": "OD-7 read/write rule: a READ surface converts to its canonical `.read` capability. The gate is `requirePortalOrUsersRolesManageAuth`, which accepts `settings.users_roles.read` as well as the manage key — so declaring the manage key here UNDER-DESCRIBED the gate. No code changed and no admission moved; the declaration now names what the handler actually enforces."
+        "capability": "admin.roles.read",
+        "helper": "requireAccessAdministration",
+        "reason": "Reads the capability catalog the role editor renders."
       }
     },
     "app/api/admin/rbac/roles/[role_key]/route.ts": {
       "PATCH": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
+        "capability": "admin.roles.write",
+        "helper": "requireAccessAdministration",
+        "reason": "Edits a role definition and, through the same transaction owner, its grants."
       }
     },
     "app/api/admin/rbac/roles/route.ts": {
       "GET": {
         "status": "declared",
-        "capability": "settings.users_roles.read",
-        "helper": "requirePortalOrUsersRolesManageAuth",
-        "note": "OD-7 read/write rule: a READ surface converts to its canonical `.read` capability. The gate is `requirePortalOrUsersRolesManageAuth`, which accepts `settings.users_roles.read` as well as the manage key — so declaring the manage key here UNDER-DESCRIBED the gate. No code changed and no admission moved; the declaration now names what the handler actually enforces."
+        "capability": "admin.roles.read",
+        "helper": "requireAccessAdministration",
+        "reason": "Lists roles."
       },
       "POST": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
+        "capability": "admin.roles.write",
+        "helper": "requireAccessAdministration",
+        "reason": "Creates a role. Role definition and its capability package are one authority; W-18 bounds what the package may contain."
       }
     },
     "app/api/admin/record-actions/route.ts": {
@@ -3363,17 +3708,26 @@
     },
     "app/api/admin/record-drawer-layouts/opportunity-workflow-v1-field-placements/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fields.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Sets per-placement REQUIRED and EDITABILITY behaviour. It writes layout config rather than field_definitions, but the canonical contract maps `set_field_requirement` and `set_field_interaction` to fields.manage - so a layout manager alone must not change field semantics."
       }
     },
     "app/api/admin/record-drawer-layouts/opportunity-workflow-v1-order/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "sections.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Section ORDER inside the opportunity drawer - canonical `reorder_section`."
       }
     },
     "app/api/admin/record-drawer-layouts/opportunity-workflow-v1-sections/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "sections.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Section visibility, titles and order inside the opportunity drawer - canonical `update_section` / `reorder_section`."
       }
     },
     "app/api/admin/record-layouts/effective-preview/route.ts": {
@@ -3474,27 +3828,42 @@
     },
     "app/api/admin/schedules/[id]/cancel/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "scheduling.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary schedule management. Replaced a literal `admin` role gate with a key the catalog has held for months and enforced NOWHERE — its only executable reference was the unenforced-permission list. Enforcing it is what makes it a real control, which is why the same slice removed it from the ops default: the gate denied ops a moment earlier."
       }
     },
     "app/api/admin/schedules/[id]/location/route.ts": {
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "scheduling.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary schedule management. Replaced a literal `admin` role gate with a key the catalog has held for months and enforced NOWHERE — its only executable reference was the unenforced-permission list. Enforcing it is what makes it a real control, which is why the same slice removed it from the ops default: the gate denied ops a moment earlier."
       }
     },
     "app/api/admin/schedules/[id]/post-completion/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.post",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. MONEY. Served from under schedules/ or jobs/, but the business consequence is financial, and authority follows the consequence rather than the URL folder. Deliberately NOT scheduling.write (labelled \"Manage scheduling\", and the migration that minted it defines billing.read as a separate family in the same statement), NOT fin.write (held by ops and enforced elsewhere, so reuse would widen ops into four admin-only money operations), and NOT fin.adjust (scoped by its own description to corrections that REDUCE what a family owes)."
       }
     },
     "app/api/admin/schedules/[id]/post-customer-payment/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.post",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. MONEY. Served from under schedules/ or jobs/, but the business consequence is financial, and authority follows the consequence rather than the URL folder. Deliberately NOT scheduling.write (labelled \"Manage scheduling\", and the migration that minted it defines billing.read as a separate family in the same statement), NOT fin.write (held by ops and enforced elsewhere, so reuse would widen ops into four admin-only money operations), and NOT fin.adjust (scoped by its own description to corrections that REDUCE what a family owes)."
       }
     },
     "app/api/admin/schedules/[id]/post-vendor-payout/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.post",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. MONEY. Served from under schedules/ or jobs/, but the business consequence is financial, and authority follows the consequence rather than the URL folder. Deliberately NOT scheduling.write (labelled \"Manage scheduling\", and the migration that minted it defines billing.read as a separate family in the same statement), NOT fin.write (held by ops and enforced elsewhere, so reuse would widen ops into four admin-only money operations), and NOT fin.adjust (scoped by its own description to corrections that REDUCE what a family owes)."
       }
     },
     "app/api/admin/schedules/[id]/reschedule/route.ts": {
@@ -3507,7 +3876,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "scheduling.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary schedule management. Replaced a literal `admin` role gate with a key the catalog has held for months and enforced NOWHERE — its only executable reference was the unenforced-permission list. Enforcing it is what makes it a real control, which is why the same slice removed it from the ops default: the gate denied ops a moment earlier."
       }
     },
     "app/api/admin/schedules/[id]/vendors-for-assign/route.ts": {
@@ -3520,7 +3892,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "scheduling.write",
+        "helper": "requireSchedulingJobsCapability",
+        "reason": "Schedules + Jobs authority cleanup. Ordinary schedule management. Replaced a literal `admin` role gate with a key the catalog has held for months and enforced NOWHERE — its only executable reference was the unenforced-permission list. Enforcing it is what makes it a real control, which is why the same slice removed it from the ops default: the gate denied ops a moment earlier."
       }
     },
     "app/api/admin/scheduling/route.ts": {
@@ -3546,7 +3921,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION in the commercial catalogue. Was ungated; the DELETE beside it carries a role gate, which is a separate authority question this slice does not answer."
       }
     },
     "app/api/admin/service-offerings/route.ts": {
@@ -3554,7 +3932,10 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION in the commercial catalogue. Was ungated; the DELETE beside it carries a role gate, which is a separate authority question this slice does not answer."
       }
     },
     "app/api/admin/service-plan-templates/[id]/route.ts": {
@@ -3562,7 +3943,10 @@
         "status": "pending"
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION in the commercial catalogue. Was ungated; the DELETE beside it carries a role gate, which is a separate authority question this slice does not answer."
       }
     },
     "app/api/admin/service-plan-templates/route.ts": {
@@ -3570,14 +3954,18 @@
         "status": "pending"
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "requireFinancialsCapability",
+        "reason": "Ordinary Financial CONFIGURATION in the commercial catalogue. Was ungated; the DELETE beside it carries a role gate, which is a separate authority question this slice does not answer."
       }
     },
     "app/api/admin/settings/users-roles/members/route.ts": {
       "GET": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
+        "capability": "admin.users.read",
+        "helper": "requireAccessAdministration",
+        "reason": "Member directory for the Access chapter."
       }
     },
     "app/api/admin/staff/directory/route.ts": {
@@ -3641,7 +4029,10 @@
         "status": "pending"
       },
       "PUT": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Publishes an org layout record for a workspace surface - `listOrgLayouts` is the same store entity-layouts already governs under this key."
       }
     },
     "app/api/admin/surfaces/workspace-header/route.ts": {
@@ -3649,7 +4040,10 @@
         "status": "pending"
       },
       "PUT": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Publishes an org layout record for a workspace surface."
       }
     },
     "app/api/admin/surfaces/workspace-processes/route.ts": {
@@ -3657,7 +4051,10 @@
         "status": "pending"
       },
       "PUT": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Publishes an org layout record for a workspace surface."
       }
     },
     "app/api/admin/tenant-bootstrap/route.ts": {
@@ -3724,56 +4121,61 @@
     "app/api/admin/users/[userId]/access-scope/route.ts": {
       "GET": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
+        "capability": "admin.users.read",
+        "helper": "requireAccessAdministration",
+        "reason": "Reads a member's scope. A read of a user, so it takes the user read authority rather than the scope WRITE key."
       },
       "PATCH": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
+        "capability": "admin.access_scope.write",
+        "helper": "requireAccessAdministration",
+        "reason": "Changes WHERE a person may operate. Separated deliberately: moving someone to another site is not the authority to invent roles or create users."
       }
     },
     "app/api/admin/users/[userId]/remove/route.ts": {
       "POST": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
+        "capability": "admin.users.write",
+        "helper": "requireAccessAdministration",
+        "reason": "Removes a person's access to the organization."
       }
     },
     "app/api/admin/users/[userId]/role/route.ts": {
       "PATCH": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
+        "capability": "admin.users.write",
+        "helper": "requireAccessAdministration",
+        "reason": "Sets a member's single role — assignment, not definition."
       }
     },
     "app/api/admin/users/[userId]/roles/[roleKey]/route.ts": {
       "DELETE": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth",
-        "reason": "W-17 Configurable Multi-Role Assignment. Adding or removing ONE role is the same authority as replacing the whole set, so it uses the gate every Access mutation route already uses rather than inventing an assignment capability. The target user comes from the path and the org from the authenticated context, so a forged user or a role belonging to another organization is refused rather than reaching another tenant."
+        "capability": "admin.users.write",
+        "helper": "requireAccessAdministration",
+        "reason": "Removes a role from a member."
       }
     },
     "app/api/admin/users/[userId]/roles/route.ts": {
       "POST": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth",
-        "reason": "W-17 Configurable Multi-Role Assignment. Adding or removing ONE role is the same authority as replacing the whole set, so it uses the gate every Access mutation route already uses rather than inventing an assignment capability. The target user comes from the path and the org from the authenticated context, so a forged user or a role belonging to another organization is refused rather than reaching another tenant."
+        "capability": "admin.users.write",
+        "helper": "requireAccessAdministration",
+        "reason": "Adds a role to a member (W-17 multi-role)."
       }
     },
     "app/api/admin/users/route.ts": {
       "GET": {
         "status": "declared",
-        "capability": "settings.users_roles.read",
-        "helper": "requirePortalOrUsersRolesManageAuth",
-        "note": "OD-8 closed this W-15 exception. It was `pending` not for want of a decision but because it failed OD-7's no-widening test: settings.users_roles.read resolves WITHOUT portalEligible, so a custom-role holder would have gained the roster read, and rule 6 forbids closing that with a secondary role check. Q15 answered both halves on the deployed tenant — C1 = 0 (no role outside admin/ops holds the key, so the widening population is empty) and B4 (ops lacked it in 2 orgs, so converting first would have NARROWED). Sequence: 20260819140000 grants ops the read key and fails closed on coverage, then the gate converted. The DISCLOSURE half is unchanged — addresses are still projected against canManageUsersAndRoles, and OD-8 does not authorize settings.users_roles."
+        "capability": "admin.users.read",
+        "helper": "requireAccessAdministration",
+        "reason": "Lists organization members."
       },
       "POST": {
         "status": "declared",
-        "capability": "settings.users_roles",
-        "helper": "requireUsersRolesManageAuth"
+        "capability": "admin.users.write",
+        "helper": "requireAccessAdministration",
+        "reason": "Creates the organization membership that IS someone's access. User lifecycle, not role definition."
       }
     },
     "app/api/admin/v2/view-models/drawer/child/[id]/route.ts": {
@@ -4012,16 +4414,28 @@
     },
     "app/api/admin/workspace-kpi-placements/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Removing a placement is layout placement. It removes presentation, not the metric definition."
       },
       "GET": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "The `?list=org` CONFIGURATION listing only - every placement row including hidden ones, which is what the KPI placement editor reads. The surface-scoped runtime read that the workspace strip uses sits on the other branch and stays ungated, so no read was tightened."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Editing a placement's order, visibility or overrides is layout placement."
       },
       "POST": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "layouts.manage",
+        "helper": "requireConfigurationCapability",
+        "reason": "Placing a registry metric on a workspace surface is layout placement."
       }
     },
     "app/api/admin/workspace/site-filter/route.ts": {

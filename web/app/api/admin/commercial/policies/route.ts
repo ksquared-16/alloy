@@ -8,6 +8,7 @@ import {
     type CommercialPolicyType,
 } from "@/lib/commercial/execution/policy/policyTypes";
 import { operatorFriendlyCommercialError } from "@/lib/commercial/operatorFriendlyCommercialError";
+import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 /**
  * Commercial Policies CRUD — operator authoring for the Commercial-owned
@@ -107,6 +108,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try { body = (await request.json()) as Record<string, unknown>; }

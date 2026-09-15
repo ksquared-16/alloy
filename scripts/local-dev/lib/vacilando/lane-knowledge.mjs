@@ -46,6 +46,7 @@ import { join } from "node:path";
 
 import { getLaneMemory, listLaneMemory, laneContextProjection } from "./lane-memory.mjs";
 import { getDurableLane, listDurableLanes } from "./development-lane.mjs";
+import { gatewayStateRoot, stateRoot } from "./runtime-roots.mjs";
 
 export const LANE_KNOWLEDGE_SCHEMA = "vacilando.lane_knowledge.v1";
 
@@ -59,8 +60,8 @@ export const LANE_KNOWLEDGE_SCHEMA = "vacilando.lane_knowledge.v1";
  * between two stores that is not theirs to know about.
  */
 function runtimeRoot() {
-  return process.env.ALLOY_RUNTIME_ROOT?.trim()
-    || join(homedir(), ".local", "state", "alloy-dev");
+  // `<root>/vacilando/...`: the Gateway's root, not its parent. See development-lane.
+  return gatewayStateRoot();
 }
 
 /**
@@ -237,7 +238,7 @@ export function knowledgeIndexFor(laneId, { repoRoot = null, stateRoot = null } 
   const id = String(laneId || "").trim();
   if (!id) return null;
   const repo = repoRoot || process.env.ALLOY_REPO || join(homedir(), "Alloy");
-  const state = stateRoot || process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const state = stateRoot || gatewayStateRoot();
   const docPath = join(repo, "docs", "platform", "planning", "vacilando-os", "lanes", `${id}.md`);
   return {
     lane_id: id,

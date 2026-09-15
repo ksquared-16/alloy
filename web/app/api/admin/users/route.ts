@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import {
-    canManageUsersAndRoles,
-    requirePortalOrUsersRolesManageAuth,
-    requireUsersRolesManageAuth,
-} from "@/lib/admin/canManageUsersAndRoles";
+import { ADMIN_USERS_READ, ADMIN_USERS_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 import { memberDirectoryLabel, projectMemberEmail } from "@/lib/access/memberDirectoryProjection";
 import { displayRoleForAdminPicker, groupSortedRoleKeysByUserId } from "@/lib/admin/userRolesMembership";
 import { createMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
+import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { fullNameFromParts } from "@/lib/access/operatorAccountName";
 
 export type AdminUserRow = {
@@ -62,18 +59,23 @@ export type AdminUserRow = {
  * **Scope is unchanged and still enforced**: the query is bounded to `access.orgId`, which is the
  * membership's org. Capability decides whether the roster may be read; it does not decide whose.
  *
- * **The disclosure half is untouched.** Addresses are still projected against
- * {@link canManageUsersAndRoles} — the MANAGING key — so this conversion does not hand the ops
- * population anything it lacked. `OD-8` does not authorize `settings.users_roles`.
+ * **The disclosure half is untouched, and the split nearly changed that by accident.** Addresses
+ * were projected against `canManageUsersAndRoles`, which named the MANAGING key while one key
+ * managed everything. That function is now the CHAPTER gate — true for any Access authority,
+ * `admin.users.read` included — so leaving the call here would have started disclosing addresses to
+ * every read-only principal, which is `W14-F1`'s defect restored by a rename rather than a decision.
+ * The disclosure names its authority directly now: `admin.users.write`.
  */
 export async function GET() {
-    const auth = await requirePortalOrUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_USERS_READ);
     if (!auth.ok) return auth.response;
     const { access } = auth;
 
     // W14-F1. The MANAGING capability, read from the same resolved context the gate used — not a
-    // second auth pass, and not a different predicate that happens to agree today.
-    const mayReadEmail = canManageUsersAndRoles(access);
+    // second auth pass, and not a different predicate that happens to agree today. It is the same
+    // membership test `requireAccessAdministration(ADMIN_USERS_WRITE)` applies on the POST below, so
+    // "may see the address" and "may act on the person" cannot drift apart.
+    const mayReadEmail = access.permissionKeys.includes(ADMIN_USERS_WRITE);
 
     const supabase = createAdminClient();
 
@@ -119,7 +121,7 @@ export async function GET() {
 
 /** POST: invite user to org. Requires org admin or `settings.users_roles` permission. Body: { email, role } (role = role_key from role_definitions). */
 export async function POST(request: Request) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_USERS_WRITE);
     if (!auth.ok) return auth.response;
     const { access } = auth;
 
@@ -174,14 +176,27 @@ export async function POST(request: Request) {
 
     // W-5/G4: membership + access profile are one transaction. Never insert into
     // `user_roles` directly here — that is the fail-open path this closes.
+    /*
+     * THE INITIAL ROLE IS A DELEGATION, so the actor travels with it.
+     *
+     * Creating a member with a role confers that role's entire package. Without the actor this call
+     * was the way around W-18: a user administrator who could not add one capability to a role could
+     * still mint a colleague holding eighty. The RPC bounds the creation to this actor's own
+     * effective authority and refuses what exceeds it, before any row is written.
+     */
     const membership = await createMembershipWithAccessProfile(supabase, {
         userId: user.id,
         orgId: access.orgId,
         role,
+        audit: accessMutationAudit(access),
     });
     if (!membership.ok) {
         if (membership.kind === "duplicate") {
             return NextResponse.json({ error: "This user already has this role in this org" }, { status: 409 });
+        }
+        // The initial role is a delegation; a ceiling refusal is about who is asking, so 403.
+        if (membership.kind === "forbidden") {
+            return NextResponse.json({ error: membership.error }, { status: 403 });
         }
         return NextResponse.json({ error: membership.error }, { status: 500 });
     }

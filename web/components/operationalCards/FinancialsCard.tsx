@@ -211,7 +211,8 @@ export default function FinancialsCard({
                             className="alloy-os-billing__autopay"
                             data-autopay-ok={evidence.payment.autopayHealthy ? "true" : undefined}
                         >
-                            {evidence.payment.autopayLabel ?? "No autopay"}
+                            {/* "No autopay" was asserted from a hardcoded null; unknown now reads as unknown. */}
+                            {evidence.payment.autopayLabel ?? "Autopay not recorded"}
                         </p>
                         {evidence.payment.nextChargeLabel ? (
                             <p className="alloy-os-billing__next">Next · {evidence.payment.nextChargeLabel}</p>
@@ -316,12 +317,15 @@ function FinancialsCompactCard({
                         <Line key={l.label} label={l.label} value={l.value} />
                     ))}
                 </div>
-                <p
-                    className="alloy-os-billing__autopay alloy-os-billing__autopay--compact"
-                    data-autopay-ok={c.paymentHealthy ? "true" : undefined}
-                >
-                    {c.paymentLine}
-                </p>
+                {/* Silence when nothing owns payment setup — see the adapter's note. */}
+                {c.paymentLine ? (
+                    <p
+                        className="alloy-os-billing__autopay alloy-os-billing__autopay--compact"
+                        data-autopay-ok={c.paymentHealthy ? "true" : undefined}
+                    >
+                        {c.paymentLine}
+                    </p>
+                ) : null}
                 {evidence.pastDue ? (
                     <ActionRow>
                         <Action primary onClick={onPayNow}>

@@ -17,6 +17,7 @@ import { executionRunStorePath } from "./execution-run.mjs";
 import { governedActionStorePath } from "./governed-action-request.mjs";
 import { developmentLaneStorePath } from "./development-lane.mjs";
 import { resolveWorktreeRegistration } from "./worktree-registration.mjs";
+import { projectScope } from "./repository-registry.mjs";
 
 const TERMINAL_RUN = new Set(["COMPLETE", "FAILED", "ABANDONED", "CANCELLED"]);
 const TERMINAL_ACTION = new Set(["complete", "completed", "failed", "denied", "cancelled", "expired"]);
@@ -164,7 +165,23 @@ export function observeRetirementCandidates({
   operatorHold = false,
   governanceException = false,
 } = {}) {
-  const parent = worktreeParent || join(homedir(), "Code", "alloy-worktrees");
+  /*
+   * THE REPOSITORY WAS ALREADY A PARAMETER, AND THE SCAN IGNORED IT.
+   *
+   * `repository` has defaulted to `repo_alloy` here for as long as this
+   * observer has existed, and the next line then joined Alloy's worktree
+   * directory as a literal — so naming a different repository changed the label
+   * on the observation and not one path it looked at. Threading identity
+   * through a call and then not reading it is worse than not threading it at
+   * all: it reads as scoped.
+   *
+   * An unregistered repository yields no parent and therefore NO CANDIDATES.
+   * Returning Alloy's worktrees for a project that has none would be a
+   * retirement observation aimed at somebody else's work.
+   */
+  const scope = projectScope(repository);
+  const parent = worktreeParent || scope.worktree_parent;
+  if (!parent) return [];
   const runs = activeRunsByWorktree(root);
   const actions = activeGovernedActionsByWorktree(root);
   const lanes = activeLanesByWorktree(root);
@@ -187,7 +204,8 @@ export function observeRetirementCandidates({
     const refs = processes.filter((p) => {
       if (selfPids.has(p.pid)) return false;
       const c = String(p.command || "");
-      return c.includes(full) || c.includes(`alloy-worktrees/${name}`);
+      // The namespace is the observed project's, not Alloy's.
+      return c.includes(full) || c.includes(`${parent.split("/").pop()}/${name}`);
     });
     const providers = refs.map((p) => ({ pid: p.pid }));
     // A dev server is a process actually serving from that path — measured here

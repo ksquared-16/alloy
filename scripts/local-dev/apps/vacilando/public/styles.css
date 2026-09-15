@@ -1692,6 +1692,56 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-repo .gw-folder{margin-left:8px;}
 .gw-repo .gw-lane{margin-left:10px;}
 .gw-add-repo{color:var(--vacilando-terracotta-ink);}
+.gw-add-projects{background:none;border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:650;color:var(--rail-0);}
+
+/* Projects: what a project can do, and the inventory it lives in.
+
+   ABSENCE IS NOT A WARNING. `gw-cap-absent` is --ink-3, the same muted ink the
+   labels use — never --blocked. A project with no database is an ordinary
+   project, and colouring it like a fault would tell the operator to go and fix
+   something that is not broken. */
+.gw-project-caps{margin:12px 0 4px;}
+.gw-cap-group{padding:10px 0;border-top:1px solid var(--line-soft);}
+.gw-cap-group:first-child{border-top:0;padding-top:0;}
+.gw-cap-group h4{margin:0 0 7px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-3);}
+/* Wider than the default 76px: "Deployment target" is a real label here. */
+.gw-cap-group .gw-kv{grid-template-columns:minmax(96px,34%) 1fr;}
+.gw-cap-absent{color:var(--ink-3);}
+.gw-cap-src{font-size:11px;color:var(--ink-3);white-space:nowrap;}
+.gw-cap-group p.gw-cap-absent{margin:0;font-size:12.5px;}
+
+.gw-proj-list{display:flex;flex-direction:column;gap:8px;margin:4px 0 8px;}
+.gw-proj-row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;width:100%;text-align:left;
+  padding:11px 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--card);
+  font:inherit;color:var(--ink);cursor:pointer;}
+.gw-proj-row:hover{background:var(--card-2);border-color:var(--line-strong);}
+.gw-proj-name{font-weight:700;font-size:13.5px;}
+.gw-proj-badge{align-self:center;font-size:10.5px;font-weight:700;color:var(--ink-3);
+  border:1px solid var(--line-strong);border-radius:999px;padding:1px 7px;}
+.gw-proj-meta{grid-column:1 / -1;font-size:11.5px;color:var(--ink-2);}
+.gw-proj-root{grid-column:1 / -1;font-size:11px;color:var(--ink-3);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gw-proj-row.is-retired .gw-proj-name{color:var(--ink-2);}
+.gw-proj-edit{margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft);}
+.gw-proj-edit input{width:100%;min-height:44px;font:inherit;padding:8px 10px;
+  border:1px solid var(--line-strong);border-radius:8px;background:var(--card);color:var(--ink);}
+.gw-field-check{display:grid;grid-template-columns:auto 1fr;gap:2px 9px;align-items:center;margin-top:12px;}
+.gw-field-check input{width:18px;height:18px;margin:0;}
+.gw-field-check .gw-field-hint{grid-column:2;margin-top:0;}
+.gw-proj-transfer{margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft);}
+.gw-proj-transfer h4{margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-3);}
+.gw-proj-transfer textarea,.gw-proj-transfer select{width:100%;font:inherit;padding:8px 10px;
+  border:1px solid var(--line-strong);border-radius:8px;background:var(--card);color:var(--ink);}
+.gw-proj-transfer textarea{min-height:88px;font-family:var(--mono,ui-monospace,monospace);font-size:12px;}
+.gw-transfer-actions{display:flex;gap:8px;margin-top:10px;}
+.gw-transfer-result{margin-top:12px;padding-top:10px;border-top:1px solid var(--line-soft);}
+.gw-transfer-result .gw-kv{grid-template-columns:minmax(96px,34%) 1fr;}
+.gw-transfer-refusals{margin:6px 0 0;padding-left:18px;font-weight:500;}
+.gw-transfer-refusals code{font-size:11.5px;}
+.gw-proj-recheck,.gw-proj-lifecycle{margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft);}
+.gw-proj-lifecycle p{margin:0 0 8px;}
 .gw-repo-id{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:8px 0 0;font-size:12px;}
 .gw-repo-id-label{color:var(--ink-3);}
 .gw-repo-id-value{font-weight:700;color:var(--ink);}

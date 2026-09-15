@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requirePortalOrUsersRolesManageAuth, requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { ADMIN_ROLES_READ, ADMIN_ROLES_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 
 /** GET: list permission_keys granted for org + role_key. Portal (admin/ops) or Users & Roles managers. */
 export async function GET(request: NextRequest) {
-    const auth = await requirePortalOrUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ROLES_READ);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
 
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
 /** PUT: replace all grants for org + role_key. Requires org admin or `settings.users_roles` permission. */
 export async function PUT(request: NextRequest) {
-    const auth = await requireUsersRolesManageAuth();
+    const auth = await requireAccessAdministration(ADMIN_ROLES_WRITE);
     if (!auth.ok) return auth.response;
     const { orgId } = auth.access;
 
@@ -122,6 +122,24 @@ export async function PUT(request: NextRequest) {
         // to produce itself, so moving the check into the transaction changed nothing the operator
         // sees. Anything else is a genuine failure and must not read as a partial success.
         const message = replaceErr.message ?? "";
+        /*
+         * W-18 — the delegation ceiling refused this. The actor asked to introduce authority they do
+         * not hold, and the transaction owner rejected it before writing anything, so there is no
+         * partial grant set to explain. 403 rather than 400: the request was well-formed and the
+         * answer is about who is asking.
+         */
+        const beyond = message.match(/delegation_ceiling:([^\s"]+)/);
+        if (beyond) {
+            return NextResponse.json(
+                {
+                    error:
+                        "You can only grant access you hold yourself. Not granted: "
+                        + beyond[1].split(",").join(", "),
+                    required_permission: beyond[1].split(",")[0],
+                },
+                { status: 403 },
+            );
+        }
         const invalid = message.match(/invalid_permission_keys:([^\s"]+)/);
         if (invalid) {
             return NextResponse.json(

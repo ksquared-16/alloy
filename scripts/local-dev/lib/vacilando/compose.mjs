@@ -22,6 +22,7 @@ import { projectApprovals } from "./approval.mjs";
 import { projectActivity } from "./activity.mjs";
 import { reviewDispositions } from "./commands/review.mjs";
 import { managedSlots } from "./managed-slots.mjs";
+import { ALLOY_REPOSITORY_ID, projectScope } from "./repository-registry.mjs";
 
 /**
  * How many slots the headline counts against.
@@ -155,5 +156,7 @@ function sourcesHealthy(raw) {
 function deriveWorktreeRoot(raw) {
   const anyPath = (raw.agents.agents || [])[0]?.path;
   if (anyPath) return anyPath.replace(/\/[^/]+$/, "");
-  return join(process.env.HOME || "", "Code", "alloy-worktrees");
+  // No agent to learn it from: ask the project, not the machine.
+  return projectScope(ALLOY_REPOSITORY_ID).worktree_parent
+    || join(process.env.HOME || "", "Code", "alloy-worktrees");
 }

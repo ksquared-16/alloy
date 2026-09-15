@@ -13,13 +13,42 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { classifyPort, classifyWorktree } from "./resource-reconciliation.mjs";
 import { resolveWorktreeRegistration } from "./worktree-registration.mjs";
+import { ALLOY_REPOSITORY_ID, projectScope, slotPortsFor } from "./repository-registry.mjs";
 
 /* ── Observation ──────────────────────────────────────────────────────────
  * The same rules `vac health` already uses, in one owner so the plan and the
  * health report cannot disagree about what is true.
  */
 
-const PORTS = Object.freeze([3011, 3012, 3013, 3014, 3015, 3016]);
+/**
+ * The slot ports this observation covers, for the project it is for.
+ *
+ * This was a frozen `[3011 … 3016]` — Alloy's six, scanned for every project on
+ * the host, and a second statement of a range the execution profile already
+ * owns. `slotPortsFor` derives it from `first_agent_port` and
+ * `managed_slot_count`; a project with no managed slots yields an EMPTY range,
+ * which is the correct scan for a repository that has no servers.
+ */
+function portsFor(repositoryId) {
+  const scope = projectScope(repositoryId);
+  if (scope.slot_ports.length) return scope.slot_ports;
+  /*
+   * AN OBSERVER MUST NEVER SILENTLY SCAN NOTHING.
+   *
+   * An unregistered id resolves to an empty range, which is correct for a
+   * project that has no slots — and catastrophic for the INCUMBENT on a host
+   * whose registry has not been seeded yet, because "I looked at no ports and
+   * found no problems" is indistinguishable from "this host is healthy". Five
+   * port-classification cases failed exactly that way.
+   *
+   * So the Alloy id falls back to ALLOY'S PROFILE, the same shape
+   * `hygiene-observe` uses for its worktree parent. This is not "any project
+   * inherits Alloy": the profile is asked for repo_alloy by name, and any other
+   * id still gets nothing.
+   */
+  if (repositoryId === ALLOY_REPOSITORY_ID) return slotPortsFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID });
+  return scope.slot_ports;
+}
 
 /** Verdicts arrive hyphenated from the probe and underscored from the classifier. */
 export function normalizeVerdict(v) {
@@ -38,6 +67,15 @@ export function observeReconciliation({
   gitWorktrees = null,
   activeRunsByWorktree = null,
   referencesByWorktree = null,
+  /*
+   * WHICH PROJECT THIS OBSERVATION IS FOR.
+   *
+   * Alloy by default, because that is what every current caller means and the
+   * observation is value-identical for it. It is a parameter now so that a
+   * second project's reconciliation scans that project's ports and worktrees —
+   * previously impossible, because both were module constants.
+   */
+  repositoryId = ALLOY_REPOSITORY_ID,
 } = {}) {
   const metaDir = join(root, "metadata");
   const registered = new Map();
@@ -53,7 +91,7 @@ export function observeReconciliation({
   }
 
   const ports = [];
-  for (const port of PORTS) {
+  for (const port of portsFor(repositoryId)) {
     const owner = registered.get(port) || null;
     const pidFile = owner ? join(root, "pids", `${owner}.pid`) : null;
     // A pid RECORD is the claim of a live runtime. Its absence is not a lie —
@@ -107,7 +145,7 @@ export function observeReconciliation({
     // THE OWNER answers registration. Scanning metadata/*.env here is what
     // made a discovered worktree invisible: adoption wrote somewhere else, so
     // the same correction was proposed forever.
-    const registration = resolveWorktreeRegistration({ root, name, repositoryId: "repo_alloy" });
+    const registration = resolveWorktreeRegistration({ root, name, repositoryId });
     const isRegistered = registration.known;
     const inGit = gitKnown ? gitKnown.includes(name) : null;
 
@@ -172,7 +210,7 @@ export function observeReconciliation({
  * never match its own fingerprint — a permanent stale_plan. A re-observation
  * that depends on the caller supplying reality is not a re-observation.
  */
-export function gatherObservation({ root, worktreeParent = null } = {}) {
+export function gatherObservation({ root, worktreeParent = null, repositoryId = ALLOY_REPOSITORY_ID } = {}) {
   let processes = [];
   try {
     processes = execFileSync("ps", ["-Ao", "pid=,args="], { encoding: "utf8", maxBuffer: 8 * 1024 * 1024, timeout: 15000 })
@@ -208,7 +246,9 @@ export function gatherObservation({ root, worktreeParent = null } = {}) {
   return observeReconciliation({
     root,
     processes,
-    worktreeParent: worktreeParent || join(homedir(), "Code", "alloy-worktrees"),
+    worktreeParent: worktreeParent || projectScope(repositoryId).worktree_parent
+      || join(homedir(), "Code", "alloy-worktrees"),
+    repositoryId,
     gitWorktrees,
     activeRunsByWorktree,
   });

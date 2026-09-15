@@ -24,6 +24,7 @@ import { join } from "node:path";
 
 import { managedSlots, portForSlot } from "./managed-slots.mjs";
 import { observeMember } from "./dev-server-ownership.mjs";
+import { ALLOY_REPOSITORY_ID, projectScope } from "./repository-registry.mjs";
 
 export const FLEET_OBSERVATION_SCHEMA = "vacilando.server_fleet_observation.v2";
 
@@ -162,9 +163,15 @@ function activeRunsByWorktree(root) {
  */
 export function observeServerFleet({
   root = RUNTIME_ROOT(),
-  worktreesRoot = join(homedir(), "Code", "alloy-worktrees"),
+  // The fleet belongs to a project. This was Alloy's directory as a default
+  // argument, so the fleet observation had one scope on any host; it now
+  // resolves from the project record, and Alloy's value is unchanged.
+  repositoryId = ALLOY_REPOSITORY_ID,
+  worktreesRoot = null,
   largeServerMb = 3000,
 } = {}) {
+  const fleetRoot = worktreesRoot || projectScope(repositoryId).worktree_parent
+    || join(homedir(), "Code", "alloy-worktrees");
   const tree = processTree();
   const active = activeRunsByWorktree(root);
   const rows = [];
@@ -174,14 +181,14 @@ export function observeServerFleet({
     // Resolve the worktree registered to this slot from the metadata the
     // registry owns, rather than inferring it from whatever holds the port.
     const name = registeredWorktreeForSlot(join(root, "metadata"), slot);
-    const member = observeMember({ port, worktree: name, worktreesRoot });
+    const member = observeMember({ port, worktree: name, worktreesRoot: fleetRoot });
     const pid = member?.pid ?? null;
     const rssMb = pid ? subtreeRssMb(pid, tree) : 0;
     const age = pid ? (tree.nodes.get(pid)?.etime ?? null) : null;
     const desired = name ? desiredStateFor(name, root) : "UNKNOWN";
     const observed = pid ? "RUNNING" : "DOWN";
     const large = rssMb >= largeServerMb;
-    const worktreePath = name ? join(worktreesRoot, name) : null;
+    const worktreePath = name ? join(fleetRoot, name) : null;
     const worktreeExists = worktreePath ? existsSync(worktreePath) : false;
     const activeRun = worktreePath ? (active.get(worktreePath) ?? null) : null;
     const recovery = name ? recoveryStateFor(name, root) : null;

@@ -27,7 +27,13 @@
  * evaluated a second time in the browser to decide what to draw.
  */
 
-import { canManageUsersAndRoles, SETTINGS_USERS_ROLES_PERMISSION } from "@/lib/admin/canManageUsersAndRoles";
+import {
+    ADMIN_ACCESS_SCOPE_WRITE,
+    ADMIN_ROLES_READ,
+    ADMIN_ROLES_WRITE,
+    ADMIN_USERS_READ,
+    ADMIN_USERS_WRITE,
+} from "@/lib/admin/canManageUsersAndRoles";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
 import {
@@ -74,32 +80,60 @@ export type SurfaceCapabilityDeclaration = {
      * inventing a backing route to satisfy it would be the fabrication the join exists to catch.
      */
     noBackingRoutesReason?: string;
+    /**
+     * Capabilities a chapter's CONTROLS require, beyond the one that admits the chapter.
+     *
+     * Empty until the four-authority split. While `settings.users_roles` admitted the workspace,
+     * admission and command authority were one key, so a surface's backing routes all required
+     * exactly what admitted it and this field would have been meaningless. They are now different
+     * questions: Users is admitted by `admin.users.read`, and the invite control behind it requires
+     * `admin.users.write`, which a read-only user administrator does not hold.
+     *
+     * Listing a capability here is a claim with an enforcement obligation, not a waiver: it says the
+     * surface WITHDRAWS the control when the capability is absent, and the tier A join checks the
+     * withdrawal is real by resolving it through {@link availableAccessCommands} rather than taking
+     * this list's word for it.
+     */
+    commandCapabilities?: readonly string[];
 };
 
 /**
- * The four Access chapters. All four present `settings.users_roles`, because the workspace is one
- * gate; what differs is whether a chapter can *prove* it through a route of its own.
+ * The three Access chapters, each admitted by the READ authority over what it shows.
+ *
+ * They used to share one capability, because one capability is what the platform had: a chapter was
+ * admitted by `settings.users_roles` and so was every command inside it. The split gives each
+ * chapter the narrowest key that makes its content meaningful — you are admitted to Users if you may
+ * see people, to Roles if you may see roles — and moves the authority to CHANGE anything into
+ * `commandCapabilities`, where it is withdrawn control by control.
+ *
+ * Admission is deliberately the read key and not the write key. Gating the chapter on write would
+ * hide the roster from an auditor who is entitled to read it, which is a narrowing no decision
+ * authorized; gating it on write would also make `admin.users.read` a key that grants nothing
+ * reachable, which is the dead-capability shape `IA-R6` forbids.
  */
 export const ACCESS_SURFACE_DECLARATIONS: Record<AccessWorkspaceChapter, SurfaceCapabilityDeclaration> = {
     users: {
         surfaceKey: "access:users",
         label: ACCESS_WORKSPACE_CHAPTER_META.users.label,
         href: accessWorkspaceChapterHref("users"),
-        capability: SETTINGS_USERS_ROLES_PERMISSION,
+        capability: ADMIN_USERS_READ,
+        commandCapabilities: [ADMIN_USERS_WRITE, ADMIN_ACCESS_SCOPE_WRITE, ADMIN_ROLES_READ],
         backingRoutes: [
             "app/api/admin/settings/users-roles/members/route.ts",
             "app/api/admin/users/route.ts",
             "app/api/admin/users/[userId]/role/route.ts",
             "app/api/admin/users/[userId]/access-scope/route.ts",
             "app/api/admin/users/[userId]/remove/route.ts",
-            "app/api/admin/rbac/roles/route.ts",
+            // GET ONLY — the picker reads the role list. Creating a role is the Roles chapter's
+            // command, under `admin.roles.write`, and this chapter draws no control for it.
+            "app/api/admin/rbac/roles/route.ts#GET",
             // OD-8 — the chapter explains effective access, so it reads the capability catalog and
             // each held role's grants. Both are READS feeding an explanation; the Users chapter
             // offers no capability editing, which stays in the role editor (`W-59`/`RM-6`).
             "app/api/admin/rbac/permissions/route.ts",
-            "app/api/admin/rbac/grants/route.ts",
+            "app/api/admin/rbac/grants/route.ts#GET",
             // D2 — the chapter renders the shared Access history card, which reads this route. It
-            // enforces the same `settings.users_roles` the chapter is admitted by, so the surface
+            // enforces `admin.users.read`, the same key that admits this chapter, so the surface
             // gate and the route gate are true for the same reason.
             "app/api/admin/access/history/route.ts",
         ],
@@ -124,7 +158,8 @@ export const ACCESS_SURFACE_DECLARATIONS: Record<AccessWorkspaceChapter, Surface
         surfaceKey: "access:roles",
         label: ACCESS_WORKSPACE_CHAPTER_META.roles.label,
         href: accessWorkspaceChapterHref("roles"),
-        capability: SETTINGS_USERS_ROLES_PERMISSION,
+        capability: ADMIN_ROLES_READ,
+        commandCapabilities: [ADMIN_ROLES_WRITE, ADMIN_USERS_READ],
         backingRoutes: [
             "app/api/admin/rbac/roles/route.ts",
             "app/api/admin/rbac/roles/[role_key]/route.ts",
@@ -141,7 +176,7 @@ export const ACCESS_SURFACE_DECLARATIONS: Record<AccessWorkspaceChapter, Surface
         surfaceKey: "access:security",
         label: ACCESS_WORKSPACE_CHAPTER_META.security.label,
         href: accessWorkspaceChapterHref("security"),
-        capability: SETTINGS_USERS_ROLES_PERMISSION,
+        capability: ADMIN_USERS_READ,
         // D2 — the chapter issues its first request. The Audit Log card said `Planned` since it was
         // written and now renders committed `mutation_events`, so the honest declaration is the route
         // it reads rather than the note explaining that it read nothing.
@@ -166,10 +201,31 @@ export const ACCESS_SURFACE_LIST: SurfaceCapabilityDeclaration[] = ACCESS_WORKSP
 export function heldAccessCapabilities(
     access: Pick<AdminAccessContextSuccess, "roleKeys" | "permissionKeys">
 ): ReadonlySet<string> {
+    /*
+     * STILL NO SECOND PREDICATE — it is just that there are five keys to report now instead of one.
+     *
+     * The old body called `canManageUsersAndRoles` and reported the single umbrella key it decided.
+     * That function survives as the CHAPTER-LEVEL gate for `/organization/access` (any Access
+     * authority opens the workspace), but it can no longer answer *which* chapters or *which*
+     * controls, because those are five different questions now. The membership test below is the
+     * same one `requireAccessAdministration` applies on every route: the key is in the set iff the
+     * principal holds it, with no role literal and no inference between keys.
+     */
     const held = new Set<string>();
-    if (canManageUsersAndRoles(access)) held.add(SETTINGS_USERS_ROLES_PERMISSION);
+    for (const key of ACCESS_ADMINISTRATION_SURFACE_KEYS) {
+        if (access.permissionKeys.includes(key)) held.add(key);
+    }
     return held;
 }
+
+/** Every key the Access surfaces admit or command on. Declared once, so the two cannot drift. */
+const ACCESS_ADMINISTRATION_SURFACE_KEYS: readonly string[] = Object.freeze([
+    ADMIN_USERS_READ,
+    ADMIN_USERS_WRITE,
+    ADMIN_ROLES_READ,
+    ADMIN_ROLES_WRITE,
+    ADMIN_ACCESS_SCOPE_WRITE,
+]);
 
 /**
  * Navigation filters from the declaration — the same one the layout enforces.
@@ -224,9 +280,23 @@ export function visibleAccessChapters(
  * `05…§7.7`'s *"true for the same reason"* requires, and what stops the drift `L8` warns about.
  */
 export function availableAccessCommands(
-    access: Pick<AdminAccessContextSuccess, "roleKeys">
+    access: Pick<AdminAccessContextSuccess, "roleKeys" | "permissionKeys">
 ): AccessCommandKey[] {
-    return hasPortalAdminMutateAccess(access.roleKeys) ? ["password-reset"] : [];
+    const commands: AccessCommandKey[] = [];
+    if (hasPortalAdminMutateAccess(access.roleKeys)) commands.push("password-reset");
+    /*
+     * Each of the three below is resolved by the MEMBERSHIP TEST ITS ROUTE APPLIES — the body of
+     * `requireAccessAdministration` is `access.permissionKeys.includes(capability)`, and so is this.
+     * A control is therefore drawn exactly when the route behind it would accept the click, which is
+     * the direction W49-F1 requires: presentation reflects authorization, never creates it.
+     *
+     * Withdrawing a control is not an authorization decision and cannot become one — a principal who
+     * is not offered the invite control and posts to the route anyway still meets the 403.
+     */
+    if (access.permissionKeys.includes(ADMIN_USERS_WRITE)) commands.push("manage-users");
+    if (access.permissionKeys.includes(ADMIN_ACCESS_SCOPE_WRITE)) commands.push("manage-access-scope");
+    if (access.permissionKeys.includes(ADMIN_ROLES_WRITE)) commands.push("manage-roles");
+    return commands;
 }
 
 /**
@@ -246,8 +316,22 @@ export function availableAccessCommands(
  * check asserts this map covers exactly the declared set, so a domain that acquires a capability
  * without acquiring a filter is a failure rather than a silent pass.
  */
-export const ORGANIZATION_DOMAIN_CAPABILITIES: Readonly<Record<string, string>> = {
-    access: SETTINGS_USERS_ROLES_PERMISSION,
+/*
+ * ANY-OF, NOT ONE KEY — and the change is forced by the split, not a loosening.
+ *
+ * This was `Record<string, string>`: one domain, one capability, because the Access page was one
+ * capability. It now has three chapter capabilities, and a role administrator holding only
+ * `admin.roles.read` is admitted to the workspace and to the Roles chapter. Pinning the card to a
+ * single key — `admin.users.read`, say — would draw no Access card for that person while
+ * `/organization/access` opened for them at the URL. That is `W49-F2`'s defect exactly, in the
+ * direction that hurts: navigation hiding a surface admission grants.
+ *
+ * So the card is visible when the principal holds ANY of the domain's capabilities, and the list is
+ * DERIVED from the chapter declarations rather than restated beside them — the card cannot gate on a
+ * key the page does not, because it is reading the page's own answer.
+ */
+export const ORGANIZATION_DOMAIN_CAPABILITIES: Readonly<Record<string, readonly string[]>> = {
+    access: Object.freeze(ACCESS_SURFACE_LIST.map((d) => d.capability).filter((c, i, a) => a.indexOf(c) === i)),
 };
 
 /**
@@ -260,7 +344,7 @@ export function isOrganizationDomainVisible(
     domainKey: string,
     heldCapabilities: ReadonlySet<string>
 ): boolean {
-    const capability = ORGANIZATION_DOMAIN_CAPABILITIES[domainKey];
-    if (!capability) return true;
-    return heldCapabilities.has(capability);
+    const capabilities = ORGANIZATION_DOMAIN_CAPABILITIES[domainKey];
+    if (!capabilities) return true;
+    return capabilities.some((capability) => heldCapabilities.has(capability));
 }

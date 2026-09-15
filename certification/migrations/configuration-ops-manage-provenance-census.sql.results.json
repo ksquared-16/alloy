@@ -1,0 +1,105 @@
+{
+  "trusted_host_action_id": "tha_597d5670b6dfda",
+  "query_hash": "1faed1b7bf1012cb9c9b979ef9679376a11c6a4c90da729407e546a26086af3f",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-14T20:36:57.688Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_597d5670b6dfda",
+    "query_hash": "1faed1b7bf1012cb9c9b979ef9679376a11c6a4c90da729407e546a26086af3f",
+    "authorization_id": "grnt_10f165a6d68d44b5",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-14T20:36:59.181Z",
+    "question_ids": [
+      "selftest_population",
+      "failing_role",
+      "audit_trace",
+      "admin_in_failing_orgs",
+      "migration_effects",
+      "ledger_version",
+      "nonvacuity",
+      "ledger_head",
+      "ledger_total"
+    ],
+    "questions": {
+      "selftest_population": {
+        "question_id": "selftest_population",
+        "row_count": null,
+        "rows": [
+          "active_ops_roles=3 failing_the_assertion=2 total_ops_roles=3"
+        ]
+      },
+      "failing_role": {
+        "question_id": "failing_role",
+        "row_count": null,
+        "rows": [
+          "7803388d-cdee-4afb-89cf-23a137f39423 ~ fields.manage ~ NEVER_GRANTED ~ false",
+          "7803388d-cdee-4afb-89cf-23a137f39423 ~ layouts.manage ~ NEVER_GRANTED ~ false",
+          "7803388d-cdee-4afb-89cf-23a137f39423 ~ option_sets.manage ~ NEVER_GRANTED ~ false",
+          "93667019-bd28-49b5-a688-acc9bb1e0a19 ~ fields.manage ~ NEVER_GRANTED ~ false",
+          "93667019-bd28-49b5-a688-acc9bb1e0a19 ~ layouts.manage ~ NEVER_GRANTED ~ false",
+          "93667019-bd28-49b5-a688-acc9bb1e0a19 ~ option_sets.manage ~ NEVER_GRANTED ~ false"
+        ]
+      },
+      "audit_trace": {
+        "question_id": "audit_trace",
+        "row_count": null,
+        "rows": [
+          "7803388d-cdee-4afb-89cf-23a137f39423 ~ events_mentioning_a_manage_key ~ 0 ~ false",
+          "93667019-bd28-49b5-a688-acc9bb1e0a19 ~ events_mentioning_a_manage_key ~ 0 ~ false"
+        ]
+      },
+      "admin_in_failing_orgs": {
+        "question_id": "admin_in_failing_orgs",
+        "row_count": null,
+        "rows": [
+          "7803388d-cdee-4afb-89cf-23a137f39423 ~ admin_manage_keys_held ~ 3 ~ of3",
+          "93667019-bd28-49b5-a688-acc9bb1e0a19 ~ admin_manage_keys_held ~ 3 ~ of3"
+        ]
+      },
+      "migration_effects": {
+        "question_id": "migration_effects",
+        "row_count": null,
+        "rows": [
+          "sensitive_keys_catalogued=3 admin_roles_short_of_six=0 ops_holding_sensitive=0"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20260914183000 ~ registered ~ present ~ true",
+          "20260914184000 ~ registered ~ present ~ true"
+        ]
+      },
+      "nonvacuity": {
+        "question_id": "nonvacuity",
+        "row_count": null,
+        "rows": [
+          "orgs_with_roles=3 grants_total=330 mutation_events=40"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20260915091000
+        ]
+      },
+      "ledger_total": {
+        "question_id": "ledger_total",
+        "row_count": null,
+        "rows": [
+          437
+        ]
+      }
+    },
+    "row_count": 17
+  }
+}

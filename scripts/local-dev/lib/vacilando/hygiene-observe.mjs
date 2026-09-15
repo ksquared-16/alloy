@@ -33,6 +33,7 @@ import {
   hygieneScoreboard,
 } from "./hygiene-classification.mjs";
 import { lastCycleSummary } from "./hygiene-reclaim.mjs";
+import { ALLOY_REPOSITORY_ID, projectScope } from "./repository-registry.mjs";
 
 export const HYGIENE_OBSERVE_SCHEMA = "vacilando.hygiene_observe.v1";
 
@@ -45,8 +46,32 @@ function run(cmd, args, { cwd = undefined, timeout = 20_000 } = {}) {
   } catch { return null; }
 }
 
-export function defaultCanonicalRoot() { return join(homedir(), "Alloy"); }
-export function defaultWorktreeParent() { return join(homedir(), "Code", "alloy-worktrees"); }
+/**
+ * THE SCOPE AN OBSERVATION IS FOR, WHICH IS A PROJECT AND NOT A MACHINE.
+ *
+ * These were `~/Alloy` and `~/Code/alloy-worktrees`, written as module
+ * functions and used as default arguments by every observer in the file. A
+ * hygiene scan therefore had ONE scope on any host, for any project, and
+ * nothing in the call chain could say otherwise.
+ *
+ * The registry is asked instead. `repositoryId` defaults to Alloy because Alloy
+ * is what every current caller means — the value is identical — but it is now a
+ * parameter a caller can change, and an UNREGISTERED id resolves to null rather
+ * than to Alloy's directories. That is the whole distinction: a scanner with no
+ * project has no scope, not Alloy's scope.
+ */
+export function defaultCanonicalRoot(repositoryId = ALLOY_REPOSITORY_ID) {
+  const scope = projectScope(repositoryId);
+  if (scope.known) return scope.root;
+  // Only the incumbent keeps a filesystem fallback, for an unseeded host. S3
+  // deletes it with the rest of the `~/Alloy` guesses.
+  return repositoryId === ALLOY_REPOSITORY_ID ? join(homedir(), "Alloy") : null;
+}
+export function defaultWorktreeParent(repositoryId = ALLOY_REPOSITORY_ID) {
+  const scope = projectScope(repositoryId);
+  if (scope.known) return scope.worktree_parent;
+  return repositoryId === ALLOY_REPOSITORY_ID ? join(homedir(), "Code", "alloy-worktrees") : null;
+}
 
 /** Every process, or null when the table could not be read. Null is never "no processes". */
 export function readProcesses() {

@@ -139,18 +139,18 @@ function context(): OperationalContext {
     } as unknown as OperationalContext;
 }
 
-function coordination(): FocusPanelCoordination {
+function coordination(open = true): FocusPanelCoordination {
     return {
         focusTargets: new Set(["current_work"]),
         request: null,
         requestFocus: vi.fn(),
-        activeDepth: { card: "current_work", level: "focused" },
+        activeDepth: open ? { card: "current_work", level: "focused" } : null,
         reportPerspective: vi.fn(),
         dismissed: null,
         dismiss: vi.fn(),
         previousFocus: null,
         back: vi.fn(),
-        currentWorkWorkspace: { open: true, intent: null },
+        currentWorkWorkspace: { open, intent: null },
         openCurrentWorkWorkspace: vi.fn(),
         closeCurrentWorkWorkspace: vi.fn(),
     } as unknown as FocusPanelCoordination;
@@ -200,6 +200,45 @@ describe("secondary work is reachable from the focused workspace", () => {
     it("survives a stage that projects no action stack at all", () => {
         const html = focusedHtml();
         expect(html).not.toContain('data-work-focused-actions="true"');
+        expect(html).toContain('data-work-secondary-item="second_work"');
+    });
+});
+
+
+/**
+ * THE SUMMARY CARD HAS THE SAME CONTRACT, AND HAD THE SAME GATE.
+ *
+ * `CurrentWorkCard`'s SummaryBody is live wherever no Process Card supersedes the region, and its
+ * certification claimed — statically — that it "lists the stage's other open work". Rendering it is
+ * what showed the claim was conditional: the section sat inside
+ * `helpful.length > 0 || subordinateOutcome`, so a stage projecting no action stack dropped it,
+ * exactly as the focused surface did before #877.
+ *
+ * A static `toContain` could never have caught that. The markup was present the whole time.
+ */
+function summaryHtml(): string {
+    return renderToStaticMarkup(
+        <CurrentWorkCard model={model} context={context()} coordination={coordination(false)} />,
+    );
+}
+
+describe("secondary work is reachable from the summary card", () => {
+    it("renders the summary body, not the focused surface", () => {
+        const html = summaryHtml();
+        expect(html).toContain('data-work-summary="true"');
+        expect(html).not.toContain('data-work-focused-surface="true"');
+    });
+
+    it("lists the stage's other open work", () => {
+        expect(summaryHtml()).toContain('data-work-secondary-item="second_work"');
+    });
+
+    it("survives a stage that projects no action stack at all", () => {
+        // The fixture deliberately projects no helpful commands and no subordinate outcome — the
+        // shape the gate hid. If the section is ever nested back inside the action stack, this
+        // fails and the static guard does not.
+        const html = summaryHtml();
+        expect(html).not.toContain('data-work-primary-stack="true"');
         expect(html).toContain('data-work-secondary-item="second_work"');
     });
 });

@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { LAYOUTS_LIFECYCLE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { isLayoutV2ConfigEnabledServer } from "@/lib/layout/featureFlag";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
@@ -27,9 +28,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, LAYOUTS_LIFECYCLE);
+    if (denied) return denied;
 
     const { id } = await params;
     try {

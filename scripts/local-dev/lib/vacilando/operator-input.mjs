@@ -35,6 +35,8 @@ const OPERATOR_ACTIONABLE_GOVERNED = new Set([
  *
  * Only modeled records count. Provider prose never does.
  */
+import { governorMayCollect } from "./run-lifecycle.mjs";
+
 export function actionableOperatorInputForRun(run, { root } = {}) {
   if (!run) return null;
 
@@ -98,6 +100,9 @@ export function actionableOperatorInputForRun(run, { root } = {}) {
  */
 export function reconcileNeedsInputWithoutInput({ root, nowMs = Date.now() } = {}) {
   const reconciled = [];
+  // Refusals are returned, not dropped: "the governor did nothing" and "the
+  // governor deliberately left this alone" are different facts.
+  const skipped = [];
   let lanes = [];
   try { lanes = listDurableLanes(root) || []; } catch { lanes = []; }
   for (const lane of lanes) {
@@ -107,6 +112,31 @@ export function reconcileNeedsInputWithoutInput({ root, nowMs = Date.now() } = {
     if (isTerminalRunState(run.state)) continue;
     const input = actionableOperatorInputForRun(run, { root });
     if (input) continue;
+    /*
+     * "NO MODELLED INPUT" IS NOT "NOTHING IS HAPPENING".
+     *
+     * This collected any NEEDS_INPUT run whose input model was empty, the
+     * instant it found it. Measured: NEEDS_INPUT at 15:12:06.937, ABANDONED at
+     * 15:12:09.356 — 2.4 seconds — on a run whose governed pull request had
+     * just been refused for a credential-shaped body. Nothing was stranded; the
+     * worker was about to act, and there was no window in which it could.
+     * Eleven of eighteen abandonments in the store carry this reason.
+     *
+     * `governorMayCollect` answers from the lifecycle phase instead: a live
+     * governed wait and a run resting between governed steps are both refused,
+     * and everything else still gets a grace period before collection. The
+     * invariant this file protects is unchanged — a run parked with no control
+     * is still collected — it simply no longer races the work.
+     */
+    const decision = governorMayCollect(run, {
+      governed: pendingGovernedActionForRun(run.run_id, root),
+      session_alive: true,
+      now_ms: nowMs,
+    });
+    if (!decision.collect) {
+      skipped.push({ lane_id: lane.lane_id, run_id: run.run_id, why: decision.why });
+      continue;
+    }
     const why = run.state_reason || "needs_input_without_operator_input";
     const out = transitionExecutionRun(run.run_id, "ABANDONED", {
       reason: "needs_input_without_operator_input",
@@ -122,7 +152,7 @@ export function reconcileNeedsInputWithoutInput({ root, nowMs = Date.now() } = {
       reconciled.push({ lane_id: lane.lane_id, run_id: run.run_id, was_reason: why });
     }
   }
-  return { ok: true, reconciled };
+  return { ok: true, reconciled, skipped };
 }
 
 /** Read-only assertion used by the API/UI: is this NEEDS_INPUT legitimate? */

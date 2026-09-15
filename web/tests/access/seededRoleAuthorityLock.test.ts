@@ -54,6 +54,119 @@ const ACCESS_OWNED = [
     join(webRoot, "app", "api", "admin", "processing"),
     join(webRoot, "lib", "pos", "processingIdentity"),
     join(webRoot, "lib", "access", "processingAuthority.ts"),
+    /*
+     * The Schedules + Jobs authorization surface. Fourteen gates, and the reason they are listed as
+     * ONE cluster is that four of them were never scheduling or job operations at all: they post a
+     * cash receipt, a vendor payout, a GL journal entry and a receivable charge. Authority there
+     * follows the business consequence rather than the URL folder, so `fin.post` is enforced from
+     * under `schedules/` and `jobs/` — and this lock has to cover both trees or the money four
+     * could quietly regress to a role title while the other ten stayed clean.
+     */
+    join(webRoot, "app", "api", "admin", "schedules"),
+    join(webRoot, "app", "api", "admin", "jobs"),
+    join(webRoot, "lib", "access", "schedulingJobsAuthority.ts"),
+    /*
+     * The configuration authorization surface — option sets, entity layouts, field definitions.
+     *
+     * TWO ROUTES IN THESE TREES KEEP A ROLE GATE ON PURPOSE, and the lock must not be read as
+     * having missed them. `entity-layouts/[id]` DELETE is a MODEL_CONTRACT_DEFECT: its own file
+     * says published rows are immutable while the handler deletes them. `ensure-platform-field`
+     * installs is_system rows the organization can never remove, and whether that may be delegated
+     * is an unresolved product decision. Minting a capability for either would make it MORE
+     * reachable — a key can be granted to a custom role, a role literal cannot — so both keep the
+     * gate they already had and are recorded as debt rather than migrated. They are named in
+     * KNOWN_ROLE_GATED below so this lock stays green on exactly those and nothing else.
+     *
+     * THE BUSINESS PROCESS TREES join this lock with the Department convergence. Every lifecycle
+     * operation under `departments/` and the publish route under `business-process/` now derives
+     * authority from `business_process.configure` / `.activate`, and the generic department DELETE
+     * was retired outright rather than given a key. One gate survives on purpose: the PATCH shape
+     * carrying `metadata` is the org-wide attention/SLA write, which has no truthful capability yet
+     * and must not borrow a process key to get one. It is recorded below, and the same handler's
+     * column-field branch is capability-gated, so the exception is a write shape, not a route.
+     *
+     * THE OPERATIONAL INTELLIGENCE TREES join with the reports.write convergence. Ten mutation
+     * handlers under `organization-calculations/` and `metrics/` asked for the admin role while
+     * `reports.write` sat in the catalog describing exactly those operations and enforcing nothing.
+     * They derive authority from it now, and the ops default package was corrected in the same
+     * slice so activating the key could not hand ops ten mutations it had never performed. No new
+     * exception is recorded: the bounded area reaches zero.
+     *
+     * DISCOUNTS joins as the Jobs vertical's, not the childcare one's. Its three mutations asked for
+     * the admin role; they ask for `ops.jobs.write` now, which is already admin-present and
+     * ops-absent, so the rehome preserved the exact behaviour without a migration. The model was NOT
+     * retired: the Financials program recorded `discount_programs` as a different vertical when it
+     * built `financial_reduction_applications`, and Jobs/Booking remains supported. Its legacy-only
+     * authoring surface is product debt, not an authority exception.
+     */
+    join(webRoot, "app", "api", "admin", "option-sets"),
+    join(webRoot, "app", "api", "admin", "entity-layouts"),
+    join(webRoot, "app", "api", "admin", "field-definitions"),
+    join(webRoot, "lib", "access", "configurationAuthority.ts"),
+    join(webRoot, "app", "api", "admin", "departments"),
+    join(webRoot, "app", "api", "admin", "business-process"),
+    join(webRoot, "lib", "access", "businessProcessAuthority.ts"),
+    join(webRoot, "app", "api", "admin", "organization-calculations"),
+    join(webRoot, "app", "api", "admin", "metrics"),
+    join(webRoot, "lib", "admin", "canReadAnalytics.ts"),
+    join(webRoot, "app", "api", "admin", "discounts"),
+    /*
+     * The Business Process FAMILY, added when enrollment-process and lifecycle-catalog rehomed onto
+     * the keys the business-process namespace already owned. Eleven gates, and they are listed as
+     * one cluster because the split inside them is the thing most at risk of quietly reverting:
+     * `stage-work-unit/route.ts` holds two `business_process.configure` handlers and one
+     * `business_process.activate` handler, because its DELETE takes running work offline while its
+     * POST and PATCH only edit the definition. A future reader tidying that file toward "one
+     * capability per route" would undo a Director decision, so the tree is locked rather than the
+     * individual handlers.
+     */
+    join(webRoot, "app", "api", "admin", "enrollment-process"),
+    join(webRoot, "app", "api", "admin", "lifecycle-catalog"),
+    /*
+     * The Configuration PRESENTATION surfaces, added when the direct routes stopped asking for the
+     * admin title and started asking the keys the Configuration model already owned. Seven trees,
+     * and they are listed rather than the whole folder set because two neighbours are deliberately
+     * NOT here:
+     *
+     *   - `agent/*` still decides from a role title on purpose. Those three routes apply a
+     *     structured configuration override through the AI agent path, and the intended owner for
+     *     that class is recorded in `lib/ai/aiEnrichmentPermissions.ts` as a FUTURE key,
+     *     `agent.suggestion.apply`. Converting them to layouts/fields would have silently answered
+     *     a question the platform has already written down as open.
+     *   - `entity-labels` renames entity types for the whole organization. It has no truthful owner
+     *     among the established keys, and a folder is not a reason to pick one.
+     *
+     * Neither is an exception list entry, because neither is claimed as finished. They are open
+     * Director questions, and this comment is where a future reader finds that out.
+     */
+    join(webRoot, "app", "api", "admin", "workspace-kpi-placements"),
+    join(webRoot, "app", "api", "admin", "surfaces"),
+    join(webRoot, "app", "api", "admin", "queue-row-layout"),
+    join(webRoot, "app", "api", "admin", "record-drawer-layouts"),
+    join(webRoot, "app", "api", "admin", "field-sections"),
+    join(webRoot, "app", "api", "admin", "config"),
+    join(webRoot, "app", "api", "admin", "business-process-layout-assignments"),
+    join(webRoot, "lib", "access", "configurationAuthority.ts"),
+];
+
+/**
+ * The only files in the Access-owned surface allowed to still decide from a role key, each with a
+ * recorded reason and an owner. The list may only SHRINK: a new entry is a new defect, and removing
+ * one means the underlying product question was answered.
+ */
+const KNOWN_ROLE_GATED: { suffix: string; why: string }[] = [
+    {
+        suffix: join("entity-layouts", "[id]", "route.ts"),
+        why: "MODEL_CONTRACT_DEFECT — deletes rows the model calls immutable; see entity-layout-delete-model-contract.md",
+    },
+    {
+        suffix: join("field-definitions", "ensure-platform-field", "route.ts"),
+        why: "PLATFORM_AUTHORITY_DELEGABILITY_UNRESOLVED — installs unremovable is_system rows; see platform-field-authority-delegability.md",
+    },
+    {
+        suffix: join("departments", "[departmentId]", "route.ts"),
+        why: "ATTENTION_SLA_METADATA_AUTHORITY_DEBT — the PATCH metadata shape is the org-wide attention/SLA write, not a business process write; settings.manage would widen it to ops and business_process.configure would make a process key a generic JSON write key. The column fields ARE capability-gated in the same handler; only the metadata branch still asks the role.",
+    },
 ];
 
 /**
@@ -144,6 +257,16 @@ describe("W-17 — a seeded role key is not authority inside Access", () => {
         expect(forms.length, "the Forms authorization surface was not scanned").toBeGreaterThan(15);
     });
 
+    it("actually scanned the Schedules + Jobs authorization surface", () => {
+        // Separate non-vacuity claim: a different tree, which must not be covered by another tree
+        // still being noisy. Both folders are named because the money four live under `schedules/`
+        // and `jobs/` while being owned by Financials.
+        const sched = scanned.filter((f) => f.includes(`${sep}schedules${sep}`));
+        const jobs = scanned.filter((f) => f.includes(`${sep}jobs${sep}`));
+        expect(sched.length, "the Schedules authorization surface was not scanned").toBeGreaterThan(5);
+        expect(jobs.length, "the Jobs authorization surface was not scanned").toBeGreaterThan(5);
+    });
+
     it("actually scanned the POS + Processing authorization surface", () => {
         // Same non-vacuity claim, made separately: these are different trees, and one of them going
         // quiet must not be covered by the other still being noisy.
@@ -174,7 +297,60 @@ describe("W-17 — a seeded role key is not authority inside Access", () => {
                 }
             }
         }
-        expect(offenders, "authorization here must derive from capabilities and scope, not from a role title").toEqual([]);
+        /*
+         * The two recorded exceptions are removed here rather than excluded from the scan, so the
+         * scan still SEES them: if either file loses its role gate the entry becomes stale, and the
+         * non-vacuity test below fails until someone deletes it.
+         */
+        const remaining = offenders.filter(
+            (o) => !KNOWN_ROLE_GATED.some((k) => o.startsWith(k.suffix) || o.includes(k.suffix)),
+        );
+        expect(remaining, "authorization here must derive from capabilities and scope, not from a role title").toEqual([]);
+    });
+
+    it("every recorded role-gated exception is still real, and the list only shrinks", () => {
+        /*
+         * A named exception that has since been fixed is a lie the next reader inherits. Each entry
+         * must still correspond to a file that genuinely still decides from a role key.
+         */
+        for (const known of KNOWN_ROLE_GATED) {
+            const file = scanned.find((f) => f.endsWith(known.suffix));
+            expect(file, `${known.suffix} is recorded as role-gated but is no longer scanned`).toBeTruthy();
+            const src = stripComments(readFileSync(file as string, "utf8"));
+            const stillGated = AUTHORITY_SHAPES.some((shape) =>
+                src.split("\n").some((line) => shape.re.test(line)),
+            );
+            expect(
+                stillGated,
+                `${known.suffix} no longer decides from a role key — delete its KNOWN_ROLE_GATED entry (${known.why})`,
+            ).toBe(true);
+        }
+        /*
+         * THE CAP MOVES ONLY WITH THE SCANNED SURFACE, NEVER WITH A NEW DEFECT IN AN OLD ONE.
+         *
+         * It was 2 while this lock covered option-sets, entity-layouts and field-definitions. The
+         * Department convergence brought two more trees under the scan — `departments/` and
+         * `business-process/` — carrying nine role-title sites between them. Eight are gone: seven
+         * converted to business_process.configure / .activate and the generic department DELETE was
+         * retired with the route. The ninth is a WRITE SHAPE, not a route: a PATCH body carrying
+         * `metadata` is the org-wide attention/SLA write, and the same handler's column-field branch
+         * is capability-gated beside it.
+         *
+         * So 3 is the honest number for a surface that now scans two more trees than it did, and it
+         * is a ceiling rather than a budget: nothing in an already-scanned tree may claim it. When
+         * attention/SLA gets its own owner, this returns to 2 and does not rise again.
+         */
+        expect(KNOWN_ROLE_GATED.length, "the exception list may only shrink").toBeLessThanOrEqual(3);
+    });
+
+    it("actually scanned the configuration authorization surface", () => {
+        const cfg = scanned.filter(
+            (f) =>
+                f.includes(`${sep}option-sets${sep}`) ||
+                f.includes(`${sep}entity-layouts${sep}`) ||
+                f.includes(`${sep}field-definitions${sep}`),
+        );
+        expect(cfg.length, "the configuration authorization surface was not scanned").toBeGreaterThan(8);
     });
 
     it("bites: the shapes it forbids are actually recognised", () => {
@@ -238,10 +414,22 @@ describe("W-17 — a seeded role key is not authority inside Access", () => {
     it("gives a custom role the SAME answer as a seeded role holding the same capability", () => {
         // The whole configurable claim, in one assertion: the decision follows the grant, and the
         // key that carried it is not consulted.
-        const seeded = { roleKeys: ["admin"], permissionKeys: ["settings.users_roles"] };
-        const custom = { roleKeys: ["cert_w17_whatever_they_called_it"], permissionKeys: ["settings.users_roles"] };
+        const seeded = { roleKeys: ["admin"], permissionKeys: ["admin.users.read"] };
+        const custom = { roleKeys: ["cert_w17_whatever_they_called_it"], permissionKeys: ["admin.users.read"] };
         expect(canManageUsersAndRoles(seeded)).toBe(true);
         expect(canManageUsersAndRoles(custom)).toBe(canManageUsersAndRoles(seeded));
+
+        // And it holds for each of the split's authorities independently — a custom role granted
+        // only scope administration is admitted to the workspace on exactly the same terms.
+        for (const key of ["admin.users.write", "admin.roles.read", "admin.roles.write", "admin.access_scope.write"]) {
+            expect(
+                canManageUsersAndRoles({ roleKeys: ["cert_w17_whatever_they_called_it"], permissionKeys: [key] }),
+                `${key} admits a seeded role but not a custom one`
+            ).toBe(canManageUsersAndRoles({ roleKeys: ["admin"], permissionKeys: [key] }));
+        }
+
+        // The retired umbrella admits nobody, whatever the role is called.
+        expect(canManageUsersAndRoles({ roleKeys: ["admin"], permissionKeys: ["settings.users_roles"] })).toBe(false);
     });
 
     it("gives a seeded role NO special treatment when it grants nothing relevant", () => {

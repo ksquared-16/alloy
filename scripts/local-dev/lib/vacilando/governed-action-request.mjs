@@ -8,6 +8,34 @@
  * This is not a parallel orchestrator: it sits on execution runs, mission
  * decisions, and trusted-host actions.
  */
+import { stampRepositoryAuthority } from "./repository-execution-authority.mjs";
+import { executionProfileFor as executionProfileForRepo, projectScope } from "./repository-registry.mjs";
+
+/** Alloy's database target, owned by Alloy's profile. */
+const alloyDatabaseTarget = () =>
+  executionProfileForRepo({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID_FOR_TARGET }).database_target;
+
+/**
+ * The database a request is actually FOR.
+ *
+ * S1 replaced the literal `"alloy_deployed_primary"` with Alloy's profile, which
+ * fixed where the value came from and left the behaviour: a request that omitted
+ * a target still acquired ALLOY'S DATABASE, whichever project it named.
+ *
+ * A request that NAMES a project now resolves that project's database, or none —
+ * a project with no database gets a null target and the action refuses
+ * downstream, which is the correct outcome for a repository-only project. Only a
+ * request that names no project at all keeps the incumbent Alloy default, and
+ * that last fallback belongs to S3, once every request carries its project.
+ */
+function requestDatabaseTarget(req = {}, inputs = {}) {
+  const stated = inputs.target || inputs.environment || req.target;
+  if (stated) return stated;
+  const named = req.authority?.repository_id || inputs.repository_id || null;
+  if (named) return projectScope(named).database_target || null;
+  return alloyDatabaseTarget();
+}
+const ALLOY_REPOSITORY_ID_FOR_TARGET = "repo_alloy";
 import { createHash, randomBytes } from "node:crypto";
 import { measureMergePullRequestGates } from "./trusted-host-repository-housekeeping.mjs";
 import { describeWait } from "./run-wait.mjs";
@@ -30,6 +58,7 @@ import {
   artifactContractFor,
   classifyActionAvailability,
   getActionDefinition,
+  resolveCanonicalRepoRoot,
 } from "./trusted-host-action-registry.mjs";
 import {
   classifyGovernedActionFailure,
@@ -51,6 +80,7 @@ import {
   fulfillRepositoryPushForMission,
   fulfillClosePullRequestForMission,
   fulfillApplyReconciliationPlanForMission,
+  fulfillTransferFilesForMission,
   fulfillExecuteRegisteredReconciliationForMission,
   fulfillRetireWorktreeForMission,
   fulfillDeleteRemoteBranchForMission,
@@ -527,7 +557,9 @@ export function presentationForGovernedAction(req = {}) {
      */
     const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
     const versions = list.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean);
-    const target = inputs.target || inputs.environment || req.target || "alloy_deployed_primary";
+    // The literal here meant any project omitting a target acquired Alloy's
+  // database. Alloy's profile answers for Alloy; another project supplies its own.
+  const target = requestDatabaseTarget(req, inputs);
     const sha = String(inputs.expectedSha || inputs.expected_sha || "");
     return {
       approve_label: "Authorize PRODUCTION migration",
@@ -707,7 +739,7 @@ function productionMigrationProposal(req) {
   const list = Array.isArray(i.migrations) ? i.migrations : [];
   const versions = list.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean);
   const files = list.map((m) => (typeof m === "string" ? m : (m?.path || m?.migration_path || m?.version || ""))).filter(Boolean);
-  const target = i.target || i.environment || req.target || "alloy_deployed_primary";
+  const target = requestDatabaseTarget(req, i);
   const sha = String(i.expectedSha || i.expected_sha || "");
   const facts = [
     factRow("Environment", "PRODUCTION — deployed primary"),
@@ -1909,6 +1941,14 @@ function defaultModeForAction(actionKey, requested) {
   // policy_denied — the trap two actions have already fallen into.
   if (actionKey === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) return "migration_apply";
   /*
+   * NOT "promotion" either. A transfer copies approved files between two
+   * project repositories; it produces no release and touches no product. It is
+   * named here explicitly so it can never inherit read_only and surface as
+   * `policy_denied` -- the trap three actions have now fallen into, and the one
+   * CI caught this action falling into before it ever ran.
+   */
+  if (actionKey === ACTION_TYPES.REPOSITORY_TRANSFER_FILES) return "other";
+  /*
    * NOT "promotion". That mode means an Alloy product release, and this action
    * exists precisely because writing a workflow definition to main is NOT one -
    * conflating them in the mode would put repository configuration and product
@@ -2607,6 +2647,32 @@ export function requestGovernedAction(input = {}, {
     return processGovernedAction(failedMatch.request_id, { nowMs, root: storeRoot, actor: "director" });
   }
 
+  /*
+   * THE REPOSITORY AUTHORITY IS DECIDED HERE, ONCE, AND TRAVELS WITH THE REQUEST.
+   *
+   * This is the first point that has both the governed action identity and a
+   * resolvable promoted authority, so it is where "the SHA this was decided
+   * against" is fixed. Nothing downstream re-reads a live ref to replace it;
+   * that is the whole stability contract, and re-resolving at execution would
+   * silently retarget an approved request onto whatever staging became.
+   *
+   * Stamped AFTER the dedupe lookups above deliberately: those compare the
+   * caller's inputs, and folding a moving SHA into them would stop two
+   * genuinely identical filings from deduping.
+   *
+   * Content-executing actions only. A requirement invented for metadata-only
+   * actions would be noise, and noise is what teaches people to work around a
+   * field.
+   */
+  const repoAuthority = stampRepositoryAuthority({
+    actionKey: shape.actionKey,
+    inputs: shape.inputs || {},
+    canonicalRoot: resolveCanonicalRepoRoot(),
+  });
+  if (!repoAuthority.ok) {
+    return { ok: false, error: repoAuthority.code, detail: repoAuthority.detail, failure_code: repoAuthority.code };
+  }
+
   const rec = {
     schema_version: GOVERNED_ACTION_SCHEMA,
     request_id: newRequestId(),
@@ -2636,7 +2702,7 @@ export function requestGovernedAction(input = {}, {
     decision_id: null,
     execution_started_at: null,
     execution_ended_at: null,
-    inputs: shape.inputs || {},
+    inputs: repoAuthority.inputs,
     continuation_plan: shape.continuationPlan || null,
     continuation_intent: bound(input.continuation_intent || input.continuationIntent, 500)
       || (shape.actionKey === ACTION_TYPES.DATABASE_READ_CENSUS
@@ -3267,6 +3333,18 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
   }
   if (rec.action_key === ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION) {
     return fulfillExecuteRegisteredReconciliationForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_TRANSFER_FILES) {
+    return fulfillTransferFilesForMission(scope, {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: rec.inputs || {},

@@ -62,7 +62,7 @@ const M6 = "20260807170000_w12_seed_default_rbac_enumerated_grants.sql";
  * capability a NEW organization never receives — the cliff `20260910183000` was written to end.
  * Forms moved it here.
  */
-const LIVE_SEED = "20260912114000_processing_capability_default_seed.sql";
+const LIVE_SEED = "20260915140000_access_administration_split.sql";
 
 /**
  * The migration that owns the COMPLETENESS contract — the admin-is-the-whole-catalog rule, the nine
@@ -114,6 +114,19 @@ const HISTORICAL_BLANKET_CEILING = 4;
 const OPS_WITHHELD = [
     "admin.users.write",
     "admin.roles.write",
+    /*
+     * The Access Administration Split's two new authorities. Neither is a narrowing of `ops`: both
+     * keys came into existence with `20260915140000`, and `ops` is not given a capability merely
+     * because one was created. Changing where a colleague may operate, and registering the devices
+     * that record attendance, are administration of the organization's access — the same class as
+     * the two keys above them, and withheld for the same reason.
+     *
+     * The narrowing the Director approved is a different statement, and it is not expressible in
+     * this list: `ops` LOSES `settings.users_roles`, which it held and which authorized all six
+     * powers at once. That key is retired, so it appears in no enumeration at all.
+     */
+    "admin.access_scope.write",
+    "attendance.devices.manage",
     "enrollment.pricing.override",
     "enrollment.requirement_exception.manage",
     "fin.adjust",
@@ -142,9 +155,78 @@ const OPS_WITHHELD = [
     "processing.archive",
     "processing.documents.manage",
     "processing.dev_cleanup",
+    /*
+     * Business process design and activation. Also not a judgement invented by the seed: all eight
+     * handlers under `/api/admin/departments`, and the business-process publish beside them, asked
+     * `ctx.role !== "admin"`, so every one of them answered ops with 403 before the Department
+     * convergence rehomed them. Withholding both is what preserves that.
+     *
+     * They are two keys rather than one because activating a process changes what the tenant is
+     * RUNNING while configuring one does not — the same line that keeps `layouts.lifecycle` out of
+     * `layouts.manage`.
+     */
+    "business_process.configure",
+    "business_process.activate",
+    /*
+     * Operational Intelligence authoring. A CORRECTION rather than a withholding of something ops
+     * never had on paper: reports.write WAS seeded to ops and enforced nowhere, so the grant
+     * conferred nothing, and all ten OI mutation routes answered ops 403 on the role literal.
+     * Making the key real without removing it would have handed ops ten mutations on the strength
+     * of a grant that had never authorized anything - the same shape, and the same answer, as
+     * scheduling.write and ops.jobs.write above.
+     *
+     * ops KEEPS reports.read, and canReadAnalytics accepts either key, so Operational Intelligence
+     * stays readable. Only authoring narrows.
+     */
+    "reports.write",
+    /*
+     * Schedule and job management, and financial posting. Not a new judgement about what ops should
+     * be: before this program touched anything, all fourteen of those routes answered ops with 403
+     * because the gate read `ctx.role !== "admin"`. The two write keys were seeded and enforced
+     * NOWHERE, so the grant conferred nothing; keeping it while the keys became real would have been
+     * the widening. `fin.post` ops never had at all.
+     */
+    "scheduling.write",
+    "ops.jobs.write",
+    "fin.post",
+    /*
+     * Deleting configuration, and layout version lifecycle. Ops keeps option_sets.manage,
+     * layouts.manage and fields.manage — it has held them all along and exercises them through
+     * Config Layout Assist, which is the whole basis for converging the ordinary routes. What it has
+     * never had is deletion or publishing, and all six of those operations answered ops with 403
+     * before this program touched anything.
+     */
+    "option_sets.delete",
+    "layouts.lifecycle",
+    "fields.delete",
 ];
 
 const statements = discoverGrantStatements();
+
+/**
+ * Capabilities some migration has RETIRED — the one honest exception to catalog completeness.
+ *
+ * A retired key stays in the historical catalog literal, because that literal is a reproduction of
+ * what `permission_definitions` held on 2026-07-29 and trimming it is an operator decision. It must
+ * NOT be in the admin enumeration, because seeding a key whose own migration sets `is_active = false`
+ * would create grants the catalog refuses to honour.
+ *
+ * Read from the tree rather than listed here, so the exemption cannot outlive the retirement, and so
+ * a key merely DROPPED from the admin grants — the defect this file exists for — still fails.
+ */
+const RETIRED_KEYS: ReadonlySet<string> = new Set(
+    migrationFiles().flatMap((file) =>
+        stripSqlComments(readMigration(file))
+            .split(";")
+            // The retiring STATEMENT, not the file. A file-wide read grabs every key literal in the
+            // migration — including the 57-key catalog reproduction — and exempts the whole catalog.
+            .filter((statement) =>
+                /update\s+(?:public\.)?permission_definitions\b/i.test(statement)
+                && /\bis_active\s*=\s*false\b/i.test(statement)
+            )
+            .flatMap((statement) => keyLiterals(statement))
+    )
+);
 
 describe("RL-8 — grant seeds enumerate their grants (W-12 / G5)", () => {
     describe("non-vacuity of the scan", () => {
@@ -191,6 +273,28 @@ describe("RL-8 — grant seeds enumerate their grants (W-12 / G5)", () => {
     describe("the end state", () => {
         const live = liveFunctionDefinition("seed_default_rbac");
 
+        /*
+         * SCOPED TO THE FUNCTION, NOT THE FILE — and the split is what forced the distinction.
+         *
+         * Every previous migration that redefined `seed_default_rbac` contained only that function,
+         * so "statements in LIVE_SEED" and "statements in the live seed" were the same set.
+         * `20260915140000` defines TWO seeding functions: `seed_default_rbac` for new organizations
+         * and `seed_access_administration_split` for existing ones, which must grant the same keys.
+         * Filtering by file counted both and read every width as doubled.
+         *
+         * Matching on the body is also the stricter reading: a statement that drifts out of the live
+         * definition stops being counted here rather than being silently credited to it.
+         */
+        // Both sides comment-stripped and whitespace-flattened: `discoverGrantStatements` strips
+        // comments before splitting, `liveFunctionDefinition` does not, and the split's seed carries
+        // comments inside the function body — so a raw `includes` matches nothing and reads as zero.
+        const flatten = (sql: string) => stripSqlComments(sql).replace(/\s+/g, " ").trim();
+        const liveBody = flatten(live!.body);
+        const inLiveFunction = (predicate: (text: string) => boolean = () => true) =>
+            statements.filter(
+                (st) => st.file === LIVE_SEED && liveBody.includes(flatten(st.text)) && predicate(st.text)
+            );
+
         it("is defined by the completeness migration, not by the frozen one", () => {
             expect(live).not.toBeNull();
             expect(live!.file).toBe(LIVE_SEED);
@@ -207,7 +311,7 @@ describe("RL-8 — grant seeds enumerate their grants (W-12 / G5)", () => {
              * The widths are asserted against the catalog two assertions below rather than restated
              * as constants here — a number typed in a test is a number that can be typed wrong.
              */
-            const inLive = statements.filter((s) => s.file === LIVE_SEED && /seed_default_rbac|p_org_id/.test(s.text));
+            const inLive = inLiveFunction((text) => /seed_default_rbac|p_org_id/.test(text));
             expect(inLive.length).toBe(3);
             expect(inLive.every((s) => s.binding === "literal")).toBe(true);
         });
@@ -218,9 +322,7 @@ describe("RL-8 — grant seeds enumerate their grants (W-12 / G5)", () => {
             // joining the catalog. Dropping it would widen. The distinction RL-8 draws is between
             // a catalog read that *decides* the key set and one that can only remove from a list
             // already fixed by literals.
-            const inLive = statements.filter(
-                (s) => s.file === LIVE_SEED && /select p_org_id, '(admin|ops)'/.test(s.text),
-            );
+            const inLive = inLiveFunction((text) => /select p_org_id, '(admin|ops)'/.test(text));
             expect(inLive.length).toBe(2);
             expect(inLive.every((s) => s.readsCatalog)).toBe(true);
             for (const statement of inLive) {
@@ -294,10 +396,28 @@ describe("RL-8 — grant seeds enumerate their grants (W-12 / G5)", () => {
             const catalog = [...new Set(catalogLiteral)].sort();
             expect(catalog.length).toBe(57);
             expect(admin.size).toBeGreaterThan(catalog.length);
-            expect(catalog.filter((k) => !admin.has(k))).toEqual([]);
+
+            /*
+             * RETIRED KEYS ARE THE ONE HONEST EXCEPTION, and it had to be admitted the first time a
+             * capability was withdrawn rather than added.
+             *
+             * `settings.users_roles` and its read companion are in the historical literal because
+             * they were in the catalog on 2026-07-29, and the literal is a reproduction that must not
+             * be trimmed. They are NOT in the admin enumeration because the split retired them —
+             * seeding a key the same migration sets `is_active = false` would create grants the
+             * catalog refuses to honour.
+             *
+             * The exemption is read from the tree, not listed here: a key qualifies only if some
+             * migration deactivates it. A key merely dropped from the admin grants still fails,
+             * which is the case this assertion exists for.
+             */
+            const ungranted = catalog.filter((k) => !admin.has(k));
+            expect(ungranted.filter((k) => !RETIRED_KEYS.has(k))).toEqual([]);
+            // Non-vacuity: the exemption is doing work, and only for the two keys the split retired.
+            expect(ungranted.sort()).toEqual(["settings.users_roles", "settings.users_roles.read"]);
         });
 
-        it("grants ops the same set less the two keys the blanket withheld", () => {
+        it("grants ops the same set less the keys administration withholds", () => {
             const admin = new Set(keyLiterals(adminRegion!));
             const ops = keyLiterals(opsRegion!).sort();
             expect(ops.length).toBe(admin.size - OPS_WITHHELD.length);
@@ -330,7 +450,15 @@ describe("RL-8 — grant seeds enumerate their grants (W-12 / G5)", () => {
              * and this reads the function's sentinelled enumeration. Two independent methods, one
              * answer.
              */
-            const discovered = [...discoverCatalog().keys()].sort();
+            /*
+             * The no-exception rule stands, with the single exception that is not one: a capability
+             * some migration RETIRED. `settings.users_roles` and its read companion are catalogued
+             * (inactive) and deliberately ungranted — an administrator seeded with a key the catalog
+             * refuses would be the mirror of the defect above, not a case of it. See RETIRED_KEYS:
+             * the exemption is derived from the tree, so it expires with the retirement and covers
+             * nothing that was merely dropped.
+             */
+            const discovered = [...discoverCatalog().keys()].filter((k) => !RETIRED_KEYS.has(k)).sort();
             expect(discovered.length).toBeGreaterThan(60);
             expect(keyLiterals(adminRegion!).sort()).toEqual(discovered);
         });

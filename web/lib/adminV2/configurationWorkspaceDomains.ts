@@ -117,12 +117,6 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 label: "Attendance devices",
                 description: "Tablets that record attendance at a site.",
             },
-            {
-                href: settings("departments"),
-                label: "Departments",
-                description: "Teams and organizational structure.",
-                advanced: true,
-            },
         ],
     },
     {
@@ -208,12 +202,6 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 href: settings("analytics"),
                 label: "Operational Intelligence",
                 description: "Performance packs, targets, and where indicators appear.",
-            },
-            {
-                href: settings("documents/document-fields"),
-                label: "Document fields",
-                description: "Fields on enrollment documents.",
-                advanced: true,
             },
             {
                 href: settings("config-proposals"),

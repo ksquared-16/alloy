@@ -56,6 +56,7 @@ const G = {
   folders: [],
   repositories: [],
   repositorySheet: null,
+  projectsSheet: null,
   laneWizard: null,
   // Only ever set at one moment: a lane was created, it needs a slot, and every
   // slot is held. There is no route to this and no way to open it deliberately.
@@ -1416,6 +1417,7 @@ function paint() {
     collapsedFolders: collapsedFolders(),
     repositories: G.repositories,
     repositorySheet: G.repositorySheet,
+    projectsSheet: G.projectsSheet,
     laneWizard: G.laneWizard,
     slotReclaim: G.slotReclaim,
     cancelPending: G.cancelPending,
@@ -3770,6 +3772,181 @@ async function confirmRepositoryRegistration() {
 }
 
 // ---------------------------------------------------------------------------
+// Projects — manage what is registered, without editing a file.
+//
+// Every call here goes to a route that already existed. The point of this
+// controller is that the operator can REACH them: list, open, rename, repoint,
+// re-check, deactivate and reactivate. The list is fetched with retired records
+// included, because a project you cannot see is a project you cannot bring back.
+//
+// Nothing is computed locally. The server returns the record it actually wrote,
+// and that record replaces the row -- so what the operator reads after a save
+// is what is stored, never an optimistic echo of what they typed.
+// ---------------------------------------------------------------------------
+async function openProjectsFlow() {
+  G.projectsSheet = { repositories: G.repositories || [], selected: null, edit: null, busy: true, error: null, notice: null };
+  paint();
+  await refreshProjects();
+}
+
+async function refreshProjects() {
+  const st = G.projectsSheet;
+  if (!st) return;
+  try {
+    const r = await gwFetch("/api/repositories?include_retired=1");
+    const j = await r.json();
+    if (j.ok && Array.isArray(j.repositories)) st.repositories = j.repositories;
+    else st.error = j.error || "repository_list_failed";
+  } catch {
+    st.error = "network"; st.errorDetail = {};
+  } finally {
+    st.busy = false;
+    paint();
+  }
+}
+
+function openProject(id) {
+  const st = G.projectsSheet;
+  if (!st) return;
+  // A fresh draft per project: an edit typed against one record must never be
+  // carried into another.
+  st.selected = id; st.edit = null; st.error = null; st.notice = null;
+  paint();
+}
+
+function backToProjects() {
+  const st = G.projectsSheet;
+  if (!st) return;
+  st.selected = null; st.edit = null; st.error = null; st.notice = null;
+  paint();
+}
+
+function editProjectField(key, value) {
+  const st = G.projectsSheet;
+  if (!st?.selected) return;
+  st.edit = { ...(st.edit || {}), [key]: value };
+  // Save enables on the first keystroke; no repaint per character.
+  const btn = document.querySelector("[data-gw-proj-save]");
+  if (btn) btn.disabled = false;
+}
+
+async function projectRequest(id, verb, body) {
+  const st = G.projectsSheet;
+  if (!st || st.busy) return null;
+  st.busy = true; st.error = null; st.notice = null;
+  paint();
+  try {
+    const r = await gwFetch(`/api/repositories/${encodeURIComponent(id)}/${verb}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+    const j = await r.json();
+    if (!j.ok) { st.error = j.error; st.errorDetail = j; return null; }
+    return j;
+  } catch {
+    st.error = "network"; st.errorDetail = {};
+    return null;
+  } finally {
+    st.busy = false;
+    paint();
+  }
+}
+
+async function saveProjectEdits(id) {
+  const st = G.projectsSheet;
+  if (!st?.edit) return;
+  const current = (st.repositories || []).find((r) => r.repository_id === id) || null;
+  // Only the fields the operator actually touched, and only the ones the update
+  // route accepts. An empty worktree parent means "use the default", which the
+  // registry represents as null rather than as an empty string.
+  const patch = {};
+  for (const key of ["name", "default_branch", "worktree_parent"]) {
+    if (st.edit[key] === undefined) continue;
+    const v = String(st.edit[key]).trim();
+    patch[key] = v === "" ? null : v;
+  }
+  /*
+   * Promotion goes as ONE object, the shape the route validates. Turning it off
+   * sends governed_promotion:false rather than omitting the block, because an
+   * omitted block means "unchanged" and the operator meant "off".
+   */
+  if (st.edit.governed_promotion !== undefined || st.edit.promotion_branch !== undefined) {
+    const on = st.edit.governed_promotion ?? Boolean(current?.promotion?.governed_promotion);
+    const branch = String(st.edit.promotion_branch ?? current?.promotion?.promotion_branch ?? "").trim();
+    patch.promotion = on
+      ? { governed_promotion: true, promotion_branch: branch || String(current?.default_branch || "").replace(/^origin\//, "") }
+      : { governed_promotion: false };
+  }
+  if (!Object.keys(patch).length) return;
+  const j = await projectRequest(id, "update", patch);
+  if (!j) return;
+  st.edit = null;
+  st.notice = "Saved.";
+  await refreshProjects();
+  try { await fetchLanes(); } catch { /* the poll catches up */ }
+  paint();
+}
+
+async function setProjectState(id, verb) {
+  const j = await projectRequest(id, verb, {});
+  const st = G.projectsSheet;
+  if (!j || !st) return;
+  st.notice = verb === "retire" ? "Project deactivated." : "Project reactivated.";
+  await refreshProjects();
+  try { await fetchLanes(); } catch { /* the poll catches up */ }
+  paint();
+}
+
+/**
+ * Preview a transfer. Reads only, and says so.
+ *
+ * The manifest is parsed HERE into explicit entries -- "a -> b" or a bare path
+ * meaning the same path on both sides -- because the governed action refuses
+ * anything that is not an explicit path, and an operator should find that out
+ * in the preview rather than at approval time.
+ */
+async function previewTransfer(destinationId) {
+  const st = G.projectsSheet;
+  if (!st?.transfer || st.transfer.busy) return;
+  const t = st.transfer;
+  t.busy = true; t.error = null; t.preview = null;
+  paint();
+  const entries = String(t.manifest || "").split("\n").map((line) => line.trim()).filter(Boolean)
+    .map((line) => {
+      const [from, to] = line.split("->").map((x) => x.trim());
+      return { source: from, destination: to || from };
+    });
+  try {
+    const r = await gwFetch("/api/repositories/transfer/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        source_repository_id: t.source,
+        destination_repository_id: destinationId,
+        entries,
+      }),
+    });
+    const j = await r.json();
+    if (!j.ok) { t.error = j.error || j.code; } else { t.preview = j; }
+  } catch {
+    t.error = "network";
+  } finally {
+    t.busy = false;
+    paint();
+  }
+}
+
+async function revalidateProject(id) {
+  const j = await projectRequest(id, "validate", {});
+  const st = G.projectsSheet;
+  if (!j || !st) return;
+  st.notice = j.repository?.last_validated_at ? "Checked — the repository is where the record says." : "Checked.";
+  await refreshProjects();
+  paint();
+}
+
+// ---------------------------------------------------------------------------
 // Sheet + wizard interaction.
 //
 // Nothing here writes anything durable until the final confirm. Values live in
@@ -3789,6 +3966,7 @@ function openLaneWizard() {
 
 function closeSheets() {
   G.repositorySheet = null;
+  G.projectsSheet = null;
   G.laneWizard = null;
   paint();
 }
@@ -3896,6 +4074,18 @@ document.addEventListener("input", (e) => {
   if (!t) return;
   if (t.matches?.("[data-gw-repo-path]") && G.repositorySheet) { G.repositorySheet.path = t.value; return; }
   if (t.matches?.("[data-gw-repo-name]") && G.repositorySheet) { G.repositorySheet.name = t.value; return; }
+  if (G.projectsSheet?.selected) {
+    if (t.matches?.("[data-gw-proj-name]")) { editProjectField("name", t.value); return; }
+    if (t.matches?.("[data-gw-proj-branch]")) { editProjectField("default_branch", t.value); return; }
+    if (t.matches?.("[data-gw-proj-wt]")) { editProjectField("worktree_parent", t.value); return; }
+    if (t.matches?.("[data-gw-proj-pb]")) { editProjectField("promotion_branch", t.value); return; }
+    if (t.matches?.("[data-gw-proj-transfer-manifest]") && G.projectsSheet?.transfer) {
+      G.projectsSheet.transfer.manifest = t.value; return;
+    }
+    if (t.matches?.("[data-gw-proj-transfer-source]") && G.projectsSheet?.transfer) {
+      G.projectsSheet.transfer.source = t.value; return;
+    }
+  }
   if (!G.laneWizard) return;
   const d = G.laneWizard.draft;
   if (t.matches?.("[data-gw-wiz-name]")) d.name = t.value;
@@ -3911,6 +4101,42 @@ document.addEventListener("click", async (e) => {
   if (hit("[data-gw-sheet-cancel]")) { e.preventDefault(); closeSheets(); return; }
   if (hit("[data-gw-repo-validate]")) { e.preventDefault(); await validateRepositoryPath(); return; }
   if (hit("[data-gw-repo-confirm]")) { e.preventDefault(); await confirmRepositoryRegistration(); return; }
+
+  if (hit("[data-gw-projects]")) { e.preventDefault(); await openProjectsFlow(); return; }
+  if (hit("[data-gw-proj-new]")) { e.preventDefault(); G.projectsSheet = null; addRepositoryFlow(); return; }
+  if (hit("[data-gw-proj-back]")) { e.preventDefault(); backToProjects(); return; }
+  const projOpen = hit("[data-gw-proj-open]");
+  if (projOpen) { e.preventDefault(); openProject(projOpen.getAttribute("data-gw-proj-open")); return; }
+  const projSave = hit("[data-gw-proj-save]");
+  if (projSave) { e.preventDefault(); await saveProjectEdits(projSave.getAttribute("data-gw-proj-save")); return; }
+  const projRetire = hit("[data-gw-proj-retire]");
+  if (projRetire) { e.preventDefault(); await setProjectState(projRetire.getAttribute("data-gw-proj-retire"), "retire"); return; }
+  const projReactivate = hit("[data-gw-proj-reactivate]");
+  if (projReactivate) { e.preventDefault(); await setProjectState(projReactivate.getAttribute("data-gw-proj-reactivate"), "reactivate"); return; }
+  const gp = hit("[data-gw-proj-gp]");
+  if (gp && G.projectsSheet?.selected) {
+    // A repaint is needed here, unlike the text fields: turning governed
+    // promotion on reveals the branch it promotes to.
+    editProjectField("governed_promotion", gp.checked);
+    paint();
+    return;
+  }
+  const openTransfer = hit("[data-gw-proj-transfer]");
+  if (openTransfer && G.projectsSheet) {
+    e.preventDefault();
+    const id = openTransfer.getAttribute("data-gw-proj-transfer");
+    const others = (G.projectsSheet.repositories || []).filter((r) => r.repository_id !== id);
+    G.projectsSheet.transfer = { repository_id: id, source: others[0]?.repository_id || null, manifest: "", preview: null, error: null };
+    paint();
+    return;
+  }
+  if (hit("[data-gw-proj-transfer-cancel]") && G.projectsSheet) {
+    e.preventDefault(); G.projectsSheet.transfer = null; paint(); return;
+  }
+  const doPreview = hit("[data-gw-proj-transfer-preview]");
+  if (doPreview) { e.preventDefault(); await previewTransfer(doPreview.getAttribute("data-gw-proj-transfer-preview")); return; }
+  const projValidate = hit("[data-gw-proj-validate]");
+  if (projValidate) { e.preventDefault(); await revalidateProject(projValidate.getAttribute("data-gw-proj-validate")); return; }
   const method = hit("[data-gw-repo-method]");
   if (method && G.repositorySheet) {
     e.preventDefault();

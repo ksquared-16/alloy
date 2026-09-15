@@ -10,6 +10,7 @@ import {
     type OiOrgCalcMeasurementStatus,
 } from "@/lib/metrics/oiOrgCalcMeasurements";
 import { loadOrgMetadata, saveOrgMetadata } from "@/lib/metrics/oiOrgCalcObserve";
+import { requireAnalyticsManageAccess } from "@/lib/admin/canReadAnalytics";
 
 export const dynamic = "force-dynamic";
 
@@ -47,9 +48,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Admin role required" }, { status: 403 });
-    }
+    const denied = await requireAnalyticsManageAccess();
+    if (!denied.ok) return denied.response;
     const { id } = await params;
 
     let body: unknown;

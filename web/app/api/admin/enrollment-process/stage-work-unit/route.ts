@@ -51,6 +51,7 @@ import {
     stageQueueMappingForPipeline,
 } from "@/lib/lifecycle/parseEnrollmentPipelineQueues";
 import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
+import { BUSINESS_PROCESS_ACTIVATE, BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 function isStageKey(s: string): s is LifecycleOperatorStage {
     return (LIFECYCLE_STAGE_ORDER as readonly string[]).includes(s);
@@ -231,9 +232,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (denied) return denied;
 
     let body: { department_id?: string; name?: string; stage?: string; status_keys?: string[] } = {};
     try {
@@ -419,9 +419,8 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (denied) return denied;
 
     let body: {
         work_unit_id?: string;
@@ -586,9 +585,8 @@ export async function PATCH(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_ACTIVATE);
+    if (denied) return denied;
 
     let body: { work_unit_id?: string } = {};
     try {

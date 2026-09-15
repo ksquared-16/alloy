@@ -39,6 +39,7 @@ import { activeRunForLane } from "./execution-run.mjs";
 // it. Importing the registry here is safe in both directions: the registry
 // imports no evidence, and this module already reaches governed-action-request.
 import { getActionDefinition } from "./trusted-host-action-registry.mjs";
+import { ALLOY_REPOSITORY_ID, projectScope } from "./repository-registry.mjs";
 
 const PROTECTED = ["staging", "main", "master", "production"];
 
@@ -278,11 +279,16 @@ export function collectDirectorEvidence(rec, {
     // and stays visible as a gate rather than being silently dropped.
     evidence.requests_branch_deletion = Boolean(inputs.deleteBranch || inputs.deleteRemoteBranch);
     try {
-      const parent = inputs.worktreeParent || join(homedir(), "Code", "alloy-worktrees");
+      // The evidence must be gathered about the project the request names. The
+      // literal here meant a retirement request for any project was checked
+      // against Alloy's worktrees, which is evidence about the wrong directory.
+      const evidenceScope = projectScope(inputs.repositoryId || ALLOY_REPOSITORY_ID);
+      const parent = inputs.worktreeParent || evidenceScope.worktree_parent
+        || join(homedir(), "Code", "alloy-worktrees");
       const gitList = (() => {
         try {
           return execFileSync("git", ["worktree", "list", "--porcelain"], {
-            cwd: inputs.canonicalRoot || join(homedir(), "Alloy"), encoding: "utf8",
+            cwd: inputs.canonicalRoot || evidenceScope.root || join(homedir(), "Alloy"), encoding: "utf8",
             timeout: 20000, stdio: ["ignore", "pipe", "ignore"],
           }).split("\n").filter((l) => l.startsWith("worktree ")).map((l) => l.replace("worktree ", ""));
         } catch { return null; }
