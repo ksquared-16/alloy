@@ -40,7 +40,7 @@ const SELF_ROLE = "mcert_ceiling_actor";
 /** A role the actor does NOT hold. */
 const OTHER_ROLE = "mcert_ceiling_supply";
 /** Held by the actor's role. */
-const HELD = ["portal.access", "settings.users_roles"];
+const HELD = ["portal.access", "admin.roles.read", "admin.roles.write"];
 /** Not held by the actor by any path. */
 const UNHELD = "fin.post";
 

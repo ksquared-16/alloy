@@ -155,6 +155,11 @@ export const CUSTOM = {
     finAdjuster: "mcert_fin_adjuster",
     ceilingActor: "mcert_ceiling_actor",
     ceilingSupply: "mcert_ceiling_supply",
+    axUserAdmin: "mcert_ax_user_admin",
+    axRoleAdmin: "mcert_ax_role_admin",
+    axScopeAdmin: "mcert_ax_scope_admin",
+    axDeviceAdmin: "mcert_ax_device_admin",
+    axAuditor: "mcert_ax_auditor",
 
     /*
      * ── CONFIGURATION: THE SENSITIVITY SPLIT ──
@@ -239,6 +244,11 @@ export const P = {
     sjPoster:       { id: "c0000000-0000-4000-8000-00000000d026", email: "cert.sjposter@northwind.invalid",      role: CUSTOM.sjPoster },
     finAdjuster:    { id: "c0000000-0000-4000-8000-00000000d045", email: "cert.finadjust@northwind.invalid",     role: CUSTOM.finAdjuster },
     ceilingActor:   { id: "c0000000-0000-4000-8000-00000000d046", email: "cert.ceiling@northwind.invalid",      role: CUSTOM.ceilingActor },
+    axUserAdmin:    { id: "c0000000-0000-4000-8000-00000000d047", email: "cert.axuser@northwind.invalid",      role: CUSTOM.axUserAdmin },
+    axRoleAdmin:    { id: "c0000000-0000-4000-8000-00000000d048", email: "cert.axrole@northwind.invalid",      role: CUSTOM.axRoleAdmin },
+    axScopeAdmin:   { id: "c0000000-0000-4000-8000-00000000d049", email: "cert.axscope@northwind.invalid",     role: CUSTOM.axScopeAdmin },
+    axDeviceAdmin:  { id: "c0000000-0000-4000-8000-00000000d050", email: "cert.axdevice@northwind.invalid",    role: CUSTOM.axDeviceAdmin },
+    axAuditor:      { id: "c0000000-0000-4000-8000-00000000d051", email: "cert.axaudit@northwind.invalid",     role: CUSTOM.axAuditor },
     sjTitular:      { id: "c0000000-0000-4000-8000-00000000d027", email: "cert.sjtitular@northwind.invalid",     role: CUSTOM.sjTitular },
     sjFinWrite:     { id: "c0000000-0000-4000-8000-00000000d028", email: "cert.sjfinwrite@northwind.invalid",    role: CUSTOM.sjFinWrite },
 
@@ -315,6 +325,11 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.finAdjuster, role_label: "Financial adjuster", description: "Holds fin.adjust and nothing else in Financials.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.ceilingActor, role_label: "Ceiling actor", description: "Limited access administrator for the W-18 proof.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.ceilingSupply, role_label: "Ceiling supply", description: "Supplies fin.write for the multi-role union proof.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.axUserAdmin, role_label: "User administrator", description: "Manages users and role assignment only.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.axRoleAdmin, role_label: "Role administrator", description: "Defines roles and their packages only.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.axScopeAdmin, role_label: "Scope administrator", description: "Changes where a user may operate only.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.axDeviceAdmin, role_label: "Device administrator", description: "Manages attendance kiosks only.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.axAuditor, role_label: "Access auditor", description: "Reads users and roles; mutates nothing.", is_system: false, is_active: true },
         /* The label is the trap. It holds nothing. */
         { org_id: ORG, role_key: CUSTOM.sjTitular,   role_label: "Admin",                description: "Named Admin, granted no schedule, job or posting authority.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.sjFinWrite,  role_label: "Financials manager",   description: "Holds fin.write, as ops does. Not a posting authority.",      is_system: false, is_active: true },
@@ -342,6 +357,37 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.oiTitular, role_label: "Admin",                description: "Named Admin, granted no Operational Intelligence authority.",           is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
+
+    /*
+     * THE PROVISIONING ACTOR MUST HOLD WHAT IT HANDS OUT.
+     *
+     * W-18 bounds every grant to the actor's own effective authority, and this fixture provisions
+     * through the same RPC an operator uses. It acts as the seeded organization administrator, so
+     * that role has to actually carry the capabilities the personas below receive — and in this
+     * tenant it had drifted: admin was missing `reports.write` (nine of ten orgs still had it),
+     * left over from earlier fixture history, so provisioning the OI persona was refused.
+     *
+     * Restating the admin package from the ACTIVE catalog is the truthful repair rather than
+     * patching whichever key is noticed next: a full administrator holds the catalog, and a fixture
+     * that quietly provisions more than its actor holds is relying on the hole this program closed.
+     * Deliberately not routed through the grants RPC — that call would be bounded by the very
+     * authority it is repairing.
+     */
+    const { data: activeKeys, error: catalogErr } = await sb
+        .from("permission_definitions")
+        .select("key")
+        .eq("is_active", true);
+    if (catalogErr) throw new Error(`catalog read for admin package: ${catalogErr.message}`);
+    const { error: adminPkgErr } = await sb.from("role_permission_grants").upsert(
+        (activeKeys ?? []).map((row) => ({
+            org_id: ORG,
+            role_key: "admin",
+            permission_key: row.key,
+            allowed: true,
+        })),
+        { onConflict: "org_id,role_key,permission_key" },
+    );
+    if (adminPkgErr) throw new Error(`admin package restore: ${adminPkgErr.message}`);
 
     for (const [rk, keys] of [
         [CUSTOM.viewer, ["fin.read"]],
@@ -374,11 +420,23 @@ export async function setup() {
         /*
          * W-18. A LIMITED access administrator: it may edit roles and holds nothing else worth
          * delegating. fin.post is deliberately absent — that is the capability the ceiling must
-         * refuse it, and the one the pre-fix exploit granted itself.
+         * refuse it, and the one the pre-fix exploit granted itself. It holds admin.roles.write
+         * rather than the retired umbrella: after the Access Administration Split that is the key
+         * that authorizes editing a role's package, and therefore the key W-18 bounds.
          */
-        [CUSTOM.ceilingActor, ["portal.access", "settings.users_roles"]],
+        [CUSTOM.ceilingActor, ["portal.access", "admin.roles.read", "admin.roles.write"]],
         /* The second role in the multi-role union proof. Supplies fin.write and nothing else. */
         [CUSTOM.ceilingSupply, ["fin.write"]],
+        /*
+         * The four Access-administration authorities, each held ALONE. The point of the matrix is
+         * what each one CANNOT do: a user administrator who can also rewrite role packages, or a
+         * device administrator who can create users, would mean the split exists only on paper.
+         */
+        [CUSTOM.axUserAdmin, ["portal.access", "admin.users.read", "admin.users.write"]],
+        [CUSTOM.axRoleAdmin, ["portal.access", "admin.roles.read", "admin.roles.write"]],
+        [CUSTOM.axScopeAdmin, ["portal.access", "admin.users.read", "admin.access_scope.write"]],
+        [CUSTOM.axDeviceAdmin, ["portal.access", "attendance.devices.manage"]],
+        [CUSTOM.axAuditor, ["portal.access", "admin.users.read", "admin.roles.read"]],
         [CUSTOM.sjTitular, ["portal.access"]],
         [CUSTOM.sjFinWrite, ["portal.access", "fin.write", "fin.read"]],
 

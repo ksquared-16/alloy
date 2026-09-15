@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import {
-    canManageUsersAndRoles,
-    requirePortalOrUsersRolesManageAuth,
-    requireUsersRolesManageAuth,
-} from "@/lib/admin/canManageUsersAndRoles";
+import { ADMIN_USERS_READ, ADMIN_USERS_WRITE, canManageUsersAndRoles, requireAccessAdministration, requirePortalOrUsersRolesManageAuth, requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { memberDirectoryLabel, projectMemberEmail } from "@/lib/access/memberDirectoryProjection";
 import { displayRoleForAdminPicker, groupSortedRoleKeysByUserId } from "@/lib/admin/userRolesMembership";
 import { createMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
 import { fullNameFromParts } from "@/lib/access/operatorAccountName";
-import { ADMIN_USERS_READ, ADMIN_USERS_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 export type AdminUserRow = {
     user_id: string;
