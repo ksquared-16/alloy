@@ -35,7 +35,7 @@
  * and this must be bumped whenever a scenario's meaning changes. Adding a scenario counts; fixing a
  * typo does not.
  */
-export const CATALOG_VERSION = "2026-09-15.2";
+export const CATALOG_VERSION = "2026-09-15.3";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -44,7 +44,20 @@ export type ScenarioDisposition =
     | "HUMAN_WALKTHROUGH"
     | "AUTOMATED_CERTIFIED_HUMAN_PENDING"
     | "EXPLICITLY_DEFERRED"
-    | "OUT_OF_SCOPE_THREAD_11A";
+    | "OUT_OF_SCOPE_THREAD_11A"
+    /**
+     * THE CAPABILITY EXISTS IN THE PLATFORM AND HAS NO OPERATOR SURFACE.
+     *
+     * Distinct from EXPLICITLY_DEFERRED, which is "the environment cannot exercise this yet", and
+     * from OUT_OF_SCOPE, which is "another thread owns it". This says: the data model, the
+     * enforcement and the arithmetic are all present and correct, and there is no screen through
+     * which a human being can configure or inspect them. It is a PRODUCT gap, not a test gap.
+     *
+     * It exists as its own disposition so that this class of finding cannot be laundered into a
+     * PASS by inspecting the database. A tester who cannot reach a capability from the product has
+     * not accepted it, whatever `psql` says.
+     */
+    | "MISSING_PRODUCTIZATION";
 
 /** What the scenario needs to be true before the Director can meaningfully run it. */
 export type ScenarioPrecondition =
@@ -122,6 +135,8 @@ export const MONEY_INVARIANTS = Object.freeze({
     PROVIDER_RETURN_IS_NOT_A_REFUND: "A provider return is the rail giving money back. An operator refund is a decision someone made. They are different events and must not be shown as one.",
     GRAIN_BEFORE_MISMATCH: "Cross-surface comparisons only mean something at equivalent scope and period. A legitimate grain difference is explained, not filed as a defect.",
     FAILED_READ_IS_NOT_ZERO: "A read that failed must never render as a valid zero balance. Not knowing and owing nothing are different answers.",
+    BILLING_PERIOD_IS_DERIVED: "A billing period is DERIVED from the date a charge is billable on — `billable_on`, then `occurs_on`, `service_date`, `created_at`. There is no billing-period table and no billing-period setting: the period is a consequence of the charge, and a row with no usable date is reported as unplaced rather than swept into the current month.",
+    ACCOUNTING_PERIOD_IS_ATTRIBUTED_AT_WRITE: "A journal entry's accounting period is decided by the database when the entry is written, against the configured accounting calendar, and a closed period refuses the write. Nothing downstream may re-decide it, and no screen may imply the period can be changed after the fact.",
 });
 
 const S = (s: Scenario) => s;
@@ -668,6 +683,77 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         expectUnchanged: [],
         invariant: MONEY_INVARIANTS.EXPECTATION_IS_NOT_PAYMENT,
         failSymptoms: [],
+    }),
+    /*
+     * ── THE TWO PERIODS, WHICH ARE NOT THE SAME PERIOD ─────────────────────────────────────────
+     *
+     * Financials carries two period concepts and an operator who conflates them will close a month
+     * that is still open, or reopen one that is closed. They are covered separately and honestly:
+     * the billing period is walked through, because it is fully on screen; the accounting period is
+     * NOT, because the platform gives a human no way to reach it.
+     */
+    S({
+        key: "billing_period",
+        order: 33,
+        title: "The billing period is derived, and every surface agrees which one a charge is in",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Confirm a charge lands in the period its billable date implies, that the period is shown with the year, and that filtering by period never changes a figure.",
+        whyItMatters:
+            "An operator reconciling a month needs to know which month a charge belongs to and to trust that every surface agrees. A period that is shown as a bare month — 'September' — cannot be reconciled against a statement, and a period filter that quietly changed a total would make the ledger a different ledger depending on how it was looked at.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "post_charge" }],
+        navigate: [
+            "Workspace → Financials → Accounts → select the account.",
+            "The account body beneath the summary: the period-grouped ledger and its period filter.",
+        ],
+        doThis: [
+            "Read the period heading the posted charge is grouped under, and the charge's own date.",
+            "Confirm the date carries a YEAR — 'Dec 1, 2026', never '2026-12-01' and never 'Dec 1'.",
+            "Confirm the period heading reads as a period — 'September 2026' — not as a date.",
+            "Choose that period in the period filter, then choose All periods again.",
+            "Open the same account in a Focus Panel (Financials → Details) and compare the grouping.",
+        ],
+        expectChanges: [
+            "Filtering to one period shows only that period's rows.",
+            "The lens counts beside All / Charges / Credits & adjustments / Funding follow the filter.",
+        ],
+        expectUnchanged: [
+            "Current balance, Due and Past due in the account summary — a filter narrows what is LISTED and never what is OWED.",
+            "The period a charge is grouped under, whichever surface it is read on.",
+        ],
+        invariant: MONEY_INVARIANTS.BILLING_PERIOD_IS_DERIVED,
+        failSymptoms: [
+            "A ledger date with no year, or a raw 2026-12-01.",
+            "A charge grouped under a different period on the workspace than in the Focus Panel detail.",
+            "The summary figures moving when a period filter is applied.",
+            "A row with no usable date appearing in the current month rather than as unplaced.",
+        ],
+    }),
+    S({
+        key: "accounting_period",
+        order: 34,
+        title: "The accounting period a journal entry is attributed to, and who may close it",
+        disposition: "MISSING_PRODUCTIZATION",
+        purpose:
+            "Confirm an operator can see which accounting period an entry was attributed to, see the configured calendar, and close and reopen a period.",
+        whyItMatters:
+            "The accounting period is what a finance team closes a month against, and closing it is the act that makes a month's figures final. The platform already enforces it — `financial_accounting_calendars` and `financial_accounting_periods` are canonical, and the `attribute_financial_journal_entry` BEFORE INSERT trigger decides each entry's period and refuses a write into a closed one — so the enforcement is real. What does not exist is any way for a human being to look at it.",
+        dispositionReason:
+            "MISSING_PRODUCTIZATION. The census for this pass found the model, the trigger and the shape arithmetic (`lib/financials/accountingPeriod.ts`) all present, with four consumers — `financialJournalService.ts`, `resolveFinancialActivity.ts`, `deletionEligibility.ts`, `FinancialsActivity.tsx` — and ZERO configuration or inspection surface anywhere under `app/` or `components/`. There is no screen that lists calendars, no screen that opens or closes a period, and no per-transaction display of the period an entry was attributed to. This scenario is therefore recorded as unrunnable rather than passed: a tester cannot accept from the product what the product does not show, and confirming it with a database query would be certifying the schema while telling the Director the product was tested. The smallest honest productization is stated below.",
+        requires: [],
+        navigate: [],
+        doThis: [
+            "NOT RUNNABLE. Do not substitute a database query for this scenario — a passing SELECT proves the trigger, not the product.",
+            "Smallest productization that would make it runnable, in order: (1) show the attributed accounting period on the charge/journal detail beside the billing period, read-only — the value already exists on the entry; (2) a read-only Accounting calendar view under Financials settings listing each period with its status and date range; (3) an operator-governed close/reopen action on that view, with the trigger's own refusal surfaced as the error.",
+        ],
+        expectChanges: [],
+        expectUnchanged: [],
+        invariant: MONEY_INVARIANTS.ACCOUNTING_PERIOD_IS_ATTRIBUTED_AT_WRITE,
+        failSymptoms: [
+            "Any surface implying an entry's accounting period can be edited after the entry was written.",
+            "A closed period accepting a write.",
+            "This scenario being marked PASS on the strength of a database inspection.",
+        ],
     }),
 ]);
 

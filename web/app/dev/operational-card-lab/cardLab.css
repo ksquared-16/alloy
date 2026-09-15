@@ -741,7 +741,9 @@
 }
 .alloy-os-billingdetail__row {
   display: grid;
-  grid-template-columns: 56px 92px 82px minmax(0, 1fr) 124px 88px 96px 150px;
+  /* Must equal the shared stylesheet's — see the lock in sharedStylesheetContract. Widened for
+     year-bearing financial dates. */
+  grid-template-columns: 92px 88px 82px minmax(0, 1fr) 124px 88px 96px 140px;
   gap: 10px;
   align-items: baseline;
   min-height: 21px;
@@ -778,6 +780,11 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--alloy-os-text-tertiary, #9ca3af);
+  /* The VALUES clip; the headers did not, so DESCRIPTION overran GL CODE at narrow widths and the
+     two headings read as one word. A header must obey its own column. */
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 .alloy-os-billingdetail__when,
 .alloy-os-billingdetail__amount {

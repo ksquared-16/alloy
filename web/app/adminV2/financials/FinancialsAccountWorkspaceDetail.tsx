@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { money, moneyExact, shortDate } from "@/app/adminV2/financials/financialsFormat";
+import { billingPeriodFromKey } from "@/lib/financials/billingPeriod";
 import {
     ACCOUNT_LENSES,
     ACCOUNT_LENS_LABELS,
@@ -61,6 +62,8 @@ import {
 type Row = Record<string, any>;
 type Vm = {
     account?: Row; period?: Row; payers?: Row[]; rows?: Row[]; reductions?: Row[]; payments?: Row[];
+    /** The reader's own period grouping, with its own totals. Read, never recomputed. */
+    ledgerPeriods?: Row[];
     reconciliation?: Record<string, number>; collectible?: Record<string, number>;
     responsibility?: { parties?: Row[]; allocatedCents?: number; unassignedCents?: number };
     expectedFunding?: Row[]; subjects?: Row[]; pastDue?: Row; achAvailable?: boolean;
@@ -150,6 +153,27 @@ export default function FinancialsAccountWorkspaceDetail({
         [payments, payer],
     );
 
+    /*
+     * THE SERVER'S OWN PERIOD TOTALS — offered to the ledger only while the view is UNFILTERED.
+     *
+     * `vm.ledgerPeriods` is the grouping the account reader already produced, with its own totals.
+     * The moment a lens or a subject filter is on, those totals describe more rows than are on
+     * screen, so handing them to a filtered ledger would label a subset with the whole's balance.
+     * Null then, and the ledger states a row count instead. No subtotal is ever computed here.
+     */
+    const canonicalPeriodTotals = useMemo(() => {
+        const unfiltered = lens === "all" && !subject && !periodKey;
+        if (!unfiltered) return null;
+        const groups = (vm?.ledgerPeriods ?? []) as Row[];
+        const byKey = new Map<string, number>();
+        for (const g of groups) {
+            const key = String((g.period as Row | undefined)?.key ?? "");
+            if (!key) continue;
+            byKey.set(key, n(g.totalCents));
+        }
+        return byKey;
+    }, [vm, lens, subject, periodKey]);
+
     if (error) {
         return (
             <p className="px-4 py-6 text-sm text-alloy-ember" data-financials-detail-error="true">{error}</p>
@@ -190,14 +214,16 @@ export default function FinancialsAccountWorkspaceDetail({
                             onClick={() => setLens(key)}
                             disabled={loading}
                             className={`rounded-md px-2.5 py-1 text-[12px] transition disabled:opacity-40 ${
+                                /* Bend Pine is the product's active operational control; navy read
+                                   as a neutral chip rather than a live selection. Token, not a hex. */
                                 lens === key
-                                    ? "bg-alloy-midnight text-white"
+                                    ? "bg-alloy-bend-pine text-white"
                                     : "text-alloy-midnight/70 hover:bg-alloy-stone/10"
                             }`}
                         >
                             {ACCOUNT_LENS_LABELS[key]}
                             {!loading ? (
-                                <span className={`ml-1.5 tabular-nums ${lens === key ? "text-white/70" : "text-alloy-midnight/40"}`}>
+                                <span className={`ml-1.5 tabular-nums ${lens === key ? "text-white/80" : "text-alloy-midnight/40"}`}>
                                     {counts[key]}
                                 </span>
                             ) : null}
@@ -256,7 +282,11 @@ export default function FinancialsAccountWorkspaceDetail({
                                 : `No ${ACCOUNT_LENS_LABELS[lens].toLowerCase()} in this view.`}
                         </Empty>
                     ) : (
-                        <LedgerTable rows={ledger as unknown as Row[]} cur={cur} />
+                        <LedgerPeriods
+                            rows={ledger as unknown as Row[]}
+                            cur={cur}
+                            canonicalTotals={canonicalPeriodTotals}
+                        />
                     )}
                 </div>
             </section>
@@ -322,57 +352,152 @@ export default function FinancialsAccountWorkspaceDetail({
 
 // ── LENS CONTENT ────────────────────────────────────────────────────────────────────────────────
 
-function LedgerTable({ rows, cur }: { rows: Row[]; cur: string }) {
+/**
+ * THE LEDGER — Focus Panel → Financials → Details' anatomy, rendered over the workspace's rows.
+ *
+ * This surface used to draw its own `<table>`: its own header typography, its own row density, its
+ * own GL treatment, its own flat chronological order with a Period COLUMN. Details groups by
+ * period, heads each group, and lays eight fixed columns on a grid. Two Financials ledgers with two
+ * different anatomies is the thing this pass exists to end, so the workspace now renders the
+ * canonical one — the same `alloy-os-billingdetail__*` classes, so the typography is literally
+ * shared rather than approximated.
+ *
+ * ── THE PERIOD SUMMARY IS THE SERVER'S FIGURE OR IT IS A COUNT ─────────────────────────────────
+ *
+ * Details states a period balance because it renders the server's own groups, whole. Here the rows
+ * have been through a lens and possibly a subject filter, and summing a SUBSET would be this
+ * component quietly becoming a second opinion about money — the exact thing `accountLenses` refuses
+ * to do. So: unfiltered, the canonical `ledgerPeriods[].totalCents` the server already computed;
+ * filtered, a count of rows. A number on screen is either canonical or it is a row count, never a
+ * subtotal invented by a presentation layer.
+ */
+function LedgerPeriods({
+    rows,
+    cur,
+    canonicalTotals,
+}: {
+    rows: Row[];
+    cur: string;
+    /** period key → the server's own total for that period, when the view is unfiltered. */
+    canonicalTotals: Map<string, number> | null;
+}) {
+    const groups = useMemo(() => {
+        const byKey = new Map<string, Row[]>();
+        for (const row of rows) {
+            const key = String(row.periodKey ?? "");
+            const found = byKey.get(key);
+            if (found) found.push(row);
+            else byKey.set(key, [row]);
+        }
+        /* Newest period first — an operator is nearly always working the current one. */
+        return [...byKey.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+    }, [rows]);
+
     return (
-        <div className="overflow-x-auto">
-            <table className="w-full min-w-[46rem] border-collapse text-sm">
-                <thead>
-                    <tr className="border-b border-alloy-stone/15 text-left text-[11px] uppercase tracking-wide text-alloy-midnight/45">
-                        <Th>Date</Th><Th>Period</Th><Th>Type</Th><Th>Subject</Th><Th>Description</Th>
-                        <Th>GL</Th><Th>Status</Th><Th right>Amount</Th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((row) => (
-                        <tr key={String(row.chargeId)} className="border-b border-alloy-stone/8"
-                            data-financials-ledger-row={String(row.chargeId)}>
-                            <Td>{shortDate(row.date as string | null)}</Td>
-                            <Td>{String(row.periodKey ?? "—")}</Td>
-                            {/* The catalog's word, never the key behind it. */}
-                            <Td>{String(row.categoryLabel ?? row.categoryKey ?? "—")}</Td>
-                            <Td>{String(row.subjectName ?? "Household")}</Td>
-                            <Td>{String(row.description ?? "—")}</Td>
-                            {/*
-                             * GL CONTEXT AT TRANSACTION GRAIN. `gl_accounts` and
-                             * `gl_account_mappings` are canonical and the reader already carries the
-                             * resolved code and name. Code and name together, because a code alone
-                             * is unreadable and a name alone is unsearchable.
-                             */}
-                            <Td>
-                                {row.glCode ? (
-                                    <span data-financials-gl={String(row.glCode)}>
-                                        <span className="font-mono text-xs">{String(row.glCode)}</span>
-                                        {row.glAccountName ? (
-                                            <span className="block text-[11px] text-alloy-midnight/50">{String(row.glAccountName)}</span>
+        <div className="alloy-os-billingdetail__ledgerband" data-financials-ledger="true">
+            {groups.map(([key, groupRows]) => {
+                const total = canonicalTotals?.get(key);
+                return (
+                    <section key={key || "unplaced"} className="alloy-os-fdetail__period"
+                        data-financials-ledger-period={key || "unplaced"}>
+                        <p className="alloy-os-fdetail__periodhead">
+                            <span className="alloy-os-fdetail__periodname">{periodLabel(key)}</span>
+                            <span className="alloy-os-fdetail__periodsum">
+                                {/* Never "Closed" — see the adapter's note. A zero total is a
+                                    balance of zero, not a closed accounting period. */}
+                                {total != null
+                                    ? `Balance ${moneyExact(total, cur)}`
+                                    : `${groupRows.length} ${groupRows.length === 1 ? "entry" : "entries"}`}
+                            </span>
+                        </p>
+                        <div className="alloy-os-billingdetail__ledger" role="table">
+                            <div className="alloy-os-billingdetail__row alloy-os-billingdetail__row--head">
+                                <span>Date</span>
+                                <span>Type</span>
+                                <span>Subject</span>
+                                <span>Description</span>
+                                <span>GL code</span>
+                                <span>Amount</span>
+                                <span>Status</span>
+                                <span>Source</span>
+                            </div>
+                            {groupRows.map((row) => (
+                                <div key={String(row.chargeId)} className="alloy-os-billingdetail__row"
+                                    data-financials-ledger-row={String(row.chargeId)}>
+                                    <span className="alloy-os-billingdetail__when">{shortDate(row.date as string | null)}</span>
+                                    {/* The catalog's word, never the key behind it. */}
+                                    <span className="alloy-os-billingdetail__type">
+                                        {String(row.categoryLabel ?? row.categoryKey ?? "—")}
+                                    </span>
+                                    <span className="alloy-os-billingdetail__subject">
+                                        {String(row.subjectName ?? "Household")}
+                                    </span>
+                                    <span className="alloy-os-billingdetail__desc">{String(row.description ?? "—")}</span>
+                                    {/*
+                                     * GL CONTEXT AT TRANSACTION GRAIN, in the detail card's own
+                                     * treatment: code and name on one line, an unmapped row saying
+                                     * so rather than rendering blank. `gl_accounts` and
+                                     * `gl_account_mappings` are canonical and the reader already
+                                     * carries the resolved pair.
+                                     */}
+                                    <span className="alloy-os-billingdetail__gl"
+                                        data-financials-gl={row.glCode ? String(row.glCode) : undefined}>
+                                        {row.glCode
+                                            ? row.glAccountName
+                                                ? `${String(row.glCode)} · ${String(row.glAccountName)}`
+                                                : String(row.glCode)
+                                            : "— unmapped"}
+                                    </span>
+                                    <span
+                                        className={`alloy-os-billingdetail__amount${
+                                            n(row.amountCents) < 0 ? " alloy-os-billing__entry-amount--credit" : ""
+                                        }`}
+                                    >
+                                        {moneyExact(n(row.amountCents), cur)}
+                                        {n(row.outstandingCents) !== n(row.amountCents) ? (
+                                            <span className="alloy-os-billingdetail__outstanding">
+                                                {moneyExact(n(row.outstandingCents), cur)} outstanding
+                                            </span>
                                         ) : null}
                                     </span>
-                                ) : <span className="text-alloy-midnight/35">—</span>}
-                            </Td>
-                            <Td>{String(row.lifecycleStatus ?? row.status ?? "—")}</Td>
-                            <Td right>
-                                <span className="tabular-nums">{moneyExact(n(row.amountCents), cur)}</span>
-                                {n(row.outstandingCents) !== n(row.amountCents) ? (
-                                    <span className="block text-[11px] text-alloy-midnight/50">
-                                        {moneyExact(n(row.outstandingCents), cur)} outstanding
+                                    <span className="alloy-os-billingdetail__status">
+                                        {String(row.lifecycleStatus ?? row.status ?? "—")}
                                     </span>
-                                ) : null}
-                            </Td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+                                    {/*
+                                     * REVERSALS AND CORRECTIONS, SAID IN THE SOURCE COLUMN.
+                                     *
+                                     * The read model already decided what this row IS in relation to
+                                     * another — `correctionKind` when it corrects something,
+                                     * `reversedByChargeId` when something corrected it. Nothing here
+                                     * infers a correction from a status string; a row that stands
+                                     * says only where it came from.
+                                     */}
+                                    <span className="alloy-os-billingdetail__source">
+                                        {row.correctsChargeId
+                                            ? `${String(row.correctionKind ?? "correction")} of a charge`
+                                            : row.reversedByChargeId
+                                                ? "Reversed by a correction"
+                                                : String(row.categoryLabel ?? "—")}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                );
+            })}
+            <p className="alloy-os-billingdetail__note">
+                No running balance column — <code>ledger_transactions</code> provides no authoritative
+                running balance, and computing one here would invent an ordering the backend does not
+                guarantee.
+            </p>
         </div>
     );
+}
+
+/** `2026-09` → `September 2026`. The billing period's own label authority, never a local map. */
+function periodLabel(key: string): string {
+    if (!/^\d{4}-\d{2}$/.test(key)) return "Unplaced";
+    return billingPeriodFromKey(key).label;
 }
 
 function PaymentsLens({

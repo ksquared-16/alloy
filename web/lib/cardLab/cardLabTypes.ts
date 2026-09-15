@@ -233,6 +233,17 @@ export type LedgerEntry = {
      * act on it, which is how `charge.reverse` ended up with no reachable operator path at all.
      */
     chargeId?: string | null;
+    /**
+     * WHICH LENS THIS ROW ANSWERS TO — decided by `ledgerLensOf` where the canonical row still
+     * exists, never re-derived from the formatted entry.
+     *
+     * The card cannot classify this itself: by the time an entry reaches it, the amount is a string
+     * and the category is a key, and "is this a reduction" is a question `buildFinancialsCardVM`
+     * already answers with `isCollectibleOffsetRow`. A second copy of those category lists in the
+     * presentation layer would drift the first time a category was added, and the two Financials
+     * surfaces would then disagree about what a row IS while agreeing about what it costs.
+     */
+    lens: "charges" | "credits" | "funding";
     /** Server-decided, never re-derived here: a draft that may be posted. */
     offersPost?: boolean;
     /** Server-decided: posted, not void, not already reversed, not itself a correction. */
@@ -303,6 +314,25 @@ export type FinancialsPeriod = {
     collectibleNow: string | null;
     paymentsReceived: string;
     currentBalance: string;
+    /**
+     * DUE — WHAT MAY BE ASKED OF THIS ACCOUNT TODAY, ALWAYS STATED.
+     *
+     * This is NOT a new financial figure and no arithmetic was invented for it. It is Thread 9's
+     * governed `currentlyCollectibleCents` — outstanding less the amount a submitted or accepted
+     * claim is suppressing, never below zero — which already had one canonical owner and one
+     * meaning before this field existed.
+     *
+     * It differs from `collectibleNow` only in WHEN it is rendered, not in what it is:
+     * `collectibleNow` is a conditional SECOND line inside the period breakdown, present only while
+     * something is actually suppressed so the breakdown does not repeat the balance. `dueNow` is an
+     * unconditional headline figure for the account summary, where the operator's question is
+     * simply "what can I collect", and an absent answer reads as zero rather than as "same as the
+     * balance". Both resolve from the same authority; neither computes.
+     *
+     * The other candidate names for this slot were rejected on evidence: `dueLabel` is prose about
+     * a due DATE ("Was due Aug 15"), and the balance is already `currentBalance`.
+     */
+    dueNow: string;
     dueLabel: string;
 };
 

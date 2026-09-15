@@ -27,6 +27,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import FinancialsExpectedFundingPanel from "@/app/adminV2/financials/FinancialsExpectedFundingPanel";
+import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 
 type Application = {
     paymentId: string;
@@ -93,11 +94,13 @@ function money(cents: number, currency: string): string {
     return (cents / 100).toLocaleString(undefined, { style: "currency", currency: currency || "USD" });
 }
 
+/*
+ * The platform's date authority, not a fourth private copy of it. `formatDisplayDate` already
+ * accepts both `YYYY-MM-DD` and a full ISO timestamp and always carries the year, which is the one
+ * thing a financial date may not omit.
+ */
 function day(value: string | null): string | null {
-    if (!value) return null;
-    const d = new Date(value.length <= 10 ? `${value}T00:00:00` : value);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    return formatDisplayDate(value) || null;
 }
 
 function Row(props: { label: string; value: string; strong?: boolean; muted?: boolean; testId?: string }) {

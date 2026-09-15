@@ -45,28 +45,31 @@ import type {
     FinancialsPayer,
 } from "@/lib/cardLab/cardLabTypes";
 import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
+import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
+import { ledgerLensOf } from "@/lib/financials/workspace/accountLenses";
 
 /** Reductions and funding are stored as their own categories, not as negative tuition. */
 const REDUCTION_CATEGORIES = new Set(["discount", "credit", "adjustment"]);
 const FUNDING_CATEGORIES = new Set(["subsidy_offset"]);
 
-/** "2026-10-01" → "Oct 1, 2026". Null rather than a guess when the value is not a date. */
-function longDate(ymd: string): string | null {
-    const d = new Date(`${ymd}T00:00:00`);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+/**
+ * EVERY DATE THIS ADAPTER EMITS, THROUGH THE PLATFORM'S FORMATTER — "Oct 1, 2026".
+ *
+ * There were two private formatters here and they disagreed: one carried the year and one did not,
+ * so the Details ledger read "Aug 15" while the line above it read "Oct 1, 2026". Financial
+ * activity crosses months, billing periods and fiscal years, and a ledger date without a year
+ * cannot be reconciled against a statement — so there is one rule now and it is
+ * `formatDisplayDate`, the same authority every other operator surface uses.
+ *
+ * Null, not a guess, when the value is absent or unparseable: a row that does not carry a date must
+ * not be given one.
+ */
+function displayDate(value: string | null | undefined): string | null {
+    return formatDisplayDate(value ?? null) || null;
 }
 
 function money(cents: number, currency: string): string {
     return (cents / 100).toLocaleString(undefined, { style: "currency", currency: currency || "USD" });
-}
-
-/** "2026-08-15" → "Aug 15". Returns null rather than inventing a date the row does not carry. */
-function shortDate(ymd: string | null | undefined): string | null {
-    if (!ymd) return null;
-    const d = new Date(`${ymd}T00:00:00`);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 /**
@@ -99,7 +102,7 @@ function pastDueFor(
     currency: string,
 ): FinancialsEvidence["pastDue"] {
     if (!pastDue || pastDue.amountCents <= 0) return null;
-    const oldest = shortDate(pastDue.oldestDueDate);
+    const oldest = displayDate(pastDue.oldestDueDate);
     return {
         amount: money(pastDue.amountCents, currency),
         oldest: oldest ?? "—",
@@ -247,6 +250,9 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 :   null,
             paymentsReceived: money(reconciliation.paymentsCents, currency),
             currentBalance: money(reconciliation.balanceCents, currency),
+            /* The SAME canonical figure `collectibleNow` reads, stated unconditionally. See the
+               field's note in `cardLabTypes`: one authority, two rendering policies. */
+            dueNow: money(vm.collectible.currentlyCollectibleCents, currency),
             dueLabel,
         },
         pastDue,
@@ -332,7 +338,8 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 reducesObligation: r.amountCents < 0,
                 reason: r.reason,
                 periodLabel: r.periodKey,
-                recordedOn: r.createdAt ? r.createdAt.slice(0, 10) : null,
+                /* A raw `2026-09-14` on an operator surface — the doctrine forbids it. */
+                recordedOn: displayDate(r.createdAt),
                 subjectName: r.customerMemberId
                     ? vm.subjects.find((sub) => sub.customerMemberId === r.customerMemberId)?.displayName ?? null
                     : null,
@@ -370,13 +377,18 @@ export function adaptFinancialsVmToLedgerPeriods(input: {
     const { vm, currency } = input;
     return vm.ledgerPeriods.map((group) => ({
         label: group.period.label,
-        summary:
-            group.totalCents === 0 ?
-                "Closed · $0"
-            :   `Balance ${money(group.totalCents, currency)}`,
+        /*
+         * "CLOSED" WAS A WORD THIS LINE HAD NO RIGHT TO. It was printed whenever the period's total
+         * came to zero — including a FUTURE period holding a scheduled charge, and a period whose
+         * charges and credits happen to cancel. Closed is a real and different fact in this
+         * platform: an ACCOUNTING period is closed by configuration and the database then refuses
+         * writes into it. Using the same word for "these rows sum to nothing" invites an operator
+         * to believe a month is final when it is open and still moving.
+         */
+        summary: `Balance ${money(group.totalCents, currency)}`,
         open: group.period.key === input.openPeriodKey,
         entries: group.rows.map((row) => ({
-            when: shortDate(row.date) ?? "—",
+            when: displayDate(row.date) ?? "—",
             // The account, not a child, when a household charge has no participant subject.
             subject: row.subjectName ?? "Household",
             type: row.categoryKey,
@@ -390,6 +402,8 @@ export function adaptFinancialsVmToLedgerPeriods(input: {
             kind: row.amountCents < 0 ? "credit" : "charge",
             status: row.lifecycleStatus,
             source: row.categoryLabel,
+            /* Borrowed, not restated — the one classifier both Financials surfaces filter by. */
+            lens: ledgerLensOf(row),
             /*
              * Identity and eligibility, both decided by the read model. The card asks whether a row
              * offers a transition; it never works out the answer from a status string.
@@ -472,7 +486,7 @@ export function adaptAddChargeSpecimen(input: {
             ?? null;
         if (!raw) return null;
         const iso = raw.match(/^\d{4}-\d{2}-\d{2}$/) ? raw : null;
-        return iso ? (longDate(iso) ?? raw) : raw;
+        return iso ? (displayDate(iso) ?? raw) : raw;
     };
 
     /*

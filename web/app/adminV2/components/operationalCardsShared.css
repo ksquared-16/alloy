@@ -1355,7 +1355,12 @@
 }
 .alloy-os-billingdetail__row {
   display: grid;
-  grid-template-columns: 56px 92px 82px minmax(0, 1fr) 124px 88px 96px 150px;
+  /*
+   * 56px fitted "Aug 20". Financial dates now carry the year — "Sep 14, 2026" — because a ledger
+   * date without one cannot be reconciled against a statement, and the column had to grow with the
+   * rule: at 56px the date ran into the Type beside it on every row.
+   */
+  grid-template-columns: 92px 88px 82px minmax(0, 1fr) 124px 88px 96px 140px;
   gap: 10px;
   align-items: baseline;
   min-height: 21px;
@@ -1392,6 +1397,11 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--alloy-os-text-tertiary, #9ca3af);
+  /* The VALUES clip; the headers did not, so DESCRIPTION overran GL CODE at narrow widths and the
+     two headings read as one word. A header must obey its own column. */
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 .alloy-os-billingdetail__when,
 .alloy-os-billingdetail__amount {
@@ -1415,6 +1425,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/*
+ * What a row still owes, under its own amount. Present only when money has been applied to the
+ * charge — the read model's per-row figure, not a difference computed on screen.
+ */
+.alloy-os-billingdetail__outstanding {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
 }
 .alloy-os-billingdetail__note {
   margin: 5px 0 0;
@@ -1813,6 +1833,66 @@
   color: var(--alloy-os-text-tertiary, #9ca3af);
   margin-right: 2px;
 }
+/*
+ * ── THE LENS BAR ──────────────────────────────────────────────────────────────────────────────
+ *
+ * Five angles on one account, sitting between the rollup and the record. The pressed lens takes
+ * BEND PINE from the token — the product's active operational control. It was navy on the
+ * workspace, which reads as a neutral chip rather than a live selection, and a hardcoded green
+ * would be a sixth definition of the brand colour.
+ */
+.alloy-os-fdetail__lensbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+.alloy-os-fdetail__lens {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  border: 0;
+  border-radius: 6px;
+  padding: 3px 9px;
+  background: transparent;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 70%, transparent);
+  cursor: pointer;
+}
+.alloy-os-fdetail__lens:hover {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
+.alloy-os-fdetail__lens--on,
+.alloy-os-fdetail__lens--on:hover {
+  background: var(--alloy-os-bend-pine, #00a283);
+  color: #fff;
+}
+.alloy-os-fdetail__lenscount {
+  font-size: 0.64rem;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, transparent);
+}
+.alloy-os-fdetail__lens--on .alloy-os-fdetail__lenscount {
+  color: color-mix(in srgb, #fff 80%, transparent);
+}
+.alloy-os-fdetail__lensfilters {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.alloy-os-fdetail__filter {
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 18%, transparent);
+  border-radius: 6px;
+  padding: 2px 6px;
+  background: #fff;
+  font-size: 0.68rem;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
 .alloy-os-fdetail__period { margin-top: 8px; }
 .alloy-os-fdetail__periodhead {
   margin: 0 0 2px;

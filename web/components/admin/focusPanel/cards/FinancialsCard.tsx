@@ -11,7 +11,7 @@ import {
 import ApprovedFinancialsCard from "@/components/operationalCards/FinancialsCard";
 import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
 import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
-import { formatQueueRowDateCompact } from "@/lib/presentation/presentationDateFormat";
+import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import CardCollectionField from "./CardCollectionField";
 import {
     useDismissSignal,
@@ -51,6 +51,13 @@ type Props = {
      * Financials → Accounts, where the account's own activity is already on screen beneath it.
      */
     showDetailsAction?: boolean;
+    /**
+     * Which summary this placement wants — see `summaryVariant` on the approved card.
+     *
+     * The Focus Panel keeps the period reconciliation. Financials → Accounts takes the account
+     * summary: balance, due, past due, `Payment`, `Add charge`, and nothing else in the header.
+     */
+    summaryVariant?: "period" | "account";
 };
 
 /**
@@ -94,6 +101,7 @@ export default function FinancialsCard({
     receded = false,
     coordination,
     showDetailsAction = true,
+    summaryVariant = "period",
 }: Props) {
     const scope = context.participantScope ?? null;
     const scopedMemberId = scope?.customerMemberId ?? null;
@@ -1359,9 +1367,13 @@ export default function FinancialsCard({
      * detail representation — the density where an operator is actually working the ledger — carry
      * the operation, which is where FinancialsDetailCard's own `Payment` action already pointed.
      */
-    const paymentBand = vm ? (
+    /*
+     * The band's own heading is suppressed inside the Payment COMMAND, where the command's title
+     * already says "Payment" one line above it. Two headings, one word, one surface.
+     */
+    const paymentBandFor = (labelled: boolean) => vm ? (
             <section className="alloy-os-financials__band" data-financials-band="payment">
-                <p className="alloy-os-financials__band-label">Payment</p>
+                {labelled ? <p className="alloy-os-financials__band-label">Payment</p> : null}
                 {/*
                     ONLY CANONICAL PAYMENT STATE THAT ACTUALLY EXISTS.
                     This region used to print the platform's own limitations at
@@ -2083,7 +2095,11 @@ export default function FinancialsCard({
                  * class. No new layer numbers, and the scrim keeps protecting the background.
                  */}
                 <UniversalCard
-                    title="Take payment"
+                    /*
+                     * "Payment", the same word the control that opens it now uses. A command whose
+                     * button says one thing and whose title says another reads as two commands.
+                     */
+                    title="Payment"
                     insight=""
                     iconName="Receipt"
                     tier="work"
@@ -2092,21 +2108,31 @@ export default function FinancialsCard({
                     density="expanded"
                     gridSpan="row"
                     data-universal-card-key="payment"
+                    /*
+                     * "Back to details" is navigation language, and it only means something where a
+                     * details destination exists. In the Focus Panel the operator arrived here from
+                     * Details and going back is a real move. In Financials → Accounts there is no
+                     * Details — the account is already open behind this overlay — so the control
+                     * pointed at a place that does not exist, and the backdrop, Escape and Cancel
+                     * all already return there. Same flag that governs the drill-down itself.
+                     */
                     footerAction={
-                        <button
-                            type="button"
-                            className="alloy-os-financials__action"
-                            data-financials-payment-close="true"
-                            onClick={() => {
-                                setPayTarget(null);
-                                setOverlay("detail");
-                            }}
-                        >
-                            ← Back to details
-                        </button>
+                        showDetailsAction ? (
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action"
+                                data-financials-payment-close="true"
+                                onClick={() => {
+                                    setPayTarget(null);
+                                    setOverlay("detail");
+                                }}
+                            >
+                                ← Back to details
+                            </button>
+                        ) : null
                     }
                 >
-                    {paymentBand}
+                    {paymentBandFor(false)}
                 </UniversalCard>
             </div>
         );
@@ -2145,7 +2171,7 @@ export default function FinancialsCard({
                                 {moveTargets.map((t) => (
                                     <option key={t.chargeId} value={t.chargeId}>
                                         {t.label}
-                                        {t.serviceDate ? ` · ${formatQueueRowDateCompact(t.serviceDate)}` : ""}
+                                        {t.serviceDate ? ` · ${formatDisplayDate(t.serviceDate)}` : ""}
                                         {` · ${(t.outstandingCents / 100).toLocaleString(undefined, {
                                             style: "currency",
                                             currency,
@@ -2540,7 +2566,7 @@ export default function FinancialsCard({
                     Details is where an operator works the ledger, and a ledger that cannot show what
                     was received is only half of one.
                 */}
-                {paymentBand}
+                {paymentBandFor(true)}
             </div>
         );
     }
@@ -2590,6 +2616,7 @@ export default function FinancialsCard({
                      * and the commit button cannot be clicked — visible, enabled, and unreachable.
                      */
                     onPayNow={openSettle}
+                    summaryVariant={summaryVariant}
                 />
             </div>
         );
@@ -2834,7 +2861,7 @@ export default function FinancialsCard({
                                     )}
                                 </section>
 
-                                {paymentBand}
+                                {paymentBandFor(true)}
                             </div>
                             )}
                         </div>
@@ -2997,7 +3024,7 @@ export default function FinancialsCard({
                                                         data-financials-row={row.chargeId}
                                                     >
                                                         <span className="alloy-os-financials__cell alloy-os-financials__cell--date">
-                                                            {formatQueueRowDateCompact(row.date) || "—"}
+                                                            {formatDisplayDate(row.date) || "—"}
                                                         </span>
                                                         <span className="alloy-os-financials__cell">
                                                             {row.subjectName ?? "—"}

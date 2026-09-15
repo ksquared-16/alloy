@@ -229,7 +229,13 @@ describe("scenario readiness", () => {
         for (const key of ["card_collection", "ach_processing", "provider_return", "subsidy_processing"]) {
             expect(scenarioByKey(key)!.disposition).not.toBe("HUMAN_WALKTHROUGH");
         }
-        /* 28 since Repair Pass 3 added the actual-payer scenario the payer chooser made possible. */
-        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(28);
+        /*
+         * 29 since Repair Pass 5D added the billing-period walkthrough. Its sibling — the
+         * ACCOUNTING period — is deliberately not one of them: it carries MISSING_PRODUCTIZATION
+         * because the platform enforces it and shows it to nobody, and offering a walkthrough for a
+         * surface that does not exist would invite a PASS resting on a database query.
+         */
+        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(29);
+        expect(scenarioByKey("accounting_period")!.disposition).toBe("MISSING_PRODUCTIZATION");
     });
 });

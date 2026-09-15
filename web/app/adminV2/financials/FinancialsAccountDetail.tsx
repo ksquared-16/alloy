@@ -33,6 +33,7 @@ export default function FinancialsAccountDetail({
     participationId,
     displayName,
     showDetailsAction = true,
+    summaryVariant = "period",
 }: {
     customerId: string | null;
     customerMemberId: string | null;
@@ -41,6 +42,8 @@ export default function FinancialsAccountDetail({
     displayName: string | null;
     /** False where the account's own activity is already on screen beneath this card. */
     showDetailsAction?: boolean;
+    /** "account" in Financials → Accounts: balance, due, past due, Payment, Add charge. */
+    summaryVariant?: "period" | "account";
 }) {
     const model = useMemo<FocusPanelCardModel>(
         () => ({
@@ -142,6 +145,7 @@ export default function FinancialsAccountDetail({
                 model={model}
                 context={context}
                 showDetailsAction={showDetailsAction}
+                summaryVariant={summaryVariant}
                 coordination={coordination}
             />
         </div>

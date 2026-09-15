@@ -4,6 +4,7 @@ import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { Action, ActionRow, FooterAction } from "@/components/cardLab/CardLabKit";
+import { Stat } from "@/components/operationalCards/FinancialsDetailCard";
 import type { FinancialsEvidence } from "@/lib/cardLab/cardLabTypes";
 
 /**
@@ -48,6 +49,7 @@ export default function FinancialsCard({
     onAddCharge,
     onPayNow,
     onManagePayment,
+    summaryVariant = "period",
 }: {
     evidence: FinancialsEvidence;
     /**
@@ -68,7 +70,31 @@ export default function FinancialsCard({
     /** Wired by the Focus Panel; the lab leaves them undefined and the buttons are inert. */
     onPayNow?: () => void;
     onManagePayment?: () => void;
+    /**
+     * WHICH QUESTION THE SUMMARY IS ANSWERING.
+     *
+     *   "period"   the Focus Panel's reconciliation — what happened this billing period, with the
+     *              arithmetic visible, because the panel is where a period is worked.
+     *   "account"  the Financials workspace's account header — the standing position of the
+     *              ACCOUNT, which is three figures and two commands and nothing else. An account
+     *              is not a period, and reading a period breakdown as an account state is how an
+     *              operator ends up quoting a family a number that was only ever this month's.
+     *
+     * The detail beneath the account summary carries everything the period breakdown used to say
+     * here, filtered and period-grouped, so nothing was removed from the surface — only from the
+     * header, which now has one job.
+     */
+    summaryVariant?: "period" | "account";
 }) {
+    if (summaryVariant === "account") {
+        return (
+            <FinancialsAccountSummaryCard
+                evidence={evidence}
+                onAddCharge={onAddCharge}
+                onPayNow={onPayNow}
+            />
+        );
+    }
     if (span === 1) {
         return (
             <FinancialsCompactCard
@@ -170,7 +196,7 @@ export default function FinancialsCard({
                             payment one — and it stays quiet so it never competes with Pay now. */}
                         <div className="alloy-os-billing__zone-actions">
                             {onPayNow ? (
-                                <FooterAction onClick={onPayNow}>Take payment →</FooterAction>
+                                <FooterAction onClick={onPayNow}>Payment →</FooterAction>
                             ) : null}
                             <FooterAction onClick={onAddCharge}>Add charge →</FooterAction>
                             {/* Offered only where there is somewhere to drill to. In Financials →
@@ -265,6 +291,88 @@ export default function FinancialsCard({
     );
 }
 
+/**
+ * THE ACCOUNT SUMMARY — three figures, two commands, and a hard stop.
+ *
+ * ── WHAT THE THREE FIGURES ARE, AND WHOSE NUMBERS THEY ARE ─────────────────────────────────────
+ *
+ *   Current balance   `reconciliation.balanceCents`              responsibility − payments
+ *   Due               `collectible.currentlyCollectibleCents`    outstanding − claim suppression
+ *   Past due          `pastDue.amountCents`                      the portion whose due date passed
+ *
+ * All three already existed and all three have exactly one owner each. Nothing here adds,
+ * differences or re-derives; `Due` in particular is Thread 9's governed collectible figure and not
+ * a fourth number invented for a header — see `FinancialsPeriod.dueNow`.
+ *
+ * ── AND WHAT IS DELIBERATELY NOT HERE ──────────────────────────────────────────────────────────
+ *
+ * Responsibility, paid, autopay, current period, next charge, the charge breakdown, the discount
+ * breakdown and the explanatory sentences are all GONE from the header. Every one of them is still
+ * on the surface — in the filtered, period-grouped detail immediately beneath — but a summary that
+ * answers nine questions answers none of them first, and an operator opening an account needs to
+ * know the position before they need the composition.
+ *
+ * The anatomy is borrowed from Focus Panel → Financials → Details (`Stat`, `__rollup`, `__strip`,
+ * `__actions`), which is the canonical Financials detail presentation. Two placements, one grammar.
+ */
+function FinancialsAccountSummaryCard({
+    evidence,
+    onAddCharge,
+    onPayNow,
+}: {
+    evidence: FinancialsEvidence;
+    onAddCharge?: () => void;
+    onPayNow?: () => void;
+}) {
+    const { period, pastDue } = evidence;
+    return (
+        <div className="alloy-os-billing" data-financials-card="account">
+            <UniversalCard
+                title="Financials"
+                insight=""
+                iconName="Receipt"
+                tier="context"
+                archetype="status"
+                density="compact"
+                gridSpan="row"
+                data-universal-card-key="financials"
+                footerAction={null}
+            >
+                <div className="alloy-os-fdetail__rollup" data-financials-account-summary="true">
+                    <div className="alloy-os-fdetail__rollup-facts">
+                        <div className="alloy-os-fdetail__strip">
+                            <Stat label="Current balance" value={period.currentBalance} strong />
+                            <Stat label="Due" value={period.dueNow} />
+                            <Stat
+                                label="Past due"
+                                value={pastDue ? pastDue.amount : "None"}
+                                tone={pastDue ? "due" : "ok"}
+                            />
+                        </div>
+                    </div>
+                    {/*
+                     * PRIMARY ACCOUNT COMMANDS, AS BUTTONS.
+                     *
+                     * These were footer links reading "Take payment →" and "Add charge →", which is
+                     * the platform's idiom for navigating to somewhere else. Neither navigates:
+                     * both open a command in place. `Payment` is the primary because settling is
+                     * what an operator opens an account to do; `Add charge` is its peer because it
+                     * changes what is owed rather than settling it.
+                     */}
+                    <div className="alloy-os-fdetail__actions">
+                        <Action primary onClick={onPayNow} data-financials-command="payment">
+                            Payment
+                        </Action>
+                        <Action onClick={onAddCharge} data-financials-command="add_charge">
+                            Add charge
+                        </Action>
+                    </div>
+                </div>
+            </UniversalCard>
+        </div>
+    );
+}
+
 function Group({ children }: { children: React.ReactNode }) {
     return <p className="alloy-os-billingdetail__group">{children}</p>;
 }
@@ -320,7 +428,7 @@ function FinancialsCompactCard({
                             operator could open offered a way in. Supplied by the host or absent.
                         */}
                         {onPayNow ? (
-                            <FooterAction onClick={onPayNow}>Take payment →</FooterAction>
+                            <FooterAction onClick={onPayNow}>Payment →</FooterAction>
                         ) : null}
                         <FooterAction onClick={onAddCharge}>Add charge →</FooterAction>
                         {/* Offered only where there is somewhere to drill to. */}

@@ -281,11 +281,22 @@ describe("F7 · one truth, two grains", () => {
      * directly beneath it is period-aware, carries a period column and offers an All-periods
      * filter — two statements of the same context. The Focus Panel keeps both, having no ledger.
      */
+    /*
+     * This used to assert a `display: none` rule that hid the summary's period heading. Hiding
+     * markup a component still emits is a workaround, not a decision, and it fails silently the
+     * moment a class name moves. The account summary now COMPOSES no period zone — three figures
+     * and two commands — and the ledger beneath it is period-GROUPED, which is where a period
+     * belongs. The lock is on those two facts.
+     */
     it("keeps the billing period with the activity rather than in the account summary", () => {
-        const css = read("app/adminV2/components/alloyOsRuntime.css");
-        expect(css).toMatch(/\.alloy-accounts-account-card[^{]*__period[^{]*\{[^}]*display: none/);
+        const card = read("components/operationalCards/FinancialsCard.tsx");
+        const variant = card.slice(card.indexOf("function FinancialsAccountSummaryCard"));
+        expect(variant, "the account summary composes no period zone")
+            .not.toMatch(/alloy-os-billing__period|Current period/);
         const detail = read(WORKSPACE_DETAIL);
         expect(detail, "and the ledger still carries it").toContain("data-financials-filter");
+        expect(detail, "as a grouping, in the detail card's own period anatomy")
+            .toContain("alloy-os-fdetail__periodhead");
         expect(detail).toContain("periodKey");
     });
 
@@ -294,17 +305,37 @@ describe("F7 · one truth, two grains", () => {
      *
      * A ledger row read `2026-12-01` beside a payment that read `Sep 14`. The presentation doctrine
      * already forbids that — "Never YYYY-MM-DD on operator surfaces" — and Financials had a private
-     * `toLocaleDateString` plus five raw renders. Everything now routes through
-     * `formatQueueRowDateCompact`.
+     * `toLocaleDateString` plus five raw renders.
+     *
+     * The helper then changed, and for a financial reason. `formatQueueRowDateCompact` drops the
+     * year inside the current year ("Sep 14"), which is right for a work queue and wrong for a
+     * ledger: financial activity crosses months, billing periods and fiscal years, and a date
+     * without a year cannot be reconciled against a statement. Everything now routes through
+     * `formatDisplayDate`, which always carries the year.
      */
     it("formats every operator-facing Financials date through the platform helper", () => {
         const fmt = read("app/adminV2/financials/financialsFormat.ts");
-        expect(fmt).toContain("formatQueueRowDateCompact");
+        expect(fmt, "the platform's date authority, not a private formatter")
+            .toContain("presentationDateFormat");
+        expect(fmt, "and the year-bearing member of it").toContain("formatDisplayDate");
+        expect(fmt, "never the year-dropping queue helper on a financial surface")
+            .not.toMatch(/formatQueueRowDateCompact\s*\(/);
         /*
          * A CALL, not the word. This asserted the bare string and matched the comment that explains
          * the removal — a test passing judgement on its own prose proves nothing about the code.
          */
         expect(fmt, "no private date formatting survives").not.toMatch(/toLocaleDateString\s*\(/);
+
+        /*
+         * THE ADAPTER WAS THE LAST YEAR-DROPPER, and it fed the canonical surface: its private
+         * `shortDate` produced "Aug 15" for every row of the Focus Panel Details ledger while its
+         * `longDate` produced "Oct 1, 2026" two lines above. Two private formatters, disagreeing.
+         */
+        const adapter = read("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts");
+        expect(adapter, "no private date formatter in the Financials adapter")
+            .not.toMatch(/toLocaleDateString\s*\(/);
+        expect(adapter, "and no raw ISO date reaching a label").not.toMatch(/\.slice\(0,\s*10\)/);
+        expect(adapter).toContain("formatDisplayDate");
 
         const surfaces = [
             WORKSPACE_DETAIL,
@@ -331,7 +362,7 @@ describe("F7 · one truth, two grains", () => {
         expect(src, "no disclosure wraps the account surface").not.toContain("<details");
         const detail = read(WORKSPACE_DETAIL);
         expect(detail).toContain("data-financials-lenses");
-        expect(detail, "the ledger is rendered, not gated").toContain("LedgerTable");
+        expect(detail, "the ledger is rendered, not gated").toContain("LedgerPeriods");
     });
 
     /*

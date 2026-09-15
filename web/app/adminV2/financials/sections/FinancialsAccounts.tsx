@@ -319,6 +319,7 @@ export default function FinancialsAccounts({
                                     participationId={null}
                                     displayName={selectedAccount?.householdName ?? null}
                                     showDetailsAction={false}
+                                    summaryVariant="account"
                                 />
                                 <FinancialsAccountWorkspaceDetail
                                     customerId={selected}

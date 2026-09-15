@@ -10545,20 +10545,32 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 /*
  * ── PERIOD BELONGS WITH ACTIVITY ───────────────────────────────────────────────────────────────
  *
- * The account summary led with "CURRENT PERIOD · September 2026", and the ledger directly beneath
- * it is period-aware, carries a period column and offers an All-periods filter. Two statements of
- * the same context, and the summary's job is the position rather than when it was created. Only
- * the heading and the label go; the figures in that zone are the summary.
+ * The account summary once led with "CURRENT PERIOD · September 2026" while the ledger directly
+ * beneath it was already period-aware and period-GROUPED. Two statements of the same context, and
+ * the summary's job is the position rather than when it was created.
  *
- * The Focus Panel keeps both, because there is no ledger beneath it to carry the period.
+ * That used to be corrected here, by hiding the period heading with CSS. It is now corrected at the
+ * source: `summaryVariant="account"` renders three figures and two commands and never composes a
+ * period zone at all, so there is nothing left to hide. A display:none that suppresses markup a
+ * component still emits is a workaround pretending to be a decision — and it fails silently the
+ * moment the component's class names move.
+ *
+ * The Focus Panel keeps the period zone, because there is no period-grouped ledger beneath it.
  */
-.alloy-accounts-account-card .alloy-os-billing__zone:first-child > .alloy-os-billing__zone-head,
-.alloy-accounts-account-card .alloy-os-billing__period {
-    display: none;
-}
 
-/* Field labels in the payment command, in Add Charge's own label grammar. */
-.alloy-accounts-command-host [data-financials-overlay="payment"] .alloy-os-financials__fieldlabel {
+/*
+ * ── THE PAYMENT COMMAND LOOKS LIKE THE ADD CHARGE COMMAND ─────────────────────────────────────
+ *
+ * Add Charge is the command reference: uppercase field labels, a pine commit, a quiet Cancel beside
+ * it. Payment is built from raw `alloy-os-financials__*` markup rather than the command kit, so the
+ * parity is carried here.
+ *
+ * These rules were scoped to `.alloy-accounts-command-host` — the Financials workspace — which gave
+ * the SAME command two appearances depending on where an operator opened it. Parity that holds in
+ * one placement is not parity. The scope is now the command itself, and the commit takes Bend Pine
+ * from the token rather than a sixth hardcoded copy of the brand green.
+ */
+[data-financials-overlay="payment"] .alloy-os-financials__fieldlabel {
     margin-top: 0.7rem;
     font-size: 0.6875rem;
     font-weight: 600;
@@ -10571,8 +10583,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
  * Primary and secondary, not two identical buttons. The commit is the pine action every Alloy
  * command commits with; Cancel is the quiet one beside it.
  */
-.alloy-accounts-command-host [data-financials-overlay="payment"] .alloy-os-financials__preview-actions button:first-child {
-    background: rgb(17, 122, 101);
+[data-financials-overlay="payment"] .alloy-os-financials__preview-actions button:first-child {
+    background: var(--alloy-os-bend-pine, #00a283);
     color: #fff;
     border: 0;
     border-radius: 8px;
@@ -10581,7 +10593,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     font-size: 0.8125rem;
 }
 
-.alloy-accounts-command-host [data-financials-overlay="payment"] .alloy-os-financials__preview-actions button + button {
+[data-financials-overlay="payment"] .alloy-os-financials__preview-actions button + button {
     background: #fff;
     border: 1px solid rgba(203, 213, 214, 0.9);
     border-radius: 8px;
@@ -10590,8 +10602,31 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     color: rgba(16, 24, 32, 0.75);
 }
 
+/*
+ * A RECEIPT IS THREE FACTS, NOT ONE WORD.
+ *
+ * The received amount, the status and method, and what has been applied are three separate spans
+ * with no styling at all between them, so they ran together as "$25.00Received · Check$25.00
+ * applied" — three figures an operator has to parse apart by eye on the surface where they decide
+ * how much to ask a family for. One flex row with a real gap; the list is the rows' container.
+ */
+.alloy-os-financials__payments {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.alloy-os-financials__payment {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.1rem 0.5rem;
+}
+
 /* The receipt context line was one unspaced run of figures. */
-.alloy-accounts-command-host [data-financials-overlay="payment"] .alloy-os-financials__note {
+[data-financials-overlay="payment"] .alloy-os-financials__note {
     margin-top: 0.15rem;
     color: rgba(16, 24, 32, 0.6);
     font-size: 0.75rem;

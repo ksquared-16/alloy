@@ -83,6 +83,29 @@ describe("the Director QA scenario catalog", () => {
         }
     });
 
+    /*
+     * ── A PRODUCT GAP MAY NOT BE LAUNDERED INTO A TEST RESULT ─────────────────────────────────
+     *
+     * The accounting period is enforced by the database and reachable by nobody. The catalog must
+     * say so in its own vocabulary, and must not offer a human a walkthrough of a screen that does
+     * not exist — that is the route by which a `psql` query becomes a reported PASS.
+     */
+    it("records the accounting period as a product gap, not as a passed or deferred scenario", () => {
+        const s = scenarioByKey("accounting_period")!;
+        expect(s.disposition).toBe("MISSING_PRODUCTIZATION");
+        expect(s.navigate, "there is nowhere to navigate to").toEqual([]);
+        expect(s.dispositionReason).toMatch(/MISSING_PRODUCTIZATION/);
+        expect(s.dispositionReason, "and it must name the smallest productization")
+            .toMatch(/productization/i);
+        expect(
+            s.doThis.join(" "),
+            "a database query must be refused as evidence, in the scenario itself",
+        ).toMatch(/database query/i);
+
+        /* Its sibling IS on screen and IS walked through — the two must not share a disposition. */
+        expect(scenarioByKey("billing_period")!.disposition).toBe("HUMAN_WALKTHROUGH");
+    });
+
     it("keeps subsidy PROCESSING out of scope while Expected Funding stays Core", () => {
         expect(scenarioByKey("subsidy_processing")!.disposition).toBe("OUT_OF_SCOPE_THREAD_11A");
         expect(scenarioByKey("expected_funding")!.disposition).toBe("HUMAN_WALKTHROUGH");
