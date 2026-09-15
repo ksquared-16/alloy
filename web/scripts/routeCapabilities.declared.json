@@ -273,7 +273,8 @@
         },
         "app/api/admin/agent/v0/queue-definition/route.ts": {
             "POST": {
-                "status": "pending"
+                "status": "pending",
+                "note": "WORK_AUTHORITY_MODEL_DEBT, not backlog by neglect. The handler writes `work_units` (line ~128) and is gated today on the role TITLE (`ctx.role !== \"admin\"`), which is left in place DELIBERATELY rather than migrated, because every truthful owner for it is missing. AI AUTHORITY IS REJECTED: `ai.enrichment.use` is the authority to USE AI, and this route commits a queue definition into the work model — gating a Work mutation on an AI key is the 'AI is a superuser' shape this programme exists to remove, and it would let any AI user reshape operational queues. CONFIGURATION AUTHORITY IS REJECTED: `fields.manage`, `layouts.manage` and `configuration.vocabulary.manage` each have established narrower meanings and none of them means 'may define what work exists'; borrowing one would hand queue definition to whoever may rename a label. NO NEW WORK KEY IS INVENTED HERE: `work.manage` / `work.write` would settle the platform's Work vocabulary as a side effect of an Agent slice, and the same question governs work items, cases and jobs. The same debt already blocks operational-task assignment (see the Assignments ruling). Recorded as explicit named debt so the gap is reached by enumeration rather than discovered later."
             }
         },
         "app/api/admin/agent/v1/activity/route.ts": {
