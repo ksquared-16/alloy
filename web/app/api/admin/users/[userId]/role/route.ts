@@ -94,6 +94,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
         audit,
     });
     if (!membership.ok) {
+        // The replacement path raises authority too, so its refusal is an authorization answer.
+        if (membership.kind === "forbidden") {
+            return NextResponse.json({ error: membership.error }, { status: 403 });
+        }
         if (membership.kind === "not_found") {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }

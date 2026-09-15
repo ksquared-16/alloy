@@ -24,7 +24,7 @@ export type MembershipRow = {
 
 export type MembershipWriteResult =
     | { ok: true; row: MembershipRow }
-    | { ok: false; kind: "duplicate" | "not_found" | "error"; error: string };
+    | { ok: false; kind: "duplicate" | "not_found" | "forbidden" | "error"; error: string };
 
 /** Postgres SQLSTATEs the RPCs use to signal caller-mappable outcomes. */
 const UNIQUE_VIOLATION = "23505";
@@ -33,6 +33,21 @@ const NO_DATA_FOUND = "P0002";
 function classify(code: string | undefined, message: string): MembershipWriteResult {
     if (code === UNIQUE_VIOLATION) return { ok: false, kind: "duplicate", error: message };
     if (code === NO_DATA_FOUND) return { ok: false, kind: "not_found", error: message };
+    /*
+     * The assignment ceiling, surfaced as authorization rather than as a fault. Creating a member
+     * with an initial role is a delegation, so a refusal here is 403 and says which authority the
+     * actor could not confer — not a 500 that reads as a broken server.
+     */
+    const beyond = message.match(/assignment_ceiling:([^\s"]+)/);
+    if (beyond) {
+        return {
+            ok: false,
+            kind: "forbidden",
+            error:
+                "You can only give someone access you hold yourself. Not assigned: "
+                + beyond[1].split(",").join(", "),
+        };
+    }
     return { ok: false, kind: "error", error: message };
 }
 

@@ -194,6 +194,10 @@ export async function POST(request: Request) {
         if (membership.kind === "duplicate") {
             return NextResponse.json({ error: "This user already has this role in this org" }, { status: 409 });
         }
+        // The initial role is a delegation; a ceiling refusal is about who is asking, so 403.
+        if (membership.kind === "forbidden") {
+            return NextResponse.json({ error: membership.error }, { status: 403 });
+        }
         return NextResponse.json({ error: membership.error }, { status: 500 });
     }
 
