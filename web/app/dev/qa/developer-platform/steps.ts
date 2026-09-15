@@ -5,10 +5,9 @@
  * gets reviewed, argued with and added to, and a reviewer should be able to read
  * the whole test plan without reading a single line of React.
  *
- * ONE STEP IS AUTHORED, AND SAYS SO. Sections A-M are dictated. DP-QA-76 arrived
- * truncated mid-sentence — "does this feel like one coherent" — so its closing
- * clause is completed here from its own heading, and it carries `authored: true`
- * so an operator can see the seam. Everything else is as instructed.
+ * EVERY STEP IS DICTATED. Sections A-M arrived across several deliveries, the last
+ * of which restated 76-82 in full; those steps now carry that wording rather than
+ * the interim text written while the instruction was still truncated.
  */
 
 export type StepResult = "PASS" | "FAIL" | "BLOCKED" | "NEEDS_REVIEW";
@@ -1206,102 +1205,121 @@ export const SECTIONS: QaSection[] = [
             {
                 id: "DP-QA-76",
                 area: "Platform coherence",
-                objective: "One platform, not several systems that happen to connect.",
-                startingState: "Everything: operator configuration, applications, installations, credentials, capabilities, boundaries, API Activity, documentation, OpenAPI, live API and partner material.",
-                action: "Trace the model — Application → Installation → Credential → Authority → API → canonical Alloy truth — through every surface.",
+                objective: "One coherent platform, not several systems sharing a brand.",
+                startingState: "Everything above complete: Integrations used, docs read, API exercised, Classroom Coach packet read.",
+                action: "Trace the journey end to end — Organization → Integrations → Application → Installation → Capabilities + Location Access → Credential → Developer Documentation → /api/v1 → canonical Alloy resources — and decide whether the same concepts, terminology, authority model and product philosophy carry through every layer.",
                 expected: [
-                    "Integrations does not have one permission system while the API has another.",
-                    "The docs describe no concept absent from the product.",
-                    "The API does not behave differently from the docs.",
-                    "OpenAPI does not describe a separate contract.",
-                    "Classroom Coach needs no bespoke trust architecture.",
-                    "External integrations do not sit outside normal Alloy domain authority."
+                    "Integrations did not invent its own access model.",
+                    "Credentials do not feel like a separate developer subsystem.",
+                    "Documentation describes no abstraction the product does not expose.",
+                    "OpenAPI does not describe a different API than the narrative docs.",
+                    "/api/v1 does not behave differently from either.",
+                    "Classroom Coach would need no separate integration architecture.",
+                    "External integrations do not bypass Alloy's normal domain authority."
                 ],
-                why: "If I had to explain the entire integration model in five minutes, does the product reinforce the explanation everywhere I look? If not, record exactly where the mental model breaks."
+                why: "The operator and developer experiences may expose different levels of technical detail, but they must describe the same system.",
+                humanQuestion: "If I had to explain Alloy's entire integration model to Classroom Coach in five minutes, could I tell one simple story and then show them the product, documentation and API as proof of that same story? If no, identify exactly where the mental model breaks."
             },
             {
                 id: "DP-QA-77",
                 area: "External credibility",
-                objective: "Another software company could responsibly build against this.",
+                objective: "A platform another software company could responsibly build against.",
                 startingState: "The whole experience.",
-                action: "Assess stability, terminology, professionalism, visible security posture, documentation, error behaviour, API consistency, troubleshooting, scope clarity and honesty about limits.",
+                action: "Judge precision, predictability, professionalism, stability, documentation quality, error quality, authority clarity, the security posture visible through the product, troubleshooting, and honesty about limitations. Do NOT judge by API breadth.",
                 expected: [
-                    "A small, precise, trustworthy API passes.",
-                    "Breadth is not the standard; intentionality and dependability are."
+                    "A small, precise API feels more credible than a broad API with ambiguous guarantees.",
+                    "What Alloy claims to support feels intentional and dependable."
                 ],
-                why: "Alloy does not need a large API surface to pass this step."
+                why: "Breadth is not credibility. A narrow contract kept exactly is worth more to a partner than a wide one kept approximately."
             },
             {
                 id: "DP-QA-78",
                 area: "Documentation trust",
-                objective: "The docs stand alone.",
-                startingState: "The documentation, imagining Alloy engineering has left the conversation.",
-                action: "Decide whether you would implement against it unaided.",
+                objective: "The documentation stands alone.",
+                startingState: "Imagine the Alloy engineering team has disappeared from the conversation after sending you these materials.",
+                action: "Decide whether you would trust the documentation enough to implement against the currently supported API.",
                 expected: [
-                    "No undocumented assumptions needed for authentication, tenant selection, authorization, boundaries, request and response formats, pagination, incremental sync, errors, rate limiting or troubleshooting."
+                    "No undocumented knowledge needed about authentication.",
+                    "…or tenant authority.",
+                    "…or scopes.",
+                    "…or resource boundaries.",
+                    "…or request formats.",
+                    "…or response formats.",
+                    "…or pagination.",
+                    "…or incremental synchronization.",
+                    "…or errors.",
+                    "…or rate limits.",
+                    "…or troubleshooting."
                 ],
-                why: "If tribal knowledge is still required, record exactly what is missing."
+                why: "If tribal knowledge is required, record exactly what is missing."
             },
             {
                 id: "DP-QA-79",
-                area: "Product trust",
-                objective: "An administrator would feel in control granting this access.",
-                startingState: "Organization → Integrations, as the administrator.",
-                action: "Decide whether you would comfortably grant an external company access here.",
+                area: "Operator product trust",
+                objective: "An administrator feels in control of external access.",
+                startingState: "Organization → Integrations, as the Alloy administrator.",
+                action: "Decide whether you would comfortably grant another software company access here.",
                 expected: [
-                    "What access is granted is clear.",
-                    "Which Locations are exposed is clear.",
-                    "Credential security, rotation, revocation and suspension are clear.",
-                    "Health and activity visibility are adequate."
+                    "What Application is being installed.",
+                    "What capabilities it receives.",
+                    "Which Locations it can access.",
+                    "Whether its Credential is active.",
+                    "How to rotate access.",
+                    "How to revoke access.",
+                    "How to suspend the entire Installation.",
+                    "Whether the Installation is healthy.",
+                    "What activity it has produced."
                 ],
-                why: "If the product makes authority feel ambiguous or overly technical, record it."
+                why: "The operator should feel in control without needing to understand Alloy's internal permission architecture. If authority feels ambiguous, overly technical, or difficult to revoke, record it."
             },
             {
                 id: "DP-QA-80",
-                area: "Boundary trust",
-                objective: "Authority comes from the Installation, never from the caller.",
+                area: "External boundary trust",
+                objective: "Authority is determined by the Installation Alloy configured, never by what the caller asks for.",
                 startingState: "Everything tested in Sections H and I.",
-                action: "Decide whether you are convinced the external experience is bounded by what Alloy configured.",
+                action: "Decide whether you are convinced. A PASS requires the earlier authority gates to have passed.",
                 expected: [
                     "Tenant authority is server-derived.",
-                    "Location authority is server-enforced.",
+                    "Resource and location authority is server-enforced.",
                     "Restricted-empty fails closed.",
                     "Missing capability fails closed.",
-                    "Revoked credentials fail.",
-                    "Suspended Installations fail."
+                    "Revoked Credentials fail.",
+                    "Suspended Installations fail.",
+                    "Caller input cannot expand tenant or resource authority."
                 ],
-                why: "This is the human acceptance summary of the technical authority model. Any uncertainty is a FAIL.",
+                why: "This is the human acceptance summary of the entire technical authority model. Any uncertainty here is a FAIL.",
                 hardGate: true
             },
             {
                 id: "DP-QA-81",
                 area: "Classroom Coach readiness",
-                objective: "Alloy can hold a serious technical conversation without pretending.",
+                objective: "Alloy can hold a serious technical conversation without pretending to know their architecture.",
                 startingState: "The partner materials as a whole.",
                 action: "Decide whether Alloy is ready for that conversation.",
                 expected: [
-                    "Alloy can explain its own platform precisely.",
-                    "Alloy can demonstrate its current API.",
-                    "Alloy can show how integrations are installed and governed.",
-                    "Alloy can provide technical documentation.",
-                    "Alloy can identify what it needs from Classroom Coach.",
+                    "Alloy can explain its own architecture precisely.",
+                    "Alloy can demonstrate its actual external API.",
+                    "Alloy can demonstrate how integrations are installed and governed.",
+                    "Alloy can provide implementation-backed technical documentation.",
+                    "Alloy can clearly state what it does and does not expose today.",
+                    "Alloy has identified exactly what technical evidence it needs from Classroom Coach.",
                     "Unknown provider capabilities remain explicitly unknown.",
-                    "There is a clear continuation once answers arrive."
+                    "There is a bounded next phase once that evidence arrives."
                 ],
-                why: "A PASS does not mean the integration is implemented."
+                why: "A PASS does not mean the Classroom Coach integration exists."
             },
             {
                 id: "DP-QA-82",
                 area: "External-send decision",
-                objective: "Record the final decision.",
-                startingState: "All steps answered.",
-                action: "Choose an acceptance outcome in the Operator acceptance panel at the foot of this page, and list every follow-up or blocking defect in its notes.",
+                objective: "Record the final human acceptance decision.",
+                startingState: "Every step answered.",
+                action: "Choose exactly one outcome in the Operator acceptance panel at the foot of this page, and list every follow-up or blocking defect in its notes.",
                 expected: [
-                    "ACCEPTED — PARTNER READY: comfortable sending both artifacts to an external technical partner today.",
-                    "ACCEPTED WITH FOLLOW-UPS: the contract is correct and usable, but listed presentation or documentation issues must be corrected first.",
-                    "REJECTED — REPAIR REQUIRED: one or more defects materially undermine the experience."
+                    "ACCEPTED — PARTNER READY: the documented API behaves as described, the product and materials are professional, and Alloy represents its capabilities and limitations accurately.",
+                    "ACCEPTED WITH FOLLOW-UPS: the technical contract is correct and usable, but presentation, product or documentation issues should be corrected before or alongside external sharing. Every follow-up must be listed.",
+                    "REJECTED — REPAIR REQUIRED: one or more product, API-contract, security-boundary, documentation, usability or presentation defects materially undermine the experience. Every blocking defect must be listed."
                 ],
-                why: "PUBLIC_READY is not the standard here. This decides whether the certified platform and partner materials are genuinely PARTNER_READY.",
+                why: "PUBLIC_READY is not the standard. SEC-0 / SEC-0c and broader public-release posture are a separate security lane. This decides whether the current Developer Platform and Classroom Coach discovery materials genuinely meet PARTNER_READY.",
                 hardGate: true
             },
         ],
