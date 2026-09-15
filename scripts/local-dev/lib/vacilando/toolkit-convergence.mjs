@@ -726,13 +726,26 @@ export function executeToolkitInstall({
    */
   artifact = null,
   expectedCurrent = null,
+  /*
+   * Injection points forwarded, deliberately. Without them the generation-2
+   * branch can only be certified by READING the dispatcher, and "the helper
+   * refuses" is not the same claim as "the governed action refuses". A guard
+   * that is correct in a helper and unreachable from the dispatcher protects
+   * nothing, so the dispatcher has to be drivable.
+   */
+  resolver = undefined,
+  installer = undefined,
   expectedStagingSha = null,
   toolkitRoot = TOOLKIT_ROOT,
   runner = null,
   binPath = null,
 } = {}) {
   if (artifact) {
-    return executeArtifactInstall({ artifact, expectedCurrent, toolkitRoot });
+    return executeArtifactInstall({
+      artifact, expectedCurrent, toolkitRoot,
+      ...(resolver ? { resolver } : {}),
+      ...(installer ? { installer } : {}),
+    });
   }
   const bin = binPath || join(toolkitRoot, "current", "alloy-toolkit");
   const before = installedToolkitSha({ toolkitRoot });
