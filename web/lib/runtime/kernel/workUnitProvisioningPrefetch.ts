@@ -77,10 +77,28 @@ export function prefetchWorkUnitProvisioning(
     }
 
     logCurrentWorkInit("provisioning.prefetch.fetch", { cacheKey: url, cache: "miss", preloadSource: "prefetch", note: "intent-warm network fetch" });
-    const promise = fetch(url, { headers: { accept: "application/json" }, credentials: "include" })
-        .then(async (res) => {
-            if (!res.ok) throw new Error(`prefetch failed HTTP ${res.status}`);
-            return (await res.json()) as ProvisioningAnswer;
+    /*
+     * ── ONE IN-FLIGHT OPERATION PER ANSWER, ACROSS BOTH PATHS ────────────────────────────────────
+     *
+     * This used to call `fetch` directly, which is what made the two paths independent: a warm here
+     * registered only in `cache` (TTL), while K2's entry fetch registers only in `inflightEntry`.
+     * Neither could see the other's request, so a prewarm and a selection for the SAME answer raced.
+     *
+     * Measured on Firefly under rapid subject alternation: ten provisioning requests, six distinct
+     * URLs, four of them CONCURRENT overlaps of a byte-identical URL — one pair issued 351ms into a
+     * request that ran 854ms. Routing the prewarm through the same coalescer closes it in both
+     * directions: a selection now joins a prewarm already in flight, and vice versa.
+     *
+     * SCOPE SAFETY. The URL is the complete request identity, not an approximation of it: the route
+     * derives its answer from the slug plus `work_view_id`, `subject_id`, `cohort` and `aspect`, and
+     * `provisioningAnswerUrl` encodes exactly those. Tenant and access scope come from the session
+     * gate, which is constant for a browser session. And the entry is dropped the instant it settles,
+     * so this coalesces only genuinely concurrent work and can never serve a stale answer.
+     */
+    const promise = fetchProvisioningEntryDeduped(url)
+        .then((result) => {
+            if (!result.ok) throw new Error(`prefetch failed HTTP ${result.status}`);
+            return result.answer;
         })
         .catch((err) => {
             // Never cache a failure: drop the entry so K2 fetches fresh.
