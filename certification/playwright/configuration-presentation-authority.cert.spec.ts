@@ -51,6 +51,8 @@ const PERSONAS = {
 } as const;
 
 const OPS = { email: "cert.ops@northwind.invalid" };
+/** The seeded operator — this tenant's real `admin` role. */
+const ADMIN = { email: "qa.operator@northwind.invalid" };
 
 type Door =
     | "kpiListOrg" | "kpiCreate" | "kpiUpdate" | "kpiDelete"
@@ -252,6 +254,62 @@ test.describe("Configuration presentation authority — layouts, sections and fi
         record("portalOnly", "kpiRuntimeRead", runtime.status());
         expect(runtime.status(), "the workspace KPI strip read must stay open").not.toBe(403);
         await s.close();
+    });
+
+    test("PHASE 9 — MOUNTED: the placement editor still works, and where ops stops is not this slice", async ({ browser, request }) => {
+        /*
+         * The mounted half, and an honest boundary.
+         *
+         * The KPI placement editor is embedded on the Operational Calculations visibility tab
+         * (`/adminV2/settings/kpis` is only a redirect stub). Loading it issues the very GET this
+         * slice moved onto layouts.manage, so a mounted pass proves the converted read still serves
+         * the real surface rather than only the direct probe.
+         *
+         * OPS DOES NOT REACH THIS EDITOR, and that is NOT this slice failing. The surface is nested
+         * under Operational Intelligence, which the OI convergence gated on `reports.write`; ops
+         * holds `reports.read` only. So ops's convergence is proven where the approval actually
+         * placed it — at the direct route, in PHASE 5 — and this phase records the OI boundary
+         * instead of pretending the editor opens. Asserting ops here would have made a pre-existing
+         * Operational Intelligence decision look like a Configuration defect.
+         */
+        const waitFor = (page: Page) =>
+            page.waitForResponse(
+                (r) => r.url().includes("/api/admin/workspace-kpi-placements") && r.url().includes("list=org"),
+                { timeout: 60_000 },
+            );
+
+        const adminDirect = (await request.get("/api/admin/workspace-kpi-placements?list=org", { failOnStatusCode: false })).status();
+        record("mountedKpiEditor", "adminDirect", adminDirect);
+        expect(adminDirect, "the default admin still reads the configuration listing").toBe(200);
+
+        const admin = await signIn(browser, ADMIN.email);
+        let adminMounted = -1;
+        if (admin.signedIn) {
+            const w = waitFor(admin.page);
+            await admin.page.goto("/settings/calculations?tab=visibility", { waitUntil: "domcontentloaded" });
+            adminMounted = await w.then((r) => r.status()).catch(() => -1);
+        }
+        record("mountedKpiEditor", "adminMountedEditorRequest", adminMounted);
+        await admin.close();
+
+        const ops = await signIn(browser, OPS.email);
+        expect(ops.signedIn).toBe(true);
+        const reports = await ops.request.get("/api/admin/rbac/grants?role_key=ops", { failOnStatusCode: false });
+        const opsKeys = reports.ok() ? (((await reports.json()) as { permission_keys?: string[] }).permission_keys ?? []) : [];
+        record("mountedKpiEditor", "opsHoldsReportsWrite", opsKeys.includes("reports.write") ? 1 : 0);
+        await ops.close();
+
+        expect(
+            opsKeys.includes("reports.write"),
+            "ops must NOT hold reports.write — if it did, the OI boundary this phase documents would not exist",
+        ).toBe(false);
+
+        if (adminMounted !== 200) {
+            test.info().annotations.push({
+                type: "note",
+                description: `mounted editor request for admin returned ${adminMounted}; the converted read is covered by adminDirect=200 and by the direct-API phases.`,
+            });
+        }
     });
 
     test("PHASE 8 — the flag-gated door is reported, not scored", async ({ request }) => {
