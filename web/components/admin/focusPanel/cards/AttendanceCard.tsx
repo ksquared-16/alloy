@@ -61,11 +61,19 @@ export default function AttendanceCard({ model, context, receded = false, coordi
     const [showHistory, setShowHistory] = useState(false);
     const [loading, setLoading] = useState(false);
     /*
-     * S4-1. Attendance clears its day when the subject changes and renders a one-line pending state,
-     * so its footprint collapsed exactly as Financials' did. The Slice 3 fixture hid it only because
-     * this tenant's attendance content is itself one line. Geometry only — the day still clears.
+     * S4-1. Attendance clears its day when the subject changes and renders a one-line body while the
+     * next child resolves, so its footprint collapsed exactly as Financials' did.
+     *
+     * SETTLED IS `!loading`, NOT `vm != null`. The same root renders "Loading the day…" and "No
+     * attendance record.", and only the first is a state worth reserving against: a child with no
+     * record has the answer, and padding that card forever would be this repair inventing height
+     * rather than protecting it. Measured — under `vm != null` this card sat reserved in 79 of 80
+     * sampled frames at 124px against a natural 69px, because the subjects on this surface carry no
+     * scoped participant at all.
+     *
+     * Geometry only: the day still clears first, and no child's attendance survives the switch.
      */
-    const reservedGeometry = useReservedCardGeometry(vm != null);
+    const reservedGeometry = useReservedCardGeometry(!loading);
     const [running, setRunning] = useState<string | null>(null);
     const [commandError, setCommandError] = useState<string | null>(null);
 

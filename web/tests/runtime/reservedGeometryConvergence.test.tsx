@@ -61,8 +61,8 @@ function mount(ui: ReactNode) {
 }
 
 /** A card with ONE root for every state — Current Work's shape. */
-function SingleRootCard({ hasContent }: { hasContent: boolean }) {
-    const g = useReservedCardGeometry(hasContent);
+function SingleRootCard({ settled }: { settled: boolean }) {
+    const g = useReservedCardGeometry(settled);
     return createElement(
         "div",
         {
@@ -71,7 +71,7 @@ function SingleRootCard({ hasContent }: { hasContent: boolean }) {
             "data-reserved": g.reserved ? "true" : undefined,
             style: g.style,
         },
-        hasContent ? createElement("p", null, "SETTLED BODY") : createElement("p", null, "Loading…"),
+        settled ? createElement("p", null, "SETTLED BODY") : createElement("p", null, "Loading…"),
     );
 }
 
@@ -80,14 +80,14 @@ function SingleRootCard({ hasContent }: { hasContent: boolean }) {
  * defect on demand: the loaded card returns through a root with no ref, so nothing is ever measured.
  */
 function TwoRootCard({
-    hasContent,
+    settled,
     refOnSettledRoot,
 }: {
-    hasContent: boolean;
+    settled: boolean;
     refOnSettledRoot: boolean;
 }) {
-    const g = useReservedCardGeometry(hasContent);
-    if (hasContent) {
+    const g = useReservedCardGeometry(settled);
+    if (settled) {
         return createElement(
             "div",
             { ref: refOnSettledRoot ? g.ref : undefined, "data-card": "settled" },
@@ -112,7 +112,7 @@ function rootOf(container: HTMLElement): HTMLElement {
 
 describe("reserved geometry — behaviour", () => {
     it("reserves the shared floor before anything has ever settled", () => {
-        const { container, unmount } = mount(createElement(SingleRootCard, { hasContent: false }));
+        const { container, unmount } = mount(createElement(SingleRootCard, { settled: false }));
         expect(rootOf(container).style.minHeight).toBe(FOCUS_PANEL_RESERVED_MIN_HEIGHT);
         expect(rootOf(container).getAttribute("data-reserved")).toBe("true");
         unmount();
@@ -121,13 +121,13 @@ describe("reserved geometry — behaviour", () => {
     it("remembers the settled footprint and reserves it while pending", () => {
         measuredHeight = 224;
         const { container, rerender, unmount } = mount(
-            createElement(SingleRootCard, { hasContent: true }),
+            createElement(SingleRootCard, { settled: true }),
         );
         // Settled: nothing reserved, no imposed height.
         expect(rootOf(container).style.minHeight).toBe("");
         expect(rootOf(container).getAttribute("data-reserved")).toBeNull();
 
-        rerender(createElement(SingleRootCard, { hasContent: false }));
+        rerender(createElement(SingleRootCard, { settled: false }));
         expect(rootOf(container).style.minHeight).toBe("224px");
         expect(rootOf(container).getAttribute("data-reserved")).toBe("true");
         unmount();
@@ -136,11 +136,11 @@ describe("reserved geometry — behaviour", () => {
     it("carries no content across — the pending body is the pending body", () => {
         measuredHeight = 224;
         const { container, rerender, unmount } = mount(
-            createElement(SingleRootCard, { hasContent: true }),
+            createElement(SingleRootCard, { settled: true }),
         );
         expect(container.textContent).toContain("SETTLED BODY");
 
-        rerender(createElement(SingleRootCard, { hasContent: false }));
+        rerender(createElement(SingleRootCard, { settled: false }));
         expect(
             container.textContent,
             "reserving a footprint must never retain the prior subject's content",
@@ -152,15 +152,15 @@ describe("reserved geometry — behaviour", () => {
     it("the remembered footprint follows the LAST settled height, not the first", () => {
         measuredHeight = 224;
         const { container, rerender, unmount } = mount(
-            createElement(SingleRootCard, { hasContent: true }),
+            createElement(SingleRootCard, { settled: true }),
         );
-        rerender(createElement(SingleRootCard, { hasContent: false }));
+        rerender(createElement(SingleRootCard, { settled: false }));
         expect(rootOf(container).style.minHeight).toBe("224px");
 
         // The next subject legitimately settles taller; that is the new footprint to hold.
         measuredHeight = 341;
-        rerender(createElement(SingleRootCard, { hasContent: true }));
-        rerender(createElement(SingleRootCard, { hasContent: false }));
+        rerender(createElement(SingleRootCard, { settled: true }));
+        rerender(createElement(SingleRootCard, { settled: false }));
         expect(rootOf(container).style.minHeight).toBe("341px");
         unmount();
     });
@@ -168,24 +168,42 @@ describe("reserved geometry — behaviour", () => {
     it("a zero measurement is not remembered as a footprint", () => {
         measuredHeight = 0; // an unlaid-out or display:none root
         const { container, rerender, unmount } = mount(
-            createElement(SingleRootCard, { hasContent: true }),
+            createElement(SingleRootCard, { settled: true }),
         );
-        rerender(createElement(SingleRootCard, { hasContent: false }));
+        rerender(createElement(SingleRootCard, { settled: false }));
         expect(rootOf(container).style.minHeight).toBe(FOCUS_PANEL_RESERVED_MIN_HEIGHT);
+        unmount();
+    });
+
+    it("a settled EMPTY card is settled — not reserved, and its footprint is what is remembered", () => {
+        measuredHeight = 300;
+        const { container, rerender, unmount } = mount(createElement(SingleRootCard, { settled: true }));
+        rerender(createElement(SingleRootCard, { settled: false }));
+        expect(rootOf(container).style.minHeight).toBe("300px");
+
+        // The next subject has no record at all: one line, and that IS the answer.
+        measuredHeight = 118;
+        rerender(createElement(SingleRootCard, { settled: true }));
+        expect(rootOf(container).style.minHeight, "an answered card is never padded").toBe("");
+        expect(rootOf(container).getAttribute("data-reserved")).toBeNull();
+
+        // …and the one line is the footprint now. Holding 300px here would be invented height.
+        rerender(createElement(SingleRootCard, { settled: false }));
+        expect(rootOf(container).style.minHeight).toBe("118px");
         unmount();
     });
 
     it("SLICE 4 REGRESSION: a two-root card measures only if the SETTLED root holds the ref", () => {
         measuredHeight = 224;
-        const wired = mount(createElement(TwoRootCard, { hasContent: true, refOnSettledRoot: true }));
-        wired.rerender(createElement(TwoRootCard, { hasContent: false, refOnSettledRoot: true }));
+        const wired = mount(createElement(TwoRootCard, { settled: true, refOnSettledRoot: true }));
+        wired.rerender(createElement(TwoRootCard, { settled: false, refOnSettledRoot: true }));
         expect(rootOf(wired.container).style.minHeight).toBe("224px");
         wired.unmount();
 
         const unwired = mount(
-            createElement(TwoRootCard, { hasContent: true, refOnSettledRoot: false }),
+            createElement(TwoRootCard, { settled: true, refOnSettledRoot: false }),
         );
-        unwired.rerender(createElement(TwoRootCard, { hasContent: false, refOnSettledRoot: false }));
+        unwired.rerender(createElement(TwoRootCard, { settled: false, refOnSettledRoot: false }));
         expect(
             rootOf(unwired.container).style.minHeight,
             "this is the Slice 4 failure — it falls back to the floor and looks like it works",
@@ -215,10 +233,13 @@ describe("reserved geometry — adopter wiring", () => {
         expect(pending).toContain("style={reservedGeometry.style}");
     });
 
-    it("Attendance's content predicate is the settled branch condition", () => {
+    it("Attendance reserves against LOADING, not against having a record", () => {
         const code = strip(read("AttendanceCard.tsx"));
-        expect(code).toMatch(/useReservedCardGeometry\(vm != null\)/);
-        expect(code, "the settled body renders under `if (vm)`").toMatch(/if \(vm\) \{/);
+        expect(code).toMatch(/useReservedCardGeometry\(!loading\)/);
+        expect(
+            code,
+            "one root renders both copies, so `vm != null` would hold a recordless child reserved forever",
+        ).toMatch(/loading \? "Loading the day…" : "No attendance record\."/);
     });
 
     it("Health holds the ref on BOTH the settled root and the fallback root", () => {
@@ -232,13 +253,12 @@ describe("reserved geometry — adopter wiring", () => {
         expect(fallback).toContain("style={reservedGeometry.style}");
     });
 
-    it("Health's content predicate is its settled branch condition verbatim", () => {
+    it("Health reserves against LOADING — a refusal and an unavailable reason are answers", () => {
         const code = strip(read("HealthSafetyCard.tsx"));
-        // `vm != null` alone would call an unavailable-reason vm "content" — it renders one line.
-        expect(code).toMatch(
-            /useReservedCardGeometry\(vm != null && !denied && !vm\.unavailableReason\)/,
-        );
-        expect(code).toMatch(/if \(vm && !denied && !vm\.unavailableReason\) \{/);
+        expect(code).toMatch(/useReservedCardGeometry\(!loading\)/);
+        // Both settled outcomes render through the fallback root, which is why it holds the ref.
+        expect(code).toMatch(/data-health-empty="permission"/);
+        expect(code).toMatch(/data-health-empty="unavailable"/);
     });
 
     it("Current Work reserves on its single root, keyed to the pending perspective", () => {

@@ -70,24 +70,41 @@ export const FOCUS_PANEL_RESERVED_MIN_HEIGHT = "7.5rem";
  * The remembered footprint is per card instance, so a legitimate unmount (a subject refusal removing
  * the card) simply starts again from the shared floor — no external state survives it.
  */
-export function useReservedCardGeometry(hasContent: boolean): {
+/**
+ * THE RESERVED-CARD GEOMETRY CONTRACT, stated once — Slice 4's Financials repair, expressed for the
+ * cards that share its shape.
+ *
+ * `settled` means THE CARD HAS THE ANSWER, whatever the answer is: a loaded record, "no attendance
+ * record", "select a child", a permission refusal. It does NOT mean "has data". A card that is
+ * resolving the next subject is the only thing this reserves against, because that is the only state
+ * whose height is about to change for a reason the operator did not ask for.
+ *
+ * Two rules the adopters must honour, both learned the hard way in Slice 4:
+ *  - the `ref` goes on EVERY root the card can return through while settled, or the footprint is
+ *    never measured and the reserve silently falls back to the shared floor;
+ *  - an interaction-opened overlay (history, detail) is NOT one of those roots — measuring it would
+ *    remember the overlay's footprint as the card's.
+ *
+ * Geometry only. Nothing here retains, restores or delays the prior subject's content.
+ */
+export function useReservedCardGeometry(settled: boolean): {
     ref: React.RefObject<HTMLDivElement | null>;
     style: React.CSSProperties | undefined;
     reserved: boolean;
 } {
     const ref = useRef<HTMLDivElement | null>(null);
-    const lastLoadedHeight = useRef<number | null>(null);
+    const lastSettledHeight = useRef<number | null>(null);
     useEffect(() => {
-        if (!hasContent || !ref.current) return;
+        if (!settled || !ref.current) return;
         const h = Math.round(ref.current.getBoundingClientRect().height);
-        if (h > 0) lastLoadedHeight.current = h;
-    }, [hasContent]);
+        if (h > 0) lastSettledHeight.current = h;
+    }, [settled]);
     return {
         ref,
-        style: hasContent
+        style: settled
             ? undefined
-            : { minHeight: lastLoadedHeight.current ?? FOCUS_PANEL_RESERVED_MIN_HEIGHT },
-        reserved: !hasContent,
+            : { minHeight: lastSettledHeight.current ?? FOCUS_PANEL_RESERVED_MIN_HEIGHT },
+        reserved: !settled,
     };
 }
 

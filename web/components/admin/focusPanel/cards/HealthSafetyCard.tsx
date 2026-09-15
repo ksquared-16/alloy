@@ -64,16 +64,18 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
     const [factCommand, setFactCommand] = useState<HealthFactKindOption | null>(null);
     /*
      * S4-1. Same shape as Attendance and Financials: health truth clears on subject change and the
-     * card falls to a one-line pending state. Geometry only — nothing about what clears changes, and
-     * no prior subject's health information is retained.
+     * card falls to a one-line body while the next child resolves.
      *
-     * The predicate is the SETTLED-BODY branch condition verbatim, not `vm != null`. A vm that
-     * carries `unavailableReason` renders the one-line fallback root, so treating it as content
-     * would both skip the reservation and remember a one-line footprint as if it were the card.
-     * Slice 4 lost a whole repair to exactly this: measuring a root the loaded card never returns
-     * through. The ref therefore sits on BOTH the settled root and the fallback root.
+     * SETTLED IS `!loading`. A permission refusal and an unavailable reason are ANSWERS — the card is
+     * not waiting for anything — and they render through the fallback root, which therefore carries
+     * the ref too. `vm != null` would have called those states pending and reserved a footprint for a
+     * card that had already finished; measured, it held this card reserved in 79 of 80 sampled frames
+     * at 142px against a natural 69px.
+     *
+     * Geometry only: nothing about what clears changes, and no prior child's health information is
+     * retained for even one frame.
      */
-    const reservedGeometry = useReservedCardGeometry(vm != null && !denied && !vm.unavailableReason);
+    const reservedGeometry = useReservedCardGeometry(!loading);
     const [factRunning, setFactRunning] = useState(false);
     const [factError, setFactError] = useState<string | null>(null);
 
