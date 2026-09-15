@@ -464,6 +464,9 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
         stageWorkPending: subjectVm.workspace.stage_work?.status === "pending",
         recordHeaderActions: subjectVm.actions.record_header ?? null,
         publishedStageInputs: subjectVm.workspace.published_stage_inputs ?? null,
+        // The settled frame's projection, produced by the same server chokepoint as the commit
+        // frame's. Switching transport must not switch authority.
+        operationalProjection: subjectVm.workspace.operational_projection ?? null,
         // SETTLEMENT projections for the drill/enrichment cards — built HERE (the adapter is the one
         // sanctioned place that reads the drawer VM), so those cards read the context, not the VM.
         lifecycleRail: buildOpportunityVmLifecycleRailModel({ displayVm: subjectVm, drawerId: input.subjectId }),

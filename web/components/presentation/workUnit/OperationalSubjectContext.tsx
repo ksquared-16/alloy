@@ -17,6 +17,7 @@
  * the operator is working on. That answer comes from the committed snapshot and nowhere else.
  */
 import { createContext, useContext, useMemo, type ReactNode } from "react";
+import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
@@ -128,6 +129,14 @@ export type OperationalSubject = {
      * did not resolve them (the panel degrades to the drawer-VM load).
      */
     publishedStageInputs: PublishedStageInputsForCurrentWork | null;
+    /**
+     * The server's operational projection for this subject, COMMIT frame.
+     *
+     * Same contract the settled drawer VM carries, produced by the same server chokepoint, so the
+     * cards render decided truth from the first frame and the switch to settled changes transport
+     * rather than authority.
+     */
+    operationalProjection: FocusPanelOperationalProjection | null;
     workIntentRuntime: WorkIntentRuntimeProjection | null;
     /**
      * A — commit-critical Household + Children snapshot (primary contact + children roster), carried by
@@ -147,7 +156,7 @@ export type OperationalSubject = {
 const EMPTY: OperationalSubject = {
     subjectId: null, attentionKind: "operational", entityType: null, subjectGrain: null, identitySeed: null, situation: null,
     decision: null, action: null, actionAbsence: null,
-    stageWorkRuntime: null, publishedStageInputs: null, workIntentRuntime: null, subjectIdentityTruth: null,
+    stageWorkRuntime: null, publishedStageInputs: null, operationalProjection: null, workIntentRuntime: null, subjectIdentityTruth: null,
     summaryDocSeed: null,
 };
 const Ctx = createContext<OperationalSubject>(EMPTY);
@@ -163,6 +172,7 @@ export function OperationalSubjectProvider({
     actionAbsence,
     stageWorkRuntime,
     publishedStageInputs,
+    operationalProjection,
     workIntentRuntime,
     subjectIdentityTruth,
     summaryDocSeed,
@@ -180,6 +190,7 @@ export function OperationalSubjectProvider({
     actionAbsence?: OperationalSubject["actionAbsence"];
     stageWorkRuntime?: StageWorkRuntimeProjection | null;
     publishedStageInputs?: PublishedStageInputsForCurrentWork | null;
+    operationalProjection?: FocusPanelOperationalProjection | null;
     workIntentRuntime?: WorkIntentRuntimeProjection | null;
     subjectIdentityTruth?: SubjectIdentityTruth | null;
     summaryDocSeed?: FocusPanelSummaryDocProjection | null;
@@ -202,11 +213,12 @@ export function OperationalSubjectProvider({
             actionAbsence: actionAbsence ?? null,
             stageWorkRuntime: stageWorkRuntime ?? null,
             publishedStageInputs: publishedStageInputs ?? null,
+            operationalProjection: operationalProjection ?? null,
             workIntentRuntime: workIntentRuntime ?? null,
             subjectIdentityTruth: subjectIdentityTruth ?? null,
             summaryDocSeed: summaryDocSeed ?? null,
         }),
-        [subjectId, attentionKind, subjectGrain, identitySeed, situation, decision, action, actionAbsence, stageWorkRuntime, publishedStageInputs, workIntentRuntime, subjectIdentityTruth, summaryDocSeed],
+        [subjectId, attentionKind, subjectGrain, identitySeed, situation, decision, action, actionAbsence, stageWorkRuntime, publishedStageInputs, operationalProjection, workIntentRuntime, subjectIdentityTruth, summaryDocSeed],
     );
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

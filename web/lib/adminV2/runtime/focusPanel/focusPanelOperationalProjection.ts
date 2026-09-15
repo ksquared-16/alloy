@@ -39,31 +39,18 @@
 
 import "server-only";
 
-import {
-    buildBusinessProcessCardEvidence,
-    type BusinessProcessCardEvidence,
-} from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
-import {
-    projectProcessCardCommands,
-    type ProcessCardCommandProjection,
-} from "@/lib/adminV2/runtime/focusPanel/businessProcess/projectProcessCardCommands";
+import { buildBusinessProcessCardEvidence } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
+import { projectProcessCardCommands } from "@/lib/adminV2/runtime/focusPanel/businessProcess/projectProcessCardCommands";
 import { projectCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/projectCurrentWork";
-import type { CurrentWorkViewModel } from "@/lib/adminV2/runtime/focusPanel/currentWork/projectCurrentWork";
+import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
-/**
- * The operational projections the answer carries, keyed by the card that renders them.
- *
- * Every member is an EXISTING canonical type. This object is an envelope, not a model.
+/*
+ * The shape lives in `focusPanelOperationalProjectionContract` so `OperationalContext` — which the
+ * cards import — can name it without reaching a `server-only` module. Re-exported here so callers
+ * of the implementation get the type from the same place they get the function.
  */
-export type FocusPanelOperationalProjection = {
-    businessProcess: {
-        evidence: BusinessProcessCardEvidence;
-        /** Command descriptors with their verdicts. Handlers are bound by the renderer. */
-        commands: ProcessCardCommandProjection;
-    };
-    currentWork: CurrentWorkViewModel;
-};
+export type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 
 export type FocusPanelOperationalProjectionInput = {
     context: OperationalContext;
