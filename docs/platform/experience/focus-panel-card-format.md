@@ -57,9 +57,10 @@ pass against any CSS at all.
 ┌────────────────────────────────────────────────────────────────────┐
 │ ENROLLMENT                                          [stage band]   │
 ├────────────────────────────────────────────────────────────────────┤
-│ Lead                                    [ Cmd ][ Cmd ][ Cmd ][Cmd] │
-│ Lead · Reach the family, understand …    ← one row, equal columns  │
+│ Lead · Reach the family, understand …                              │
 │ Record outcome            ← link, under the stage's own lines      │
+│ [ Contact Family ][ Tour ▾ ][ Move to Waitlist ]                   │
+│ [ Add Child ]             ← one compact region; wraps as needed    │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -68,29 +69,57 @@ pass against any CSS at all.
 `Lead`, not `Case · Lead`. The panel is already scoped to the grain; prefixing every card with it
 spends a line on something no operator asked.
 
-### 2.2 One row, equal columns
+### 2.2 One compact command region — one row when it fits, clean wrapping when it does not
 
 ```css
-display: grid;
-grid-auto-flow: column;
-grid-auto-columns: minmax(0, 1fr);
+display: flex;
+flex-wrap: wrap;
+gap: 6px;
+/* and on each command */
+flex: 0 0 auto;
+width: auto;
 ```
 
-Every command is the **same width** regardless of label length, and the filled primary is sized with
-the outline commands rather than sizing itself.
+**Commands must fit the card; the card must not be distorted to fit the commands.**
 
-This is the third attempt at this row, and the first two are why the rule is written this way:
+Consistency is **height, padding and treatment** — 1.9rem, `0 10px`, inherited from the platform's
+own `.alloy-os-currentwork__helpful-action` so Process cannot drift from What's Next. Consistency is
+**not identical width**: equal widths force truncation, and they waste the room a short label would
+otherwise return to a long one, causing wraps that were never necessary.
 
-- **`nowrap` + `overflow-x: auto`** clipped. Measured on a deployed Waitlist card: `scrollWidth 409`
-  against `clientWidth 300` — the whole of "Send form" outside the visible box, with a hidden
-  scrollbar and so no signal it existed. Six of six sampled cards were clipped.
-- **`flex-wrap: wrap`** kept every command reachable but produced the stagger: three commands on one
-  line, two on the next, each a different width.
+At wider authored widths the set fits one line. At the narrowest supported width it takes the
+minimum number of clean rows. Nothing is hidden, nothing is truncated, nothing scrolls sideways.
 
-Equal columns give one row without bringing the clipping back. When the set is wide, labels
-**ellipsize inside their own column** — a visible truncation the operator can see and hover, not a
-hidden region behind a gesture nobody is prompted to make. That is the whole difference from the
-rule this replaces: the failure mode is legible instead of silent.
+This is the fourth rule to stand here, and each of the first three was correct at the width it was
+designed against:
+
+| rule | failed |
+| --- | --- |
+| `nowrap` + `overflow-x: auto` | clipped — deployed Waitlist card measured `scrollWidth 409` vs `clientWidth 300`, the whole of "Send form" outside the box behind a hidden scrollbar. Six of six sampled cards clipped. |
+| `flex-wrap: wrap`, content-sized | every command reachable, but lines of differing width — read as assembled rather than designed |
+| one row of equal columns | consistent, and at the authored Business Process width it **ellipsized labels mid-word**. Legible clipping is still clipping. |
+
+The third is the one this replaces, and the reason it had to go is that equal columns *cause* the
+truncation they were meant to make legible: four commands take a quarter of the track each whether
+or not their labels fit. Measured at 340px with that rule, all five of the longer configured set
+read `clipped=true`.
+
+Wrapping is not the stagger objection returning — that objection was overruled by product, because
+a second line costs nothing an operator loses, and a truncated label does.
+
+**Certified by rectangle, not by rule.** `web/playwright/geometry/processCommandRegion.spec.ts`
+measures the real `ActionRow` / `Action` inside `.alloy-os-process__work-actions` at **300 / 340 /
+420 / 560 / 700px** — 300 being the `minmax(300px, …)` floor the Process work band gives this
+column — and asserts at each width:
+
+- `scrollWidth <= clientWidth`
+- every command rectangle inside the region bounds
+- no command clipped by its own box (`scrollWidth > clientWidth` on the control)
+- configured order preserved, reading across each row then down
+- one distinct height across the set, **more than one distinct width**
+- no two commands on a line overlapping
+
+Restoring the equal-column rule fails **11 of 15** of those.
 
 ### 2.3 Resolving the work is a link, not a button
 
@@ -254,11 +283,39 @@ All four are asserted. Rules 1–3 each close a different half; any one of them 
 
 ### 4.7 Certification
 
-| claim | proof |
+| claim | automated owner |
 | --- | --- |
-| solver constraints, spans, convergence | unit — `focusPanelRowHeightSolver.test.ts` |
-| assignment applied, measurement neutralized | source contract — `focusPanelExpandedSurfaceGeometry.test.tsx` |
-| **cards actually align on screen** | **browser geometry, ≤1px** |
+| band derivation, chains, solver constraints, convergence | `web/tests/surfaces/focusPanelRowHeightSolver.test.ts` |
+| assignment applied, measurement neutralized, one planner | `web/tests/surfaces/focusPanelExpandedSurfaceGeometry.test.tsx` |
+| **cards actually align on screen, ≤1px** | **`web/playwright/geometry/focusPanelGeometry.spec.ts`** |
 
-Geometry is authoritative. jsdom computes no layout, so an equal-height assertion there would pass
-against any implementation at all.
+**Browser geometry certification** — required, and owned by:
+
+| | |
+| --- | --- |
+| spec | `web/playwright/geometry/focusPanelGeometry.spec.ts` |
+| fixture | `web/playwright/geometry/focusPanelGeometryFixture.tsx` — mounts the **real** `FocusPanelCardGrid` |
+| config | `web/playwright.geometry.config.ts` |
+| command | `npm run test:focus-panel-geometry` |
+| required check | `Surfaces / Focus Panel certification` → *Certify Focus Panel browser geometry* |
+
+Geometry is authoritative and is now measured, not argued. Vitest runs in `environment: "node"`,
+which computes no layout, so an equal-height assertion there passes against any implementation at
+all — and twice it did, for [§4.3](#43-rowstart-is-a-placement-coordinate-not-a-visual-row) and
+[§4.6](#46-intrinsic-child-vs-assigned-wrapper) respectively. Both reached staging.
+
+The browser layer **adds to** the suites above rather than replacing them; each owns a layer the
+others cannot see. It depends on no server, tenant, network or sleep: the fixture is bundled with
+esbuild and served through `setContent`, and it waits on three consecutive animation frames of
+unchanged geometry — a measured settle, which doubles as the loop guard.
+
+Its binding is proven by planting each shipped defect and watching it fail:
+
+| planted defect | result |
+| --- | --- |
+| bands grouped by literal `rowStart` equality | scenario A fails at 1180 / 1440 / 1680, and B with it |
+| measurement reads the assigned wrapper (PR #989) | 5 of 16 fail, including the shrink case |
+
+A scenario asserting that cards in **different** bands stay independent sits alongside them, so an
+implementation that simply equalised everything fails too. Between them, neither wrong
+implementation this work shipped can pass.
