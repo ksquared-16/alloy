@@ -31,12 +31,15 @@ export default function FinancialsAccountDetail({
     customerMemberId,
     participationId,
     displayName,
+    showDetailsAction = true,
 }: {
     customerId: string | null;
     customerMemberId: string | null;
     /** `opportunity_customer_members.id` when the selection carries one. */
     participationId: string | null;
     displayName: string | null;
+    /** False where the account's own activity is already on screen beneath this card. */
+    showDetailsAction?: boolean;
 }) {
     const model = useMemo<FocusPanelCardModel>(
         () => ({
@@ -80,5 +83,5 @@ export default function FinancialsAccountDetail({
         [customerId, customerMemberId, participationId, displayName],
     );
 
-    return <FinancialsCard model={model} context={context} />;
+    return <FinancialsCard model={model} context={context} showDetailsAction={showDetailsAction} />;
 }

@@ -43,6 +43,13 @@ type Props = {
     context: OperationalContext;
     receded?: boolean;
     coordination?: FocusPanelCoordination;
+    /**
+     * Whether this placement offers the `Details →` drill-down.
+     *
+     * True in the Focus Panel, where the card is financial context beside another subject. False in
+     * Financials → Accounts, where the account's own activity is already on screen beneath it.
+     */
+    showDetailsAction?: boolean;
 };
 
 /**
@@ -80,7 +87,13 @@ type Props = {
  * row is never itself reversed — the bound is the database's (`20260902140000`) and the read model
  * projects it, so this card renders the answer rather than deciding it.
  */
-export default function FinancialsCard({ model, context, receded = false, coordination }: Props) {
+export default function FinancialsCard({
+    model,
+    context,
+    receded = false,
+    coordination,
+    showDetailsAction = true,
+}: Props) {
     const scope = context.participantScope ?? null;
     const scopedMemberId = scope?.customerMemberId ?? null;
     const customerId = householdIdFrom(context);
@@ -3052,16 +3065,31 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                             </>
                         ) : null}
 
-                        <button
-                            type="button"
-                            className="alloy-os-financials__details"
-                            data-financials-details="true"
-                            // The overlay state owns elevation now; reporting perspective here as
-                            // well would give the depth layer two authorities for one card.
-                            onClick={() => setOverlay(expanded ? null : "detail")}
-                        >
-                            {expanded ? "← Less" : "Details →"}
-                        </button>
+                        {/*
+                         * ── DETAILS IS A DRILL-DOWN, AND SOME PLACEMENTS HAVE NOWHERE TO DRILL ──
+                         *
+                         * In the Focus Panel this card is financial CONTEXT beside some other
+                         * subject, so `Details →` is how an operator asks to see the account. In
+                         * Financials → Accounts they have already asked: they opened the Financials
+                         * workspace, chose Accounts, and selected a household. The account's own
+                         * activity is on screen beneath this card. Offering a drill-down there is
+                         * asking them to request what they are already looking at, and it opened a
+                         * scrimmed overlay over the surface that was already showing it.
+                         *
+                         * Defaults to present, so the Focus Panel is untouched.
+                         */}
+                        {showDetailsAction ? (
+                            <button
+                                type="button"
+                                className="alloy-os-financials__details"
+                                data-financials-details="true"
+                                // The overlay state owns elevation now; reporting perspective here as
+                                // well would give the depth layer two authorities for one card.
+                                onClick={() => setOverlay(expanded ? null : "detail")}
+                            >
+                                {expanded ? "← Less" : "Details →"}
+                            </button>
+                        ) : null}
                     </>
                 )}
             </UniversalCard>

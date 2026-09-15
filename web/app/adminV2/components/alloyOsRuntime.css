@@ -10357,3 +10357,48 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   .alloy-os-ucard[data-focus-panel-cell-not-applicable="true"]:hover {
   box-shadow: none;
 }
+
+/*
+ * ── THE ACCOUNT'S COMMAND MODE, AS A FOCUSED POP-OUT OVER THE ACCOUNT ───────────────────────────
+ *
+ * `FinancialsCard` enters a command by RETURNING a different tree — `data-financials-overlay` is
+ * `add_charge`, `payment` or `detail` — which replaces the card in place. In the Focus Panel that
+ * reads correctly: the card is one card among several, and the panel's focused perspective raises
+ * it into a scrimmed, centred position.
+ *
+ * In Financials → Accounts that same return swapped the ACCOUNT HEADER for the form while the
+ * ledger stayed below it, leaving the operator half in a command and half in a workspace. The
+ * command is not a navigation destination; the account is the context and the command borrows the
+ * operator for a moment.
+ *
+ * So the placement, not the command, is what changes here. There is no second Add Charge, no second
+ * executor and no state duplicated out of the card: the host simply presents whatever overlay the
+ * card has entered as a focused layer, and the account and its queue keep rendering underneath.
+ * `Cancel` returns the card to its normal tree, the overlay selector stops matching, and the
+ * account is exactly as it was because it was never unmounted.
+ */
+.alloy-accounts-command-host:has(> [data-financials-overlay])::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: rgba(16, 24, 32, 0.38);
+    z-index: 60;
+}
+
+.alloy-accounts-command-host > [data-financials-overlay] {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 61;
+    width: min(38rem, calc(100vw - 3rem));
+    /* The body scrolls; the command's own actions stay reachable, which is the one thing a
+       focused layer may never lose. */
+    max-height: min(78svh, 42rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(16, 24, 32, 0.22);
+    padding: 0.75rem;
+}

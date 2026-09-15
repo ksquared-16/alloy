@@ -140,6 +140,42 @@ describe("F7 · one truth, two grains", () => {
     });
 
     /*
+     * ── ONE SURFACE, NOT A SET OF DESTINATIONS ─────────────────────────────────────────────────
+     *
+     * The Accounts placement offers no drill-down. `Details →` is a Focus Panel affordance, where
+     * the card is financial context beside some other subject; here the operator has already opened
+     * Financials, chosen Accounts and selected a household, and the account's activity is directly
+     * beneath. The prop defaults to present so the Focus Panel keeps it.
+     */
+    it("offers no drill-down from the Accounts placement", () => {
+        const src = read(ACCOUNTS);
+        expect(src).toContain("showDetailsAction={false}");
+        const card = read("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card, "and the Focus Panel still gets it by default").toContain("showDetailsAction = true");
+    });
+
+    /*
+     * A COMMAND BORROWS THE OPERATOR; IT IS NOT A PLACE THEY GO.
+     *
+     * `FinancialsCard` enters a command by returning a different tree, which in the Focus Panel is
+     * raised by that panel's focused perspective. In Accounts the same return swapped the account
+     * HEADER for the form while the ledger stayed below it. The host presents whatever overlay the
+     * card has entered as a focused layer instead — presentation only, no second command, no second
+     * executor, and no card state lifted out.
+     */
+    it("presents the card's command mode as a focused layer over the account", () => {
+        const src = read(ACCOUNTS);
+        expect(src).toContain("alloy-accounts-command-host");
+        const css = read("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).toContain(".alloy-accounts-command-host");
+        expect(css, "the account stays behind a scrim rather than being replaced")
+            .toMatch(/\.alloy-accounts-command-host:has\(> \[data-financials-overlay\]\)::before/);
+        expect(css, "and the command's own actions stay reachable").toMatch(/max-height: min\(78svh/);
+        /* One Add Charge implementation: the workspace composes the card, it does not rebuild it. */
+        expect(src).not.toContain("AddChargeCommand");
+    });
+
+    /*
      * The operator is already in the Financials workspace and has already chosen an account.
      * Requiring `Details →` before showing its ledger asks them to say so twice.
      */

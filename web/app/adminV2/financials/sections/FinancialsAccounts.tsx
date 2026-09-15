@@ -275,13 +275,28 @@ export default function FinancialsAccounts({
                              * surface. The detail below used to carry a second metric band saying
                              * the same numbers again; two summaries is not a hierarchy.
                              */}
+                            {/*
+                             * The command host: when the card enters a command, this presents it as
+                             * a focused layer over the account instead of swapping the header for a
+                             * form. Presentation only — see `alloy-accounts-command-host`.
+                             */}
+                            <div className="alloy-accounts-command-host" data-financials-command-host="true">
                             <FinancialsAccountDetail
                                 key={`summary-${selected}`}
                                 customerId={selected}
                                 customerMemberId={null}
                                 participationId={null}
                                 displayName={selectedAccount?.householdName ?? null}
+                                /*
+                                 * NO DRILL-DOWN HERE. The operator opened Financials, chose
+                                 * Accounts and selected this household; the account's own activity
+                                 * is directly below. `Details →` would ask them to request what
+                                 * they are already looking at, and opened a scrimmed overlay over
+                                 * the surface already showing it.
+                                 */
+                                showDetailsAction={false}
                             />
+                            </div>
 
                             {/*
                              * DETAIL IS VISIBLE, NOT BEHIND A COMMAND.
