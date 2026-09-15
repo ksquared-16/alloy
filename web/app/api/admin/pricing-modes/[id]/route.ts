@@ -60,7 +60,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     (updates as { updated_at: string }).updated_at = new Date().toISOString();
 
     const supabase = createAdminClient();
-    const { data, error } = await supabase.from("pricing_modes").update(updates).eq("id", id).eq("org_id", ctx.orgId).select("id, mode_key, mode_name, updated_at").single();
+    const { data, error } = await supabase.from("pricing_modes").update(updates).eq("id", id).eq("org_id", ctx.orgId).select("id, mode_key, mode_name, updated_at").maybeSingle();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    /*
+     * A ROW IN ANOTHER ORGANIZATION IS NOT FOUND, NOT A SERVER ERROR.
+     *
+     * With the tenant predicate in place, a cross-organization id simply matches nothing, and
+     * `.single()` turns "no rows" into a thrown PostgREST error that surfaced as a 500. The write is
+     * correctly refused either way, but answering 500 tells the caller the server broke when what
+     * happened is that the resource is not theirs — and it would bury a genuine failure in the same
+     * status. `maybeSingle()` lets the empty case be what it is.
+     */
+    if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json(data ?? { ok: true });
 }

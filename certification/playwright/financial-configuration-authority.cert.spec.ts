@@ -42,7 +42,7 @@ const PERSONAS = {
 } as const;
 const OPS = { email: "cert.ops@northwind.invalid" };
 
-type Door = "commercialProduct" | "ratePlan" | "pricingMode" | "pricingMatrix" | "simulate" | "paymentsRun";
+type Door = "commercialProduct" | "ratePlan" | "pricingMode" | "pricingMatrix" | "simulate" | "paymentsPatch" | "paymentsRun";
 
 const no = { data: {}, failOnStatusCode: false } as const;
 async function knock(r: APIRequestContext, door: Door): Promise<number> {
@@ -55,13 +55,23 @@ async function knock(r: APIRequestContext, door: Door): Promise<number> {
         // ── fin.read: computes, persists nothing ──
         case "simulate": return (await r.post("/api/admin/financial/charge-templates/simulate", no)).status();
         // ── fin.post: money truth ──
+        case "paymentsPatch": return (await r.patch(`/api/admin/payments/${NO_ID}`, no)).status();
         case "paymentsRun": return (await r.post("/api/admin/payments/run", no)).status();
     }
 }
 
 const CONFIG: Door[] = ["commercialProduct", "ratePlan", "pricingMode", "pricingMatrix"];
 const COMPUTE: Door[] = ["simulate"];
-const POSTING: Door[] = ["paymentsRun"];
+/**
+ * `paymentsRun` is NOT here, and that is a finding rather than an omission.
+ *
+ * It runs `requireAdmin()` before anything this slice added, so its effective authority is the admin
+ * ROLE *and* fin.post — a capability holder who is not an admin is refused by the older gate and
+ * never reaches the newer one. The earlier census read it as ungated because it looks for
+ * `ctx.role !== "admin"` and did not know that helper. Scoring it as a fin.post door would assert a
+ * capability contract the route does not actually offer; PHASE 8 measures what it does offer.
+ */
+const POSTING: Door[] = ["paymentsPatch"];
 const ALL: Door[] = [...CONFIG, ...COMPUTE, ...POSTING];
 const admitted = (s: number) => s !== 403;
 
@@ -127,7 +137,7 @@ test.describe("Financial configuration authority — capability and tenant are t
          * their own claims so a regression names the doctrine it broke.
          */
         expect(MATRIX.finRead.commercialProduct, "fin.read must not configure").toBe(403);
-        expect(MATRIX.finWrite.paymentsRun, "fin.write must not post money").toBe(403);
+        expect(MATRIX.finWrite.paymentsPatch, "fin.write must not change payment truth").toBe(403);
         expect(MATRIX.finPost.commercialProduct, "fin.post must not configure").toBe(403);
         expect(MATRIX.finAdjust.commercialProduct, "fin.adjust must not configure").toBe(403);
         expect(admitted(MATRIX.finRead.simulate), "fin.read keeps the non-persisting computation").toBe(true);
@@ -165,7 +175,7 @@ test.describe("Financial configuration authority — capability and tenant are t
             expect(admitted(MATRIX.defaultOps[door]), `ops holds fin.write and must keep ${door}`).toBe(true);
         }
         expect(
-            MATRIX.defaultOps.paymentsRun,
+            MATRIX.defaultOps.paymentsPatch,
             "ops must not gain posting merely because it may configure",
         ).toBe(403);
     });
@@ -201,6 +211,37 @@ test.describe("Financial configuration authority — capability and tenant are t
             res.status(),
             "a cross-organization write must not be admitted; the tenant predicate should make the row unfindable",
         ).not.toBe(200);
+        expect(
+            res.status(),
+            "and it must read as NOT FOUND — a 500 would say the server broke when the resource simply is not theirs",
+        ).toBe(404);
+    });
+
+    test("PHASE 8 — payments/run answers to BOTH an older role gate and the new capability", async ({ browser, request }) => {
+        /*
+         * Recorded rather than silently "fixed".
+         *
+         * `payments/run` executes the payment run. It already called `requireAdmin()`, so it was
+         * never reachable without the admin role — the census that called it ungated was reading for
+         * `ctx.role !== "admin"` and did not recognise that helper. This slice added fin.post on top,
+         * which is truthful about the consequence but does not change who gets in, because fin.post
+         * is admin-only today anyway.
+         *
+         * The honest classification is CAPABILITY_PLUS_ROLE_TITLE, the same shape as the recorded
+         * financials/accounts debt. Removing the role gate would widen the route to any future
+         * fin.post holder, and that is a policy decision this slice does not make.
+         */
+        const s = await signIn(browser, PERSONAS.finPost.email);
+        expect(s.signedIn).toBe(true);
+        const holderStatus = await knock(s.request, "paymentsRun");
+        await s.close();
+        record("finPost", "paymentsRun", holderStatus);
+
+        const adminStatus = await knock(request, "paymentsRun");
+        record("seededOperatorAdmin", "paymentsRun", adminStatus);
+
+        expect(holderStatus, "a fin.post holder who is not an admin is stopped by the older role gate").toBe(403);
+        expect(admitted(adminStatus), "the default admin, who holds both, still reaches it").toBe(true);
     });
 
     test("PHASE 7 — D2: a grant reaches the holder on the next request, and a revoke removes it at once", async ({ browser, request }) => {
@@ -211,8 +252,9 @@ test.describe("Financial configuration authority — capability and tenant are t
          */
         const ROLE = "mcert_portal_only";
         const grants = async (keys: string[]) => {
-            const r = await request.put("/api/admin/rbac/grants", {
-                data: { role_key: ROLE, permission_keys: keys },
+            // role_key travels in the query string; the body carries only the keys.
+            const r = await request.put(`/api/admin/rbac/grants?role_key=${ROLE}`, {
+                data: { permission_keys: keys },
                 failOnStatusCode: false,
             });
             expect(r.ok(), `grant write failed: ${r.status()}`).toBe(true);
