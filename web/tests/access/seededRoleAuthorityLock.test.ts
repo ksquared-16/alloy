@@ -110,6 +110,18 @@ const ACCESS_OWNED = [
     join(webRoot, "app", "api", "admin", "metrics"),
     join(webRoot, "lib", "admin", "canReadAnalytics.ts"),
     join(webRoot, "app", "api", "admin", "discounts"),
+    /*
+     * The Business Process FAMILY, added when enrollment-process and lifecycle-catalog rehomed onto
+     * the keys the business-process namespace already owned. Eleven gates, and they are listed as
+     * one cluster because the split inside them is the thing most at risk of quietly reverting:
+     * `stage-work-unit/route.ts` holds two `business_process.configure` handlers and one
+     * `business_process.activate` handler, because its DELETE takes running work offline while its
+     * POST and PATCH only edit the definition. A future reader tidying that file toward "one
+     * capability per route" would undo a Director decision, so the tree is locked rather than the
+     * individual handlers.
+     */
+    join(webRoot, "app", "api", "admin", "enrollment-process"),
+    join(webRoot, "app", "api", "admin", "lifecycle-catalog"),
 ];
 
 /**

@@ -25,6 +25,7 @@ import { syncDepartmentQueueForStage } from "@/lib/lifecycle/syncDepartmentQueue
 import { syncLifecycleStageWorkUnitQueueForDepartment } from "@/lib/lifecycle/lifecycleStageWorkUnitQueueSync";
 import { logLifecycleBuilderSaveTiming } from "@/lib/lifecycle/lifecycleBuilderSaveTiming";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 async function loadDepartmentMetadata(orgId: string, departmentId: string) {
     const supabase = createAdminClient();
@@ -86,9 +87,8 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (denied) return denied;
 
     let body: { stage?: string; status_keys?: string[]; reset_stage?: string; department_id?: string } = {};
     try {
