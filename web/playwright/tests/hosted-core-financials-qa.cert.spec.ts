@@ -251,8 +251,14 @@ test.describe("QA 2 · financial subject", () => {
         const again = await openWorkspaceAccount(page);
         expect(await textOf(again.detail), "the subject survives a cold reload").toMatch(/Alvarez/);
 
-        // A SWITCH AWAY AND BACK LEAKS NOTHING. The peer is discovered: the accounts list holds
-        // accounts WITH activity, so naming one would assert a fact about the list, not the switch.
+        /*
+         * A SWITCH AWAY AND BACK LEAKS NOTHING. The peer is still discovered rather than named —
+         * naming one asserts a fact about the list's contents while pretending to test the switch.
+         *
+         * The reason recorded here before was that the list "holds accounts WITH activity". That
+         * was true of the rail and was the defect: Accounts is the list of households that HAVE a
+         * financial account, and zero activity is one of the states such an account can be in.
+         */
         const peers = await shell.locator("[data-financials-account-row]").evaluateAll((els) =>
             els.map((e) => e.getAttribute("data-financials-account-row") || "").filter(Boolean),
         );

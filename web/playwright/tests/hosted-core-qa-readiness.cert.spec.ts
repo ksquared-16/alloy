@@ -617,11 +617,13 @@ test.describe("core financials — hosted QA readiness, mounted", () => {
         /*
          * SWITCH AWAY TO WHICHEVER PEER THE LIST ACTUALLY OFFERS.
          *
-         * The other fixture households were named here first, and they are correctly absent: the
-         * accounts list is a list of accounts with financial activity, and a household the fixture
-         * gave an agreement but no money has none. Hard-coding a peer therefore asserted a fact
-         * about the LIST'S CONTENTS while pretending to test the SWITCH. The peer is discovered so
-         * this stays a switching proof in any tenant state.
+         * Hard-coding a peer asserts a fact about the LIST'S CONTENTS while pretending to test the
+         * SWITCH, so the peer is discovered and this stays a switching proof in any tenant state.
+         *
+         * The absence this comment used to explain — "the other fixture households are correctly
+         * absent, because the accounts list is a list of accounts with financial activity" — was
+         * the defect, not the contract. Accounts lists the households that HAVE a financial
+         * account; a household with no transaction yet is one of them, and now appears.
          */
         const shell = page.locator("[data-adminv2-financials-workspace]");
         const peers = await shell.locator("[data-financials-account-row]").evaluateAll((els) =>
