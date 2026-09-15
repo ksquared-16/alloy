@@ -4,6 +4,7 @@ import { ADMIN_USERS_READ, ADMIN_USERS_WRITE, requireAccessAdministration } from
 import { memberDirectoryLabel, projectMemberEmail } from "@/lib/access/memberDirectoryProjection";
 import { displayRoleForAdminPicker, groupSortedRoleKeysByUserId } from "@/lib/admin/userRolesMembership";
 import { createMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
+import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { fullNameFromParts } from "@/lib/access/operatorAccountName";
 
 export type AdminUserRow = {
@@ -175,10 +176,19 @@ export async function POST(request: Request) {
 
     // W-5/G4: membership + access profile are one transaction. Never insert into
     // `user_roles` directly here — that is the fail-open path this closes.
+    /*
+     * THE INITIAL ROLE IS A DELEGATION, so the actor travels with it.
+     *
+     * Creating a member with a role confers that role's entire package. Without the actor this call
+     * was the way around W-18: a user administrator who could not add one capability to a role could
+     * still mint a colleague holding eighty. The RPC bounds the creation to this actor's own
+     * effective authority and refuses what exceeds it, before any row is written.
+     */
     const membership = await createMembershipWithAccessProfile(supabase, {
         userId: user.id,
         orgId: access.orgId,
         role,
+        audit: accessMutationAudit(access),
     });
     if (!membership.ok) {
         if (membership.kind === "duplicate") {

@@ -39,15 +39,25 @@ function classify(code: string | undefined, message: string): MembershipWriteRes
 /**
  * Add a membership and guarantee its access profile, atomically.
  * `duplicate` means the (user, org, role) membership already exists.
+ *
+ * **The actor is the delegation ceiling's subject, not audit decoration.** Creating a member with an
+ * initial role confers that role's whole package, which is why "create a user, give them admin" was
+ * the bypass around W-18's grant ceiling: the RPC took no actor at all and so could not be bounded.
+ * It now refuses an unattributed creation in any organization that already has a member, and bounds
+ * an attributed one to the actor's own authority.
+ *
+ * `actor` is optional ONLY for genuine bootstrap — the first membership of a freshly created
+ * organization, which is the one case the RPC recognises structurally rather than on a caller's word.
  */
 export async function createMembershipWithAccessProfile(
     supabase: SupabaseClient,
-    params: { userId: string; orgId: string; role: string }
+    params: { userId: string; orgId: string; role: string; audit?: AccessMutationAudit }
 ): Promise<MembershipWriteResult> {
     const { data, error } = await supabase.rpc("create_membership_with_access_profile", {
         p_user_id: params.userId,
         p_org_id: params.orgId,
         p_role: params.role,
+        p_actor_user_id: params.audit?.actorUserId ?? null,
     });
 
     if (error) return classify(error.code, error.message);
