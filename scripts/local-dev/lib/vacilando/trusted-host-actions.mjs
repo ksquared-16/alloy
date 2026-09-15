@@ -65,6 +65,7 @@ import { closePullRequest, deleteRemoteBranch } from "./trusted-host-repository-
 import { applyReconciliationPlan, buildReconciliationPlan } from "./reconciliation-apply.mjs";
 import { executeWorktreeRetirement } from "./trusted-host-worktree-retirement.mjs";
 import { gatherObservation } from "./reconciliation-observe.mjs";
+import { executeTransfer } from "./repository-transfer.mjs";
 import {
   applyMigrationBatch,
   publicMigrationResult,
@@ -941,6 +942,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   if (action.actionType === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) {
     return executeApplyReconciliationPlanTrustedHostAction(action, { actor, nowMs, grant });
   }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_TRANSFER_FILES) {
+    return executeTransferFilesTrustedHostAction(action, { actor, nowMs, grant });
+  }
   if (action.actionType === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
     return executeDeleteRemoteBranchTrustedHostAction(action, { actor, nowMs, grant });
   }
@@ -1053,6 +1057,8 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
     || action.inputs.worktreePath
     || resolveArtifactRoot(action.inputs);
   const hostCheckout = findRepoRoot();
+  // S3: nullable now. A census with no canonical root cannot run, and saying so
+  // here beats spawning a child with an undefined repository path.
   const canonical = resolveCanonicalRepoRoot();
   const envSource = resolveTrustedServerEnvSource();
   // A census names its database too. It used to inherit whichever credential the
@@ -2686,6 +2692,83 @@ export function executeApplyReconciliationPlanTrustedHostAction(action, { actor 
     requested: out.requested, applied: out.applied, skipped: out.skipped,
     withheld: out.withheld, unsupported: out.unsupported, credentialsExposed: false,
   }, { nowMs });
+}
+
+/**
+ * Copy an approved manifest from one project repository into another.
+ *
+ * THE EXECUTOR RE-DERIVES, like every other apply here. It recomputes the plan
+ * fingerprint from the entries it was handed and refuses when it does not match
+ * the approved one, so a caller cannot widen a plan after approval by adding a
+ * path to the list. It then recomputes the preview against the live filesystem,
+ * so a source that changed since approval is caught even when the manifest did
+ * not change at all.
+ *
+ * BOTH PROJECTS RESOLVE THROUGH THE REGISTRY, inside `repository-transfer`.
+ * Nothing here knows where any project lives, which is what lets the same
+ * action serve any pair and keeps Alloy out of the destination's resolution.
+ */
+export function executeTransferFilesTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const i = action.inputs || {};
+  const plan = {
+    source_repository_id: i.sourceRepositoryId,
+    destination_repository_id: i.destinationRepositoryId,
+    mode: "copy",
+    entries: i.entries || [],
+  };
+  let out;
+  try {
+    out = executeTransfer(plan, { approvedFingerprint: i.planFingerprint });
+  } catch (e) {
+    return failTrustedAction(action, "transfer_failed", String(e?.message || e), { nowMs });
+  }
+  if (!out.ok) {
+    const detail = out.code === "transfer_refused"
+      ? (out.refusals || []).map((r) => `${r.source}: ${r.refusal}`).slice(0, 12).join("; ")
+      : `expected ${out.expected || "?"}, plan is ${out.actual || "?"}`;
+    return failTrustedAction(action, out.code, detail, { nowMs });
+  }
+  return completeTrustedAction(action, {
+    plan_id: i.planId,
+    plan_fingerprint: out.plan_fingerprint,
+    source_project: out.source.project_id,
+    destination_project: out.destination.project_id,
+    summary: out.summary,
+    applied: out.applied.map((a) => ({ destination: a.destination, disposition: a.disposition, written: a.written })),
+    git_effect: out.git_effect,
+    credentialsExposed: false,
+  }, { nowMs });
+}
+
+/**
+ * The leg that makes the action reachable from a mission.
+ *
+ * A registered action with an executor and no caller is not a capability -- it
+ * is a definition nobody can invoke, which this file has been bitten by before.
+ */
+export function fulfillTransferFilesForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.REPOSITORY_TRANSFER_FILES, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export function executeRetireWorktreeTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {

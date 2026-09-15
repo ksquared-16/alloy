@@ -3898,6 +3898,45 @@ async function setProjectState(id, verb) {
   paint();
 }
 
+/**
+ * Preview a transfer. Reads only, and says so.
+ *
+ * The manifest is parsed HERE into explicit entries -- "a -> b" or a bare path
+ * meaning the same path on both sides -- because the governed action refuses
+ * anything that is not an explicit path, and an operator should find that out
+ * in the preview rather than at approval time.
+ */
+async function previewTransfer(destinationId) {
+  const st = G.projectsSheet;
+  if (!st?.transfer || st.transfer.busy) return;
+  const t = st.transfer;
+  t.busy = true; t.error = null; t.preview = null;
+  paint();
+  const entries = String(t.manifest || "").split("\n").map((line) => line.trim()).filter(Boolean)
+    .map((line) => {
+      const [from, to] = line.split("->").map((x) => x.trim());
+      return { source: from, destination: to || from };
+    });
+  try {
+    const r = await gwFetch("/api/repositories/transfer/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        source_repository_id: t.source,
+        destination_repository_id: destinationId,
+        entries,
+      }),
+    });
+    const j = await r.json();
+    if (!j.ok) { t.error = j.error || j.code; } else { t.preview = j; }
+  } catch {
+    t.error = "network";
+  } finally {
+    t.busy = false;
+    paint();
+  }
+}
+
 async function revalidateProject(id) {
   const j = await projectRequest(id, "validate", {});
   const st = G.projectsSheet;
@@ -4040,6 +4079,12 @@ document.addEventListener("input", (e) => {
     if (t.matches?.("[data-gw-proj-branch]")) { editProjectField("default_branch", t.value); return; }
     if (t.matches?.("[data-gw-proj-wt]")) { editProjectField("worktree_parent", t.value); return; }
     if (t.matches?.("[data-gw-proj-pb]")) { editProjectField("promotion_branch", t.value); return; }
+    if (t.matches?.("[data-gw-proj-transfer-manifest]") && G.projectsSheet?.transfer) {
+      G.projectsSheet.transfer.manifest = t.value; return;
+    }
+    if (t.matches?.("[data-gw-proj-transfer-source]") && G.projectsSheet?.transfer) {
+      G.projectsSheet.transfer.source = t.value; return;
+    }
   }
   if (!G.laneWizard) return;
   const d = G.laneWizard.draft;
@@ -4076,6 +4121,20 @@ document.addEventListener("click", async (e) => {
     paint();
     return;
   }
+  const openTransfer = hit("[data-gw-proj-transfer]");
+  if (openTransfer && G.projectsSheet) {
+    e.preventDefault();
+    const id = openTransfer.getAttribute("data-gw-proj-transfer");
+    const others = (G.projectsSheet.repositories || []).filter((r) => r.repository_id !== id);
+    G.projectsSheet.transfer = { repository_id: id, source: others[0]?.repository_id || null, manifest: "", preview: null, error: null };
+    paint();
+    return;
+  }
+  if (hit("[data-gw-proj-transfer-cancel]") && G.projectsSheet) {
+    e.preventDefault(); G.projectsSheet.transfer = null; paint(); return;
+  }
+  const doPreview = hit("[data-gw-proj-transfer-preview]");
+  if (doPreview) { e.preventDefault(); await previewTransfer(doPreview.getAttribute("data-gw-proj-transfer-preview")); return; }
   const projValidate = hit("[data-gw-proj-validate]");
   if (projValidate) { e.preventDefault(); await revalidateProject(projValidate.getAttribute("data-gw-proj-validate")); return; }
   const method = hit("[data-gw-repo-method]");

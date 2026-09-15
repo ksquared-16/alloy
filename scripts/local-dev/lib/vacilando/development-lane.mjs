@@ -20,6 +20,7 @@ import { isManagedSlot } from "./managed-slots.mjs";
 // cycle survives today only by accident of hoisting order.
 import { LANE_BOOTSTRAP_CONTRACT_VERSION, laneBootstrapStamp } from "./lane-bootstrap-contract.mjs";
 import { instructionBaselineVersion } from "./agent-configuration.mjs";
+import { stateRoot } from "./runtime-roots.mjs";
 
 export const DEVELOPMENT_LANE_SCHEMA = "vacilando.development_lane.v1";
 export const DURABLE_LANE_ID_RE = /^lane_[a-f0-9]{12}$/;
@@ -34,8 +35,7 @@ export const WORK_CLASS_RUNTIME_SELF = "runtime_self";
 export const RUNTIME_SELF_RESOURCE_PRIORITY = -10;
 
 function runtimeRoot() {
-  return process.env.ALLOY_RUNTIME_ROOT?.trim()
-    || join(homedir(), ".local", "state", "alloy-dev");
+  return stateRoot();
 }
 
 export function durableLanesEnabled() {

@@ -142,3 +142,142 @@ applying for, which `production-apply-executor` does explicitly.
 | `alloy-worktrees` in `provider-prompt-authority`, `validate-caps.sh`, `vacilando-secret-preflight`, `vac-health`, `vac-maintenance`, `vac-reconcile`, `vac-worktree-retire`, `workspace-facts`, `identity`, `execution-node`, `control-plane-resilience`, `browser-auth` | ~12 | **S3** | CLI entry points and host-fact collectors, which S3 rethreads when the runtime root moves |
 
 Nothing is unassigned.
+
+---
+
+# S3 — runtime root independence
+
+S3 began by asking what `ALLOY_RUNTIME_ROOT` actually means. The answer decided
+the slice: across **104 executable resolutions, every one** falls back to
+`~/.local/state/alloy-dev` — a directory under the operator's home. It has never
+meant "the Alloy checkout". It means **"where Vacilando keeps its own
+control-plane state"**, which is Vacilando's concept wearing Alloy's name.
+
+A rename would therefore have been wrong twice: it preserves the real defect,
+and it renames a thing whose problem was never its name.
+
+## The root concepts, told apart
+
+| concept | what it is | authority |
+|---|---|---|
+| **state root** | where Vacilando keeps control-plane state. Not a repository. | `runtime-roots.stateRoot()` |
+| **gateway state root** | `<state>/gateway`. A distinct concept, not a suffix. | `runtime-roots.gatewayStateRoot()` |
+| **repository root** | where a registered project's repository lives | repository registry |
+| **execution checkout** | the worktree a lane runs in | lane, then its repository |
+| **runtime source root** | the Vacilando source *this process* executes from | `import.meta.url`, never cwd |
+| **installed toolkit root** | the immutable installed copy serving the Gateway | distribution, not semantics |
+
+## The defect this closes, which had already cost an outage
+
+One variable carried **two incompatible meanings**: 40 executable sites treat it
+as the state root, 20 as the Gateway root one level deeper. Which is correct
+depends on how the host happens to set it:
+
+| setting | the 40 | the 20 |
+|---|---|---|
+| unset | **wrong** | ok |
+| set to the parent (`alloy-dev`) | **wrong** | **wrong** |
+| set to the child (`alloy-dev/gateway`) — *this host* | ok | ok |
+
+The tree is correct in exactly one of three configurations, and the documented
+default is not that one.
+
+`trusted-host-merge` was bitten and defended itself with a private probe:
+reading the wrong depth named a store file that did not exist, `existsSync` was
+false, and the parity gate evaluated against **zero census records for every
+merge, permanently**. PR #848 was denied by it while a completed census sat in
+the store 42 minutes old. One file solving this privately is exactly what kept
+it invisible to the other fifty-nine. The probe is now the owner's.
+
+## Compatibility, and how it ends
+
+`VACILANDO_STATE_ROOT` is the canonical input. `ALLOY_RUNTIME_ROOT` remains as a
+deprecated host override, read in **one place** — `runtime-roots.stateRoot()` —
+and never as authority. 82 files still read it directly; each is
+compatibility-only, each resolves the same default the owner does, and all 82
+are **enumerated** in `development-runtime-roots` case 4, which fails when a new
+one appears. The list only shrinks.
+
+**Deletion criteria** (all three, assigned to **S5**):
+1. every host exports `VACILANDO_STATE_ROOT` or accepts the default, by census;
+2. no `scripts/local-dev` shell entry point exports `ALLOY_RUNTIME_ROOT` to a child;
+3. the enumerated reader list is down to `runtime-roots.mjs` alone.
+
+## Person-specific paths removed
+
+`/Users/Kelly/Alloy` is gone from executable generic runtime — the canonical-root
+candidate list *and* its final `return` (which now fails closed), three
+trusted-host shell scripts that reach a production database, and the migrate
+object-store candidates (where it was listed and then filtered back out by
+literal, two statements of one wrong assumption). Registered repository roots
+replace it.
+
+`INSTRUCTED_PATH_PREFIXES` was four literals under another operator's home
+**inside a security authority**, with no consumers. On any host but that one the
+positive trust list covered nothing, which reads as covering everything. It is
+derived now, and on this host resolves both `prj_alloy` and `prj_vacilando`.
+
+## Deferred, deliberately
+
+| debt | why not now |
+|---|---|
+| the `alloy-dev` directory name | **branding/distribution**, not semantics. No decision depends on the spelling. |
+| the `~/.local/share/alloy/toolkit` install path | same; toolkit distribution is explicitly out of scope |
+| 82 compatibility readers | routed slice by slice; the ratchet stops new ones |
+| `ALLOY_CANONICAL_ROOT` / `ALLOY_REPO` inputs | still honoured above the registry; they name a real thing and are not person-specific |
+
+## Not claimed
+
+`CANONICAL_REPOSITORY_EXECUTION_ROOT_DRIFT` is **untouched**. S3 clarifies which
+root is which; it implements no automatic owner for execution-checkout
+convergence, so the drift defect stands.
+
+---
+
+# S3A — governed cross-project file transfer
+
+S4 has to seed Vacilando's own source into the Vacilando repository, and until
+now the only way to do that was `cp` in a terminal — outside governance, outside
+evidence, outside anything that could refuse. `repository.transfer_files` is the
+missing product capability, and it is deliberately small: **it executes an
+approved plan.** It does not decide ownership and does not discover what should
+move.
+
+| | |
+|---|---|
+| action key | `repository.transfer_files` (privileged_write) |
+| capability | `scripts/local-dev/lib/vacilando/repository-transfer.mjs` |
+| UI | Projects → a project → **Transfer files in…** (preview only) |
+| preview route | `POST /api/repositories/transfer/preview` (read-only) |
+| mission leg | `fulfillTransferFilesForMission` — same runtime, second placement |
+
+## How S4 consumes a manifest
+
+The independence boundary artifacts remain the authority for *what* moves. A
+Director mission produces an explicit manifest from those classifications; this
+capability executes it. Nothing here infers ownership from a filename, a
+directory, an import, a comment or Git history, and a pattern is refused as
+`entry_is_a_pattern_not_a_path` — "move all the Vacilando files" is not
+expressible and cannot become so.
+
+## The rules
+
+- **Copy only.** The sequence freezes Alloy's copy before retiring it, so
+  deletion from the source is a separately governed operation in **S6**. The
+  capability calls no removal primitive at all.
+- **Silence never overwrites.** Absent → COPY; byte-identical → UNCHANGED (which
+  is what makes replay safe); **different → REFUSE** unless the approved plan
+  said, per path, that it may be replaced.
+- **All or nothing.** One refusal stops the whole transfer. A half-applied seed
+  is the state nobody can reason about.
+- **Both projects are governed inputs.** The destination is where bytes land and
+  is not necessarily the repository hosting the running Vacilando code, so
+  authorizing against "the current repository" would authorize the wrong thing.
+- **Preview writes nothing**, and the suite fails if a write primitive ever
+  appears in its path.
+
+## Remaining manual step for S4
+
+None for the transfer itself. Committing, certifying and promoting the seeded
+content stay with ordinary lane workflows, which is where they belong — file
+transfer owns file transfer.

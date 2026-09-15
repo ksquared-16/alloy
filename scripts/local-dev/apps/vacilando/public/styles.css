@@ -1729,6 +1729,17 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-field-check{display:grid;grid-template-columns:auto 1fr;gap:2px 9px;align-items:center;margin-top:12px;}
 .gw-field-check input{width:18px;height:18px;margin:0;}
 .gw-field-check .gw-field-hint{grid-column:2;margin-top:0;}
+.gw-proj-transfer{margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft);}
+.gw-proj-transfer h4{margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-3);}
+.gw-proj-transfer textarea,.gw-proj-transfer select{width:100%;font:inherit;padding:8px 10px;
+  border:1px solid var(--line-strong);border-radius:8px;background:var(--card);color:var(--ink);}
+.gw-proj-transfer textarea{min-height:88px;font-family:var(--mono,ui-monospace,monospace);font-size:12px;}
+.gw-transfer-actions{display:flex;gap:8px;margin-top:10px;}
+.gw-transfer-result{margin-top:12px;padding-top:10px;border-top:1px solid var(--line-soft);}
+.gw-transfer-result .gw-kv{grid-template-columns:minmax(96px,34%) 1fr;}
+.gw-transfer-refusals{margin:6px 0 0;padding-left:18px;font-weight:500;}
+.gw-transfer-refusals code{font-size:11.5px;}
 .gw-proj-recheck,.gw-proj-lifecycle{margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft);}
 .gw-proj-lifecycle p{margin:0 0 8px;}
 .gw-repo-id{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:8px 0 0;font-size:12px;}

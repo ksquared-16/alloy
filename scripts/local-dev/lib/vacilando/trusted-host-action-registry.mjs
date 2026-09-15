@@ -48,6 +48,7 @@ export const ACTION_TYPES = Object.freeze({
   REPOSITORY_CLOSE_PULL_REQUEST: "repository.close_pull_request",
   REPOSITORY_DELETE_REMOTE_BRANCH: "repository.delete_remote_branch",
   VACILANDO_APPLY_RECONCILIATION_PLAN: "vacilando.apply_reconciliation_plan",
+  REPOSITORY_TRANSFER_FILES: "repository.transfer_files",
   VACILANDO_RETIRE_WORKTREE: "vacilando.retire_worktree",
   CAPACITY_SET_PROVIDER_CEILING: "capacity.set_provider_ceiling",
   HOST_INSTALL_TOOLKIT: "host.install_toolkit",
@@ -184,12 +185,25 @@ export function resolveCanonicalRepoRoot() {
     const rec = getRepositoryRecord(ALLOY_REPOSITORY_ID);
     registered = rec?.root || null;
   } catch { registered = null; }
+  /*
+   * S3: THE PERSON-SPECIFIC LITERAL IS GONE.
+   *
+   * `/Users/Kelly/Alloy` sat in this list and was also the final `return` --
+   * another operator's home directory, in generic runtime, as the answer of
+   * last resort. S0 put the registry above it and left it below; the registry
+   * now holds Alloy's real root on this host and on every seeded host, so the
+   * guess has nothing left to do that is not a guess about somebody else's
+   * filesystem.
+   *
+   * `~/Alloy` stays: it is THIS operator's home, and an unseeded host must
+   * still resolve. What is removed is the part that could only ever be right
+   * for one person.
+   */
   const candidates = [
     process.env.ALLOY_CANONICAL_ROOT,
     process.env.ALLOY_REPO,
     registered,
     join(process.env.HOME || "", "Alloy"),
-    "/Users/Kelly/Alloy",
     findRepoRoot(),
   ].filter(Boolean);
   for (const c of candidates) {
@@ -198,7 +212,15 @@ export function resolveCanonicalRepoRoot() {
       return root;
     }
   }
-  return "/Users/Kelly/Alloy";
+  /*
+   * FAIL CLOSED RATHER THAN NAME A STRANGER'S DIRECTORY. Returning a path that
+   * exists on nobody's machine made every downstream read fail somewhere far
+   * from here, with a message about a missing file rather than about an
+   * unresolvable project. The registry is the authority; when it and every
+   * candidate come up empty there is no canonical root, and saying so is the
+   * honest answer.
+   */
+  return null;
 }
 
 /**
@@ -243,8 +265,11 @@ export function resolveTrustedServerEnvSource() {
   }
   const registered = projectEnvSource(ALLOY_REPOSITORY_ID);
   if (registered && existsSync(registered)) return registered;
+  // S3: the canonical root may now be null rather than a stranger's directory,
+  // so there is a case with no answer. Null propagates instead of throwing on
+  // join(null, ...), and a caller with no env source refuses where it reads.
   const canonical = resolveCanonicalRepoRoot();
-  return join(canonical, "web", ".env.local");
+  return canonical ? join(canonical, "web", ".env.local") : null;
 }
 
 function defineDatabaseReadCensus() {
@@ -548,6 +573,81 @@ function defineEnvironmentExecuteRegisteredReconciliation() {
       const resolved = resolveReconciliationRequest(inputs);
       if (!resolved.ok) return { ok: false, code: resolved.code, detail: resolved.detail };
       return { ok: true, normalized: { ...resolved.normalized, runtimeRoot: inputs.runtimeRoot || null } };
+    },
+  };
+}
+
+function defineTransferFiles() {
+  return {
+    actionType: ACTION_TYPES.REPOSITORY_TRANSFER_FILES,
+    version: 1,
+    title: "Transfer approved files from one project repository to another",
+    requiredCapability: "trusted_host.repository.transfer_files",
+    riskClass: "privileged_write",
+    timeoutMs: 300_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    /*
+     * BOTH PROJECTS ARE REQUIRED INPUTS, and that is the governance point.
+     *
+     * A transfer writes into a repository that is NOT necessarily the one
+     * hosting the running Vacilando code, so authorizing against "the current
+     * repository" would authorize the wrong thing entirely. The Director sees
+     * the source it reads from and the destination it writes into, by project,
+     * before approving. The destination is the one that matters: that is where
+     * bytes land.
+     */
+    inputSchema: {
+      required: ["sourceRepositoryId", "destinationRepositoryId", "planId", "planFingerprint", "entries"],
+    },
+    outputSchema: { applied: "array", summary: "object" },
+    evidenceSchema: [
+      "plan_id", "plan_fingerprint", "source_project", "destination_project",
+      "summary", "applied", "git_effect", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      const source = String(inputs.sourceRepositoryId || "").trim();
+      const destination = String(inputs.destinationRepositoryId || "").trim();
+      const planId = String(inputs.planId || "").trim();
+      const fingerprint = String(inputs.planFingerprint || "").trim();
+      const entries = Array.isArray(inputs.entries) ? inputs.entries : null;
+      if (!source) return { ok: false, code: "missing_source_repository" };
+      if (!destination) return { ok: false, code: "missing_destination_repository" };
+      if (source === destination) return { ok: false, code: "source_and_destination_identical" };
+      if (!planId) return { ok: false, code: "missing_plan_id" };
+      if (!/^[0-9a-f]{32}$/.test(fingerprint)) return { ok: false, code: "invalid_plan_fingerprint" };
+      if (!entries || !entries.length) return { ok: false, code: "missing_entries" };
+      /*
+       * AN EXPLICIT MANIFEST, OR NOTHING. "Move the Vacilando files" must not be
+       * expressible here: every entry names one source and one destination, and
+       * a wildcard is not a path. The executor re-derives the fingerprint from
+       * these entries and refuses when it does not match what was approved, so
+       * a caller cannot widen an approved plan by editing the list.
+       */
+      for (const e of entries) {
+        const from = String(e?.source || "").trim();
+        const to = String(e?.destination || "").trim();
+        if (!from || !to) return { ok: false, code: "entry_missing_path" };
+        if (/[*?]|\*\*/.test(from) || /[*?]/.test(to)) return { ok: false, code: "entry_is_a_pattern_not_a_path" };
+        if (from.split("/").includes("..") || to.split("/").includes("..")) {
+          return { ok: false, code: "entry_path_traversal" };
+        }
+      }
+      return {
+        ok: true,
+        normalized: {
+          sourceRepositoryId: source,
+          destinationRepositoryId: destination,
+          planId,
+          planFingerprint: fingerprint,
+          mode: "copy",
+          entries: entries.map((e) => ({
+            source: String(e.source).trim(),
+            destination: String(e.destination).trim(),
+            replace_approved: e.replace_approved === true,
+            expected_sha256: e.expected_sha256 ? String(e.expected_sha256) : null,
+          })),
+        },
+      };
     },
   };
 }
@@ -1089,6 +1189,7 @@ const REGISTRY = new Map([
   [ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST, defineRepositoryClosePullRequest()],
   [ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH, defineRepositoryDeleteRemoteBranch()],
   [ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN, defineApplyReconciliationPlan()],
+  [ACTION_TYPES.REPOSITORY_TRANSFER_FILES, defineTransferFiles()],
   [ACTION_TYPES.VACILANDO_RETIRE_WORKTREE, defineRetireWorktree()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
   [ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION, defineDatabaseApplyPromotedMigration()],

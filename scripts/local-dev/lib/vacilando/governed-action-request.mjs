@@ -80,6 +80,7 @@ import {
   fulfillRepositoryPushForMission,
   fulfillClosePullRequestForMission,
   fulfillApplyReconciliationPlanForMission,
+  fulfillTransferFilesForMission,
   fulfillExecuteRegisteredReconciliationForMission,
   fulfillRetireWorktreeForMission,
   fulfillDeleteRemoteBranchForMission,
@@ -1940,6 +1941,14 @@ function defaultModeForAction(actionKey, requested) {
   // policy_denied — the trap two actions have already fallen into.
   if (actionKey === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) return "migration_apply";
   /*
+   * NOT "promotion" either. A transfer copies approved files between two
+   * project repositories; it produces no release and touches no product. It is
+   * named here explicitly so it can never inherit read_only and surface as
+   * `policy_denied` -- the trap three actions have now fallen into, and the one
+   * CI caught this action falling into before it ever ran.
+   */
+  if (actionKey === ACTION_TYPES.REPOSITORY_TRANSFER_FILES) return "other";
+  /*
    * NOT "promotion". That mode means an Alloy product release, and this action
    * exists precisely because writing a workflow definition to main is NOT one -
    * conflating them in the mode would put repository configuration and product
@@ -3324,6 +3333,18 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
   }
   if (rec.action_key === ACTION_TYPES.ENVIRONMENT_EXECUTE_REGISTERED_RECONCILIATION) {
     return fulfillExecuteRegisteredReconciliationForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_TRANSFER_FILES) {
+    return fulfillTransferFilesForMission(scope, {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: rec.inputs || {},

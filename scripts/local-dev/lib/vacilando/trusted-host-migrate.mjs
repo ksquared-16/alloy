@@ -11,6 +11,7 @@ import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { listRepositories } from "./repository-registry.mjs";
 
 export const CANONICAL_MIGRATION_DIR = "supabase/migrations";
 export const ALLOWED_ENVIRONMENTS = Object.freeze(["staging", "certification", "cert"]);
@@ -124,6 +125,17 @@ function moduleRepoRoot() {
 }
 
 export function gitObjectStoreCandidates(root) {
+  /*
+   * S3: THE REGISTERED PROJECTS REPLACE THE PERSON-SPECIFIC GUESS.
+   *
+   * `/Users/Kelly/Alloy` was in this list, and the fetch step below then had to
+   * filter it back OUT by literal -- a path we would read from but must never
+   * fetch into, because it is not this machine's. That is two statements of one
+   * wrong assumption.
+   *
+   * Every registered repository's root is a real object store on THIS host, so
+   * the registry supplies them and the filter has nothing left to exclude.
+   */
   return [...new Set([
     root,
     process.env.VACILANDO_CHECKOUT,
@@ -131,9 +143,16 @@ export function gitObjectStoreCandidates(root) {
     moduleRepoRoot(),
     process.env.ALLOY_CANONICAL_ROOT,
     process.env.ALLOY_REPO,
-    "/Users/Kelly/Alloy",
+    ...registeredRepositoryRoots(),
     join(process.env.HOME || "", "Alloy"),
   ].filter(Boolean))];
+}
+
+/** Roots of every registered repository, or none when the registry is unreadable. */
+function registeredRepositoryRoots() {
+  try {
+    return listRepositories({ includeRetired: false }).map((r) => r.root).filter(Boolean);
+  } catch { return []; }
 }
 
 function gitHasCommit(sha, { cwd, git }) {
@@ -174,8 +193,8 @@ export function ensureCommitAvailable(sha, {
       detail: `Commit ${want} is not in the Git object database`,
     };
   }
-  const fetchTargets = candidates.filter((c) => c !== "/Users/Kelly/Alloy");
-  if (!fetchTargets.length) fetchTargets.push(...candidates);
+  // Every candidate is now a store on this host, so there is nothing to exclude.
+  const fetchTargets = [...candidates];
   for (const cwd of fetchTargets) {
     if (fetchCommitInto(cwd, want, git)) return { ok: true, cwd, fetched: true };
   }

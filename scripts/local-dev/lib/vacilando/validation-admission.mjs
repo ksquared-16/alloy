@@ -31,6 +31,7 @@ import { homedir } from "node:os";
 
 import { WORKLOAD_CLASSES } from "./workload-classification.mjs";
 import { EXCLUSIVE } from "./capacity-policy.mjs";
+import { gatewayStateRoot } from "./runtime-roots.mjs";
 
 export const VALIDATION_CLAIMS_SCHEMA = "vacilando.validation_claims.v1";
 
@@ -67,7 +68,7 @@ export function isEnforced(workloadClass) {
 // ── Ledger ───────────────────────────────────────────────────────────────────
 
 function defaultStorePath(root) {
-  const base = root || process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  const base = root || gatewayStateRoot();
   return join(base, "vacilando", "validation-claims.json");
 }
 

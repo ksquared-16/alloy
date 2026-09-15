@@ -20,9 +20,9 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { convergenceStatus } from "./toolkit-convergence.mjs";
+import { gatewayStateRoot } from "./runtime-roots.mjs";
 
-const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT
-  || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+const RUNTIME_ROOT = gatewayStateRoot();
 
 function git(args, cwd) {
   try {

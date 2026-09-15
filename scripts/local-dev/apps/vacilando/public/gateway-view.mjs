@@ -5075,6 +5075,115 @@ export function renderProjectsSheet(state = {}) {
   });
 }
 
+/**
+ * FILE TRANSFER — copying an approved manifest into another project.
+ *
+ * The operator question this answers is narrow and real: "I have an approved
+ * list of paths; move them into that project." Until now the only answer was a
+ * terminal and `cp`, which is outside governance, outside evidence, and outside
+ * anything that could refuse.
+ *
+ * PREVIEW IS THE WHOLE UI. What an operator needs before approving is not a
+ * form, it is EVIDENCE: how many files, how many bytes, what is already
+ * identical, and — the part that matters — what would be refused and why. The
+ * summary reads first and the per-path detail is there when the numbers are
+ * surprising, because a manifest of four hundred files is not reviewed by
+ * scrolling it.
+ *
+ * CONFIRMING IS NOT HERE, AND THAT IS DELIBERATE. Copying is a privileged write
+ * held by the trusted host under `repository.transfer_files`. This surface
+ * previews and hands over the exact governed action; a browser control that
+ * both previewed and copied would be a second authorization path, which is the
+ * one thing this capability must not add.
+ */
+function renderTransferPanel(repo, state = {}) {
+  const t = state.transfer || null;
+  const open = Boolean(t && t.repository_id === repo.repository_id);
+  if (!open) {
+    return `<div class="gw-proj-transfer">
+      <button type="button" class="btn" data-gw-proj-transfer="${esc(repo.repository_id)}">Transfer files in\u2026</button>
+      <span class="gw-field-hint">Copy an approved manifest of paths from another project into this one.</span>
+    </div>`;
+  }
+  const others = (state.repositories || []).filter((r) => r.repository_id !== repo.repository_id);
+  const sourceRow = `<label class="gw-field">
+    <span class="gw-field-label">Copy from</span>
+    <select data-gw-proj-transfer-source>
+      ${others.map((r) => `<option value="${esc(r.repository_id)}"${t.source === r.repository_id ? " selected" : ""}>${esc(r.name)}</option>`).join("")}
+    </select>
+    <span class="gw-field-hint">Into <strong>${esc(repo.name)}</strong>.</span>
+  </label>`;
+
+  const manifest = `<label class="gw-field">
+    <span class="gw-field-label">Approved manifest</span>
+    <textarea data-gw-proj-transfer-manifest rows="5"
+      placeholder="one path per line, or source -&gt; destination">${esc(t.manifest || "")}</textarea>
+    <span class="gw-field-hint">Explicit paths only. A pattern is not a path, and
+      &ldquo;everything&rdquo; is not a manifest \u2014 the governed action refuses both.</span>
+  </label>`;
+
+  const p = t.preview || null;
+  const refusals = p ? (p.entries || []).filter((e) => e.disposition === "refuse") : [];
+  const evidence = !p ? "" : `<div class="gw-transfer-result">
+    <dl class="gw-kv">
+      <dt>From</dt><dd>${esc(p.source?.project_id || p.source?.repository_id || "")}</dd>
+      <dt>Into</dt><dd>${esc(p.destination?.project_id || p.destination?.repository_id || "")}</dd>
+      <dt>Files</dt><dd>${esc(String(p.summary.files))} in ${esc(String(p.summary.directories))} ${p.summary.directories === 1 ? "directory" : "directories"}</dd>
+      <dt>Size</dt><dd>${esc(formatBytes(p.summary.bytes))}</dd>
+      <dt>New</dt><dd>${esc(String(p.summary.copy))}</dd>
+      <dt>Already there</dt><dd>${p.summary.unchanged ? esc(String(p.summary.unchanged)) : `<span class="gw-cap-absent">none</span>`}</dd>
+      ${p.summary.replace ? `<dt>Replaced</dt><dd>${esc(String(p.summary.replace))}</dd>` : ""}
+      <dt>Refused</dt><dd>${p.summary.refuse
+        ? `<strong>${esc(String(p.summary.refuse))}</strong>`
+        : `<span class="gw-cap-absent">none</span>`}</dd>
+    </dl>
+    ${refusals.length ? `<div class="gw-notice err" role="alert">
+      Nothing will be copied while anything is refused \u2014 a half-applied transfer is
+      worse than none. ${esc(String(refusals.length))} to resolve:
+      <ul class="gw-transfer-refusals">${refusals.slice(0, 8).map((r) => `<li><code>${esc(r.source || "?")}</code> \u2014 ${esc(refusalText(r.refusal))}</li>`).join("")}</ul>
+      ${refusals.length > 8 ? `<p class="gw-field-hint">\u2026and ${esc(String(refusals.length - 8))} more.</p>` : ""}
+    </div>` : `<p class="gw-field-hint">Nothing is copied until the governed
+      <code>repository.transfer_files</code> action is approved. This preview wrote nothing.</p>`}
+  </div>`;
+
+  return `<div class="gw-proj-transfer is-open">
+    <h4>Transfer files in</h4>
+    ${sourceRow}
+    ${manifest}
+    <div class="gw-transfer-actions">
+      <button type="button" class="btn" data-gw-proj-transfer-preview="${esc(repo.repository_id)}"
+        ${t.busy ? "disabled" : ""}>${t.busy ? "Checking\u2026" : "Preview"}</button>
+      <button type="button" class="btn" data-gw-proj-transfer-cancel>Cancel</button>
+    </div>
+    ${t.error ? `<div class="gw-notice err" role="alert">${esc(transferErrorText(t.error))}</div>` : ""}
+    ${evidence}
+  </div>`;
+}
+
+/** Refusals in the operator's terms. Each is a different decision, never one blur. */
+export function refusalText(code) {
+  switch (String(code || "")) {
+    case "source_missing": return "that path is not in the source project";
+    case "source_outside_repository": return "that path is outside the source project";
+    case "destination_outside_repository": return "that would land outside this project";
+    case "symlink_not_transferable": return "a symbolic link is not transferable content";
+    case "destination_differs_without_replace_authority":
+      return "a different file is already here \u2014 the manifest must say it may be replaced";
+    case "source_changed_since_approval": return "the source changed after this manifest was approved";
+    default: return String(code || "refused");
+  }
+}
+
+export function transferErrorText(code) {
+  switch (String(code || "")) {
+    case "source_project_unresolved": return "That source project is not registered.";
+    case "destination_project_unresolved": return "This project is not registered.";
+    case "source_and_destination_are_the_same_project": return "A project cannot transfer into itself.";
+    case "network": return "Could not reach Vacilando. Nothing was changed.";
+    default: return `Preview refused: ${String(code || "unknown")}.`;
+  }
+}
+
 function renderProjectDetail(repo, state, { busy, err, ok }) {
   const retired = String(repo.state || "ACTIVE") !== "ACTIVE";
   const draft = state.edit || {};
@@ -5156,6 +5265,7 @@ function renderProjectDetail(repo, state, { busy, err, ok }) {
 
   const body = `${err}${ok}
     ${renderProjectCapabilities(repo)}
+    ${renderTransferPanel(repo, state)}
     ${laneNote}
     ${fields}
     <div class="gw-proj-recheck">
