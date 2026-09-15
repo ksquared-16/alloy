@@ -383,3 +383,50 @@ export function readScroll(scope: QaScope, scenarioKey: string): number {
         return 0;
     }
 }
+
+// ── WHY THE SCENARIO MOVED, KEPT WHERE THE DIRECTOR CAN SEE IT ──────────────────────────────────
+
+/**
+ * A ring buffer of every change of active scenario, with the reason it happened.
+ *
+ * Repair Pass 5 could not reproduce the reset the Director experiences: eighteen minutes of his
+ * actual workflow — product navigation, account selection, invoking and cancelling commands,
+ * switching tabs, 234 hot-module reloads — produced zero scenario changes, and sampling the first
+ * frames after a reload showed the walkthrough landing directly on the right scenario.
+ *
+ * A defect nobody can reproduce is not a defect that has gone away. So the runtime now records its
+ * own navigation history: every change, what moved it, and what it moved from and to. When it
+ * happens to the Director again, the cause is already written down and on screen, instead of
+ * depending on somebody being watching at that moment.
+ *
+ * `localStorage`, so it survives the reload it may be recording the cause of.
+ */
+export type ScenarioMove = {
+    at: string;
+    from: string | null;
+    to: string | null;
+    /** The event that moved it. `restore` and `catalog_shift` are the ones worth seeing. */
+    cause: "start" | "resume" | "next" | "previous" | "leave" | "restore" | "catalog_shift" | "unknown";
+};
+
+const MOVES_KEPT = 40;
+
+function movesKey(scope: QaScope): string {
+    return `${ROOT}.${scope.suiteKey}.${scope.environment}.moves`;
+}
+
+export function recordScenarioMove(
+    scope: QaScope,
+    move: Omit<ScenarioMove, "at">,
+): void {
+    /* A no-op move is not history; recording it would bury the ones that matter. */
+    if (move.from === move.to) return;
+    const existing = readScenarioMoves(scope);
+    existing.push({ ...move, at: new Date().toISOString() });
+    writeJson(movesKey(scope), existing.slice(-MOVES_KEPT));
+}
+
+export function readScenarioMoves(scope: QaScope): ScenarioMove[] {
+    const stored = readJson<ScenarioMove[]>(movesKey(scope));
+    return Array.isArray(stored) ? stored : [];
+}

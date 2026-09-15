@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { Scenario } from "@/lib/qa/financialsDirectorQa/scenarioCatalog";
 import { SUITE_KEY } from "@/lib/qa/financialsDirectorQa/scenarioCatalog";
@@ -10,14 +10,17 @@ import {
     readDraft,
     readPosition,
     resolveResumeIndex,
+    readScenarioMoves,
     readScroll,
     readShellCache,
+    recordScenarioMove,
     writeDraft,
     writePosition,
     writeScroll,
     writeShellCache,
     type DraftRead,
     type QaScope,
+    type ScenarioMove,
     type ShellCache,
 } from "@/lib/qa/runtime/directorQaSession";
 
@@ -99,8 +102,20 @@ export default function CoreFinancialsQaReader() {
             setError(e instanceof Error ? e.message : "Could not reach the readiness endpoint.");
         }
     }, []);
-    /* Draw from cache first, then let the live read replace it. Cache never supplies a figure. */
-    useEffect(() => {
+    /*
+     * ── BEFORE FIRST PAINT, NOT AFTER ──────────────────────────────────────────────────────────
+     *
+     * `useLayoutEffect` runs after the DOM is built and BEFORE the browser paints, so the first
+     * frame the Director sees is already their scenario. As a plain effect this ran after paint,
+     * which put one frame of "Reading the environment…" on screen at every reload — and on a
+     * development server, where the route reloads whenever anything in its module graph changes,
+     * that flash is constant. Nothing was lost, and a surface that blinks back to a loading state
+     * dozens of times an hour is indistinguishable from one that resets.
+     *
+     * It never runs on the server, so there is no hydration mismatch: the server has no storage to
+     * read and renders the same defaults it always did.
+     */
+    useLayoutEffect(() => {
         setShell(readShellCache<Scenario>(SUITE_KEY, "staging") ?? readShellCache<Scenario>(SUITE_KEY, "local"));
     }, []);
     useEffect(() => { void load(); }, [load]);
@@ -171,6 +186,16 @@ export default function CoreFinancialsQaReader() {
         return null;
     }, [data, shell]);
 
+    /*
+     * The runtime's own navigation history, shown to the Director. If the walkthrough ever moves
+     * without them, the entry naming the cause is already on screen — no reproduction required.
+     */
+    const [moves, setMoves] = useState<ScenarioMove[]>([]);
+    useEffect(() => {
+        if (!scope) return;
+        setMoves(readScenarioMoves(scope));
+    }, [scope, index, started]);
+
     /** Where the walkthrough should open, asked fresh so a click reflects the latest results. */
     const resume = useCallback(() => {
         if (!scope || walkthrough.length === 0) return { index: 0, started: false, source: "start" as const };
@@ -181,8 +206,9 @@ export default function CoreFinancialsQaReader() {
         });
     }, [scope, walkthrough, resultOf]);
 
-    /* RESTORE, once, as soon as there is a catalog to resolve a stored scenario key against. */
-    useEffect(() => {
+    /* RESTORE, once, as soon as there is a catalog to resolve a stored scenario key against —
+       and before paint, so the Director never sees a frame of somewhere they are not. */
+    useLayoutEffect(() => {
         if (restoredRef.current || !scope || walkthrough.length === 0) return;
         restoredRef.current = true;
         const at = resume();
@@ -192,8 +218,20 @@ export default function CoreFinancialsQaReader() {
          * A restore is not a move, so it records only when storage held nothing usable — otherwise
          * it would rewrite the very value it just read, which is how the clobber got in.
          */
-        if (at.source !== "stored" && scope && walkthrough[at.index]) {
-            writePosition(scope, walkthrough[at.index].key, at.started);
+        if (scope && walkthrough[at.index]) {
+            if (at.source !== "stored") {
+                writePosition(scope, walkthrough[at.index].key, at.started);
+            }
+            /*
+             * Recorded even when it restores correctly. A journal that only logs surprises cannot
+             * show that the ordinary case is ordinary, and "restore landed somewhere else" is
+             * exactly the entry that would explain the Director's reset.
+             */
+            recordScenarioMove(scope, {
+                from: null,
+                to: walkthrough[at.index].key,
+                cause: at.source === "stored" ? "restore" : "catalog_shift",
+            });
         }
     }, [scope, walkthrough, resume]);
 
@@ -215,14 +253,18 @@ export default function CoreFinancialsQaReader() {
      * is no code path by which a render can record a position.
      */
     const goTo = useCallback(
-        (nextIndex: number, nextStarted: boolean) => {
+        (nextIndex: number, nextStarted: boolean, cause: ScenarioMove["cause"]) => {
             const bounded = Math.max(0, Math.min(walkthrough.length - 1, nextIndex));
             const target = walkthrough[bounded];
+            const previous = walkthrough[index];
             setIndex(bounded);
             setStarted(nextStarted);
-            if (scope && target) writePosition(scope, target.key, nextStarted);
+            if (scope && target) {
+                writePosition(scope, target.key, nextStarted);
+                recordScenarioMove(scope, { from: previous?.key ?? null, to: target.key, cause });
+            }
         },
-        [scope, walkthrough],
+        [scope, walkthrough, index],
     );
 
     /* LOAD the draft for whichever scenario is open. Never mistaken for typing — see the ref. */
@@ -385,7 +427,7 @@ export default function CoreFinancialsQaReader() {
                         <button type="button" data-qa-start="true"
                             data-qa-resume-source={resume().source}
                             data-qa-resume-scenario={walkthrough[resume().index]?.key ?? ""}
-                            onClick={() => { const at = resume(); goTo(at.index, true); }}
+                            onClick={() => { const at = resume(); goTo(at.index, true, at.source === "stored" ? "resume" : "start"); }}
                             className="rounded-lg bg-alloy-midnight px-4 py-2 text-[13px] font-medium text-white">
                             {tally.pass + tally.fail + tally.blocked > 0 ? "Resume walkthrough" : "Start walkthrough"}
                             {walkthrough[resume().index]
@@ -397,7 +439,7 @@ export default function CoreFinancialsQaReader() {
 
                 {walkthrough.length > 0 && started && current ? (
                     <article className="space-y-5" data-qa-scenario={current.key}>
-                        <button type="button" onClick={() => goTo(index, false)}
+                        <button type="button" onClick={() => goTo(index, false, "leave")}
                             className="text-[12px] text-alloy-midnight/55 underline underline-offset-2">
                             ← All scenarios
                         </button>
@@ -492,9 +534,38 @@ export default function CoreFinancialsQaReader() {
                             </p>
                         </Section>
 
+                        {/*
+                         * WHY THE WALKTHROUGH IS WHERE IT IS.
+                         *
+                         * Quiet, collapsed, and always available. Repair Pass 5 could not reproduce
+                         * the reset the Director reports — eighteen minutes of his own workflow and
+                         * 234 hot reloads produced no scenario change — and a defect nobody can
+                         * reproduce is not one that has gone away. So the runtime keeps its own
+                         * record: the next time it moves without him, the cause is already here.
+                         */}
+                        {moves.length ? (
+                            <details className="border-t border-alloy-midnight/10 pt-3" data-qa-moves="true">
+                                <summary className="cursor-pointer text-[11px] text-alloy-midnight/45">
+                                    Navigation history · {moves.length} recorded
+                                </summary>
+                                <ul className="mt-1 space-y-0.5">
+                                    {moves.slice().reverse().slice(0, 12).map((m, i) => (
+                                        <li key={`${m.at}-${i}`}
+                                            className="flex items-baseline gap-2 text-[11px] text-alloy-midnight/55"
+                                            data-qa-move={m.cause}>
+                                            <span className="tabular-nums">{m.at.slice(11, 19)}</span>
+                                            <span className={m.cause === "restore" || m.cause === "catalog_shift"
+                                                ? "font-medium text-alloy-midnight/75" : ""}>{m.cause}</span>
+                                            <span className="truncate">{m.from ?? "—"} → {m.to ?? "—"}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </details>
+                        ) : null}
+
                         <div className="flex justify-between gap-2 border-t border-alloy-midnight/10 pt-4">
-                            <Btn onClick={() => goTo(index - 1, true)} disabled={index === 0} id="prev">← Previous</Btn>
-                            <Btn onClick={() => goTo(index + 1, true)}
+                            <Btn onClick={() => goTo(index - 1, true, "previous")} disabled={index === 0} id="prev">← Previous</Btn>
+                            <Btn onClick={() => goTo(index + 1, true, "next")}
                                 disabled={index >= walkthrough.length - 1} id="next">Next scenario →</Btn>
                         </div>
                     </article>
