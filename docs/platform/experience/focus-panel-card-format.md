@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: active
+status: frozen
 last_reviewed: 2026-09-15
 ---
 
