@@ -9,6 +9,7 @@ import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModal
 import { packetStepReadinessLabel } from "@/lib/forms/packets/packetOrchestrationPresentation";
 import { PACKET_STEP_KIND_LABELS, type PacketStepKind } from "@/lib/forms/packets/packetStepKind";
 import { STEP_TYPE_LABEL } from "@/components/forms/workspace/PacketStepConfigureModal";
+import { openGovernedDocument } from "@/lib/forms/packets/openGovernedDocument";
 import { CLASSIFICATION_KEY_LABELS } from "@/lib/pos/processingCase/classification/operatorCorrection";
 import { PacketAddStepChooser, type NewDocumentStep } from "@/components/forms/workspace/PacketAddStepChooser";
 import { opGroupedRowInner, opGroupedSurface, opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
@@ -164,12 +165,8 @@ export function PacketStepCompositionEditor({
                                             data-testid={`packet-step-view-document-${idx}`}
                                             onClick={async () => {
                                                 const id = card?.acknowledgment_document_id || s.acknowledgment_document_id;
-                                                const res = await fetch(`/api/admin/documents/${encodeURIComponent(String(id))}/signed-url`, {
-                                                    credentials: "same-origin",
-                                                });
-                                                const body = (await res.json().catch(() => ({}))) as { url?: string; data?: { url?: string } };
-                                                const url = body.url ?? body.data?.url;
-                                                if (url) window.open(url, "_blank", "noopener");
+                                                const opened = await openGovernedDocument(String(id));
+                                                if (!opened.ok) window.alert(opened.message);
                                             }}
                                         >
                                             View document →

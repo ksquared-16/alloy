@@ -6,6 +6,7 @@ import clsx from "clsx";
 import PrimaryButton from "@/components/PrimaryButton";
 import ProcessingAlloyDialog from "@/app/adminV2/pos/ProcessingAlloyDialog";
 import { CLASSIFICATION_KEY_LABELS, OPERATOR_CLASSIFIED_KEYS } from "@/lib/pos/processingCase/classification/operatorCorrection";
+import { openGovernedDocument } from "@/lib/forms/packets/openGovernedDocument";
 import { opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
 
 /**
@@ -55,6 +56,10 @@ type OrgDocument = { id: string; name: string | null; original_filename: string 
 
 const inputClass = "w-full rounded-lg border border-alloy-midnight/10 bg-white px-2.5 py-1.5 text-sm";
 
+/** The classification in operator words, for the retention line. */
+const documentClassificationLabelFor = (key: string): string =>
+    (CLASSIFICATION_KEY_LABELS as Record<string, string>)[key] ?? "an enrollment document";
+
 const documentLabel = (d: OrgDocument) =>
     (d.name ?? "").trim() || (d.original_filename ?? "").trim() || "Untitled document";
 
@@ -71,6 +76,38 @@ export const STEP_TYPE_LABEL: Readonly<Record<ConfigurableStep["kind"], string>>
     document_upload: "Document upload",
     document_acknowledgment: "Document acknowledgment",
 });
+
+/**
+ * The two questions every obligation must answer, in the same shape for all three kinds.
+ *
+ * "What determines completion?" and "what data, if any, is extracted or mapped?" were the questions
+ * an administrator could not answer from this screen — and the gap was widest on the document
+ * obligations, where it is easy to assume that filing a document means reading it. Every line below
+ * is traced to something actually persisted; nothing here is aspirational.
+ */
+function CompletionContract({ completeWhen, retains }: { completeWhen: string; retains: string[] }) {
+    return (
+        <>
+            <Row label="What makes this complete">
+                <p className={opMetadata} data-testid="packet-step-complete-when">
+                    {completeWhen}
+                </p>
+            </Row>
+            <Row label="What Alloy retains or updates">
+                <ul className="space-y-0.5" data-testid="packet-step-retains">
+                    {retains.map((line) => (
+                        <li key={line} className="text-[11px] leading-snug text-alloy-midnight/70">
+                            <span aria-hidden className="mr-1 text-alloy-midnight/30">
+                                •
+                            </span>
+                            {line}
+                        </li>
+                    ))}
+                </ul>
+            </Row>
+        </>
+    );
+}
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
     return (
@@ -239,6 +276,14 @@ export function PacketStepConfigureModal({
                                 "Guided conversationally, with a review before completion",
                             ]}
                         />
+                        <CompletionContract
+                            completeWhen="The family has answered the questions this Form requires, and submitted it."
+                            retains={[
+                                "Answers connected to Alloy update the child or family record",
+                                "Answers that are not connected stay with this Form's submission",
+                                "The submission itself is kept as evidence of what was answered",
+                            ]}
+                        />
                     </>
                 ) : null}
 
@@ -265,16 +310,8 @@ export function PacketStepConfigureModal({
                                     className="mt-2 text-xs font-semibold text-alloy-blue hover:underline"
                                     data-testid="packet-step-configure-view-document"
                                     onClick={async () => {
-                                        const res = await fetch(
-                                            `/api/admin/documents/${encodeURIComponent(step.acknowledgment_document_id!)}/signed-url`,
-                                            { credentials: "same-origin" },
-                                        );
-                                        const body = (await res.json().catch(() => ({}))) as {
-                                            url?: string;
-                                            data?: { url?: string };
-                                        };
-                                        const url = body.url ?? body.data?.url;
-                                        if (url) window.open(url, "_blank", "noopener");
+                                        const opened = await openGovernedDocument(step.acknowledgment_document_id!);
+                                        if (!opened.ok) setErr(opened.message);
                                     }}
                                 >
                                     View document →
@@ -301,10 +338,33 @@ export function PacketStepConfigureModal({
                                 Require a signature
                             </label>
                         </Row>
-                        <Row label="Completion evidence">
-                            <p className={opMetadata}>
-                                Completion records the document the family acknowledged and their acknowledgment
-                                {requiresSignature ? " and signature" : ""}.
+                        <CompletionContract
+                            completeWhen={
+                                requiresSignature
+                                    ? "The family acknowledges this document and provides the required signature."
+                                    : "The family acknowledges this document."
+                            }
+                            retains={[
+                                "Which document was acknowledged",
+                                "The acknowledgment, with the time it was given",
+                                ...(requiresSignature
+                                    ? ["The signature — the name typed or the signature drawn — and a signed PDF of what was agreed"]
+                                    : []),
+                                "The packet session it belongs to, so the acknowledgment is attributable",
+                                "No child or household fields are updated from this document",
+                            ]}
+                        />
+                        <Row label="Data mapping">
+                            {/*
+                             * The question this answers is "how is the data getting mapped?", and the honest
+                             * answer is that it is not. An attestation obligation records that a document was
+                             * agreed to; nothing reads the Handbook's text into Alloy.
+                             */}
+                            <p className="text-sm font-medium text-alloy-midnight">None</p>
+                            <p className={clsx("mt-0.5", opMutedMeta)}>
+                                This step records acknowledgment of the document. It does not extract or map the
+                                document&rsquo;s contents into Alloy records. The family is shown the document before
+                                acknowledging it.
                             </p>
                         </Row>
                     </>
@@ -345,11 +405,26 @@ export function PacketStepConfigureModal({
                                 "They can replace it before they finish",
                             ]}
                         />
-                        <Row label="Document intelligence">
+                        <CompletionContract
+                            completeWhen="The family provides the document. Receiving it is what completes this step."
+                            retains={[
+                                `The document itself, filed as ${documentClassificationLabelFor(documentTypeKey)} against the child`,
+                                "Which packet session and step it arrived from",
+                                "The most recent file, if the family replaced an earlier one",
+                            ]}
+                        />
+                        <Row label="Information extraction">
+                            {/*
+                             * Classification is not extraction, and the difference matters: knowing a document IS
+                             * an immunization record tells Alloy nothing about which doses a child received.
+                             * Structured dose truth is Health's to own (D-H5), and claiming it here would be the
+                             * most expensive kind of wrong.
+                             */}
                             <p className="text-sm font-medium text-alloy-midnight">Not configured</p>
                             <p className={clsx("mt-0.5", opMutedMeta)}>
-                                Alloy files the document. It does not read values out of it, so the family is never
-                                asked to retype what the document already says.
+                                Alloy keeps the document as evidence. Information from it is not extracted into the
+                                child&rsquo;s Health record, and filing a document under a type is not the same as
+                                reading what is inside it.
                             </p>
                         </Row>
                     </>
