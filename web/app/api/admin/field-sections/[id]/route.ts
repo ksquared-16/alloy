@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { assertSectionSafeToDelete, parseFieldSectionConfig } from "@/lib/fields/sectionManagement";
+import { SECTIONS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
@@ -12,9 +13,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, SECTIONS_MANAGE);
+    if (denied) return denied;
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -75,9 +75,8 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, SECTIONS_MANAGE);
+    if (denied) return denied;
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });

@@ -56,6 +56,7 @@ import {
 import {
     diagnoseIneffectiveQueueRowFields,
 } from "@/lib/layout/runtime/validateQueueRecordLayoutConfig";
+import { LAYOUTS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 
 
 
@@ -123,7 +124,8 @@ export async function POST(
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (ctx.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const denied = requireConfigurationCapability(ctx, LAYOUTS_MANAGE);
+    if (denied) return denied;
 
     const { surfaceId } = await params;
 

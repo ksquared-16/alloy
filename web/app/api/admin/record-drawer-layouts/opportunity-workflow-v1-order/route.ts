@@ -11,6 +11,7 @@ import {
     validateOpportunityWorkflowV1SectionOrder,
 } from "@/lib/admin/opportunityWorkflowV1DrawerOrder";
 import { assertLegacyOpportunityLayoutWriteAllowed } from "@/lib/admin/legacyOpportunityLayoutWriteGuard";
+import { SECTIONS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 
 /**
  * PATCH: persist safe workflow v1 opportunity drawer section order into `record_drawer_layouts.config_json`
@@ -23,9 +24,8 @@ export async function PATCH(request: NextRequest) {
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden — admin role required" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, SECTIONS_MANAGE);
+    if (denied) return denied;
 
     const writeGuard = assertLegacyOpportunityLayoutWriteAllowed();
     if (!writeGuard.ok) return writeGuard.response;

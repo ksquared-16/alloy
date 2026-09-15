@@ -8,6 +8,7 @@ import {
     prepareFieldDefinitionVisibilityPatch,
 } from "@/lib/agent/v2/applyFieldDefinitionVisibility";
 import { getFieldDefinitionLockTimestamp } from "@/lib/agent/v2/fieldVisibilityConfigV0";
+import { FIELDS_MANAGE, requireConfigurationCapability } from "@/lib/access/configurationAuthority";
 
 /**
  * PUT — merge visibility patch on `field_definitions` (admin). Atomic RPC + audit.
@@ -16,9 +17,8 @@ import { getFieldDefinitionLockTimestamp } from "@/lib/agent/v2/fieldVisibilityC
 export async function PUT(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = requireConfigurationCapability(ctx, FIELDS_MANAGE);
+    if (denied) return denied;
 
     let body: Record<string, unknown>;
     try {
