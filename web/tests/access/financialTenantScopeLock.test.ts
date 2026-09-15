@@ -39,7 +39,11 @@ const SURFACE = [
     "app/api/admin/payments",
 ];
 
-const GLOBAL_BY_DESIGN = new Set(["pricing_first_clean_prices", "pricing_recurring_prices"]);
+const GLOBAL_BY_DESIGN = new Set([
+    "pricing_first_clean_prices",
+    "pricing_recurring_prices",
+    "pricing_addons",
+]);
 
 const MUTATION = /\.(update|delete|upsert|insert)\(/;
 
