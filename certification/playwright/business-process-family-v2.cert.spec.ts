@@ -258,6 +258,30 @@ test.describe("Business Process family authority — enrollment process and life
         await s.close();
     });
 
+    test("PHASE 8 — the seeded operator, who is a real default admin, keeps all eleven", async ({ request }) => {
+        /*
+         * COMPATIBILITY, PROVEN ON THE MOUNTED SESSION RATHER THAN ARGUED.
+         *
+         * Every other phase builds its own context and signs a capability persona in. This one uses
+         * the suite's default `request` fixture, which carries the storage state captured for
+         * `qa.operator@northwind.invalid` — the seeded operator, whose role in this tenant is
+         * literally `admin`, holding business_process.configure and .activate in all ten orgs and
+         * denied in none.
+         *
+         * That is the principal who could reach all eleven routes under `ctx.role !== "admin"`, so it
+         * is the principal whose access this slice must not have cost. If a conversion ever gets
+         * pointed at a key the admin package does not carry, this fails and PHASE 1 does not.
+         */
+        for (const door of ALL) {
+            const status = await knock(request, door);
+            record("seededOperatorAdmin", door, status);
+            expect(
+                admitted(status),
+                `the default admin lost ${door} (${status}) — this slice broke compatibility`,
+            ).toBe(true);
+        }
+    });
+
     test("PHASE 7 — cleanup-test admits, and still removes nothing", async ({ browser }) => {
         /*
          * Gating a destructive route is only half the answer. The other half is that the route is
