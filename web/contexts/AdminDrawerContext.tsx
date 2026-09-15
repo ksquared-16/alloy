@@ -139,6 +139,14 @@ export type OpportunityWorkspaceContext = {
     focus_panel_layout_id?: string | null;
     /** Active process Work View id for layout/filter context. */
     work_view_id?: string | null;
+    /**
+     * The SUBJECT OF ATTENTION — the selected participation on a child-scoped surface.
+     *
+     * The settled Drawer frame projects child-scoped operational truth, so it must know which child
+     * the surface is actually scoped to. Optional: family-grain consumers legitimately name none,
+     * and a Drawer opened outside the Focus Panel has no attention selection at all.
+     */
+    attention_subject_id?: string | null;
 };
 
 /** Dev/diagnostic — model-swap navigation between VM-backed drawer entities (shell stays mounted). */

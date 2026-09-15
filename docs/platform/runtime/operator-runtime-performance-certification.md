@@ -1512,3 +1512,95 @@ Rapid A→B→C settles on C's own data with no stale flash.
 
 §21.7 remains **TARGET, NOT YET MET** — Attendance, Health and Financials have not joined the root
 lifecycle.
+
+## 26. The subject of attention is part of the provisioning identity
+
+### 26.1 What went wrong
+
+Both transport frames shared a producer. They did not share the SELECTED PARTICIPANT.
+
+Measured on a child-scoped surface: the root Attendance producer projected for member `dce12254…`
+while the card was scoped to `46105cd4…` — **a different child**. The result happened to be empty, so
+the UI looked harmless. It was not: shipped, it would render one child's attendance under another
+child's name.
+
+### 26.2 The resolvers were right; the input was wrong
+
+`buildOperationalContext` resolves `childSubjectScope ?? resolveParticipantScope({selectedParticipationId, participants})`,
+and neither resolver guesses — `participantScopeFromChildSubjectTruth` refuses unless truth names both
+`child.customer_member_id` and `child.process_instance_id`; `resolveParticipantScope` answers
+`not_found` for a stale or foreign selection and `ambiguous` for several children with none named.
+
+The settled call passed the FAMILY record as truth with `selectedParticipationId: null`, so
+`childSubjectScope` was null and the fallback legitimately returned `sole_participant`. **Neither
+resolver was changed.**
+
+### 26.3 The missing contract, and what now carries it
+
+The commit frame already resolves the selection — the panel body passes `selectedParticipationId`.
+The settled frame could not: the Drawer route accepted `department_id`, `work_unit_id` and
+`stage_work` and nothing else, so the server frame had no way to know which child the surface was
+scoped to. That is the gap, and it is why a settled-frame producer could not have been correct.
+
+Shipped here, as one route-contract extension:
+
+| Layer | Carries |
+| --- | --- |
+| `buildOpportunityDrawerViewModelUrl` | `attention_subject_id` on the request |
+| Drawer route | parses it, untrusted, alongside `deferStageWork` |
+| `composeOpportunityDrawerViewModel` | passes it as `selectedParticipationId` |
+| `useRecordWorkRuntime` | **the transport owner** — reads live attention and names it |
+| Drawer VM cache key | `attentionSubjectId` as a key segment |
+
+`useRecordWorkRuntime` is the only place that may add it. Cards do not add query parameters; they
+read what the request returns. Outside the RuntimeKernel — the modal drawer product renders above it —
+attention is null, which is the ordinary family-grain answer rather than a degraded one.
+
+### 26.4 The three quiet halves
+
+Naming the subject on the request is the obvious half. Three others would each have silently undone it:
+
+- **Cache identity.** One record under Child A is not the same answer as the same record under Child
+  B. Keying on the record alone loses the identity on the very next read after the fetch that got it
+  right.
+- **The unscoped write.** `applyVm` filed every response under `{department, workUnit}` with no
+  attention. A child-scoped view model written at the unscoped key is handed to the next family-grain
+  reader — the leak, arriving by a different door.
+- **The null scope.** `resolveOpportunityDrawerVmCacheContext` returned `null` unless a department or
+  work unit was named, and a null context keys **every child of a record to one entry**. The Focus
+  Panel's transport names attention without naming either, so attention alone is now a scope.
+
+Invalidation moved the other way: it clears every attention variant of a record, because an
+invalidation names a RECORD that changed and that change is equally true under every child it was
+viewed under.
+
+### 26.5 It is an input, not a credential
+
+A caller can write the parameter. The route does not validate it and must not try: it hands the value
+to the canonical resolver, which refuses a participation that does not belong to the record under
+view. A Family A request naming a Family B child resolves to no scope, and the producers, given no
+scope, return `unavailable` without attempting a read.
+
+The dangerous shape is a **single-child** family, where a lenient resolver would answer "there is only
+one — here it is", turning a refused request into a successful read. `tests/adminV2/viewModel/drawerAttentionAuthorizationBoundary.test.ts`
+holds that line, and was proven by planting the lenient fallback and watching it fail.
+
+### 26.6 The refined law
+
+> Transport frames may differ in FRESHNESS. They may not differ in SUBJECT.
+> A frame may produce child-scoped truth only if it knows the canonical subject of attention.
+
+### 26.7 Real Next client-graph smoke — infrastructure debt, CONFIRMED
+
+Resolved by inspection this run: **no required check runs a real `next build`.** The prebuild gate
+runs `npm run prebuild` — the chain that runs *before* `next build` — and `web-prebuild-gates.yml`'s
+own header records that a preview deployment never runs `npm run build`.
+
+So the `server-only` class of failure, which is rejected by Next's loader rather than by esbuild or
+`tsc`, still has no required automated catcher. §25's module-graph certification covers the known
+shape statically; the general case is caught only by rendering the page. No smoke was faked to close
+this.
+
+§21.7 remains **TARGET, NOT YET MET** — Attendance, Health and Financials have not joined the root
+lifecycle.
+

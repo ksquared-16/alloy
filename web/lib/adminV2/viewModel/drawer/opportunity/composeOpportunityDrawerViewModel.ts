@@ -45,6 +45,8 @@ export type ComposeOpportunityDrawerViewModelParams = {
      * to false so any full-drawer caller keeps stage work inline.
      */
     deferStageWork?: boolean;
+    /** The selected participation this surface is scoped to; resolved, never trusted. */
+    attentionSubjectId?: string | null;
 };
 
 export async function composeOpportunityDrawerViewModel(
@@ -282,7 +284,15 @@ export async function composeOpportunityDrawerViewModel(
                      * two permission models.
                      */
                     canMutate: viewModel.header?.status_can_mutate ?? hasPortalAdminMutateAccess(gate.roleKeys ?? []),
-                    selectedParticipationId: null,
+                    /*
+                     * THE SAME SUBJECT THE SURFACE IS SCOPED TO.
+                     *
+                     * This was `null`, and the canonical resolver then fell through to
+                     * `sole_participant` — a DIFFERENT child from the one on screen. The resolver was
+                     * right; the input was wrong. Passing the attention identity is what makes the
+                     * settled frame able to project the subject it claims to.
+                     */
+                    selectedParticipationId: params.attentionSubjectId ?? null,
                 }),
             }),
         },
