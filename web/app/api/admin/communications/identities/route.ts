@@ -5,6 +5,10 @@ import { buildBosDiscoverySnapshot } from "@/lib/communications/identity/bosDisc
 import { loadIdentityResolutionContext } from "@/lib/communications/identity/loadIdentityContext";
 import { resolveOutboundSender } from "@/lib/communications/identity/resolveOutboundSender";
 import { visibleEmailAddress } from "@/lib/communications/identity/visibleEmailIdentity";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
 
 function sanitizeIdentity(row: Record<string, unknown>) {
     /*
@@ -51,6 +55,8 @@ function sanitizeIdentity(row: Record<string, unknown>) {
 export async function GET(req: Request) {
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const url = new URL(req.url);
     const channel = url.searchParams.get("channel");

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+    COMMUNICATIONS_TEMPLATES_MANAGE,
+} from "@/lib/communications/communicationsAuthority";
 import {
     buildTemplateVersionInsertPayload,
     computeTemplateTokenPaths,
@@ -13,7 +17,7 @@ import {
 
 /**
  * Communications V2 — template list + create (Phase 1 / B2).
- * Pattern: requireAdminOrOps -> getAdminContextCached -> createAdminClient.
+ * Pattern: `communications.read` / `communications.templates.manage` -> getAdminContextCached -> createAdminClient.
  * service_role writes; org_id enforced on every query. No UI/announcements/provider.
  */
 
@@ -23,8 +27,8 @@ const VERSION_COLS = "id, template_id, version_number, subject, body, token_path
 
 /** GET /api/admin/communications/templates — list org templates (optional category/channel/status filters). */
 export async function GET(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
@@ -98,8 +102,8 @@ export async function GET(request: NextRequest) {
 
 /** POST /api/admin/communications/templates — create a template + its initial version. */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_TEMPLATES_MANAGE);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_PROVIDER_CONFIGURE,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
+import {
     CERTIFICATION_RECEIVING_DOMAINS,
     certificationDiscoveryEnabled,
     extractReceivingDomains,
@@ -42,6 +47,8 @@ import {
 export async function GET() {
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const supabase = createAdminClient();
     const { data, error } = await supabase
@@ -156,6 +163,8 @@ async function discoverReceivingDomains(apiKey: string | null): Promise<string[]
 export async function POST(req: Request) {
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_PROVIDER_CONFIGURE);
+    if (!auth.ok) return auth.response;
 
     let body: Record<string, unknown>;
     try {

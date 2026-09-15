@@ -4,6 +4,10 @@ import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
+import {
     resolveFamilyCommunicationWorkspace,
     resolveCustomerScopeFromEntity,
     FAMILY_WORKSPACE_RESOLVER_VERSION,
@@ -24,6 +28,8 @@ export async function GET(req: Request) {
     }
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const url = new URL(req.url);
     const directCustomerId = (url.searchParams.get("customer_id") ?? "").trim();

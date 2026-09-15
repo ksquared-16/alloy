@@ -14,6 +14,23 @@ import {
  *
  * DARK: gated behind comms_v2_assignment (404 when off). Writes communication_threads assignment
  * fields + an immutable conversation_assignment_events audit row. No send, no message mutation. (PKG-10)
+ *
+ * DELIBERATELY NOT CONVERTED — `ASSIGNMENTS_AUTHORITY_MODEL_DEBT` (BLOCKED_DECISION).
+ *
+ * Every other mutation on this surface now names one of the five Communications capabilities.
+ * This one does not, because assignment is not a Communications authority: it decides WHO OWNS A
+ * PIECE OF WORK, and the same unresolved question governs work items, cases and jobs. Answering it
+ * here — by inventing `communications.assign`, or by folding assignment into `communications.send`
+ * — would settle a platform-wide model as a side effect of a Communications lock, and settle it in
+ * the one place least able to see the other three surfaces.
+ *
+ * So it keeps `requireAdminOrOps()`, which resolves portal admission and nothing else. That is
+ * stated plainly rather than dressed up: this route's authority is UNRESOLVED, not enforced. What
+ * bounds it is the flag above — dark in production, 404 when off — and the fact that it can neither
+ * send nor alter a message. The Communications lock asserts this exemption by name, so it cannot be
+ * quietly widened and cannot be forgotten.
+ *
+ * See `docs/platform/governance/assignments-authority-model-debt.md`.
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     if (!isCommsV2FlagEnabled("comms_v2_assignment")) {
