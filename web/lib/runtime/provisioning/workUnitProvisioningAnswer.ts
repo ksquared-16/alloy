@@ -1938,8 +1938,15 @@ export async function composeWorkUnitProvisioningAnswer(
              * is deliberately null: no projection reads it — verified across both card projectors —
              * and inventing a server-side one would be guessing at a viewer's lens.
              */
+            /*
+             * ALWAYS PROJECT, even with no stage slice.
+             *
+             * The client always built evidence — `buildBusinessProcessCardEvidence` over a context
+             * with null published inputs yields an empty-but-valid card. Returning null here instead
+             * would hand the renderer a case it never had, so the frame keeps the same shape it
+             * always did and the emptiness stays inside the projection.
+             */
             const stageSlice = focusPanelStageWork;
-            if (!stageSlice) return null;
             const startedAt = now();
             const projected = projectFocusPanelOperational({
                 context: buildCommitCriticalOperationalContext({
@@ -1952,8 +1959,8 @@ export async function composeWorkUnitProvisioningAnswer(
                     statusKey: currentBusinessState?.stageKey ?? null,
                     canMutate: req.canMutate ?? false,
                     perspective: null,
-                    stageWorkRuntime: stageSlice.stage_work_runtime ?? null,
-                    publishedStageInputs: stageSlice.published_stage_inputs ?? null,
+                    stageWorkRuntime: stageSlice?.stage_work_runtime ?? null,
+                    publishedStageInputs: stageSlice?.published_stage_inputs ?? null,
                     situation: currentBusinessState
                         ? {
                               stageKey: currentBusinessState.stageKey,

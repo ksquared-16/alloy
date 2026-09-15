@@ -10,6 +10,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { EMPTY_BUSINESS_PROCESS_EVIDENCE } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
 import {
     adaptBusinessProcessEvidenceToProcessCard,
     type ProcessCardActionInput,
@@ -123,14 +124,13 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
     const projected = context.operationalProjection ?? null;
     const selectedParticipantId = context.participantScope?.participationId ?? null;
     const evidence = useMemo(() => {
-        const base = projected?.businessProcess.evidence ?? null;
-        if (!base) return null;
+        const base = projected?.businessProcess.evidence ?? EMPTY_BUSINESS_PROCESS_EVIDENCE;
         if (!selectedParticipantId) return base;
         return {
             ...base,
             participants: base.participants.map((p) => ({
                 ...p,
-                selected:
+                scoped:
                     p.id === selectedParticipantId || (p.customerMemberId ?? null) === selectedParticipantId,
             })),
         };

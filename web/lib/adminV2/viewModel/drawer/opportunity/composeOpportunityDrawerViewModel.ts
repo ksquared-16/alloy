@@ -261,7 +261,11 @@ export async function composeOpportunityDrawerViewModel(
                     // No projection function reads perspective — verified across both card
                     // projectors — and the server has no viewer lens to state.
                     perspective: null,
-                    statusLabel: viewModel.header?.status?.label ?? null,
+                    // `StatusControlVm` is a union; only the dropdown variant names a label.
+                    statusLabel:
+                        viewModel.header?.status && "label" in viewModel.header.status
+                            ? viewModel.header.status.label
+                            : null,
                     /*
                      * THE VM'S OWN VERDICT, not a second interpretation.
                      *
