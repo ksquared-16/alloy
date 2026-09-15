@@ -168,8 +168,16 @@ describe("F7 · one truth, two grains", () => {
         expect(src).toContain("alloy-accounts-command-host");
         const css = read("app/adminV2/components/alloyOsRuntime.css");
         expect(css).toContain(".alloy-accounts-command-host");
-        expect(css, "the account stays behind a scrim rather than being replaced")
-            .toMatch(/\.alloy-accounts-command-host:has\(> \[data-financials-overlay\]\)::before/);
+        /*
+         * A CLICKABLE backdrop, not a decorative one. This asserted a `::before` scrim, which cannot
+         * receive a click — so the only way out of a command was its own Cancel. It is a real
+         * element now, and it dismisses through the platform's return-to-base signal.
+         */
+        expect(css).toContain(".alloy-accounts-command-backdrop");
+        expect(css, "the account stays behind a scrim")
+            .toMatch(/\.alloy-accounts-command-host:has\(\[data-financials-overlay\]\)[^{]*\{[^}]*position: fixed/);
+        const detail = read("app/adminV2/financials/FinancialsAccountDetail.tsx");
+        expect(detail, "and the backdrop is clickable").toContain('data-financials-command-backdrop="true"');
         /*
          * BOUNDED, not a pinned number. This asserted `78svh` and then failed when the bound was
          * raised to fit the Add Charge footer — pinning the value locks the accident rather than
@@ -242,12 +250,76 @@ describe("F7 · one truth, two grains", () => {
          * LAYER does the bounding, so a laptop shows the whole form and a smaller viewport scrolls
          * the layer with the actions still reachable.
          */
-        const block = css.slice(css.indexOf(".alloy-accounts-command-host > [data-financials-overlay] .alloy-os-financials__preview"));
+        const block = css.slice(css.indexOf(".alloy-accounts-command-host [data-financials-overlay] .alloy-os-financials__preview"));
         const uncapped = block.slice(0, block.indexOf("}") + 1);
         expect(uncapped, "the command body is uncapped here").toContain("max-height: none");
         expect(uncapped, "and both inner caps are released").toContain(".alloy-os-ucard__body");
         expect(css, "while the layer itself stays bounded for smaller viewports")
             .toMatch(/\[data-financials-overlay\]\s*\{[^}]*max-height: min\(/);
+    });
+
+    /*
+     * ── DISMISSAL IS THE PLATFORM'S, NOT A FINANCIALS RULE ─────────────────────────────────────
+     *
+     * `FinancialsCard` already subscribes to `useDismissSignal(coordination, "financials", …)`, the
+     * Focus Panel's return-to-base path, which resets overlay, pending preview and command error
+     * together. The workspace never supplied a coordination object, so the signal had nowhere to
+     * come from. One handler raises it and every command the card can enter is covered — no
+     * per-command document listener, and no Financials-only cancellation doctrine.
+     */
+    it("dismisses commands through the platform signal, not a bespoke listener", () => {
+        const detail = read("app/adminV2/financials/FinancialsAccountDetail.tsx");
+        expect(detail).toContain("coordination={coordination}");
+        expect(detail).toMatch(/dismissed:[^,]*card: "financials"/);
+        expect(detail, "Escape is handled once, for whatever command is open").toContain('e.key !== "Escape"');
+        /* One scope-level listener is the platform shape; a listener per command is what is banned. */
+        expect((detail.match(/addEventListener/g) ?? []).length).toBeLessThanOrEqual(2);
+    });
+
+    /*
+     * PERIOD BELONGS WITH ACTIVITY. The summary led with the billing period while the ledger
+     * directly beneath it is period-aware, carries a period column and offers an All-periods
+     * filter — two statements of the same context. The Focus Panel keeps both, having no ledger.
+     */
+    it("keeps the billing period with the activity rather than in the account summary", () => {
+        const css = read("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).toMatch(/\.alloy-accounts-account-card[^{]*__period[^{]*\{[^}]*display: none/);
+        const detail = read(WORKSPACE_DETAIL);
+        expect(detail, "and the ledger still carries it").toContain("data-financials-filter");
+        expect(detail).toContain("periodKey");
+    });
+
+    /*
+     * ── ONE DATE RULE, THE PLATFORM'S ─────────────────────────────────────────────────────────
+     *
+     * A ledger row read `2026-12-01` beside a payment that read `Sep 14`. The presentation doctrine
+     * already forbids that — "Never YYYY-MM-DD on operator surfaces" — and Financials had a private
+     * `toLocaleDateString` plus five raw renders. Everything now routes through
+     * `formatQueueRowDateCompact`.
+     */
+    it("formats every operator-facing Financials date through the platform helper", () => {
+        const fmt = read("app/adminV2/financials/financialsFormat.ts");
+        expect(fmt).toContain("formatQueueRowDateCompact");
+        /*
+         * A CALL, not the word. This asserted the bare string and matched the comment that explains
+         * the removal — a test passing judgement on its own prose proves nothing about the code.
+         */
+        expect(fmt, "no private date formatting survives").not.toMatch(/toLocaleDateString\s*\(/);
+
+        const surfaces = [
+            WORKSPACE_DETAIL,
+            "app/adminV2/financials/sections/FinancialsCharges.tsx",
+            "app/adminV2/financials/sections/FinancialsActivity.tsx",
+            "app/adminV2/financials/sections/FinancialsPayments.tsx",
+            "app/adminV2/financials/sections/FinancialsOverview.tsx",
+            "components/admin/focusPanel/cards/FinancialsCard.tsx",
+        ];
+        for (const path of surfaces) {
+            const src = read(path);
+            /* A raw ISO date reaching JSX — `{row.date}`, `{x.serviceDate}`, `.slice(0, 10)`. */
+            expect(src, `${path} must not print a raw date`).not.toMatch(/\{\s*(row|t|p|e)\.(date|serviceDate|receivedAt|postedAt|dueDate)\s*(\?\?[^}]*)?\}/);
+            expect(src, `${path} must not truncate an ISO string for display`).not.toMatch(/\.slice\(0,\s*10\)\}/);
+        }
     });
 
     /*

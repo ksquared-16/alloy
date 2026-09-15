@@ -10377,15 +10377,25 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
  * `Cancel` returns the card to its normal tree, the overlay selector stops matching, and the
  * account is exactly as it was because it was never unmounted.
  */
-.alloy-accounts-command-host:has(> [data-financials-overlay])::before {
-    content: "";
+/*
+ * A CLICKABLE BACKDROP, not a decorative one. This was a `::before`, which cannot receive a click,
+ * so the only way out of a command was its own Cancel. It is a real element now and dismisses
+ * through the platform's own return-to-base signal — see `FinancialsAccountDetail`.
+ */
+.alloy-accounts-command-backdrop {
+    display: none;
+}
+
+.alloy-accounts-command-host:has([data-financials-overlay]) .alloy-accounts-command-backdrop {
+    display: block;
     position: fixed;
     inset: 0;
     background: rgba(16, 24, 32, 0.38);
     z-index: 60;
+    cursor: default;
 }
 
-.alloy-accounts-command-host > [data-financials-overlay] {
+.alloy-accounts-command-host [data-financials-overlay] {
     position: fixed;
     top: 50%;
     left: 50%;
@@ -10440,24 +10450,29 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
  * shadow. Inside the account surface that is a second box around the top half of one object, so it
  * is suppressed at whatever depth it sits. Only within this placement: the Focus Panel keeps it.
  */
-.alloy-accounts-account-card .alloy-os-ucard,
-.alloy-accounts-account-card .alloy-os-billing,
-.alloy-accounts-account-card .alloy-os-financials {
+/*
+ * The in-flow card chrome only. `:not([data-financials-overlay])` matters: a command layer carries
+ * the same `alloy-os-financials` class, and zeroing its radius stripped the very shell this pass is
+ * converging with the Focus Panel.
+ */
+.alloy-accounts-account-card .alloy-os-ucard:not([data-financials-overlay] *):not([data-financials-overlay]),
+.alloy-accounts-account-card .alloy-os-billing:not([data-financials-overlay]),
+.alloy-accounts-account-card .alloy-os-financials:not([data-financials-overlay]) {
     border: 0;
     border-radius: 0;
     background: transparent;
     box-shadow: none;
 }
 
-.alloy-accounts-account-card > .alloy-os-billing,
-.alloy-accounts-account-card > .alloy-os-financials,
+.alloy-accounts-account-card .alloy-os-billing,
+.alloy-accounts-account-card .alloy-os-financials,
 .alloy-accounts-account-card .alloy-os-ucard {
     padding: 0;
 }
 
 /* The command overlay is a real layer and keeps its own surface. */
-.alloy-accounts-account-card > [data-financials-overlay],
-.alloy-accounts-account-card > [data-financials-overlay] .alloy-os-ucard {
+.alloy-accounts-account-card [data-financials-overlay],
+.alloy-accounts-account-card [data-financials-overlay] .alloy-os-ucard {
     background: #fff;
 }
 
@@ -10467,7 +10482,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
  * simply grows to its content, and the action footer therefore stays on screen without scrolling at
  * a normal laptop height. A smaller viewport still scrolls, which is the point of the bound.
  */
-.alloy-accounts-command-host > [data-financials-overlay] .alloy-os-financials__preview,
+.alloy-accounts-command-host [data-financials-overlay] .alloy-os-financials__preview,
 /*
  * `UniversalCard` caps its body at 324px and scrolls it. Measured with the Add Charge form open at
  * 1280x720: the body wanted 547px, so it scrolled inside a layer that had room, and the action row
@@ -10475,7 +10490,109 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
  * low. Inside this layer the body grows and the LAYER does the bounding, so the actions stay on
  * screen at a laptop height and a smaller viewport scrolls the layer with the footer still reachable.
  */
-.alloy-accounts-command-host > [data-financials-overlay] .alloy-os-ucard__body {
+.alloy-accounts-command-host [data-financials-overlay] .alloy-os-ucard__body {
     max-height: none;
     overflow-y: visible;
+}
+
+/*
+ * ── THE COMMAND SHELL, TAKEN FROM THE FOCUS PANEL RATHER THAN APPROXIMATED ─────────────────────
+ *
+ * Focus Panel command pop-outs read as Alloy surfaces because of their border, radius and
+ * elevation; the workspace layer was drawing its own weaker approximation of the same thing. These
+ * are the panel's own values, applied once to whatever overlay the card enters, so Add Charge and
+ * Take Payment share one shell instead of resembling each other.
+ */
+.alloy-accounts-command-host [data-financials-overlay] {
+    border-radius: 14px;
+    border: 1px solid rgba(203, 213, 214, 0.9);
+    box-shadow:
+        0 1px 2px rgba(16, 24, 32, 0.04),
+        0 18px 44px rgba(16, 24, 32, 0.20);
+}
+
+/*
+ * The payment command was a bare form inside that shell — unlabelled rows, inputs with no field
+ * anatomy, and an action row that did not read as one. It borrows Add Charge's field grammar here
+ * rather than gaining a Financials-only style of its own.
+ */
+.alloy-accounts-command-host [data-financials-overlay="payment"] .alloy-os-financials__preview-summary {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: rgb(16, 24, 32);
+    margin-bottom: 0.125rem;
+}
+
+.alloy-accounts-command-host [data-financials-overlay="payment"] input,
+.alloy-accounts-command-host [data-financials-overlay="payment"] select {
+    width: 100%;
+    border: 1px solid rgba(203, 213, 214, 0.9);
+    border-radius: 8px;
+    padding: 0.4rem 0.55rem;
+    font-size: 0.8125rem;
+    background: #fff;
+    margin-top: 0.35rem;
+}
+
+.alloy-accounts-command-host [data-financials-overlay="payment"] .alloy-os-financials__preview-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.85rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(203, 213, 214, 0.55);
+}
+
+/*
+ * ── PERIOD BELONGS WITH ACTIVITY ───────────────────────────────────────────────────────────────
+ *
+ * The account summary led with "CURRENT PERIOD · September 2026", and the ledger directly beneath
+ * it is period-aware, carries a period column and offers an All-periods filter. Two statements of
+ * the same context, and the summary's job is the position rather than when it was created. Only
+ * the heading and the label go; the figures in that zone are the summary.
+ *
+ * The Focus Panel keeps both, because there is no ledger beneath it to carry the period.
+ */
+.alloy-accounts-account-card .alloy-os-billing__zone:first-child > .alloy-os-billing__zone-head,
+.alloy-accounts-account-card .alloy-os-billing__period {
+    display: none;
+}
+
+/* Field labels in the payment command, in Add Charge's own label grammar. */
+.alloy-accounts-command-host [data-financials-overlay="payment"] .alloy-os-financials__fieldlabel {
+    margin-top: 0.7rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(16, 24, 32, 0.45);
+}
+
+/*
+ * Primary and secondary, not two identical buttons. The commit is the pine action every Alloy
+ * command commits with; Cancel is the quiet one beside it.
+ */
+.alloy-accounts-command-host [data-financials-overlay="payment"] .alloy-os-financials__preview-actions button:first-child {
+    background: rgb(17, 122, 101);
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    padding: 0.45rem 0.9rem;
+    font-weight: 600;
+    font-size: 0.8125rem;
+}
+
+.alloy-accounts-command-host [data-financials-overlay="payment"] .alloy-os-financials__preview-actions button + button {
+    background: #fff;
+    border: 1px solid rgba(203, 213, 214, 0.9);
+    border-radius: 8px;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.8125rem;
+    color: rgba(16, 24, 32, 0.75);
+}
+
+/* The receipt context line was one unspaced run of figures. */
+.alloy-accounts-command-host [data-financials-overlay="payment"] .alloy-os-financials__note {
+    margin-top: 0.15rem;
+    color: rgba(16, 24, 32, 0.6);
+    font-size: 0.75rem;
 }

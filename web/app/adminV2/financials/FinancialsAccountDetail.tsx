@@ -20,11 +20,12 @@
  * reason; nothing here narrows it.
  */
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import FinancialsCard from "@/components/admin/focusPanel/cards/FinancialsCard";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 
 export default function FinancialsAccountDetail({
     customerId,
@@ -83,11 +84,66 @@ export default function FinancialsAccountDetail({
         [customerId, customerMemberId, participationId, displayName],
     );
 
+    /*
+     * ── BACKDROP AND ESCAPE DISMISS EVERY COMMAND, THROUGH THE PLATFORM'S OWN SIGNAL ────────────
+     *
+     * `FinancialsCard` already subscribes to `useDismissSignal(coordination, "financials", …)` — the
+     * Focus Panel's "return to base" path, which is what closes a command there on a backdrop click
+     * or ESC, and which resets the overlay, the pending preview and the command error together.
+     * The workspace simply never supplied a coordination object, so the signal had nowhere to come
+     * from and its command layers could only be closed from their own Cancel.
+     *
+     * So this raises that signal rather than inventing a second mechanism. ONE handler covers every
+     * command the card can enter — Add Charge, Take Payment, adjustments, moves, reversals — because
+     * the card resets its own overlay state, whatever it happened to be in. No per-command document
+     * listener, and no Financials-only cancellation rule.
+     *
+     * A click INSIDE the layer never reaches this: the backdrop element is a sibling behind it.
+     */
+    const [dismissNonce, setDismissNonce] = useState(0);
+    const hostRef = useRef<HTMLDivElement | null>(null);
+    const dismiss = useCallback(() => setDismissNonce((n) => n + 1), []);
+
+    const coordination = useMemo<FocusPanelCoordination>(
+        () => ({
+            request: null,
+            requestFocus: () => {},
+            dismissed: dismissNonce > 0 ? { card: "financials", nonce: dismissNonce } : null,
+            dismiss: () => setDismissNonce((n) => n + 1),
+        }),
+        [dismissNonce],
+    );
+
+    /* ESC, matching the platform: the same return-to-base the Focus Panel gives a focused card. */
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            const open = hostRef.current?.querySelector("[data-financials-overlay]");
+            if (open) dismiss();
+        };
+        document.addEventListener("keydown", onKey);
+        return () => document.removeEventListener("keydown", onKey);
+    }, [dismiss]);
+
     return (
-        <FinancialsCard
-            model={model}
-            context={context}
-            showDetailsAction={showDetailsAction}
-        />
+        <div ref={hostRef} data-financials-command-scope="true">
+            {/*
+             * The backdrop is a real element rather than a `::before`, so it can be clicked. It
+             * exists only while a command is open — `:has()` in the stylesheet gives it its size and
+             * scrim; with no command open it is an inert, zero-area node.
+             */}
+            <div
+                className="alloy-accounts-command-backdrop"
+                data-financials-command-backdrop="true"
+                aria-hidden="true"
+                onClick={dismiss}
+            />
+            <FinancialsCard
+                model={model}
+                context={context}
+                showDetailsAction={showDetailsAction}
+                coordination={coordination}
+            />
+        </div>
     );
 }

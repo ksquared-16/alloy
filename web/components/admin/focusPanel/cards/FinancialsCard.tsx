@@ -11,6 +11,7 @@ import {
 import ApprovedFinancialsCard from "@/components/operationalCards/FinancialsCard";
 import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
 import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
+import { formatQueueRowDateCompact } from "@/lib/presentation/presentationDateFormat";
 import CardCollectionField from "./CardCollectionField";
 import {
     useDismissSignal,
@@ -1690,6 +1691,13 @@ export default function FinancialsCard({
                         <p className="alloy-os-financials__note">
                             {money(payTarget.outstandingCents, currency)} outstanding
                         </p>
+                        {/*
+                         * LABELLED, like every other Alloy command field. This was three bare
+                         * controls in a column — an amount, a method and a payer with nothing
+                         * saying which was which, which is what made the command read as a raw form
+                         * rather than a financial operation.
+                         */}
+                        <p className="alloy-os-financials__fieldlabel">Amount</p>
                         <input
                             type="number"
                             min="0.01"
@@ -1699,6 +1707,7 @@ export default function FinancialsCard({
                             data-financials-payment-amount="true"
                             onChange={(e) => setPayAmount(e.target.value)}
                         />
+                        <p className="alloy-os-financials__fieldlabel">Method</p>
                         <select
                             value={payMethod}
                             aria-label="Payment method"
@@ -1742,6 +1751,8 @@ export default function FinancialsCard({
                          * somebody's SHARE remains a separate, explicit act.
                          */}
                         {vm.payerCandidates.length ? (
+                            <>
+                            <p className="alloy-os-financials__fieldlabel">Who paid</p>
                             <select
                                 value={payPayerPersonId}
                                 aria-label="Who paid"
@@ -1757,6 +1768,7 @@ export default function FinancialsCard({
                                     </option>
                                 ))}
                             </select>
+                            </>
                         ) : null}
                         <span className="alloy-os-financials__preview-actions">
                             <button
@@ -2133,7 +2145,7 @@ export default function FinancialsCard({
                                 {moveTargets.map((t) => (
                                     <option key={t.chargeId} value={t.chargeId}>
                                         {t.label}
-                                        {t.serviceDate ? ` · ${t.serviceDate}` : ""}
+                                        {t.serviceDate ? ` · ${formatQueueRowDateCompact(t.serviceDate)}` : ""}
                                         {` · ${(t.outstandingCents / 100).toLocaleString(undefined, {
                                             style: "currency",
                                             currency,
@@ -2620,7 +2632,12 @@ export default function FinancialsCard({
                     loading || subjectStillResolving ? (
                         <div className="alloy-os-financials__empty" data-financials-empty="loading" aria-busy="true">
                             <div className="flex flex-wrap gap-x-8 gap-y-3">
-                                {["Current period", "Charges", "Past due"].map((label) => (
+                                {/*
+                                  * The labels the summary actually settles into. They used to read
+                                  * "Current period", which is the one field this surface no longer
+                                  * carries — a skeleton promising a field that never arrives.
+                                  */}
+                                {["Balance", "Past due", "Payments"].map((label) => (
                                     <div key={label}>
                                         <p className="text-[10px] uppercase tracking-wide text-alloy-midnight/40">{label}</p>
                                         <span
@@ -2980,7 +2997,7 @@ export default function FinancialsCard({
                                                         data-financials-row={row.chargeId}
                                                     >
                                                         <span className="alloy-os-financials__cell alloy-os-financials__cell--date">
-                                                            {row.date ?? "—"}
+                                                            {formatQueueRowDateCompact(row.date) || "—"}
                                                         </span>
                                                         <span className="alloy-os-financials__cell">
                                                             {row.subjectName ?? "—"}
