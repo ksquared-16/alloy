@@ -10,7 +10,14 @@ export type FocusPanelCommitCriticalInput = {
     subjectId: string;
     statusKey: string | null;
     stageWorkRuntime: StageWorkRuntimeProjection | null;
-    publishedStageInputs: PublishedStageInputsForCurrentWork | null;
+    /**
+     * SERVER-SIDE PROJECTION INPUT ONLY — optional, and the browser no longer supplies it.
+     *
+     * The server chokepoint builds its context from the answer directly and needs this; the browser
+     * carries the PROJECTION instead, so every client call site omits it. Kept on the type because
+     * the server path still names it, not because anything on the wire does.
+     */
+    publishedStageInputs?: PublishedStageInputsForCurrentWork | null;
     /** The server's operational projection for this subject, commit frame. */
     operationalProjection?: FocusPanelOperationalProjection | null;
     situation: { stageKey: string; stageLabel: string; purpose: string | null } | null;
