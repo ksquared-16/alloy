@@ -174,12 +174,30 @@ export default function DirectorQaClient() {
         const at = resume();
         if (at.started) setView({ mode: "scenario", index: at.index });
         else setView((v) => (v.mode === "landing" ? { mode: "landing", index: at.index } : v));
-    }, [scope, walkthrough.length, resume]);
+        /* A restore is not a move; writing back what it just read is how the clobber got in. */
+        if (at.source !== "stored" && scope && walkthrough[at.index]) {
+            writePosition(scope, walkthrough[at.index].key, at.started);
+        }
+    }, [scope, walkthrough, resume]);
 
-    useEffect(() => {
-        if (!scope || !restoredRef.current || !current) return;
-        writePosition(scope, current.key, view.mode === "scenario");
-    }, [scope, current, view.mode]);
+    /*
+     * POSITION IS WRITTEN BY THE MOVE, NEVER MIRRORED FROM A RENDER.
+     *
+     * This surface carried the identical defect the local reader did: an effect wrote whatever
+     * `current` happened to be, and on every mount it fired in the same commit as the restore,
+     * before React had applied the restored index — putting scenario 01 over the Director's real
+     * position for a window on every single load. An effect cannot tell "the Director moved" from
+     * "React rendered a default", which is exactly the distinction the rule turns on.
+     */
+    const goTo = useCallback(
+        (nextIndex: number, mode: "landing" | "scenario" | "list" | "failures" | "demo") => {
+            const bounded = Math.max(0, Math.min(Math.max(walkthrough.length - 1, 0), nextIndex));
+            const target = walkthrough[bounded];
+            setView({ mode, index: bounded });
+            if (scope && target) writePosition(scope, target.key, mode === "scenario");
+        },
+        [scope, walkthrough],
+    );
 
     useEffect(() => {
         if (!scope || !current) return;
@@ -299,7 +317,7 @@ export default function DirectorQaClient() {
                 </Panel>
 
                 <div className="flex flex-wrap gap-2">
-                    <Primary onClick={() => setView({ mode: "scenario", index: resume().index })}
+                    <Primary onClick={() => goTo(resume().index, "scenario")}
                         testId="start-walkthrough">
                         {started ? "Resume walkthrough" : "Start walkthrough"}
                     </Primary>
@@ -473,10 +491,10 @@ export default function DirectorQaClient() {
             </Panel>
 
             <div className="flex flex-wrap justify-between gap-2">
-                <Secondary onClick={() => setView({ mode: "scenario", index: Math.max(0, view.index - 1) })}
+                <Secondary onClick={() => goTo(view.index - 1, "scenario")}
                     disabled={view.index === 0} testId="prev-scenario">← Previous</Secondary>
                 <Secondary onClick={() => setView({ mode: "landing", index: 0 })} testId="save-exit">Save &amp; exit</Secondary>
-                <Secondary onClick={() => setView({ mode: "scenario", index: Math.min(walkthrough.length - 1, view.index + 1) })}
+                <Secondary onClick={() => goTo(view.index + 1, "scenario")}
                     disabled={view.index >= walkthrough.length - 1} testId="next-scenario">Next scenario →</Secondary>
             </div>
         </Shell>

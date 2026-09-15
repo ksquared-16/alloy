@@ -51,9 +51,44 @@ import FinancialsAccountDetail from "@/app/adminV2/financials/FinancialsAccountD
 import FinancialsAccountWorkspaceDetail from "@/app/adminV2/financials/FinancialsAccountWorkspaceDetail";
 import { money, moneyExact } from "@/app/adminV2/financials/financialsFormat";
 import type { FinancialsReadState } from "@/app/adminV2/financials/useFinancialsReads";
-import { accountState, joinAccounts } from "@/lib/financials/workspace/accountsRail";
+import { accountState, joinAccounts, type AccountRow } from "@/lib/financials/workspace/accountsRail";
 import type { FinancialPositionCohort } from "@/lib/financials/workspace/resolveFinancialPosition";
 import type { FinancialSubjectCohort } from "@/lib/financials/workspace/resolveFinancialSubjects";
+
+/**
+ * THE ONE STATE A QUEUE ROW ASSERTS.
+ *
+ * Precedence, not a list: an account can be several of these at once and a row that said so would
+ * be a table. The order runs from what needs a decision now down to what needs none, so the chip an
+ * operator reads is always the most actionable true thing about the account.
+ *
+ * Every input is a field the position cohort already produced. Nothing here derives money.
+ */
+function RailState({ account }: { account: AccountRow }) {
+    const { tone, label } =
+        account.outstandingCents > 0
+            ? { tone: "due" as const, label: "Outstanding" }
+            : account.varianceCents !== 0
+              ? { tone: "due" as const, label: "Variance open" }
+              : account.suppressionCents > 0
+                ? { tone: "hold" as const, label: "Funding expected" }
+                : account.noActivity
+                  ? { tone: "quiet" as const, label: "No financial activity" }
+                  : { tone: "ok" as const, label: "Settled" };
+
+    const skin =
+        tone === "due" ? "bg-alloy-ember/10 text-alloy-ember"
+        : tone === "hold" ? "bg-alloy-bend-pine/10 text-alloy-bend-pine"
+        : tone === "ok" ? "bg-alloy-midnight/[0.06] text-alloy-midnight/65"
+        : "bg-alloy-stone/15 text-alloy-midnight/50";
+
+    return (
+        <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${skin}`}
+            data-financials-rail-state={label.toLowerCase().replace(/ /g, "_")}>
+            {label}
+        </span>
+    );
+}
 
 export default function FinancialsAccounts({
     position,
@@ -94,7 +129,28 @@ export default function FinancialsAccounts({
              * collected, and the one thing about it that wants attention. Anything further down
              * the hierarchy belongs to the detail, not to a row somebody is scanning.
              */}
-            <WorkspaceSurface className="flex min-h-0 w-[17.5rem] shrink-0 flex-col overflow-hidden">
+            {/*
+             * ── THE QUEUE MUST NOT CONSUME HALF THE PRODUCT ────────────────────────────────────
+             *
+             * Bounded rather than proportional-without-limit: roughly 30% of the surface, and never
+             * below 280px or above 360px, so the rail stays a queue at any container width and the
+             * account being worked always gets the remaining two thirds.
+             */}
+            <div
+                className="flex min-h-0 shrink-0 flex-col"
+                /*
+                 * SIZED FROM OUTSIDE, AND IN A STYLE RATHER THAN A CLASS.
+                 *
+                 * `WorkspaceSurface` hardcodes `flex-1` ahead of whatever className it is given, and
+                 * in a flex row `flex: 1 1 0%` beats any width utility — which is why the rail was
+                 * measured at 49% of the surface while carrying a 280px class that looked applied.
+                 * A width class on that component cannot win; an inline style on a wrapper always
+                 * does, and does not depend on which order Tailwind happened to emit two rules in.
+                 */
+                style={{ width: "clamp(280px, 30%, 360px)" }}
+                data-financials-accounts-rail="true"
+            >
+            <WorkspaceSurface className="flex h-full min-h-0 flex-col overflow-hidden">
                 <div className="min-h-0 flex-1 overflow-y-auto" data-financials-accounts-list="true">
                     {readError ? (
                         <p className="px-3 py-4 text-xs text-alloy-ember" data-financials-accounts-error="true">
@@ -123,45 +179,50 @@ export default function FinancialsAccounts({
                                         : "border-l-[3px] border-l-transparent"
                                 }`}
                             >
+                                {/*
+                                 * ── ONE ROW, THREE LINES, IN ALLOY'S QUEUE GRAMMAR ─────────────
+                                 *
+                                 * Household, then the two figures that decide whether to open it,
+                                 * then ONE state line where there is something to say. Five metrics
+                                 * on every row is a table; this is a queue, and a queue is scanned.
+                                 */}
                                 <span className="flex items-baseline justify-between gap-2">
                                     <span className="truncate text-[13px] font-medium text-alloy-midnight">
                                         {account.householdName ?? "Household"}
                                     </span>
                                     <span
-                                        className="shrink-0 text-[13px] tabular-nums text-alloy-midnight"
+                                        className="shrink-0 text-[13px] font-medium tabular-nums text-alloy-midnight"
                                         data-financials-account-outstanding={account.customerId}
                                     >
                                         {moneyExact(account.outstandingCents, account.currencyCode)}
                                     </span>
                                 </span>
-                                <span className="mt-0.5 block truncate text-xs text-alloy-midnight/60">
-                                    {/*
-                                     * Collectible is shown beside outstanding, never instead of it: the gap
-                                     * between them is a submitted subsidy claim doing its job, and hiding
-                                     * one of the two figures is how that gap becomes unexplainable.
-                                     */}
-                                    {/*
-                                      * THREE ZERO STATES, AND THEY ARE NOT THE SAME SENTENCE.
-                                      *
-                                      * A settled account has paid what it owed. An account with no
-                                      * activity has never been billed — it is open, and the next
-                                      * thing that happens on it is a first charge. Rendering either
-                                      * as a bare row of zeroes leaves an operator to guess which,
-                                      * and guessing wrong on the second one is how a family gets
-                                      * chased for money nobody ever raised.
-                                      */}
-                                    {account.noActivity
-                                        ? "No financial activity yet"
-                                        : account.outstandingCents <= 0
-                                            && account.suppressionCents <= 0
-                                            && account.varianceCents === 0
-                                          ? `Settled · ${account.charges} ${account.charges === 1 ? "charge" : "charges"}`
-                                          : `${money(account.collectibleCents, account.currencyCode)} collectible now`}
-                                    {account.suppressionCents > 0
-                                        ? ` · ${money(account.suppressionCents, account.currencyCode)} with an agency`
-                                        : ""}
-                                    {account.varianceCents !== 0 ? " · variance open" : ""}
-                                    {account.hasOrgScoped ? " · includes account-wide fees" : ""}
+                                {/*
+                                 * Collectible sits beside outstanding, never instead of it: the gap
+                                 * between them is a submitted subsidy claim doing its job, and
+                                 * hiding one of the two is how that gap becomes unexplainable.
+                                 */}
+                                <span className="mt-0.5 flex items-baseline justify-between gap-2 text-[11px] text-alloy-midnight/55">
+                                    <span className="truncate">
+                                        {account.noActivity
+                                            ? "Open · nothing billed"
+                                            : `${account.charges} ${account.charges === 1 ? "charge" : "charges"}`}
+                                        {account.hasOrgScoped ? " · account-wide fees" : ""}
+                                    </span>
+                                    {!account.noActivity ? (
+                                        <span className="shrink-0 tabular-nums">
+                                            {money(account.collectibleCents, account.currencyCode)} collectible
+                                        </span>
+                                    ) : null}
+                                </span>
+                                {/*
+                                 * THE ONE THING WORTH SAYING ABOUT THIS ACCOUNT, as a chip in the
+                                 * same state vocabulary the rest of the workspace uses. A settled
+                                 * account and an account nobody has billed are different facts and
+                                 * a row of zeroes tells them apart for nobody.
+                                 */}
+                                <span className="mt-1 block">
+                                    <RailState account={account} />
                                 </span>
                             </button>
                         ))
@@ -177,6 +238,7 @@ export default function FinancialsAccounts({
                     </p>
                 ) : null}
             </WorkspaceSurface>
+            </div>
 
             <WorkspaceSurface className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {!selected ? (
@@ -186,65 +248,57 @@ export default function FinancialsAccounts({
                     />
                 ) : (
                     <div className="flex min-h-0 flex-1 flex-col" data-financials-account-detail={selected}>
-                        <div className="border-b border-alloy-stone/10 px-3 py-2">
-                            {/* SCOPE, SAID OUT LOUD. The list is site-scoped; this is not. */}
-                            <p className="text-xs text-alloy-midnight/60" data-financials-detail-scope="account_wide">
-                                Account-wide financial detail
+                        {/*
+                         * IDENTITY COMMITS AT THE INSTANT OF THE CLICK.
+                         *
+                         * The household name and the scope of what follows are known from the row;
+                         * neither waits on a network read, so the selected account is never a bare
+                         * loading card. SCOPE, SAID OUT LOUD: the rail is site-scoped, this is not.
+                         */}
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-alloy-stone/10 px-4 py-2">
+                            <p className="truncate text-[15px] font-semibold text-alloy-midnight"
+                                data-financials-detail-household="true">
+                                {selectedAccount?.householdName ?? "Household"}
+                            </p>
+                            <p className="text-[11px] text-alloy-midnight/55" data-financials-detail-scope="account_wide">
+                                Account-wide · every site
                             </p>
                         </div>
-                        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
                             {/*
-                             * THE WORKSPACE GRAIN LEADS, AND SELECTION IS IMMEDIATE.
+                             * ── SUMMARY AND ACTIONS, THEN DETAIL. ONE HIERARCHY. ───────────────
                              *
-                             * NO `key` HERE, deliberately. Keying by the selected id remounted the
-                             * whole detail on every click, which is precisely why selecting an
-                             * account replaced the surface with "Reading the account…": a remount
-                             * has no state to render, so everything already known at the instant of
-                             * the click — the household, the section structure — was thrown away
-                             * along with the figures that genuinely had to be fetched. One instance
-                             * now persists and commits the new subject synchronously; the detail
-                             * drops any response that arrives for an account no longer selected.
+                             * The Focus Panel's Financials card is the summary object: balance,
+                             * past due, responsibility, received, payment state, and the financial
+                             * commands. It is COMPOSED rather than reimplemented — one capability,
+                             * several placements, one executor — and it is the ONLY summary on this
+                             * surface. The detail below used to carry a second metric band saying
+                             * the same numbers again; two summaries is not a hierarchy.
+                             */}
+                            <FinancialsAccountDetail
+                                key={`summary-${selected}`}
+                                customerId={selected}
+                                customerMemberId={null}
+                                participationId={null}
+                                displayName={selectedAccount?.householdName ?? null}
+                            />
+
+                            {/*
+                             * DETAIL IS VISIBLE, NOT BEHIND A COMMAND.
                              *
-                             * Same truth, different grain: both read `buildFinancialsCardVM`. An
-                             * account with nothing on it renders the same bands saying so, and a
-                             * read that FAILS renders none of them.
+                             * The operator is already in the Financials workspace and has already
+                             * chosen an account; making them press Details → to see its ledger asks
+                             * them to say so twice. Lenses decide what is emphasised, not whether
+                             * anything is shown.
+                             *
+                             * NO `key` on this one, deliberately: it holds the committed subject and
+                             * drops responses for an account no longer selected, which a remount
+                             * would throw away along with the rendered structure.
                              */}
                             <FinancialsAccountWorkspaceDetail
                                 customerId={selected}
                                 householdName={selectedAccount?.householdName ?? null}
                                 currencyCode={selectedAccount?.currencyCode}
-                                actions={
-                                    /*
-                                     * THE COMMANDS LIVE ON THE CARD, AND ARE PLACED HIGH.
-                                     *
-                                     * Add charge, Record payment, Add adjustment, Move and Apply and
-                                     * the reversals are implemented there. Re-implementing them here
-                                     * would be a second action path over the same money, so the card
-                                     * is COMPOSED rather than copied — one capability, several
-                                     * placements, one executor.
-                                     *
-                                     * It used to sit behind a disclosure beneath the entire ledger,
-                                     * which is the last place an operator looks for the thing they
-                                     * came to do. In the dedicated financial workspace it is open,
-                                     * above the record, where "what can I do next" is answered.
-                                     */
-                                    <section
-                                        className="rounded-xl border border-alloy-stone/15 bg-white/40 px-3 pb-3 pt-2"
-                                        data-financials-account-actions="true"
-                                        data-financials-account-actions-open="true"
-                                    >
-                                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45">
-                                            Financial actions
-                                        </p>
-                                        <FinancialsAccountDetail
-                                            key={`actions-${selected}`}
-                                            customerId={selected}
-                                            customerMemberId={null}
-                                            participationId={null}
-                                            displayName={selectedAccount?.householdName ?? null}
-                                        />
-                                    </section>
-                                }
                             />
                         </div>
                     </div>

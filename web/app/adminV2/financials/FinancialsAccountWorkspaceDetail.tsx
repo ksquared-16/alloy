@@ -82,20 +82,11 @@ export default function FinancialsAccountWorkspaceDetail({
     customerId,
     householdName = null,
     currencyCode = "USD",
-    actions = null,
 }: {
     customerId: string;
     /** Known at the instant of the click. The name never waits on a network read. */
     householdName?: string | null;
     currencyCode?: string;
-    /**
-     * The canonical command surface, composed by the caller and PLACED here.
-     *
-     * This file owns where the actions sit in the reading order — high, above the record — and owns
-     * nothing about what they do. Splitting it that way is what keeps "one capability, several
-     * placements, one executor" true as placements multiply.
-     */
-    actions?: React.ReactNode;
 }) {
     const [vm, setVm] = useState<Vm | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -176,67 +167,12 @@ export default function FinancialsAccountWorkspaceDetail({
         <div className="flex flex-col gap-3 pb-6" data-financials-workspace-detail={customerId}
             data-financials-detail-hydrated={loading ? "false" : "true"}>
 
-            {/* ── 1 · STATE BAND — what this account is, before anything else ───────────────────── */}
-            <section className="rounded-xl border border-alloy-stone/15 bg-white/70 px-4 py-3"
-                data-financials-state-band="true">
-                <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
-                    <div className="min-w-0">
-                        <p className="truncate text-[15px] font-semibold text-alloy-midnight"
-                            data-financials-detail-household="true">
-                            {name || "Household"}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
-                            <span data-financials-billing-period={String(vm?.period?.key ?? "")}>
-                                {loading ? <Skeleton w="7rem" /> : `Billing period · ${String(vm?.period?.label ?? "—")}`}
-                            </span>
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
-                        <Headline label="Outstanding" loading={loading} value={moneyExact(n(r.balanceCents), cur)} />
-                        <Figure label="Collectible now" loading={loading} value={moneyExact(n(c.currentlyCollectibleCents), cur)} />
-                        <Figure label="Gross charged" loading={loading} value={money(n(r.grossCents), cur)} />
-                        <Figure label="Payments received" loading={loading} value={money(n(r.paymentsCents), cur)} />
-                    </div>
-                </div>
-
-                {/* State reads as state: a chip, not a paragraph. Colour carries meaning, never decoration. */}
-                {!loading ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5" data-financials-state-chips="true">
-                        {pastDueCents > 0 ? <Chip tone="due">{money(pastDueCents, cur)} past due</Chip> : null}
-                        {n(vm?.responsibility?.unassignedCents) > 0 ? (
-                            <Chip tone="due" testId="unassigned">
-                                {moneyExact(n(vm?.responsibility?.unassignedCents), cur)} unassigned
-                            </Chip>
-                        ) : null}
-                        {n(c.submittedClaimSuppressionCents) > 0 ? (
-                            <Chip tone="hold">{money(n(c.submittedClaimSuppressionCents), cur)} with an agency</Chip>
-                        ) : null}
-                        {rows.length === 0 && payments.length === 0 ? (
-                            <Chip tone="quiet">No financial activity yet</Chip>
-                        ) : null}
-                        {rows.length > 0 && n(r.balanceCents) <= 0 && pastDueCents <= 0 ? (
-                            <Chip tone="ok">Settled</Chip>
-                        ) : null}
-                        <Chip tone="quiet">
-                            {(vm?.subjects ?? []).length
-                                ? `Billed for ${(vm?.subjects ?? []).map((s) => String(s.displayName)).join(", ")}`
-                                : "Household account"}
-                        </Chip>
-                    </div>
-                ) : null}
-            </section>
-
-            {/* ── 2 · WHAT CAN I DO NEXT — above the record, not beneath it ─────────────────────── */}
             {/*
-             * The commands are the card's. Re-implementing Add charge, Record payment, Add
-             * adjustment, Move and Apply here would be a second action path over the same money,
-             * which is exactly what the surface decision forbids — so the card is COMPOSED by the
-             * caller and only its PLACEMENT is decided here. It used to sit behind a disclosure
-             * underneath the whole ledger, which is the last place an operator looks for the thing
-             * they came to do.
+             * NO SUMMARY HERE. The Financials card composed directly above this is the account's
+             * one summary — balance, past due, responsibility, received, payment state, actions.
+             * This band used to repeat those figures under different labels, which gave the surface
+             * two summaries and no hierarchy. What follows is DETAIL, and only detail.
              */}
-            {actions}
-
             {/* ── 3 · THE MONEY, THROUGH ONE LENS AT A TIME ─────────────────────────────────────── */}
             <section className="rounded-xl border border-alloy-stone/15 bg-white/60" data-financials-lenses="true">
                 <div className="flex flex-wrap items-center gap-1 border-b border-alloy-stone/10 px-2 py-1.5">
@@ -311,7 +247,7 @@ export default function FinancialsAccountWorkspaceDetail({
                     ) : ledger.length === 0 ? (
                         <Empty>
                             {lens === "all"
-                                ? "Nothing has been charged on this account yet."
+                                ? "Nothing charged yet"
                                 : `No ${ACCOUNT_LENS_LABELS[lens].toLowerCase()} in this view.`}
                         </Empty>
                     ) : (
@@ -328,7 +264,7 @@ export default function FinancialsAccountWorkspaceDetail({
                         {loading ? (
                             <Skeleton w="12rem" />
                         ) : (vm?.responsibility?.parties ?? []).length === 0 ? (
-                            <Empty>No responsibility has been arranged for this account.</Empty>
+                            <Empty>No responsibility assigned</Empty>
                         ) : (
                             <ul className="space-y-1">
                                 {(vm?.responsibility?.parties ?? []).map((p) => (
@@ -342,11 +278,13 @@ export default function FinancialsAccountWorkspaceDetail({
                         )}
                     </div>
                     <div>
-                        <Sub>Expected funding</Sub>
+                        <Sub title="An expectation, not money received. It does not reduce what is owed.">
+                            Expected funding
+                        </Sub>
                         {loading ? (
                             <Skeleton w="12rem" />
                         ) : (vm?.expectedFunding ?? []).length === 0 ? (
-                            <Empty>Nothing is expected from a third party.</Empty>
+                            <Empty>No expected funding</Empty>
                         ) : (
                             <ul className="space-y-1">
                                 {(vm?.expectedFunding ?? []).map((f, i) => (
@@ -357,10 +295,14 @@ export default function FinancialsAccountWorkspaceDetail({
                                 ))}
                             </ul>
                         )}
-                        {/* The line the whole distinction exists for. */}
-                        <p className="mt-1 text-[11px] text-alloy-midnight/50">
-                            Expected funding is an expectation, not money received. It does not reduce what is owed.
-                        </p>
+                        {/*
+                         * THE DISTINCTION STAYS; THE PARAGRAPH GOES.
+                         *
+                         * Misreading expected funding as money received is a real financial risk, so
+                         * the warning is kept — but as a hint on the label rather than three lines of
+                         * teaching on every account an operator opens for the rest of the product's
+                         * life. Progressive disclosure, not permanent instruction.
+                         */}
                     </div>
                 </div>
                 {!loading && (vm?.unavailable ?? []).length ? (
@@ -453,7 +395,7 @@ function PaymentsLens({
     return (
         <>
             {payments.length === 0 ? (
-                <Empty>No money has been received on this account.</Empty>
+                <Empty>No payments received</Empty>
             ) : (
                 <ul className="space-y-3">
                     {payments.map((p) => <PaymentCard key={String(p.paymentId)} p={p} cur={cur} />)}
@@ -619,8 +561,11 @@ const LedgerSkeleton = () => (
     </div>
 );
 
-const Sub = ({ children }: { children: React.ReactNode }) => (
-    <p className="mb-1 text-[11px] uppercase tracking-wide text-alloy-midnight/45">{children}</p>
+const Sub = ({ children, title }: { children: React.ReactNode; title?: string }) => (
+    <p className={`mb-1 text-[11px] uppercase tracking-wide text-alloy-midnight/45 ${title ? "cursor-help decoration-dotted underline-offset-2 [text-decoration-line:underline]" : ""}`}
+        title={title}>
+        {children}
+    </p>
 );
 const Empty = ({ children }: { children: React.ReactNode }) => (
     <p className="text-sm text-alloy-midnight/50">{children}</p>

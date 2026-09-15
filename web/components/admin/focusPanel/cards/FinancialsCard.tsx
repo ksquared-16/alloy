@@ -2584,29 +2584,48 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 footerAction={null}
             >
                 {!vm ? (
-                    <p
-                        className="alloy-os-financials__empty"
-                        data-financials-empty={
-                            loading || subjectStillResolving
-                                ? "loading"
-                                : noFinancialSubject
-                                  ? "no-subject"
-                                  : "no-account"
-                        }
-                    >
-                        {/*
-                         * THREE STATES, AND ONLY ONE OF THEM IS TERMINAL.
-                         *
-                         * "No financial record" was wrong in every case it was shown. It reads as a
-                         * statement about the FAMILY — that they have no financial history — and
-                         * having no financial activity is a perfectly ordinary, fully supported
-                         * state that renders as $0.00 with Add charge available. What the card
-                         * actually meant was that it could not resolve an account to ask about.
-                         */}
-                        {loading || subjectStillResolving
-                            ? "Loading the account…"
-                            : "Financial account unavailable"}
-                    </p>
+                    /*
+                     * THREE STATES, AND ONLY ONE OF THEM IS TERMINAL.
+                     *
+                     * "No financial record" was wrong in every case it was shown. It reads as a
+                     * statement about the FAMILY — that they have no financial history — and having
+                     * no financial activity is a perfectly ordinary, fully supported state that
+                     * renders as $0.00 with Add charge available. What the card actually meant was
+                     * that it could not resolve an account to ask about.
+                     *
+                     * ── AND LOADING IS NOT A SENTENCE ──────────────────────────────────────────
+                     *
+                     * The unresolved state used to be one line of text in an otherwise empty card,
+                     * which in the Financials workspace — where this card is the account's primary
+                     * summary — meant selecting an account produced a large box reading "Loading the
+                     * account…" while the detail beneath it was already showing its ledger. The
+                     * card's own shape is known before its figures are, so the shape is what it
+                     * draws: labelled regions with placeholders inside them, never a number and
+                     * never a zero, because a placeholder mistaken for $0.00 is worse than a wait.
+                     */
+                    loading || subjectStillResolving ? (
+                        <div className="alloy-os-financials__empty" data-financials-empty="loading" aria-busy="true">
+                            <div className="flex flex-wrap gap-x-8 gap-y-3">
+                                {["Current period", "Charges", "Past due"].map((label) => (
+                                    <div key={label}>
+                                        <p className="text-[10px] uppercase tracking-wide text-alloy-midnight/40">{label}</p>
+                                        <span
+                                            aria-hidden
+                                            data-financials-card-skeleton="true"
+                                            className="mt-1 inline-block h-[1.1em] w-20 animate-pulse rounded bg-alloy-stone/25 align-middle"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <p
+                            className="alloy-os-financials__empty"
+                            data-financials-empty={noFinancialSubject ? "no-subject" : "no-account"}
+                        >
+                            Financial account unavailable
+                        </p>
+                    )
                 ) : (
                     <>
                         {/* ── CURRENT PERIOD · PAST DUE / PAYMENT ─────────────────────────────── */}

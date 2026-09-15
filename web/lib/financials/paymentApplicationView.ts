@@ -204,8 +204,14 @@ export async function resolveHouseholdPaymentViews(
                          * resolved here rather than patched in a component, so every surface reading
                          * this view gets the same answer.
                          *
-                         * The catalog returns the key unchanged for a category it does not know,
-                         * which is the honest floor: a label nobody configured is not invented here.
+                         * The catalog reads an unknown category ALOUD rather than handing back the
+                         * key — same words, minus the underscores — so no surface reading this view
+                         * can print a stored category key.
+                         *
+                         * A DESCRIPTION IS NOT A CATEGORY, and it wins here on purpose. It is what a
+                         * person typed about this charge, and rewriting somebody's own words to look
+                         * tidier would be the surface editing the record. A description that reads
+                         * like a key is a fact about what was written, not about this code.
                          */
                         chargeLabel:
                             charge?.description?.trim()

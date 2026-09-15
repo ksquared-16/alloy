@@ -292,3 +292,94 @@ export function clearDrafts(scope: QaScope, scenarioKey: string): void {
         /* nothing stored, nothing to clear */
     }
 }
+
+// ── THE SHELL, SO A RELOAD IS NOT A BLANK SCREEN ────────────────────────────────────────────────
+
+/**
+ * Enough to draw the walkthrough before the network answers.
+ *
+ * A reload used to show "Reading the environment…" for as long as the readiness read took — around
+ * a second and a half — and on a development server, where Fast Refresh reloads this route whenever
+ * anything in its module graph changes, the Director sees that flash constantly. Position was being
+ * restored correctly the whole time and it did not matter: a screen that goes blank and comes back
+ * reads as having been reset, whatever it does afterwards.
+ *
+ * DELIBERATELY NO MONEY. The cache holds the scenario catalog and the environment labels — the
+ * shape of the page — and nothing about a family's balance. Figures are re-read every time and show
+ * as pending until they arrive, because a cached balance is a stale balance, and a QA tool that
+ * showed one would be testifying about a number nobody just looked up. `sessionStorage`, so it dies
+ * with the tab.
+ */
+export type ShellCache<TScenario> = {
+    scenarios: TScenario[];
+    catalogVersion: string;
+    environment: string;
+    savedAt: string;
+};
+
+function shellKey(suiteKey: string, environment: string): string {
+    return `${ROOT}.${suiteKey}.${environment}.shell`;
+}
+
+function sessionStore(): Storage | null {
+    try {
+        if (typeof window === "undefined" || !window.sessionStorage) return null;
+        return window.sessionStorage;
+    } catch {
+        return null;
+    }
+}
+
+export function writeShellCache<TScenario>(
+    suiteKey: string,
+    environment: string,
+    value: Omit<ShellCache<TScenario>, "savedAt">,
+): void {
+    const s = sessionStore();
+    if (!s) return;
+    try {
+        s.setItem(shellKey(suiteKey, environment), JSON.stringify({ ...value, savedAt: new Date().toISOString() }));
+    } catch {
+        /* Quota or a refusing browser. The reader simply waits for the network, as it used to. */
+    }
+}
+
+export function readShellCache<TScenario>(suiteKey: string, environment: string): ShellCache<TScenario> | null {
+    const s = sessionStore();
+    if (!s) return null;
+    try {
+        const raw = s.getItem(shellKey(suiteKey, environment));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as ShellCache<TScenario>;
+        return Array.isArray(parsed?.scenarios) && parsed.scenarios.length ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Where the Director had scrolled to. Restored with the scenario, for the same reason.
+ *
+ * Coming back to the right scenario at the top of a long page is still losing your place.
+ */
+export function writeScroll(scope: QaScope, scenarioKey: string, y: number): void {
+    const s = sessionStore();
+    if (!s || !scenarioKey) return;
+    try {
+        s.setItem(`${ROOT}.${scope.suiteKey}.${scope.environment}.scroll.${scenarioKey}`, String(Math.round(y)));
+    } catch {
+        /* nothing to restore next time; the scenario still comes back */
+    }
+}
+
+export function readScroll(scope: QaScope, scenarioKey: string): number {
+    const s = sessionStore();
+    if (!s || !scenarioKey) return 0;
+    try {
+        const raw = s.getItem(`${ROOT}.${scope.suiteKey}.${scope.environment}.scroll.${scenarioKey}`);
+        const n = raw ? Number(raw) : 0;
+        return Number.isFinite(n) && n > 0 ? n : 0;
+    } catch {
+        return 0;
+    }
+}
