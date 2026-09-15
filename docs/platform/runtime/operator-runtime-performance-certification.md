@@ -1388,3 +1388,76 @@ reported, correctly: they differ by ~50 bytes and are near-copies rather than ex
 ### 23.5 Status
 
 `PROCESS PRODUCER — NOT SHIPPED.` §21.7 remains **TARGET, NOT YET MET**.
+
+## 24. C2 — the cutover found a SECOND producer of the raw payload
+
+Implementing the cutover — not auditing it — surfaced a fact every prior pass had missed, including
+§21–§23. All of them treated the provisioning answer as the sole producer of
+`published_stage_inputs`. **It is not.**
+
+### 24.1 What was built and verified
+
+The chokepoint wiring is written and typechecks clean (`vac run typecheck` rc=0):
+
+- `ProvisioningRequest` gains `canMutate`, threaded from the route gate as
+  `hasPortalAdminMutateAccess(gate.roleKeys)` — the same rule `useAdminAuth` applies client-side, so
+  the two cannot drift.
+- `workUnitProvisioningAnswer.ts` calls `projectFocusPanelOperational` at the assembly point through
+  `buildCommitCriticalOperationalContext`, timed via the route's existing `markSpan`.
+
+Two viewer-scoped inputs were checked rather than assumed:
+
+| input | verdict |
+| --- | --- |
+| `perspective` | read by **zero** projection functions — the server passing `null` is harmless |
+| `canMutate` | genuinely read (outcome completion). Server-derivable from the gate; at commit the browser uses `authCanMutate` too, because `resolveOpportunityVmStatusCanMutate` falls back to it until the drawer VM arrives |
+
+### 24.2 The blocker
+
+`OpportunityFocusPanelBody` builds its model **two ways**:
+
+```
+if (enriched)  -> focusPanelWorkModeModelFromDrawerVm(...)   <- SETTLED / steady state
+else           -> focusPanelWorkModeModelFromProvisioningAnswer(...)  <- commit frame only
+```
+
+The settled context comes from `buildOperationalContext`, which reads
+`subjectVm.workspace.published_stage_inputs` — put there by
+`applyStageWorkSliceToVm`, from the **drawer VM** endpoint
+(`/api/admin/view-models/drawer/opportunity/{id}`, measured at ~137KB in §21.2).
+
+So the provisioning answer is the **commit frame only**. In steady state — what the operator
+actually looks at — the cards project from the drawer VM's copy of the same configuration.
+
+**Consequences, and why the wiring was not promoted:**
+
+1. Removing `published_stage_inputs` from the provisioning answer alone yields **zero** steady-state
+   byte reduction.
+2. The client projection engine stays fully alive on the settled path, so Phase 5's zero-consumer
+   proof is unreachable by this route.
+3. Shipping the wiring on its own would **add** the projection's bytes to the commit frame with no
+   consumer — strictly worse — and recreate exactly the dual-authority state C1 avoided.
+
+### 24.3 Corrected scope for C2
+
+The chokepoint must be invoked in **both server producers** before either card is cut over:
+
+| producer | site |
+| --- | --- |
+| provisioning answer | `workUnitProvisioningAnswer.ts` assembly — **written, unpromoted** |
+| drawer view model | `composeOpportunityDrawerViewModel.ts` / `applyStageWorkSliceToVm.ts` |
+
+Then: cut both cards once, remove the raw payload from **both** producers, and re-measure. The
+§21.2 census already shows the drawer VM is the larger of the two carriers, so the payload win is
+bigger than §22 estimated — but it is not reachable in the order C2 assumed.
+
+The written wiring is preserved on `agent/focus-panel-c2-cutover` (`a2bb4e2f0`), deliberately not
+promoted.
+
+### 24.4 GO / NO-GO — Attendance / Health / Financials
+
+**NO-GO.** The measured blocker: no payload has moved, because the steady-state raw configuration
+is produced by the drawer VM rather than the provisioning answer, and the client projection engine
+is therefore still the operational authority. Criteria 1, 4 and 5 all fail on evidence.
+
+§21.7 remains **TARGET, NOT YET MET**. The client projection engine is **NOT** retired.
