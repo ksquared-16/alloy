@@ -310,7 +310,8 @@ export type FinancialsPeriod = {
 export type FinancialsCompact = {
     dueLine: string;
     lines: { label: string; value: string }[];
-    paymentLine: string;
+    /** Null when payment setup is unknown — the card then says nothing rather than claiming absence. */
+    paymentLine: string | null;
     paymentHealthy: boolean;
 };
 

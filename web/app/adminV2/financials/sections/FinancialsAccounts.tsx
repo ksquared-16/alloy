@@ -28,6 +28,7 @@ import { useMemo, useState } from "react";
 import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import FinancialsAccountDetail from "@/app/adminV2/financials/FinancialsAccountDetail";
+import FinancialsAccountWorkspaceDetail from "@/app/adminV2/financials/FinancialsAccountWorkspaceDetail";
 import { money, moneyExact } from "@/app/adminV2/financials/financialsFormat";
 import type { FinancialsReadState } from "@/app/adminV2/financials/useFinancialsReads";
 import type { FinancialPositionCohort } from "@/lib/financials/workspace/resolveFinancialPosition";
@@ -194,14 +195,44 @@ export default function FinancialsAccounts({
                             </p>
                         </div>
                         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                            {/* THREAD 2, UNFORKED. Its own read model, its own numbers. */}
-                            <FinancialsAccountDetail
-                                key={selected}
-                                customerId={selected}
-                                customerMemberId={null}
-                                participationId={null}
-                                displayName={null}
-                            />
+                            {/*
+                             * THE WORKSPACE GRAIN LEADS.
+                             *
+                             * This used to render the Focus Panel's compact card, which is the
+                             * contextual grain — summary-first, deliberately small, built for
+                             * reading financial context while working some OTHER subject. In the
+                             * dedicated financial workspace that left a small card marooned in a
+                             * large canvas and answered a question nobody had asked here.
+                             *
+                             * Same truth, different grain: both read `buildFinancialsCardVM`.
+                             */}
+                            <FinancialsAccountWorkspaceDetail key={selected} customerId={selected} />
+
+                            {/*
+                             * THE COMMANDS STILL LIVE ON THE CARD, AND SAY SO.
+                             *
+                             * Add charge, Add adjustment, Move and Apply payment and the reversals
+                             * are implemented there. Re-implementing them here would be a second
+                             * action path over the same money, which is exactly what the surface
+                             * decision forbids — so the card is composed BENEATH the account
+                             * detail as the action region rather than copied. Workspace-native
+                             * commands are named follow-up, not quietly skipped.
+                             */}
+                            <details className="mt-4 rounded-xl border border-alloy-stone/15 bg-white/40"
+                                data-financials-account-actions="true">
+                                <summary className="cursor-pointer px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45">
+                                    Financial actions
+                                </summary>
+                                <div className="px-3 pb-3">
+                                    <FinancialsAccountDetail
+                                        key={`actions-${selected}`}
+                                        customerId={selected}
+                                        customerMemberId={null}
+                                        participationId={null}
+                                        displayName={null}
+                                    />
+                                </div>
+                            </details>
                         </div>
                     </div>
                 )}

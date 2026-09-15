@@ -182,7 +182,19 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                     ? [{ label: "Collectible now", value: money(vm.collectible.currentlyCollectibleCents, currency) }]
                     : []),
             ],
-            paymentLine: vm.paymentSetup ?? "No payment method on file",
+            /*
+             * NOT KNOWING IS NOT THE SAME AS NONE.
+             *
+             * `vm.paymentSetup` is hardcoded null and has no producer anywhere in the codebase, so
+             * "No payment method on file" was not a fact about any tenant — it was a constant read
+             * back as evidence. The card asserted it for every household, including ones that may
+             * well have a method, and an operator acting on it would have been acting on nothing.
+             *
+             * Until something owns payment setup, the card says only what it can support. The
+             * unknown state is silence, not a claim of absence. See the
+             * PAYMENT_SETUP_AND_PAYER_PRODUCTIZATION follow-up.
+             */
+            paymentLine: vm.paymentSetup ?? null,
             paymentHealthy: Boolean(vm.paymentSetup),
         },
         subjects: vm.subjects.map((s) => s.displayName).filter((n): n is string => Boolean(n)),
