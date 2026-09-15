@@ -180,3 +180,44 @@ together, since a quiet host with an expired session, or a session with a noisy 
 nothing. Operator actions required: pause the other lanes' dev servers, approve the filed QA restore,
 and produce a production build with `ALLOY_ROUTE_TIMING=1`. The methodology in §5 and the standing
 evidence in §7 mean the next attempt should be measurement only.
+
+## 11. Addendum — governed QA restore executed, and what it actually delivered
+
+After this document was first written, the Director executed `environment.restore_qa_session`
+(`gar_3e1c928da6e10e` → `tha_4a93d7fa9f2fe7`) against target **`alloy_deployed_primary`**. Its result:
+
+```json
+{ "ok": true, "status": "restored", "lane_id": "lane_73a897409906", "slot": 1,
+  "registered_identity": "qa-slot1-product@example.com",
+  "storage_written": true, "verified": true, "failure_code": null }
+```
+
+**It does not unblock local measurement, and the result should not be read as saying it does.**
+Verified three ways rather than from the result:
+
+| Check | Finding |
+|---|---|
+| `vac browser-auth status --slot 1` | `authentication_valid`, `storage_captured_at 21:08:27Z`, expiry `22:08:27Z` |
+| slot-1 storage file | `~/.local/state/alloy-dev/auth/slot1/storage-state.json`, mtime **13:11:51** — the previous mint |
+| its cookies | all four `sb-…-auth-token` entries expire **14:11:51**, i.e. already expired |
+| headless load of `127.0.0.1:3011/workspace/work-unit/all` | redirects to **`/login`**, 0 rows |
+
+So the status command and the file Playwright loads are describing different stores: the deployed
+primary was restored, the loopback slot was not. The trusted-host record also carries
+`started_at == completed_at == created_at` (21:08:26.358Z) — the near-instant signature of work that
+did not happen for this target.
+
+The action was **not retried** from this lane, per the notification. The local slot still needs a
+loopback restore, which is a Director target choice, not this lane's to make.
+
+**Host, re-gated after the restore (14:14):** load 1-min **4.65** (limit 4) FAIL · trend PASS ·
+CPU idle 83.91% PASS · spotlight PASS · **competing node 10 others** FAIL → still
+*HOST NOT QUALIFIED*. Improving but not admissible; the persistent half is other lanes' dev servers.
+
+The gateway store shows why the host stays loud: `wt6-surfaces-faacca`, `access-identity` and the
+`vacilando` seed lane were all pushing/merging during this window. Worth noting for collision risk,
+not for this slice's decisions: **`wt6-surfaces-faacca` is committing to
+`workUnitProvisioningAnswer.ts` and `InlineOpportunityFocusPanel.tsx`** — two files this programme
+owns repairs in.
+
+**Blocker status unchanged: all three still stand.**
