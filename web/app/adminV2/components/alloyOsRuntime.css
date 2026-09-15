@@ -10433,6 +10433,30 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
+    /*
+     * ── THE CARD FILLS THE PANE; THE ACTIVITY INSIDE IT SCROLLS ────────────────────────────────
+     *
+     * It used to size to its content inside a scrolling wrapper, so a family with a year of history
+     * made the whole object — balance, Payment, Add charge, the lenses — travel upward out of sight.
+     * The card now takes the height it is given and hands the overflow to exactly one descendant,
+     * the financial-activity region. `min-height: 0` is the part that actually does it: without it a
+     * flex child refuses to shrink below its content and the inner scroller never engages.
+     */
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+}
+
+/*
+ * The summary keeps its natural height; the activity takes what is left. Every link in the chain
+ * down to the scroller must also agree to shrink, or the inner `overflow-y` never engages.
+ */
+.alloy-accounts-account-card > [data-financials-command-scope] {
+    flex: 0 0 auto;
+}
+.alloy-accounts-account-card > [data-financials-workspace-detail],
+.alloy-accounts-account-card [data-financials-lenses] {
+    min-height: 0;
 }
 
 /* The card inside no longer draws a second box around the top half of the same object. */

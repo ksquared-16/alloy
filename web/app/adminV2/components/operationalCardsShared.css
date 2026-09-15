@@ -1356,12 +1356,23 @@
 .alloy-os-billingdetail__row {
   display: grid;
   /*
-   * 56px fitted "Aug 20". Financial dates now carry the year — "Sep 14, 2026" — because a ledger
-   * date without one cannot be reconciled against a statement, and the column had to grow with the
-   * rule: at 56px the date ran into the Type beside it on every row.
+   * ── THE GRID IS PRIORITISED, NOT EQUALISED ────────────────────────────────────────────────
+   *
+   * Date, Type, Subject, Description, GL code, Amount, Status, Source.
+   *
+   * Two failures, one in each direction. Description originally held `1fr` and took every spare
+   * pixel while TYPE — a configured label like "One-time charge" — truncated to "One-time char…" on
+   * a full desktop; a truncated classification is unreadable in a way truncated free text is not.
+   * The first correction then over-corrected: the fixed tracks summed to more than the ledger had,
+   * and Description was measured at 55px. Both are the same mistake — allocating without measuring.
+   *
+   * These tracks are sized to the content they actually carry, and the total is checked against the
+   * ledger's real width so Description keeps a usable column: at the workspace's ~850px it lands
+   * near 200px, and it is the track that absorbs every extra pixel beyond that. The gap tightens
+   * from 10px to 8px for the same reason — seven gaps is a column's worth of space.
    */
-  grid-template-columns: 92px 88px 82px minmax(0, 1fr) 124px 88px 96px 140px;
-  gap: 10px;
+  grid-template-columns: 80px 116px 84px minmax(0, 1fr) 92px 82px 72px 80px;
+  gap: 8px;
   align-items: baseline;
   min-height: 21px;
   padding: 1px 0;
@@ -1421,6 +1432,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/*
+ * TYPE IS A CLASSIFICATION AND A TRUNCATED CLASSIFICATION IS UNREADABLE. It keeps the ellipsis as a
+ * last resort at very narrow widths, but it is never the column asked to give way first — that is
+ * Description, which is free text and flexes by construction.
+ */
+.alloy-os-billingdetail__type { min-width: 0; }
 .alloy-os-billingdetail__desc {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1803,6 +1820,16 @@
   font-size: 1rem;
   font-weight: 700;
 }
+/*
+ * PEERS. Equal label, equal value, equal baseline — the account summary's three figures answer one
+ * question between them and none of them outranks the others. Semantic colour still applies.
+ */
+.alloy-os-fdetail__strip--peers .alloy-os-fdetail__statvalue {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.alloy-os-fdetail__strip--peers { align-items: baseline; gap: 6px 32px; }
+
 .alloy-os-fdetail__stat[data-tone="due"] .alloy-os-fdetail__statvalue { color: #b45309; }
 .alloy-os-fdetail__stat[data-tone="ok"] .alloy-os-fdetail__statvalue { color: var(--alloy-os-bend-pine, #00a283); }
 .alloy-os-fdetail__payers {
@@ -1841,6 +1868,33 @@
  * workspace, which reads as a neutral chip rather than a live selection, and a hardcoded green
  * would be a sixth definition of the brand colour.
  */
+/*
+ * ── THE DETAIL'S CONTROLS STAY; ITS RECORD SCROLLS ────────────────────────────────────────────
+ *
+ * The card body used to scroll as a whole, so reading August took the balance, the two commands
+ * and the lenses off the top of the panel. The body now holds its height and hands the overflow to
+ * one region — the ledger, payments, adjustments and upcoming beneath the lens bar.
+ *
+ * Scoped to the DETAIL card. The summary card and every command overlay keep the body scrolling
+ * they already had.
+ */
+.alloy-os-billing--detail > .alloy-os-ucard > .alloy-os-ucard__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.alloy-os-billing--detail .alloy-os-fdetail__rollup,
+.alloy-os-billing--detail .alloy-os-fdetail__lensbar {
+  flex: 0 0 auto;
+}
+.alloy-os-fdetail__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .alloy-os-fdetail__lensbar {
   display: flex;
   flex-wrap: wrap;

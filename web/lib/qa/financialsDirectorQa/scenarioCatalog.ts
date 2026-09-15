@@ -35,7 +35,7 @@
  * and this must be bumped whenever a scenario's meaning changes. Adding a scenario counts; fixing a
  * typo does not.
  */
-export const CATALOG_VERSION = "2026-09-15.3";
+export const CATALOG_VERSION = "2026-09-15.4";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -709,9 +709,11 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         doThis: [
             "Read the period heading the posted charge is grouped under, and the charge's own date.",
             "Confirm the date carries a YEAR — 'Dec 1, 2026', never '2026-12-01' and never 'Dec 1'.",
-            "Confirm the period heading reads as a period — 'September 2026' — not as a date.",
-            "Choose that period in the period filter, then choose All periods again.",
-            "Open the same account in a Focus Panel (Financials → Details) and compare the grouping.",
+            "Confirm the period heading reads as a period in WORDS — 'September 2026'. A heading, a filter option or a row that says '2026-09' is a defect: that is the period's internal identifier, not its name.",
+            "OPEN THE PERIOD FILTER and read the options themselves. Every option must read 'September 2026', 'October 2026'; none may read '2026-09'.",
+            "Choose that period in the filter and confirm the activity shown is that period's and only that period's; then choose All periods again and confirm the full history returns.",
+            "Check the other period surfaces for the same rule: the Charges list row context, the charge detail, and the result line after a bulk generation run.",
+            "Open the same account in a Focus Panel (Financials → Details) and compare the grouping and the filter options.",
         ],
         expectChanges: [
             "Filtering to one period shows only that period's rows.",
@@ -724,8 +726,10 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         invariant: MONEY_INVARIANTS.BILLING_PERIOD_IS_DERIVED,
         failSymptoms: [
             "A ledger date with no year, or a raw 2026-12-01.",
+            "A billing period shown as '2026-09' anywhere a human label belongs — a heading, a filter option, a row's context line, a run result.",
             "A charge grouped under a different period on the workspace than in the Focus Panel detail.",
             "The summary figures moving when a period filter is applied.",
+            "A period filter that returns activity from another period, or that hides activity belonging to the chosen one.",
             "A row with no usable date appearing in the current month rather than as unplaced.",
         ],
     }),
@@ -743,7 +747,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         requires: [],
         navigate: [],
         doThis: [
-            "NOT RUNNABLE. Do not substitute a database query for this scenario — a passing SELECT proves the trigger, not the product.",
+            "NOT RUNNABLE, and it does not become runnable by inspection. Do not substitute a database query for this scenario — a passing SELECT proves the trigger, not the product — and do not accept it on the strength of the BILLING period reading correctly. They are different periods with different owners.",
             "Smallest productization that would make it runnable, in order: (1) show the attributed accounting period on the charge/journal detail beside the billing period, read-only — the value already exists on the entry; (2) a read-only Accounting calendar view under Financials settings listing each period with its status and date range; (3) an operator-governed close/reopen action on that view, with the trigger's own refusal surfaced as the error.",
         ],
         expectChanges: [],

@@ -16,6 +16,21 @@ import { describe, expect, it } from "vitest";
 import { chargeCategoryLabel, isDeclaredChargeCategory } from "@/lib/financials/chargeCategories";
 
 const read = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
+
+/**
+ * The source with its comments removed.
+ *
+ * Three locks in this file have now been caught asserting their own EXPLANATORY PROSE: a comment
+ * saying why "Account-wide · every site" was removed contains the string, and a comment promising
+ * exactly one `overflow-y-auto` counts as a second one. A test that passes judgement on a comment
+ * proves nothing about the code, and — worse — a test that FAILS on a comment sends the next person
+ * to delete the explanation. Strip them and assert the code.
+ */
+function code(path: string): string {
+    return read(path)
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+}
 const WORKSPACE_DETAIL = "app/adminV2/financials/FinancialsAccountWorkspaceDetail.tsx";
 const ACCOUNTS = "app/adminV2/financials/sections/FinancialsAccounts.tsx";
 
@@ -294,7 +309,7 @@ describe("F7 · one truth, two grains", () => {
         expect(variant, "the account summary composes no period zone")
             .not.toMatch(/alloy-os-billing__period|Current period/);
         const detail = read(WORKSPACE_DETAIL);
-        expect(detail, "and the ledger still carries it").toContain("data-financials-filter");
+        expect(detail, "and the ledger still carries it").toContain("financials-filter-");
         expect(detail, "as a grouping, in the detail card's own period anatomy")
             .toContain("alloy-os-fdetail__periodhead");
         expect(detail).toContain("periodKey");
@@ -435,5 +450,217 @@ describe("F2 · the card does not claim a payment fact nothing produces", () => 
     it("preserves genuine ACH readiness", () => {
         const vm = read("lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM.ts");
         expect(vm).toContain("ach_readiness");
+    });
+});
+
+// ── PASS 5E · THE WORKSPACE FIT ─────────────────────────────────────────────────────────────────
+
+describe("F9 · the queue is a queue, and the account is already open", () => {
+    const ACCOUNTS_SRC = "app/adminV2/financials/sections/FinancialsAccounts.tsx";
+
+    /*
+     * A ROW IN THE HOUSE GRAMMAR, NOT A FINANCIAL LIST.
+     *
+     * Processing, the work-unit queue and the configuration rails all render one shell whose
+     * perimeter and elevation come from the Focus Panel card tokens. The rail used to draw its own
+     * flat divider list with a navy left edge, which is how it drifted from every other queue in
+     * the product. The lock is on the REUSE — a rail that hand-rolls the same look would pass a
+     * screenshot and fail the next time the house treatment changes.
+     */
+    it("renders account rows in the shared queue-row shell", () => {
+        const src = read(ACCOUNTS_SRC);
+        expect(src).toContain("QUEUE_ROW_CARD_SHELL_CLASS");
+        expect(src, "selected state is the canonical Bend Pine treatment")
+            .toContain("QUEUE_ROW_CARD_SELECTED_BORDER_CLASS");
+        expect(src, "and not a hand-rolled selection edge").not.toMatch(/border-l-alloy-midnight/);
+        /* The shell itself must still be the one the rest of the product uses. */
+        const shell = read("lib/presentation/runtime/queueRowCardShell.ts");
+        expect(shell).toContain("alloy-os-queue-row-card");
+        expect(shell).toMatch(/SELECTED_BORDER_CLASS[\s\S]{0,200}alloy-bend-pine/);
+    });
+
+    /*
+     * SELECTION IS DERIVED, NOT WRITTEN BY AN EFFECT.
+     *
+     * The Director QA harness lost the operator's position twice to an effect that wrote state
+     * during render. Auto-selection is the same shape of problem, so it is a pure function of the
+     * cohort and the operator's explicit choice — asserted directly in `accountQueue.test.ts`, and
+     * asserted HERE to be the thing the surface actually calls.
+     */
+    it("derives the open account instead of writing it from an effect", () => {
+        const src = read(ACCOUNTS_SRC);
+        expect(src).toContain("resolveAccountSelection");
+        expect(src, "no effect writes the selection").not.toMatch(/useEffect\([^)]*setChosen/);
+        expect(src, "the empty cohort still has its own state").toContain("No household account in scope");
+        expect(src, "and a narrowed-to-nothing queue says something different")
+            .toContain("No account matches these filters");
+    });
+
+    it("offers search, program and room — and never a second site control", () => {
+        const src = read(ACCOUNTS_SRC);
+        expect(src).toContain("data-financials-account-search");
+        expect(src).toContain("financials-account-program");
+        expect(src).toContain("financials-account-room");
+        /*
+         * Site scope is the workspace's, resolved server-side. A site filter inside the rail would
+         * be a second answer to a question that already has one — see `accountQueue`.
+         */
+        expect(src, "site is not re-offered inside the rail").not.toMatch(/All sites|site_location_id/);
+    });
+
+    it("names the household once, and states no scope sentence over it", () => {
+        const src = read(ACCOUNTS_SRC);
+        expect(src, "the selected row is the statement of which account is open")
+            .not.toContain("data-financials-detail-household");
+        expect(code(ACCOUNTS_SRC), "and the scope sentence is gone").not.toContain("Account-wide · every site");
+        expect(src, "identity survives for assistive technology").toMatch(/aria-label=\{`Financials — /);
+    });
+});
+
+describe("F10 · the controls stay; the activity scrolls", () => {
+    it("gives the account exactly one scroll owner, and it is the activity", () => {
+        const detail = read(WORKSPACE_DETAIL);
+        expect(detail, "the activity region owns the overflow").toContain("data-financials-activity-scroll");
+        const scrollers = code(WORKSPACE_DETAIL).match(/overflow-y-auto/g) ?? [];
+        expect(scrollers.length, "one scroller inside the account body, never two").toBe(1);
+        /* And the lens bar is outside it — controls do not travel with the record. */
+        expect(detail.indexOf("data-financials-lensbar")).toBeLessThan(
+            detail.indexOf("data-financials-activity-scroll"),
+        );
+
+        const css = read("app/adminV2/components/alloyOsRuntime.css");
+        expect(css, "the card takes the height it is given").toMatch(
+            /\.alloy-accounts-account-card \{[^}]*min-height: 0/,
+        );
+    });
+
+    it("applies the same principle inside Focus Panel Details", () => {
+        const card = read("components/operationalCards/FinancialsDetailCard.tsx");
+        expect(card).toContain("data-financials-detail-scroll");
+        expect(card.indexOf("data-financials-lenses")).toBeLessThan(card.indexOf("data-financials-detail-scroll"));
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        expect(css, "one scroller in the detail, not a second inside the modal").toMatch(
+            /\.alloy-os-fdetail__scroll \{[^}]*overflow-y: auto/,
+        );
+        expect(css).toMatch(/\.alloy-os-billing--detail[^{]*__body \{[^}]*overflow: hidden/);
+    });
+});
+
+describe("F11 · the three metrics are peers", () => {
+    it("gives current balance no more weight than due or past due", () => {
+        const card = read("components/operationalCards/FinancialsCard.tsx");
+        const variant = card.slice(card.indexOf("function FinancialsAccountSummaryCard"));
+        const summary = variant.slice(0, variant.indexOf("\nfunction ", 1));
+        expect(summary, "no emphasis on one of three peers").not.toMatch(/label="Current balance"[^/]*strong/);
+        expect(summary).toContain("alloy-os-fdetail__strip--peers");
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        expect(css, "and the peer treatment sets ONE value size").toMatch(
+            /__strip--peers \.alloy-os-fdetail__statvalue \{[^}]*font-size/,
+        );
+    });
+
+    it("renders the committed anatomy before the figures arrive", () => {
+        const card = read("components/operationalCards/FinancialsCard.tsx");
+        const pending = card.slice(card.indexOf("export function AccountSummaryPending"));
+        /* The same three labels, the same two commands, the same classes — so nothing moves. */
+        for (const label of ["Current balance", "Due", "Past due", "Payment", "Add charge"]) {
+            expect(pending.slice(0, 2000), `${label} is present in the pending frame`).toContain(label);
+        }
+        expect(pending.slice(0, 2000)).toContain("alloy-os-fdetail__strip--peers");
+        expect(pending.slice(0, 2000), "placeholders, never a zero that reads as a balance")
+            .not.toMatch(/\$0|0\.00/);
+        const host = read("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(host, "and the account placement uses it while loading").toContain("<AccountSummaryPending />");
+    });
+});
+
+describe("F12 · a billing period is named, not identified", () => {
+    /*
+     * `YYYY-MM` is the period's IDENTITY — what a filter carries and an `<input type="month">`
+     * holds — and never its NAME. A dated identifier where a human label belongs is the same
+     * doctrine violation as a raw ISO date on a ledger row, and it had leaked into four surfaces.
+     */
+    it("routes every operator-facing period label through the one authority", () => {
+        const authority = read("lib/financials/billingPeriod.ts");
+        expect(authority).toContain("export function billingPeriodLabel");
+
+        for (const path of [
+            "lib/financials/workspace/accountLenses.ts",
+            "lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts",
+            "app/adminV2/financials/sections/FinancialsCharges.tsx",
+            "app/adminV2/financials/sections/FinancialsBulkCharge.tsx",
+            WORKSPACE_DETAIL,
+        ]) {
+            expect(read(path), `${path} must label periods, not print their keys`)
+                .toContain("billingPeriodLabel");
+        }
+    });
+
+    it("does not print a period key where a label belongs", () => {
+        /* The filter's VALUE stays canonical; its LABEL does not. */
+        const lenses = read("lib/financials/workspace/accountLenses.ts");
+        expect(lenses).toContain("label: billingPeriodLabel(value)");
+        expect(lenses, "the value an operator's choice carries is still the key")
+            .toMatch(/byKey\.set\(value, \{ value,/);
+
+        const charges = read("app/adminV2/financials/sections/FinancialsCharges.tsx");
+        expect(charges, "no bare period key interpolated into a row").not.toMatch(/\$\{row\.periodKey\}/);
+        const bulk = read("app/adminV2/financials/sections/FinancialsBulkCharge.tsx");
+        expect(bulk, "the run result reads as a month").toContain("billingPeriodLabel(result.periodKey)");
+        expect(bulk, "and the month input still holds the key").toContain('type="month"');
+    });
+});
+
+describe("F13 · the ledger grid is prioritised", () => {
+    it("gives Type room to render a configured label and lets Description flex", () => {
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        const grid = /\.alloy-os-billingdetail__row \{[\s\S]*?grid-template-columns:\s*([^;]+);/.exec(css);
+        expect(grid, "the ledger declares its columns").toBeTruthy();
+        const tracks = grid![1]!.trim().split(/\s+(?![^(]*\))/);
+        expect(tracks.length, "eight columns: date, type, subject, description, gl, amount, status, source")
+            .toBe(8);
+        const px = (t: string) => Number((/^(\d+)px$/.exec(t) ?? [])[1] ?? NaN);
+        expect(px(tracks[1]!), "Type is fixed and wide enough for a configured label")
+            .toBeGreaterThanOrEqual(112);
+        expect(tracks[3], "Description is the column that flexes").toContain("minmax(0, 1fr)");
+        expect(px(tracks[0]!), "Date fits a year-bearing date").toBeGreaterThanOrEqual(78);
+
+        /*
+         * ── AND THE FIXED TRACKS MUST LEAVE DESCRIPTION A COLUMN ──────────────────────────────
+         *
+         * Widening Type is only half the correction. The first attempt made the seven fixed tracks
+         * sum to more than the ledger had, and Description — the flexible one — was measured on the
+         * running build at 55px. A budget that starves the flex track is the same defect as one
+         * that starves Type, and neither is visible in a rule that only checks Type's width.
+         *
+         * The workspace ledger measures ~850px at a 1512px viewport. Fixed tracks plus gaps must
+         * leave Description at least 180px there.
+         */
+        const gapMatch = /\.alloy-os-billingdetail__row \{[\s\S]*?gap:\s*(\d+)px/.exec(css);
+        const gap = Number(gapMatch?.[1] ?? 10);
+        const fixed = tracks.filter((t) => /^\d+px$/.test(t)).reduce((sum, t) => sum + px(t), 0);
+        const description = 850 - fixed - gap * 7;
+        expect(description, `Description would be ${description}px at the workspace's ledger width`)
+            .toBeGreaterThanOrEqual(180);
+
+        /* And the lab's copy still agrees — the review surface must not show a different ledger. */
+        const lab = read("app/dev/operational-card-lab/cardLab.css");
+        const labGrid = /\.alloy-os-billingdetail__row \{[\s\S]*?grid-template-columns:\s*([^;]+);/.exec(lab);
+        expect(labGrid![1]!.trim().replace(/\s+/g, " ")).toBe(grid![1]!.trim().replace(/\s+/g, " "));
+    });
+});
+
+describe("F14 · the queue filters are the house control", () => {
+    it("uses AlloySelect rather than a raw browser select", () => {
+        for (const path of [
+            "app/adminV2/financials/sections/FinancialsAccounts.tsx",
+            WORKSPACE_DETAIL,
+            "components/operationalCards/FinancialsDetailCard.tsx",
+        ]) {
+            const src = read(path);
+            expect(src, `${path} must use the platform dropdown`).toContain("AlloySelect");
+            expect(src, `${path} must not hand-roll a <select> for a filter`)
+                .not.toMatch(/<select\b[\s\S]{0,400}data-financials-filter/);
+        }
     });
 });

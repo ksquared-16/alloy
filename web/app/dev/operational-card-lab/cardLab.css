@@ -741,10 +741,24 @@
 }
 .alloy-os-billingdetail__row {
   display: grid;
-  /* Must equal the shared stylesheet's — see the lock in sharedStylesheetContract. Widened for
-     year-bearing financial dates. */
-  grid-template-columns: 92px 88px 82px minmax(0, 1fr) 124px 88px 96px 140px;
-  gap: 10px;
+  /*
+   * ── THE GRID IS PRIORITISED, NOT EQUALISED ────────────────────────────────────────────────
+   *
+   * Date, Type, Subject, Description, GL code, Amount, Status, Source.
+   *
+   * Two failures, one in each direction. Description originally held `1fr` and took every spare
+   * pixel while TYPE — a configured label like "One-time charge" — truncated to "One-time char…" on
+   * a full desktop; a truncated classification is unreadable in a way truncated free text is not.
+   * The first correction then over-corrected: the fixed tracks summed to more than the ledger had,
+   * and Description was measured at 55px. Both are the same mistake — allocating without measuring.
+   *
+   * These tracks are sized to the content they actually carry, and the total is checked against the
+   * ledger's real width so Description keeps a usable column: at the workspace's ~850px it lands
+   * near 200px, and it is the track that absorbs every extra pixel beyond that. The gap tightens
+   * from 10px to 8px for the same reason — seven gaps is a column's worth of space.
+   */
+  grid-template-columns: 80px 116px 84px minmax(0, 1fr) 92px 82px 72px 80px;
+  gap: 8px;
   align-items: baseline;
   min-height: 21px;
   padding: 1px 0;

@@ -33,6 +33,7 @@ import type { FinancialWorkQueueState } from "@/app/adminV2/financials/useFinanc
 import type { FinancialWorkRow } from "@/lib/financials/workspace/resolveFinancialWorkQueue";
 import type { FinancialPositionCohort, FinancialPositionRow } from "@/lib/financials/workspace/resolveFinancialPosition";
 import type { FinancialsReadState } from "@/app/adminV2/financials/useFinancialsReads";
+import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 
 /*
  * WORK AND RECORD ARE DIFFERENT QUESTIONS, and they get different lists.
@@ -329,7 +330,7 @@ export default function FinancialsCharges({
                                 <span className="mt-0.5 block truncate text-xs text-alloy-midnight/60">
                                     {row.categoryLabel}
                                     {row.childName ? ` · ${row.childName}` : ""}
-                                    {row.periodKey ? ` · ${row.periodKey}` : ""}
+                                    {row.periodKey ? ` · ${billingPeriodLabel(String(row.periodKey))}` : ""}
                                     {" · "}
                                     {/* Location is stated per row, including when it belongs to no site. */}
                                     {row.locationScope === "site" ? (row.siteName ?? "Site") : "Account-wide"}

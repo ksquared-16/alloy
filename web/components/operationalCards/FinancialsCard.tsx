@@ -340,8 +340,21 @@ function FinancialsAccountSummaryCard({
             >
                 <div className="alloy-os-fdetail__rollup" data-financials-account-summary="true">
                     <div className="alloy-os-fdetail__rollup-facts">
-                        <div className="alloy-os-fdetail__strip">
-                            <Stat label="Current balance" value={period.currentBalance} strong />
+                        {/*
+                         * ── THREE PEERS, AT ONE SIZE ───────────────────────────────────────────
+                         *
+                         * Current balance carried the detail card's `strong` treatment and was
+                         * therefore half again the size of the other two, which made a typographic
+                         * claim nobody intended: that the balance matters more than what can be
+                         * collected today or what is already late. On an ACCOUNT summary these are
+                         * three answers to one question and they rank equally.
+                         *
+                         * Colour still carries meaning — past due in the attention treatment, a
+                         * clear account in Bend Pine — because that is semantic rather than
+                         * hierarchical. Size is not.
+                         */}
+                        <div className="alloy-os-fdetail__strip alloy-os-fdetail__strip--peers">
+                            <Stat label="Current balance" value={period.currentBalance} />
                             <Stat label="Due" value={period.dueNow} />
                             <Stat
                                 label="Past due"
@@ -369,6 +382,48 @@ function FinancialsAccountSummaryCard({
                     </div>
                 </div>
             </UniversalCard>
+        </div>
+    );
+}
+
+/**
+ * THE ACCOUNT SUMMARY BEFORE ITS FIGURES — the same anatomy, with placeholders in the value slots.
+ *
+ * Exported so the Focus Panel adapter renders THIS while the account is read, rather than a second
+ * loading shape of its own. That is the whole point: the pending frame and the settled frame are
+ * the same components with the same classes in the same positions, so the API finishing changes
+ * text and never layout. A separate skeleton would drift from the card within a pass.
+ *
+ * The commands render, disabled and titled: an operator can see that Payment and Add charge are
+ * where they will be, and cannot fire one at an account whose position is not yet known.
+ */
+export function AccountSummaryPending() {
+    return (
+        <div className="alloy-os-fdetail__rollup" data-financials-account-summary="pending" aria-busy="true">
+            <div className="alloy-os-fdetail__rollup-facts">
+                <div className="alloy-os-fdetail__strip alloy-os-fdetail__strip--peers">
+                    {["Current balance", "Due", "Past due"].map((label) => (
+                        <span key={label} className="alloy-os-fdetail__stat">
+                            <span className="alloy-os-fdetail__statlabel">{label}</span>
+                            <span className="alloy-os-fdetail__statvalue">
+                                <span
+                                    aria-hidden
+                                    data-financials-card-skeleton="true"
+                                    className="inline-block h-[1em] w-[4.5rem] animate-pulse rounded bg-alloy-stone/25 align-middle"
+                                />
+                            </span>
+                        </span>
+                    ))}
+                </div>
+            </div>
+            <div className="alloy-os-fdetail__actions">
+                <Action primary disabled title="Reading the account" data-financials-command="payment">
+                    Payment
+                </Action>
+                <Action disabled title="Reading the account" data-financials-command="add_charge">
+                    Add charge
+                </Action>
+            </div>
         </div>
     );
 }

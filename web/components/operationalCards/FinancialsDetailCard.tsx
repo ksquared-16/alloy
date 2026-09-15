@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { useMemo, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { Action, ActionRow, FooterAction, SectionHead } from "@/components/cardLab/CardLabKit";
 import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import {
@@ -284,6 +285,16 @@ export default function FinancialsDetailCard({
                         ) : null}
                     </span>
                 </div>
+
+                {/*
+                  * ── THE SAME SCROLL OWNER, AT THE PANEL'S SMALLER HEIGHT ─────────────────────
+                  *
+                  * The rollup and the lens bar above are the controls; everything below is the
+                  * record. The record scrolls, the controls do not, and there is exactly ONE
+                  * scroller — the Focus Panel already bounds this card's height, and a second
+                  * scrollbar inside a bounded modal is two ways to move one surface.
+                  */}
+                <div className="alloy-os-fdetail__scroll" data-financials-detail-scroll="true">
 
                 {/* The ledger owns the detail. */}
                 {lens !== "payments" ? (
@@ -575,6 +586,8 @@ export default function FinancialsDetailCard({
                     </div>
                 ) : null}
 
+                </div>
+
                             </UniversalCard>
         </div>
     );
@@ -597,20 +610,21 @@ function LensFilter({
     placeholder: string;
     options: string[];
 }) {
+    /*
+     * The house dropdown, not a bare `<select>` — same reason as the workspace's copy: on macOS the
+     * native option menu is drawn by the OS and ignores the product's CSS, so a filter beside Bend
+     * Pine lenses rendered as a grey system control with a grey system popup.
+     */
     return (
-        <select
-            className="alloy-os-fdetail__filter"
-            data-financials-filter={testId}
+        <AlloySelect
             value={value}
-            onChange={(e) => onChange(e.target.value)}
-        >
-            <option value="">{placeholder}</option>
-            {options.map((o) => (
-                <option key={o} value={o}>
-                    {o}
-                </option>
-            ))}
-        </select>
+            onChange={onChange}
+            options={options.map((o) => ({ value: o, label: o }))}
+            placeholder={placeholder}
+            density="compact"
+            aria-label={placeholder}
+            testId={`financials-filter-${testId}`}
+        />
     );
 }
 

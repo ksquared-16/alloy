@@ -28,13 +28,17 @@
  * household that has no charges — a household with no charges has no figures, and zero is what the
  * absence of money looks like, not a number this file computed.
  *
- * ── THE ROW IS SCOPED; THE DETAIL IS NOT, AND IT SAYS SO ──
+ * ── THE ROW IS SCOPED; THE DETAIL IS NOT ──
  *
  * A row's figures obey the site filter, because the charges behind them do, and so does its
  * presence: the subject cohort applies the same location contract at subject grain. The account
  * detail beneath answers for a household ACROSS every site, which is the honest thing for a
- * household to mean — so the detail zone is labelled "Account-wide" rather than being filtered into
- * agreeing with the row above it.
+ * household to mean.
+ *
+ * That distinction used to be printed over every account as "Account-wide · every site". It is a
+ * fact about the PRODUCT, true of every household on every visit, and an operator cannot act on it;
+ * restating it forever spent a band of the surface teaching the same sentence. Scope is governed
+ * and stated by the workspace's own site context, which is where an operator changes it.
  *
  * ── OUTSTANDING, NOT A/R ──
  *
@@ -43,15 +47,32 @@
  * the name promises none.
  */
 
-import { useMemo, useState } from "react";
+import { Receipt } from "lucide-react";
+import { useDeferredValue, useMemo, useState } from "react";
 
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import FinancialsAccountDetail from "@/app/adminV2/financials/FinancialsAccountDetail";
 import FinancialsAccountWorkspaceDetail from "@/app/adminV2/financials/FinancialsAccountWorkspaceDetail";
 import { money, moneyExact } from "@/app/adminV2/financials/financialsFormat";
 import type { FinancialsReadState } from "@/app/adminV2/financials/useFinancialsReads";
+import {
+    NO_ACCOUNT_FILTER,
+    filterAccounts,
+    isAccountFilterActive,
+    programDivides,
+    programOptions,
+    resolveAccountSelection,
+    roomDivides,
+    roomOptions,
+} from "@/lib/financials/workspace/accountQueue";
 import { accountState, joinAccounts, type AccountRow } from "@/lib/financials/workspace/accountsRail";
+import {
+    QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
+    QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
+    QUEUE_ROW_CARD_SHELL_CLASS,
+} from "@/lib/presentation/runtime/queueRowCardShell";
 import type { FinancialPositionCohort } from "@/lib/financials/workspace/resolveFinancialPosition";
 import type { FinancialSubjectCohort } from "@/lib/financials/workspace/resolveFinancialSubjects";
 
@@ -90,6 +111,79 @@ function RailState({ account }: { account: AccountRow }) {
     );
 }
 
+/**
+ * ── THE ACCOUNT ROW, IN THE HOUSE QUEUE GRAMMAR ────────────────────────────────────────────────
+ *
+ * It was a flat divider list with a navy left edge: a financial list that happened to live in a
+ * workspace. Processing, the work-unit queue and the configuration rails all render the SAME card
+ * shell — `QUEUE_ROW_CARD_SHELL_CLASS`, whose perimeter and elevation come from the Focus Panel
+ * card tokens — and selected state there is a Bend Pine perimeter and tint, not a browser focus
+ * ring and not a decorative rail. Reusing the shell is what keeps this rail from drifting again the
+ * next time the house card treatment changes.
+ *
+ * The FINANCIAL meaning is preserved, because that is what makes this queue worth scanning:
+ * household identity, outstanding, collectible where it differs from outstanding, the state chip,
+ * and one line of secondary context. What it stops doing is inventing its own chrome to say them.
+ */
+function AccountQueueRow({
+    account,
+    selected,
+    onSelect,
+}: {
+    account: AccountRow;
+    selected: boolean;
+    onSelect: (customerId: string) => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={() => onSelect(account.customerId)}
+            data-financials-account-row={account.customerId}
+            data-financials-account-state={accountState(account)}
+            data-financials-account-selected={selected ? "true" : "false"}
+            aria-pressed={selected}
+            aria-current={selected ? "true" : undefined}
+            className={`${QUEUE_ROW_CARD_SHELL_CLASS} !px-2.5 !py-2 transition-colors ${
+                selected ? QUEUE_ROW_CARD_SELECTED_BORDER_CLASS : QUEUE_ROW_CARD_IDLE_BORDER_CLASS
+            }`}
+        >
+            <span className="flex items-baseline gap-1.5">
+                <Receipt className="h-3.5 w-3.5 shrink-0 translate-y-0.5 text-alloy-midnight/40" aria-hidden strokeWidth={2} />
+                <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-alloy-midnight/90">
+                    {account.householdName ?? "Household"}
+                </span>
+                <span
+                    className="shrink-0 text-[12.5px] font-semibold tabular-nums text-alloy-midnight/90"
+                    data-financials-account-outstanding={account.customerId}
+                >
+                    {moneyExact(account.outstandingCents, account.currencyCode)}
+                </span>
+            </span>
+            {/*
+             * Collectible sits beside outstanding, never instead of it: the gap between them is a
+             * submitted subsidy claim doing its job, and hiding one is how that gap becomes
+             * unexplainable.
+             */}
+            <span className="mt-0.5 flex items-baseline justify-between gap-2 text-[10px] text-alloy-midnight/45">
+                <span className="truncate">
+                    {account.noActivity
+                        ? "Open · nothing billed"
+                        : `${account.charges} ${account.charges === 1 ? "charge" : "charges"}`}
+                    {account.hasOrgScoped ? " · account-wide fees" : ""}
+                </span>
+                {!account.noActivity ? (
+                    <span className="shrink-0 tabular-nums">
+                        {money(account.collectibleCents, account.currencyCode)} collectible
+                    </span>
+                ) : null}
+            </span>
+            <span className="mt-1 block">
+                <RailState account={account} />
+            </span>
+        </button>
+    );
+}
+
 export default function FinancialsAccounts({
     position,
     subjects,
@@ -99,7 +193,24 @@ export default function FinancialsAccounts({
     subjects: FinancialsReadState<FinancialSubjectCohort>;
     scopeLabel: string;
 }) {
-    const [selected, setSelected] = useState<string | null>(null);
+    /*
+     * ── SELECTION IS A CONSEQUENCE OF THE COHORT, NOT A CLICK ──────────────────────────────────
+     *
+     * What is held here is the operator's EXPLICIT choice, which is usually nothing. The account
+     * actually open is derived from it and the visible cohort by `resolveAccountSelection`, so the
+     * workspace opens on the first account instead of on an empty canvas asking to be begun, and a
+     * choice that a filter narrows away is replaced rather than left rendering an account the queue
+     * no longer contains. Derivation rather than an effect: an effect that writes selection during
+     * render is how the QA harness lost the Director's position twice.
+     */
+    const [chosen, setChosen] = useState<string | null>(null);
+    const [filter, setFilter] = useState(NO_ACCOUNT_FILTER);
+    /*
+     * Typing must never wait on re-filtering two thousand rows. The input stays the operator's;
+     * the list catches up. React's own deferral rather than a hand-rolled debounce with a timer
+     * nobody owns.
+     */
+    const deferredSearch = useDeferredValue(filter.search);
 
     /*
      * A ROW IS COMPOSED ONLY WHEN BOTH SIDES WERE READ.
@@ -116,10 +227,27 @@ export default function FinancialsAccounts({
     const readError = position.error ?? subjects.error;
     const loading = (position.loading || subjects.loading) && accounts.length === 0;
     const truncated = Boolean(subjects.data?.truncated || position.data?.truncated);
-    const selectedAccount = accounts.find((a) => a.customerId === selected) ?? null;
+
+    /* The facets on offer describe the cohort, not the organisation — see `accountQueue`. */
+    const programs = useMemo(() => programOptions(accounts), [accounts]);
+    const rooms = useMemo(() => roomOptions(accounts), [accounts]);
+    /*
+     * Offered when choosing an option would actually narrow the queue — not merely when the cohort
+     * holds two distinct values. A centre with one classroom still has families outside it.
+     */
+    const showProgram = useMemo(() => programDivides(accounts, programs), [accounts, programs]);
+    const showRoom = useMemo(() => roomDivides(accounts, rooms), [accounts, rooms]);
+    const visible = useMemo(
+        () => filterAccounts(accounts, { ...filter, search: deferredSearch }),
+        [accounts, filter, deferredSearch],
+    );
+    const narrowed = isAccountFilterActive({ ...filter, search: deferredSearch });
+
+    const selected = resolveAccountSelection(visible, chosen);
+    const selectedAccount = visible.find((a) => a.customerId === selected) ?? null;
 
     return (
-        <div className="flex min-h-0 flex-1 gap-3" data-testid="financials-accounts-section">
+        <div className="flex min-h-0 flex-1 gap-2" data-testid="financials-accounts-section">
             {/*
              * ── THE RAIL IS A QUEUE, NOT A TABLE ───────────────────────────────────────────────
              *
@@ -150,81 +278,105 @@ export default function FinancialsAccounts({
                 style={{ width: "clamp(280px, 30%, 360px)" }}
                 data-financials-accounts-rail="true"
             >
-            <WorkspaceSurface className="flex h-full min-h-0 flex-col overflow-hidden">
-                <div className="min-h-0 flex-1 overflow-y-auto" data-financials-accounts-list="true">
+            {/*
+             * `padded={false}`: the surface's own `p-4 lg:p-6` put 24px of empty stone inside a
+             * 360px rail before the first queue row, and another 24 on the far side of the account
+             * pane. Between them they were most of the 40px trench between the rail and the card.
+             * The regions set their own, tighter padding — the rail is a queue and the account pane
+             * is a single card that should reach the edges of the canvas it was given.
+             */}
+            <WorkspaceSurface padded={false} className="flex h-full min-h-0 flex-col overflow-hidden">
+                {/*
+                 * ── THE QUEUE CONTROLS ─────────────────────────────────────────────────────────
+                 *
+                 * An operator opens Accounts to reach ONE family, and the way they reach it is a
+                 * name — usually a child's — or the room the child is in. Scrolling a rail of every
+                 * household in the organisation is not a way to reach anybody.
+                 *
+                 * Narrowing only. See `accountQueue`: these decide which rows are LISTED and can
+                 * never change what any household owes. And no site control here — the workspace
+                 * already owns site scope, server-side, and a second one would be a second answer.
+                 */}
+                <div className="flex flex-col gap-1.5 border-b border-alloy-stone/10 px-2 py-2"
+                    data-financials-accounts-controls="true">
+                    <input
+                        type="search"
+                        value={filter.search}
+                        onChange={(e) => setFilter((f) => ({ ...f, search: e.target.value }))}
+                        placeholder="Search household, child or contact"
+                        aria-label="Search accounts"
+                        data-financials-account-search="true"
+                        className="w-full rounded-lg border border-alloy-stone/25 bg-white px-2.5 py-1.5 text-[12px] text-alloy-midnight placeholder:text-alloy-midnight/40 focus:border-alloy-bend-pine/60 focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/15"
+                    />
+                    {/*
+                     * Offered only where they divide something — the same rule the ledger lenses
+                     * keep. A control with one choice reads as a capability the surface has not got.
+                     */}
+                    {showProgram || showRoom ? (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            {/* A width to be 100% OF — see the note on the detail's Filter. */}
+                            {showProgram ? (
+                                <span className="min-w-0 flex-1">
+                                    <AlloySelect
+                                        value={filter.programId ?? ""}
+                                        onChange={(v) => setFilter((f) => ({ ...f, programId: v || null }))}
+                                        options={programs.map((p) => ({ value: p.id, label: p.label }))}
+                                        placeholder="All programs"
+                                        density="compact"
+                                        aria-label="Filter by program"
+                                        testId="financials-account-program"
+                                    />
+                                </span>
+                            ) : null}
+                            {showRoom ? (
+                                <span className="min-w-0 flex-1">
+                                    <AlloySelect
+                                        value={filter.roomId ?? ""}
+                                        onChange={(v) => setFilter((f) => ({ ...f, roomId: v || null }))}
+                                        options={rooms.map((r) => ({ value: r.id, label: r.label }))}
+                                        placeholder="All rooms"
+                                        density="compact"
+                                        aria-label="Filter by room"
+                                        testId="financials-account-room"
+                                    />
+                                </span>
+                            ) : null}
+                        </div>
+                    ) : null}
+                </div>
+                <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-1.5" data-financials-accounts-list="true">
                     {readError ? (
                         <p className="px-3 py-4 text-xs text-alloy-ember" data-financials-accounts-error="true">
                             {readError}
                         </p>
                     ) : loading ? (
                         <p className="px-3 py-4 text-xs text-alloy-midnight/50">Loading accounts…</p>
-                    ) : accounts.length === 0 ? (
-                        <WorkspaceEmptyState
-                            title="No household account in scope"
-                            body={`No household has a financial account for ${scopeLabel.toLowerCase()}.`}
-                        />
+                    ) : visible.length === 0 ? (
+                        /*
+                         * TWO DIFFERENT EMPTIES. "Nothing matched what you typed" is recoverable by
+                         * clearing the box; "no household has an account in this scope" is not, and
+                         * telling an operator the second when the first is true sends them looking
+                         * for a data problem that does not exist.
+                         */
+                        narrowed ? (
+                            <WorkspaceEmptyState
+                                title="No account matches these filters"
+                                body="Clear the search or the program and room filters to see the full queue."
+                            />
+                        ) : (
+                            <WorkspaceEmptyState
+                                title="No household account in scope"
+                                body={`No household has a financial account for ${scopeLabel.toLowerCase()}.`}
+                            />
+                        )
                     ) : (
-                        accounts.map((account) => (
-                            <button
+                        visible.map((account) => (
+                            <AccountQueueRow
                                 key={account.customerId}
-                                type="button"
-                                onClick={() => setSelected(account.customerId)}
-                                data-financials-account-row={account.customerId}
-                                data-financials-account-state={accountState(account)}
-                                aria-current={selected === account.customerId ? "true" : undefined}
-                                /* A selected row is stated by an edge, not by a wash the eye loses. */
-                                className={`block w-full border-b border-alloy-stone/10 px-3 py-2 text-left transition hover:bg-alloy-stone/5 ${
-                                    selected === account.customerId
-                                        ? "border-l-[3px] border-l-alloy-midnight bg-alloy-midnight/[0.04] pl-[calc(0.75rem-3px)]"
-                                        : "border-l-[3px] border-l-transparent"
-                                }`}
-                            >
-                                {/*
-                                 * ── ONE ROW, THREE LINES, IN ALLOY'S QUEUE GRAMMAR ─────────────
-                                 *
-                                 * Household, then the two figures that decide whether to open it,
-                                 * then ONE state line where there is something to say. Five metrics
-                                 * on every row is a table; this is a queue, and a queue is scanned.
-                                 */}
-                                <span className="flex items-baseline justify-between gap-2">
-                                    <span className="truncate text-[13px] font-medium text-alloy-midnight">
-                                        {account.householdName ?? "Household"}
-                                    </span>
-                                    <span
-                                        className="shrink-0 text-[13px] font-medium tabular-nums text-alloy-midnight"
-                                        data-financials-account-outstanding={account.customerId}
-                                    >
-                                        {moneyExact(account.outstandingCents, account.currencyCode)}
-                                    </span>
-                                </span>
-                                {/*
-                                 * Collectible sits beside outstanding, never instead of it: the gap
-                                 * between them is a submitted subsidy claim doing its job, and
-                                 * hiding one of the two is how that gap becomes unexplainable.
-                                 */}
-                                <span className="mt-0.5 flex items-baseline justify-between gap-2 text-[11px] text-alloy-midnight/55">
-                                    <span className="truncate">
-                                        {account.noActivity
-                                            ? "Open · nothing billed"
-                                            : `${account.charges} ${account.charges === 1 ? "charge" : "charges"}`}
-                                        {account.hasOrgScoped ? " · account-wide fees" : ""}
-                                    </span>
-                                    {!account.noActivity ? (
-                                        <span className="shrink-0 tabular-nums">
-                                            {money(account.collectibleCents, account.currencyCode)} collectible
-                                        </span>
-                                    ) : null}
-                                </span>
-                                {/*
-                                 * THE ONE THING WORTH SAYING ABOUT THIS ACCOUNT, as a chip in the
-                                 * same state vocabulary the rest of the workspace uses. A settled
-                                 * account and an account nobody has billed are different facts and
-                                 * a row of zeroes tells them apart for nobody.
-                                 */}
-                                <span className="mt-1 block">
-                                    <RailState account={account} />
-                                </span>
-                            </button>
+                                account={account}
+                                selected={selected === account.customerId}
+                                onSelect={setChosen}
+                            />
                         ))
                     )}
                 </div>
@@ -240,14 +392,20 @@ export default function FinancialsAccounts({
             </WorkspaceSurface>
             </div>
 
-            <WorkspaceSurface className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <WorkspaceSurface padded={false} className="flex min-h-0 flex-1 flex-col overflow-hidden p-2">
                 {!selected ? (
                     <WorkspaceEmptyState
                         title="Select an account"
                         body="Choose a household to see its canonical financial detail."
                     />
                 ) : (
-                    <div className="flex min-h-0 flex-1 flex-col" data-financials-account-detail={selected}>
+                    <div
+                        className="flex min-h-0 flex-1 flex-col"
+                        data-financials-account-detail={selected}
+                        role="region"
+                        aria-label={`Financials — ${selectedAccount?.householdName ?? "Household"}`}
+                        data-financials-account-household={selectedAccount?.householdName ?? "Household"}
+                    >
                         {/*
                          * IDENTITY COMMITS AT THE INSTANT OF THE CLICK.
                          *
@@ -255,16 +413,36 @@ export default function FinancialsAccounts({
                          * neither waits on a network read, so the selected account is never a bare
                          * loading card. SCOPE, SAID OUT LOUD: the rail is site-scoped, this is not.
                          */}
-                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-alloy-stone/10 px-4 py-2">
-                            <p className="truncate text-[15px] font-semibold text-alloy-midnight"
-                                data-financials-detail-household="true">
-                                {selectedAccount?.householdName ?? "Household"}
-                            </p>
-                            <p className="text-[11px] text-alloy-midnight/55" data-financials-detail-scope="account_wide">
-                                Account-wide · every site
-                            </p>
-                        </div>
-                        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+                        {/*
+                         * ── THE HOUSEHOLD IS NAMED ONCE ────────────────────────────────────────
+                         *
+                         * It was named twice: in the selected queue row on the left, and again as a
+                         * large heading directly beside it. The selected row IS the statement of
+                         * which account is open — that is what selection means — and a second copy
+                         * of the same name spent a band of the operating surface saying nothing new.
+                         *
+                         * Identity does NOT disappear: the region is labelled with the household's
+                         * name for assistive technology, and the name is still on screen in the row
+                         * that is selected. What went is the duplicate visual heading.
+                         *
+                         * "Account-wide · every site" went with it. Scope is governed by the
+                         * workspace's own site context and stated there; restating it over every
+                         * account taught an operator nothing they could act on, and it is not
+                         * replaced by another explanatory sentence.
+                         */}
+                        {/*
+                         * ── THE CARD TAKES THE CANVAS ──────────────────────────────────────────
+                         *
+                         * A 12px pad around a surface that owns the whole right pane, rather than
+                         * the 16-20px of gutter that used to sit between the rail and the account.
+                         * The ledger is eight columns wide; every pixel spent on empty canvas here
+                         * is a pixel the Description column does not get.
+                         *
+                         * This element no longer OWNS the scroll — see the sticky note on the card
+                         * shell. The summary, the commands and the lenses stay put; the financial
+                         * activity beneath them is what moves.
+                         */}
+                        <div className="flex min-h-0 flex-1 flex-col">
                             {/*
                              * ── SUMMARY AND ACTIONS, THEN DETAIL. ONE HIERARCHY. ───────────────
                              *

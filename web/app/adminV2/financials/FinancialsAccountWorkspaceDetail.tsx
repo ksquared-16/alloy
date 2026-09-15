@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { money, moneyExact, shortDate } from "@/app/adminV2/financials/financialsFormat";
-import { billingPeriodFromKey } from "@/lib/financials/billingPeriod";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
+import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 import {
     ACCOUNT_LENSES,
     ACCOUNT_LENS_LABELS,
@@ -188,7 +189,19 @@ export default function FinancialsAccountWorkspaceDetail({
     const name = householdName ?? String(vm?.account?.label ?? "") ?? null;
 
     return (
-        <div className="flex flex-col" data-financials-workspace-detail={customerId}
+        /*
+         * ── ONE SCROLL OWNER, AND IT IS NOT THE ACCOUNT ────────────────────────────────────────
+         *
+         * The controls an operator works an account WITH — the balance, the two commands, the
+         * lenses and the context filters — used to scroll away the moment a family had a year of
+         * history, so reading September meant losing the Payment button. The card above this and
+         * the lens bar below stay put; the financial activity is what moves.
+         *
+         * A flex column with a min-height of zero and exactly ONE `overflow-y-auto` inside it,
+         * rather than sticky offsets that would need the summary's height as a magic number, and
+         * rather than a second scroller nested in the first.
+         */
+        <div className="flex min-h-0 flex-1 flex-col" data-financials-workspace-detail={customerId}
             data-financials-detail-hydrated={loading ? "false" : "true"}>
 
             {/*
@@ -203,8 +216,9 @@ export default function FinancialsAccountWorkspaceDetail({
              * is rendered inside, so it draws no border of its own — a bordered panel here would put
              * a card inside a card and reintroduce the two-object reading this pass removed.
              */}
-            <section className="border-t border-alloy-stone/15 pt-2" data-financials-lenses="true">
-                <div className="flex flex-wrap items-center gap-1 px-1 pb-1.5">
+            <section className="flex min-h-0 flex-1 flex-col border-t border-alloy-stone/15 pt-2" data-financials-lenses="true">
+                <div className="flex shrink-0 flex-wrap items-center gap-1 px-1 pb-1.5"
+                    data-financials-lensbar="true">
                     {ACCOUNT_LENSES.map((key) => (
                         <button
                             key={key}
@@ -222,11 +236,15 @@ export default function FinancialsAccountWorkspaceDetail({
                             }`}
                         >
                             {ACCOUNT_LENS_LABELS[key]}
-                            {!loading ? (
-                                <span className={`ml-1.5 tabular-nums ${lens === key ? "text-white/80" : "text-alloy-midnight/40"}`}>
-                                    {counts[key]}
-                                </span>
-                            ) : null}
+                            {/*
+                             * The count SLOT is always present, so the lens bar is the same width
+                             * before and after the read. It used to appear with the data and shift
+                             * every lens to its right — a control moving under the cursor at the
+                             * moment an operator reaches for it.
+                             */}
+                            <span className={`ml-1.5 inline-block min-w-[1.25ch] text-center tabular-nums ${lens === key ? "text-white/80" : "text-alloy-midnight/40"}`}>
+                                {loading ? "·" : counts[key]}
+                            </span>
                         </button>
                     ))}
 
@@ -235,7 +253,14 @@ export default function FinancialsAccountWorkspaceDetail({
                      * one payer would be a dropdown with a single choice, which reads as a
                      * capability this surface does not have. Every control shown here works.
                      */}
-                    <span className="ml-auto flex flex-wrap items-center gap-1.5">
+                    {/*
+                     * The filter row keeps its height while the account reads, for the same reason,
+                     * and stays on ONE line beside the lenses. It wrapped to a second row and then
+                     * stacked its two controls vertically, which read as a separate panel floating
+                     * to the right of the lens bar rather than as part of it.
+                     */}
+                    <span className="ml-auto flex min-h-[1.75rem] shrink-0 items-center gap-1.5"
+                        data-financials-filter-slot="true">
                         {!loading && lens !== "payments" && hasChoice(subjects) ? (
                             <Filter
                                 testId="subject"
@@ -266,7 +291,8 @@ export default function FinancialsAccountWorkspaceDetail({
                     </span>
                 </div>
 
-                <div className="py-1">
+                {/* THE SCROLL REGION BEGINS HERE — with the activity, never with the controls. */}
+                <div className="min-h-0 flex-1 overflow-y-auto py-1" data-financials-activity-scroll="true">
                     {loading ? (
                         <LedgerSkeleton />
                     ) : lens === "payments" ? (
@@ -288,11 +314,10 @@ export default function FinancialsAccountWorkspaceDetail({
                             canonicalTotals={canonicalPeriodTotals}
                         />
                     )}
-                </div>
-            </section>
-
-            {/* ── 4 · WHO OWES IT, AND WHO IS FUNDING IT ────────────────────────────────────────── */}
-            <section className="border-t border-alloy-stone/15 pt-2.5" data-financials-arrangements="true">
+            {/* ── 4 · WHO OWES IT, AND WHO IS FUNDING IT ────────────────────────────────────────
+                Inside the scroll region, beneath the ledger: it is context for the activity, not a
+                control, so it travels with what it explains. */}
+            <section className="mt-2.5 border-t border-alloy-stone/15 pt-2.5" data-financials-arrangements="true">
                 <div className="grid gap-4 md:grid-cols-2">
                     <div>
                         <Sub>Who owes it</Sub>
@@ -345,6 +370,8 @@ export default function FinancialsAccountWorkspaceDetail({
                         Not claimed here: {(vm?.unavailable ?? []).map((u) => String(u.fact)).join(", ")}.
                     </p>
                 ) : null}
+            </section>
+                </div>
             </section>
         </div>
     );
@@ -494,10 +521,9 @@ function LedgerPeriods({
     );
 }
 
-/** `2026-09` → `September 2026`. The billing period's own label authority, never a local map. */
+/** `2026-09` → `September 2026`, through the one authority. A row with no period is unplaced. */
 function periodLabel(key: string): string {
-    if (!/^\d{4}-\d{2}$/.test(key)) return "Unplaced";
-    return billingPeriodFromKey(key).label;
+    return billingPeriodLabel(key) || "Unplaced";
 }
 
 function PaymentsLens({
@@ -659,6 +685,19 @@ const Chip = ({ children, tone, testId }: { children: React.ReactNode; tone: "du
     );
 };
 
+/**
+ * A CONTEXT FILTER, IN THE PLATFORM'S OWN DROPDOWN — not a raw browser select.
+ *
+ * This was a bare `<select>`: a grey OS control with black text sitting beside Bend Pine lenses and
+ * Alloy buttons, and on macOS its open menu is painted by the operating system and ignores the
+ * product's CSS entirely. `AlloySelect` is the house control — the one the Financials workspace's
+ * own site filter already uses — and it owns the border, radius, chevron, hover, focus, open state
+ * and the white-and-midnight menu. Adopting it is how these stop being the one place in Financials
+ * that looks like an admin form.
+ *
+ * The count stays in the option label: it is the only reason to prefer one filter value over
+ * another before opening it.
+ */
 const Filter = ({ testId, value, onChange, placeholder, options }: {
     testId: string;
     value: string;
@@ -666,18 +705,23 @@ const Filter = ({ testId, value, onChange, placeholder, options }: {
     placeholder: string;
     options: Array<{ value: string; label: string; count: number }>;
 }) => (
-    <select
-        value={value}
-        aria-label={placeholder}
-        data-financials-filter={testId}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[12px] text-alloy-midnight"
-    >
-        <option value="">{placeholder}</option>
-        {options.map((o) => (
-            <option key={o.value} value={o.value}>{o.label} ({o.count})</option>
-        ))}
-    </select>
+    /*
+     * SIZED BY A WRAPPER, not by a class on the control. `.alloy-select` sets `width: 100%`, so a
+     * width utility on the same element is a specificity coin-toss against the primitive's own
+     * stylesheet — and as a bare flex item it collapsed to its content and truncated its own
+     * placeholder to "All perio…". The wrapper gives it a width to be 100% OF.
+     */
+    <span className="inline-block w-[10.5rem] shrink-0">
+        <AlloySelect
+            value={value}
+            onChange={onChange}
+            options={options.map((o) => ({ value: o.value, label: `${o.label} (${o.count})` }))}
+            placeholder={placeholder}
+            density="compact"
+            aria-label={placeholder}
+            testId={`financials-filter-${testId}`}
+        />
+    </span>
 );
 
 const LedgerSkeleton = () => (

@@ -95,6 +95,29 @@ export function billingPeriodFromKey(key: BillingPeriodKey): BillingPeriod {
     return { key, start, end, label: `${MONTHS[month - 1] ?? key} ${year}` };
 }
 
+/**
+ * THE OPERATOR'S NAME FOR A BILLING PERIOD — "September 2026", never "2026-09".
+ *
+ * `YYYY-MM` is the period's IDENTITY: it is what the reader groups by, what a filter carries, what
+ * an `<input type="month">` holds, and it must not change. It is not the period's NAME. A dated
+ * identifier printed where a human label belongs is the same doctrine violation as a raw ISO date
+ * on a ledger row — `docs/system/typography-and-presentation-doctrine.md` forbids both — and it had
+ * leaked into four places: the ledger's period filter, the Adjustments line on the detail card, the
+ * Charges list's row context and the bulk-generation result.
+ *
+ * One authority, so a fifth surface cannot invent a fifth spelling. An unparseable key is returned
+ * UNCHANGED rather than guessed at: a period this function does not recognise is a fact about the
+ * data, and quietly renaming it would hide that.
+ *
+ * NOT for accounting periods. Those carry a configured name of their own and follow it once a
+ * surface exists to show them — see `lib/financials/accountingPeriod.ts`.
+ */
+export function billingPeriodLabel(key: string | null | undefined): string {
+    const raw = typeof key === "string" ? key.trim() : "";
+    if (!/^\d{4}-\d{2}$/.test(raw)) return raw;
+    return billingPeriodFromKey(raw).label;
+}
+
 /** The period a given day falls in. */
 export function billingPeriodForDate(ymd: string): BillingPeriod {
     return billingPeriodFromKey(ymd.slice(0, 7));

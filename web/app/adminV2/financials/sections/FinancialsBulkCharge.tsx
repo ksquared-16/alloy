@@ -41,6 +41,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import { moneyExact } from "@/app/adminV2/financials/financialsFormat";
+import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 
 const GENERATE_TUITION_ACTION_KEY = "billing.generate_tuition";
 
@@ -280,7 +281,8 @@ export default function FinancialsBulkCharge({
             {result ? (
                 <p className="mt-2 text-xs text-alloy-midnight" data-financials-bulk-run-result="true">
                     {/* The run's own tally, not the preview's — they can legitimately differ. */}
-                    {result.periodKey} · {result.counts.generated} generated, {result.counts.alreadyPosted} already
+                    {/* The month in words. The `<input type="month">` above still holds the key. */}
+                    {billingPeriodLabel(result.periodKey)} · {result.counts.generated} generated, {result.counts.alreadyPosted} already
                     posted, {result.counts.refused} refused, {result.counts.errors} errored.
                 </p>
             ) : null}

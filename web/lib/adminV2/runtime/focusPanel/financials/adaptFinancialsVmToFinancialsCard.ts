@@ -44,6 +44,7 @@ import type {
     FinancialsLedgerPeriod,
     FinancialsPayer,
 } from "@/lib/cardLab/cardLabTypes";
+import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import { ledgerLensOf } from "@/lib/financials/workspace/accountLenses";
@@ -337,7 +338,8 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 amountLabel: money(r.amountCents, r.currencyCode || currency),
                 reducesObligation: r.amountCents < 0,
                 reason: r.reason,
-                periodLabel: r.periodKey,
+                /* The operator's word for the month, not the key the reader groups by. */
+                periodLabel: billingPeriodLabel(r.periodKey) || null,
                 /* A raw `2026-09-14` on an operator surface — the doctrine forbids it. */
                 recordedOn: displayDate(r.createdAt),
                 subjectName: r.customerMemberId

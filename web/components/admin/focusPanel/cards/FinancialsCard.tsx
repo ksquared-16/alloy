@@ -8,7 +8,7 @@ import {
     lifecycleLabel,
     type CollectionRail,
 } from "@/lib/financials/payments/collectionLifecycle";
-import ApprovedFinancialsCard from "@/components/operationalCards/FinancialsCard";
+import ApprovedFinancialsCard, { AccountSummaryPending } from "@/components/operationalCards/FinancialsCard";
 import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
 import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
@@ -2657,6 +2657,26 @@ export default function FinancialsCard({
                      * never a zero, because a placeholder mistaken for $0.00 is worse than a wait.
                      */
                     loading || subjectStillResolving ? (
+                        /*
+                         * ── THE ANATOMY IS KNOWN BEFORE THE FIGURES ARE ───────────────────────
+                         *
+                         * Selecting an account used to assemble in phases: an empty canvas, then a
+                         * partial card, then the filters, then the ledger — four layouts in a row,
+                         * each one moving the controls the operator was reaching for. Nothing about
+                         * that was unavoidable. At the instant of the click the system already knows
+                         * the card's shape, which three metrics it carries, where Payment and Add
+                         * charge sit and which lenses exist; only the NUMBERS are outstanding.
+                         *
+                         * So the committed anatomy renders immediately, in the same components and
+                         * the same classes the settled card uses, with placeholders where values
+                         * will land. The API finishing then changes text, never layout.
+                         *
+                         * Placeholders, never zeroes: a $0.00 that is really "not read yet" is a
+                         * financial claim, and this surface may not make one it cannot support.
+                         */
+                        summaryVariant === "account" ? (
+                            <AccountSummaryPending />
+                        ) : (
                         <div className="alloy-os-financials__empty" data-financials-empty="loading" aria-busy="true">
                             <div className="flex flex-wrap gap-x-8 gap-y-3">
                                 {/*
@@ -2676,6 +2696,7 @@ export default function FinancialsCard({
                                 ))}
                             </div>
                         </div>
+                        )
                     ) : (
                         <p
                             className="alloy-os-financials__empty"
