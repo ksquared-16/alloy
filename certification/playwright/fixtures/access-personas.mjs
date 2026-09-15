@@ -48,7 +48,20 @@ export const ORG = "00000000-0000-4000-8000-000000000001";
  * is the attribution lie D2 exists to prevent. `origin: "system"` is what makes the presenter render it
  * as a system actor rather than as a departed colleague.
  */
-export const FIXTURE_ACTOR = "fixture:access-personas";
+/*
+ * W-18. THIS USED TO BE THE STRING "fixture:access-personas", AND THE DELEGATION CEILING REFUSED IT.
+ *
+ * Rightly. A synthetic actor holds no roles, so it holds no authority, so it may delegate none —
+ * and provisioning a persona with `fin.read` is a delegation like any other. The fixture had been
+ * relying on the unbounded grant path this slice closed.
+ *
+ * The fix is not an exemption. `p_origin` is a PARAMETER, so "trust me, I am the system" is
+ * caller-selectable and would hand every caller the bypass. Instead the fixture now provisions as
+ * the seeded organization administrator, which is what it has always been pretending to be: a human
+ * with the authority to hand these capabilities out. D2 attributes the provisioning to that
+ * principal, which is truer than attributing it to a script name.
+ */
+export const FIXTURE_ACTOR = "00000000-0000-4000-8000-000000000002";
 export const FIXTURE_ORIGIN = "system";
 export const OTHER_ORG = "aaaa1111-0000-4000-8000-000000000001";
 export const PASSWORD = "alloy-local-cert";
@@ -140,6 +153,8 @@ export const CUSTOM = {
     sjTitular: "mcert_sj_titular",
     sjFinWrite: "mcert_sj_finwrite",
     finAdjuster: "mcert_fin_adjuster",
+    ceilingActor: "mcert_ceiling_actor",
+    ceilingSupply: "mcert_ceiling_supply",
 
     /*
      * ── CONFIGURATION: THE SENSITIVITY SPLIT ──
@@ -223,6 +238,7 @@ export const P = {
     sjJobber:       { id: "c0000000-0000-4000-8000-00000000d025", email: "cert.sjjobber@northwind.invalid",      role: CUSTOM.sjJobber },
     sjPoster:       { id: "c0000000-0000-4000-8000-00000000d026", email: "cert.sjposter@northwind.invalid",      role: CUSTOM.sjPoster },
     finAdjuster:    { id: "c0000000-0000-4000-8000-00000000d045", email: "cert.finadjust@northwind.invalid",     role: CUSTOM.finAdjuster },
+    ceilingActor:   { id: "c0000000-0000-4000-8000-00000000d046", email: "cert.ceiling@northwind.invalid",      role: CUSTOM.ceilingActor },
     sjTitular:      { id: "c0000000-0000-4000-8000-00000000d027", email: "cert.sjtitular@northwind.invalid",     role: CUSTOM.sjTitular },
     sjFinWrite:     { id: "c0000000-0000-4000-8000-00000000d028", email: "cert.sjfinwrite@northwind.invalid",    role: CUSTOM.sjFinWrite },
 
@@ -297,6 +313,8 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.sjJobber,    role_label: "Job coordinator",      description: "Manages jobs. Raises no charges.",                  is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.sjPoster,    role_label: "Financial poster",     description: "Posts receipts, payouts, journals and charges.",    is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.finAdjuster, role_label: "Financial adjuster", description: "Holds fin.adjust and nothing else in Financials.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.ceilingActor, role_label: "Ceiling actor", description: "Limited access administrator for the W-18 proof.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.ceilingSupply, role_label: "Ceiling supply", description: "Supplies fin.write for the multi-role union proof.", is_system: false, is_active: true },
         /* The label is the trap. It holds nothing. */
         { org_id: ORG, role_key: CUSTOM.sjTitular,   role_label: "Admin",                description: "Named Admin, granted no schedule, job or posting authority.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.sjFinWrite,  role_label: "Financials manager",   description: "Holds fin.write, as ops does. Not a posting authority.",      is_system: false, is_active: true },
@@ -353,6 +371,14 @@ export async function setup() {
         [CUSTOM.sjPoster, ["portal.access", "fin.post"]],
         /* fin.adjust alone — the reduction family, deliberately without fin.write. */
         [CUSTOM.finAdjuster, ["portal.access", "fin.adjust"]],
+        /*
+         * W-18. A LIMITED access administrator: it may edit roles and holds nothing else worth
+         * delegating. fin.post is deliberately absent — that is the capability the ceiling must
+         * refuse it, and the one the pre-fix exploit granted itself.
+         */
+        [CUSTOM.ceilingActor, ["portal.access", "settings.users_roles"]],
+        /* The second role in the multi-role union proof. Supplies fin.write and nothing else. */
+        [CUSTOM.ceilingSupply, ["fin.write"]],
         [CUSTOM.sjTitular, ["portal.access"]],
         [CUSTOM.sjFinWrite, ["portal.access", "fin.write", "fin.read"]],
 
