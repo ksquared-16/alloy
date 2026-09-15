@@ -146,7 +146,6 @@ import {
 import { resolveChildGrainFocusPanelScope } from "@/lib/runtime/provisioning/childGrainScope";
 import type { ChildParticipationIdentity } from "@/lib/lifecycle/childParticipationIdentity";
 import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjection";
-import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 /*
  * The TYPE comes from the contract, never from the server-only implementation.
  *
@@ -2000,27 +1999,6 @@ export async function composeWorkUnitProvisioningAnswer(
         actionsProjection,
         timings,
     };
-    /*
-     * THE CARD PRODUCERS JOIN THE SAME LIFECYCLE.
-     *
-     * Attendance (and, next, Health and Financials) needs its own read, which is why it grew a
-     * card-local fetch and its own loading state. It runs here instead — inside this provisioning
-     * identity, concurrently, each producer independently fallible — so the surface has ONE
-     * lifecycle rather than one plus three.
-     */
-    if (answer.focusPanelOperationalProjection) {
-        const tCards = now();
-        answer.focusPanelOperationalProjection = {
-            ...answer.focusPanelOperationalProjection,
-            cards: await projectFocusPanelCardProducers({
-                supabase: req.supabase,
-                orgId: req.orgId,
-                context: focusPanelProjectionContext,
-            }),
-        };
-        markSpan("focus_panel_card_producers", tCards);
-    }
-
     timings.composition_ms = now() - tComp;
     timings.spans = spans;
     timings.total_ms = now() - t0;
