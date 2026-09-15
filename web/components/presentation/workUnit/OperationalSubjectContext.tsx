@@ -128,7 +128,6 @@ export type OperationalSubject = {
      * commit-critical Focus Panel renders the SAME card the resolved VM does (A). Null when the answer
      * did not resolve them (the panel degrades to the drawer-VM load).
      */
-    publishedStageInputs: PublishedStageInputsForCurrentWork | null;
     /**
      * The server's operational projection for this subject, COMMIT frame.
      *
@@ -156,7 +155,7 @@ export type OperationalSubject = {
 const EMPTY: OperationalSubject = {
     subjectId: null, attentionKind: "operational", entityType: null, subjectGrain: null, identitySeed: null, situation: null,
     decision: null, action: null, actionAbsence: null,
-    stageWorkRuntime: null, publishedStageInputs: null, operationalProjection: null, workIntentRuntime: null, subjectIdentityTruth: null,
+    stageWorkRuntime: null, operationalProjection: null, workIntentRuntime: null, subjectIdentityTruth: null,
     summaryDocSeed: null,
 };
 const Ctx = createContext<OperationalSubject>(EMPTY);
@@ -171,7 +170,6 @@ export function OperationalSubjectProvider({
     action,
     actionAbsence,
     stageWorkRuntime,
-    publishedStageInputs,
     operationalProjection,
     workIntentRuntime,
     subjectIdentityTruth,
@@ -189,7 +187,6 @@ export function OperationalSubjectProvider({
     action?: OperationalSubject["action"];
     actionAbsence?: OperationalSubject["actionAbsence"];
     stageWorkRuntime?: StageWorkRuntimeProjection | null;
-    publishedStageInputs?: PublishedStageInputsForCurrentWork | null;
     operationalProjection?: FocusPanelOperationalProjection | null;
     workIntentRuntime?: WorkIntentRuntimeProjection | null;
     subjectIdentityTruth?: SubjectIdentityTruth | null;
@@ -212,13 +209,12 @@ export function OperationalSubjectProvider({
             action: action ?? null,
             actionAbsence: actionAbsence ?? null,
             stageWorkRuntime: stageWorkRuntime ?? null,
-            publishedStageInputs: publishedStageInputs ?? null,
             operationalProjection: operationalProjection ?? null,
             workIntentRuntime: workIntentRuntime ?? null,
             subjectIdentityTruth: subjectIdentityTruth ?? null,
             summaryDocSeed: summaryDocSeed ?? null,
         }),
-        [subjectId, attentionKind, subjectGrain, identitySeed, situation, decision, action, actionAbsence, stageWorkRuntime, publishedStageInputs, operationalProjection, workIntentRuntime, subjectIdentityTruth, summaryDocSeed],
+        [subjectId, attentionKind, subjectGrain, identitySeed, situation, decision, action, actionAbsence, stageWorkRuntime, operationalProjection, workIntentRuntime, subjectIdentityTruth, summaryDocSeed],
     );
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

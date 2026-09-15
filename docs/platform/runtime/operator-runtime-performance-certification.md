@@ -1461,3 +1461,54 @@ is produced by the drawer VM rather than the provisioning answer, and the client
 is therefore still the operational authority. Criteria 1, 4 and 5 all fail on evidence.
 
 §21.7 remains **TARGET, NOT YET MET**. The client projection engine is **NOT** retired.
+
+## 25. C2 final — raw projection transport retired
+
+### 25.1 Telemetry moved off raw configuration
+
+`BusinessProcessCard`'s drift telemetry was the last browser reader of `published_stage_inputs`. It
+echoed the raw operating plan and the process's own command selection beside the result — and both
+were **redundant**: `configuredRefs` already states what configuration named, `commandKeys` what the
+row became, `drift`/`withheld` the difference, all decided by the server projection. The two raw
+echoes are gone; the comparison, and the `window.__ALLOY_PROCESS_COMMAND_PROJECTION` dedupe
+identity, are unchanged.
+
+### 25.2 Zero browser readers, then zero browser transport
+
+After the telemetry fix, `publishedStageInputs` had **no** browser reference at all — reader or
+carrier. The obsolete plumbing was removed from all four carriers.
+
+### 25.3 Raw payload removed from BOTH frames
+
+| frame | site |
+| --- | --- |
+| commit | `workUnitProvisioningAnswer` emits the slice with `published_stage_inputs: null` **after** projecting |
+| settled | `composeOpportunityDrawerViewModel` emits the VM workspace the same way |
+
+Both or neither: stripping one would let a change of transport frame restore the old architecture.
+
+The deferred stage-work merge path (`applyStageWorkSliceToVm` via `useRecordWorkRuntime`) is
+**dormant** — it runs only when `stage_work` is `pending`, which requires `?stage_work=0`, and no
+client sends it. Recorded because if it is ever activated it would merge a slice without refreshing
+the projection.
+
+### 25.4 Measured, on the running panel
+
+| | before | after |
+| --- | --- | --- |
+| commit answer | 138,239 B | **81,050 B** |
+| settled drawer VM | ≈137 KB | **97,303–103,783 B** |
+| raw config present | yes, 78,355 B | **absent from both** |
+
+Browser proof with the configuration physically absent: rail, stage copy, all four configured
+commands in order, Record outcome link, drift diagnostics still recorded, **zero page errors**.
+Rapid A→B→C settles on C's own data with no stale flash.
+
+### 25.5 Status
+
+`C1 — SERVER PROJECTION CHOKEPOINT: SHIPPED.`
+`C2 — CLIENT PROJECTION ENGINE: RETIRED.`
+`RAW CONFIG TRANSPORT: RETIRED.`
+
+§21.7 remains **TARGET, NOT YET MET** — Attendance, Health and Financials have not joined the root
+lifecycle.
