@@ -31,6 +31,81 @@ export type QaStep = {
 
 export type QaSection = { id: string; title: string; intent: string; steps: QaStep[] };
 
+/**
+ * Where a step's subject lives, so the operator clicks rather than hunts.
+ *
+ * Deliberately absent for DP-QA-01 and DP-QA-21: discoverability is what those
+ * two steps test, and handing over a link would answer the question for them.
+ */
+export const STEP_SURFACES: Record<string, { label: string; href: string }[]> = {
+    "DP-QA-02": [{ label: "Open Organization → Integrations", href: "/organization/integrations" }],
+    "DP-QA-03": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-04": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-05": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-06": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-07": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-08": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-09": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-10": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-11": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-12": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-13": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-14": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-15": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-16": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-17": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-18": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-19": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-20": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-22": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-23": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-24": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-25": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-39": [{ label: "Open API Reference", href: "/api/admin/integrations/openapi" }],
+    "DP-QA-40": [{ label: "Open API Reference", href: "/api/admin/integrations/openapi" }],
+    "DP-QA-41": [{ label: "Open API Reference", href: "/api/admin/integrations/openapi" }],
+    "DP-QA-42": [{ label: "Open API Reference", href: "/api/admin/integrations/openapi" }],
+    "DP-QA-43": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-44": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-45": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-46": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-47": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-48": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-49": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-50": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-51": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-52": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-53": [{ label: "Open API Reference", href: "/api/admin/integrations/openapi" }],
+    "DP-QA-54": [
+        { label: "Open Developer Documentation", href: "/organization/integrations/documentation" },
+        { label: "Open API Reference", href: "/api/admin/integrations/openapi" },
+    ],
+    "DP-QA-55": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-56": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-59": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-60": [
+        { label: "Open Integrations", href: "/organization/integrations" },
+        { label: "Open Developer Documentation", href: "/organization/integrations/documentation" },
+    ],
+    "DP-QA-61": [{ label: "Open Classroom Coach readiness packet", href: "/api/dev/qa/developer-platform/doc?name=readiness" }],
+    "DP-QA-62": [{ label: "Open Classroom Coach readiness packet", href: "/api/dev/qa/developer-platform/doc?name=readiness" }],
+    "DP-QA-63": [{ label: "Open Classroom Coach readiness packet", href: "/api/dev/qa/developer-platform/doc?name=readiness" }],
+    "DP-QA-64": [{ label: "Open Classroom Coach readiness packet", href: "/api/dev/qa/developer-platform/doc?name=readiness" }],
+    "DP-QA-65": [{ label: "Open Classroom Coach readiness packet", href: "/api/dev/qa/developer-platform/doc?name=readiness" }],
+    "DP-QA-66": [{ label: "Open Classroom Coach discovery request", href: "/api/dev/qa/developer-platform/doc?name=discovery" }],
+    "DP-QA-67": [{ label: "Open Classroom Coach discovery request", href: "/api/dev/qa/developer-platform/doc?name=discovery" }],
+    "DP-QA-68": [{ label: "Open Classroom Coach readiness packet", href: "/api/dev/qa/developer-platform/doc?name=readiness" }],
+    "DP-QA-69": [
+        { label: "Open Classroom Coach readiness packet", href: "/api/dev/qa/developer-platform/doc?name=readiness" },
+        { label: "Open Classroom Coach discovery request", href: "/api/dev/qa/developer-platform/doc?name=discovery" },
+    ],
+    "DP-QA-70": [{ label: "Open Classroom Coach readiness packet", href: "/api/dev/qa/developer-platform/doc?name=readiness" }],
+    "DP-QA-71": [{ label: "Open Developer Documentation", href: "/organization/integrations/documentation" }],
+    "DP-QA-72": [{ label: "Open Integrations", href: "/organization/integrations" }],
+    "DP-QA-75": [{ label: "Open Classroom Coach readiness packet", href: "/api/dev/qa/developer-platform/doc?name=readiness" }],
+    "DP-QA-79": [{ label: "Open Integrations", href: "/organization/integrations" }],
+};
+
 export const SEVERITIES: { value: Severity; label: string }[] = [
     { value: "P0", label: "P0 — security or data integrity" },
     { value: "P1", label: "P1 — prevents the intended workflow" },
