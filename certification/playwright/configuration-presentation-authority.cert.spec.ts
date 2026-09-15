@@ -258,19 +258,24 @@ test.describe("Configuration presentation authority — layouts, sections and fi
 
     test("PHASE 9 — MOUNTED: the placement editor still works, and where ops stops is not this slice", async ({ browser, request }) => {
         /*
-         * The mounted half, and an honest boundary.
+         * THE MOUNTED HALF, AND WHAT IT ACTUALLY FOUND.
          *
-         * The KPI placement editor is embedded on the Operational Calculations visibility tab
-         * (`/adminV2/settings/kpis` is only a redirect stub). Loading it issues the very GET this
-         * slice moved onto layouts.manage, so a mounted pass proves the converted read still serves
-         * the real surface rather than only the direct probe.
+         * This phase set out to watch the KPI placement editor issue the GET this slice moved onto
+         * layouts.manage. It could not, and the reason is a product fact worth recording rather than
+         * a test to keep rewriting until it passes:
          *
-         * OPS DOES NOT REACH THIS EDITOR, and that is NOT this slice failing. The surface is nested
-         * under Operational Intelligence, which the OI convergence gated on `reports.write`; ops
-         * holds `reports.read` only. So ops's convergence is proven where the approval actually
-         * placed it — at the direct route, in PHASE 5 — and this phase records the OI boundary
-         * instead of pretending the editor opens. Asserting ops here would have made a pre-existing
-         * Operational Intelligence decision look like a Configuration defect.
+         *   - `/adminV2/settings/kpis` is a redirect stub, not a page.
+         *   - it redirects to the Operational Intelligence visibility tab, which renders
+         *     `metrics/kpi-targets` — NOT `workspace-kpi-placements?list=org`.
+         *   - a load of every Configuration surface (`/organization/layouts`, `/data-model`,
+         *     `/surfaces`, `/processes`) calls none of the eighteen converted endpoints; they are
+         *     issued only after further interaction inside the editors.
+         *
+         * So the converted configuration LISTING has no caller that a page load reaches. What this
+         * phase can still prove honestly, it proves: the listing serves the default admin, and ops
+         * genuinely lacks `reports.write`, which is the standing Operational Intelligence boundary
+         * that keeps ops out of that editor regardless of anything this slice did. Ops's convergence
+         * is proven at the direct route in PHASE 5, which is where the approval placed it.
          */
         const waitFor = (page: Page) =>
             page.waitForResponse(
@@ -286,7 +291,7 @@ test.describe("Configuration presentation authority — layouts, sections and fi
         let adminMounted = -1;
         if (admin.signedIn) {
             const w = waitFor(admin.page);
-            await admin.page.goto("/settings/calculations?tab=visibility", { waitUntil: "domcontentloaded" });
+            await admin.page.goto("/adminV2/settings/analytics?tab=visibility", { waitUntil: "domcontentloaded" });
             adminMounted = await w.then((r) => r.status()).catch(() => -1);
         }
         record("mountedKpiEditor", "adminMountedEditorRequest", adminMounted);
