@@ -1,0 +1,149 @@
+{
+  "trusted_host_action_id": "tha_952656a42e3323",
+  "query_hash": "ca4c553a180dda388be77f4d41cc32c7ce592ca2397d0b746a5d8661219185f3",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-11T18:19:14.308Z",
+    "question_ids": [
+      "expected_grant_pairs",
+      "ledger_ceiling",
+      "ledger_control_20260910183000",
+      "ledger_w13",
+      "ledger_window",
+      "postcondition_catalog_control",
+      "postcondition_catalog_portal_access",
+      "postcondition_grants_control",
+      "postcondition_grants_portal_access",
+      "postcondition_seed_fn_portal_access",
+      "preflight_objects"
+    ],
+    "questions": {
+      "expected_grant_pairs": {
+        "question_id": "expected_grant_pairs",
+        "row_count": null,
+        "rows": [
+          {
+            "admin_ops_role_definitions": 4,
+            "roles": [
+              "admin",
+              "ops"
+            ]
+          }
+        ]
+      },
+      "ledger_ceiling": {
+        "question_id": "ledger_ceiling",
+        "row_count": null,
+        "rows": [
+          {
+            "max_version": "20260911130000"
+          }
+        ]
+      },
+      "ledger_control_20260910183000": {
+        "question_id": "ledger_control_20260910183000",
+        "row_count": null,
+        "rows": [
+          {
+            "version": "20260910183000",
+            "present": true
+          }
+        ]
+      },
+      "ledger_w13": {
+        "question_id": "ledger_w13",
+        "row_count": null,
+        "rows": [
+          {
+            "version": "20260911140000",
+            "present": false
+          }
+        ]
+      },
+      "ledger_window": {
+        "question_id": "ledger_window",
+        "row_count": null,
+        "rows": [
+          {
+            "versions": [
+              "20260910120000",
+              "20260910130000",
+              "20260910183000",
+              "20260911100000",
+              "20260911110000",
+              "20260911120000",
+              "20260911130000"
+            ]
+          }
+        ]
+      },
+      "postcondition_catalog_control": {
+        "question_id": "postcondition_catalog_control",
+        "row_count": null,
+        "rows": [
+          {
+            "key": "settings.users_roles",
+            "present": true
+          }
+        ]
+      },
+      "postcondition_catalog_portal_access": {
+        "question_id": "postcondition_catalog_portal_access",
+        "row_count": null,
+        "rows": [
+          {
+            "key": "portal.access",
+            "present": false,
+            "group_key": null,
+            "is_active": null
+          }
+        ]
+      },
+      "postcondition_grants_control": {
+        "question_id": "postcondition_grants_control",
+        "row_count": null,
+        "rows": [
+          {
+            "permission_key": "settings.users_roles",
+            "rows": 2
+          }
+        ]
+      },
+      "postcondition_grants_portal_access": {
+        "question_id": "postcondition_grants_portal_access",
+        "row_count": null,
+        "rows": [
+          {
+            "permission_key": "portal.access",
+            "rows": 0,
+            "allowed_true": 0,
+            "roles": []
+          }
+        ]
+      },
+      "postcondition_seed_fn_portal_access": {
+        "question_id": "postcondition_seed_fn_portal_access",
+        "row_count": null,
+        "rows": [
+          {
+            "function_present": true,
+            "mentions_portal_access": false
+          }
+        ]
+      },
+      "preflight_objects": {
+        "question_id": "preflight_objects",
+        "row_count": null,
+        "rows": [
+          {
+            "permission_definitions": true,
+            "role_permission_grants": true,
+            "role_definitions": true,
+            "seed_default_rbac": true
+          }
+        ]
+      }
+    },
+    "row_count": 11
+  }
+}

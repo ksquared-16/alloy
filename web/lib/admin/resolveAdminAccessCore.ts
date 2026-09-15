@@ -48,10 +48,18 @@ export function normalizeRoleKey(raw: unknown): string {
  * - `legacy-all` — the historical fail-open: both dimensions resolve `all`.
  * - `deny`       — W-7's target: the membership sees nothing.
  *
- * MUST remain `legacy-all` until M1 (`20260807140000_backfill_membership_access_profiles.sql`)
- * is APPLIED on the shared target. W-0 Q4 stands at 2 `(user, org)` pairs with no profile row,
- * so flipping this ahead of the backfill locks out those 2 principals — the exact L1 outcome
- * W-7 exists to avoid. Plan §5 Q4: "W-7 cannot precede it."
+ * MUST remain `legacy-all`. **The gate is an invariant, not a count** — plan §6 W-6 ruling
+ * (2026-09-06): *no writer can create a membership without a profile*. Applying M1
+ * (`20260807140000_backfill_membership_access_profiles.sql`) is necessary and NOT sufficient:
+ * it drives W-0 Q4 to 0 at commit and seed/QA tooling refills it, which census run 4 measured
+ * directly — 2 → 5 profile-less `(user, org)` pairs across 28 days with no product write. So
+ * this comment deliberately quotes no current count: gating the switch on a value that can move
+ * between the re-derivation and the flip IS the lockout mechanism, one step removed.
+ *
+ * Nothing in the tree enforces that invariant today (checked 2026-09-06): there is no trigger on
+ * `user_roles` in any migration, `create_membership_with_access_profile`
+ * (`20260807090001`) is convention that a direct INSERT bypasses, and M9 (`20260818190000`)
+ * constrains `(org_id, role)` → `role_definitions` — the role vocabulary, not profile existence.
  *
  * Flipping this constant to `deny` and deleting the two lines above it is the whole switch.
  */
@@ -124,8 +132,9 @@ export function dualReadScopeAnswer(profileRow: ProfileScopeRow): {
  *
  * **This is a different population from {@link ABSENT_PROFILE_ENFORCEMENT}, and that is why it can
  * ship while that constant is still pinned to `legacy-all`.** That constant governs a membership
- * whose profile row is genuinely ABSENT — 2 known `(user, org)` pairs — and flipping it before the
- * M1 backfill locks those principals out. A read FAILURE is not that population: it is a transient
+ * whose profile row is genuinely ABSENT — a live, refilling population, last measured at 5
+ * `(user, org)` pairs by census run 4 — and flipping it before the invariant above holds locks
+ * those principals out. A read FAILURE is not that population: it is a transient
  * fault affecting whoever happens to be mid-request. Denying it changes nothing for any healthy
  * read, so it carries no lockout risk and does not wait on the migration.
  *

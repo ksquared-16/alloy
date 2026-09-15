@@ -61,6 +61,22 @@ const artifactEnforced = artifact.enforced.map((e) => e.key);
 const APPROVED_ADDITIONS: Record<string, string> = {
     "health.view": "D-H6 — structured health visibility boundary",
     "health.manage": "D-H6 — structured health mutation boundary",
+    /*
+     * Seeded 2026-09-01 by `20260901120000_enrollment_requirement_exception_v1.sql` (commit
+     * `2f3135408`), a track that does not own this vocabulary — which is the §7 event this suite
+     * exists to catch, and it caught it: six tests went red rather than the catalog widening in
+     * silence.
+     *
+     * W-11 was handed the disposition and it is `approved addition`, not `deletion candidate`,
+     * decided by the same measurement that decided C13 rather than by preference. A deletion
+     * candidate is a key NO product source names; this one is named at a live refusal
+     * (`requirementExceptionService.ts` refuses without it) and declared as
+     * `REQUIREMENT_EXCEPTION_MANAGE_PERMISSION`. The migration also states its own authorization —
+     * granted to `admin` only, `ops` deliberately withheld, "following D-H6" — so it carries the
+     * same warrant as the two keys above rather than an invented one.
+     */
+    "enrollment.requirement_exception.manage":
+        "D-H6 precedent — enrollment requirement exception, admin-only by default (migration 20260901120000)",
 };
 
 describe("W-11 — the catalog is discovered completely", () => {

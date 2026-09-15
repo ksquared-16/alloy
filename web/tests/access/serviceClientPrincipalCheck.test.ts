@@ -25,7 +25,11 @@ type Row = {
 type Report = {
     ok: boolean;
     counts: Record<string, number>;
-    ratchet: { max_subject_unresolved: number | null; max_transitive_only_unresolved: number | null };
+    ratchet: {
+        max_subject_unresolved: number | null;
+        max_transitive_only_unresolved: number | null;
+        max_baseline: number | null;
+    };
     violations: { route: string; kind: string }[];
     stale: { route: string; kind: string; list: string }[];
     rows: Row[];
@@ -37,7 +41,7 @@ const allowlist = JSON.parse(readFileSync(ALLOWLIST_PATH, "utf8")) as {
     exceptions: { route: string; model: string; reason: string }[];
     baseline: { route: string; frozen: string; why_not_an_exception: string; w15_note: string }[];
     advisory_transitive_only: { route: string; reason: string }[];
-    ratchet: { max_subject_unresolved: number; max_transitive_only_unresolved: number };
+    ratchet: { max_subject_unresolved: number; max_transitive_only_unresolved: number; max_baseline: number };
 };
 
 /**
@@ -116,9 +120,19 @@ describe("W-4 · the check is not vacuous", () => {
             ...allowlist,
             exceptions: [
                 ...allowlist.exceptions,
-                { route: "app/api/deleted/route.ts", model: "none", reason: "route does not exist" },
+                // Reasons are long enough to clear the register-integrity floor, so this test
+                // isolates staleness rather than also tripping the reviewedness clause.
+                {
+                    route: "app/api/deleted/route.ts",
+                    model: "none",
+                    reason: "fixture: the route file does not exist, which is the staleness this asserts",
+                },
                 // A gated route has no business being exempted.
-                { route: "app/api/admin/users/route.ts", model: "none", reason: "already gated" },
+                {
+                    route: "app/api/admin/users/route.ts",
+                    model: "none",
+                    reason: "fixture: already gated, so listing it as an exception is stale residue",
+                },
             ],
         }) as Report;
         expect(stale.ok).toBe(false);
@@ -167,13 +181,15 @@ describe("W-4 · the ratchet", () => {
     // strictly stronger than the old `toBeLessThanOrEqual`, because a ceiling sitting ABOVE the
     // floor is exactly the slack that handed out 9 free exceptions in the 2026-08-04 run.
 
-    it("pins both ceilings to the live floor — no slack, in either direction", () => {
+    it("pins all three ceilings to the live floor — no slack, in either direction", () => {
         expect({
             unresolved: allowlist.ratchet.max_subject_unresolved,
             advisory: allowlist.ratchet.max_transitive_only_unresolved,
+            baseline: allowlist.ratchet.max_baseline,
         }).toEqual({
             unresolved: report.counts.subject_unresolved,
             advisory: report.counts.transitive_only_unresolved,
+            baseline: report.counts.listed_baseline,
         });
     });
 
@@ -181,6 +197,7 @@ describe("W-4 · the ratchet", () => {
         expect(report.ratchet).toEqual({
             max_subject_unresolved: allowlist.ratchet.max_subject_unresolved,
             max_transitive_only_unresolved: allowlist.ratchet.max_transitive_only_unresolved,
+            max_baseline: allowlist.ratchet.max_baseline,
         });
     });
 
@@ -213,6 +230,79 @@ describe("W-4 · the ratchet", () => {
     it("FAILS when no ceiling is recorded at all, so the count cannot be left unbounded", () => {
         const missing = runServiceClientPrincipalCheck({ ...allowlist, ratchet: undefined }) as Report;
         expect(missing.ok).toBe(false);
-        expect(missing.violations.filter((v) => v.kind === "ratchet-missing")).toHaveLength(2);
+        expect(missing.violations.filter((v) => v.kind === "ratchet-missing")).toHaveLength(3);
+    });
+});
+
+/**
+ * The 2026-08-06 repair moved the ceilings into the check because `prebuild` could not see the
+ * lock. It moved ONLY the ceilings. On 2026-09-06 the sixth issuance showed the consequence at the
+ * CLI: relabel all 22 reviewed exceptions as unreasoned `baseline`, drop every `model` and
+ * `reason`, and the check exits 0 — the register loses its reviewedness with a green build.
+ *
+ * These lock the clauses now enforced by the check itself. Each asserts the RED state, because a
+ * clause that cannot be shown to fail is not enforced; §10.2 exists for exactly that reason.
+ */
+describe("W-4 · the register cannot be stripped of its review while staying green", () => {
+    it("FAILS when a reviewed exception is relabelled as unreasoned frozen baseline", () => {
+        const [first, ...rest] = allowlist.exceptions;
+        const relabelled = runServiceClientPrincipalCheck({
+            ...allowlist,
+            exceptions: rest,
+            baseline: [{ route: first.route }],
+        }) as Report;
+        expect(relabelled.ok).toBe(false);
+        // Both clauses bite: the baseline grew past 0, and the moved entry states no reason.
+        expect(relabelled.violations.filter((v) => v.kind === "register-baseline-unreasoned")).toHaveLength(1);
+        expect(relabelled.violations.filter((v) => v.kind === "ratchet-exceeded").map((v) => v.route)).toContain(
+            "ratchet.max_baseline"
+        );
+    });
+
+    it("FAILS when the WHOLE exception list is relabelled — the demonstrated escape", () => {
+        const stripped = runServiceClientPrincipalCheck({
+            ...allowlist,
+            exceptions: [],
+            baseline: allowlist.exceptions.map((e) => ({ route: e.route })),
+        }) as Report;
+        expect(stripped.ok).toBe(false);
+        expect(stripped.violations.filter((v) => v.kind === "register-baseline-unreasoned")).toHaveLength(
+            allowlist.exceptions.length
+        );
+    });
+
+    it("FAILS when an exception is stripped of its model or its reason in place", () => {
+        const [first, ...rest] = allowlist.exceptions;
+        const unreasoned = runServiceClientPrincipalCheck({
+            ...allowlist,
+            exceptions: [{ route: first.route, model: "", reason: "" }, ...rest],
+        }) as Report;
+        expect(unreasoned.ok).toBe(false);
+        expect(unreasoned.violations.filter((v) => v.kind === "register-exception-unreasoned")).toEqual([
+            expect.objectContaining({ route: first.route }),
+        ]);
+    });
+
+    it("FAILS when the same route is listed in both lists, which mean opposite things", () => {
+        const [first] = allowlist.exceptions;
+        const overlapping = runServiceClientPrincipalCheck({
+            ...allowlist,
+            baseline: [
+                {
+                    route: first.route,
+                    why_not_an_exception:
+                        "a reason long enough to clear the forty-character floor this check enforces",
+                    w15_note: "fixture",
+                },
+            ],
+        }) as Report;
+        expect(overlapping.ok).toBe(false);
+        expect(overlapping.violations.filter((v) => v.kind === "register-overlap").map((v) => v.route)).toEqual([
+            first.route,
+        ]);
+    });
+
+    it("is GREEN on the committed register — the clauses cost the current lists nothing", () => {
+        expect(report.violations.filter((v) => v.kind.startsWith("register-"))).toEqual([]);
     });
 });

@@ -1,20 +1,21 @@
 {
   "generated_by": "web/scripts/checkServiceClientPrincipal.mjs",
   "counts": {
-    "routes": 570,
-    "holds_service_client_direct": 541,
-    "reaches_service_client_transitive": 567,
-    "resolves_principal": 542,
-    "subject_resolves_principal": 526,
-    "subject_unresolved": 15,
-    "listed_exceptions": 15,
+    "routes": 603,
+    "holds_service_client_direct": 570,
+    "reaches_service_client_transitive": 598,
+    "resolves_principal": 564,
+    "subject_resolves_principal": 548,
+    "subject_unresolved": 22,
+    "listed_exceptions": 22,
     "listed_baseline": 0,
-    "transitive_only_unresolved": 10,
-    "listed_advisory": 10
+    "transitive_only_unresolved": 12,
+    "listed_advisory": 12
   },
   "ratchet": {
-    "max_subject_unresolved": 15,
-    "max_transitive_only_unresolved": 10
+    "max_subject_unresolved": 22,
+    "max_transitive_only_unresolved": 12,
+    "max_baseline": 0
   },
   "ok": true,
   "violations": [],
@@ -41,11 +42,43 @@
       "list": "exceptions"
     },
     {
+      "route": "app/api/communications/unsubscribe/route.ts",
+      "list": "exceptions"
+    },
+    {
       "route": "app/api/public/booking-config/route.ts",
       "list": "exceptions"
     },
     {
       "route": "app/api/public/field-definitions/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/forms/[token]/enrollment-artifact/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/forms/[token]/enrollment-document/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/forms/[token]/enrollment-edit/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/forms/[token]/enrollment-objective/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/forms/[token]/enrollment-signature-asset/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/forms/[token]/enrollment-turn/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/forms/[token]/enrollment-upload/route.ts",
       "list": "exceptions"
     },
     {
@@ -65,10 +98,6 @@
       "list": "exceptions"
     },
     {
-      "route": "app/api/public/tour-booking/[token]/book/route.ts",
-      "list": "exceptions"
-    },
-    {
       "route": "app/api/vendor-application/route.ts",
       "list": "exceptions"
     },
@@ -83,8 +112,10 @@
   ],
   "transitive_only_unresolved": [
     "app/api/leads/gutters/route.ts",
+    "app/api/public/tour-booking/[token]/book/route.ts",
     "app/api/public/tour-booking/[token]/cancel-intent/route.ts",
     "app/api/public/tour-booking/[token]/cancel/route.ts",
+    "app/api/public/tour-booking/[token]/confirm-attendance/route.ts",
     "app/api/public/tour-booking/[token]/confirm/route.ts",
     "app/api/public/tour-booking/[token]/decline/route.ts",
     "app/api/public/tour-booking/[token]/reschedule/route.ts",
@@ -93,5 +124,5 @@
     "app/api/webhooks/twilio/sms-status/[binding_id]/route.ts",
     "app/api/webhooks/twilio/sms-status/route.ts"
   ],
-  "allowlist_reviewed": "2026-08-06"
+  "allowlist_reviewed": "2026-09-06"
 }

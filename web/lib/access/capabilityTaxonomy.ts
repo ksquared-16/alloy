@@ -38,6 +38,17 @@ export type CapabilityArea = {
 export const CAPABILITY_AREAS: readonly CapabilityArea[] = Object.freeze([
     { key: "families", label: "Families", description: "Customer and family records.", order: 10 },
     { key: "inquiries", label: "Inquiries", description: "Opportunities and enrollment inquiries.", order: 20 },
+    /*
+     * Enrollment is its own area rather than a corner of Inquiries, and the feature model is what
+     * decides that rather than tidiness.
+     *
+     * `requirementException.ts` states its subject explicitly: the Enrollment Participation — the
+     * durable episode — "not the Opportunity, which may not exist at all". Inquiries is the
+     * Opportunity area. Filing an exception there would put "decide this requirement does not apply
+     * to this child" behind the same preset as "read inquiries", which is the exact merge the `crm`
+     * split above refuses, in the same direction and for the same reason.
+     */
+    { key: "enrollment", label: "Enrollment", description: "Enrollment requirements and exceptions.", order: 25 },
     { key: "scheduling", label: "Scheduling", description: "Schedules and calendars.", order: 30 },
     { key: "communications", label: "Communications", description: "Messages to families and contacts.", order: 40 },
     { key: "documents", label: "Documents", description: "Documents and forms on a record.", order: 50 },
@@ -80,6 +91,7 @@ const GROUP_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
     billing: "billing",
     communications: "communications",
     documents: "documents",
+    enrollment: "enrollment",
     health: "health",
     reports: "reports",
     scheduling: "scheduling",

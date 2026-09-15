@@ -548,6 +548,49 @@ export function runServiceClientPrincipalCheck(allowlistOverride) {
         }
     }
 
+    // Register integrity. The 2026-08-06 repair moved the ceilings out of the vitest lock and into
+    // the check, because `prebuild` could not see them. It moved only the ceilings. The lock asserts
+    // three further disciplines that `prebuild` still could not see, and `tests/access` is run by no
+    // CI workflow — so on 2026-09-06 all 22 reviewed exceptions were relabelled as unreasoned frozen
+    // `baseline` in a substituted register and the check exited 0. The entries kept their slots in
+    // `max_subject_unresolved`, so no NEW ungated route could enter; what could happen is that a
+    // reviewed exception is silently downgraded into unreasoned remediation debt. That is an attack
+    // on the register's reviewedness, which is this workstream's actual exit criterion. The three
+    // clauses are enforced here so they fail `next build` rather than a suite nobody runs.
+    for (const [route, e] of baseline) {
+        if ((e.why_not_an_exception?.length ?? 0) <= 40 || !e.w15_note) {
+            violations.push({
+                route,
+                kind: "register-baseline-unreasoned",
+                list: "baseline",
+                detail:
+                    "a frozen baseline entry must state `why_not_an_exception` (> 40 chars) and carry a `w15_note` — an entry with no stated reason is residue, not remediation debt",
+            });
+        }
+    }
+    for (const [route, e] of exceptions) {
+        if (!e.model || (e.reason?.length ?? 0) <= 40) {
+            violations.push({
+                route,
+                kind: "register-exception-unreasoned",
+                list: "exceptions",
+                detail:
+                    "a reviewed exception must name a `model` and give a `reason` (> 40 chars) citing what enforces it — without both it is an unreviewed exemption wearing the word `reviewed`",
+            });
+        }
+    }
+    for (const route of exceptions.keys()) {
+        if (baseline.has(route)) {
+            violations.push({
+                route,
+                kind: "register-overlap",
+                list: "exceptions+baseline",
+                detail:
+                    "listed in both `exceptions` and `baseline` — the lists mean opposite things (verified model vs no model) and a route in both is credited by whichever is read first",
+            });
+        }
+    }
+
     // The numeric ceilings. Set membership above stops a list growing without an edit; it does
     // NOT stop the edit. Only a ceiling does that, and until 2026-08-06 the ceilings lived solely
     // in the vitest lock — so `e7e585010` grew the advisory set 3 → 9 in an allow-list-only commit,
@@ -557,9 +600,14 @@ export function runServiceClientPrincipalCheck(allowlistOverride) {
     // Over the ceiling is a VIOLATION: the count grew, which is the thing being prevented.
     // Under the ceiling is STALE: the floor dropped and nobody followed it down, which silently
     // hands out that many free exceptions. A ratchet is only a ratchet if it follows the floor.
+    //
+    // `max_baseline` is seeded at 0 and is the freeze clause expressed as a ceiling: the baseline
+    // may only shrink, so any growth is a breach. It costs nothing while the baseline is empty and
+    // it follows the floor down as W-15 remediates, exactly like the other two.
     for (const [key, live] of [
         ["max_subject_unresolved", unresolved.length],
         ["max_transitive_only_unresolved", transitiveOnly.length],
+        ["max_baseline", baseline.size],
     ]) {
         const ceiling = ratchet?.[key];
         if (typeof ceiling !== "number") {
@@ -601,6 +649,7 @@ export function runServiceClientPrincipalCheck(allowlistOverride) {
         ratchet: {
             max_subject_unresolved: ratchet?.max_subject_unresolved ?? null,
             max_transitive_only_unresolved: ratchet?.max_transitive_only_unresolved ?? null,
+            max_baseline: ratchet?.max_baseline ?? null,
         },
         ok: violations.length === 0 && stale.length === 0,
         violations,
@@ -652,14 +701,18 @@ if (invokedDirectly) {
         console.log(`    transitive-only and unresolved (advisory)   ${String(c.transitive_only_unresolved).padStart(4)}`);
         console.log(
             `\n  ratchet ceilings                    ` +
-                `unresolved ≤ ${report.ratchet.max_subject_unresolved} · advisory ≤ ${report.ratchet.max_transitive_only_unresolved}`
+                `unresolved ≤ ${report.ratchet.max_subject_unresolved} · advisory ≤ ${report.ratchet.max_transitive_only_unresolved}` +
+                ` · baseline ≤ ${report.ratchet.max_baseline}`
         );
 
         if (report.violations.length) {
             // Ratchet breaches are not routes and must not be given the route remediation, which
             // would send the reader looking for a file that does not exist.
-            const routeViolations = report.violations.filter((v) => !v.kind.startsWith("ratchet-"));
+            const routeViolations = report.violations.filter(
+                (v) => !v.kind.startsWith("ratchet-") && !v.kind.startsWith("register-")
+            );
             const ratchetViolations = report.violations.filter((v) => v.kind.startsWith("ratchet-"));
+            const registerViolations = report.violations.filter((v) => v.kind.startsWith("register-"));
             if (routeViolations.length) {
                 console.log(`\n✗ ${routeViolations.length} unlisted violation(s):`);
                 for (const v of routeViolations) console.log(`    ${v.route}`);
@@ -672,6 +725,13 @@ if (invokedDirectly) {
             if (ratchetViolations.length) {
                 console.log(`\n✗ ${ratchetViolations.length} ratchet breach(es) — a bounded count grew:`);
                 for (const v of ratchetViolations) console.log(`    ${v.route} — ${v.detail}`);
+            }
+            if (registerViolations.length) {
+                console.log(
+                    `\n✗ ${registerViolations.length} register integrity failure(s) — the exception list is a` +
+                        ` reviewed artifact, not a residue:`
+                );
+                for (const v of registerViolations) console.log(`    [${v.list}] ${v.route} — ${v.detail}`);
             }
         }
         if (report.stale.length) {

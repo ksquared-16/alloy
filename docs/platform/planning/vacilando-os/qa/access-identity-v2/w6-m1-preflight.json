@@ -18,12 +18,24 @@
   "why_this_file_exists": "Plan §6 W-6 QA names it ('Evidence file per §11 — w6-m1-preflight.json') and MIGRATION-APPLY-GATE.md requires migrations[].preflight.evidence_path to point at JSON evidence under the mission QA directory. It is a THIRD file beyond the two this assignment's Scope names, created because the gate cannot be satisfied without it — the two prior W-6 dispatches could not create it because the preflight had never executed and there was no evidence to hold.",
   "durability_rationale": "NOT a transcription for convenience — this file is the DURABLE home of run 3's Q4 numbers, and the census artifact is not. wave0-authority-census.json's `results` block is OVERWRITTEN in place by the Director on every census run (trusted-host-actions.mjs:385-406 rewrites {...prior, status, query_hash, execution, results}), a behaviour that artifact predicts of itself at next_run_prepared.what_the_directors_merge_back_will_do. A run 4 would therefore silently replace the exact numbers this preflight rests on, leaving a preflight.ok:true pointing at counts that no longer exist. Snapshotting them here fixes that.",
 
+  "VOIDED_2026_09_06": {
+    "headline": "THIS PREFLIGHT IS VOID. Do not apply M1 on the strength of this file. Re-run the census and re-authorize.",
+    "voided_by": "claude, assignment asg_7b05887a569304, mission msn_b7040b5174ddeafb79 v1, fourth W-6 dispatch. Ruling recorded in full at 03-implementation-qa-sequence.md §6 W-6 ('The ruling') and wave0-authority-census.json -> w6_m1_preflight.w6_owner_ruling_2026_09_06.",
+    "why": "Census run 4 (2026-09-04, tha_836b248cacf951) returned q4_pairs_without_profile = 5, against the 2 this entire file rests on. Membership rows 8 -> 13, distinct pairs 6 -> 11, orphan profiles still 0. RULE 5 (immediacy) — 'an aged preflight is not a preflight' — has bitten for the first time in the programme, 28 days after the authorization was granted and never used.",
+    "what_is_NOT_wrong": "The migration is correct and is unchanged. It self-sizes in-transaction, so a stale preflight number cannot cause a WRONG apply — only an UNEXPLAINED one. That was argued in this very file on 2026-08-07 (residual_risks R1 and w6_owner_acceptance) and run 4 vindicated it. This void is about the AUTHORIZATION resting on numbers the operator would not recognise, not about safety.",
+    "what_IS_wrong": "Two things. (1) abort_conditions[0] now FIRES on confirmed evidence: three new fail-open pairs exist and cannot be attributed to a specific writer, and W-5's audit was incomplete — it swept routes, never scripts. (2) The operator authorized against a written record saying '2 rows'; an apply emitting 5 reads as a misfire.",
+    "the_finding_that_outlives_this_file": "W-6 cannot establish W-7's precondition. 'Q4 returns 0' is momentary — M1 empties the backlog and seed/QA tooling refills it. W-7 must wait on an INVARIANT (no writer can create a membership without a profile), which is W-5/M9 scope. See the plan §6 W-6 ruling part 3.",
+    "how_to_revive": "Run the prepared row-level attribution census at wave0-authority-census.json -> w6_m1_preflight.w6_owner_ruling_2026_09_06.prepared_attribution_census (it discharges abort_conditions[0] AND RULE 5 in one authorization), then re-derive every figure below from that run, then re-authorize. Do NOT edit the numbers in this file in place — they are run 3's and are the durable record of what was authorized on 2026-08-07."
+  },
+
   "preflight": {
-    "ok": true,
-    "scope_of_this_ok": "The PRE-APPLY rules only — RULE 1 (sizing), RULE 2 (grain), RULE 5 (immediacy) and both abort conditions, which are exactly what MIGRATION-APPLY-GATE.md requires a worker to establish BEFORE the operator is asked to authorize. RULES 3 and 4 are POST-apply and are structurally unreachable until the operator authorizes the apply; they are recorded below as pending, not as passed. `ok: true` here means 'safe to ASK', never 'applied' and never 'verified after'.",
+    "ok": false,
+    "ok_was_true_until_2026_09_06": "Set true on 2026-08-07 against census run 3; set FALSE on 2026-09-06 by asg_7b05887a569304 after run 4 moved the population 2 -> 5. Per MIGRATION-APPLY-GATE.md this drops M1's gate position from `operator_review` back to `unmet`: there is no valid preflight for M1 right now. Leaving it true would have presented an operator with an actionable apply on numbers known to be wrong — the exact outcome the gate exists to refuse.",
+    "scope_of_this_ok": "HISTORICAL — describes what ok:true meant while it stood. The PRE-APPLY rules only — RULE 1 (sizing), RULE 2 (grain), RULE 5 (immediacy) and both abort conditions, which are exactly what MIGRATION-APPLY-GATE.md requires a worker to establish BEFORE the operator is asked to authorize. RULES 3 and 4 are POST-apply and are structurally unreachable until the operator authorizes the apply; they are recorded below as pending, not as passed. `ok: true` here means 'safe to ASK', never 'applied' and never 'verified after'.",
     "summary": "pairs_without_profile=2; membership_rows=8; distinct_user_org_pairs=6; orphan_profiles=0; M1 sized at exactly 2 inserted rows against the pairs_without_profile grain; no unattributed growth across three runs; migration functionally proven not-yet-applied on target",
     "evidence_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/w6-m1-preflight.json",
-    "status_of_migration": "awaiting_authorization"
+    "status_of_migration": "preflight_void_reauthorization_required",
+    "status_history": "awaiting_authorization (2026-08-07, pre-authorization) -> authorized_awaiting_apply (2026-08-07, operator granted) -> preflight_void_reauthorization_required (2026-09-06, RULE 5 failure on census run 4). The middle state was real and was never collapsed into either neighbour; it ended because the preflight under it expired, not because the operator withdrew anything."
   },
 
   "census_source": {
@@ -100,8 +112,10 @@
   "abort_conditions": [
     {
       "condition": "q4_pairs_without_profile cannot be attributed to a known writer (cert fixture) — stop; a sixth membership writer exists and W-5's audit was incomplete.",
-      "status": "CLEAR",
-      "reasoning": "The count did not grow at all (2 -> 2 -> 2 across runs 1-3), and q4_membership_rows held at 8, so no membership was created in the interval by any writer. There is nothing requiring attribution. Note this is an absence of activity, not proof that the closure holds under load — W-5 closed the three product writers on 2026-08-07, but the deployed target has simply been idle."
+      "status": "FIRES AS OF 2026-09-06 — was CLEAR at runs 1-3, superseded by run 4.",
+      "status_at_run_3": "CLEAR",
+      "reasoning_at_run_3": "The count did not grow at all (2 -> 2 -> 2 across runs 1-3), and q4_membership_rows held at 8, so no membership was created in the interval by any writer. There is nothing requiring attribution. Note this is an absence of activity, not proof that the closure holds under load — W-5 closed the three product writers on 2026-08-07, but the deployed target has simply been idle.",
+      "run_4_outcome": "The caveat above was correct and is now realised. Q4 grew 2 -> 5 between 2026-08-07 and 2026-09-04; three new pairs arrived without a profile and CANNOT be attributed to a specific writer, because Q4 returns counts and not rows. The condition's consequent is established fact: a writer other than the anticipated cert fixture exists, and W-5's audit was incomplete — it swept routes, never scripts. Full ruling: wave0-authority-census.json -> w6_m1_preflight.w6_owner_ruling_2026_09_06.ruling_1_abort_condition. The CLASS is attributed with certainty (seed/QA tooling — four enumerated writers, no product path among them); the INSTANCE is not."
     },
     {
       "condition": "q4_profiles_without_membership > 0 — must be recorded and explained before apply.",
@@ -132,8 +146,9 @@
   },
 
   "apply_authorization": {
-    "granted": true,
-    "granted_at": "2026-08-07",
+    "granted": false,
+    "VOID_AS_OF_2026_09_06": "This authorization is VOID on RULE 5 grounds and MUST NOT be acted on. `granted` was true from 2026-08-07 until 2026-09-06; it is set false so that no reader or tool treats this as a live permission to apply. The operator did not withdraw it — the preflight beneath it expired when census run 4 moved the population 2 -> 5, and an apply under it would emit 5 against a ticket that says 2. Re-authorization is required against fresh numbers; the everything-else of this block is preserved verbatim below as the record of what was actually decided on 2026-08-07.",
+    "granted_at_historical": "2026-08-07",
     "granted_by": "operator (Kelly), answered from Mission Control",
     "decision": "Authorize the M1 shared apply, or parse-check it first?",
     "chosen_option": "(a) Authorize the apply now, confirming the target carries org fingerprint ab7e5dde2e229d5c46e251456e4d9534",

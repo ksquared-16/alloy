@@ -13,7 +13,9 @@
  *   2. A second membership for the same (user, org) does not add a second profile.
  *   3. A failure inside the atomic block leaves NO orphan membership row.
  *   4. A failure AFTER the profile insert leaves NO orphan profile row either.
- *   5. The W-0 Q4 anti-join returns zero for the org afterwards.
+ *   5. A writer that SKIPS the RPC still produces the fail-open — the negative
+ *      control that reproduces the path W-0 run 4 caught growing Q4.
+ *   6. The W-0 Q4 anti-join returns zero for the org afterwards.
  *
  * Note on (3) and (4): the RPC is a single transaction, so failure is injected by
  * making a write inside it violate a constraint rather than by stubbing the
@@ -233,6 +235,49 @@ describe.skipIf(!hasEnv)("W-5 — membership + access profile are atomic (integr
         if (missing.ok) return;
         expect(missing.kind).toBe("not_found");
         expect(await membershipCount(supabase, strangerId)).toBe(0);
+    });
+
+    /**
+     * The negative control for the whole workstream, and the one case that
+     * reproduces the path W-0 run 4 (2026-09-04) caught growing Q4.
+     *
+     * Every other case here proves the RPC is atomic. None of them proves the
+     * complementary fact: that a writer which SKIPS the RPC still produces the
+     * fail-open. W-0 run 4 attributed three new profile-less pairs to seed and QA
+     * tooling — `scripts/seedRealisticChildcareDemoData.ts:1310`,
+     * `scripts/seedAccessValidationDemo.ts:536`,
+     * `scripts/qa/employmentNegativeControls.sh:76` — by reasoning over counts,
+     * because Q4 returns counts and not rows. This executes that attribution's
+     * mechanism against a real database instead of inferring it.
+     *
+     * The shape below is `seedRealisticChildcareDemoData.ts:1310` verbatim: a bare
+     * `user_roles` insert with no profile write. If this case ever goes green with
+     * a profile row present, the invariant has moved into the database (a trigger
+     * or a constraint) and W-5's scope question is settled — at which point the
+     * assertion should be inverted rather than deleted.
+     */
+    it("a direct insert that skips the RPC is what grows Q4 — the seed-script shape", async () => {
+        const supabase = createAdminClient();
+        const [role] = await activeRoleKeys(supabase);
+        const userId = await makeUser(supabase, "bypass");
+
+        const { error } = await supabase
+            .from("user_roles")
+            .insert({ user_id: userId, org_id: orgId!, role } as never);
+        expect(error, "the direct insert itself is not blocked today — that is the finding").toBeNull();
+
+        expect(await membershipCount(supabase, userId)).toBe(1);
+        expect(
+            await profileCount(supabase, userId),
+            "no profile row: this is the fail-open W-5 closes for product paths and not for seed/QA tooling"
+        ).toBe(0);
+
+        // Self-clean rather than leave it to afterAll: the anti-join case below
+        // asserts no pair THIS SUITE created is uncovered, and this row is
+        // deliberately uncovered. Leaving it would fail that case for the one
+        // reason it is not testing.
+        await supabase.from("user_roles").delete().eq("user_id", userId).eq("org_id", orgId!);
+        expect(await membershipCount(supabase, userId)).toBe(0);
     });
 
     it("W-0 Q4 anti-join returns zero for this org", async () => {

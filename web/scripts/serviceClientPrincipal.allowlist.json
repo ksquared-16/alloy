@@ -15,13 +15,32 @@
     "",
     "The `ratchet` ceilings below are ENFORCED BY THE CHECK, not only by the lock. Over the",
     "ceiling is a violation; under it is stale, because a ceiling left above a fallen floor hands",
-    "out that many free exceptions. Both must be re-tightened whenever the floor moves."
+    "out that many free exceptions. All three must be re-tightened whenever the floor moves.",
+    "",
+    "`max_baseline` is the freeze clause as a ceiling, seeded at 0. The check ALSO enforces that",
+    "every exception names a `model` and a `reason`, that every baseline entry states",
+    "`why_not_an_exception` and a `w15_note`, and that the two lists are disjoint — so an entry",
+    "cannot be stripped of its review and stay green. Before 2026-09-06 those clauses lived only",
+    "in the vitest lock, which no CI workflow runs.",
+    "",
+    "CITATION CONVENTION: backtick the SYMBOL beside every line number (`fnName` at `:73`), never",
+    "a bare number. A bare number cannot be checked by a human or a tool, which is why drift here",
+    "recurred three times before anyone measured it.",
+    "",
+    "CONVENTION FULLY APPLIED 2026-09-06 (eighth issuance). Every exception entry that carries a",
+    "line reference now binds a symbol to it, and every reference was re-derived against the tree",
+    "rather than copied forward. Of the entries audited that pass, 2 carried SUBSTANTIVE errors —",
+    "`action/[token]` named an `.eq(\"token\", …)` that exists nowhere in the repo, and",
+    "`public/forms/[token]/resolve` named a gate symbol that is neither imported nor called in the",
+    "route — and 6 more line references had drifted. NOTHING here changed a route, a list",
+    "membership or a count; the authorization models were re-verified and all hold."
   ],
-  "reviewed": "2026-08-27",
-  "reviewed_by": "Real Enrollment V1 staging landing (PR #555) — added the two participant Enrollment capability-token routes that broke the staging build; previously WS8 V1 preference boundary (Communications final hardening) — added the recipient unsubscribe capability-token route; previously PR #416 staging build fix (tour book + confirm-attendance moved to guardTourActionRoute advisory model); previously assignment asg_91e144a61569e4 (mission msn_f74ed02c126c88d7ff, W-4 reopen re-execution, 2026-08-06); previously the same assignment's 2026-08-04 re-verification; originally asg_d203f547736c16 (mission msn_2d054741a54698fa4c)",
+  "reviewed": "2026-09-06",
+  "reviewed_by": "assignment asg_5a6c6af93091d2 (mission msn_f2483d8ceb3c6a90a8, W-4 eighth issuance, 2026-09-06) — completed the citation audit the seventh issuance named as its residual: all 15 exception entries carrying line references were re-derived against the tree and converted to the backtick-the-symbol convention. Two substantive errors found (`action/[token]` cited a non-existent `.eq(\"token\", …)`; `public/forms/[token]/resolve` cited a gate symbol absent from the route) and six drifted references corrected. No route, no list membership and no count changed. Previously assignment asg_0c0aed000bc6e9 (mission msn_f817f5b9608736b771, W-4 seventh issuance, 2026-09-06) — seeded `max_baseline` and moved the three lock-only freeze/reviewedness clauses into the check; applied the twice-deferred citation repairs to `enrollment-upload` and `tour-booking/[token]/resolve`. No list membership changed and no count moved; previously Real Enrollment V1 staging landing (PR #555) — added the two participant Enrollment capability-token routes that broke the staging build; previously WS8 V1 preference boundary (Communications final hardening) — added the recipient unsubscribe capability-token route; previously PR #416 staging build fix (tour book + confirm-attendance moved to guardTourActionRoute advisory model); previously assignment asg_91e144a61569e4 (mission msn_f74ed02c126c88d7ff, W-4 reopen re-execution, 2026-08-06); previously the same assignment's 2026-08-04 re-verification; originally asg_d203f547736c16 (mission msn_2d054741a54698fa4c)",
   "ratchet": {
     "max_subject_unresolved": 22,
     "max_transitive_only_unresolved": 12,
+    "max_baseline": 0,
     "history": [
       "2026-07-31: unresolved 26 (initial baseline), advisory 3.",
       "2026-08-04: unresolved re-tightened 26 → 17 after the book-v2 retirement; advisory left at 3.",
@@ -37,54 +56,56 @@
       "2026-08-19: unresolved raised 17 → 18 for `enrollment-document` (original-document artifact vertical). Read-only render of the participant's own filled document; the whole selection chain (session → pinned version → mapped source document → sha-pinned bytes) is server-derived from the token.",
       "2026-08-19: unresolved raised 18 → 19 for `enrollment-signature-asset` (artifact-positioned signing). Same gate; the request carries PNG bytes (magic-verified, 300KB cap) and NO target — the asset attaches to the D-95 anchor's own subject, resolved server-side.",
       "2026-08-19: unresolved raised 19 → 20 for the recipient Email unsubscribe route (`communications/unsubscribe`). Not a loosening. It is the same capability-token model as the `public/forms/[token]` and Participant Runtime entries, and it is the narrowest instance of that model on the list: the caller supplies NO target and NO value — Person, org and category are all signed claims, and the only reachable mutation is a single preference category to `opted_out` through the canonical write authority. Required because an unsubscribe link that demands a session is not an unsubscribe link; WS8 V1 needs recipient-initiated Email opt-out.",
-      "2026-08-27: unresolved raised 20 → 22 for the two new participant Enrollment routes (enrollment-artifact, enrollment-upload). Not a shrink, and deliberate: they are the tenth and eleventh members of the `public/forms/[token]` capability-token family, gated by the same `resolveParticipantEnrollmentFromToken` as the nine already listed. A public participant route has no auth principal to resolve by construction — the token IS the principal — so the ceiling moves with the family rather than the routes being left unlisted."
+      "2026-08-27: unresolved raised 20 → 22 for the two new participant Enrollment routes (enrollment-artifact, enrollment-upload). Not a shrink, and deliberate: they are the tenth and eleventh members of the `public/forms/[token]` capability-token family, gated by the same `resolveParticipantEnrollmentFromToken` as the nine already listed. A public participant route has no auth principal to resolve by construction — the token IS the principal — so the ceiling moves with the family rather than the routes being left unlisted.",
+      "2026-09-06: `max_baseline` seeded at 0. No count moved; this closes the half of the 2026-08-06 repair that was never applied. That repair moved the CEILINGS out of the vitest lock and into the check because `prebuild` could not see them, but left three further clauses lock-only — baseline may not grow, every baseline entry states why it is not an exception, and the two lists are disjoint — and no CI workflow runs `tests/access`. The sixth issuance demonstrated the consequence: all 22 reviewed exceptions relabelled as unreasoned `baseline` in a substituted register, and the CLI exited 0. All three clauses now fail the check itself, and exception `model`/`reason` is enforced alongside them so the same strip cannot be done in place.",
+      "2026-09-06 (eighth issuance): no ceiling moved — 22 / 12 / 0 all re-derived from the tree and all still exact. This entry records a REVIEW, not a ratchet change: the citation audit the seventh issuance deferred as residual was completed across all 15 exception entries that carry line references."
     ]
   },
   "exceptions": [
     {
       "route": "app/api/action/[token]/route.ts",
       "model": "capability-token",
-      "reason": "Read-only action-link metadata. The row is selected BY the bearer token (`.eq(\"token\", token)` at :22) — the token is the authorization, per I-4. No caller-supplied row selector."
+      "reason": "Read-only action-link metadata. The row is selected BY the bearer token — `.from(\"action_links\")` at `:21`, `.eq(\"token_hash\", hashFormLinkToken(token))` at `:23` — so the token is the authorization, per I-4. No caller-supplied row selector. CITATIONS CORRECTED 2026-09-06 (eighth issuance), and this one was SUBSTANTIVE: the entry claimed the selector was `.eq(\"token\", token)` at `:22`. Line `:22` is the `.select(...)`, and no `.eq(\"token\", …)` exists on this route or on any of the four sibling action-link routes — all five select by `token_hash`. The real model is STRONGER than the one the register described (the column stores a SHA, so a database read cannot recover a bearer token), but a reason that names a call which is not in the file cannot be checked by anyone, and a reader reconciling code to register could have `fixed` the code toward the weaker form."
     },
     {
       "route": "app/api/action/[token]/consume/route.ts",
       "model": "capability-token",
-      "reason": "Row selected by the bearer token (:17). Expiry and single-use are checked and return 410 (verified by phase 3 §13.1 / I-4)."
+      "reason": "Row selected by the bearer token — `.from(\"action_links\")` at `:17`, `.eq(\"token_hash\", hashFormLinkToken(token))` at `:19`. Expiry and single-use are checked and return 410 (verified by phase 3 §13.1 / I-4). Citation re-verified exact 2026-09-06 (eighth issuance); symbol bound per the convention."
     },
     {
       "route": "app/api/action-links/resolve/route.ts",
       "model": "capability-token",
-      "reason": "Row selected by the bearer token from the query string (:20). Same action_links capability as /action/[token]."
+      "reason": "Row selected by the bearer token from the query string — `request.nextUrl.searchParams.get(\"token\")` at `:12`, `.eq(\"token_hash\", hashFormLinkToken(token.trim()))` at `:21`. Same `action_links` capability as /action/[token]. CITATION CORRECTED 2026-09-06 (eighth issuance): `:20` was the `.select(...)`, not the selector."
     },
     {
       "route": "app/api/action-links/consume-accept-job/route.ts",
       "model": "capability-token",
-      "reason": "Row selected by the bearer token from the body (:75), documented as the same raw action_links.token as the /action/[token] URL."
+      "reason": "Row selected by the bearer token from the body — `.from(\"action_links\")` at `:75`, `.eq(\"token_hash\", hashFormLinkToken(token))` at `:77`, the token read at `:67` and documented at `:55` as the same raw `action_links.token` as the /action/[token] URL. Citation re-verified exact 2026-09-06 (eighth issuance); symbol bound per the convention."
     },
     {
       "route": "app/api/action-links/consume-reschedule/route.ts",
       "model": "capability-token",
-      "reason": "Row selected by the bearer token (:37); validity, consumption and expiry are checked before the write."
+      "reason": "Row selected by the bearer token — `.from(\"action_links\")` at `:37`, `.eq(\"token_hash\", hashFormLinkToken(token))` at `:39`; validity, consumption and expiry are checked before the write. Citation re-verified exact 2026-09-06 (eighth issuance); symbol bound per the convention."
     },
     {
       "route": "app/api/public/forms/[token]/resolve/route.ts",
       "model": "capability-token",
-      "reason": "Embed bootstrap. `resolvePublicFormEmbedContext(supabase, token)` (:31) is the gate; every subsequent read is scoped to what the token resolved."
+      "reason": "Embed bootstrap. The gate is `buildPublicFormResolvePayload(createServiceRoleClient(), token, requestEmbedOrigin(request))` at `:24-28`, which calls `resolvePublicFormEmbedContext(supabase, token)` at `lib/public/forms/buildPublicFormResolvePayload.ts:59` and refuses on `!resolved.ok` at `:60`; it then enforces `isEmbedOriginAllowed` at `:70` (403 ORIGIN_FORBIDDEN). Every subsequent read is scoped to what the token resolved — the route's only caller input is the token itself (`plaintextToken(rawToken)` at `:22`). CITATION CORRECTED 2026-09-06 (eighth issuance), and SUBSTANTIVE: this entry named `resolvePublicFormEmbedContext` at `:31` as the gate, but that symbol is neither imported nor called in this route — `:31` is a `publicErr(...)` inside the failure branch. The gate moved down one level into a helper. The exception remains valid because the same function still runs, but the register was pointing a reviewer at a line that disproves it, and this is the second helper-refactor citation orphan in the register (see `tour-booking/[token]/resolve`), which is the 2026-08-06 record's warning that `a helper refactor is an exit from W-4's enforced predicate` showing up in the PROSE as well as in the check."
     },
     {
       "route": "app/api/public/forms/[token]/submissions/route.ts",
       "model": "capability-token",
-      "reason": "Creates a draft tied to the resolved public link (:46). Creates only — no caller-supplied row selector."
+      "reason": "Creates a draft tied to the resolved public link — `resolvePublicFormEmbedContext(supabase, token)` at `:50` (imported `:20`). Creates only — no caller-supplied row selector. CITATION CORRECTED 2026-09-06 (eighth issuance): `:46`→`:50`."
     },
     {
       "route": "app/api/public/forms/[token]/submissions/[submissionId]/route.ts",
       "model": "capability-token + subject-binding",
-      "reason": "Takes a caller-supplied submissionId, but binds it: `verifySubmissionBelongsToPublicEmbed(supabase, ctx, submissionId)` at :58 (GET) and :144 (PATCH) runs before the read/update. This is the subject-bound property I-4 requires."
+      "reason": "Takes a caller-supplied submissionId, but binds it: `verifySubmissionBelongsToPublicEmbed(supabase, ctx, submissionId)` at `:58` (GET) and `:144` (PATCH) runs before the read/update, each preceded by `resolvePublicFormEmbedContext` at `:42` and `:97`. This is the subject-bound property I-4 requires. Both citations re-verified exact 2026-09-06 (eighth issuance) — the only entry in the register whose multi-line citation set survived re-measurement unchanged."
     },
     {
       "route": "app/api/public/forms/[token]/submissions/[submissionId]/submit/route.ts",
       "model": "capability-token + subject-binding",
-      "reason": "Same binding check at :114 before the submit path executes."
+      "reason": "Same binding check — `verifySubmissionBelongsToPublicEmbed(supabase, ctx, submissionId)` at `:117`, after `resolvePublicFormEmbedContext` at `:75` — before the submit path executes. CITATION CORRECTED 2026-09-06 (eighth issuance): `:114`→`:117`."
     },
     {
       "route": "app/api/public/forms/[token]/enrollment-objective/route.ts",
@@ -114,7 +135,7 @@
     {
       "route": "app/api/webhooks/resend/route.ts",
       "model": "webhook-signature",
-      "reason": "Svix `Webhook.verify` against RESEND_WEBHOOK_SECRET at :69, and it returns 400 before `createAdminClient()` is constructed at :91 — no statement reaches the database on an unsigned request. The handler documents that session auth MUST NOT gate it."
+      "reason": "Svix `new Webhook(secret).verify(...)` against `RESEND_WEBHOOK_SECRET` at `:110` (secret read `:95`, 503 if unset `:97`), and it returns 400 before `createAdminClient()` is constructed at `:132` — no statement reaches the database on an unsigned request, and the ordering that makes this true (`:110` < `:132`) was re-derived from the tree, not assumed. The handler documents at `:90` that session auth MUST NOT gate it. CITATIONS CORRECTED 2026-09-06 (eighth issuance): `:69`→`:110`, `:91`→`:132`. The security property is unchanged; both line numbers had drifted by roughly 40 lines, which is the largest drift in the register and the reason the ordering claim had to be re-checked rather than carried."
     },
     {
       "route": "app/api/verticals/route.ts",
@@ -124,32 +145,32 @@
     {
       "route": "app/api/public/booking-config/route.ts",
       "model": "public-catalog-read + env-pinned-org",
-      "reason": "Pricing/addon catalogs for the public booking UI. The org is pinned to ALLOY_PUBLIC_ORG_ID from the environment (:26) — never caller-supplied — and the handler is read-only."
+      "reason": "Pricing/addon catalogs for the public booking UI. The org is pinned to `process.env.ALLOY_PUBLIC_ORG_ID` at `:26` — never caller-supplied — and the handler is read-only. Citation re-verified exact 2026-09-06 (eighth issuance); symbol bound per the convention."
     },
     {
       "route": "app/api/public/field-definitions/route.ts",
       "model": "public-catalog-read + env-pinned-org",
-      "reason": "Org pinned to ALLOY_PUBLIC_ORG_ID and 500s without it (:17-20); entity_type is validated against a fixed allow-list (:32-38). Read-only, returns only fields explicitly flagged for public booking."
+      "reason": "Org pinned to `process.env.ALLOY_PUBLIC_ORG_ID` at `:17` and 500s without it at `:19`; `entityType` is validated against the fixed `allowed` array declared at `:32` and enforced at `:33-38` (400 otherwise), and reaches the query only as `.eq(\"entity_type\", entityType)` at `:47`/`:55`. Read-only, returns only fields explicitly flagged for public booking. Citations re-verified exact 2026-09-06 (eighth issuance); symbols bound per the convention."
     },
     {
       "route": "app/api/vendor-application/route.ts",
       "model": "public-intake-create + env-pinned-org",
-      "reason": "Unauthenticated vendor application intake. Org pinned to ALLOY_PUBLIC_ORG_ID and 500s without it (:33-37). Creates only — it selects no existing row by a caller-supplied id."
+      "reason": "Unauthenticated vendor application intake. Org pinned to `process.env.ALLOY_PUBLIC_ORG_ID` at `:33` and 500s without it at `:35-37`. Creates only — it selects no existing row by a caller-supplied id. Citation re-verified exact 2026-09-06 (eighth issuance); symbol bound per the convention."
     },
     {
       "route": "app/api/communications/unsubscribe/route.ts",
       "model": "capability-token",
-      "reason": "Recipient-initiated Email unsubscribe; public by necessity (an unsubscribe link that requires a login is not an unsubscribe link). EVERY target is a signed claim, not a caller-supplied selector: the Person, the organization and the single mutable category all come out of the HMAC-verified token (`verifyUnsubscribeToken`, lib/communications/preferences/unsubscribeToken.ts:150-190), and applyUnsubscribe.ts:60-90 reads nothing from the request. The caller therefore supplies no value the mutation uses at all — strictly narrower than the enrollment-turn precedent, where the caller supplies a value but never a target. The token cannot switch categories (`c` is signed), cannot cross tenants (`o` is signed, and persons is re-checked on the pair), and the only reachable write is toState=\"opted_out\" through the canonical persistCommunicationPreference authority."
+      "reason": "Recipient-initiated Email unsubscribe; public by necessity (an unsubscribe link that requires a login is not an unsubscribe link). EVERY target is a signed claim, not a caller-supplied selector: the Person, the organization and the single mutable category all come out of the HMAC-verified token (`verifyUnsubscribeToken`, `lib/communications/preferences/unsubscribeToken.ts:130-168`, signature checked constant-time at `:144` BEFORE expiry at `:165`), and `applyUnsubscribeToken` (`lib/communications/preferences/applyUnsubscribe.ts:50-68`) reads nothing from the request — it destructures the claims at `:59` and hands them to `performUnsubscribe` at `:61`, which re-checks the person↔org pair against the database at `:78-84`. The caller therefore supplies no value the mutation uses at all — strictly narrower than the enrollment-turn precedent, where the caller supplies a value but never a target. The token cannot switch categories (`c` is signed), cannot cross tenants (`o` is signed, and persons is re-checked on the pair), and the only reachable write is toState=\"opted_out\" through the canonical persistCommunicationPreference authority."
     },
     {
       "route": "app/api/public/forms/[token]/enrollment-artifact/route.ts",
       "model": "capability-token",
-      "reason": "Same gate as its siblings — `resolveParticipantEnrollmentFromToken(supabase, token)` at :52 — and READ-ONLY. The request selects nothing: it is a GET whose only caller input is the token itself, and `resolveActiveArtifact` at :59 takes the org and session from the resolved access, never from the request. It answers which document the participant is on and where it is signed, for both renderer engines."
+      "reason": "Same gate as its siblings — `resolveParticipantEnrollmentFromToken(supabase, token)` at `:52` (imported `:26`) — and READ-ONLY. The request selects nothing: it is a GET whose only caller input is the token itself, and `resolveActiveArtifact` at `:59` (imported `:29`) takes the org and session from the resolved access, never from the request. Both citations re-verified exact 2026-09-06 (eighth issuance), a second time after the sixth issuance. It answers which document the participant is on and where it is signed, for both renderer engines."
     },
     {
       "route": "app/api/public/forms/[token]/enrollment-upload/route.ts",
       "model": "capability-token + subject-binding",
-      "reason": "Same gate at :75. The caller names a field id (:88) and NOTHING else, and it is bound: `uploadDestinationForField` at :105 reads the session's own D-94-pinned schema and refuses any id that is not an upload destination on THAT artifact. The doc_type comes from the schema (:135), never the caller, and the entity is the session's own child read from `process_instances.subject_id` at :111-117 — the request cannot name an entity. Bytes are magic-sniffed against a PDF/PNG/JPEG allow-list with a 10MB cap."
+      "reason": "Same gate — `resolveParticipantEnrollmentFromToken` at `:73`. The caller names a field id (`body.field_id` → `fieldId`, `:86`) and NOTHING else, and it is bound: `resolveParticipantUploadDestination` at `:110` reads the session's own D-94-pinned schema and refuses any id that is not an upload destination on THAT artifact. The doc_type comes from the schema (`destination.docType`, `:146`), never the caller, and the entity is the session's own child read from `process_instances.subject_id` at `:124-128` — the request cannot name an entity. Bytes are magic-sniffed against a PDF/PNG/JPEG allow-list (`sniff`, `:53`) under a 10MB cap (`MAX_BYTES`, `:36`, enforced at `:96`). CITATIONS CORRECTED 2026-09-06: all five line references were drifted and `uploadDestinationForField` had been renamed to `resolveParticipantUploadDestination`. Reported by the fifth issuance (2026-09-04) and again by the sixth; applied here on the third. The authorization model itself was re-verified against the tree and is unchanged — only the citations were wrong."
     }
   ],
   "baseline": [],
@@ -168,7 +189,7 @@
     },
     {
       "route": "app/api/public/tour-booking/[token]/resolve/route.ts",
-      "reason": "Recipient-scoped capability token, not a session principal. The route no longer constructs a service client: `guardTourActionRoute` (:39) holds it and returns it only after `authorizeTourAction` verifies the token hash, the link↔invitation recipient binding, and the action kind. `requiredActions` is the route constant `REQUIRED_ACTIONS` (:27-35) — never request-supplied. CORRECTED 2026-08-06: that constant now lists all seven action kinds, so the previous reason's claim that `[view_tour_slots, view_tour_details]` keeps a decline- or cancel-only token from reading context is NO LONGER TRUE. The widening is deliberate and argued in the route header (:18-25) — any credential on the same invitation may re-read what the invitation already disclosed to that same recipient — and the authorizer still proves recipient binding, expiry and revocation. Read-only; discloses labels and status, never a person, opportunity, process or household id."
+      "reason": "Recipient-scoped capability token, not a session principal. The route no longer constructs a service client: `guardTourActionRoute` (imported `:4`, called `:45`) holds it and returns it only after `authorizeTourAction` verifies the token hash, the link↔invitation recipient binding, and the action kind. `requiredActions` is the route constant `REQUIRED_ACTIONS` (`:32-41`) — never request-supplied. CORRECTED 2026-08-06: that constant now lists every action kind, so the previous reason's claim that `[view_tour_slots, view_tour_details]` keeps a decline- or cancel-only token from reading context is NO LONGER TRUE. The widening is deliberate and argued in the route header (`:15-24`) — any credential on the same invitation may re-read what the invitation already disclosed to that same recipient — and the authorizer still proves recipient binding, expiry and revocation. Read-only; discloses labels and status, never a person, opportunity, process or household id. CITATIONS CORRECTED 2026-09-06: `guardTourActionRoute` `:39`→`:45`, `REQUIRED_ACTIONS` `:27-35`→`:32-41`, header `:18-25`→`:15-24`. Also substantive — the constant lists EIGHT kinds, not the seven this entry claimed; `confirm_attendance` was added by PR #416 and the 2026-08-06 correction was never updated to follow it."
     },
     {
       "route": "app/api/public/tour-booking/[token]/slots/route.ts",
