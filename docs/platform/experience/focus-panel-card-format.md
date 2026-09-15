@@ -122,3 +122,143 @@ Consistent with `tests/adminV2/sourcePresenceIsNotRuntimeProof.test.tsx`:
 | heights actually match | **browser geometry** |
 
 A source guard proves the markup was typed. It cannot prove the operator sees it.
+
+## 4 · Assigned height — the published composition owns card geometry
+
+> Added once implemented. This replaces the earlier note that equal-height rhythm was
+> unresolved on the composed canvas.
+
+**Cards own their content. The published Focus Panel composition owns their geometry.**
+
+### 4.1 Two heights, kept apart
+
+| | |
+| --- | --- |
+| **intrinsic** | what the card's content needs · measured · owned by the card |
+| **assigned** | what the authored bands give it · solved · owned by the composition |
+
+`lib/adminV2/runtime/focusPanel/composition/focusPanelRowHeights.ts` is pure and receives only
+measurements, so it has no way to read its own output.
+
+### 4.2 Why CSS could not do this
+
+The composed canvas positions every area **`position: absolute`** with JS-computed
+`left`/`width`/`top`. `align-items` is inert on absolutely positioned children — tested live by
+injecting `stretch` on both the canvas and the area, which changed nothing.
+
+### 4.3 `rowStart` is a placement coordinate, not a visual row
+
+**This is the rule that was got wrong, shipped, and measured wrong on the live panel.**
+
+Column-aware placement advances each column independently, so two cards an operator composed side
+by side are routinely published with *different* `rowStart` values. The live Firefly Work Unit
+panel publishes exactly that:
+
+| card | colStart | colSpan | rowStart | rowSpan |
+| --- | --- | --- | --- | --- |
+| `business_process` | 1 | 8 | **1** | 2 |
+| `financials` | 9 | 4 | **2** | 2 |
+
+They are drawn side by side — each starts at the top of its own column — and an engine that
+equalises on `rowStart === rowStart` sees two unrelated cards. Measured on staging-equivalent
+build: **325px beside 299px**, with every same-`rowStart` test in the suite green.
+
+So:
+
+> **Equal-height rhythm follows authored VISUAL BANDS, not literal `rowStart` equality.**
+> `rowStart` is a placement coordinate under column-aware composition. It is not by itself a
+> visual row identity.
+
+### 4.4 What a band is
+
+`focusPanelVisualBands.ts` merges the authored row extents `[rowStart, rowStart + rowSpan)`. Each
+merged interval is one band — `[1,3)` and `[2,4)` overlap, so `business_process` and `financials`
+are one band, which is the relationship the builder drew and the coordinate alone lost.
+
+Within a band, cards sharing a column form a **chain** and stack on each other. The band is as tall
+as its tallest chain; every shorter chain is stretched to match, its shortfall split equally across
+its cards. A single-card chain simply takes the band's height.
+
+```
+┌──────────────┬──────────────┐   A + gap + B is one chain
+│      A       │              │   C is another
+├──────────────┤      C       │   band height = max(A+gap+B, C)
+│      B       │              │   so top(C) == top(A), bottom(C) == bottom(B)
+└──────────────┴──────────────┘
+```
+
+Band identity and chain identity both come from the **published composition** — never from a
+rendered rectangle or DOM order. `deriveVisualBands` and `columnChains` are built on
+`packOrder` and `columnsOverlap`, the placement engine's own primitives, so the builder preview
+and the Work Unit runtime cannot disagree about where a band begins. One composition, one
+interpretation, both surfaces.
+
+A band holding any **unmeasured** card is left entirely alone. An assignment derived from a height
+nobody has measured is a guess, and a guess here is a rectangle on screen.
+
+`rowSpan` is still **not** a height floor: it says which rows a card occupies, and therefore which
+band it joins. How tall the band is comes from measured content alone, so a band whose cards shrink
+shrinks with them.
+
+### 4.5 What this does not restore
+
+`resolveColumnAwareLayout` abandoned global CSS-grid rows for a measured reason: Household ended
+at y=1448 and Health, directly beneath it, began at y=1716 — 268px owned by rows occupied only in
+the opposite columns. **Bands do not bring that back.** A band never spans rows no card occupies,
+and cards in different bands are never equalised, so cards in unrelated columns stay as independent
+as the column-aware model made them.
+
+### 4.6 Intrinsic child vs assigned wrapper
+
+**The element the layout stretches can never be the element the layout measures.**
+
+```
+AREA WRAPPER                  position: absolute
+  .alloy-os-fp-grid-area      top/left/width = placement, height = assigned band height
+        │
+        ▼
+  INTRINSIC NODE              min-height: 100%  — fills the band, can exceed it
+  .alloy-os-fp-card-intrinsic measured, and watched by both observers
+        │
+        ▼
+  CARD                        flex: 1 1 auto — takes the room, so the chrome is the band's height
+```
+
+The intrinsic node is rendered by `FocusPanelCardGrid`, one per authored area, so it outlives every
+subtree a card swaps in when its data arrives — which is what the earlier move to the wrapper was
+protecting, kept without the wrapper's dishonesty.
+
+This canvas has now shipped the feedback failure **in both directions**, and the rules exist
+because of each:
+
+| shipped | mechanism | symptom |
+| --- | --- | --- |
+| wrapper carried `min-height`, measurement read the wrapper | the measurement returned its own output | *"a card could only ever grow"* — a Children roster shrinking 17 → 2 kept the whitespace |
+| PR #989 pinned the wrapper with `height` and measured it | a fixed box cannot report that its content no longer fits | late-arriving card content **overflowed and the row beneath was drawn straight across it** |
+
+Four rules keep both closed:
+
+1. the measurement reads the **intrinsic node** with the wrapper's height neutralized
+   (`wrapper.style.height = "auto"`) and restored in the same synchronous block — layout is forced,
+   nothing is painted between, so the value is intrinsic and nothing flickers;
+2. the intrinsic node's fill is `min-height: 100%`, a **floor, not a ceiling** — content that
+   outgrows its band pushes through and the `ResizeObserver` sees it. That is the overlap fix;
+3. a `MutationObserver` on the intrinsic node's subtree catches the half a `ResizeObserver` cannot
+   see — content shrinking *below* the floor changes no box and fires no resize. It watches
+   `childList`/`subtree`/`characterData` and **never `attributes`**, because the only thing the
+   engine writes is inline style on the wrapper, outside that subtree, so the measurement cannot
+   re-trigger itself. Reads are coalesced to one per frame;
+4. the solver is pure — re-solving with its own output as input returns the same answer.
+
+All four are asserted. Rules 1–3 each close a different half; any one of them alone reopens a loop.
+
+### 4.7 Certification
+
+| claim | proof |
+| --- | --- |
+| solver constraints, spans, convergence | unit — `focusPanelRowHeightSolver.test.ts` |
+| assignment applied, measurement neutralized | source contract — `focusPanelExpandedSurfaceGeometry.test.tsx` |
+| **cards actually align on screen** | **browser geometry, ≤1px** |
+
+Geometry is authoritative. jsdom computes no layout, so an equal-height assertion there would pass
+against any implementation at all.
