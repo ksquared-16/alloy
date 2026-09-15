@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
+import { chargeCategoryLabel, isDeclaredChargeCategory } from "@/lib/financials/chargeCategories";
 
 const read = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
 const WORKSPACE_DETAIL = "app/adminV2/financials/FinancialsAccountWorkspaceDetail.tsx";
@@ -28,11 +28,39 @@ describe("F5A · operator labels resolve through the owning catalog", () => {
     });
 
     /*
-     * THE FLOOR IS HONEST, NOT INVENTED. A category the catalog does not know comes back unchanged
-     * rather than being humanized into a label nobody configured.
+     * ── A REVERSAL, AND THE EVIDENCE FOR IT ────────────────────────────────────────────────────
+     *
+     * This used to require an unknown category to come back UNCHANGED — "the floor is honest, not
+     * invented" — on the grounds that humanising it produced a label nobody configured. Mounted
+     * certification showed what that costs: a payment receipt in the Accounts workspace read
+     * `late_pickup_fee` beside the money it settled. `late_pickup_fee` is a real category on real
+     * tenants and is not in the declared vocabulary, so the honest floor was a stored key on an
+     * operator's screen.
+     *
+     * And the codebase already disagreed with itself about it: the payment chooser kept this
+     * humanising rule PRIVATELY, so the chooser said "Late pickup fee" while the receipt for the
+     * very same charge said `late_pickup_fee`.
+     *
+     * The distinction that resolves it: reading a key aloud is not naming it. "Late pickup fee"
+     * asserts nothing `late_pickup_fee` does not already assert — same token, same words, minus the
+     * underscores. Inventing a label would be substituting DIFFERENT words, and nothing here does
+     * that. Callers that must genuinely tell a declared category from a tenant's own ask
+     * `isDeclaredChargeCategory`, which is that question and only that question.
      */
-    it("returns an unknown category unchanged rather than inventing a label", () => {
-        expect(chargeCategoryLabel("not_a_configured_category")).toBe("not_a_configured_category");
+    it("reads an unknown category aloud without renaming it", () => {
+        expect(chargeCategoryLabel("not_a_configured_category")).toBe("Not a configured category");
+        expect(chargeCategoryLabel("late_pickup_fee")).toBe("Late pickup fee");
+        /* Same words as the key, never different ones. */
+        expect(chargeCategoryLabel("late_pickup_fee").toLowerCase().replace(/ /g, "_")).toBe("late_pickup_fee");
+        /* And whether the vocabulary knows it stays a separate, answerable question. */
+        expect(isDeclaredChargeCategory("not_a_configured_category")).toBe(false);
+        expect(isDeclaredChargeCategory("tuition")).toBe(true);
+    });
+
+    it("never hands a raw stored key to a surface", () => {
+        for (const key of ["late_pickup_fee", "registration_fee", "materials_fee", "some_tenant_category"]) {
+            expect(chargeCategoryLabel(key), `${key} reaches the operator as language`).not.toMatch(/_/);
+        }
     });
 
     it("resolves the payment application label through the catalog, not the raw key", () => {

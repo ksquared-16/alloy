@@ -138,6 +138,17 @@ export async function resolvePayerCandidates(
             /* An ended relationship is history, not a payer you would offer today. */
             if (t(row.end_date)) return null;
             if (t(row.status).toLowerCase() === "inactive") return null;
+            /*
+             * THE CHILD IS THE SUBJECT, NOT A PAYER.
+             *
+             * `customer_persons` is meant to be the adult edge — the durable household composer
+             * says so in as many words, children carrying their identity on the member row — but
+             * the certification tenant has children on it too, and the chooser duly offered a
+             * four-year-old as the person who paid the bill. Role types are organisation-configured
+             * vocabulary, so this excludes the canonical `child` key rather than guessing at
+             * synonyms; a household that renames the role keeps its own word and this reads it.
+             */
+            if (t(row.role_type).toLowerCase() === "child") return null;
             const name =
                 [t(row.persons?.first_name), t(row.persons?.last_name)].filter(Boolean).join(" ")
                 || "Unnamed contact";

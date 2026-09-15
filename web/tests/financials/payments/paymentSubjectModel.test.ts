@@ -97,6 +97,23 @@ describe("payer candidates", () => {
         expect(candidates.map((c) => c.name)).toEqual(["Rosa Alvarez", "Abe Alvarez", "Zoe Alvarez"]);
     });
 
+    /*
+     * Found mounted: the chooser offered "Ana Alvarez · child" as the person who paid the bill.
+     * `customer_persons` is nominally the adult edge, and the certification tenant has children on
+     * it anyway.
+     */
+    it("never offers a child as the person who paid", async () => {
+        const supabase = fakeSupabase({
+            contacts: [
+                person("p-dana", "Dana", "Alvarez", { role_type: "parent", is_primary: true }),
+                person("p-ana", "Ana", "Alvarez", { role_type: "child" }),
+                person("p-rosa", "Rosa", "Alvarez", { role_type: "guardian" }),
+            ],
+        });
+        const { candidates } = await resolvePayerCandidates(supabase, ARGS);
+        expect(candidates.map((c) => c.name)).toEqual(["Dana Alvarez", "Rosa Alvarez"]);
+    });
+
     it("drops relationships that have ended or gone inactive", async () => {
         const supabase = fakeSupabase({
             contacts: [

@@ -61,8 +61,31 @@ export const CHARGE_CATEGORY_REFERENCE: Record<ChargeCategory, { description: st
     subsidy_offset: { description: "Reduction covered by a third-party payer.", example: "Agency-funded portion" },
 };
 
+/**
+ * A CATEGORY, IN LANGUAGE. Never a stored key on an operator's screen.
+ *
+ * The declared vocabulary answers first. It is not enough on its own: tenants carry categories the
+ * catalog does not enumerate — `late_pickup_fee` and `registration_fee` are both real and neither
+ * is in `CHARGE_CATEGORIES` — and this used to hand those straight back, so a receipt read
+ * "late_pickup_fee" beside the money it settled.
+ *
+ * Humanising lives HERE rather than in one caller, which is where it used to live: the payment
+ * chooser had this rule privately, so the chooser said "Late pickup fee" while the receipt for the
+ * very same charge said `late_pickup_fee`. One rule, every surface.
+ *
+ * `isDeclaredChargeCategory` is the separate question — whether the vocabulary KNOWS this key — for
+ * the callers that genuinely need to tell a declared category from a tenant's own.
+ */
 export function chargeCategoryLabel(category: string): string {
-    return (CHARGE_CATEGORY_LABEL as Record<string, string>)[category] ?? category;
+    const known = (CHARGE_CATEGORY_LABEL as Record<string, string>)[category];
+    if (known) return known;
+    const words = category.replace(/[_-]+/g, " ").trim();
+    return words ? words.charAt(0).toUpperCase() + words.slice(1) : category;
+}
+
+/** Whether the declared vocabulary knows this key, as distinct from whether it can be read aloud. */
+export function isDeclaredChargeCategory(category: string): boolean {
+    return Boolean((CHARGE_CATEGORY_LABEL as Record<string, string>)[category]);
 }
 
 export function listChargeCategories(): {
