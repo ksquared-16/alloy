@@ -122,3 +122,71 @@ Consistent with `tests/adminV2/sourcePresenceIsNotRuntimeProof.test.tsx`:
 | heights actually match | **browser geometry** |
 
 A source guard proves the markup was typed. It cannot prove the operator sees it.
+
+## 4 · Assigned height — the published composition owns card geometry
+
+> Added once implemented. This replaces the earlier note that equal-height rhythm was
+> unresolved on the composed canvas.
+
+**Cards own their content. The published Focus Panel composition owns their geometry.**
+
+### 4.1 Two heights, kept apart
+
+| | |
+| --- | --- |
+| **intrinsic** | what the card's content needs · measured · owned by the card |
+| **assigned** | what the authored bands give it · solved · owned by the composition |
+
+`lib/adminV2/runtime/focusPanel/composition/focusPanelRowHeights.ts` is pure and receives only
+measurements, so it has no way to read its own output.
+
+### 4.2 Why CSS could not do this
+
+The composed canvas positions every area **`position: absolute`** with JS-computed
+`left`/`width`/`top`. `align-items` is inert on absolutely positioned children — tested live by
+injecting `stretch` on both the canvas and the area, which changed nothing.
+
+### 4.3 The solver
+
+- a card in one band → that band is at least its intrinsic height
+- a card spanning N bands → those N bands plus (N−1) gaps total at least its intrinsic height
+- a shortfall on a spanning card is distributed **equally** across the bands it covers, because
+  the authored layout expresses no row weights; inventing a priority would be a hidden rule
+- an **unmeasured** card constrains nothing — a placeholder is indistinguishable from a real
+  measurement one frame later
+- bands are keyed by authored `rowStart`, never by DOM adjacency
+
+`rowSpan` regains exactly one meaning: a spanning card covers its bands. It is still **not** a
+height floor — a spanning card with short content does not hold its bands open.
+
+### 4.4 What this does not restore
+
+`resolveColumnAwareLayout` abandoned global CSS-grid rows for a measured reason: Household ended
+at y=1448 and Health, directly beneath it, began at y=1716 — 268px owned by rows occupied only in
+the opposite columns. **This solver does not bring that back.** It equalizes only cards the author
+placed in the same band and never reaches across bands, so cards in unrelated columns stay as
+independent as the column-aware model made them.
+
+### 4.5 Feedback-loop prevention
+
+This canvas already shipped the loop once: the wrapper carried an imposed `min-height`, the
+measurement read the wrapper, and *"a card could only ever grow"*. Three things keep it closed:
+
+1. the measurement **neutralizes** the assigned height (`style.height = "auto"`), reads, and
+   restores it in the same synchronous block — layout is forced, nothing is painted between, so
+   the value is intrinsic and nothing flickers;
+2. the assignment is an exact `height`, never a `min-height` that could only ratchet upward;
+3. the solver is pure — re-solving with its own output as input returns the same answer.
+
+All three are asserted, and either of the first two alone would reopen the loop.
+
+### 4.6 Certification
+
+| claim | proof |
+| --- | --- |
+| solver constraints, spans, convergence | unit — `focusPanelRowHeightSolver.test.ts` |
+| assignment applied, measurement neutralized | source contract — `focusPanelExpandedSurfaceGeometry.test.tsx` |
+| **cards actually align on screen** | **browser geometry, ≤1px** |
+
+Geometry is authoritative. jsdom computes no layout, so an equal-height assertion there would pass
+against any implementation at all.

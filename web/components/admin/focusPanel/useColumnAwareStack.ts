@@ -6,6 +6,7 @@ import {
     resolveColumnAwareLayout,
     type ColumnAwareLayout,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelColumnAwareLayout";
+import { solveRowHeights } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelRowHeights";
 import type { FocusPanelGridLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 
 /**
@@ -89,7 +90,24 @@ export function useColumnAwareStack(args: {
                  * because it is fractional — rounding every card up to a whole pixel
                  * accumulated visible drift down a long column.
                  */
+                /*
+                 * INTRINSIC, MEASURED THROUGH THE ASSIGNMENT.
+                 *
+                 * The wrapper now carries a solved height, so reading its box would hand back
+                 * the number this engine just imposed — the exact shape of the defect above,
+                 * where a card could only grow. The assignment is neutralised for the read and
+                 * restored in the same synchronous block: `getBoundingClientRect` forces layout,
+                 * so the intrinsic value is real, and nothing is painted in between, so nothing
+                 * flickers.
+                 *
+                 * Still the WRAPPER and not a child, which is what keeps the subtree-swap fix
+                 * above intact: the element observed is the one that outlives the card's
+                 * internals.
+                 */
+                const assigned = el.style.height;
+                if (assigned) el.style.height = "auto";
                 const measured = el.getBoundingClientRect().height;
+                if (assigned) el.style.height = assigned;
                 if (Math.abs((prev.get(card) ?? -1) - measured) > 0.5) {
                     next.set(card, measured);
                     changed = true;
@@ -203,10 +221,23 @@ export function useColumnAwareStack(args: {
     const resolved = useMemo(() => {
         if (!width) return null;
         // A raised card keeps the slot it left, at the height it left it.
-        const effective =
+        const intrinsic =
             holdCard && holdHeight != null
                 ? new Map(heights).set(holdCard, holdHeight)
                 : heights;
+        /*
+         * THE PUBLISHED COMPOSITION DECIDES HOW TALL A CARD IS DRAWN.
+         *
+         * `intrinsic` is what each card's content needs; `assigned` is what the authored bands
+         * give it. Placement then runs on the assigned heights, so a card beneath a band that
+         * grew is pushed down by the band rather than by one neighbour's content.
+         *
+         * The two never merge: `solveRowHeights` is pure and receives only measurements, and the
+         * measurement above reads through the assignment rather than back from it.
+         */
+        const { assigned } = solveRowHeights({ areas: layout.areas, intrinsic, gapPx });
+        const effective = new Map(intrinsic);
+        for (const [card, height] of assigned) if (intrinsic.has(card)) effective.set(card, height);
         return resolveColumnAwareLayout({ layout, heights: effective, width, gapPx, unmeasuredHeightFor });
     }, [layout, heights, width, gapPx, unmeasuredHeightFor, holdCard, holdHeight]);
 

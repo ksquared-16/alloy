@@ -5200,10 +5200,16 @@ html[data-alloy-os-runtime-split="true"]
 }
 .alloy-os-fp-grid-area {
   display: flex;
-  /* The card must not stretch to its wrapper: the wrapper's height IS the card's, and a
-   * stretched child would make any height we ever set read back as the measured content
-   * height. Height flows content -> wrapper -> layout, never the other way. */
-  align-items: flex-start;
+  /*
+   * The card fills the band the composition assigned it.
+   *
+   * This was `flex-start`, with the reasoning that a stretched child would make any height we
+   * set read back as the measured content height. That was exactly right for a wrapper whose
+   * box WAS the measurement. It no longer is: the measurement neutralises the assigned height
+   * before reading, so stretching the child can no longer feed the assignment back, and cards
+   * sharing an authored band can finally be drawn the same height.
+   */
+  align-items: stretch;
   min-width: 0;
   min-height: 0;
 }

@@ -562,17 +562,28 @@ export default function FocusPanelCardGrid({
                                               }
                                         : boxOf
                                             ? {
-                                                  // Placement only. NO height of any kind:
-                                                  // the authored span owns where a card sits
-                                                  // and how wide it is, and the content owns
-                                                  // how tall it is. A `min-height` here would
-                                                  // be read straight back by the measurement
-                                                  // on the next frame and become the card's
-                                                  // height forever.
+                                                  /*
+                                                   * Placement AND the solved band height.
+                                                   *
+                                                   * This carried no height at all, because a
+                                                   * `min-height` here used to be read straight
+                                                   * back by the measurement and become the
+                                                   * card's height forever. That hazard is real
+                                                   * and unchanged — what changed is the
+                                                   * measurement, which now neutralises this
+                                                   * value before reading, so the number below
+                                                   * can never return as an intrinsic one.
+                                                   *
+                                                   * `height` rather than `min-height`: the band
+                                                   * is the card's extent in both directions, so
+                                                   * a card whose content shrinks follows its
+                                                   * band down instead of holding old whitespace.
+                                                   */
                                                   position: "absolute",
                                                   left: `${boxOf.left}px`,
                                                   width: `${boxOf.width}px`,
                                                   top: `${boxOf.top}px`,
+                                                  height: `${boxOf.height}px`,
                                               }
                                             : {
                                                   // First paint, before measurement: keep the

@@ -98,10 +98,36 @@ describe("the platform owns the expanded widths — no card-specific modal", () 
 });
 
 describe("card height flows from content, never from the box we drew", () => {
-    it("imposes no height of any kind on a placed card", () => {
+    /*
+     * THE GUARD MOVED; THE HAZARD DID NOT.
+     *
+     * This used to assert that a placed card carried no height at all, because a `min-height`
+     * here was read straight back by the measurement and became the card's height forever. The
+     * composition now assigns a band height — which is the only way cards sharing an authored
+     * band can be drawn the same height, since the canvas positions every area absolutely and
+     * CSS `align-items` is inert on absolutely positioned children.
+     *
+     * So the assertion changes shape but guards the same thing: the assignment is applied as an
+     * exact `height` (never a `min-height`, which could only ratchet upward), and the
+     * measurement neutralises it before reading. Both halves are asserted — either one alone
+     * brings the growth loop back.
+     */
+    it("assigns an exact band height, never a floor that could only ratchet up", () => {
         const absoluteBranch = grid.slice(grid.indexOf(": boxOf"), grid.indexOf("// First paint"));
+        expect(absoluteBranch).toContain("height: `${boxOf.height}px`");
         expect(absoluteBranch).not.toContain("minHeight");
-        expect(absoluteBranch).not.toContain("height:");
+    });
+
+    it("neutralises the assigned height before measuring, so it cannot return as intrinsic", () => {
+        // The other half of the guard above. Without this the card grows on every frame.
+        expect(hook).toContain('el.style.height = "auto"');
+        const at = hook.indexOf('const assigned = el.style.height;');
+        expect(at, "the measurement must read the assignment before clearing it").toBeGreaterThan(-1);
+        const block = hook.slice(at, at + 400);
+        expect(block).toContain("const measured = el.getBoundingClientRect().height;");
+        expect(block, "the assignment must be restored in the same synchronous block").toContain(
+            "el.style.height = assigned;",
+        );
     });
 
     it("measures the wrapper, which nothing sizes, rather than a stretched child", () => {
@@ -118,8 +144,13 @@ describe("card height flows from content, never from the box we drew", () => {
         expect(register).not.toMatch(/ro\.observe\((?!node\)).*firstElementChild/);
     });
 
-    it("stops the card stretching to any height a wrapper might carry", () => {
+    it("lets the card fill the band the composition assigned it", () => {
+        /*
+         * The inverse of what this asserted before, and safe for one reason only: the wrapper's
+         * box is no longer the measurement. A stretched child was previously how the imposed
+         * height laundered itself back into the heights map.
+         */
         const at = css.indexOf(".alloy-os-fp-grid-area {");
-        expect(css.slice(at, css.indexOf("}", at))).toContain("align-items: flex-start");
+        expect(css.slice(at, css.indexOf("}", at))).toContain("align-items: stretch");
     });
 });
