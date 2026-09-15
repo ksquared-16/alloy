@@ -277,6 +277,16 @@ export const CUSTOM = {
      */
     vocabManager: "mcert_vocab_manager",
     vocabTitular: "mcert_vocab_titular",
+
+    /*
+     * ── PROGRAMS ──
+     *
+     * `settings.manage` is the authority Programs already declared, and until this slice it had
+     * exactly one enforcement site. This role holds it ALONE, which is what makes it possible to ask
+     * whether Programs authority is independently useful: it may publish a Program and distribute it
+     * to Locations, and it may not touch fields, option sets, vocabulary, CRM records or money.
+     */
+    programManager: "mcert_program_manager",
     oiReader: "mcert_oi_reader",
     oiTitular: "mcert_oi_titular",
 };
@@ -365,6 +375,7 @@ export const P = {
     crmTitular:      { id: "c0000000-0000-4000-8000-00000000d066", email: "cert.crmtitular@northwind.invalid",     role: CUSTOM.crmTitular },
     vocabManager:    { id: "c0000000-0000-4000-8000-00000000d067", email: "cert.vocabmgr@northwind.invalid",       role: CUSTOM.vocabManager },
     vocabTitular:    { id: "c0000000-0000-4000-8000-00000000d068", email: "cert.vocabtitular@northwind.invalid",   role: CUSTOM.vocabTitular },
+    programManager:  { id: "c0000000-0000-4000-8000-00000000d069", email: "cert.programmgr@northwind.invalid",     role: CUSTOM.programManager },
 };
 
 async function principal(p) {
@@ -471,6 +482,7 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.crmTitular,     role_label: "Customer Administrator",      description: "Titled for authority, holding none of it.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.vocabManager,   role_label: "Vocabulary manager",          description: "Defines the organization's words. Changes none of its records.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.vocabTitular,   role_label: "Configuration Administrator", description: "Titled for configuration authority, holding none of it.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.programManager, role_label: "Program manager",             description: "Publishes Programs. Touches no records and no money.", is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
 
@@ -613,6 +625,8 @@ export async function setup() {
         [CUSTOM.vocabManager, ["portal.access", "configuration.vocabulary.manage"]],
         /* Labelled "Configuration Administrator". Holds admission and nothing else. */
         [CUSTOM.vocabTitular, ["portal.access"]],
+        /* settings.manage ALONE — no fields, no option sets, no vocabulary, no CRM, no money. */
+        [CUSTOM.programManager, ["portal.access", "settings.manage"]],
     ]) {
         const { error } = await sb.rpc("replace_role_permission_grants", {
             p_org_id: ORG,
