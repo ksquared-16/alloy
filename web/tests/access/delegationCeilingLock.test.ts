@@ -127,7 +127,17 @@ describe("W-18 delegation ceiling", () => {
          * operator request — which is why the ceiling neither applies to them nor needs to. Anything
          * else appearing here is a second way to grant authority, and the ceiling would be advisory.
          */
-        const SYSTEM_BOOTSTRAP = new Set(["seed_default_rbac", "seed_integrations_role_grants"]);
+        const SYSTEM_BOOTSTRAP = new Set([
+            "seed_default_rbac",
+            "seed_integrations_role_grants",
+            /*
+             * Access Administration Split V1. Provisions the four administration authorities for a
+             * NEW organization and removes the retired umbrella. Like its siblings it runs from
+             * org-creation with no human actor, so there is no delegating principal to bound — and
+             * it is enumerated, so a catalog addition cannot widen a package through it.
+             */
+            "seed_access_administration_split",
+        ]);
         const CEILING_OWNER = "replace_role_permission_grants";
 
         const writers = new Set<string>();

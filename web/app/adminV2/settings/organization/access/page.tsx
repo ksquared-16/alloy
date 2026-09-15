@@ -70,9 +70,11 @@ export default async function OrganizationAccessPage({ searchParams }: PageProps
         );
     }
 
-    // W49-F1. Chapter admission is not command admission: `Send password reset` is enforced by the
-    // portal `admin` role, not by the capability that admitted the chapter. Resolved here, from the
-    // route's own predicate, so the client is handed an enforced result rather than a decision.
+    // W49-F1. Chapter admission is not command admission — and since the four-authority split that
+    // is true of nearly every control here, not just `Send password reset`. Someone admitted to Users
+    // by `admin.users.read` may hold none of the three write authorities the controls on that page
+    // require. Each is resolved HERE, from the membership test its own route applies, so the client
+    // is handed enforced results rather than a decision it could get wrong.
     return (
         <UsersRolesConfigurationPage
             chapters={chapters}

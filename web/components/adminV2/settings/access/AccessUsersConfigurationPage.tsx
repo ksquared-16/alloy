@@ -164,6 +164,20 @@ export default function AccessUsersConfigurationPage({
     commands: readonly AccessCommandKey[];
 }) {
     const canSendPasswordReset = commands.includes("password-reset");
+    /*
+     * THE SPLIT REACHES THE CONTROLS, NOT JUST THE ROUTES.
+     *
+     * This page is admitted by `admin.users.read`, and three different write authorities sit behind
+     * what it draws. A user administrator invites and removes people but may not move anyone's
+     * operating scope; a scope administrator does only the reverse. Both are admitted here.
+     *
+     * These are ENFORCED RESULTS resolved on the server by `availableAccessCommands`, not decisions
+     * this component makes — withdrawing a control hides nothing an operator is entitled to see (the
+     * scope a person holds is still summarised above, read-only) and admits nothing: the route
+     * refuses the request regardless of whether the button was drawn.
+     */
+    const canManageUsers = commands.includes("manage-users");
+    const canManageAccessScope = commands.includes("manage-access-scope");
     const router = useRouter();
     const searchParams = useSearchParams();
     const initialUserId = searchParams.get("userId");
@@ -438,7 +452,9 @@ export default function AccessUsersConfigurationPage({
      * for it. `LocationMultiSelect` has two modes, so simply rendering it for an `unset` scope
      * would show one radio already chosen — a choice nobody made, one click from being written.
      */
-    const scopeEditorVisible = (selected?.has_access_profile ?? false) || deptScope !== "unset" || siteScope !== "unset";
+    const scopeEditorVisible =
+        canManageAccessScope
+        && ((selected?.has_access_profile ?? false) || deptScope !== "unset" || siteScope !== "unset");
 
     /** Starts from the closed direction: restricted with nothing selected, never org-wide. */
     const beginScopeConfiguration = () => {
@@ -700,10 +716,12 @@ export default function AccessUsersConfigurationPage({
                 <p className="text-xs leading-snug text-alloy-midnight/55">
                     Manage people who can sign in to Alloy.
                 </p>
-                <ConfigurationPrimaryButton className="gap-1" onClick={openInvite} data-testid="access-users-invite">
-                    <Plus className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-                    Invite User
-                </ConfigurationPrimaryButton>
+                {canManageUsers ?
+                    <ConfigurationPrimaryButton className="gap-1" onClick={openInvite} data-testid="access-users-invite">
+                        <Plus className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+                        Invite User
+                    </ConfigurationPrimaryButton>
+                :   null}
             </div>
 
             {error ?
@@ -870,7 +888,9 @@ export default function AccessUsersConfigurationPage({
                                                         className="absolute right-0 top-full z-10 mt-1 w-56 rounded-lg border border-alloy-stone/25 bg-white p-2 shadow-lg"
                                                         data-testid="access-user-more-menu"
                                                     >
-                                                        {!confirmRemove ?
+                                                        {!canManageUsers ?
+                                                            null
+                                                        : !confirmRemove ?
                                                             <button
                                                                 type="button"
                                                                 className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-red-700 hover:bg-red-50"
@@ -1239,6 +1259,7 @@ export default function AccessUsersConfigurationPage({
                                                                       * access profile and its scope remain, and the
                                                                       * principal simply resolves to no capabilities.
                                                                       */}
+                                                                    {canManageUsers ?
                                                                     <button
                                                                         type="button"
                                                                         className="ml-0.5 rounded-full px-1 text-alloy-midnight/45 transition-colors hover:bg-alloy-stone/20 hover:text-alloy-midnight disabled:cursor-not-allowed disabled:opacity-50"
@@ -1249,6 +1270,7 @@ export default function AccessUsersConfigurationPage({
                                                                     >
                                                                         ×
                                                                     </button>
+                                                                    :   null}
                                                                 </li>
                                                             ))}
                                                         </ul>
@@ -1281,14 +1303,16 @@ export default function AccessUsersConfigurationPage({
                                                         }
                                                     </select>
                                                 </label>
-                                                <ConfigurationPrimaryButton
-                                                    className="mt-3"
-                                                    disabled={roleSaving || !editRole || assignableRoles.length === 0}
-                                                    onClick={() => void assignRole(editRole)}
-                                                    data-testid="access-user-role-save"
-                                                >
-                                                    {roleSaving ? "Saving…" : "Add role"}
-                                                </ConfigurationPrimaryButton>
+                                                {canManageUsers ?
+                                                    <ConfigurationPrimaryButton
+                                                        className="mt-3"
+                                                        disabled={roleSaving || !editRole || assignableRoles.length === 0}
+                                                        onClick={() => void assignRole(editRole)}
+                                                        data-testid="access-user-role-save"
+                                                    >
+                                                        {roleSaving ? "Saving…" : "Add role"}
+                                                    </ConfigurationPrimaryButton>
+                                                :   null}
                                             </ConfigWorkspaceCard>
                                             {!selected.has_access_profile ?
                                                 <div
@@ -1304,13 +1328,15 @@ export default function AccessUsersConfigurationPage({
                                                         Nothing is pre-selected, because nothing has been configured.
                                                         Start configuring to choose a scope and create the profile.
                                                     </p>
-                                                    <ConfigurationSecondaryButton
-                                                        className="mt-2"
-                                                        onClick={beginScopeConfiguration}
-                                                        data-testid="access-user-access-configure"
-                                                    >
-                                                        Configure access scope
-                                                    </ConfigurationSecondaryButton>
+                                                    {canManageAccessScope ?
+                                                        <ConfigurationSecondaryButton
+                                                            className="mt-2"
+                                                            onClick={beginScopeConfiguration}
+                                                            data-testid="access-user-access-configure"
+                                                        >
+                                                            Configure access scope
+                                                        </ConfigurationSecondaryButton>
+                                                    :   null}
                                                 </div>
                                             :   null}
                                             {scopeEditorVisible ?

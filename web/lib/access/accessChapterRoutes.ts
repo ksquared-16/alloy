@@ -46,7 +46,28 @@ export const ACCESS_WORKSPACE_CHAPTER_META: Record<AccessWorkspaceChapter, { lab
  * from a server module is erased today and a runtime import the moment someone drops the `type`
  * keyword, which is too quiet a way to break a client bundle.
  */
-export type AccessCommandKey = "password-reset";
+/*
+ * THE SPLIT MADE THIS VOCABULARY LOAD-BEARING RATHER THAN A ONE-OFF.
+ *
+ * `password-reset` was the only entry while `settings.users_roles` admitted the workspace, because
+ * one key opened the chapter AND authorized every control inside it — the sole exception being a
+ * route gated on something else entirely. The four-authority split ends that: a user administrator
+ * is admitted to Users and may invite and remove people, but may not change where someone operates;
+ * a role administrator is admitted to Roles and nothing in Users. Chapter admission and command
+ * authority are now different questions for every mutation on the page, not just for one.
+ *
+ * Each key below is withdrawn by the SERVER from the same capability its route enforces, so a
+ * control is drawn only when the route behind it would accept the click.
+ */
+export type AccessCommandKey =
+    /** `app/api/admin/send-password-reset/route.ts` — the portal `admin` role (W49-F1, unchanged). */
+    | "password-reset"
+    /** Invite, remove, and change a person's roles — `admin.users.write`. */
+    | "manage-users"
+    /** Change where a person may operate — `admin.access_scope.write`. */
+    | "manage-access-scope"
+    /** Define a role and set the capabilities it grants — `admin.roles.write`. */
+    | "manage-roles";
 
 /** Canonical base for the Access workspace. */
 export const ACCESS_WORKSPACE_BASE_HREF = CANONICAL_ORGANIZATION_ACCESS_HREF;

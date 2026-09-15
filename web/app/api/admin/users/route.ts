@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { ADMIN_USERS_READ, ADMIN_USERS_WRITE, canManageUsersAndRoles, requireAccessAdministration, requirePortalOrUsersRolesManageAuth, requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { ADMIN_USERS_READ, ADMIN_USERS_WRITE, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 import { memberDirectoryLabel, projectMemberEmail } from "@/lib/access/memberDirectoryProjection";
 import { displayRoleForAdminPicker, groupSortedRoleKeysByUserId } from "@/lib/admin/userRolesMembership";
 import { createMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
@@ -58,9 +58,12 @@ export type AdminUserRow = {
  * **Scope is unchanged and still enforced**: the query is bounded to `access.orgId`, which is the
  * membership's org. Capability decides whether the roster may be read; it does not decide whose.
  *
- * **The disclosure half is untouched.** Addresses are still projected against
- * {@link canManageUsersAndRoles} — the MANAGING key — so this conversion does not hand the ops
- * population anything it lacked. `OD-8` does not authorize `settings.users_roles`.
+ * **The disclosure half is untouched, and the split nearly changed that by accident.** Addresses
+ * were projected against `canManageUsersAndRoles`, which named the MANAGING key while one key
+ * managed everything. That function is now the CHAPTER gate — true for any Access authority,
+ * `admin.users.read` included — so leaving the call here would have started disclosing addresses to
+ * every read-only principal, which is `W14-F1`'s defect restored by a rename rather than a decision.
+ * The disclosure names its authority directly now: `admin.users.write`.
  */
 export async function GET() {
     const auth = await requireAccessAdministration(ADMIN_USERS_READ);
@@ -68,8 +71,10 @@ export async function GET() {
     const { access } = auth;
 
     // W14-F1. The MANAGING capability, read from the same resolved context the gate used — not a
-    // second auth pass, and not a different predicate that happens to agree today.
-    const mayReadEmail = canManageUsersAndRoles(access);
+    // second auth pass, and not a different predicate that happens to agree today. It is the same
+    // membership test `requireAccessAdministration(ADMIN_USERS_WRITE)` applies on the POST below, so
+    // "may see the address" and "may act on the person" cannot drift apart.
+    const mayReadEmail = access.permissionKeys.includes(ADMIN_USERS_WRITE);
 
     const supabase = createAdminClient();
 

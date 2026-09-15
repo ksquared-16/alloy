@@ -23,15 +23,15 @@ const orgId = "org-1";
 const CALLER = "caller-1";
 const TARGET = "target-1";
 
-const { mockRequireUsersRolesManageAuth } = vi.hoisted(() => ({
-    mockRequireUsersRolesManageAuth: vi.fn(),
+const { mockRequireAccessAdministration } = vi.hoisted(() => ({
+    mockRequireAccessAdministration: vi.fn(),
 }));
 
 vi.mock("@/lib/admin/canManageUsersAndRoles", async () => {
     const actual = await vi.importActual<typeof import("@/lib/admin/canManageUsersAndRoles")>(
         "@/lib/admin/canManageUsersAndRoles",
     );
-    return { ...actual, requireUsersRolesManageAuth: mockRequireUsersRolesManageAuth };
+    return { ...actual, requireAccessAdministration: mockRequireAccessAdministration };
 });
 
 const { mockClient } = vi.hoisted(() => ({ mockClient: { value: null as unknown } }));
@@ -97,7 +97,7 @@ function callPatch(body: unknown) {
 
 beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireUsersRolesManageAuth.mockResolvedValue({
+    mockRequireAccessAdministration.mockResolvedValue({
         ok: true,
         access: {
             ok: true,

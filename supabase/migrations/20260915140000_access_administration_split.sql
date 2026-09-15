@@ -343,10 +343,19 @@ begin
     ('admin.roles.read', 'View roles & permissions', 'system', null),
     ('admin.roles.write', 'Manage roles & permissions', 'system', null),
     ('admin.users.read', 'View users', 'system', null),
-    ('admin.users.write', 'Manage users', 'system', null),
-    ('admin.access_scope.write', 'Manage user access scope', 'system', null),
-    ('attendance.devices.manage', 'Manage attendance devices', 'operations', null)
+    ('admin.users.write', 'Manage users', 'system', null)
   on conflict (key) do nothing;
+  /*
+   * THE TWO NEW KEYS ARE DELIBERATELY ABSENT FROM THE LIST ABOVE.
+   *
+   * That list is a reproduction of what `permission_definitions` held on 2026-07-29, carried forward
+   * unchanged through every redefinition of this function; `RL-8` holds it byte-for-byte because
+   * narrowing it is an operator decision about the deletion list, not something a seed rewrite may
+   * do in passing. Growing it is equally wrong, and pointlessly so: `permission_definitions` is
+   * keyed on `key` alone with no `org_id`, so the catalog is GLOBAL. Section 1 of this migration
+   * inserts `admin.access_scope.write` and `attendance.devices.manage` once, for the database — a
+   * new organization needs no catalog rows of its own, only the grants enumerated below.
+   */
 
   -- Default roles for the org.
   perform public.seed_default_role_definitions(p_org_id);
@@ -573,6 +582,115 @@ begin
   -- ACCESSV2:DIRECTOR-GRANTS:END
 end;
 $function$;
+
+-- The grant half stays wired to the org, exactly as the role half is. Re-asserted here because a
+-- migration that redefines the seed and leaves the trigger to an earlier file is a migration whose
+-- correctness depends on the order someone replays them in.
+CREATE OR REPLACE FUNCTION public.orgs_seed_default_rbac() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $fn$
+begin
+  perform public.seed_default_rbac(new.id);
+  return new;
+end;
+$fn$;
+
+ALTER FUNCTION public.orgs_seed_default_rbac() OWNER TO "postgres";
+
+DROP TRIGGER IF EXISTS orgs_seed_default_rbac ON public.orgs;
+CREATE TRIGGER orgs_seed_default_rbac
+    AFTER INSERT ON public.orgs
+    FOR EACH ROW EXECUTE FUNCTION public.orgs_seed_default_rbac();
+
+-- ---------------------------------------------------------------------------
+-- THE GUARDS THIS REDEFINITION CANNOT HONESTLY SKIP.
+--
+-- Reproducing a 71-key enumeration in order to remove one key and add six is exactly the operation
+-- that drops a line by accident, and an ops EXCLUSION is an absence -- the kind of thing that comes
+-- back silently. Both checks read pg_get_functiondef, so they describe the text this migration
+-- itself installs, and they hold on any database.
+-- ---------------------------------------------------------------------------
+DO $axguard$
+DECLARE
+    v_src           text;
+    v_admin_region  text;
+    v_ops_region    text;
+    v_ops_extra     text[];
+    v_admin_missing text[];
+BEGIN
+    v_src := pg_get_functiondef('public.seed_default_rbac(uuid)'::regprocedure);
+
+    IF strpos(v_src, 'W12:ADMIN-GRANTS:BEGIN') = 0 OR strpos(v_src, 'W12:OPS-GRANTS:BEGIN') = 0 THEN
+        RAISE EXCEPTION
+            'ACCESSV2 ABORT: the installed seed_default_rbac does not carry the grant-enumeration sentinels. Nothing can be asserted about what it grants, so the migration refuses to leave it installed.';
+    END IF;
+
+    v_admin_region := substr(v_src, strpos(v_src, 'W12:ADMIN-GRANTS:BEGIN'),
+                             strpos(v_src, 'W12:ADMIN-GRANTS:END') - strpos(v_src, 'W12:ADMIN-GRANTS:BEGIN'));
+    v_ops_region   := substr(v_src, strpos(v_src, 'W12:OPS-GRANTS:BEGIN'),
+                             strpos(v_src, 'W12:OPS-GRANTS:END') - strpos(v_src, 'W12:OPS-GRANTS:BEGIN'));
+
+    -- A NEW ORGANIZATION MUST BE BORN ABLE TO ADMINISTER ITSELF. The split's whole risk is that the
+    -- umbrella leaves and nothing replaces it, which would create organizations whose administrator
+    -- cannot open the Access workspace at all.
+    SELECT array_agg(k ORDER BY k) INTO v_admin_missing
+      FROM unnest(ARRAY[
+          'admin.users.read', 'admin.users.write',
+          'admin.roles.read', 'admin.roles.write',
+          'admin.access_scope.write', 'attendance.devices.manage'
+      ]) AS k
+     WHERE strpos(v_admin_region, '''' || k || '''') = 0;
+    IF v_admin_missing IS NOT NULL THEN
+        RAISE EXCEPTION
+            'ACCESSV2 ABORT: the admin enumeration is missing %, so a new organization would be created with no one able to administer its access.',
+            v_admin_missing;
+    END IF;
+
+    -- OPS KEEPS BOTH READS. The narrowing the Director approved removes WRITE authority from ops; an
+    -- ops operator who could no longer see the roster would be a narrowing nobody decided.
+    IF strpos(v_ops_region, '''admin.users.read''') = 0 THEN
+        RAISE EXCEPTION 'ACCESSV2 ABORT: ops lost admin.users.read, so the member directory would close to it. The split narrows writing, never reading.';
+    END IF;
+    IF strpos(v_ops_region, '''admin.roles.read''') = 0 THEN
+        RAISE EXCEPTION 'ACCESSV2 ABORT: ops lost admin.roles.read, so it could not read the role catalog it has always read.';
+    END IF;
+
+    -- THE RETIRED UMBRELLA MAY NOT BE GRANTED BY EITHER ROLE. It is deactivated below; a seed that
+    -- still enumerated it would create organizations holding a key the catalog refuses to honour.
+    IF strpos(v_admin_region, '''settings.users_roles''') > 0 OR strpos(v_ops_region, '''settings.users_roles''') > 0 THEN
+        RAISE EXCEPTION 'ACCESSV2 ABORT: the seed still grants the retired settings.users_roles umbrella.';
+    END IF;
+
+    -- THE FULL WITHHELD SET, in the wording the RL-8 grant-seed lock reads. Every key here is one the
+    -- migration that introduced it deliberately kept from ops; reproducing the whole list rather than
+    -- only this slice's additions is what stops a later redefinition quietly restoring one.
+    SELECT array_agg(k ORDER BY k) INTO v_ops_extra
+      FROM unnest(ARRAY[
+          'admin.users.write', 'admin.roles.write',
+          'admin.access_scope.write', 'attendance.devices.manage',
+          'enrollment.pricing.override', 'enrollment.requirement_exception.manage',
+          'fin.adjust', 'fin.responsibility', 'fin.subsidy',
+          'health.view', 'health.manage',
+          'forms.author', 'forms.submissions',
+          'processing.archive', 'processing.documents.manage', 'processing.dev_cleanup',
+          'scheduling.write', 'ops.jobs.write', 'fin.post',
+          'option_sets.delete', 'layouts.lifecycle', 'fields.delete',
+          'business_process.configure', 'business_process.activate',
+          'reports.write'
+      ]) AS k
+     WHERE strpos(v_ops_region, '''' || k || '''') > 0;
+    IF v_ops_extra IS NOT NULL THEN
+        RAISE EXCEPTION
+            'ACCESSV2 ABORT: the ops enumeration grants %, which the migration that introduced each of those keys explicitly withheld from ops. This would widen ops, not preserve it.',
+            v_ops_extra;
+    END IF;
+
+    IF strpos(v_ops_region, '''forms.submissions.confirm''') = 0 THEN
+        RAISE EXCEPTION 'ACCESSV2 ABORT: ops lost forms.submissions.confirm, the one Forms write it already had.';
+    END IF;
+END
+$axguard$;
 
 -- 4. EVERY EXISTING ORGANIZATION. `seed_default_rbac` only runs for new ones.
 DO $backfill$

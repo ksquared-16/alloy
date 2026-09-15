@@ -205,7 +205,14 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         // and consulted by nothing, while fourteen handlers asked `ctx.role !== "admin"` instead.
         // Every movement this initiative has recorded has been OUT of the deletion list, which is the
         // direction that means the product grew a real gate rather than lost one.
-        expect(unenforced.length).toBe(30);
+        //
+        // The Access Administration Split moved four at once — `admin.users.read/write` and
+        // `admin.roles.read/write` had been catalogued since the permission grid and consulted by
+        // nothing, and are now the keys twelve handlers enforce. It is also the first entry ever
+        // recorded IN: `settings.users_roles.read` is retired, so nothing consults it any more. That
+        // is not a gate the product lost — it is a gate the product replaced with four narrower ones,
+        // and the honest record of a retirement is a key that no longer has a site.
+        expect(unenforced.length).toBe(27);
     });
 
     it("C13 resolves against the measurement: nothing enforces a workflows key", () => {

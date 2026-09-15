@@ -72,7 +72,21 @@ const ROLE = {
     second: "cert_d2_second",
 } as const;
 
-const ACTOR = "d2-live-actor";
+/*
+ * A REAL ADMINISTRATOR OF THIS ORG, not a label.
+ *
+ * `"d2-live-actor"` was a readable string, and that was fine while the writer only RECORDED who
+ * acted. `W-18`'s delegation ceiling reads it: a grant is refused unless the ACTOR already holds
+ * every key being added, resolved by joining `user_roles` on this value. A string matching no
+ * membership holds nothing, so after the ceiling landed every grant in this file was refused with
+ * `delegation_ceiling:…` — the audit certification failing on an authority rule, not an audit one.
+ *
+ * The seeded administrator of the certification org is the honest subject: the D2 claims are about
+ * what an ADMINISTRATOR's changes record, and an administrator is who makes them. Note this is not
+ * an exemption — the ceiling applies to this actor exactly as it does to any other, and the lockout
+ * case below still uses an ordinary principal so the refusals it certifies remain real.
+ */
+const ACTOR = "00000000-0000-4000-8000-000000000002";
 const ALL_ROLES = Object.values(ROLE);
 
 type EventRow = {
@@ -681,13 +695,20 @@ describeLive("D2 access change audit — live", () => {
          * FOUND BY THIS CERTIFICATION, DESTRUCTIVELY. A boundaries spec addressed the seeded `admin`
          * role and — because the organization comes from the session rather than the request, which is
          * correct — the write landed on the caller's own tenant. `admin` went from 68 capabilities to
-         * one, `settings.users_roles` among the 67 removed, and every administrator instantly lost the
-         * authority to undo it. There is no product path back: the screen that repairs role grants is
-         * the screen the removed capability gates.
+         * one, the access-administration key among the 67 removed, and every administrator instantly
+         * lost the authority to undo it. There is no product path back: the screen that repairs role
+         * grants is the screen the removed capability gates.
+         *
+         * The key the guard watches moved with the Access Administration Split. It was
+         * `settings.users_roles`, the umbrella that authorized everything; it is now
+         * `admin.roles.write`, because editing role grants is the specific authority whose loss is
+         * unrecoverable — a principal who keeps `admin.users.read` can still see the damage and
+         * still cannot repair it.
          */
+        const LOCKOUT_KEY = "admin.roles.write";
         await supabase.from("role_permission_grants").delete().eq("org_id", ORG).eq("role_key", ROLE.target);
         const { error: grantErr } = await supabase.rpc("replace_role_permission_grants", {
-            p_org_id: ORG, p_role_key: ROLE.target, p_permission_keys: ["settings.users_roles"],
+            p_org_id: ORG, p_role_key: ROLE.target, p_permission_keys: [LOCKOUT_KEY],
             p_actor_user_id: ACTOR, p_origin: "operator", p_correlation_id: `d2-lockout-setup-${crypto.randomUUID()}`,
         });
         expect(grantErr).toBeNull();
@@ -707,7 +728,7 @@ describeLive("D2 access change audit — live", () => {
             .from("role_permission_grants").select("permission_key")
             .eq("org_id", ORG).eq("role_key", ROLE.target).eq("allowed", true);
         expect((still ?? []).map((g) => (g as { permission_key: string }).permission_key))
-            .toContain("settings.users_roles");
+            .toContain(LOCKOUT_KEY);
 
         // A role they do NOT hold is none of the guard's business — over-refusing would be its own defect.
         const other = await supabase.rpc("replace_role_permission_grants", {

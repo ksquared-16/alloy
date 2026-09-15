@@ -11,8 +11,9 @@
  * the route disagree would fail here even if both were independently defensible — which is the only
  * form of check that can catch "hidden in navigation, reachable by URL".
  *
- * **What "the route" means here.** `requireUsersRolesManageAuth` is the real helper the Access
- * routes call, exercised with its access-context dependency mocked at the module boundary. The
+ * **What "the route" means here.** `requireAccessAdministration` is the real helper the Access
+ * routes call — every one of them, with the authority its own operation needs — exercised with its
+ * access-context dependency mocked at the module boundary. The
  * decision under test is the route's own, not a restatement of it. Everything below the mock —
  * Supabase, cookies, the resolver's I/O — is precisely what a tier C check must not depend on.
  *
@@ -25,9 +26,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
     canManageUsersAndRoles,
-    canReadUsersAndRolesCatalog,
-    SETTINGS_USERS_ROLES_PERMISSION,
-    SETTINGS_USERS_ROLES_READ_PERMISSION,
+    ADMIN_ACCESS_SCOPE_WRITE,
+    ADMIN_ROLES_READ,
+    ADMIN_ROLES_WRITE,
+    ADMIN_USERS_READ,
+    ADMIN_USERS_WRITE,
 } from "@/lib/admin/canManageUsersAndRoles";
 import {
     ACCESS_SURFACE_DECLARATIONS,
@@ -63,7 +66,7 @@ vi.mock("@/lib/admin/getAdminAccessContext", () => ({
 }));
 
 /** Imported after the mock is registered, so the helper closes over the mocked dependency. */
-const { requireUsersRolesManageAuth } = await import("@/lib/admin/canManageUsersAndRoles");
+const { requireAccessAdministration } = await import("@/lib/admin/canManageUsersAndRoles");
 
 type Principal = {
     userId: string;
@@ -101,15 +104,22 @@ function principal(over: Partial<Principal> & { userId: string }): Principal {
  * string in application code and no capability was ever read. A matrix whose administrator holds no
  * capability cannot notice that the capability stopped being enforced.
  *
- * The grant is not invented to make the test pass. `20260505120100` backfills `admin ->
- * settings.users_roles` for every org, `seed_default_rbac` enumerates it for new orgs, and
- * `20260811120000` re-asserts it for every `role_definitions` row. The fixture now says what the
- * database says.
+ * The grants are not invented to make the test pass. `seed_access_administration_split` gives every
+ * org's `admin` role all five Access authorities and `seed_default_rbac` enumerates them for new
+ * orgs. The fixture says what the database says.
  */
+const ADMIN_ACCESS_PACKAGE = [
+    ADMIN_USERS_READ,
+    ADMIN_USERS_WRITE,
+    ADMIN_ROLES_READ,
+    ADMIN_ROLES_WRITE,
+    ADMIN_ACCESS_SCOPE_WRITE,
+];
+
 function adminPrincipal(over: Partial<Principal> & { userId: string }): Principal {
     return principal({
         roleKeys: ["admin"],
-        permissionKeys: [SETTINGS_USERS_ROLES_PERMISSION],
+        permissionKeys: [...ADMIN_ACCESS_PACKAGE],
         ...over,
     });
 }
@@ -117,7 +127,24 @@ function adminPrincipal(over: Partial<Principal> & { userId: string }): Principa
 /** The status the Access routes actually return for this principal. */
 async function routeStatus(p: Principal | { ok: false; status: 401 | 403 }): Promise<number> {
     getAdminAccessContextCached.mockResolvedValue("ok" in p ? p : { ok: true, ...p, portalEligible: true });
-    const auth = await requireUsersRolesManageAuth();
+    // The roster read — the weakest Access authority, so this stays a question about ADMISSION to
+    // the workspace rather than about any one operation inside it.
+    const auth = await requireAccessAdministration(ADMIN_USERS_READ);
+    return auth.ok ? 200 : auth.response.status;
+}
+
+/**
+ * The status a route enforcing a NAMED authority returns for this principal.
+ *
+ * The split's whole claim is that these answers differ by key, so the matrix needs to ask per key
+ * rather than only "are you admitted at all".
+ */
+async function routeStatusFor(
+    p: Principal,
+    capability: Parameters<typeof requireAccessAdministration>[0]
+): Promise<number> {
+    getAdminAccessContextCached.mockResolvedValue({ ok: true, ...p, portalEligible: true });
+    const auth = await requireAccessAdministration(capability);
     return auth.ok ? 200 : auth.response.status;
 }
 
@@ -369,7 +396,7 @@ const FIXTURES: Fixture[] = [
         caller: principal({
             userId: "u-scoped-manager",
             roleKeys: ["ops"],
-            permissionKeys: [SETTINGS_USERS_ROLES_PERMISSION],
+            permissionKeys: [...ADMIN_ACCESS_PACKAGE],
             siteScope: "restricted",
             allowedSiteLocationIds: ["loc-a"],
         }),
@@ -515,11 +542,15 @@ describe("Truthful Access — eleven-fixture certification matrix", () => {
                     const admittedByUrl = urlAdmission(fixture.caller, chapter);
                     expect(admittedByUrl).toBe(offeredInNav);
                     expect(admittedByUrl).toBe(fixture.admitted);
-                    // Every chapter gates on the capability the backing routes require, so the
-                    // surface gate is true "for the same reason" the command gate is.
-                    expect(ACCESS_SURFACE_DECLARATIONS[chapter].capability).toBe(
-                        SETTINGS_USERS_ROLES_PERMISSION,
-                    );
+                    /*
+                     * Each chapter gates on ITS OWN read authority now, and the equality that used
+                     * to be asserted here — every chapter declares the one umbrella key — is exactly
+                     * what the split destroyed. The surviving property is the one that mattered: a
+                     * chapter is offered iff the caller holds the capability that chapter declares,
+                     * so the surface gate is true "for the same reason" the route gate is.
+                     */
+                    const declared = ACCESS_SURFACE_DECLARATIONS[chapter].capability;
+                    expect(fixture.caller.permissionKeys.includes(declared)).toBe(offeredInNav);
                 }
             });
 
@@ -651,35 +682,39 @@ describe("W-13 / AD-22 — the chain is four layers, and the role literal is not
         const grantOnly = principal({
             userId: "u-granted-no-role",
             roleKeys: [],
-            permissionKeys: [SETTINGS_USERS_ROLES_PERMISSION],
+            permissionKeys: [ADMIN_USERS_READ],
         });
         expect(canManageUsersAndRoles(grantOnly)).toBe(true);
         expect(await routeStatus(grantOnly)).toBe(200);
     });
 
-    it("the catalog READ admits the weaker key without conferring management", () => {
-        // `ops` reads the RBAC catalog today by being portal-eligible. After the collapse it reads by
-        // holding `settings.users_roles.read` — and that key must NOT let it mutate, or a migration
-        // written to preserve access would have widened it.
+    it("the catalog READ admits the weaker key without conferring management", async () => {
+        /*
+         * `ops` reads the RBAC catalog by holding `admin.roles.read`, and that key must NOT let it
+         * mutate — or the split, written to narrow authority, would have widened it instead.
+         *
+         * The claim is now made against the ROUTES' gate rather than a `canRead…` helper, because
+         * that helper is gone: it existed to let one manage key stand in for one read key, and with
+         * five independent keys the substitution it encoded no longer has a meaning.
+         */
         const opsReader = principal({
             userId: "u-ops-reader",
             roleKeys: ["ops"],
-            permissionKeys: [SETTINGS_USERS_ROLES_READ_PERMISSION],
+            permissionKeys: [ADMIN_ROLES_READ],
         });
+        expect(canManageUsersAndRoles(opsReader)).toBe(true); // admitted to the workspace…
+        expect(await routeStatusFor(opsReader, ADMIN_ROLES_READ)).toBe(200);
+        expect(await routeStatusFor(opsReader, ADMIN_ROLES_WRITE)).toBe(403); // …and may change nothing
 
-        expect(canReadUsersAndRolesCatalog(opsReader)).toBe(true);
-        expect(canManageUsersAndRoles(opsReader)).toBe(false);
+        // A role administrator reads as well as writes — the write does not replace the read grant,
+        // it accompanies it, which is what `seed_access_administration_split` enumerates.
+        const manager = principal({ userId: "u-manager", permissionKeys: [ADMIN_ROLES_READ, ADMIN_ROLES_WRITE] });
+        expect(await routeStatusFor(manager, ADMIN_ROLES_READ)).toBe(200);
+        expect(await routeStatusFor(manager, ADMIN_ROLES_WRITE)).toBe(200);
 
-        // A manager can always read.
-        const manager = principal({
-            userId: "u-manager",
-            permissionKeys: [SETTINGS_USERS_ROLES_PERMISSION],
-        });
-        expect(canReadUsersAndRolesCatalog(manager)).toBe(true);
-
-        // And neither key is conjured from a role string.
+        // And no key is conjured from a role string.
         const plainOps = principal({ userId: "u-plain-ops-2", roleKeys: ["ops"] });
-        expect(canReadUsersAndRolesCatalog(plainOps)).toBe(false);
+        expect(await routeStatusFor(plainOps, ADMIN_ROLES_READ)).toBe(403);
     });
 });
 

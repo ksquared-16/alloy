@@ -35,7 +35,7 @@ import {
 import { organizationConfigurationDomains } from "@/lib/configRuntime/organizationRuntime";
 import { ACCESS_WORKSPACE_CHAPTERS } from "@/lib/access/accessChapterRoutes";
 import { buildAccessLandingModel } from "@/lib/configRuntime/accessLandingModel";
-import { SETTINGS_USERS_ROLES_PERMISSION } from "@/lib/admin/canManageUsersAndRoles";
+import { ADMIN_ROLES_READ, ADMIN_ROLES_WRITE, ADMIN_USERS_READ, ADMIN_USERS_WRITE, ADMIN_ACCESS_SCOPE_WRITE } from "@/lib/admin/canManageUsersAndRoles";
 import { discoverCatalog, PERMISSION_KEY_GRAMMAR, REPO_ROOT } from "./permissionCatalogDiscovery";
 
 type Declaration =
@@ -47,14 +47,33 @@ const declaredTable = JSON.parse(
     fs.readFileSync(path.join(REPO_ROOT, "web/scripts/routeCapabilities.declared.json"), "utf8")
 ) as { routes: Record<string, Record<string, Declaration>> };
 
-/** Capabilities a route declares on any of its exported methods. */
-function capabilitiesDeclaredBy(route: string): Set<string> {
-    const methods = declaredTable.routes[route];
+/**
+ * Capabilities a backing-route reference declares.
+ *
+ * A reference may name a single method — `app/api/admin/rbac/roles/route.ts#GET` — and the split is
+ * why that became necessary. The Users chapter reads the role list to populate a picker and never
+ * creates a role, but the module also exports a POST requiring `admin.roles.write`. Charging the
+ * whole file to every chapter that touches it would force Users to declare an authority it presents
+ * no control for, which would make `commandCapabilities` a list of keys the chapter *might* use —
+ * exactly the vagueness that lets the umbrella grow back.
+ *
+ * A bare path still means EVERY method, so the stricter reading is the default and narrowing is the
+ * thing you have to write down.
+ */
+function capabilitiesDeclaredBy(reference: string): Set<string> {
+    const [route, method] = reference.split("#");
+    const methods = declaredTable.routes[route!];
     const out = new Set<string>();
-    for (const decl of Object.values(methods ?? {})) {
+    for (const [verb, decl] of Object.entries(methods ?? {})) {
+        if (method && verb !== method) continue;
         if (decl.status === "declared") out.add(decl.capability);
     }
     return out;
+}
+
+/** The route module a backing-route reference points at, with any method narrowing removed. */
+function routeModuleOf(reference: string): string {
+    return reference.split("#")[0]!;
 }
 
 /* ------------------------------------------------------------------ */
@@ -127,52 +146,110 @@ describe("W-49 · RL-36 — the surface capability declaration", () => {
     });
 
     /**
-     * A surface's capability must SATISFY every capability its backing routes require.
+     * A backing route's capability must be one the surface ACCOUNTS FOR — and there are now exactly
+     * two honest ways to account for one.
      *
-     * This asserted equality until OD-7. That forbade the read/write split the decision mandates:
-     * a surface that MANAGES roles gates on `settings.users_roles`, while a backing route that only
-     * READS correctly requires `settings.users_roles.read`, and demanding they be identical would
-     * force every read behind the mutation key — precisely what OD-7's read/write rule prohibits.
+     * This was subsumption over a one-key model: a surface gated on `settings.users_roles` satisfied
+     * a route requiring `settings.users_roles.read`, because the manage key accepted the read key.
+     * The four-authority split ends that arrangement outright. There is no ordering among
+     * `admin.users.write`, `admin.access_scope.write` and `admin.roles.write` — that is the POINT of
+     * splitting them, and any subsumption table over them would re-create the umbrella in the test
+     * layer, quietly asserting the thing the run was called to destroy.
      *
-     * The property W-49 actually protects is the other direction: a surface must not present a
-     * command its route will refuse. So the test is subsumption, not equality — and a route
-     * requiring something the surface's holder does NOT have still fails, which is the case that
-     * matters. Subsumption is not asserted from the key names: it is read from
-     * `canReadUsersAndRolesCatalog`, which is the code that actually accepts the manage key in place
-     * of the read key.
+     * So the property W-49 protects — *a surface must not present a command its route will refuse* —
+     * is enforced the way the product now satisfies it:
+     *
+     *   1. the route requires the capability that ADMITS the chapter (nothing more is needed); or
+     *   2. the chapter declares it in `commandCapabilities`, which is a claim that the control is
+     *      WITHDRAWN when the capability is absent — and the claim is checked below against
+     *      `availableAccessCommands`, not taken on trust.
+     *
+     * A route requiring something in neither list still fails, which is the case that matters.
      */
-    const SUBSUMES: Record<string, readonly string[]> = {
-        "settings.users_roles": ["settings.users_roles.read"],
-    };
-
-    function surfaceSatisfies(surfaceCapability: string, routeCapability: string): boolean {
-        if (surfaceCapability === routeCapability) return true;
-        return (SUBSUMES[surfaceCapability] ?? []).includes(routeCapability);
+    function surfaceAccountsFor(decl: (typeof ACCESS_SURFACE_LIST)[number], routeCapability: string): boolean {
+        if (decl.capability === routeCapability) return true;
+        return (decl.commandCapabilities ?? []).includes(routeCapability);
     }
 
-    it("the subsumption claim is read from the gate, not from the key names", () => {
-        // If `canReadUsersAndRolesCatalog` stopped accepting the manage key, the mapping above would
-        // be a fiction and every surface/route pair relying on it would be unproven.
+    /**
+     * Every write authority a chapter claims to withdraw must actually be withdrawn.
+     *
+     * This is the assertion that keeps `commandCapabilities` from becoming a waiver list. A chapter
+     * may name a capability there only if a principal LACKING it is offered no command, and a
+     * principal HOLDING it is offered one — read from the server-side resolver the page calls.
+     */
+    const WITHDRAWN_BY: Record<string, string> = {
+        [ADMIN_USERS_WRITE]: "manage-users",
+        [ADMIN_ACCESS_SCOPE_WRITE]: "manage-access-scope",
+        [ADMIN_ROLES_WRITE]: "manage-roles",
+    };
+
+    it("a declared command capability is one the surface really withdraws", () => {
+        const claimed = new Set(ACCESS_SURFACE_LIST.flatMap((d) => d.commandCapabilities ?? []));
+
+        // Non-vacuity: the split gave the chapters write authorities to withdraw.
+        expect(claimed.size).toBeGreaterThan(0);
+
+        for (const capability of claimed) {
+            const command = WITHDRAWN_BY[capability];
+            // A READ capability needs no withdrawal — it admits a sibling chapter, and holding it is
+            // what makes the cross-chapter link (Users → a role, Roles → a member) resolvable.
+            if (!command) {
+                expect(
+                    [ADMIN_USERS_READ, ADMIN_ROLES_READ],
+                    `${capability} is claimed as a command capability but withdraws no command`
+                ).toContain(capability);
+                continue;
+            }
+            expect(
+                availableAccessCommands({ roleKeys: [], permissionKeys: [] }),
+                `a principal holding nothing is offered ${command}`
+            ).not.toContain(command);
+            expect(
+                availableAccessCommands({ roleKeys: [], permissionKeys: [capability] }),
+                `${capability} does not produce ${command} — the declaration claims a withdrawal that is not implemented`
+            ).toContain(command);
+        }
+    });
+
+    it("the umbrella is gone from the gate module, not merely unused", () => {
+        /*
+         * The replaced assertion read `canReadUsersAndRolesCatalog` to prove the manage key really
+         * accepted the read key. That function is deleted, and so is the pair of constants it read:
+         * with `settings.users_roles` inactive, any helper still asking for it is a gate that
+         * refuses everyone while continuing to typecheck. This asserts the deletion, because an
+         * unused gate left in place is the thing that gets imported again six months later.
+         */
         const gate = fs.readFileSync(path.join(__dirname, "..", "..", "lib/admin/canManageUsersAndRoles.ts"), "utf8");
-        const body = gate.slice(gate.indexOf("export function canReadUsersAndRolesCatalog"));
-        expect(body).toContain("canManageUsersAndRoles(access)");
-        expect(body).toContain("SETTINGS_USERS_ROLES_READ_PERMISSION");
+        const executable = gate.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+        for (const dead of [
+            "requireUsersRolesManageAuth",
+            "requirePortalOrUsersRolesManageAuth",
+            "canReadUsersAndRolesCatalog",
+            "settings.users_roles",
+        ]) {
+            expect(executable, `${dead} still lives in the gate module`).not.toContain(dead);
+        }
+        // Non-vacuity: the four authorities that replaced it are there.
+        expect(executable).toContain("requireAccessAdministration");
     });
 
     it("joins each surface to W-14's table: the surface's capability satisfies its backing routes", () => {
         for (const decl of ACCESS_SURFACE_LIST) {
             for (const route of decl.backingRoutes) {
                 expect(
-                    declaredTable.routes[route],
+                    declaredTable.routes[routeModuleOf(route)],
                     `${decl.surfaceKey} names ${route}, which is not in the declared route table`
                 ).toBeDefined();
                 const required = [...capabilitiesDeclaredBy(route)];
+                // A narrowing that selects no method is a typo that would silently assert nothing.
+                expect(required.length, `${route} narrows to a method that declares no capability`).toBeGreaterThan(0);
                 for (const routeCapability of required) {
                     expect(
-                        surfaceSatisfies(decl.capability, routeCapability),
+                        surfaceAccountsFor(decl, routeCapability),
                         `${decl.surfaceKey} gates on ${decl.capability}, but its backing route ${route} requires ` +
-                            `${routeCapability}, which that does not satisfy — a surface presenting a command its ` +
-                            "route will refuse"
+                            `${routeCapability}, which it neither is nor declares as a withdrawn command — a ` +
+                            "surface presenting a command its route will refuse"
                     ).toBe(true);
                 }
             }
@@ -238,13 +315,28 @@ describe("W-49 · RL-36 — the surface capability declaration", () => {
     it("offers the reset control only where the route's own predicate admits it", () => {
         // Resolved from `hasPortalAdminMutateAccess`, which is what `compatibilityPortalRole` — and
         // therefore the route's `ctx.role === "admin"` — reduces to. One predicate, read twice.
-        expect(availableAccessCommands({ roleKeys: ["admin"] })).toEqual(["password-reset"]);
-        // The population W49-F1 is about: holds the surface capability, is not org admin.
-        expect(availableAccessCommands({ roleKeys: ["ops"] })).toEqual([]);
-        expect(availableAccessCommands({ roleKeys: [] })).toEqual([]);
+        expect(availableAccessCommands({ roleKeys: ["admin"], permissionKeys: [] })).toEqual(["password-reset"]);
+        // The population W49-F1 is about: admitted to the surface, is not org admin.
+        expect(availableAccessCommands({ roleKeys: ["ops"], permissionKeys: [ADMIN_USERS_READ] })).toEqual([]);
+        expect(availableAccessCommands({ roleKeys: [], permissionKeys: [] })).toEqual([]);
         // A multi-role membership still resolves by union — IA-7's subject, asserted here so the
         // command gate cannot regress to reading a single "primary" role.
-        expect(availableAccessCommands({ roleKeys: ["ops", "admin"] })).toEqual(["password-reset"]);
+        expect(availableAccessCommands({ roleKeys: ["ops", "admin"], permissionKeys: [] })).toEqual([
+            "password-reset",
+        ]);
+
+        /*
+         * RESET STAYS THE ROLE LITERAL'S, and the split must not have quietly annexed it.
+         *
+         * `admin.users.write` is the closest thing the new model has to "may act on a person", so it
+         * is the key someone would reach for if they decided this control had found its capability.
+         * That would be the WIDENING W49-F1 declined to make on a presentation workstream's
+         * authority — the route still enforces `ctx.role !== "admin"`, and a control drawn for a
+         * grant-holder who is not org admin is the 403-on-click defect returning.
+         */
+        expect(availableAccessCommands({ roleKeys: ["ops"], permissionKeys: [ADMIN_USERS_WRITE] })).toEqual([
+            "manage-users",
+        ]);
 
         // The control is conditional on that resolved list, and the prop is required the whole way
         // down. A default anywhere on this path restores "draw it for everyone, 403 on click".
@@ -285,10 +377,27 @@ describe("W-49 · RL-36 — the surface capability declaration", () => {
 });
 
 describe("W-49 · L8 — navigation filters from the declaration", () => {
-    it("shows every chapter to a principal holding the declared capability", () => {
-        expect(visibleAccessChapters(new Set([SETTINGS_USERS_ROLES_PERMISSION]))).toEqual([
-            ...ACCESS_WORKSPACE_CHAPTERS,
-        ]);
+    it("shows every chapter to a principal holding every declared capability", () => {
+        const all = new Set(ACCESS_SURFACE_LIST.map((d) => d.capability));
+        expect(visibleAccessChapters(all)).toEqual([...ACCESS_WORKSPACE_CHAPTERS]);
+    });
+
+    it("shows a chapter to the authority that admits it, AND NO OTHER — the split, seen from navigation", () => {
+        /*
+         * The point of the four-authority model, stated as navigation. Under the umbrella one key
+         * showed all three chapters, so this assertion could not have been written; if it ever
+         * passes trivially again, the keys have been re-merged somewhere.
+         */
+        expect(visibleAccessChapters(new Set([ADMIN_ROLES_READ]))).toEqual(["roles"]);
+
+        // Users and Security are both admitted by `admin.users.read` — reading who changed access
+        // and reading who HAS access are the same entitlement, which is why they share a key.
+        expect(visibleAccessChapters(new Set([ADMIN_USERS_READ]))).toEqual(["users", "security"]);
+
+        // A write authority alone admits no chapter: the split's reads are what open surfaces.
+        for (const write of [ADMIN_USERS_WRITE, ADMIN_ROLES_WRITE, ADMIN_ACCESS_SCOPE_WRITE]) {
+            expect(visibleAccessChapters(new Set([write])), `${write} admitted a chapter on its own`).toEqual([]);
+        }
     });
 
     it("filters the landing tiles from the same list, and the ids join exactly", () => {
@@ -309,15 +418,20 @@ describe("W-49 · L8 — navigation filters from the declaration", () => {
 
     it("derives held capabilities by calling the routes' own gate, not a second predicate", () => {
         expect(
-            heldAccessCapabilities({ roleKeys: ["admin"], permissionKeys: [SETTINGS_USERS_ROLES_PERMISSION] })
-        ).toEqual(new Set([SETTINGS_USERS_ROLES_PERMISSION]));
+            heldAccessCapabilities({ roleKeys: ["admin"], permissionKeys: [ADMIN_USERS_READ, ADMIN_ROLES_WRITE] })
+        ).toEqual(new Set([ADMIN_USERS_READ, ADMIN_ROLES_WRITE]));
+        // The retired umbrella derives nothing. It is an inactive key no role holds, and a surface
+        // that still answered to it would be admitting on a grant the database refuses to issue.
+        expect(heldAccessCapabilities({ roleKeys: ["admin"], permissionKeys: ["settings.users_roles"] })).toEqual(
+            new Set()
+        );
         // W-13/AD-22 — and the role string alone derives nothing. Before the fifth layer was removed
         // this case read `roleKeys: ["admin"], permissionKeys: []` and expected the capability, which
         // is the surface agreeing with a literal rather than with the catalog.
         expect(heldAccessCapabilities({ roleKeys: ["admin"], permissionKeys: [] })).toEqual(new Set());
         expect(
-            heldAccessCapabilities({ roleKeys: ["ops"], permissionKeys: [SETTINGS_USERS_ROLES_PERMISSION] })
-        ).toEqual(new Set([SETTINGS_USERS_ROLES_PERMISSION]));
+            heldAccessCapabilities({ roleKeys: ["ops"], permissionKeys: [ADMIN_USERS_READ] })
+        ).toEqual(new Set([ADMIN_USERS_READ]));
         // `ops` is portal-eligible and was previously admitted to this surface. It is the whole
         // population L8 changes, and it must hold nothing here.
         expect(heldAccessCapabilities({ roleKeys: ["ops"], permissionKeys: [] })).toEqual(new Set());
@@ -407,15 +521,34 @@ describe("W-49 · AE-4 — the surface is not reachable by URL without the capab
     it("filters the /organization Access card from the same declaration", () => {
         const admin = heldAccessCapabilities({
             roleKeys: ["admin"],
-            permissionKeys: [SETTINGS_USERS_ROLES_PERMISSION],
+            permissionKeys: [ADMIN_USERS_READ, ADMIN_ROLES_READ],
         });
         const opsOnly = heldAccessCapabilities({ roleKeys: ["ops"], permissionKeys: [] });
         expect(isOrganizationDomainVisible("access", admin)).toBe(true);
         expect(isOrganizationDomainVisible("access", opsOnly)).toBe(false);
 
-        // The declared capability is read from the surface declaration, not restated. If the two
-        // ever diverge, the Access card and the Access page would gate on different keys.
-        expect(ORGANIZATION_DOMAIN_CAPABILITIES.access).toBe(ACCESS_SURFACE_DECLARATIONS.users.capability);
+        /*
+         * THE CARD IS ANY-OF NOW, AND THAT IS THE CASE THAT USED TO BREAK.
+         *
+         * A role administrator holds only `admin.roles.read`. They are admitted to the workspace and
+         * to the Roles chapter — so a card pinned to the Users chapter's key would hide the door to
+         * a surface that opens for them, which is W49-F2's defect pointing the other way.
+         */
+        const roleAdminOnly = heldAccessCapabilities({ roleKeys: [], permissionKeys: [ADMIN_ROLES_READ] });
+        expect(visibleAccessChapters(roleAdminOnly).length).toBeGreaterThan(0);
+        expect(isOrganizationDomainVisible("access", roleAdminOnly)).toBe(true);
+
+        // The declared capabilities are read from the surface declarations, not restated beside
+        // them. If the two ever diverge, the Access card and the Access page gate on different keys.
+        expect([...ORGANIZATION_DOMAIN_CAPABILITIES.access!].sort()).toEqual(
+            [...new Set(ACCESS_SURFACE_LIST.map((d) => d.capability))].sort()
+        );
+
+        // A principal holding a write authority but no read is admitted to no chapter, so the card
+        // must not be drawn either — the card and the page agree on the empty case too.
+        const writeOnly = heldAccessCapabilities({ roleKeys: [], permissionKeys: [ADMIN_USERS_WRITE] });
+        expect(visibleAccessChapters(writeOnly)).toEqual([]);
+        expect(isOrganizationDomainVisible("access", writeOnly)).toBe(false);
 
         // Every key in the map must be a real domain — a typo would silently gate nothing.
         const domainKeys = organizationConfigurationDomains().map((d) => d.key);

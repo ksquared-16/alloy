@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { ADMIN_ROLES_READ, requireAccessAdministration, requirePortalOrUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { ADMIN_ROLES_READ, requireAccessAdministration } from "@/lib/admin/canManageUsersAndRoles";
 
 /** GET: list active permissions. Portal (admin/ops) or Users & Roles managers. */
 export async function GET() {

@@ -23,16 +23,31 @@ import { join } from "node:path";
 
 const webRoot = process.cwd();
 
-const { mockLoadAdminAccessBundleCached, mockGetAdminContextCached } = vi.hoisted(() => ({
-    mockLoadAdminAccessBundleCached: vi.fn(),
-    mockGetAdminContextCached: vi.fn(),
-}));
+const { mockLoadAdminAccessBundleCached, mockGetAdminContextCached, mockGetAdminAccessContextCached } =
+    vi.hoisted(() => ({
+        mockLoadAdminAccessBundleCached: vi.fn(),
+        mockGetAdminContextCached: vi.fn(),
+        mockGetAdminAccessContextCached: vi.fn(),
+    }));
 
 vi.mock("@/lib/admin/getAdminAccessContext", async () => {
     const actual = await vi.importActual<typeof import("@/lib/admin/getAdminAccessContext")>(
         "@/lib/admin/getAdminAccessContext"
     );
-    return { ...actual, loadAdminAccessBundleCached: mockLoadAdminAccessBundleCached };
+    /*
+     * BOTH RESOLVERS, FROM ONE FIXTURE.
+     *
+     * The roster route reached its authority through `loadAdminAccessBundleCached` while the gate
+     * was `requirePortalOrUsersRolesManageAuth`, which needed `portalEligible`. The split's gate does
+     * not — it asks only whether the capability is held — so it reads the narrower
+     * `getAdminAccessContextCached`. `asCaller` derives both from the same object below, because two
+     * independently-stubbed resolvers is how a test starts certifying a principal that cannot exist.
+     */
+    return {
+        ...actual,
+        loadAdminAccessBundleCached: mockLoadAdminAccessBundleCached,
+        getAdminAccessContextCached: mockGetAdminAccessContextCached,
+    };
 });
 
 vi.mock("@/lib/admin/getAdminContext", async () => {
@@ -89,31 +104,41 @@ type Caller = {
     permissionKeys: string[];
 };
 
-// W-13/AD-22: an org admin is described by the grant it holds, not by the role string. The literal
-// no longer satisfies `canManageUsersAndRoles`, and every org admin holds this key (`20260505120100`,
-// `seed_default_rbac`, `20260811120000`).
+/*
+ * W-13/AD-22: an org admin is described by the grants it holds, not by the role string.
+ *
+ * The keys changed with the four-authority split, and the DISTINCTION these fixtures draw is the
+ * reason the file survives it. Reading the roster is `admin.users.read`; reading an ADDRESS is
+ * `admin.users.write`, because the address is what lets you act on the person. Every org admin holds
+ * both (`seed_access_administration_split`, `seed_default_rbac`).
+ */
 const ORG_ADMIN: Caller = {
     label: "org admin",
     portalEligible: true,
     roleKeys: ["admin"],
-    permissionKeys: ["settings.users_roles"],
+    permissionKeys: ["admin.users.read", "admin.users.write"],
 };
 const GRANT_HOLDER: Caller = {
     label: "granted, not admin",
     portalEligible: true,
     roleKeys: ["ops"],
-    permissionKeys: ["settings.users_roles"],
+    permissionKeys: ["admin.users.read", "admin.users.write"],
 };
 /**
- * The `ops` operator AFTER `20260819140000`. `OD-8`'s preservation grant gives every org's `ops`
- * role `settings.users_roles.read`, so this is what an ops principal looks like once the migration
- * has landed: reads the roster, holds no managing capability, sees no addresses.
+ * The `ops` operator AFTER the split. `seed_access_administration_split` narrows ops to the two
+ * READ authorities, so this is what an ops principal looks like once the migration has landed:
+ * reads the roster, holds no managing capability, sees no addresses.
+ *
+ * This fixture is also the regression the split nearly shipped. `mayReadEmail` was
+ * `canManageUsersAndRoles(access)`, and that function became true for `admin.users.read` when it
+ * was widened into the chapter gate — so this exact principal would have started receiving every
+ * member's address, from a rename rather than a decision.
  */
 const OPS_PRESERVED: Caller = {
     label: "ops with the preserved read capability",
     portalEligible: true,
     roleKeys: ["ops"],
-    permissionKeys: ["settings.users_roles.read"],
+    permissionKeys: ["admin.users.read"],
 };
 
 /**
@@ -149,6 +174,8 @@ function asCaller(caller: Caller) {
         portalEligible: caller.portalEligible,
     };
     mockLoadAdminAccessBundleCached.mockResolvedValue(bundle);
+    const { portalEligible: _portalEligible, ...accessContext } = bundle;
+    mockGetAdminAccessContextCached.mockResolvedValue(accessContext);
     mockGetAdminContextCached.mockResolvedValue(
         caller.portalEligible
             ? { ok: true, orgId: ORG, role: caller.roleKeys.includes("admin") ? "admin" : "ops", userId: "caller-1" }
@@ -242,17 +269,28 @@ describe("OD-8 / W-15 — the roster gate is a capability, and the conversion ne
         // The boundary is narrow and worth restating where it is enforced: this says capability
         // holders may read THIS roster. It is not a general rule that a capability holder enters
         // every portal surface, and `OD-8` says so explicitly.
-        const res = await (asCaller({ ...NOT_ADMITTED, permissionKeys: ["settings.users_roles.read"], roleKeys: ["auditor"] }), GET());
+        const res = await (asCaller({ ...NOT_ADMITTED, permissionKeys: ["admin.users.read"], roleKeys: ["auditor"] }), GET());
         expect(res.status).toBe(200);
     });
 
     it("the conversion granted no mutation — the read key does not open POST", async () => {
-        // `OD-8` does not authorize `settings.users_roles`. The read capability must not become a
-        // write one by sharing a route file with it.
+        /*
+         * The read capability must not become a write one by sharing a route file with it — and the
+         * split makes that assertion sharper than it could be before. The two handlers no longer
+         * merely call different functions: they name different KEYS, so the GET's authority is
+         * visible in the POST's absence of it.
+         */
         const routeSource = readFileSync(join(webRoot, "app/api/admin/users/route.ts"), "utf8");
         const postBody = routeSource.slice(routeSource.indexOf("export async function POST"));
-        expect(postBody).toContain("requireUsersRolesManageAuth");
-        expect(postBody).not.toContain("requirePortalOrUsersRolesManageAuth");
+        expect(postBody).toContain("requireAccessAdministration(ADMIN_USERS_WRITE)");
+        expect(postBody).not.toContain("ADMIN_USERS_READ");
+
+        // And the GET holds only the read key, so neither handler can drift onto the other's.
+        const getBody = routeSource.slice(
+            routeSource.indexOf("export async function GET"),
+            routeSource.indexOf("export async function POST"),
+        );
+        expect(getBody).toContain("requireAccessAdministration(ADMIN_USERS_READ)");
     });
 
     it("scope survives the conversion — the roster is still bounded to the caller's org", async () => {
