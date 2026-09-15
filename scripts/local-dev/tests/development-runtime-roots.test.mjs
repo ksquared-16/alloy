@@ -81,7 +81,14 @@ test("1 — the five roots are distinct concepts with distinct owners", () => {
   // The state root is NOT a repository root, and cannot be confused for one.
   assert.notEqual(RR.stateRoot(), ALLOY_ROOT);
   assert.notEqual(RR.stateRoot(), RR.runtimeSourceRoot());
-  assert.equal(RR.gatewayStateRoot(), join(RR.stateRoot(), "gateway"));
+  /*
+   * The honest relationship, not a spelling. `stateRoot()` is the PARENT of the
+   * Gateway root, whatever that directory is called: the probe resolves the
+   * level that actually holds `vacilando/`, and on a host where the supplied
+   * value already names it, the two are not separated by a literal "gateway".
+   */
+  assert.equal(RR.stateRoot(), dirname(RR.gatewayStateRoot()));
+  assert.notEqual(RR.stateRoot(), RR.gatewayStateRoot());
 });
 
 test("2 — the state root is Vacilando's own, never a checkout", () => {
@@ -406,7 +413,8 @@ test("18 — a caller that appends `vacilando/` means the GATEWAY root", () => {
       `${name} resolves the parent of the store it reads; the Gateway reports zero lanes`);
   }
   // The invariant in one line: the store lives one level below the state root.
-  assert.equal(RR.gatewayStateRoot(), join(RR.stateRoot(), "gateway"));
+  // The invariant in one line: the state root is the parent of the store's root.
+  assert.equal(RR.stateRoot(), dirname(RR.gatewayStateRoot()));
 });
 
 process.stdout.write(`\n# pass ${pass}\n# fail ${fail}\n`);

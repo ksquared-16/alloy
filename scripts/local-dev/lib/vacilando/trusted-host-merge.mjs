@@ -15,7 +15,9 @@ import { spawnSync } from "node:child_process";
 // leaves this machine, and one guard in one place is the point.
 import { canonicalGatewayRuntimeRoot, liveMergePermitted } from "./trusted-host-remote-guard.mjs";
 import { firstMeaningfulLine } from "./trusted-host-push.mjs";
-import { ALLOY_REPOSITORY_ID, executionProfileFor, promotionPolicyFor } from "./repository-registry.mjs";
+import {
+  ALLOY_REPOSITORY_ID, eligibleRepositoryRemotes, executionProfileFor, promotionPolicyFor,
+} from "./repository-registry.mjs";
 import { gatewayStateRoot } from "./runtime-roots.mjs";
 
 export { canonicalGatewayRuntimeRoot, liveMergePermitted };
@@ -49,8 +51,16 @@ export function mergeBranchPolicyFor(repositoryRecord) {
   if (repositoryRecord) return promotionPolicyFor(repositoryRecord);
   return ALLOY_POLICY;
 }
-// Alloy's slug, owned by Alloy's profile rather than by this module.
-const DEFAULT_REPOS = Object.freeze([executionProfileFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID }).remote_slug]);
+/*
+ * PROFILE-DECLARED REMOTES, which is a floor and not the universe.
+ *
+ * S2 learned this shape the hard way: deriving a governed set from live host
+ * state alone made a CI runner with an empty registry look like a machine where
+ * Alloy's repository had ceased to exist, and 19 ledger cases failed saying so.
+ * The floor keeps an unseeded host working; it does not decide who else is
+ * eligible, and it is no longer the only source.
+ */
+const PROFILE_REPOS = Object.freeze([executionProfileFor({ profile: "alloy", repository_id: ALLOY_REPOSITORY_ID }).remote_slug]);
 
 /**
  * The canonical form of a GitHub repository reference.
@@ -88,12 +98,36 @@ export function isAllowlistedRepository(value) {
   return allowlistedRepositories().some((r) => normalizeRepositorySlug(r) === want);
 }
 
+/**
+ * The repositories governed actions may be ASKED about.
+ *
+ * THE REGISTRY IS THE TARGET AUTHORITY. This used to be Alloy's slug plus an
+ * environment variable, which meant a second registered project could never be
+ * pushed to however correctly it was configured -- the S4 seed committed into
+ * `prj_vacilando` and then had nowhere governed to go. An operator who has
+ * registered a project has already said which repository it is; requiring them
+ * to also name it in an env var is asking twice for the same fact.
+ *
+ * ELIGIBILITY IS NOT AUTHORIZATION, and the distinction is the whole design.
+ * Being in this set means "Vacilando knows this repository and will consider a
+ * request about it". Whether the request proceeds is decided afterwards by
+ * governed request creation, policy evaluation, approval and delegation rules,
+ * execution ownership, push protections, audit and repository-state validation
+ * -- none of which this function touches. Registering a project authorizes
+ * nothing; it makes a target addressable.
+ *
+ * Three sources, in descending authority: registered projects, the profile
+ * floor that keeps an unseeded host working, and the environment extras kept as
+ * an explicit compatibility path for hosts that still set them.
+ */
 export function allowlistedRepositories() {
   const extra = String(process.env.VACILANDO_GITHUB_REPOSITORY || process.env.ALLOY_GITHUB_REPOSITORY || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  return [...new Set([...DEFAULT_REPOS, ...extra])];
+  let registered = [];
+  try { registered = [...eligibleRepositoryRemotes()]; } catch { registered = []; }
+  return [...new Set([...registered, ...PROFILE_REPOS, ...extra])];
 }
 
 /**
