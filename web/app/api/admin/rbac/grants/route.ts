@@ -122,6 +122,24 @@ export async function PUT(request: NextRequest) {
         // to produce itself, so moving the check into the transaction changed nothing the operator
         // sees. Anything else is a genuine failure and must not read as a partial success.
         const message = replaceErr.message ?? "";
+        /*
+         * W-18 — the delegation ceiling refused this. The actor asked to introduce authority they do
+         * not hold, and the transaction owner rejected it before writing anything, so there is no
+         * partial grant set to explain. 403 rather than 400: the request was well-formed and the
+         * answer is about who is asking.
+         */
+        const beyond = message.match(/delegation_ceiling:([^\s"]+)/);
+        if (beyond) {
+            return NextResponse.json(
+                {
+                    error:
+                        "You can only grant access you hold yourself. Not granted: "
+                        + beyond[1].split(",").join(", "),
+                    required_permission: beyond[1].split(",")[0],
+                },
+                { status: 403 },
+            );
+        }
         const invalid = message.match(/invalid_permission_keys:([^\s"]+)/);
         if (invalid) {
             return NextResponse.json(

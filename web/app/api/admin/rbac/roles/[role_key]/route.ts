@@ -80,6 +80,23 @@ export async function PATCH(
 
         if (saveErr) {
             const message = saveErr.message ?? "";
+            /*
+             * W-18 — the delegation ceiling refused this. Role editing reaches the same transaction
+             * owner as the grants route, so the same refusal surfaces here and means the same thing:
+             * the actor asked to introduce authority they do not hold, and nothing was written.
+             */
+            const beyond = message.match(/delegation_ceiling:([^\s"]+)/);
+            if (beyond) {
+                return NextResponse.json(
+                    {
+                        error:
+                            "You can only grant access you hold yourself. Not granted: "
+                            + beyond[1].split(",").join(", "),
+                        required_permission: beyond[1].split(",")[0],
+                    },
+                    { status: 403 },
+                );
+            }
             const invalid = message.match(/invalid_permission_keys:([^\s"]+)/);
             if (invalid) {
                 return NextResponse.json(
