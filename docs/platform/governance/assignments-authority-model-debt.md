@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-15
+supersedes: []
+---
+
 # ASSIGNMENTS_AUTHORITY_MODEL_DEBT
 
 **Status:** `BLOCKED_DECISION` — open, bounded, and deliberately not closed by the Communications lock.
