@@ -37,6 +37,10 @@
  * operation is how the narrow governed route becomes the permissive one.
  */
 import { execFileSync } from "node:child_process";
+import { mkdtempSync, readdirSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { GENERATION, SANCTIONED_PRODUCERS } from "./toolkit-artifact.mjs";
+import { installArtifact } from "./toolkit-artifact-install.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -501,6 +505,55 @@ export function verifyConvergenceOutcome({
  * that decides what gets installed onto every other lane's machine.
  */
 export function validateInstallToolkitInputs(inputs = {}, { measure = measureToolkitConvergence } = {}) {
+  /*
+   * TWO GENERATIONS, CHOSEN EXPLICITLY, NEVER GUESSED.
+   *
+   * An `artifact` block means generation 2: the runtime comes from a Vacilando
+   * CI artifact and legitimacy is artifact identity. Its absence means
+   * generation 1: the runtime comes from the commit Alloy promoted. The caller
+   * states which; nothing here searches for whichever happens to be present,
+   * because a path that guesses is a path that can be steered.
+   */
+  const artifact = inputs.artifact || inputs.vacilando_artifact || null;
+  if (artifact) {
+    const missing = ["version", "source_repository", "source_sha", "artifact_sha256", "ci_run_id"]
+      .filter((k) => !String(artifact[k] ?? "").trim());
+    if (missing.length) {
+      return { ok: false, error: "artifact_identity_incomplete", detail: `an artifact is named by ${missing.join(", ")}` };
+    }
+    if (!/^[0-9a-f]{64}$/i.test(String(artifact.artifact_sha256).trim())) {
+      return { ok: false, error: "invalid_artifact_hash", detail: "artifact_sha256 must be a sha256" };
+    }
+    const reasonG2 = String(inputs.reason ?? "").trim();
+    if (reasonG2.length < 8) return { ok: false, error: "missing_reason", detail: "state why convergence is needed" };
+    /*
+     * The CAS state is REQUIRED for generation 2. Generation 1 could compare
+     * against a staging SHA it measured itself; an artifact install must be
+     * bound to the installed identity the approval was made against, or it can
+     * land on a host somebody else already moved.
+     */
+    const expectedCurrent = String(inputs.expected_current_identity ?? inputs.expectedCurrentIdentity ?? "").trim();
+    if (!expectedCurrent) {
+      return { ok: false, error: "expected_current_identity_missing", detail: "state what is installed now, or the decision is not bound to it" };
+    }
+    return {
+      ok: true,
+      normalized: {
+        generation: GENERATION.VACILANDO_ARTIFACT,
+        artifact: {
+          version: String(artifact.version).trim(),
+          source_repository: String(artifact.source_repository).trim(),
+          source_sha: String(artifact.source_sha).trim(),
+          artifact_sha256: String(artifact.artifact_sha256).trim().toLowerCase(),
+          ci_run_id: String(artifact.ci_run_id).trim(),
+        },
+        expectedCurrent,
+        reason: reasonG2,
+        dedupeKey: `toolkit_install:artifact:${String(artifact.version).trim()}`,
+      },
+    };
+  }
+
   const expected = String(inputs.expected_staging_sha ?? inputs.expectedStagingSha ?? "").trim();
   if (!/^[0-9a-f]{7,40}$/i.test(expected)) {
     return { ok: false, error: "invalid_expected_staging_sha", detail: "expected_staging_sha must be a git sha" };
@@ -578,12 +631,122 @@ export function validateInstallToolkitInputs(inputs = {}, { measure = measureToo
  * installed and running have not yet been reconciled. That is the same
  * installed-vs-running distinction the whole module exists to keep visible.
  */
+
+/**
+ * GENERATION 2 — INSTALL A VACILANDO CI ARTIFACT.
+ *
+ * THE CALLER SUPPLIES IDENTITY, NEVER TRANSPORT. No URL, no path, no command,
+ * no destination. Governance names WHICH artifact — producer, version, source
+ * commit, content hash, CI run — and the trusted host works out how to obtain
+ * it. A caller that can name a location can name any location, which is the
+ * same "much larger capability wearing a narrow name" this action already
+ * refuses for `ref`.
+ *
+ * The producer must be sanctioned before a single byte is fetched, so an
+ * unsanctioned name costs nothing and reaches nothing.
+ */
+export function resolveSanctionedArtifact({
+  version, source_repository: repo, ci_run_id: runId,
+  sanctionedProducers = SANCTIONED_PRODUCERS,
+  downloader = defaultArtifactDownloader,
+} = {}) {
+  const want = String(repo || "").trim().toLowerCase();
+  if (!sanctionedProducers.map((r) => r.toLowerCase()).includes(want)) {
+    return { ok: false, code: "producer_not_sanctioned", detail: `${repo || "(none)"} may not produce a runtime` };
+  }
+  if (!runId || !version) {
+    return { ok: false, code: "artifact_identity_incomplete", detail: "an artifact is named by its CI run and version" };
+  }
+  const dir = mkdtempSync(join(tmpdir(), "vac-artifact-"));
+  try { downloader({ repo, runId, dir }); }
+  catch (e) { return { ok: false, code: "artifact_unavailable", detail: String(e.message).slice(0, 200) }; }
+
+  const found = { tar: null, manifest: null };
+  const walk = (d) => {
+    for (const n of readdirSync(d)) {
+      const full = join(d, n);
+      if (statSync(full).isDirectory()) { walk(full); continue; }
+      if (n.endsWith(".tar.gz")) found.tar = full;
+      else if (n.endsWith(".json")) found.manifest = full;
+    }
+  };
+  walk(dir);
+  if (!found.tar || !found.manifest) {
+    return { ok: false, code: "artifact_incomplete_download", detail: "the CI run produced no artifact/manifest pair" };
+  }
+  return { ok: true, artifactPath: found.tar, manifestPath: found.manifest, workDir: dir };
+}
+
+/** `gh` runs as the host, with the host's credentials. Never the caller's. */
+function defaultArtifactDownloader({ repo, runId, dir }) {
+  execFileSync("gh", ["run", "download", String(runId), "--repo", repo, "--dir", dir],
+    { encoding: "utf8", timeout: 300_000, stdio: ["ignore", "pipe", "pipe"] });
+}
+
+/**
+ * The generation-2 install, end to end: resolve -> verify -> compare-and-set ->
+ * extract -> alias -> activate, with the previous generation retained.
+ */
+export function executeArtifactInstall({
+  artifact = {}, expectedCurrent = null, toolkitRoot = TOOLKIT_ROOT,
+  resolver = resolveSanctionedArtifact, installer = installArtifact,
+} = {}) {
+  const resolved = resolver(artifact);
+  if (!resolved.ok) return { ok: false, error: resolved.code, detail: resolved.detail };
+  const out = installer({
+    artifactPath: resolved.artifactPath,
+    manifestPath: resolved.manifestPath,
+    toolkitRoot,
+    expected: {
+      version: artifact.version,
+      source_repository: artifact.source_repository,
+      source_sha: artifact.source_sha,
+      artifact_sha256: artifact.artifact_sha256,
+    },
+    expectedCurrent,
+  });
+  if (!out.ok) return { ok: false, error: out.code, detail: out.detail };
+  return {
+    ok: true,
+    generation: GENERATION.VACILANDO_ARTIFACT,
+    installed_identity: out.identity,
+    previous_identity: out.previous || null,
+    already_converged: Boolean(out.already_converged),
+    rollback_available: Boolean(out.rollback_available),
+    credentialsExposed: false,
+  };
+}
+
 export function executeToolkitInstall({
+  /*
+   * GENERATION 2 SHORT-CIRCUITS HERE. When the validated inputs named an
+   * artifact, the runtime does not come from a git ref and none of the
+   * staging measurement below applies. Both paths remain, explicitly, for as
+   * long as generation 1 is still a valid rollback target.
+   */
+  artifact = null,
+  expectedCurrent = null,
+  /*
+   * Injection points forwarded, deliberately. Without them the generation-2
+   * branch can only be certified by READING the dispatcher, and "the helper
+   * refuses" is not the same claim as "the governed action refuses". A guard
+   * that is correct in a helper and unreachable from the dispatcher protects
+   * nothing, so the dispatcher has to be drivable.
+   */
+  resolver = undefined,
+  installer = undefined,
   expectedStagingSha = null,
   toolkitRoot = TOOLKIT_ROOT,
   runner = null,
   binPath = null,
 } = {}) {
+  if (artifact) {
+    return executeArtifactInstall({
+      artifact, expectedCurrent, toolkitRoot,
+      ...(resolver ? { resolver } : {}),
+      ...(installer ? { installer } : {}),
+    });
+  }
   const bin = binPath || join(toolkitRoot, "current", "alloy-toolkit");
   const before = installedToolkitSha({ toolkitRoot });
 
