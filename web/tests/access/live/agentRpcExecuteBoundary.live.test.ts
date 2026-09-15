@@ -41,12 +41,19 @@ function certEnv(): { url: string; serviceKey: string } | null {
 type Row = { proname: string; open_to_clients: boolean; has_service_role: boolean };
 
 const env = certEnv();
-const d = env ? describe : describe.skip;
+const describeLive = env ? describe : describe.skip;
 
-d("the agent commit RPCs are closed to client roles — live", () => {
-    const sb: SupabaseClient = createClient(env!.url, env!.serviceKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-    });
+describeLive("the agent commit RPCs are closed to client roles — live", () => {
+    /*
+     * CONSTRUCTED CONDITIONALLY, because `describe.skip` skips the TESTS and still runs this
+     * callback. The first version built the client unconditionally from `env!`, so in any checkout
+     * without `.env.certification.local` — a fresh probe worktree, for instance — the file threw
+     * `Cannot read properties of null (reading 'url')` and failed as a FILE rather than skipping.
+     * A live test that cannot skip cleanly turns every environment without credentials into a red.
+     */
+    const sb = (env
+        ? createClient(env.url, env.serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+        : null) as unknown as SupabaseClient;
 
     it("covers a real set of functions, so a green report means something", async () => {
         /*

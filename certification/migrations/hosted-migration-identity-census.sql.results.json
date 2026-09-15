@@ -1,9 +1,9 @@
 {
-  "trusted_host_action_id": "tha_3427fba3ddb98b",
+  "trusted_host_action_id": "tha_33b4c339c66fb0",
   "query_hash": "3528e048c8ca3d3f0a076019ec817f67bcb2814027692a25a2f466cc09747dc6",
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-15T22:02:55.874Z",
+    "census_run_at": "2026-09-15T22:18:15.777Z",
     "question_ids": [
       "ledger",
       "ledger_head",
@@ -145,11 +145,11 @@
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-09-15T22:02:54.549Z",
+    "executed_at": "2026-09-15T22:18:14.468Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_3427fba3ddb98b",
+    "trusted_host_action_id": "tha_33b4c339c66fb0",
     "query_hash": "3528e048c8ca3d3f0a076019ec817f67bcb2814027692a25a2f466cc09747dc6",
-    "authorization_id": "grnt_e40ec2dda5af4d81",
+    "authorization_id": "grnt_7d26ba92441741ae",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
