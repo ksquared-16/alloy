@@ -1198,8 +1198,10 @@ subtractive on the client. There is no duplicate fetch to delete.
   `presentation` 6,359B, plus `actionsProjection`, `lensSet`, `settlement`, `workUnit`,
   `currentBusinessState`. Real, and smaller than the lead claimed.
 - **The dominant cost is not configuration.** `focusPanelStageWork.published_stage_inputs` is
-  **78,585B — 57% of the answer** — and legitimately differs per subject. Adding three producers
-  without addressing that would make the critical path worse, not better.
+  **78,585B — 57% of the answer**. ~~and legitimately differs per subject~~ — **this half was
+  wrong; corrected in §22.** It does not differ per subject at all. Adding three producers without
+  addressing it would make the critical path worse, not better — that part stands, and §22 shows
+  the reason is larger than stated here.
 
 ### 21.6 Stale-subject protection already exists, card-locally
 
@@ -1218,3 +1220,171 @@ Closing it means adding Financials, Attendance and Health producers to
 `composeProvisioningAnswerForRoute` with a readiness contract, moving three cards onto that
 projection, and binding producer results to the provisioning request identity. That is a change to
 the operational critical path and is scoped as its own work, with §21.5 as a precondition.
+
+## 22. Phase 1 — `published_stage_inputs` consumer audit — MEASURED 2026-09-15
+
+The precondition on adding Financials/Attendance/Health producers. It returns a different answer
+than the one §21.5 assumed, and **corrects an error made there**.
+
+### 22.1 The correction
+
+§21.5 recorded that `published_stage_inputs` "legitimately differs per subject". **It does not.**
+That claim came from hashing the whole `focusPanelStageWork` subtree, which also carries
+`stage_work_runtime` and `work_intent_runtime` — those do vary. Its 78,355B
+`published_stage_inputs` child does not.
+
+Two consecutive selections, same work view, different subject: **every one of its twelve fields is
+byte-identical.** 78,355B of 78,355B, 100%.
+
+### 22.2 And the whole answer is nearly static too
+
+Compared recursively rather than at top-level-key granularity:
+
+| | |
+| --- | --- |
+| answer A / answer B | 138,239B / 138,228B |
+| **byte-identical** | **135,749B — 99.6%** |
+| actually differs | **565B — 0.4%** |
+
+The 565B are ids, an email and two due dates. **The critical path transmits ~138KB to deliver ~565
+bytes of new truth.**
+
+Scope honestly: 99.6% is the *within-work-view* case — an operator working down a queue, which is
+the motion the census caught issuing three provisioning answers. Across work views the figure is
+37–96%, because the queue `rows` legitimately change. Both supersede §21.5's 40%, which was a
+measurement artefact of the coarser comparison.
+
+### 22.3 Field inventory and classification
+
+| field | bytes | varies per subject? | class |
+| --- | --- | --- | --- |
+| `departmentMetadata` | 32,550 | no | CONFIG_STATIC |
+| `process` | 28,741 | no | CONFIG_STATIC — **and duplicated, see §22.4** |
+| `commandProjection` | 10,139 | no | CONFIG_STATIC (already a projection) |
+| `operatingPlan` | 5,561 | no | CONFIG_STATIC |
+| `processTracks` | 646 | no | CONFIG_STATIC |
+| `fieldRules` | 262 | no | CONFIG_STATIC |
+| `processStages` | 238 | no | CONFIG_STATIC |
+| `actionCatalog` | 102 | no | CONFIG_STATIC |
+| `commandConfiguration` | 94 | no | CONFIG_STATIC · no runtime consumer found |
+| `processKey` / `stageKey` / `operatorGuidance` | 22 | no | CONFIG_STATIC |
+
+**UNUSED / COMMAND_LAZY / DETAIL_LAZY: none identified.** Nothing here is deferrable-by-field,
+which is why the expected Phase 1 remedy does not apply.
+
+### 22.4 The same process record ships twice in one answer
+
+`process` is 28,741B. `departmentMetadata.lifecycle_builder_v1.processes[0]` is 28,791B — the same
+record, differing by ~50 bytes of normalization. **~28.7KB of every answer is a second copy of
+configuration already present in it**, because `resolvePublishedStageInputsForCurrentWork` carries
+both the raw metadata and `activeLifecycleProcess(builder)` derived from it.
+
+### 22.5 Why it is on the wire at all — the real finding
+
+`BusinessProcessCard` is a client component. It calls
+`adaptBusinessProcessEvidenceToProcessCard` → `buildCurrentWorkSurfaceVM`, which reads
+`context.publishedStageInputs`. **The Process card projects its own view model in the browser**, so
+the answer must ship the configuration inputs rather than the projection.
+
+That is the same architecture the rest of this work is trying to remove, seen from the other end:
+Financials/Attendance/Health have *no* server producer, and Process has one that runs on the
+client. `commandProjection` — 10,139B of already-projected output beside 61,291B of the inputs it
+was projected from — shows what inversion is worth.
+
+### 22.6 Phase 1 acceptance — the budget
+
+| | bytes |
+| --- | --- |
+| current `published_stage_inputs` | **78,355** |
+| genuinely per-subject within a work view (whole answer) | **565** |
+| retained as initial operational truth *after inversion* | the Process card projection, not its inputs |
+| deferrable by field | **0** — no field is lazy; the payload is structural |
+| duplicated within the answer | **~28,741** |
+
+So the budget is not a smaller `published_stage_inputs`. It is **the Process card projection in
+place of `published_stage_inputs`**, with the configuration reached by published version rather
+than retransmitted per subject.
+
+### 22.7 STOP — and why
+
+The instruction's own stop condition applies: *"producer convergence would materially worsen
+critical-path latency without a safe deferred model."*
+
+Adding three producers to an answer that is 99.6% retransmission would add weight to a path whose
+measured defect is that it already carries ~138KB to say ~565 bytes. The ordering must change:
+**invert the Process projection first**, then add Financials/Attendance/Health producers to a
+lifecycle that ships projections rather than configuration.
+
+§21.7's contract is unchanged and still **TARGET, NOT YET MET**.
+
+## 23. Process inversion — consumer audit, census tool, and a NO-GO
+
+### 23.1 Every operational consumer of `publishedStageInputs`, classified
+
+Fifteen non-test files reference it. Only **two** execute projection over it, and both are client
+components:
+
+| consumer | class |
+| --- | --- |
+| `BusinessProcessCard.tsx` — `buildBusinessProcessCardEvidence`, `projectProcessCardCommands`, `adaptBusinessProcessEvidenceToProcessCard`, all in `useMemo` | **PROCESS_PROJECTION** |
+| `CurrentWorkCard.tsx` — `projectCurrentWork`, `resolveWorkItemHandoff` | **OTHER_INITIAL_RUNTIME** |
+| `OperationalSubjectContext` · `InlineOpportunityFocusPanel` · `ProvisionedWorkUnitSurface` · `OpportunityFocusPanelBody` | plumbing — carry it to the two above |
+| `BusinessProcessCard` direct field read (`operatingPlan.work_templates`, `commandProjection`) | telemetry only — `logProcessCardCommandProjection` |
+| `lib/**` — `buildCurrentWorkSurfaceVM` (12), `resolveCurrentWorkChecklistTruthFromPublishedRules` (14), `projectProcessCardCommands`, overlays, `buildOperationalContext` | the projection itself; no independent consumer |
+
+**CONFIGURATION_UI: none. DETAIL/COMMAND: none. UNKNOWN: none.**
+
+### 23.2 The projection engine is client-side wholesale
+
+`focusPanelWorkModeModelFromProvisioningAnswer` — which builds the commit-critical card models — is
+itself called from `OpportunityFocusPanelBody.tsx`, a client component. And
+`COMMIT_CRITICAL_CARD_SPECS` holds `current_work`, `household`, `children`, `readiness_kpi`;
+**`business_process` is not in it at all.**
+
+So the provisioning answer is not an operational answer that happens to be large. It is a
+**data-transfer format for a projection engine that runs in the browser**. That is the same defect
+as the three missing producers, seen from the other end.
+
+### 23.3 Why Process inversion alone cannot remove the payload — the NO-GO
+
+`CurrentWorkCard` projects over the same `publishedStageInputs`. Inverting Process alone therefore
+removes **no** configuration from the answer: the payload must stay for the other card. What it
+would add is a *second* projection site — the exact "another Process Card model" this run forbids —
+for zero measured payload improvement.
+
+**NO-GO for Attendance / Health / Financials producers**, and NO-GO for Process inversion as a
+standalone slice. Both were gated on this audit, and the audit says the unit of work is wrong:
+
+> The sliceable unit is not "Process". It is **the client projection engine** —
+> `BusinessProcessCard` and `CurrentWorkCard` together — because they are the only two consumers,
+> and the payload cannot move until both do.
+
+`current_work` is not in the live Firefly composition (the census saw `business_process`,
+`financials`, `attendance`, `children`, `health_safety`, `household`), so the two can ship in
+sequence. But the payload removal in §Phase 5 lands only after the second.
+
+### 23.4 The census tool — shipped
+
+`lib/runtime/provisioning/recursivePayloadCensus.ts`, with
+`tests/surfaces/recursivePayloadCensus.test.ts`. Both superseded figures came from the same
+mistake, so the measurement is now code rather than a pipeline someone re-derives.
+
+Validated against the real captured answers:
+
+| method | identical | differing | share |
+| --- | --- | --- | --- |
+| **recursive** | 126,387B | **565B** | **99.6%** |
+| top-level (kept only to demonstrate the error) | 51,001B | 77,257B | 39.8% |
+
+It reproduces the superseded **40%** exactly, which is the proof that figure was method and not
+measurement.
+
+`internalDuplicationBytes` also found what the manual pass missed: **`operatingPlan` (5,223B) is
+carried three times** in one answer — standalone, inside
+`departmentMetadata.lifecycle_builder_v1.processes[0].stages[0].stage_operating_plan_v1`, and
+inside `process.stages[0].stage_operating_plan_v1`. The `process` ≈ `processes[0]` pair is *not*
+reported, correctly: they differ by ~50 bytes and are near-copies rather than exact ones.
+
+### 23.5 Status
+
+`PROCESS PRODUCER — NOT SHIPPED.` §21.7 remains **TARGET, NOT YET MET**.
