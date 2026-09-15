@@ -93,7 +93,15 @@ describe("the Director QA scenario catalog", () => {
         for (const key of ["card_collection", "ach_processing", "provider_return"]) {
             const s = scenarioByKey(key)!;
             expect(s.disposition).toBe("EXPLICITLY_DEFERRED");
-            expect(s.dispositionReason).toMatch(/paymentSetup|achAvailable|provider configuration/i);
+            /*
+             * The reason must cite what the environment actually SAYS, in whatever vocabulary the
+             * account reader currently uses. It used to cite `paymentSetup: null` — a hardcoded
+             * constant — which was accurate about the field and wrong about the world; the reader
+             * now derives capability states, so the evidence is the merchant and the capability.
+             */
+            expect(s.dispositionReason).toMatch(
+                /takePaymentCard|takePaymentAch|achAvailable|merchant|provider configuration/i,
+            );
         }
     });
 });

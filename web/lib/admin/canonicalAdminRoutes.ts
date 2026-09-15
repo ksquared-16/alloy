@@ -414,6 +414,16 @@ export function isPublicMarketingChromeSuppressedPath(pathname: string | null | 
         return true;
     }
     if (p === "/tour-booking" || p.startsWith("/tour-booking/")) return true;
+    /*
+     * LOCAL QA READERS ARE NOT MARKETING PAGES.
+     *
+     * `/dev/*` is the human-acceptance walkthrough surface — local by construction, gated on the
+     * runtime, never reachable on a hosted deployment. It was inheriting the public site's header
+     * and footer, so a Director reading a financial scenario also got Vision, About, Contact, GET
+     * STARTED and a copyright line wrapped around the script. The QA standard asks for a surface
+     * outside the product's chrome; it did not ask for the marketing site's.
+     */
+    if (p === "/dev" || p.startsWith("/dev/")) return true;
     return isCanonicalWorkspacePath(p) || isCanonicalSettingsPath(p);
 }
 

@@ -185,55 +185,52 @@
  * rule below says why.
  */
 .alloy-os-process__work-actions .alloy-os-currentwork__helpful-row {
-  display: flex;
   /*
-   * THE ROW WRAPS. IT DOES NOT SCROLL.
+   * ONE ROW, EQUAL COLUMNS — and why this is not the "ONE ROW, ALWAYS" rule that already failed.
    *
-   * This replaces a deliberate "ONE ROW, ALWAYS" rule, so the reason it lost is worth recording.
-   * That rule set `flex-wrap: nowrap` with `overflow-x: auto` and a hidden scrollbar, reasoning that
-   * a wrapped command reads as a separate, lesser group. What it produced instead was a command
-   * cut off at the card edge with nothing to indicate it existed: measured on a deployed Waitlist
-   * card, `scrollWidth 409` against `clientWidth 300`, so 109px of the set — the whole of "Send
-   * form" — sat outside the visible box. A five-command card was worse, at 518 against 300.
+   * The first attempt used `flex-wrap: nowrap` with `overflow-x: auto` and a hidden scrollbar. It
+   * clipped: measured on a deployed Waitlist card, `scrollWidth 409` against `clientWidth 300`, so
+   * the whole of "Send form" sat outside the visible box with nothing to indicate it existed. That
+   * was replaced by wrapping, which kept every command reachable but produced the stagger this
+   * row now has to stop being: three commands on one line, two on the next, each a different
+   * width because each sized to its own label.
    *
-   * A horizontal rail is only honest when the operator can tell it scrolls. With `scrollbar-width:
-   * none` there was no such signal, and on a card this narrow the set will exceed the column
-   * routinely rather than exceptionally — every one of six cards sampled across four work units was
-   * clipped. So the failure was not an edge case being handled ungracefully; it was the normal case.
+   * Equal columns give one row without bringing the clipping back. A command never leaves the box
+   * and never lands on a second line; when the set is wide the labels ellipsize INSIDE their own
+   * column, which is a visible truncation the operator can see and hover, not a hidden region
+   * behind a gesture nobody is prompted to make. That is the whole difference from the rule this
+   * replaces — the failure mode is legible instead of silent.
    *
-   * Wrapping costs vertical space the card can afford and keeps every configured command reachable
-   * without a gesture nobody is prompted to make.
+   * `grid-auto-columns: 1fr` (not `auto`) is what makes every command the same width regardless of
+   * label length, which is the consistency the row was missing.
    */
-  flex-wrap: wrap;
-  /*
-   * `safe` IS STILL LOAD-BEARING.
-   *
-   * Plain `flex-end` pushes overflow past the START edge, which is unreachable in a left-to-right
-   * row. Wrapping makes that far less likely, but a single command wider than the column can still
-   * do it, so the guard stays: `safe flex-end` keeps the right alignment whenever the line fits and
-   * falls back to start alignment when it would otherwise overflow the unreachable end. The
-   * unprefixed declaration stays first as the fallback for engines that do not parse the keyword.
-   */
-  justify-content: flex-end;
-  justify-content: safe flex-end;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   grid-template-columns: none;
-  /*
-   * Wrapped lines need their own rhythm. `row-gap` is set explicitly rather than inherited so a
-   * second line sits clear of the first instead of touching it.
-   */
-  row-gap: 6px;
-  /*
-   * No `overflow-x`. A row that wraps has nothing to scroll, and leaving `auto` here would let a
-   * single over-wide command re-introduce a silent hidden region.
-   */
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  align-items: stretch;
+  /* Nothing to scroll and nothing to wrap: a single row of columns that always fits its track. */
   overflow-x: visible;
 }
 
 .alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__helpful-action,
 .alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__primary-action,
 .alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > [data-work-tour-grouped="true"] {
-  width: auto;
+  /*
+   * The column decides the width now, so the command fills it. The filled primary is listed here
+   * with the outline commands deliberately: it used to size itself and stood a different width and
+   * height from its neighbours, which is most of what made the row look assembled rather than
+   * designed.
+   */
+  width: 100%;
   min-width: 0;
+  /* A label too long for its share truncates visibly rather than widening the column. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   /*
    * Size to content, and never shrink. `0 0 auto` is what keeps a command's own label whole instead
    * of absorbing a neighbour's overflow — the behaviour that produced "hange lead locatio". A
@@ -284,6 +281,37 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+}
+
+/*
+ * Resolving the current work — a link under the stage's own lines, not a fifth button.
+ *
+ * Styled as text so it reads as a consequence of the sentence above it. It keeps
+ * `data-process-action`, so the command identity and every certification selector are unchanged by
+ * the move out of the row.
+ */
+.alloy-os-process__outcome-link {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--alloy-os-bend-pine, #0f7a5a);
+  cursor: pointer;
+  text-align: left;
+}
+
+.alloy-os-process__outcome-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.alloy-os-process__outcome-link:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 
 .alloy-os-process__work-label {
