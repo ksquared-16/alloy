@@ -1,8 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Scenario } from "@/lib/qa/financialsDirectorQa/scenarioCatalog";
+import { SUITE_KEY } from "@/lib/qa/financialsDirectorQa/scenarioCatalog";
+import {
+    EMPTY_DRAFT,
+    clearDrafts,
+    readDraft,
+    readPosition,
+    resolveResumeIndex,
+    writeDraft,
+    writePosition,
+    type DraftRead,
+    type QaScope,
+} from "@/lib/qa/runtime/directorQaSession";
 
 /**
  * ONE SCENARIO AT A TIME, BESIDE THE PRODUCT.
@@ -38,6 +50,7 @@ type Subject = {
     billableChildren: Array<{ customerMemberId: string; displayName: string }>;
 };
 type Payload = {
+    suiteKey?: string;
     catalogVersion: string; environment: string; deployedRevision: string;
     subject: Subject; navigation: Navigation; scenarios: Scenario[]; readiness: Readiness[]; results: ResultRow[];
     baselineChanged: boolean; priorRevisions: string[];
@@ -58,6 +71,12 @@ export default function CoreFinancialsQaReader() {
     const [observation, setObservation] = useState("");
     const [expected, setExpected] = useState("");
     const [classification, setClassification] = useState("");
+    /* Set when the loaded draft was written against an earlier build — offered, never adopted. */
+    const [carriedFrom, setCarriedFrom] = useState<DraftRead["carriedFrom"]>(null);
+    /* One-shot guards: restoring position must not fight the Director's own navigation, and
+       loading a scenario's draft must not be mistaken for the Director typing it. */
+    const restoredRef = useRef(false);
+    const loadedDraftForRef = useRef<string | null>(null);
 
     const load = useCallback(async () => {
         try {
@@ -88,6 +107,77 @@ export default function CoreFinancialsQaReader() {
     const current = walkthrough[index];
     const readiness = data?.readiness.find((r) => r.scenarioKey === current?.key);
 
+    /*
+     * ── THE DIRECTOR'S PLACE, AND THEIR UNSUBMITTED WORDS ──────────────────────────────────────
+     *
+     * Everything below keeps the walkthrough usable across a document reload. The reloads have an
+     * owner and it is not this component — on a development server, Fast Refresh fully reloads a
+     * server-component route whenever anything in its module graph changes, which on a lane under
+     * active repair is constantly. What was broken here is that the runtime's correctness depended
+     * on the document surviving, and a QA tool may not assume that.
+     *
+     * Position and drafts are per-browser conveniences. The RESULT is not stored here at all — it
+     * belongs to the acceptance authority, bound to the build and the catalog version, written only
+     * when the Director submits.
+     */
+    const scope: QaScope | null = useMemo(
+        () => (data
+            ? {
+                  suiteKey: data.suiteKey ?? SUITE_KEY,
+                  environment: data.environment,
+                  catalogVersion: data.catalogVersion,
+                  deployedRevision: data.deployedRevision,
+              }
+            : null),
+        [data],
+    );
+
+    /** Where the walkthrough should open, asked fresh so a click reflects the latest results. */
+    const resume = useCallback(() => {
+        if (!scope || walkthrough.length === 0) return { index: 0, started: false, source: "start" as const };
+        return resolveResumeIndex({
+            scenarioKeys: walkthrough.map((s) => s.key),
+            resultOf,
+            stored: readPosition(scope),
+        });
+    }, [scope, walkthrough, resultOf]);
+
+    /* RESTORE, once, as soon as there is a catalog to resolve a stored scenario key against. */
+    useEffect(() => {
+        if (restoredRef.current || !scope || walkthrough.length === 0) return;
+        restoredRef.current = true;
+        const at = resume();
+        setIndex(at.index);
+        setStarted(at.started);
+    }, [scope, walkthrough.length, resume]);
+
+    /* REMEMBER, whenever the Director moves. Keyed by scenario key, so renumbering cannot move it. */
+    useEffect(() => {
+        if (!scope || !restoredRef.current || !current) return;
+        writePosition(scope, current.key, started);
+    }, [scope, current, started]);
+
+    /* LOAD the draft for whichever scenario is open. Never mistaken for typing — see the ref. */
+    useEffect(() => {
+        if (!scope || !current) return;
+        if (loadedDraftForRef.current === current.key) return;
+        loadedDraftForRef.current = current.key;
+        const found = readDraft(scope, current.key);
+        setObservation(found.draft.observation);
+        setExpected(found.draft.expected);
+        setClassification(found.draft.classification);
+        setCarriedFrom(found.carriedFrom);
+    }, [scope, current]);
+
+    /* SAVE the draft as it is typed, debounced so a keystroke is not a write. */
+    useEffect(() => {
+        if (!scope || !current || loadedDraftForRef.current !== current.key) return;
+        const t = setTimeout(() => {
+            writeDraft(scope, current.key, { observation, expected, classification });
+        }, 300);
+        return () => clearTimeout(t);
+    }, [scope, current, observation, expected, classification]);
+
     const record = useCallback(async (result: string) => {
         if (!current) return;
         setSaving(true);
@@ -101,10 +191,20 @@ export default function CoreFinancialsQaReader() {
             });
             const json = (await res.json()) as { error?: string };
             if (!res.ok) { setError(json.error ?? "Could not record that result."); return; }
-            setError(null); setObservation(""); setExpected(""); setClassification("");
+            /*
+             * SUBMITTED, SO THE DRAFT IS SPENT. Leaving it behind would put the same words back in
+             * the form next time this scenario is opened, where they would read as unsubmitted.
+             */
+            if (scope) clearDrafts(scope, current.key);
+            loadedDraftForRef.current = null;
+            setError(null);
+            setObservation(EMPTY_DRAFT.observation);
+            setExpected(EMPTY_DRAFT.expected);
+            setClassification(EMPTY_DRAFT.classification);
+            setCarriedFrom(null);
             await load();
         } finally { setSaving(false); }
-    }, [current, observation, expected, classification, load]);
+    }, [current, observation, expected, classification, load, scope]);
 
     return (
         <main className="min-h-screen bg-white" data-qa-reader="core-financials">
@@ -176,13 +276,20 @@ export default function CoreFinancialsQaReader() {
                             accepted · {tally.fail} failed · {tally.blocked} blocked · {tally.not_run} not run
                         </p>
 
+                        {/*
+                          * ONE RULE FOR WHERE THIS OPENS, shared with the reload path: the place you
+                          * were, if this browser remembers one; otherwise the first scenario that is
+                          * not yet accepted, which is the work remaining.
+                          */}
                         <button type="button" data-qa-start="true"
-                            onClick={() => {
-                                const i = walkthrough.findIndex((s) => resultOf(s.key) === "not_run");
-                                setIndex(i < 0 ? 0 : i); setStarted(true);
-                            }}
+                            data-qa-resume-source={resume().source}
+                            data-qa-resume-scenario={walkthrough[resume().index]?.key ?? ""}
+                            onClick={() => { const at = resume(); setIndex(at.index); setStarted(true); }}
                             className="rounded-lg bg-alloy-midnight px-4 py-2 text-[13px] font-medium text-white">
                             {tally.pass + tally.fail + tally.blocked > 0 ? "Resume walkthrough" : "Start walkthrough"}
+                            {walkthrough[resume().index]
+                                ? ` · ${String(walkthrough[resume().index].order).padStart(2, "0")}`
+                                : ""}
                         </button>
                     </section>
                 ) : null}
@@ -240,6 +347,20 @@ export default function CoreFinancialsQaReader() {
                         </Section>
 
                         <Section label="Record your result">
+                            {carriedFrom ? (
+                                /*
+                                 * OFFERED, NOT ADOPTED. These words were written against a different
+                                 * build, and a note about an older build silently presented as this
+                                 * one's testimony would be the tool making a claim nobody made.
+                                 */
+                                <p className="mb-2 rounded-lg border-l-[3px] border-alloy-midnight/25 bg-alloy-midnight/[0.03] px-3 py-2 text-[12px] text-alloy-midnight/70"
+                                    data-qa-draft-carried="true">
+                                    These notes were saved against build{" "}
+                                    <strong className="font-medium">{carriedFrom.deployedRevision.slice(0, 12)}</strong>
+                                    {" "}(definitions {carriedFrom.catalogVersion}), not this one. Keep them if they
+                                    still apply, or clear the fields.
+                                </p>
+                            ) : null}
                             <textarea id="qa-observation" data-qa-observation="true" rows={3} value={observation}
                                 onChange={(e) => setObservation(e.target.value)}
                                 placeholder="What did you actually observe?"
@@ -261,8 +382,10 @@ export default function CoreFinancialsQaReader() {
                                 <Btn onClick={() => void record("blocked")} disabled={saving} id="record-blocked">BLOCKED</Btn>
                                 <Btn onClick={() => void record("not_run")} disabled={saving} id="record-not-run">NOT RUN</Btn>
                             </div>
-                            <p className="mt-2 text-[11px] text-alloy-midnight/45">
-                                Nothing is inferred. Moving on does not accept anything.
+                            <p className="mt-2 text-[11px] text-alloy-midnight/45" data-qa-draft-notice="true">
+                                Nothing is inferred. Moving on does not accept anything. Notes are kept in this
+                                browser as you type and survive a reload; they reach the record only when you
+                                choose a result.
                             </p>
                         </Section>
 
