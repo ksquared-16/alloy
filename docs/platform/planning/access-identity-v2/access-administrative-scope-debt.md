@@ -1,4 +1,11 @@
-# ACCESS_ADMINISTRATIVE_SCOPE_DEBT
+---
+title: ACCESS_ADMINISTRATIVE_SCOPE_DEBT
+status: sprint
+owner: access administration
+raised_by: Access & Identity V2 - Access Administration Split V1
+---
+
+# Four authorities answer "what may they do", and none answers "to whom"
 
 **Status:** OPEN — recorded by Director decision (5) of the Access Administration Split.
 **Decision:** administrative scope was explicitly NOT built in this slice.

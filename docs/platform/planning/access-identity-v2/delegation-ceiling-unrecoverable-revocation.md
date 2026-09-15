@@ -1,4 +1,11 @@
-# DELEGATION_CEILING_UNRECOVERABLE_REVOCATION
+---
+title: DELEGATION_CEILING_UNRECOVERABLE_REVOCATION
+status: sprint
+owner: access administration
+raised_by: Access & Identity V2 - Access Administration Split V1
+---
+
+# A capability revoked from every role can never be granted back
 
 **Status:** OPEN — needs a Director decision. Not repaired in the Access Administration Split.
 **Introduced by:** `20260915130000_w18_delegation_ceiling.sql` (Access Delegation Ceiling V1, PR #980).
