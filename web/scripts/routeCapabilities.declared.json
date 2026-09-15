@@ -208,6 +208,14 @@
         "reason": "Self-inspection only. The handler reads the CALLER'S OWN resolved scope — every query is filtered by `gate.userId` and `gate.orgId` from the caller's own gate — and returns it. It discloses nothing about any other principal and mutates nothing, so there is no operation for a capability to protect. Admission (loadAdminRouteGate) is what bounds it, which is admission used to DENY, not to authorize."
       }
     },
+    "app/api/admin/access/history/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "admin.users.read",
+        "helper": "requireAccessAdministration",
+        "reason": "The access-change audit feed. It used to require the authority to CHANGE access, on the reasoning that reading who changed it should need the power to change it. The split makes that unsatisfiable — the feed spans users, roles and scope, and no single write key covers all three — so it moves to the user READ authority, which preserves exactly today's audience (admin and ops) and lets a read-only auditor see it."
+      }
+    },
     "app/api/admin/action-definitions/[id]/route.ts": {
       "PATCH": {
         "status": "pending"
@@ -311,14 +319,6 @@
     "app/api/admin/agent/v2/field-visibility/route.ts": {
       "POST": {
         "status": "pending"
-      }
-    },
-    "app/api/admin/access/history/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "admin.users.read",
-        "helper": "requireAccessAdministration",
-        "reason": "The access-change audit feed. It used to require the authority to CHANGE access, on the reasoning that reading who changed it should need the power to change it. The split makes that unsatisfiable — the feed spans users, roles and scope, and no single write key covers all three — so it moves to the user READ authority, which preserves exactly today's audience (admin and ops) and lets a read-only auditor see it."
       }
     },
     "app/api/admin/ai/config-layout-assist/capabilities/route.ts": {
@@ -1989,13 +1989,6 @@
         "helper": "assertFinancialsReadAllowed"
       }
     },
-    "app/api/admin/financials/subjects/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "fin.read",
-        "helper": "assertFinancialsReadAllowed"
-      }
-    },
     "app/api/admin/financials/responsibility-candidates/route.ts": {
       "GET": {
         "status": "declared",
@@ -2018,6 +2011,13 @@
       }
     },
     "app/api/admin/financials/statements/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      }
+    },
+    "app/api/admin/financials/subjects/route.ts": {
       "GET": {
         "status": "declared",
         "capability": "fin.read",
@@ -2322,6 +2322,84 @@
     "app/api/admin/intake/record-resolution/route.ts": {
       "POST": {
         "status": "pending"
+      }
+    },
+    "app/api/admin/integrations/applications/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/capabilities/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/activity/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/credentials/[credentialId]/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      },
+      "DELETE": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/credentials/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/[id]/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
+      },
+      "PATCH": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/installations/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "authorizeIntegrationsAdmin"
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/locations/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.manage",
+        "helper": "requireIntegrationsAccess"
+      }
+    },
+    "app/api/admin/integrations/openapi/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "integrations.read",
+        "helper": "requireIntegrationsAccess"
       }
     },
     "app/api/admin/intelligence/operational/route.ts": {
@@ -3533,6 +3611,18 @@
         "status": "pending"
       }
     },
+    "app/api/admin/qa/financials-director/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Internal Director QA readiness. Renders a real household's outstanding, collectible and responsibility figures through buildFinancialsCardVM, so it is gated exactly as the Financials card is — being a QA tool is not a reason to read money more cheaply than the product does."
+      },
+      "POST": {
+        "status": "none",
+        "reason": "Records a Director's human acceptance testimony only — scenario key, result, observation, classification, evidence reference — into qa_director_acceptance_results. It holds no amounts, references no financial row, and writes nothing a balance can be derived from. Role-gated by requireAdminOrOps; a Financials capability would misdescribe what it touches."
+      }
+    },
     "app/api/admin/queue-row-layout/[surfaceId]/route.ts": {
       "GET": {
         "status": "pending"
@@ -4058,6 +4148,22 @@
         "reason": "Sets a member's single role — assignment, not definition."
       }
     },
+    "app/api/admin/users/[userId]/roles/[roleKey]/route.ts": {
+      "DELETE": {
+        "status": "declared",
+        "capability": "admin.users.write",
+        "helper": "requireAccessAdministration",
+        "reason": "Removes a role from a member."
+      }
+    },
+    "app/api/admin/users/[userId]/roles/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "admin.users.write",
+        "helper": "requireAccessAdministration",
+        "reason": "Adds a role to a member (W-17 multi-role)."
+      }
+    },
     "app/api/admin/users/route.ts": {
       "GET": {
         "status": "declared",
@@ -4357,6 +4463,22 @@
         "reason": "Development-only and read-only. The handler returns 404 whenever NODE_ENV is production, so it does not exist in any deployed environment; on a lane's local dev server it answers with that server's hostname, worktree, branch and commit. It reads nothing tenant-scoped and writes nothing, so there is no org principal whose capability could gate it. It exists because six rounds of operator QA failed on the assumption that the operator's localhost and the lane's localhost were one process; see docs/platform/governance/operator-qa-host-identity-defect-2026-09-02.md."
       }
     },
+    "app/api/dev/qa/developer-platform/doc/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Developer Platform QA walkthrough support, dev-only. The route returns 404 when NODE_ENV is production. It serves two committed partner documents selected from a closed name map, never a caller-supplied path, so the walkthrough can put the artifact one click away from the step that judges it."
+      }
+    },
+    "app/api/dev/qa/developer-platform/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Developer Platform QA walkthrough support, dev-only. The route returns 404 when NODE_ENV is production, so it has no production surface to hold a capability for. It prepares the certification fixture and runs the walkthrough's live verification against this server's own origin; it accepts no caller-supplied target, path or SQL, and returns no credential material."
+      },
+      "POST": {
+        "status": "none",
+        "reason": "Developer Platform QA walkthrough support, dev-only. The route returns 404 when NODE_ENV is production, so it has no production surface to hold a capability for. It prepares the certification fixture and runs the walkthrough's live verification against this server's own origin; it accepts no caller-supplied target, path or SQL, and returns no credential material."
+      }
+    },
     "app/api/dev/supabase-origin/route.ts": {
       "GET": {
         "status": "none",
@@ -4533,6 +4655,24 @@
         "reason": "Stripe's own callback. There is no org principal to hold a capability — the caller is the provider, which cannot present an Alloy session — so admission is the signed request itself: an HMAC over the raw body verified before the body is read as meaningful. Tenancy comes from the connected account through the merchant binding and fails closed when that account is bound to no organization, so the event never names its own tenant."
       }
     },
+    "app/api/v1/context/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External read of the caller's own installation context, admitted by a bearer access token resolved through resolveAccessTokenPrincipal. Same reasoning as the token route: the principal is a non-human application, not an org member, so no catalog capability applies. It returns only the caller's own application, installation, organization id, granted scopes and resource boundary — no domain data, so no domain capability is implicated."
+      }
+    },
+    "app/api/v1/locations/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope locations.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies — external scopes are a separate compatibility contract by design (see docs/api/developer-platform/03-authorization-scopes-boundaries.md). Tenancy and the installation location boundary are enforced inside public.list_external_locations."
+      }
+    },
+    "app/api/v1/oauth/token/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External token exchange. Admission IS the presented installation credential, resolved by hashed secret through resolveApplicationPrincipal, which reads the organization from the installation row. There is no org principal to hold a catalog capability: the caller is a non-human Application Principal, and Alloy's capability catalog describes what a MEMBER may do. External authority is the installation's granted_scopes, enforced at /api/v1 by requireScope, not a catalog key."
+      }
+    },
     "app/api/vendor-application/route.ts": {
       "POST": {
         "status": "none",
@@ -4561,130 +4701,6 @@
       "POST": {
         "status": "none",
         "reason": "The unscoped form of the same Twilio callback, verified against the global TWILIO_AUTH_TOKEN and failing closed identically."
-      }
-    },
-    "app/api/admin/users/[userId]/roles/route.ts": {
-      "POST": {
-        "status": "declared",
-        "capability": "admin.users.write",
-        "helper": "requireAccessAdministration",
-        "reason": "Adds a role to a member (W-17 multi-role)."
-      }
-    },
-    "app/api/admin/users/[userId]/roles/[roleKey]/route.ts": {
-      "DELETE": {
-        "status": "declared",
-        "capability": "admin.users.write",
-        "helper": "requireAccessAdministration",
-        "reason": "Removes a role from a member."
-      }
-    },
-    "app/api/admin/integrations/applications/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "integrations.manage",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/capabilities/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "integrations.read",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/installations/[id]/activity/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "integrations.read",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/installations/[id]/credentials/[credentialId]/route.ts": {
-      "POST": {
-        "status": "declared",
-        "capability": "integrations.manage",
-        "helper": "requireIntegrationsAccess"
-      },
-      "DELETE": {
-        "status": "declared",
-        "capability": "integrations.manage",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/installations/[id]/credentials/route.ts": {
-      "POST": {
-        "status": "declared",
-        "capability": "integrations.manage",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/installations/[id]/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "integrations.read",
-        "helper": "requireIntegrationsAccess"
-      },
-      "PATCH": {
-        "status": "declared",
-        "capability": "integrations.manage",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/installations/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "integrations.read",
-        "helper": "authorizeIntegrationsAdmin"
-      },
-      "POST": {
-        "status": "declared",
-        "capability": "integrations.manage",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/locations/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "integrations.manage",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/admin/integrations/openapi/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "integrations.read",
-        "helper": "requireIntegrationsAccess"
-      }
-    },
-    "app/api/v1/context/route.ts": {
-      "GET": {
-        "status": "none",
-        "reason": "External read of the caller's own installation context, admitted by a bearer access token resolved through resolveAccessTokenPrincipal. Same reasoning as the token route: the principal is a non-human application, not an org member, so no catalog capability applies. It returns only the caller's own application, installation, organization id, granted scopes and resource boundary — no domain data, so no domain capability is implicated."
-      }
-    },
-    "app/api/v1/locations/route.ts": {
-      "GET": {
-        "status": "none",
-        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope locations.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies — external scopes are a separate compatibility contract by design (see docs/api/developer-platform/03-authorization-scopes-boundaries.md). Tenancy and the installation location boundary are enforced inside public.list_external_locations."
-      }
-    },
-    "app/api/v1/oauth/token/route.ts": {
-      "POST": {
-        "status": "none",
-        "reason": "External token exchange. Admission IS the presented installation credential, resolved by hashed secret through resolveApplicationPrincipal, which reads the organization from the installation row. There is no org principal to hold a catalog capability: the caller is a non-human Application Principal, and Alloy's capability catalog describes what a MEMBER may do. External authority is the installation's granted_scopes, enforced at /api/v1 by requireScope, not a catalog key."
-      }
-    },
-    "app/api/admin/qa/financials-director/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "fin.read",
-        "helper": "assertFinancialsReadAllowed",
-        "reason": "Internal Director QA readiness. Renders a real household's outstanding, collectible and responsibility figures through buildFinancialsCardVM, so it is gated exactly as the Financials card is — being a QA tool is not a reason to read money more cheaply than the product does."
-      },
-      "POST": {
-        "status": "none",
-        "reason": "Records a Director's human acceptance testimony only — scenario key, result, observation, classification, evidence reference — into qa_director_acceptance_results. It holds no amounts, references no financial row, and writes nothing a balance can be derived from. Role-gated by requireAdminOrOps; a Financials capability would misdescribe what it touches."
       }
     }
   }

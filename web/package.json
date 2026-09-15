@@ -101,7 +101,8 @@
     "dev:cert:seed-financials-demo-tenant": "node scripts/seedFinancialsDemoTenant.mjs",
     "dev:qa:converge-placement-waitlisted": "tsx --tsconfig tsconfig.json scripts/qaConvergePlacementWaitlistedChildren.ts",
     "test:playwright-current-work": "playwright test playwright/tests/current-work-journey.spec.ts",
-    "dev:certify:enrollment-e2e": "NODE_ENV=test tsx --tsconfig tsconfig.json scripts/certifyEnrollmentE2E.ts"
+    "dev:certify:enrollment-e2e": "NODE_ENV=test tsx --tsconfig tsconfig.json scripts/certifyEnrollmentE2E.ts",
+    "qa:developer-platform": "tsx --tsconfig tsconfig.json scripts/qa/developerPlatformQaFixture.ts"
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.16",
