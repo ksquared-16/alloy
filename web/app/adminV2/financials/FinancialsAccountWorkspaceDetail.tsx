@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { money, moneyExact } from "@/app/adminV2/financials/financialsFormat";
+import { money, moneyExact, shortDate } from "@/app/adminV2/financials/financialsFormat";
 import {
     ACCOUNT_LENSES,
     ACCOUNT_LENS_LABELS,
@@ -336,7 +336,7 @@ function LedgerTable({ rows, cur }: { rows: Row[]; cur: string }) {
                     {rows.map((row) => (
                         <tr key={String(row.chargeId)} className="border-b border-alloy-stone/8"
                             data-financials-ledger-row={String(row.chargeId)}>
-                            <Td>{String(row.date ?? "—")}</Td>
+                            <Td>{shortDate(row.date as string | null)}</Td>
                             <Td>{String(row.periodKey ?? "—")}</Td>
                             {/* The catalog's word, never the key behind it. */}
                             <Td>{String(row.categoryLabel ?? row.categoryKey ?? "—")}</Td>
@@ -442,7 +442,7 @@ function PaymentCard({ p, cur }: { p: Row; cur: string }) {
                             {String(p.payerLabel ?? "unnamed payer")}
                         </strong>
                         {p.method ? ` · ${String(p.method)}` : ""}
-                        {p.receivedAt ? ` · ${String(p.receivedAt).slice(0, 10)}` : ""}
+                        {p.receivedAt ? ` · ${shortDate(String(p.receivedAt))}` : ""}
                     </span>
                 </div>
                 {p.reference ? <span className="font-mono text-[11px] text-alloy-midnight/45">{String(p.reference)}</span> : null}

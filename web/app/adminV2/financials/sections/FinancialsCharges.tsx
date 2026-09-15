@@ -28,7 +28,7 @@ import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import FinancialsAccountDetail from "@/app/adminV2/financials/FinancialsAccountDetail";
 import FinancialsChargeDetail from "@/app/adminV2/financials/FinancialsChargeDetail";
 import FinancialsBulkCharge from "@/app/adminV2/financials/sections/FinancialsBulkCharge";
-import { moneyExact } from "@/app/adminV2/financials/financialsFormat";
+import { moneyExact, shortDate } from "@/app/adminV2/financials/financialsFormat";
 import type { FinancialWorkQueueState } from "@/app/adminV2/financials/useFinancialWorkQueue";
 import type { FinancialWorkRow } from "@/lib/financials/workspace/resolveFinancialWorkQueue";
 import type { FinancialPositionCohort, FinancialPositionRow } from "@/lib/financials/workspace/resolveFinancialPosition";
@@ -285,7 +285,7 @@ export default function FinancialsCharges({
                                     </span>
                                     <span className="mt-0.5 block truncate text-xs text-alloy-midnight/60">
                                         {/* The charge's own date, not the operating month. */}
-                                        {row.serviceDate ?? "No service date"}
+                                        {row.serviceDate ? shortDate(row.serviceDate) : "No service date"}
                                         {row.customerMemberId ? " · child" : " · account-wide"}
                                         {row.position.outstandingCents > 0
                                             ? ` · ${moneyExact(row.position.outstandingCents, row.position.currencyCode)} outstanding`

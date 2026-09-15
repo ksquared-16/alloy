@@ -1,3 +1,5 @@
+import { formatQueueRowDateCompact } from "@/lib/presentation/presentationDateFormat";
+
 /**
  * Presentation helpers. Formatting only — nothing here decides what a number means.
  *
@@ -27,8 +29,19 @@ export function signedMoney(cents: number, currency: string): string {
     return `${cents < 0 ? "−" : "+"}${formatted}`;
 }
 
-export function shortDate(iso: string | null): string {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+/**
+ * EVERY OPERATOR-FACING FINANCIALS DATE, THROUGH THE PLATFORM'S OWN RULE.
+ *
+ * Financials had a private `toLocaleDateString` here and raw ISO strings in five other places, so a
+ * ledger row read `2026-12-01` beside a payment that read `Sep 14`. The presentation doctrine
+ * already owns this — "Never `YYYY-MM-DD` or `MM-DD-YYYY` on operator surfaces" — and
+ * `formatQueueRowDateCompact` is its compact form: `Dec 1` within the current year, `Jun 22, 2026`
+ * when the year is doing work. That is exactly what a dense financial ledger wants, and it is the
+ * same helper the rest of Alloy's queues use, so the two cannot drift apart again.
+ *
+ * Presentation only. The ISO value stays the value; this decides how it is read aloud.
+ */
+export function shortDate(iso: string | null | undefined): string {
+    const formatted = formatQueueRowDateCompact(iso ?? null);
+    return formatted || "—";
 }
