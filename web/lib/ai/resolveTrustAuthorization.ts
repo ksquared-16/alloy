@@ -24,7 +24,6 @@ import { hasOpenAiStructuredCredentials, isAiEnrichmentStubEnvEnabled } from "@/
 import {
     AI_ENRICHMENT_USE_PERMISSION_KEY,
     computeOpenAiLiveInvocationPermitted,
-    isAiEnrichmentUsePermissionRequired,
     resolveAiEnrichmentPortalAccess,
 } from "@/lib/ai/aiEnrichmentPermissions";
 import {
@@ -160,7 +159,10 @@ function evidenceBase(
         consumer_key: descriptor.key,
         stage: "access",
         requested_feature_key: descriptor.featureKey,
-        required_permission_key: isAiEnrichmentUsePermissionRequired() ? AI_ENRICHMENT_USE_PERMISSION_KEY : null,
+        // Unconditional: the key IS the requirement now, in every environment,
+        // so evidence that reported `null` when a flag was unset reported a
+        // requirement that no longer varies.
+        required_permission_key: AI_ENRICHMENT_USE_PERMISSION_KEY,
         permission_granted: false,
         org_id: null,
         actor_user_id: null,
