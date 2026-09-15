@@ -146,6 +146,7 @@ import {
 import { resolveChildGrainFocusPanelScope } from "@/lib/runtime/provisioning/childGrainScope";
 import type { ChildParticipationIdentity } from "@/lib/lifecycle/childParticipationIdentity";
 import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjection";
+import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 /*
  * The TYPE comes from the contract, never from the server-only implementation.
  *
@@ -1872,6 +1873,36 @@ export async function composeWorkUnitProvisioningAnswer(
           }
         : null;
 
+    /*
+     * ONE CONTEXT, BUILT ONCE — the sync projection and the async card producers read the same
+     * subject. Building it twice would be two answers to "who is this panel about".
+     */
+    const focusPanelProjectionContext = buildCommitCriticalOperationalContext({
+            // Business Process and Current Work are WORK-mode cards; the mode names the
+            // Focus Panel surface, not the provisioning request kind.
+            mode: "work",
+            subjectId: chosen.entityId,
+            title: strOrNull((subjectRow as Record<string, unknown>)?.title) ?? "",
+            statusLabel: currentBusinessState?.stageLabel ?? null,
+            statusKey: currentBusinessState?.stageKey ?? null,
+            canMutate: req.canMutate ?? false,
+            perspective: null,
+            stageWorkRuntime: stageSlice?.stage_work_runtime ?? null,
+            publishedStageInputs: stageSlice?.published_stage_inputs ?? null,
+            situation: currentBusinessState
+                ? {
+                      stageKey: currentBusinessState.stageKey,
+                      stageLabel: currentBusinessState.stageLabel,
+                      purpose: currentBusinessState.purpose ?? null,
+                  }
+                : null,
+            primaryAction: primaryAction
+                ? { actionRef: primaryAction.actionRef, label: primaryAction.label }
+                : null,
+            subjectIdentityTruth,
+            subjectGrain,
+        }),
+
     const answer: ProvisioningAnswer = {
         terminal: "operational",
         orgId: req.orgId,
@@ -1953,49 +1984,11 @@ export async function composeWorkUnitProvisioningAnswer(
             /*
              * THE PROJECTION CHOKEPOINT. One call, here, where every ingredient already exists.
              *
-             * The context is built by the SAME function the browser used
-             * (`buildCommitCriticalOperationalContext`), from the SAME answer-derived fields, so the
-             * projections cannot diverge from the ones the cards produced for themselves. Perspective
-             * is deliberately null: no projection reads it — verified across both card projectors —
-             * and inventing a server-side one would be guessing at a viewer's lens.
+             * Perspective is deliberately null: no projection reads it — verified across both card
+             * projectors — and inventing a server-side one would be guessing at a viewer's lens.
              */
-            /*
-             * ALWAYS PROJECT, even with no stage slice.
-             *
-             * The client always built evidence — `buildBusinessProcessCardEvidence` over a context
-             * with null published inputs yields an empty-but-valid card. Returning null here instead
-             * would hand the renderer a case it never had, so the frame keeps the same shape it
-             * always did and the emptiness stays inside the projection.
-             */
-            const stageSlice = focusPanelStageWork;
             const startedAt = now();
-            const projected = projectFocusPanelOperational({
-                context: buildCommitCriticalOperationalContext({
-                    // Business Process and Current Work are WORK-mode cards; the mode names the
-                    // Focus Panel surface, not the provisioning request kind.
-                    mode: "work",
-                    subjectId: chosen.entityId,
-                    title: strOrNull((subjectRow as Record<string, unknown>)?.title) ?? "",
-                    statusLabel: currentBusinessState?.stageLabel ?? null,
-                    statusKey: currentBusinessState?.stageKey ?? null,
-                    canMutate: req.canMutate ?? false,
-                    perspective: null,
-                    stageWorkRuntime: stageSlice?.stage_work_runtime ?? null,
-                    publishedStageInputs: stageSlice?.published_stage_inputs ?? null,
-                    situation: currentBusinessState
-                        ? {
-                              stageKey: currentBusinessState.stageKey,
-                              stageLabel: currentBusinessState.stageLabel,
-                              purpose: currentBusinessState.purpose ?? null,
-                          }
-                        : null,
-                    primaryAction: primaryAction
-                        ? { actionRef: primaryAction.actionRef, label: primaryAction.label }
-                        : null,
-                    subjectIdentityTruth,
-                    subjectGrain,
-                }),
-            });
+            const projected = projectFocusPanelOperational({ context: focusPanelProjectionContext });
             markSpan("focus_panel_operational_projection", startedAt);
             return projected;
         })(),
@@ -2005,6 +1998,27 @@ export async function composeWorkUnitProvisioningAnswer(
         actionsProjection,
         timings,
     };
+    /*
+     * THE CARD PRODUCERS JOIN THE SAME LIFECYCLE.
+     *
+     * Attendance (and, next, Health and Financials) needs its own read, which is why it grew a
+     * card-local fetch and its own loading state. It runs here instead — inside this provisioning
+     * identity, concurrently, each producer independently fallible — so the surface has ONE
+     * lifecycle rather than one plus three.
+     */
+    if (answer.focusPanelOperationalProjection) {
+        const tCards = now();
+        answer.focusPanelOperationalProjection = {
+            ...answer.focusPanelOperationalProjection,
+            cards: await projectFocusPanelCardProducers({
+                supabase: req.supabase,
+                orgId: req.orgId,
+                context: focusPanelProjectionContext,
+            }),
+        };
+        markSpan("focus_panel_card_producers", tCards);
+    }
+
     timings.composition_ms = now() - tComp;
     timings.spans = spans;
     timings.total_ms = now() - t0;

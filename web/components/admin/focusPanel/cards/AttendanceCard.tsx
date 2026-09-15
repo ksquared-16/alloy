@@ -132,11 +132,28 @@ export default function AttendanceCard({ model, context, receded = false, coordi
         [load, memberId, running],
     );
 
+    /*
+     * THE ROOT PROVISIONED THIS DAY. The card renders it.
+     *
+     * This used to `fetch(/api/admin/attendance/card)` on mount — its own bootstrap, its own loading
+     * state, its own stale-guard — which is what made the Focus Panel one lifecycle plus three. The
+     * attendance producer now runs inside the root provisioning lifecycle, bound to the same subject,
+     * so the projection arrives already keyed to the child this panel is about.
+     *
+     * `load()` remains for the REFRESH after a command: recording attendance must re-read the day,
+     * and that is an interaction, not a bootstrap.
+     */
+    const provisioned = context.operationalProjection?.cards?.attendance ?? null;
+    /*
+     * READINESS IS THE ROOT'S. A projection that has not arrived is PROVISIONING, and saying
+     * "No attendance record." then would be a false empty — the card asserting an absence it has
+     * not been told about. `loading` still covers the post-command re-read, which is the card's own.
+     */
+    const provisioning = memberId != null && provisioned == null;
     useEffect(() => {
         // Clear FIRST: the previous child's day must not linger while the next one resolves.
-        setVm(null);
-        void load();
-    }, [load]);
+        setVm(provisioned?.state === "ready" ? provisioned.data : null);
+    }, [provisioned]);
 
     useReportPerspective(coordination, "attendance", showHistory ? "focused" : "base");
     useDismissSignal(coordination, "attendance", () => setShowHistory(false));
@@ -215,7 +232,7 @@ export default function AttendanceCard({ model, context, receded = false, coordi
         <div className="alloy-os-attendance" data-attendance-card="true" data-attendance-subject={memberId ?? undefined}>
             <UniversalCard
                 title={model.title}
-                insight={insightFor(vm, name, Boolean(memberId), loading)}
+                insight={insightFor(vm, name, Boolean(memberId), loading || provisioning)}
                 iconName={model.iconName}
                 tier={model.tier}
                 archetype={model.archetype}
@@ -243,7 +260,7 @@ export default function AttendanceCard({ model, context, receded = false, coordi
                      * branch can no longer be reached.
                      */
                     <p className="alloy-os-attendance__empty" data-attendance-empty="loading">
-                        {loading ? "Loading the day…" : "No attendance record."}
+                        {loading || provisioning ? "Loading the day…" : "No attendance record."}
                     </p>
                 )}
             </UniversalCard>
