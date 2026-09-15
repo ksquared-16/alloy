@@ -25,9 +25,22 @@
   "reviewed": "2026-08-11",
   "reviewed_by": "assignment asg_fdf10a529525f5 (mission msn_f74ed02c126c88d7ff, W-40 session 11, 2026-08-11)",
   "ratchet": {
-    "max_unauthenticated_side_effect_routes": 3
+    "max_unauthenticated_side_effect_routes": 4,
+    "history": [
+      "2026-09-15: 3 → 4 for app/api/dev/qa/developer-platform/route.ts, the Developer Platform human-QA backend. Deliberate. Its side effects are the certification fixture's own rows and credentials it revokes in the same call, and the route returns 404 when NODE_ENV is production, so there is no unauthenticated production sender to authenticate. Putting an operator session in front of it would reinstate the manual step the instrument exists to remove."
+    ]
   },
   "exemptions": [
+    {
+      "route": "app/api/dev/qa/developer-platform/route.ts",
+      "model": "dev-only-404-in-production",
+      "reason": "Developer Platform QA walkthrough backend, dev-only. The side effects are the certification fixture's own rows and credentials it immediately revokes; the route returns 404 when NODE_ENV is production, so there is no unauthenticated production sender to authenticate. Authenticating it would put an operator session between the walkthrough and the fixture it prepares, which is the manual step this instrument exists to remove."
+    },
+    {
+      "route": "app/api/leads/gutters/route.ts",
+      "model": "public-intake-create",
+      "reason": "Public inbound gutter-lead intake, marked LEGACY_COMPAT in its own header. There is no sender to authenticate. Creates only — a contact upsert plus an opportunity create — so as with vendor-application there is no caller-supplied selector reaching an existing row. It reaches a service client through `@/lib/supabase` helpers rather than importing a constructor, which is why W-4 carries it under `advisory_transitive_only` rather than as an exception; it is a genuine S-1 subject either way. UNBOUNDED: no rate limit, no captcha. W-35's work, and W-15 separately holds the question of whether this legacy route should exist at all."
+    },
     {
       "route": "app/api/marketing/demo-request/route.ts",
       "model": "public-intake-notify",
@@ -37,11 +50,6 @@
       "route": "app/api/vendor-application/route.ts",
       "model": "public-intake-create + env-pinned-org",
       "reason": "Unauthenticated vendor application intake. There is no sender to authenticate. What holds instead is the pair W-4 already reviewed and this check re-verifies: the org is pinned to ALLOY_PUBLIC_ORG_ID from the environment and the route 500s without it (:33-37), never taking an org from the caller; and the handler CREATES ONLY — it selects no existing row by a caller-supplied id, so there is no object it can be pointed at. That is the property whose absence froze W-4's book-v2 baseline. UNBOUNDED: no rate limit, so the side effect is unlimited anonymous row creation in the pinned org. W-35's work."
-    },
-    {
-      "route": "app/api/leads/gutters/route.ts",
-      "model": "public-intake-create",
-      "reason": "Public inbound gutter-lead intake, marked LEGACY_COMPAT in its own header. There is no sender to authenticate. Creates only — a contact upsert plus an opportunity create — so as with vendor-application there is no caller-supplied selector reaching an existing row. It reaches a service client through `@/lib/supabase` helpers rather than importing a constructor, which is why W-4 carries it under `advisory_transitive_only` rather than as an exception; it is a genuine S-1 subject either way. UNBOUNDED: no rate limit, no captcha. W-35's work, and W-15 separately holds the question of whether this legacy route should exist at all."
     }
   ]
 }
