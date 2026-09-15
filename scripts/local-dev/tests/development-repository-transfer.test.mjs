@@ -440,6 +440,29 @@ test("21b — a PROMPT cannot become an executable plan", () => {
   }
 });
 
+test("21d — FOUR legs, not three: mode, fulfil dispatch, executor, caller", () => {
+  /*
+   * CI CAUGHT THIS AND I HAD NOT. I wired the registry definition, the executor
+   * branch and the mission caller, and called the action reachable. The
+   * governed-action contract gate wanted two more things:
+   *
+   *   a MODE, or the action inherits read_only, meets its own non-read risk
+   *   class in validateAgainstRegistry, and is refused as `policy_denied` --
+   *   which reads as the operator forbidding it rather than nobody having
+   *   assigned it a mode. Three actions had already fallen into that trap.
+   *
+   *   a FULFIL DISPATCH branch, which the gate's own comment calls "the branch
+   *   that keeps going missing": registered, advertised, approvable, and
+   *   unreachable at execution.
+   */
+  const request = readFileSync(`${LIB}governed-action-request.mjs`, "utf8");
+  assert.match(request, /actionKey === ACTION_TYPES\.REPOSITORY_TRANSFER_FILES\) return "other"/,
+    "a privileged action with no mode is denied as policy_denied");
+  assert.match(request, /rec\.action_key === ACTION_TYPES\.REPOSITORY_TRANSFER_FILES/,
+    "and with no fulfil dispatch branch it is unreachable at execution");
+  assert.match(request, /fulfillTransferFilesForMission/, "which must be imported to be called");
+});
+
 test("21c — the action is REACHABLE: registered, dispatched, and callable", () => {
   /*
    * A registered action with no executor branch and no caller is a definition
