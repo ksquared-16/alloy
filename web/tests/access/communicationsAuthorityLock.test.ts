@@ -228,6 +228,41 @@ describe("RL-11 — the Communications surface names its authority", () => {
         expect(stragglers).toEqual([]);
     });
 
+    it("keeps the mounted matrix's personas in step with the fixture that creates them", () => {
+        /*
+         * The cert spec MIRRORS the persona list rather than importing it, because the fixture is a
+         * real ES module reading `import.meta` and Playwright's transform cannot take that from a
+         * `.ts` spec — the import throws, and Playwright then reports "no tests found", which reads
+         * as a missing spec rather than a broken one. That is a good reason to mirror and a bad
+         * reason to let the two drift: a persona renamed in the fixture would leave the matrix
+         * signing in as somebody who no longer exists, and a sign-in failure looks like an
+         * environment problem rather than a coverage hole.
+         */
+        const cert = path.join(WEB, "..", "certification", "playwright");
+        const spec = fs.readFileSync(path.join(cert, "communications-authority.cert.spec.ts"), "utf8");
+        const fixture = fs.readFileSync(path.join(cert, "fixtures", "access-personas.mjs"), "utf8");
+
+        /*
+         * PERMISSIVE ON PURPOSE. The first version of this matched `cert\.[a-z0-9]+@[a-z.]+`, and a
+         * planted rename to `cert.commsbulkRENAMED@…` did not fail it — the uppercase letters simply
+         * fell outside the character class, so the drifted address was never extracted and never
+         * checked. An assertion that silently declines to look at the thing it is about is worse
+         * than no assertion: it reports green for the exact mutation it exists to catch.
+         */
+        const emails = [...new Set([...spec.matchAll(/"(cert\.[^"\s@]+@[^"\s]+)"/g)].map((m) => m[1]))];
+        expect(emails.length, "non-vacuity: the matrix must sign in as somebody").toBeGreaterThan(5);
+        for (const email of emails) {
+            expect(fixture.includes(`"${email}"`), `${email} is certified but the fixture creates no such persona`).toBe(true);
+        }
+
+        // And every Communications capability must be held ALONE by some persona, or the
+        // non-implication matrix has no diagonal to test.
+        for (const sym of CAPABILITY_SYMBOLS) {
+            const key = sym.toLowerCase().replace("communications_", "communications.").replace(/_/g, ".");
+            expect(fixture, `no fixture role grants ${key}`).toContain(`"${key}"`);
+        }
+    });
+
     it("admits no role title as a Communications authority", () => {
         /*
          * W-13 removed role-title authority from the rest of the platform; `hasCommunicationsSendPermission`

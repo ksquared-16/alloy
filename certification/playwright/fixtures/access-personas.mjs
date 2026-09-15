@@ -204,6 +204,39 @@ export const CUSTOM = {
      * it. `oiTitular` is labelled Admin and holds neither.
      */
     oiWriter: "mcert_oi_writer",
+
+    /*
+     * ── THE FIVE COMMUNICATIONS AUTHORITIES, ONE ROLE PER CLAIM ──
+     *
+     * Communications had two capability keys and five materially different powers, and the gap was
+     * filled by `requireAdminOrOps()` — portal admission wearing the name of a role check. The only
+     * way to show the five are genuinely five, rather than one authority wearing five names, is to
+     * give a different person each one alone and watch the product answer differently for each.
+     *
+     * `commsSender` deliberately does NOT hold `communications.read`. If sending implied reading,
+     * this persona would see the organization's conversations, and the non-implication the model
+     * claims would be false in the direction nobody checks.
+     *
+     * `commsTitular` is the control, and it is the one that would have caught the defect this
+     * closed: its LABEL is "Communications Administrator" and it holds no Communications capability
+     * at all. The send path really did open with `roleKeys.some(r => r === "admin" || r === "ops")`,
+     * so a role whose TITLE claims authority is the thing worth pointing a persona at.
+     *
+     * `commsOperator` carries exactly the seeded `ops` package for this area. A custom role with the
+     * same grants must behave identically to the system role — that is the whole promise of
+     * configurable roles, and the role-title check broke it in both directions.
+     */
+    commsReader: "mcert_comms_reader",
+    commsSender: "mcert_comms_sender",
+    commsTemplates: "mcert_comms_templates",
+    commsProvider: "mcert_comms_provider",
+    commsBulk: "mcert_comms_bulk",
+    commsOperator: "mcert_comms_operator",
+    commsFull: "mcert_comms_full",
+    commsTitular: "mcert_comms_titular",
+    commsPortalOnly: "mcert_comms_portal_only",
+    /* The union half: held ALONGSIDE commsReader, never alone. Carries no admission of its own. */
+    commsUnionBulk: "mcert_comms_union_bulk",
     oiReader: "mcert_oi_reader",
     oiTitular: "mcert_oi_titular",
 };
@@ -268,6 +301,23 @@ export const P = {
     oiWriter:           { id: "c0000000-0000-4000-8000-00000000d041", email: "cert.oiwriter@northwind.invalid",    role: CUSTOM.oiWriter },
     oiReader:           { id: "c0000000-0000-4000-8000-00000000d042", email: "cert.oireader@northwind.invalid",    role: CUSTOM.oiReader },
     oiTitular:          { id: "c0000000-0000-4000-8000-00000000d043", email: "cert.oititular@northwind.invalid",   role: CUSTOM.oiTitular },
+
+    commsReader:     { id: "c0000000-0000-4000-8000-00000000d052", email: "cert.commsreader@northwind.invalid",    role: CUSTOM.commsReader },
+    commsSender:     { id: "c0000000-0000-4000-8000-00000000d053", email: "cert.commssender@northwind.invalid",    role: CUSTOM.commsSender },
+    commsTemplates:  { id: "c0000000-0000-4000-8000-00000000d054", email: "cert.commstemplates@northwind.invalid", role: CUSTOM.commsTemplates },
+    commsProvider:   { id: "c0000000-0000-4000-8000-00000000d055", email: "cert.commsprovider@northwind.invalid",  role: CUSTOM.commsProvider },
+    commsBulk:       { id: "c0000000-0000-4000-8000-00000000d056", email: "cert.commsbulk@northwind.invalid",      role: CUSTOM.commsBulk },
+    commsOperator:   { id: "c0000000-0000-4000-8000-00000000d057", email: "cert.commsoperator@northwind.invalid",  role: CUSTOM.commsOperator },
+    commsFull:       { id: "c0000000-0000-4000-8000-00000000d058", email: "cert.commsfull@northwind.invalid",      role: CUSTOM.commsFull },
+    commsTitular:    { id: "c0000000-0000-4000-8000-00000000d059", email: "cert.commstitular@northwind.invalid",   role: CUSTOM.commsTitular },
+    commsPortalOnly: { id: "c0000000-0000-4000-8000-00000000d060", email: "cert.commsportal@northwind.invalid",    role: CUSTOM.commsPortalOnly },
+    /*
+     * THE UNION PERSONA. Two roles, neither sufficient: `commsReader` carries admission and read,
+     * `commsUnionBulk` carries bulk and no admission. Effective authority is the union, so this
+     * person must reach both a read and a campaign route — and still be refused templates and
+     * provider, which neither role holds. `also` is the second role; see the user_roles insert.
+     */
+    commsUnion:      { id: "c0000000-0000-4000-8000-00000000d061", email: "cert.commsunion@northwind.invalid",     role: CUSTOM.commsReader, also: [CUSTOM.commsUnionBulk] },
 };
 
 async function principal(p) {
@@ -355,6 +405,17 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.oiReader,  role_label: "Intelligence reader", description: "Reads Operational Intelligence. Changes none of it.",                    is_system: false, is_active: true },
         /* The label is the trap. It holds nothing. */
         { org_id: ORG, role_key: CUSTOM.oiTitular, role_label: "Admin",                description: "Named Admin, granted no Operational Intelligence authority.",           is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsReader,    role_label: "Communications reader",        description: "Reads the organization's communications. Sends nothing.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsSender,    role_label: "Communications sender",        description: "Sends an individual message. Deliberately cannot read the org's conversations.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsTemplates, role_label: "Template author",              description: "Authors templates. Delivers nothing.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsProvider,  role_label: "Delivery administrator",       description: "Configures delivery infrastructure. Messages nobody.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsBulk,      role_label: "Campaign sender",              description: "Addresses the whole organization. Authors no template.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsOperator,  role_label: "Communications operator",      description: "The seeded ops package for this area, as a CUSTOM role.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsFull,      role_label: "Communications administrator", description: "All five, as a custom role rather than by job title.", is_system: false, is_active: true },
+        /* The title control. Named like an administrator, granted nothing. */
+        { org_id: ORG, role_key: CUSTOM.commsTitular,   role_label: "Communications Administrator", description: "Titled for authority, holding none of it.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsPortalOnly,role_label: "Portal only",                  description: "The census persona: admission and nothing else.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsUnionBulk, role_label: "Campaign sender (union half)", description: "Second role in the multi-role union proof.", is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
 
@@ -457,6 +518,28 @@ export async function setup() {
         [CUSTOM.oiWriter, ["portal.access", "reports.read", "reports.write"]],
         [CUSTOM.oiReader, ["portal.access", "reports.read"]],
         [CUSTOM.oiTitular, ["portal.access"]],
+
+        /*
+         * Each of the five held ALONE, because the matrix is about what each one CANNOT do. A
+         * template author who can also reconfigure delivery, or a campaign sender who can rewrite
+         * every template, would mean the split exists only on paper.
+         */
+        [CUSTOM.commsReader, ["portal.access", "communications.read"]],
+        /* No `communications.read`. Send must not imply read — that is the half nobody checks. */
+        [CUSTOM.commsSender, ["portal.access", "communications.send"]],
+        [CUSTOM.commsTemplates, ["portal.access", "communications.templates.manage"]],
+        [CUSTOM.commsProvider, ["portal.access", "communications.provider.configure"]],
+        [CUSTOM.commsBulk, ["portal.access", "communications.bulk.send"]],
+        /* Exactly the seeded ops package for this area, carried by a custom role. */
+        [CUSTOM.commsOperator, ["portal.access", "communications.read", "communications.send"]],
+        [CUSTOM.commsFull, ["portal.access", "communications.read", "communications.send",
+                            "communications.templates.manage", "communications.provider.configure",
+                            "communications.bulk.send"]],
+        /* Titled "Communications Administrator". Holds admission and nothing else. */
+        [CUSTOM.commsTitular, ["portal.access"]],
+        [CUSTOM.commsPortalOnly, ["portal.access"]],
+        /* Supplies bulk to the union persona and carries no admission of its own. */
+        [CUSTOM.commsUnionBulk, ["communications.bulk.send"]],
     ]) {
         const { error } = await sb.rpc("replace_role_permission_grants", {
             p_org_id: ORG,
@@ -525,8 +608,15 @@ export async function setup() {
         user_id: P.bpScoped.id, org_id: ORG, department_id: BP_DEPT_ALLOWED,
     });
     if (udaErr) throw new Error(`user_department_access: ${udaErr.message}`);
+    /*
+     * One row per role a persona holds, not one per persona. Multi-role is not an edge case here:
+     * effective authority is the UNION of a person's roles, and a matrix that only ever gives
+     * someone one role cannot tell a union from a single grant.
+     */
     const { error: urErr } = await sb.from("user_roles").insert(
-        Object.values(P).map((p) => ({ user_id: p.id, org_id: p.org ?? ORG, role: p.role })),
+        Object.values(P).flatMap((p) =>
+            [p.role, ...(p.also ?? [])].map((role) => ({ user_id: p.id, org_id: p.org ?? ORG, role })),
+        ),
     );
     if (urErr) throw new Error(`user_roles: ${urErr.message}`);
     return sb;
