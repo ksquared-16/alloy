@@ -85,7 +85,16 @@ export default function FinancialsAccounts({
 
     return (
         <div className="flex min-h-0 flex-1 gap-3" data-testid="financials-accounts-section">
-            <WorkspaceSurface className="flex min-h-0 w-[24rem] shrink-0 flex-col overflow-hidden">
+            {/*
+             * ── THE RAIL IS A QUEUE, NOT A TABLE ───────────────────────────────────────────────
+             *
+             * It was 24rem of mostly-empty width holding two facts, and the canvas that width cost
+             * belonged to the account an operator is actually working. Narrower, and each row now
+             * carries what decides whether to open it: the household, what it owes, what can be
+             * collected, and the one thing about it that wants attention. Anything further down
+             * the hierarchy belongs to the detail, not to a row somebody is scanning.
+             */}
+            <WorkspaceSurface className="flex min-h-0 w-[17.5rem] shrink-0 flex-col overflow-hidden">
                 <div className="min-h-0 flex-1 overflow-y-auto" data-financials-accounts-list="true">
                     {readError ? (
                         <p className="px-3 py-4 text-xs text-alloy-ember" data-financials-accounts-error="true">
@@ -107,16 +116,19 @@ export default function FinancialsAccounts({
                                 data-financials-account-row={account.customerId}
                                 data-financials-account-state={accountState(account)}
                                 aria-current={selected === account.customerId ? "true" : undefined}
+                                /* A selected row is stated by an edge, not by a wash the eye loses. */
                                 className={`block w-full border-b border-alloy-stone/10 px-3 py-2 text-left transition hover:bg-alloy-stone/5 ${
-                                    selected === account.customerId ? "bg-alloy-bend-pine/5" : ""
+                                    selected === account.customerId
+                                        ? "border-l-[3px] border-l-alloy-midnight bg-alloy-midnight/[0.04] pl-[calc(0.75rem-3px)]"
+                                        : "border-l-[3px] border-l-transparent"
                                 }`}
                             >
                                 <span className="flex items-baseline justify-between gap-2">
-                                    <span className="truncate text-sm text-alloy-midnight">
+                                    <span className="truncate text-[13px] font-medium text-alloy-midnight">
                                         {account.householdName ?? "Household"}
                                     </span>
                                     <span
-                                        className="shrink-0 text-sm tabular-nums text-alloy-midnight"
+                                        className="shrink-0 text-[13px] tabular-nums text-alloy-midnight"
                                         data-financials-account-outstanding={account.customerId}
                                     >
                                         {moneyExact(account.outstandingCents, account.currencyCode)}
@@ -182,53 +194,58 @@ export default function FinancialsAccounts({
                         </div>
                         <div className="min-h-0 flex-1 overflow-y-auto p-3">
                             {/*
-                             * THE WORKSPACE GRAIN LEADS.
+                             * THE WORKSPACE GRAIN LEADS, AND SELECTION IS IMMEDIATE.
                              *
-                             * This used to render the Focus Panel's compact card, which is the
-                             * contextual grain — summary-first, deliberately small, built for
-                             * reading financial context while working some OTHER subject. In the
-                             * dedicated financial workspace that left a small card marooned in a
-                             * large canvas and answered a question nobody had asked here.
+                             * NO `key` HERE, deliberately. Keying by the selected id remounted the
+                             * whole detail on every click, which is precisely why selecting an
+                             * account replaced the surface with "Reading the account…": a remount
+                             * has no state to render, so everything already known at the instant of
+                             * the click — the household, the section structure — was thrown away
+                             * along with the figures that genuinely had to be fetched. One instance
+                             * now persists and commits the new subject synchronously; the detail
+                             * drops any response that arrives for an account no longer selected.
                              *
                              * Same truth, different grain: both read `buildFinancialsCardVM`. An
-                             * account with nothing on it renders the same bands saying so — $0,
-                             * no responsibility arranged, nothing expected, no money received,
-                             * nothing charged — and a read that FAILS renders none of them.
+                             * account with nothing on it renders the same bands saying so, and a
+                             * read that FAILS renders none of them.
                              */}
-                            <FinancialsAccountWorkspaceDetail key={selected} customerId={selected} />
-
-                            {/*
-                             * THE COMMANDS STILL LIVE ON THE CARD, AND SAY SO.
-                             *
-                             * Add charge, Add adjustment, Move and Apply payment and the reversals
-                             * are implemented there. Re-implementing them here would be a second
-                             * action path over the same money, which is exactly what the surface
-                             * decision forbids — so the card is composed BENEATH the account
-                             * detail as the action region rather than copied. Workspace-native
-                             * commands are named follow-up, not quietly skipped.
-                             *
-                             * OPEN when the account has no activity: on an account carrying
-                             * nothing, raising the first charge is the only work there is, and
-                             * putting it behind a disclosure would hide the one affordance the
-                             * surface exists to offer.
-                             */}
-                            <details className="mt-4 rounded-xl border border-alloy-stone/15 bg-white/40"
-                                open={selectedAccount?.noActivity ?? false}
-                                data-financials-account-actions="true"
-                                data-financials-account-actions-open={selectedAccount?.noActivity ? "true" : undefined}>
-                                <summary className="cursor-pointer px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45">
-                                    Financial actions
-                                </summary>
-                                <div className="px-3 pb-3">
-                                    <FinancialsAccountDetail
-                                        key={`actions-${selected}`}
-                                        customerId={selected}
-                                        customerMemberId={null}
-                                        participationId={null}
-                                        displayName={null}
-                                    />
-                                </div>
-                            </details>
+                            <FinancialsAccountWorkspaceDetail
+                                customerId={selected}
+                                householdName={selectedAccount?.householdName ?? null}
+                                currencyCode={selectedAccount?.currencyCode}
+                                actions={
+                                    /*
+                                     * THE COMMANDS LIVE ON THE CARD, AND ARE PLACED HIGH.
+                                     *
+                                     * Add charge, Record payment, Add adjustment, Move and Apply and
+                                     * the reversals are implemented there. Re-implementing them here
+                                     * would be a second action path over the same money, so the card
+                                     * is COMPOSED rather than copied — one capability, several
+                                     * placements, one executor.
+                                     *
+                                     * It used to sit behind a disclosure beneath the entire ledger,
+                                     * which is the last place an operator looks for the thing they
+                                     * came to do. In the dedicated financial workspace it is open,
+                                     * above the record, where "what can I do next" is answered.
+                                     */
+                                    <section
+                                        className="rounded-xl border border-alloy-stone/15 bg-white/40 px-3 pb-3 pt-2"
+                                        data-financials-account-actions="true"
+                                        data-financials-account-actions-open="true"
+                                    >
+                                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45">
+                                            Financial actions
+                                        </p>
+                                        <FinancialsAccountDetail
+                                            key={`actions-${selected}`}
+                                            customerId={selected}
+                                            customerMemberId={null}
+                                            participationId={null}
+                                            displayName={selectedAccount?.householdName ?? null}
+                                        />
+                                    </section>
+                                }
+                            />
                         </div>
                     </div>
                 )}
