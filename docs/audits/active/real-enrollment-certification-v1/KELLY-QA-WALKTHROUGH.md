@@ -63,6 +63,16 @@ stuff decided?* Every answer should be a place in the product, not an explanatio
 > required, and where each answer goes. The **packet** owns only that the Form is included, its
 > order, and the step name the family sees. Change the step name here; change the questions in Forms.
 
+**0.4a. DO** — Still in Configure, read **What makes this complete** and **What Alloy retains or
+updates**.
+**EXPECT** — Complete when the family has answered what the Form requires and submitted it. Retained:
+answers connected to Alloy update the child or family record, answers that are not connected stay
+with this Form's submission, and the submission is kept as evidence.
+
+> Every obligation now answers the same two questions — what makes it complete, and what Alloy keeps
+> — so you can compare a Form, a document to read, and a document to send in without translating
+> between three different vocabularies.
+
 **0.5. DO** — Click **Manage form →**, click **Student Date of Birth:**, then **Student Name:**.
 **EXPECT** — The inspector says *Alloy already knows this when available…* for the first and
 *Stored with this form — Not written to the child or family record* for the second. Every question
@@ -83,10 +93,34 @@ carries **Required** or **Optional**; four carry an **Alloy** mark.
 - **Completion evidence** — what completion records
 - **What the family is told** — the participant instruction
 
-**0.7. DO** — Untick **Require a signature**, read **Completion evidence**, then tick it back and
+**0.7. DO** — Click **View document →**.
+**EXPECT** — The actual 2026–2027 Family Handbook opens in a new tab.
+
+> This did nothing when you clicked it last time. It was reading the wrong field off the response, so
+> there was no tab and no error either — the click simply died. If it fails now it will *tell* you
+> why instead of going quiet.
+
+**0.7a. DO** — Read **What makes this complete** and **What Alloy retains or updates**.
+**EXPECT** — Completion is *the family acknowledges this document and provides the required
+signature*. Alloy retains: which document was acknowledged, the acknowledgment and its time, the
+signature — typed or drawn — and a signed PDF of what was agreed, and the packet session it belongs
+to. Then, plainly: **no child or household fields are updated from this document**.
+
+**0.7b. DO** — Read **Data mapping**.
+**EXPECT** — **None**, and: *This step records acknowledgment of the document. It does not extract or
+map the document's contents into Alloy records. The family is shown the document before acknowledging
+it.*
+
+> This is the direct answer to your question about how Handbook data gets mapped: **it doesn't**.
+> This is an attestation — it records that a specific document was agreed to, by whom, and when.
+> Note the careful wording about being *shown* the document: the family is shown it before they can
+> agree, but Alloy does not track that they read it, so the product does not claim a "viewed" step it
+> cannot prove.
+
+**0.7c. DO** — Untick **Require a signature**, watch the completion sentence, then tick it back and
 **Save configuration**.
-**EXPECT** — The evidence sentence changes as you toggle, and the card still says *Signature
-required* afterwards.
+**EXPECT** — The completion sentence drops the signature and the retention list drops the signature
+line while unticked, and the card still says *Signature required* afterwards.
 
 > **STOP** if you are ever shown a *Form* here. Alloy builds a hidden one-question form to record the
 > agreement; that is machinery and you should never have to know it exists.
@@ -110,8 +144,22 @@ required* afterwards.
 > Alloy is one thing, owned by Processing. *A family* sending in a document to satisfy an obligation
 > is a different thing, owned right here. Immunization is the second.
 >
-> **Document intelligence: Not configured** is deliberate and correct: Alloy files the record, it
-> does not read doses out of it, and the family is never asked to retype what the document says.
+> **Information extraction: Not configured** is deliberate and correct, and it is the answer to your
+> question. If extraction is not configured, how are we pulling immunization information and mapping
+> it? **We are not.** Today this step means: the family provides evidence, Alloy stores the document
+> and files it as an Immunization record, and that satisfies the obligation. It does **not** mean the
+> document is read, doses are extracted, or the child's Health record is updated.
+>
+> Filing a document under a type is not the same as reading what is inside it. Structured dose truth
+> belongs to Health, and the vaccine grid stays truthfully blank until Health supplies it.
+
+**0.8a. DO** — Read **What makes this complete** and **What Alloy retains or updates**.
+**EXPECT** — Complete when *the family provides the document — receiving it is what completes this
+step*. Retained: the document filed as **Immunization record** against the child, which packet
+session and step it arrived from, and the most recent file if the family replaced an earlier one.
+
+> **STOP AND TELL US** if anything on this screen suggests Alloy is reading values out of the
+> document. Nothing should. Zero health facts are extracted by this step today.
 
 ---
 
