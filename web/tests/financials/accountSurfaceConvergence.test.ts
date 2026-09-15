@@ -176,6 +176,66 @@ describe("F7 · one truth, two grains", () => {
     });
 
     /*
+     * ── ONE FINANCIALS OBJECT, OPENED TO ITS FULL DEPTH ────────────────────────────────────────
+     *
+     * Summary, divider, lenses and activity are one bordered surface. They are SIBLINGS in the DOM
+     * rather than nested, and that is deliberate: `FinancialsCard` enters a command by returning a
+     * different tree, so a body rendered inside it unmounts the instant Add Charge opens and comes
+     * back with its lens and scroll reset — which is exactly the state Cancel exists to restore.
+     * The shared border is drawn by the placement and suppressed on the card within it.
+     */
+    it("renders the summary and the account body as one surface", () => {
+        const src = read(ACCOUNTS);
+        const surfaceAt = src.indexOf("alloy-accounts-account-card");
+        expect(surfaceAt, "the placement draws one account surface").toBeGreaterThan(-1);
+        const summaryAt = src.indexOf("<FinancialsAccountDetail");
+        const bodyAt = src.indexOf("<FinancialsAccountWorkspaceDetail");
+        expect(summaryAt).toBeGreaterThan(surfaceAt);
+        expect(bodyAt, "both live inside that surface, summary first").toBeGreaterThan(summaryAt);
+
+        const css = read("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).toContain(".alloy-accounts-account-card");
+        expect(css, "and the card inside it draws no second box")
+            .toMatch(/\.alloy-accounts-account-card \.alloy-os-ucard/);
+    });
+
+    /* The lenses and the account body are not a second workspace panel with its own chrome. */
+    it("gives the account body no card chrome of its own", () => {
+        const detail = read(WORKSPACE_DETAIL);
+        expect(detail, "the lens region is a divider, not a panel").toContain('data-financials-lenses="true"');
+        expect(detail).not.toMatch(/data-financials-lenses="true"[^>]*rounded-xl/);
+        expect(detail).not.toMatch(/<section className="rounded-xl border/);
+    });
+
+    /*
+     * FOCUS PANEL COMPACT, ACCOUNTS EXPANDED. One presentation system, two depths — the difference
+     * is what the placement passes, never a second component or a second truth.
+     */
+    it("keeps the Focus Panel compact and Accounts expanded", () => {
+        const card = read("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card, "the drill-down is on by default, so the Focus Panel keeps it")
+            .toContain("showDetailsAction = true");
+        const accounts = read(ACCOUNTS);
+        expect(accounts, "and Accounts turns it off").toContain("showDetailsAction={false}");
+        expect(accounts, "Accounts shows the body without asking").toContain("<FinancialsAccountWorkspaceDetail");
+        /* Nothing in the Focus Panel path opts into the expanded body. */
+        expect(card).not.toContain("alloy-accounts-account-card");
+    });
+
+    /*
+     * ADD CHARGE FITS. The command body carried its own 420px cap, so the form scrolled inside a
+     * layer that had room for it. The host bounds the layer; the body grows to its content.
+     */
+    it("lets the Add Charge body grow to its content inside the bounded layer", () => {
+        const css = read("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).toMatch(
+            /\.alloy-accounts-command-host > \[data-financials-overlay\] \.alloy-os-financials__preview\s*\{[^}]*max-height: none/,
+        );
+        expect(css, "and the layer itself stays bounded for smaller viewports")
+            .toMatch(/\.alloy-accounts-command-host > \[data-financials-overlay\]\s*\{[^}]*max-height: min\(/);
+    });
+
+    /*
      * The operator is already in the Financials workspace and has already chosen an account.
      * Requiring `Details →` before showing its ledger asks them to say so twice.
      */

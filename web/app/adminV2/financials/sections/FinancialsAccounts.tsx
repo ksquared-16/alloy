@@ -280,41 +280,52 @@ export default function FinancialsAccounts({
                              * a focused layer over the account instead of swapping the header for a
                              * form. Presentation only — see `alloy-accounts-command-host`.
                              */}
-                            <div className="alloy-accounts-command-host" data-financials-command-host="true">
-                            <FinancialsAccountDetail
-                                key={`summary-${selected}`}
-                                customerId={selected}
-                                customerMemberId={null}
-                                participationId={null}
-                                displayName={selectedAccount?.householdName ?? null}
-                                /*
-                                 * NO DRILL-DOWN HERE. The operator opened Financials, chose
-                                 * Accounts and selected this household; the account's own activity
-                                 * is directly below. `Details →` would ask them to request what
-                                 * they are already looking at, and opened a scrimmed overlay over
-                                 * the surface already showing it.
-                                 */
-                                showDetailsAction={false}
-                            />
-                            </div>
-
                             {/*
-                             * DETAIL IS VISIBLE, NOT BEHIND A COMMAND.
+                             * ── ONE FINANCIALS OBJECT, EXPANDED ────────────────────────────────
                              *
-                             * The operator is already in the Financials workspace and has already
-                             * chosen an account; making them press Details → to see its ledger asks
-                             * them to say so twice. Lenses decide what is emphasised, not whether
-                             * anything is shown.
+                             * The lenses and the account's activity are the card's own lower body,
+                             * passed in and rendered inside it. They used to sit in a second panel
+                             * beneath the card, which gave the operator two objects to reconcile
+                             * where the product has one — and made the summary look like a header
+                             * for something else rather than the top of this account.
                              *
-                             * NO `key` on this one, deliberately: it holds the committed subject and
-                             * drops responses for an account no longer selected, which a remount
-                             * would throw away along with the rendered structure.
+                             * The Focus Panel passes no body and stays compact. Same card, same
+                             * truth, same commands; only the depth this placement may show differs.
                              */}
-                            <FinancialsAccountWorkspaceDetail
-                                customerId={selected}
-                                householdName={selectedAccount?.householdName ?? null}
-                                currencyCode={selectedAccount?.currencyCode}
-                            />
+                            {/*
+                             * ── ONE FINANCIALS OBJECT, EXPANDED ────────────────────────────────
+                             *
+                             * Summary, divider, lenses and activity are one bordered surface: the
+                             * account's Financials card, opened to its full depth because the
+                             * operator is already in the dedicated financial workspace. The lenses
+                             * used to sit in a second panel below a second border, which gave them
+                             * two objects to reconcile where the product has one.
+                             *
+                             * SIBLINGS RATHER THAN NESTED, deliberately. `FinancialsCard` enters a
+                             * command by RETURNING a different tree, so a body rendered inside it
+                             * unmounts the moment Add Charge opens — and comes back with its lens
+                             * and scroll reset, which is precisely the state Cancel is supposed to
+                             * restore. Side by side under one surface, the body is never unmounted
+                             * and the command has nothing to take away from it. The shared border
+                             * is drawn here and suppressed on the card, so it still reads as one.
+                             */}
+                            <div className="alloy-accounts-account-card alloy-accounts-command-host"
+                                data-financials-account-card="true"
+                                data-financials-command-host="true">
+                                <FinancialsAccountDetail
+                                    key={`account-${selected}`}
+                                    customerId={selected}
+                                    customerMemberId={null}
+                                    participationId={null}
+                                    displayName={selectedAccount?.householdName ?? null}
+                                    showDetailsAction={false}
+                                />
+                                <FinancialsAccountWorkspaceDetail
+                                    customerId={selected}
+                                    householdName={selectedAccount?.householdName ?? null}
+                                    currencyCode={selectedAccount?.currencyCode}
+                                />
+                            </div>
                         </div>
                     </div>
                 )}

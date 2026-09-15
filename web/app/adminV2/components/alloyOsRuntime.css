@@ -10402,3 +10402,72 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     box-shadow: 0 24px 60px rgba(16, 24, 32, 0.22);
     padding: 0.75rem;
 }
+
+/*
+ * ── THE ACCOUNT IS ONE FINANCIALS CARD, OPENED TO ITS FULL DEPTH ───────────────────────────────
+ *
+ * Summary, divider, lenses and activity share ONE bordered surface. They are siblings in the DOM
+ * because `FinancialsCard` enters a command by returning a different tree, and a body nested inside
+ * it would unmount the instant Add Charge opened — returning with its lens and scroll reset, which
+ * is exactly the state Cancel exists to restore. So the surface is drawn here, once, and the card's
+ * own border and padding are suppressed inside it.
+ *
+ * The Focus Panel is untouched: it never gets this class, keeps its own border, and stays compact.
+ * One presentation system, two depths.
+ */
+.alloy-accounts-account-card {
+    border: 1px solid rgba(203, 213, 214, 0.55);
+    border-radius: 14px;
+    background: #fff;
+    padding: 0.85rem 1rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+/* The card inside no longer draws a second box around the top half of the same object. */
+.alloy-accounts-account-card > .alloy-os-billing,
+.alloy-accounts-account-card > .alloy-os-financials {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+}
+
+/*
+ * The card the placement wraps draws its own `UniversalCard` chrome — a border, a radius and a
+ * shadow. Inside the account surface that is a second box around the top half of one object, so it
+ * is suppressed at whatever depth it sits. Only within this placement: the Focus Panel keeps it.
+ */
+.alloy-accounts-account-card .alloy-os-ucard,
+.alloy-accounts-account-card .alloy-os-billing,
+.alloy-accounts-account-card .alloy-os-financials {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.alloy-accounts-account-card > .alloy-os-billing,
+.alloy-accounts-account-card > .alloy-os-financials,
+.alloy-accounts-account-card .alloy-os-ucard {
+    padding: 0;
+}
+
+/* The command overlay is a real layer and keeps its own surface. */
+.alloy-accounts-account-card > [data-financials-overlay],
+.alloy-accounts-account-card > [data-financials-overlay] .alloy-os-ucard {
+    background: #fff;
+}
+
+/*
+ * ADD CHARGE FITS. The command body carried its own 420px cap from an earlier pass, so the form
+ * scrolled inside a layer that had room for it. The host bounds the layer; the body inside it
+ * simply grows to its content, and the action footer therefore stays on screen without scrolling at
+ * a normal laptop height. A smaller viewport still scrolls, which is the point of the bound.
+ */
+.alloy-accounts-command-host > [data-financials-overlay] .alloy-os-financials__preview {
+    max-height: none;
+    overflow-y: visible;
+}

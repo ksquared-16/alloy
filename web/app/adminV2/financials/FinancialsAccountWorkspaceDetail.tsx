@@ -164,7 +164,7 @@ export default function FinancialsAccountWorkspaceDetail({
     const name = householdName ?? String(vm?.account?.label ?? "") ?? null;
 
     return (
-        <div className="flex flex-col gap-3 pb-6" data-financials-workspace-detail={customerId}
+        <div className="flex flex-col" data-financials-workspace-detail={customerId}
             data-financials-detail-hydrated={loading ? "false" : "true"}>
 
             {/*
@@ -174,8 +174,13 @@ export default function FinancialsAccountWorkspaceDetail({
              * two summaries and no hierarchy. What follows is DETAIL, and only detail.
              */}
             {/* ── 3 · THE MONEY, THROUGH ONE LENS AT A TIME ─────────────────────────────────────── */}
-            <section className="rounded-xl border border-alloy-stone/15 bg-white/60" data-financials-lenses="true">
-                <div className="flex flex-wrap items-center gap-1 border-b border-alloy-stone/10 px-2 py-1.5">
+            {/*
+             * A DIVIDER, NOT A NEW SURFACE. This region is the lower half of the Financials card it
+             * is rendered inside, so it draws no border of its own — a bordered panel here would put
+             * a card inside a card and reintroduce the two-object reading this pass removed.
+             */}
+            <section className="border-t border-alloy-stone/15 pt-2" data-financials-lenses="true">
+                <div className="flex flex-wrap items-center gap-1 px-1 pb-1.5">
                     {ACCOUNT_LENSES.map((key) => (
                         <button
                             key={key}
@@ -235,7 +240,7 @@ export default function FinancialsAccountWorkspaceDetail({
                     </span>
                 </div>
 
-                <div className="px-3 py-2">
+                <div className="py-1">
                     {loading ? (
                         <LedgerSkeleton />
                     ) : lens === "payments" ? (
@@ -257,7 +262,7 @@ export default function FinancialsAccountWorkspaceDetail({
             </section>
 
             {/* ── 4 · WHO OWES IT, AND WHO IS FUNDING IT ────────────────────────────────────────── */}
-            <section className="rounded-xl border border-alloy-stone/15 bg-white/60 px-4 py-3">
+            <section className="border-t border-alloy-stone/15 pt-2.5" data-financials-arrangements="true">
                 <div className="grid gap-4 md:grid-cols-2">
                     <div>
                         <Sub>Who owes it</Sub>

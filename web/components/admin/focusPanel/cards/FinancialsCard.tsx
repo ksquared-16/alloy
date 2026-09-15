@@ -2567,7 +2567,8 @@ export default function FinancialsCard({
                      * placement should not silently change which questions the card answers.
                      */
                     span={model.density === "compact" ? 1 : "row"}
-                    onDetails={() => setOverlay("detail")}
+                    /* No drill-down where the account's own body is already open beneath this. */
+                    onDetails={showDetailsAction ? () => setOverlay("detail") : undefined}
                     onAddCharge={() => setOverlay("add_charge")}
                     /*
                      * `Pay now` was always this card's primary action and the Focus Panel never wired
@@ -3078,6 +3079,7 @@ export default function FinancialsCard({
                          *
                          * Defaults to present, so the Focus Panel is untouched.
                          */}
+
                         {showDetailsAction ? (
                             <button
                                 type="button"

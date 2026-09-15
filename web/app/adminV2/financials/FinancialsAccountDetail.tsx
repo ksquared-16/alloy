@@ -83,5 +83,11 @@ export default function FinancialsAccountDetail({
         [customerId, customerMemberId, participationId, displayName],
     );
 
-    return <FinancialsCard model={model} context={context} showDetailsAction={showDetailsAction} />;
+    return (
+        <FinancialsCard
+            model={model}
+            context={context}
+            showDetailsAction={showDetailsAction}
+        />
+    );
 }

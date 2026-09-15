@@ -173,7 +173,9 @@ export default function FinancialsCard({
                                 <FooterAction onClick={onPayNow}>Take payment →</FooterAction>
                             ) : null}
                             <FooterAction onClick={onAddCharge}>Add charge →</FooterAction>
-                            <FooterAction onClick={onDetails}>Details →</FooterAction>
+                            {/* Offered only where there is somewhere to drill to. In Financials →
+                                Accounts the account's own body is already open beneath this. */}
+                            {onDetails ? <FooterAction onClick={onDetails}>Details →</FooterAction> : null}
                         </div>
                     </section>
 
@@ -321,7 +323,8 @@ function FinancialsCompactCard({
                             <FooterAction onClick={onPayNow}>Take payment →</FooterAction>
                         ) : null}
                         <FooterAction onClick={onAddCharge}>Add charge →</FooterAction>
-                        <FooterAction onClick={onDetails}>Details →</FooterAction>
+                        {/* Offered only where there is somewhere to drill to. */}
+                        {onDetails ? <FooterAction onClick={onDetails}>Details →</FooterAction> : null}
                     </div>
                 }
             >
