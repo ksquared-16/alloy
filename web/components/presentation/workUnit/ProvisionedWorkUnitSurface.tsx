@@ -361,7 +361,6 @@ export function ProvisionedWorkUnitSurface() {
                             : null
                     }
                     stageWorkRuntime={op ? op.focusPanelStageWork?.stage_work_runtime ?? null : null}
-                    publishedStageInputs={op ? op.focusPanelStageWork?.published_stage_inputs ?? null : null}
                     operationalProjection={op ? op.focusPanelOperationalProjection ?? null : null}
                     workIntentRuntime={op ? op.focusPanelStageWork?.work_intent_runtime ?? null : null}
                     // A — commit-critical subject identity truth (domain-declared bindings; renders identity cards meaningful at commit).
