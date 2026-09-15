@@ -1,186 +1,225 @@
 /**
- * THE PUBLISHED COMPOSITION OWNS CARD HEIGHT; THE CARD OWNS ITS CONTENT.
+ * ROWSTART IS A PLACEMENT COORDINATE, NOT A VISUAL ROW.
  *
- * Measured on the deployed Work Unit panel: Enrollment 237px beside Financials 325px, both in
- * the same authored band. CSS could not fix it — the composed canvas positions every area
- * absolutely from JS-computed left/width/top, and `align-items` is inert on absolutely
- * positioned children. Injecting `stretch` on the canvas and on the area changed nothing.
+ * PR #989 equalised cards whose `rowStart` matched, and on the live Firefly panel that
+ * equalised nothing: column-aware placement advances each column independently, so the
+ * operator's side-by-side pair is published as
  *
- * So the height has to be SOLVED. These cases are the solver's contract.
+ *     business_process  colStart 1  colSpan 8   rowStart 1  rowSpan 2
+ *     financials        colStart 9  colSpan 4   rowStart 2  rowSpan 2
  *
- * Nothing here names a card type. `solveRowHeights` reads `rowStart`, `rowSpan` and measured
- * heights, and would behave identically for cards that do not exist yet.
+ * Two different `rowStart` values for one visual band. The measured result was 325px
+ * beside 299px, and every same-rowStart test in the suite stayed green through it.
+ *
+ * So the fixture below is that exact published shape, and the rule under test is the
+ * authored BAND, not the coordinate.
  */
 
-import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { solveRowHeights, bandsCovered } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelRowHeights";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
-const area = (card: string, rowStart: number, rowSpan = 1) => ({ card, rowStart, rowSpan });
-const heights = (entries: Record<string, number>) => new Map(Object.entries(entries));
+import { solveRowHeights } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelRowHeights";
+import {
+    columnChains,
+    deriveVisualBands,
+    type BandArea,
+} from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelVisualBands";
 
-describe("cards sharing an authored band share its height", () => {
-    it("gives both cards the taller one's height — the measured defect, as a unit", () => {
-        const { assigned } = solveRowHeights({
-            areas: [area("enrollment", 1), area("financials", 1)],
-            intrinsic: heights({ enrollment: 237, financials: 325 }),
-            gapPx: 12,
-        });
-        expect(assigned.get("enrollment")).toBe(325);
-        expect(assigned.get("financials")).toBe(325);
-    });
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(here, "../..");
+const readSrc = (rel: string) => readFileSync(resolve(repoRoot, rel), "utf8");
 
-    it("solves each band independently — a tall band never inflates the next", () => {
-        const { assigned } = solveRowHeights({
-            areas: [area("a", 1), area("b", 1), area("c", 2), area("d", 2)],
-            intrinsic: heights({ a: 400, b: 120, c: 90, d: 110 }),
-            gapPx: 12,
-        });
-        expect(assigned.get("a")).toBe(400);
-        expect(assigned.get("b")).toBe(400);
-        // Row 2 is settled by row 2 alone.
-        expect(assigned.get("c")).toBe(110);
-        expect(assigned.get("d")).toBe(110);
-    });
+const GAP = 10;
+const area = (card: string, colStart: number, colSpan: number, rowStart: number, rowSpan: number): BandArea =>
+    ({ card, colStart, colSpan, rowStart, rowSpan });
 
-    it("leaves a lone card in its band at its own height — no global normalization", () => {
-        const { assigned } = solveRowHeights({
-            areas: [area("a", 1), area("b", 2)],
-            intrinsic: heights({ a: 400, b: 90 }),
-            gapPx: 12,
-        });
-        expect(assigned.get("b")).toBe(90);
-    });
-});
+/** The published composition read off the live Work Unit panel that exposed the defect. */
+const LIVE_FIREFLY: BandArea[] = [
+    area("business_process", 1, 8, 1, 2),
+    area("financials", 9, 4, 2, 2),
+    area("attendance", 1, 6, 4, 2),
+    area("children", 7, 6, 4, 4),
+    area("health_safety", 1, 6, 6, 2),
+    area("household", 7, 6, 8, 4),
+];
 
-describe("a spanning card covers the bands it was authored across", () => {
-    it("equals the stacked cards plus the gap between them", () => {
-        // A(150) over B(160) on the left; C spans both on the right. 150 + 12 + 160 = 322.
-        const { assigned } = solveRowHeights({
-            areas: [area("a", 1), area("b", 2), area("c", 1, 2)],
-            intrinsic: heights({ a: 150, b: 160, c: 300 }),
-            gapPx: 12,
-        });
-        expect(assigned.get("a")! + 12 + assigned.get("b")!).toBe(assigned.get("c"));
-        expect(assigned.get("c")).toBe(322);
-    });
+const solve = (areas: BandArea[], heights: Record<string, number>) =>
+    solveRowHeights({ areas, intrinsic: new Map(Object.entries(heights)), gapPx: GAP }).assigned;
 
-    it("expands the bands deterministically when the spanning card is taller", () => {
-        // C needs 400 but the bands offer 322 — the 78px shortfall splits evenly.
-        const { assigned, bandHeights } = solveRowHeights({
-            areas: [area("a", 1), area("b", 2), area("c", 1, 2)],
-            intrinsic: heights({ a: 150, b: 160, c: 400 }),
-            gapPx: 12,
-        });
-        expect(bandHeights.get(1)).toBe(150 + 39);
-        expect(bandHeights.get(2)).toBe(160 + 39);
-        expect(assigned.get("c")).toBe(400);
-        expect(assigned.get("a")! + 12 + assigned.get("b")!).toBe(400);
-    });
-
-    it("does not expand anything when the spanning card is shorter than its bands", () => {
-        const { assigned } = solveRowHeights({
-            areas: [area("a", 1), area("b", 2), area("c", 1, 2)],
-            intrinsic: heights({ a: 150, b: 160, c: 50 }),
-            gapPx: 12,
-        });
-        expect(assigned.get("a")).toBe(150);
-        expect(assigned.get("b")).toBe(160);
-        // It still covers its authored bands — that is what spanning means.
-        expect(assigned.get("c")).toBe(322);
-    });
-
-    it("settles when two spanning cards share a band", () => {
-        // Satisfying one span can leave the other short, so the solver runs to a fixed point.
-        const { assigned } = solveRowHeights({
-            areas: [area("x", 1, 2), area("y", 2, 2), area("a", 1), area("b", 2), area("c", 3)],
-            intrinsic: heights({ x: 500, y: 500, a: 10, b: 10, c: 10 }),
-            gapPx: 12,
-        });
-        expect(assigned.get("x")).toBeGreaterThanOrEqual(500);
-        expect(assigned.get("y")).toBeGreaterThanOrEqual(500);
-        // Bounded, not merely finished: no band ran away satisfying the other.
-        expect(assigned.get("x")).toBeLessThan(900);
-    });
-});
-
-describe("what the solver refuses to invent", () => {
-    it("lets an unmeasured card constrain nothing", () => {
-        const { assigned } = solveRowHeights({
-            areas: [area("measured", 1), area("pending", 1)],
-            intrinsic: heights({ measured: 200 }),
-            gapPx: 12,
-        });
-        // The band is the one real measurement, not a guess averaged with it.
-        expect(assigned.get("measured")).toBe(200);
-        expect(assigned.get("pending")).toBe(200);
-    });
-
-    it("shrinks when content shrinks — a solved height is never a floor", () => {
-        const tall = solveRowHeights({
-            areas: [area("a", 1), area("b", 1)],
-            intrinsic: heights({ a: 237, b: 325 }),
-            gapPx: 12,
-        });
-        expect(tall.assigned.get("a")).toBe(325);
-        // The same layout, after B's roster collapses. Nothing remembers 325.
-        const short = solveRowHeights({
-            areas: [area("a", 1), area("b", 1)],
-            intrinsic: heights({ a: 237, b: 90 }),
-            gapPx: 12,
-        });
-        expect(short.assigned.get("a")).toBe(237);
-        expect(short.assigned.get("b")).toBe(237);
-    });
-
-    it("is a pure function of its inputs — the same input always solves the same", () => {
-        const run = () => solveRowHeights({
-            areas: [area("a", 1), area("b", 1, 2), area("c", 2)],
-            intrinsic: heights({ a: 100, b: 400, c: 100 }),
-            gapPx: 12,
-        }).assigned;
-        expect([...run()]).toEqual([...run()]);
-    });
-
-    /*
-     * THE CONVERGENCE REQUIREMENT, AS A UNIT.
-     *
-     * Feeding a solved height back in as if it were intrinsic is the failure this canvas
-     * already shipped once. Here that is spelled out: re-solving with the ASSIGNED heights
-     * as input must not grow the answer. The renderer's half of this guarantee — measuring
-     * the card, never the box drawn around it — is asserted separately.
-     */
-    it("does not grow when its own output is fed back as intrinsic", () => {
-        const areas = [area("a", 1), area("b", 1)];
-        const first = solveRowHeights({ areas, intrinsic: heights({ a: 237, b: 325 }), gapPx: 12 });
-        let current = first.assigned;
-        for (let i = 0; i < 5; i += 1) {
-            const next = solveRowHeights({ areas, intrinsic: new Map(current), gapPx: 12 });
-            expect(next.assigned.get("a")).toBe(325);
-            expect(next.assigned.get("b")).toBe(325);
-            current = next.assigned;
-        }
-    });
-
-    it("names no card, archetype or process anywhere in its source", () => {
-        // The solver must be as true for a card invented tomorrow as for today's.
-        const src = readFileSync(
-            resolve(__dirname, "../../lib/adminV2/runtime/focusPanel/composition/focusPanelRowHeights.ts"),
-            "utf8",
+describe("1 — same rowStart, same visual band", () => {
+    it("draws both cards at the taller one's height", () => {
+        const assigned = solve(
+            [area("left", 1, 6, 1, 4), area("right", 7, 6, 1, 4)],
+            { left: 237, right: 325 },
         );
-        const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-        for (const name of ["financials", "enrollment", "business_process", "current_work", "children"]) {
-            expect(code.toLowerCase()).not.toContain(name);
-        }
+        expect(assigned.get("left")).toBeCloseTo(325, 5);
+        expect(assigned.get("right")).toBeCloseTo(325, 5);
     });
 });
 
-describe("bandsCovered", () => {
-    it("lists every band an authored span touches", () => {
-        expect(bandsCovered({ card: "c", rowStart: 2, rowSpan: 3 })).toEqual([2, 3, 4]);
+describe("2 — DIFFERENT rowStart, same visual band (the live failure)", () => {
+    it("equalises business_process and financials even though rowStart is 1 and 2", () => {
+        const assigned = solve(LIVE_FIREFLY, {
+            business_process: 325,
+            financials: 299,
+            attendance: 124,
+            children: 276,
+            health_safety: 142,
+            household: 267,
+        });
+        expect(assigned.get("business_process")).toBeCloseTo(325, 5);
+        expect(assigned.get("financials")).toBeCloseTo(325, 5);
     });
-    it("treats a degenerate span as one band", () => {
-        expect(bandsCovered({ card: "c", rowStart: 5, rowSpan: 0 })).toEqual([5]);
+
+    it("puts them in ONE band despite the staggered coordinate", () => {
+        const [first] = deriveVisualBands(LIVE_FIREFLY);
+        expect(first.areas.map((a) => a.card).sort()).toEqual(["business_process", "financials"]);
+    });
+
+    it("fails the way the shipped defect did if bands are read as rowStart equality", () => {
+        // The disproof: grouping this fixture by literal rowStart yields two groups of one,
+        // which is precisely why 325 stood beside 299 on the live surface.
+        const byRowStart = new Set(LIVE_FIREFLY.slice(0, 2).map((a) => a.rowStart));
+        expect(byRowStart.size).toBe(2);
+    });
+});
+
+describe("3 — different visual bands stay independent", () => {
+    it("never equalises across bands, so no card pays for a row it does not occupy", () => {
+        const assigned = solve(
+            [area("upper", 1, 12, 1, 2), area("lower", 1, 12, 3, 2)],
+            { upper: 100, lower: 400 },
+        );
+        expect(assigned.get("upper")).toBeCloseTo(100, 5);
+        expect(assigned.get("lower")).toBeCloseTo(400, 5);
+    });
+
+    it("keeps the 268px whitespace defect from returning — bands never span unoccupied rows", () => {
+        const bands = deriveVisualBands([area("a", 1, 6, 1, 2), area("b", 1, 6, 3, 2)]);
+        expect(bands).toHaveLength(2);
+        expect(bands[0].rowEnd).toBe(3);
+    });
+});
+
+describe("4 — two stacked cards against one spanning card", () => {
+    const stacked = [area("upper", 1, 6, 1, 2), area("lower", 1, 6, 3, 2), area("tall", 7, 6, 1, 4)];
+
+    it("stretches the spanning card to the full stack: top to top, bottom to bottom", () => {
+        const assigned = solve(stacked, { upper: 180, lower: 260, tall: 200 });
+        // 180 + gap + 260
+        expect(assigned.get("tall")).toBeCloseTo(450, 5);
+        expect(assigned.get("upper")).toBeCloseTo(180, 5);
+        expect(assigned.get("lower")).toBeCloseTo(260, 5);
+    });
+
+    it("stretches the STACK instead when the spanning card is the taller one", () => {
+        const assigned = solve(stacked, { upper: 180, lower: 260, tall: 500 });
+        expect(assigned.get("tall")).toBeCloseTo(500, 5);
+        // 50px short, split equally so the pair still bottoms out with the spanning card.
+        expect(assigned.get("upper")).toBeCloseTo(205, 5);
+        expect(assigned.get("lower")).toBeCloseTo(285, 5);
+        const stackBottom =
+            (assigned.get("upper") ?? 0) + GAP + (assigned.get("lower") ?? 0);
+        expect(stackBottom).toBeCloseTo(assigned.get("tall") ?? 0, 5);
+    });
+});
+
+describe("6 — the assignment can never become an intrinsic height", () => {
+    it("returns the same answer when re-solved with its own output", () => {
+        const heights = { business_process: 325, financials: 299, attendance: 124, children: 276, health_safety: 142, household: 267 };
+        let current: Record<string, number> = heights;
+        for (let pass = 0; pass < 5; pass += 1) {
+            const assigned = solve(LIVE_FIREFLY, current);
+            current = Object.fromEntries([...assigned.entries()]);
+        }
+        expect(current.business_process).toBeCloseTo(325, 5);
+        expect(current.financials).toBeCloseTo(325, 5);
+    });
+});
+
+describe("7 / 8 — the band follows the content, both ways", () => {
+    const pair = [area("left", 1, 6, 1, 4), area("right", 7, 6, 2, 4)];
+
+    it("grows the band when a card's content grows", () => {
+        expect(solve(pair, { left: 200, right: 240 }).get("left")).toBeCloseTo(240, 5);
+        expect(solve(pair, { left: 200, right: 480 }).get("left")).toBeCloseTo(480, 5);
+    });
+
+    it("SHRINKS the band when the card that set it shrinks", () => {
+        // The seventeen-children-to-two defect: a band that can only grow keeps whitespace
+        // nothing needs. `rowSpan` is 4 in both fixtures and prescribes nothing.
+        expect(solve(pair, { left: 200, right: 480 }).get("right")).toBeCloseTo(480, 5);
+        expect(solve(pair, { left: 90, right: 120 }).get("right")).toBeCloseTo(120, 5);
+    });
+});
+
+describe("10 — a band is only ever spoken for once every card in it is measured", () => {
+    it("assigns nothing to a band holding an unmeasured card", () => {
+        const assigned = solve([area("left", 1, 6, 1, 4), area("right", 7, 6, 1, 4)], { left: 237 });
+        expect(assigned.has("left")).toBe(false);
+        expect(assigned.has("right")).toBe(false);
+    });
+
+    it("leaves other bands solvable, so a slow card cannot freeze the panel", () => {
+        const assigned = solve(
+            [area("a", 1, 6, 1, 2), area("b", 7, 6, 1, 2), area("slow", 1, 12, 4, 2)],
+            { a: 100, b: 150 },
+        );
+        expect(assigned.get("a")).toBeCloseTo(150, 5);
+        expect(assigned.has("slow")).toBe(false);
+    });
+});
+
+describe("11 — one band interpretation, shared", () => {
+    it("derives bands and chains from the placement engine's own primitives", () => {
+        const src = readSrc("lib/adminV2/runtime/focusPanel/composition/focusPanelVisualBands.ts");
+        expect(src).toContain("columnsOverlap");
+        expect(src).toContain("packOrder");
+        expect(src).toContain("focusPanelColumnAwareLayout");
+    });
+
+    it("gives builder and Work Unit one planner, because both resolve through one hook", () => {
+        const hook = readSrc("components/admin/focusPanel/useColumnAwareStack.ts");
+        expect(hook).toContain("solveRowHeights");
+        // The grid is the only consumer of the hook, and both surfaces render the grid.
+        const grid = readSrc("components/admin/focusPanel/FocusPanelCardGrid.tsx");
+        expect(grid).toContain("useColumnAwareStack");
+    });
+});
+
+describe("12 — the planner knows nothing about any card", () => {
+    it("names no card, archetype or tenant", () => {
+        for (const rel of [
+            "lib/adminV2/runtime/focusPanel/composition/focusPanelVisualBands.ts",
+            "lib/adminV2/runtime/focusPanel/composition/focusPanelRowHeights.ts",
+        ]) {
+            const body = readSrc(rel)
+                .split("\n")
+                .filter((line) => !line.trimStart().startsWith("*") && !line.trimStart().startsWith("/*") && !line.trimStart().startsWith("//"))
+                .join("\n");
+            for (const name of ["financials", "business_process", "enrollment", "children", "household", "attendance"]) {
+                expect(body.toLowerCase(), `${rel} mentions ${name}`).not.toContain(name);
+            }
+        }
+    });
+
+    it("keeps rowSpan out of the height, so an authored span prescribes nothing", () => {
+        const wide = solve([area("only", 1, 12, 1, 12)], { only: 80 });
+        expect(wide.get("only")).toBeCloseTo(80, 5);
+    });
+});
+
+describe("column chains", () => {
+    it("couples cards that share a column and separates cards that do not", () => {
+        const chains = columnChains([area("a", 1, 6, 4, 2), area("b", 7, 6, 4, 4), area("c", 1, 6, 6, 2)]);
+        const keyed = chains.map((chain) => chain.map((entry) => entry.card).sort().join("+")).sort();
+        expect(keyed).toEqual(["a+c", "b"]);
+    });
+
+    it("folds two chains together when a later card bridges them", () => {
+        const chains = columnChains([area("left", 1, 4, 1, 2), area("right", 9, 4, 1, 2), area("wide", 1, 12, 3, 2)]);
+        expect(chains).toHaveLength(1);
     });
 });

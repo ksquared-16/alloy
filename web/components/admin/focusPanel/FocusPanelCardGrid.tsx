@@ -544,7 +544,6 @@ export default function FocusPanelCardGrid({
                             return (
                                 <div
                                     key={area.card}
-                                    ref={stack.registerCard(area.card) as never}
                                     className="alloy-os-fp-grid-area"
                                     data-fp-grid-area={area.card}
                                     data-fp-grid-col={`${area.colStart}/${area.colSpan}`}
@@ -570,14 +569,21 @@ export default function FocusPanelCardGrid({
                                                    * back by the measurement and become the
                                                    * card's height forever. That hazard is real
                                                    * and unchanged — what changed is the
-                                                   * measurement, which now neutralises this
-                                                   * value before reading, so the number below
-                                                   * can never return as an intrinsic one.
+                                                   * measurement, which reads the INTRINSIC NODE
+                                                   * below with this value neutralised, so the
+                                                   * number here can never return as an
+                                                   * intrinsic one.
                                                    *
                                                    * `height` rather than `min-height`: the band
                                                    * is the card's extent in both directions, so
                                                    * a card whose content shrinks follows its
                                                    * band down instead of holding old whitespace.
+                                                   * Content that OUTGROWS its band is not
+                                                   * trapped by that — the intrinsic node's own
+                                                   * `min-height: 100%` is a floor it can exceed,
+                                                   * which is how the observer learns the band
+                                                   * needs to be re-solved rather than letting
+                                                   * the row beneath be drawn over it.
                                                    */
                                                   position: "absolute",
                                                   left: `${boxOf.left}px`,
@@ -593,7 +599,28 @@ export default function FocusPanelCardGrid({
                                               }
                                     }
                                 >
-                                    {renderCellBox(area.card, { dataWidthUnits: area.colSpan })}
+                                    {/*
+                                      * THE INTRINSIC NODE — the card's own height, and the only
+                                      * thing measured.
+                                      *
+                                      * The wrapper above carries the band's assigned height, so it
+                                      * cannot also report what the content needs. This node is
+                                      * rendered here rather than by the card, so it outlives every
+                                      * subtree a card swaps in when its data arrives, and the
+                                      * observer never loses the element it is watching.
+                                      *
+                                      * `min-height: 100%` in the stylesheet is what lets the card
+                                      * FILL its band without becoming the measurement: it resolves
+                                      * against the wrapper's assigned height, and the measurement
+                                      * takes that height away for the length of one synchronous read.
+                                      */}
+                                    <div
+                                        ref={stack.registerCard(area.card) as never}
+                                        className="alloy-os-fp-card-intrinsic"
+                                        data-fp-card-intrinsic={area.card}
+                                    >
+                                        {renderCellBox(area.card, { dataWidthUnits: area.colSpan })}
+                                    </div>
                                 </div>
                             );
                         })}

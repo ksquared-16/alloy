@@ -120,28 +120,69 @@ describe("card height flows from content, never from the box we drew", () => {
 
     it("neutralises the assigned height before measuring, so it cannot return as intrinsic", () => {
         // The other half of the guard above. Without this the card grows on every frame.
-        expect(hook).toContain('el.style.height = "auto"');
-        const at = hook.indexOf('const assigned = el.style.height;');
-        expect(at, "the measurement must read the assignment before clearing it").toBeGreaterThan(-1);
-        const block = hook.slice(at, at + 400);
+        const at = hook.indexOf("const wrapper = el.parentElement;");
+        expect(at, "the measurement must reach the wrapper that carries the assignment").toBeGreaterThan(-1);
+        const block = hook.slice(at, at + 420);
+        expect(block).toContain('wrapper.style.height = "auto"');
         expect(block).toContain("const measured = el.getBoundingClientRect().height;");
         expect(block, "the assignment must be restored in the same synchronous block").toContain(
-            "el.style.height = assigned;",
+            "wrapper.style.height = assigned;",
         );
     });
 
-    it("measures the wrapper, which nothing sizes, rather than a stretched child", () => {
-        expect(hook).toContain("const measured = el.getBoundingClientRect().height;");
-        expect(hook).not.toContain("firstElementChild as HTMLElement).offsetHeight");
+    it("measures the INTRINSIC NODE, which the layout never sizes, not the wrapper it stretches", () => {
+        // PR #989 measured the wrapper and pinned it in the same breath, so a card whose
+        // content outgrew its band could not report it and the row beneath was drawn over it.
+        const grid = readSrc("components/admin/focusPanel/FocusPanelCardGrid.tsx");
+        expect(grid).toContain('className="alloy-os-fp-card-intrinsic"');
+        // The ref — and therefore the measurement and both observers — is on that node.
+        const at = grid.indexOf('className="alloy-os-fp-card-intrinsic"');
+        expect(grid.slice(at - 200, at)).toContain("stack.registerCard(area.card)");
+        // And the grid renders it, so it outlives any subtree the card swaps in.
+        expect(grid.slice(at, at + 400)).toContain("renderCellBox(area.card");
     });
 
-    it("observes the wrapper, so a card that swaps its subtree on load stays measured", () => {
+    it("lets content outgrow its band, which is what stops the overlap", () => {
+        // A floor can report that it was exceeded; a fixed height cannot.
+        const at = css.indexOf(".alloy-os-fp-card-intrinsic {");
+        expect(at).toBeGreaterThan(-1);
+        const rule = css.slice(at, css.indexOf("}", at));
+        expect(rule).toContain("min-height: 100%");
+        expect(rule).not.toMatch(/\n\s*height:/);
+    });
+
+    it("watches content for the shrink a ResizeObserver cannot see", () => {
+        expect(hook).toContain("new MutationObserver");
+        const at = hook.indexOf("ensureContentObserver()?.observe(node,");
+        expect(at, "the content observer must watch the intrinsic node").toBeGreaterThan(-1);
+        const call = hook.slice(at, at + 200);
+        expect(call).toContain("childList: true");
+        expect(call).toContain("subtree: true");
+        // Never attributes: the engine writes inline style on the wrapper, and watching
+        // attributes here would let the measurement re-trigger itself.
+        expect(call).not.toContain("attributes: true");
+    });
+
+    it("observes a node the GRID renders, so a card that swaps its subtree stays measured", () => {
         const from = hook.indexOf("const registerCard");
         const register = hook.slice(from, hook.indexOf("useLayoutEffect", from));
         expect(from).toBeGreaterThan(-1);
         expect(register).toContain("ro.observe(node)");
-        // The observed target is the wrapper — never whichever child happened to exist at mount.
-        expect(register).not.toMatch(/ro\.observe\((?!node\)).*firstElementChild/);
+        /*
+         * The node handed to this ref is `.alloy-os-fp-card-intrinsic`, which the grid owns.
+         * Never `firstElementChild` — that was whichever element the card happened to have
+         * rendered at mount, and a card loading asynchronously replaced it with one nobody
+         * was watching. Owning the node keeps that fix while moving off the wrapper, whose
+         * box is the layout's own output.
+         */
+        const code = register
+            .split("\n")
+            .filter((line) => {
+                const t = line.trimStart();
+                return !t.startsWith("*") && !t.startsWith("/*") && !t.startsWith("//");
+            })
+            .join("\n");
+        expect(code).not.toContain("firstElementChild");
     });
 
     it("lets the card fill the band the composition assigned it", () => {

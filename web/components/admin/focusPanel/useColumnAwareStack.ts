@@ -75,39 +75,32 @@ export function useColumnAwareStack(args: {
                 // Raised out of its wrapper — hold the resting height (see `holdCard`).
                 if (card === holdCardRef.current) continue;
                 /*
-                 * MEASURE THE CARD, NOT THE BOX WE DREW AROUND IT.
+                 * MEASURE THE CARD, NEVER THE BOX THE LAYOUT STRETCHED AROUND IT.
                  *
-                 * This used to read `firstElementChild.offsetHeight` while the wrapper
-                 * carried a `min-height` we had just set from the previous layout — and
-                 * the wrapper is a flex container whose child stretches to it. So the
-                 * measurement handed back the height we imposed, and a card could only
-                 * ever grow: shrink a Children roster from seventeen to two and the
-                 * whitespace stayed. A measurement that reads back its own output is not
-                 * a measurement.
+                 * `el` is the intrinsic node — rendered by the grid, one per area, so it
+                 * outlives whatever subtree the card swaps in when its data arrives. Its
+                 * PARENT is the wrapper carrying the solved band height.
                  *
-                 * The wrapper no longer carries an imposed height, so its own box IS the
-                 * content's height. `getBoundingClientRect` rather than `offsetHeight`
-                 * because it is fractional — rounding every card up to a whole pixel
-                 * accumulated visible drift down a long column.
+                 * Reading either box as-is hands back the number this engine just imposed.
+                 * That was the original defect — a card could only ever grow, so shrinking a
+                 * Children roster from seventeen to two left the whitespace behind — and
+                 * PR #989 reproduced it in mirror image by pinning the wrapper: a fixed box
+                 * cannot report that its content outgrew it, so late-arriving content
+                 * overflowed and the row beneath was drawn straight across it.
+                 *
+                 * So the assignment is neutralised for the read and restored in the same
+                 * synchronous block. `getBoundingClientRect` forces layout, so the value is
+                 * real; nothing is painted in between, so nothing flickers. With the wrapper
+                 * height gone the intrinsic node's `min-height: 100%` has no definite parent
+                 * to resolve against and collapses to its content — which is the truth we
+                 * came for. Fractional rather than `offsetHeight`: rounding every card up to
+                 * a whole pixel accumulated visible drift down a long column.
                  */
-                /*
-                 * INTRINSIC, MEASURED THROUGH THE ASSIGNMENT.
-                 *
-                 * The wrapper now carries a solved height, so reading its box would hand back
-                 * the number this engine just imposed — the exact shape of the defect above,
-                 * where a card could only grow. The assignment is neutralised for the read and
-                 * restored in the same synchronous block: `getBoundingClientRect` forces layout,
-                 * so the intrinsic value is real, and nothing is painted in between, so nothing
-                 * flickers.
-                 *
-                 * Still the WRAPPER and not a child, which is what keeps the subtree-swap fix
-                 * above intact: the element observed is the one that outlives the card's
-                 * internals.
-                 */
-                const assigned = el.style.height;
-                if (assigned) el.style.height = "auto";
+                const wrapper = el.parentElement;
+                const assigned = wrapper?.style.height ?? "";
+                if (wrapper && assigned) wrapper.style.height = "auto";
                 const measured = el.getBoundingClientRect().height;
-                if (assigned) el.style.height = assigned;
+                if (wrapper && assigned) wrapper.style.height = assigned;
                 if (Math.abs((prev.get(card) ?? -1) - measured) > 0.5) {
                     next.set(card, measured);
                     changed = true;
@@ -126,6 +119,34 @@ export function useColumnAwareStack(args: {
         if (observer.current || typeof ResizeObserver === "undefined") return observer.current;
         observer.current = new ResizeObserver(() => measure());
         return observer.current;
+    }, [measure]);
+
+    /*
+     * THE HALF A RESIZE OBSERVER CANNOT SEE.
+     *
+     * The intrinsic node carries `min-height: 100%` so the card fills its band, and that
+     * floor is the one thing a ResizeObserver on it is blind to: content shrinking from
+     * 325px to 200px inside a band still 325px tall changes no box, fires no callback, and
+     * the band would stay open at a height nothing needs any more. Growth it does see —
+     * the node exceeds the floor — which is what closes the overlap.
+     *
+     * So content changes are watched where they happen. `attributes: false` matters: the
+     * only thing this engine writes is inline style on the WRAPPER, which is the observed
+     * node's parent and outside this subtree, so `measure()` cannot trigger itself. Reads
+     * are coalesced to one per frame because a card that renders a list mutates once per row.
+     */
+    const contentObserver = useRef<MutationObserver | null>(null);
+    const contentFrame = useRef<number | null>(null);
+    const ensureContentObserver = useCallback(() => {
+        if (contentObserver.current || typeof MutationObserver === "undefined") return contentObserver.current;
+        contentObserver.current = new MutationObserver(() => {
+            if (contentFrame.current != null) return;
+            contentFrame.current = requestAnimationFrame(() => {
+                contentFrame.current = null;
+                measure();
+            });
+        });
+        return contentObserver.current;
     }, [measure]);
 
     const containerRef = useCallback((node: HTMLElement | null) => {
@@ -166,17 +187,20 @@ export function useColumnAwareStack(args: {
             if (node) {
                 cardEls.current.set(card, node);
                 /*
-                 * Observe the WRAPPER, which lives as long as the card is placed.
+                 * Observe the INTRINSIC NODE, whose height is the card's own.
                  *
-                 * Observing `firstElementChild` meant observing whatever element the card
-                 * happened to have rendered at mount. A card that swaps its subtree when
-                 * data arrives — every card that loads asynchronously — replaced the
-                 * observed node with one nobody was watching, and its height went stale
-                 * at whatever the loading state had measured. The wrapper is not replaced,
-                 * and since nothing imposes a height on it any more, its box tracks the
-                 * content exactly.
+                 * This once observed `firstElementChild` — whatever element the card had
+                 * rendered at mount — and a card that swapped its subtree when data arrived
+                 * replaced the observed node with one nobody was watching. Moving to the
+                 * wrapper fixed that and cost the truth: the wrapper is what the layout
+                 * stretches, so it reported the engine's own output.
+                 *
+                 * The intrinsic node is neither. The grid renders it, one per authored area,
+                 * so it outlives every subtree the card swaps; and the layout assigns to its
+                 * parent, never to it, so its box stays the content's.
                  */
                 if (ro) ro.observe(node);
+                ensureContentObserver()?.observe(node, { childList: true, subtree: true, characterData: true });
             } else {
                 cardEls.current.delete(card);
             }
@@ -184,7 +208,7 @@ export function useColumnAwareStack(args: {
         };
         cardRefs.current.set(card, ref);
         return ref;
-    }, [ensureObserver, measure]);
+    }, [ensureObserver, ensureContentObserver, measure]);
 
     /*
      * KEEP WATCHING. THIS IS WHERE THE LAYOUT WENT STALE.
@@ -206,16 +230,23 @@ export function useColumnAwareStack(args: {
      */
     useLayoutEffect(() => {
         const ro = ensureObserver();
+        const mo = ensureContentObserver();
         if (ro) {
             if (containerEl.current) ro.observe(containerEl.current);
             for (const el of cardEls.current.values()) ro.observe(el);
         }
+        // Re-observing an element already observed is a no-op for both observer kinds.
+        if (mo) for (const el of cardEls.current.values()) mo.observe(el, { childList: true, subtree: true, characterData: true });
         measure();
-    }, [measure, ensureObserver, layout]);
+    }, [measure, ensureObserver, ensureContentObserver, layout]);
 
     useEffect(() => () => {
         observer.current?.disconnect();
         observer.current = null;
+        contentObserver.current?.disconnect();
+        contentObserver.current = null;
+        if (contentFrame.current != null) cancelAnimationFrame(contentFrame.current);
+        contentFrame.current = null;
     }, []);
 
     const resolved = useMemo(() => {
@@ -228,12 +259,13 @@ export function useColumnAwareStack(args: {
         /*
          * THE PUBLISHED COMPOSITION DECIDES HOW TALL A CARD IS DRAWN.
          *
-         * `intrinsic` is what each card's content needs; `assigned` is what the authored bands
-         * give it. Placement then runs on the assigned heights, so a card beneath a band that
-         * grew is pushed down by the band rather than by one neighbour's content.
+         * `intrinsic` is what each card's content needs; `assigned` is what the authored VISUAL
+         * BAND gives it. Placement then runs on the assigned heights, so a card beneath a band
+         * that grew is pushed down by the band rather than by one neighbour's content.
          *
          * The two never merge: `solveRowHeights` is pure and receives only measurements, and the
-         * measurement above reads through the assignment rather than back from it.
+         * measurement above reads the intrinsic node with the assignment neutralised, so the
+         * number this produces cannot return as the number it consumes.
          */
         const { assigned } = solveRowHeights({ areas: layout.areas, intrinsic, gapPx });
         const effective = new Map(intrinsic);
