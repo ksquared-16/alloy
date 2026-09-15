@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import {
+    requireCrmPeopleCapability,
+    CRM_CUSTOMERS_READ,
+    CRM_CUSTOMERS_WRITE,
+} from "@/lib/access/crmPeopleAuthority";
 
 /**
  * LEGACY_COMPAT: `customer_member_contacts` links members to compatibility `contacts`.
@@ -16,6 +21,8 @@ export async function GET(request: NextRequest) {
             { status: ctx.status }
         );
     }
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_READ);
+    if (capDenied) return capDenied;
 
     const { searchParams } = new URL(request.url);
     const customerMemberId = searchParams.get("customer_member_id")?.trim();
@@ -76,9 +83,8 @@ export async function POST(request: NextRequest) {
             { status: ctx.status }
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_WRITE);
+    if (capDenied) return capDenied;
 
     let body: { customer_member_id?: string; contact_id?: string; role_key?: string } = {};
     try {

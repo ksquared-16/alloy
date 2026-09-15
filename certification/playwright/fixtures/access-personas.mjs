@@ -248,6 +248,23 @@ export const CUSTOM = {
      * conversation in the organization.
      */
     commsAssigner: "mcert_comms_assigner",
+
+    /*
+     * ── THE FAMILY RECORD, ONE ROLE PER CLAIM ──
+     *
+     * `crm.customers.read` and `crm.customers.write` were catalogued since the permission grid and
+     * granted to admin and ops everywhere, while the routes they describe were decided by
+     * `requireAdminOrOps()`, `ctx.role !== "admin"`, and in four places nothing at all. These four
+     * roles are what makes the two keys mean something: each holds a different half.
+     *
+     * `crmTitular` is the control, and it is pointed at the defect that was actually here: nine
+     * handlers gated on the WORD "admin". Its label says Customer Administrator and it holds
+     * admission and nothing else.
+     */
+    crmReader: "mcert_crm_reader",
+    crmWriter: "mcert_crm_writer",
+    crmWriteOnly: "mcert_crm_write_only",
+    crmTitular: "mcert_crm_titular",
     oiReader: "mcert_oi_reader",
     oiTitular: "mcert_oi_titular",
 };
@@ -330,6 +347,10 @@ export const P = {
      */
     commsUnion:      { id: "c0000000-0000-4000-8000-00000000d061", email: "cert.commsunion@northwind.invalid",     role: CUSTOM.commsReader, also: [CUSTOM.commsUnionBulk] },
     commsAssigner:   { id: "c0000000-0000-4000-8000-00000000d062", email: "cert.commsassign@northwind.invalid",    role: CUSTOM.commsAssigner },
+    crmReader:       { id: "c0000000-0000-4000-8000-00000000d063", email: "cert.crmreader@northwind.invalid",      role: CUSTOM.crmReader },
+    crmWriter:       { id: "c0000000-0000-4000-8000-00000000d064", email: "cert.crmwriter@northwind.invalid",      role: CUSTOM.crmWriter },
+    crmWriteOnly:    { id: "c0000000-0000-4000-8000-00000000d065", email: "cert.crmwriteonly@northwind.invalid",   role: CUSTOM.crmWriteOnly },
+    crmTitular:      { id: "c0000000-0000-4000-8000-00000000d066", email: "cert.crmtitular@northwind.invalid",     role: CUSTOM.crmTitular },
 };
 
 async function principal(p) {
@@ -429,6 +450,11 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.commsPortalOnly,role_label: "Portal only",                  description: "The census persona: admission and nothing else.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.commsUnionBulk, role_label: "Campaign sender (union half)", description: "Second role in the multi-role union proof.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.commsAssigner,  role_label: "Conversation assigner",       description: "Routes the inbox. Answers nothing.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.crmReader,      role_label: "Family record reader",        description: "Reads families and people. Changes none of them.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.crmWriter,      role_label: "Family record operator",      description: "Reads and maintains family records.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.crmWriteOnly,   role_label: "Family record writer (write only)", description: "Holds write and not read — the separation, from the other side.", is_system: false, is_active: true },
+        /* The title control. Named for authority over customers, granted none of it. */
+        { org_id: ORG, role_key: CUSTOM.crmTitular,     role_label: "Customer Administrator",      description: "Titled for authority, holding none of it.", is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
 
@@ -555,6 +581,17 @@ export async function setup() {
         [CUSTOM.commsUnionBulk, ["communications.bulk.send"]],
         /* Assignment ALONE. No send, no read, no management — the separation, held by a person. */
         [CUSTOM.commsAssigner, ["portal.access", "communications.assign"]],
+
+        /*
+         * Read without write, write without read, and both. The middle one exists because the
+         * catalog has always had two keys here and nothing ever checked either: if a mutation
+         * quietly accepted the read key, only a reader could prove it.
+         */
+        [CUSTOM.crmReader, ["portal.access", "crm.customers.read"]],
+        [CUSTOM.crmWriter, ["portal.access", "crm.customers.read", "crm.customers.write"]],
+        [CUSTOM.crmWriteOnly, ["portal.access", "crm.customers.write"]],
+        /* Labelled "Customer Administrator". Holds admission and nothing else. */
+        [CUSTOM.crmTitular, ["portal.access"]],
     ]) {
         const { error } = await sb.rpc("replace_role_permission_grants", {
             p_org_id: ORG,
