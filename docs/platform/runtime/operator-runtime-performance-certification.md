@@ -1143,3 +1143,78 @@ recorded here so the trade does not have to be rediscovered.
 
 **Verdict: HEALTHY WITH GENUINE DRAWER-VM DEPENDENCIES.** The remaining three cards are late because
 their first meaningful truth does not exist earlier — not because it exists and is withheld.
+
+## 21. Focus Panel provisioning census — MEASURED 2026-09-15, NOT YET CONVERGED
+
+Measured on the running application (slot 6, hosted project data, Firefly tenant, 1680px) because
+the surface visibly loads in phases: composition and shells first, Financials alone, then the rest.
+
+### 21.1 The phased load, timed
+
+| t | state |
+| --- | --- |
+| 1899ms | 6 card areas present · **financials** loading |
+| 3410ms | **attendance + financials + health_safety** loading |
+| 3911ms | **financials** loading |
+| 5921ms | settled |
+
+That is the operator-visible defect: one composition, then ~4s of cards arriving independently.
+
+### 21.2 Cold load totals
+
+**49 `/api/` responses, 1,107,395 bytes.** The provisioning answer is not the first thing asked for
+— ~18 configuration requests precede it, including `departments` 32KB,
+`entity-layouts/focus-panel-summary` 28KB, `lifecycle-builder` 76KB and one
+`view-models/drawer/opportunity` at 137KB.
+
+### 21.3 Classification
+
+| class | operation | bytes |
+| --- | --- | --- |
+| **FOCUS_PANEL_ROOT** | `/api/admin/work-units/{slug}/provisioning-answer` | 114–309KB |
+| **CARD-OWNED LIFECYCLE** | `/api/admin/financials/card` | ~3.1KB |
+| **CARD-OWNED LIFECYCLE** | `/api/admin/attendance/card` | — |
+| **CARD-OWNED LIFECYCLE** | `/api/admin/health/card` | — |
+| consumes root only | Business Process · Children · Household | 0 |
+
+### 21.4 ROOT CAUSE — and it is not what the symptom suggests
+
+The natural reading is "cards re-fetch truth the root answer already has". **They do not.** The root
+answer does not carry that truth at all: searched, it contains `ledger` 0 times, `balance` 0,
+`charge` 0, `immuniz` 0, `customer_member_id` 0. The words `financials`, `attendance` and `health`
+appear 7 times each — as **card keys in the published composition**, never as data.
+
+So Financials, Attendance and Health have **no producer in the provisioning lifecycle**. They were
+never migrated when the four-request client waterfall was collapsed into the D1 answer, and each
+card discovers its own subject id from props and boots its own fetch and its own loading state.
+
+The remedy is therefore **additive on the server** — give the one lifecycle three producers — not
+subtractive on the client. There is no duplicate fetch to delete.
+
+### 21.5 Corrections to the prior audit
+
+- **Retransmission is 40%, not ~71%.** Two consecutive selections in one work view (138,239B vs
+  138,228B) share **55,199B byte-identical**: `focusPanelSummaryDoc` 30,500B, `rows` 14,328B,
+  `presentation` 6,359B, plus `actionsProjection`, `lensSet`, `settlement`, `workUnit`,
+  `currentBusinessState`. Real, and smaller than the lead claimed.
+- **The dominant cost is not configuration.** `focusPanelStageWork.published_stage_inputs` is
+  **78,585B — 57% of the answer** — and legitimately differs per subject. Adding three producers
+  without addressing that would make the critical path worse, not better.
+
+### 21.6 Stale-subject protection already exists, card-locally
+
+`FinancialsCard` carries a `requestSeq` ordinal and drops superseded responses; its comment records
+a reproduced stale overwrite. So rapid A→B is guarded — but by each card for itself, not by a shared
+provisioning identity. Any convergence must keep that guarantee, not re-derive it.
+
+### 21.7 The contract — TARGET, NOT YET MET
+
+> One selected subject. One provisioning lifecycle. One published composition. One authoritative
+> operational answer. Cards are projections of that answer, and request deep detail only on
+> explicit operator intent.
+
+This is recorded as the target so the gap is legible. **Today the surface has 1 + 3 lifecycles.**
+Closing it means adding Financials, Attendance and Health producers to
+`composeProvisioningAnswerForRoute` with a readiness contract, moving three cards onto that
+projection, and binding producer results to the provisioning request identity. That is a change to
+the operational critical path and is scoped as its own work, with §21.5 as a precondition.
