@@ -237,7 +237,7 @@ const FIXTURES: { name: string; context: OperationalContext }[] = [
         context: context({
             businessProcess: { key: "enrollment", label: "Enrollment", stageKey: "tour" },
             publishedStageInputs: publishedStageInputs("tour"),
-            signals: { ...NULL_SIGNALS, tour: { scheduled: true, startAt: "2026-09-20T15:00:00Z", statusLabel: "Scheduled", statusKey: "scheduled", bookingId: "bk-1" } } as OperationalContext["signals"],
+            signals: { ...NULL_SIGNALS, tour: { scheduled: true, startAt: "2026-09-20T15:00:00Z", statusLabel: "Scheduled", statusKey: "scheduled", bookingId: "bk-1" } } as unknown as OperationalContext["signals"],
         }),
     },
     {
@@ -262,7 +262,7 @@ const FIXTURES: { name: string; context: OperationalContext }[] = [
         name: "mixed-grain family — family Lead with child participants",
         context: context({
             publishedStageInputs: publishedStageInputs("lead"),
-            truth: { _inquiry_children: [{ id: "cm-1", name: "Child A", stage_key: "waitlist" }, { id: "cm-2", name: "Child B", stage_key: "enrolling" }] } as OperationalContext["truth"],
+            truth: { _inquiry_children: [{ id: "cm-1", name: "Child A", stage_key: "waitlist" }, { id: "cm-2", name: "Child B", stage_key: "enrolling" }] } as unknown as OperationalContext["truth"],
         }),
     },
     {
@@ -273,7 +273,7 @@ const FIXTURES: { name: string; context: OperationalContext }[] = [
         name: "attention / blocked",
         context: context({
             publishedStageInputs: publishedStageInputs("lead"),
-            signals: { ...NULL_SIGNALS, attention: { needsAttention: true, primaryReason: "missing_health_form", reasonCount: 2 } } as OperationalContext["signals"],
+            signals: { ...NULL_SIGNALS, attention: { needsAttention: true, primaryReason: "missing_health_form", reasonCount: 2 } } as unknown as OperationalContext["signals"],
         }),
     },
     {
