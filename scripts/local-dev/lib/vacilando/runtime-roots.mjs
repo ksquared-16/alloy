@@ -80,8 +80,15 @@ const DEFAULT_STATE_ROOT = () => join(homedir(), ".local", "state", "alloy-dev")
 
 const clean = (v) => String(v || "").trim().replace(/\/+$/, "");
 
-/** The directory that marks a real Gateway state root, whatever its depth. */
-const GATEWAY_MARKER = join("vacilando", "governed-actions");
+/**
+ * The directory every owner here appends, and the one the probe looks for.
+ *
+ * NOT one of its children. The first version probed `vacilando/governed-actions`,
+ * which is narrower than the invariant and wrong for the same reason the
+ * incident was: a host whose Gateway root holds `vacilando/lanes` but has not
+ * yet written a governed action resolved one level too deep.
+ */
+const GATEWAY_MARKER = "vacilando";
 
 /** The value an operator (or the shipped config) supplied, canonical input first. */
 function suppliedRoot() {
@@ -115,12 +122,23 @@ function suppliedRoot() {
 export function gatewayStateRoot() {
   const supplied = suppliedRoot();
   if (!supplied) return join(DEFAULT_STATE_ROOT(), "gateway");
-  if (existsSync(join(supplied, GATEWAY_MARKER))) return supplied;
+  /*
+   * THE DEEPER CANDIDATE FIRST, and this host is why.
+   *
+   * `vacilando/` exists at BOTH depths here: ten entries under the parent and
+   * sixty-three under the Gateway, and only the deeper one holds `lanes/`. A
+   * probe that accepted the first match it found would take the shallow decoy
+   * whenever the variable named the parent -- which is the shipped
+   * configuration on some hosts, and is precisely the depth that reported
+   * thirteen live lanes as zero.
+   *
+   * So the nested level is tested first and the supplied level second. Whichever
+   * actually holds `vacilando/` is the Gateway state root; when neither does,
+   * this is a fresh host and the first write lands where every later read looks.
+   */
   const nested = join(supplied, "gateway");
   if (existsSync(join(nested, GATEWAY_MARKER))) return nested;
-  // Neither level holds a store yet — a fresh host. The supplied value is taken
-  // at the depth the shipped config uses, so the first write lands where every
-  // later read will look.
+  if (existsSync(join(supplied, GATEWAY_MARKER))) return supplied;
   return nested;
 }
 

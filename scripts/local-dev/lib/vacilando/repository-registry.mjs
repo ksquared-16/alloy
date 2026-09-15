@@ -384,6 +384,64 @@ export function projectScope(repositoryId, { root = runtimeRoot() } = {}) {
   });
 }
 
+/**
+ * The canonical remote identity of a registered repository, or null.
+ *
+ * ONE OWNER, THREE SOURCES, IN ORDER. A record may state `remote_slug`
+ * explicitly; failing that the normalised remote the registry already captured
+ * at registration answers; failing that the raw remote URL does. An operator
+ * who registered a project by pointing at a clone has already told Vacilando
+ * where it lives, and should not have to type it a second time in another form.
+ *
+ * `prj_vacilando` is exactly that case: its record carries
+ * `remote_normalized: "github.com/ksquared-16/vacilando"` and a null
+ * `remote_slug`, and this resolves `ksquared-16/vacilando` from it.
+ *
+ * AMBIGUITY RESOLVES TO NULL, never to a guess. A record with no remote is a
+ * local-only project, which is a legitimate thing to be and not a push target.
+ */
+export function canonicalRemoteFor(rec) {
+  const stated = executionProfileFor(rec).remote_slug;
+  const raw = stated || rec?.remote_normalized || rec?.remote || "";
+  const slug = String(raw)
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^git@([^:]+):/i, "$1/")
+    .replace(/^ssh:\/\//i, "")
+    .replace(/^github\.com\//i, "")
+    .replace(/\.git$/i, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+  // owner/name, and nothing else. A bare name, a path with extra segments, or
+  // anything carrying a scheme we did not strip is ambiguous and refused.
+  return /^[a-z0-9._-]+\/[a-z0-9._-]+$/.test(slug) ? slug : null;
+}
+
+/**
+ * Every registered repository whose remote may be a governed target.
+ *
+ * ELIGIBILITY IS NOT AUTHORIZATION. This answers "is this a repository
+ * Vacilando knows and may be asked about", and nothing more: whether a specific
+ * push proceeds is governance's decision, unchanged, downstream of this.
+ *
+ * Three conditions, each for its own reason. ACTIVE, because a retired project
+ * is one an operator took out of service. Validation healthy, because a record
+ * pointing at a checkout that is gone is a record that cannot be pushed to
+ * anyway. A canonical remote, because an ambiguous one is not an identity.
+ */
+export function eligibleRepositoryRemotes({ root = runtimeRoot() } = {}) {
+  const out = [];
+  let records = [];
+  try { records = Object.values(readRepositoryStore(root).repositories); } catch { records = []; }
+  for (const rec of records) {
+    if (rec?.state !== "ACTIVE") continue;
+    if (rec?.validation && rec.validation.ok === false) continue;
+    const slug = canonicalRemoteFor(rec);
+    if (slug && !out.includes(slug)) out.push(slug);
+  }
+  return Object.freeze(out);
+}
+
 export function promotionPolicyFor(rec) {
   const profile = profileFor(rec?.profile);
   const base = profile.promotion || REPOSITORY_PROFILES.generic.promotion;

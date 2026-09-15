@@ -32,9 +32,52 @@ import { existsSync } from "node:fs";
 
 import { isAllowlistedRepository, normalizeRepositorySlug, repositoryRefusalDetail } from "./trusted-host-merge.mjs";
 import { liveRemoteMutationPermitted } from "./trusted-host-remote-guard.mjs";
+import { canonicalRemoteFor, listRepositories, promotionPolicyFor } from "./repository-registry.mjs";
 
 /** Refs a branch push may never target. Promotion is a merge, not a push. */
+/**
+ * The refs no project may be branch-pushed to, as a FLOOR for a target the
+ * registry does not know. A registered project's own policy decides its own.
+ */
+/** The registered record whose canonical remote is this target, or null. */
+function repositoryRecordForRemote(remote) {
+  const want = String(remote || "").trim().toLowerCase();
+  try {
+    for (const rec of listRepositories({ includeRetired: false })) {
+      if (canonicalRemoteFor(rec) === want) return rec;
+    }
+  } catch { /* an unreadable registry yields the floor, not a bypass */ }
+  return null;
+}
+
 export const PROTECTED_REFS = Object.freeze(["staging", "main", "master", "production", "prod", "HEAD"]);
+
+/**
+ * What a branch push may not target, FOR THIS REPOSITORY.
+ *
+ * The frozen list above is Alloy's branch policy, and applying it to every
+ * project is the same defect the allowlist had one layer up: `prj_vacilando`
+ * declares `promotion_branch: main` with no protected branches, and was refused
+ * its own promotion trunk with "main is promoted by merging a reviewed pull
+ * request" -- a sentence true of Alloy and false of it.
+ *
+ * TWO SOURCES, AND NEITHER WEAKENS THE INCUMBENT. A project's declared
+ * protected branches are protected. Its PROMOTION branch is protected too when
+ * it has governed promotion, because a governed trunk moves by reviewed merge
+ * and never by a branch push -- that is what makes Alloy's `staging` stay
+ * refused even though `staging` is not in Alloy's protected list. `HEAD` and
+ * any `refs/` spelling are always refused.
+ *
+ * An unregistered target gets the full floor, which is the safe direction.
+ */
+export function protectedRefsFor(repositoryRecord) {
+  if (!repositoryRecord) return PROTECTED_REFS;
+  const policy = promotionPolicyFor(repositoryRecord);
+  const out = new Set([...(policy.protected_branches || [])]);
+  if (policy.governed_promotion && policy.promotion_branch) out.add(policy.promotion_branch);
+  out.add("HEAD");
+  return Object.freeze([...out]);
+}
 export const BRANCH_RE = /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,180}$/;
 export const SHA_RE = /^[a-f0-9]{7,40}$/;
 
@@ -145,7 +188,8 @@ export function validatePushInputs(inputs = {}) {
   if (!BRANCH_RE.test(branch)) {
     return { ok: false, code: "invalid_branch", detail: "branch must be a plain ref name" };
   }
-  if (PROTECTED_REFS.includes(branch) || branch.startsWith("refs/")) {
+  const targetRecord = repositoryRecordForRemote(repository);
+  if (protectedRefsFor(targetRecord).includes(branch) || branch.startsWith("refs/")) {
     return {
       ok: false,
       code: "protected_ref_rejected",
