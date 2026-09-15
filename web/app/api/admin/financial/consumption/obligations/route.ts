@@ -13,6 +13,7 @@ import {
     reviewObligation,
 } from "@/lib/operationalConsumption/obligationReviewService";
 import type { ObligationListFilters, ReviewStatus } from "@/lib/operationalConsumption/obligationReviewTypes";
+import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 /**
  * Draft Obligation Review (Operational Consumption, Slice 4) — PRE-POSTING.
@@ -61,6 +62,8 @@ export async function POST(request: NextRequest) {
     if (forbidden) return forbidden;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try {

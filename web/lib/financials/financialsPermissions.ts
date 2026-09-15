@@ -17,6 +17,7 @@
  * Permission key: {@link FINANCIALS_READ_PERMISSION_KEY}
  */
 
+import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
@@ -79,6 +80,34 @@ export async function assertFinancialsWriteAllowed(params: {
 }
 
 export type FinancialsVerdict = { ok: true } | { ok: false; message: string; requiredPermission: string };
+
+/**
+ * The SYNCHRONOUS sibling of the two asserts above, for handlers whose context already carries the
+ * caller's effective capabilities.
+ *
+ * ── WHY A SECOND SHAPE RATHER THAN A SECOND SYSTEM ──
+ *
+ * `assertFinancialsReadAllowed` / `assertFinancialsWriteAllowed` re-read the grants from the
+ * database because the routes that first needed them had no capability keys on their context. Modern
+ * `getAdminContextCached` carries `permissionKeys`, so the money-configuration cohort would otherwise
+ * pay a grants query per request to learn something the request already knows. This reads the same
+ * keys, in the same module, so the route-capability table's three-join binding still holds and there
+ * is exactly one place where a Financials key is named.
+ *
+ * It answers the capability question ONLY. Scope, tenancy and resource existence remain the
+ * handler's to enforce — a capability has never been permission to reach across an organization.
+ */
+export function requireFinancialsCapability(
+    ctx: { permissionKeys?: readonly string[] | null },
+    capability: typeof FINANCIALS_READ_PERMISSION_KEY | typeof FINANCIALS_WRITE_PERMISSION_KEY,
+): NextResponse | null {
+    if ((ctx.permissionKeys ?? []).includes(capability)) return null;
+    const message =
+        capability === FINANCIALS_WRITE_PERMISSION_KEY
+            ? FINANCIALS_WRITE_DENIED_MESSAGE
+            : FINANCIALS_READ_DENIED_MESSAGE;
+    return NextResponse.json({ error: message, required_permission: capability }, { status: 403 });
+}
 
 /** One implementation, so the read gate and the write gate cannot come to disagree about `null`. */
 async function assertKey(

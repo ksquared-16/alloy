@@ -14,6 +14,7 @@ import {
     parseJsonObject,
     resolveOperationalEnrollmentTodayYmd,
 } from "@/lib/childcareOperational/operationalEnrollmentApi";
+import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 /**
  * Financial Policies (Commercial Model, Slice C). Scoped, effective-dated config.
@@ -38,6 +39,8 @@ export async function POST(request: NextRequest) {
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try {

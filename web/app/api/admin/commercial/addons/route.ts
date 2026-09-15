@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import type { CommercialAddon } from "@/lib/commercial/feesAddons";
+import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 const SELECT_COLS =
     "id, org_id, location_id, program_key, name, description, addon_type, amount_cents, cadence_key, effective_start, effective_end, revenue_category, package_unit_count, package_unit_type, package_expires_days, is_active, metadata, created_at, updated_at";
@@ -51,6 +52,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try { body = (await request.json()) as Record<string, unknown>; }

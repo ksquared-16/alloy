@@ -4,10 +4,13 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { validateCommercialPolicyValue, type CommercialPolicyType } from "@/lib/commercial/execution/policy/policyTypes";
 import { operatorFriendlyCommercialError } from "@/lib/commercial/operatorFriendlyCommercialError";
 import { SELECT_COLS, mapPolicyRow, resolveScopeColumns } from "@/app/api/admin/commercial/policies/route";
+import { FINANCIALS_WRITE_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     const { id } = await params;
     let body: Record<string, unknown> = {};
@@ -62,6 +65,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+    if (denied) return denied;
 
     const { id } = await params;
     const supabase = createAdminClient();

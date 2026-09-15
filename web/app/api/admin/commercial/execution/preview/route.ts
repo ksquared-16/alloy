@@ -5,6 +5,7 @@ import { requireAdminOrOps } from "@/lib/adminAuth";
 import { composeCommercialExport } from "@/lib/commercial/execution/export";
 import { buildCommercialExecutionPreview } from "@/lib/commercial/execution/preview/buildPreview";
 import { parseCommercialContext, parseFundingPlan, parseHorizon } from "@/lib/commercial/execution/preview/parsePreviewRequest";
+import { FINANCIALS_READ_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 /**
  * Commercial Execution Simulator — PREVIEW ONLY (Phase 8).
@@ -24,6 +25,8 @@ export async function POST(request: NextRequest) {
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_READ_PERMISSION_KEY);
+    if (denied) return denied;
 
     let body: Record<string, unknown> = {};
     try {
