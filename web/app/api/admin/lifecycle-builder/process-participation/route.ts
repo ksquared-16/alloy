@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 import {
     departmentIdAllowed,
     scopeDimensionsFromAccess,
@@ -105,13 +106,26 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
     const dim = scopeDimensionsFromAccess(access);
+    /*
+     * BUSINESS PROCESS CONFIGURATION, BEHIND A ROLE TITLE UNTIL NOW.
+     *
+     * This writes `participation_v1` — which Business Processes a department participates in — and is mounted
+     * in Settings -> Business Process. It changes what a process WOULD do, which is
+     * exactly the `configure` half of the established split, so no new vocabulary is
+     * needed and none is invented.
+     *
+     * `ctx.role !== "admin"` stood here. It admitted an admin whose package withholds
+     * `business_process.configure` and refused a custom Configurer who holds it, which
+     * made the capability decorative on this surface. Department scope below is
+     * unchanged and still applies after the capability check: holding the authority
+     * does not widen which operational domains the caller may edit.
+     */
+    const capDenied = requireBusinessProcessCapability(access, BUSINESS_PROCESS_CONFIGURE);
+    if (capDenied) return capDenied;
 
     let body: Record<string, unknown> = {};
     try {

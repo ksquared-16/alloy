@@ -48,6 +48,7 @@ const OPS = { email: "cert.ops@northwind.invalid" };
 
 type Door =
     | "provision" | "rename" | "builder" | "requirements" | "actionsMatrix"
+    | "participation" | "workViews"
     | "activate" | "deactivate" | "deleteDepartment";
 
 type Session = { page: Page; request: APIRequestContext; signedIn: boolean; close: () => Promise<void> };
@@ -81,6 +82,22 @@ async function knock(r: APIRequestContext, door: Door, deptId = NO_DEPT): Promis
         case "builder": return (await r.patch(`${D}/lifecycle-builder`, no)).status();
         case "requirements": return (await r.patch(`${D}/lifecycle-requirements`, no)).status();
         case "actionsMatrix": return (await r.put(`${D}/lifecycle-actions-matrix`, no)).status();
+        /*
+         * LIFECYCLE BUILDER CONFIGURATION — the save path behind Settings -> Business Process.
+         * `participation` writes `participation_v1` (BusinessProcessParticipationCard) and
+         * `workViews` writes `work_views_v1` (WorkViewsConfigurationContext). Both were gated on
+         * the `admin` role title until Lifecycle Builder Authority Convergence V1.
+         *
+         * The body is deliberately minimal: authority is decided BEFORE the payload is parsed, so a
+         * refusal is 403 and an admitted caller falls through to validation or scope. `admitted()`
+         * treats anything that is not 403 as admitted, which is what this matrix asks.
+         */
+        case "participation": return (await r.post("/api/admin/lifecycle-builder/process-participation", {
+            data: { department_id: deptId, process_id: deptId }, failOnStatusCode: false,
+        })).status();
+        case "workViews": return (await r.post("/api/admin/lifecycle-builder/process-work-views", {
+            data: { department_id: deptId, process_id: deptId }, failOnStatusCode: false,
+        })).status();
         case "activate": return (await r.patch(`${D}/lifecycle-activation`, no)).status();
         case "deactivate": return (await r.delete(`${D}/lifecycle-activation`, { failOnStatusCode: false })).status();
         case "deleteDepartment": return (await r.delete(D, { failOnStatusCode: false })).status();
@@ -88,7 +105,11 @@ async function knock(r: APIRequestContext, door: Door, deptId = NO_DEPT): Promis
 }
 
 const admitted = (s: number) => s !== 403;
-const CONFIGURE: Door[] = ["provision", "rename", "builder", "requirements", "actionsMatrix"];
+const CONFIGURE: Door[] = [
+    "provision", "rename", "builder", "requirements", "actionsMatrix",
+    // Lifecycle Builder Authority Convergence V1 — same owner, same family.
+    "participation", "workViews",
+];
 const ACTIVATE: Door[] = ["activate", "deactivate"];
 const ALL: Door[] = [...CONFIGURE, ...ACTIVATE];
 
@@ -224,7 +245,7 @@ test.describe("Business Process authority, and a retired Department product", ()
          */
         const ALLOWED = "c0000000-0000-4000-8000-0000000000a1";
         const DENIED = "c0000000-0000-4000-8000-0000000000a2";
-        const doors: Door[] = ["builder", "requirements", "activate"];
+        const doors: Door[] = ["builder", "requirements", "activate", "participation"];
 
         const s = await signIn(browser, PERSONAS.scoped.email);
         expect(s.signedIn, "the scoped persona must reach the portal").toBe(true);
