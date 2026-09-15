@@ -97,11 +97,53 @@ export async function saveFocusPanelSummaryDraft(
     return createFocusPanelSummaryDraft(doc, name);
 }
 
+/**
+ * Cross-tab publish channel — the same shape the published Queue Row surface already uses
+ * (`QUEUE_ROW_SURFACE_PUBLISHED_CHANNEL`). A publish in one tab must reach the others: before this,
+ * invalidation was same-tab only with no TTL, so a second tab could hold a superseded layout
+ * indefinitely.
+ */
+export const FOCUS_PANEL_SUMMARY_PUBLISHED_CHANNEL = "alloy-focus-panel-summary";
+
+/**
+ * What a publish says about itself.
+ *
+ * The event was previously payloadless, so a listener could only respond by dropping every cached
+ * scope and refetching. Carrying the published record's identity lets a consumer recognise a version
+ * it already holds and skip the refetch — and it is the identity S5-3's omission protocol will need.
+ *
+ * Applicability scope is deliberately NOT part of this: a Focus Panel Summary is ONE published
+ * document whose scope variants are selected when it is read, so a publish changes it for every
+ * scope. Claiming a narrower scope here would be a lie about what changed.
+ */
+export type FocusPanelSummaryPublishedDetail = {
+    surfaceId: string;
+    layoutKey: string | null;
+    entityType: string | null;
+    version: number | null;
+};
+
+/** Announce a publish to this tab and to every other tab in this browser. */
+export function dispatchFocusPanelSummaryPublished(detail: FocusPanelSummaryPublishedDetail): void {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent(FOCUS_PANEL_SUMMARY_PUBLISHED_EVENT, { detail }));
+    try {
+        const channel = new BroadcastChannel(FOCUS_PANEL_SUMMARY_PUBLISHED_CHANNEL);
+        channel.postMessage({ type: "published", ...detail });
+        channel.close();
+    } catch {
+        /* BroadcastChannel unavailable — same-tab event + TTL + foreground revalidation still apply */
+    }
+}
+
 /** Publish a draft row and notify open runtime surfaces to refresh. */
 export async function publishFocusPanelSummary(draftId: string): Promise<EntityLayoutRecord> {
     const published = await publishEntityLayoutDraft(draftId);
-    if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent(FOCUS_PANEL_SUMMARY_PUBLISHED_EVENT));
-    }
+    dispatchFocusPanelSummaryPublished({
+        surfaceId: published.id,
+        layoutKey: published.layoutKey ?? null,
+        entityType: published.entityType ?? null,
+        version: typeof published.version === "number" ? published.version : null,
+    });
     return published;
 }
