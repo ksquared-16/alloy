@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { FinancialActivityFeed } from "@/lib/financials/workspace/resolveFinancialActivity";
 import type { FinancialPaymentFlow } from "@/lib/financials/workspace/resolveFinancialPaymentFlow";
 import type { FinancialPositionCohort } from "@/lib/financials/workspace/resolveFinancialPosition";
+import type { FinancialSubjectCohort } from "@/lib/financials/workspace/resolveFinancialSubjects";
 
 export type FinancialsReadState<T> = {
     data: T | null;
@@ -91,6 +92,23 @@ export function useFinancialsPosition(siteLocationId: string, enabled: boolean) 
         siteLocationId,
         enabled,
         "The financial position could not be loaded.",
+    );
+}
+
+/**
+ * WHO HAS AN ACCOUNT, separately from what their money is doing.
+ *
+ * Accounts joins this with the position cohort rather than deriving its rail from posted rows, so a
+ * household with no transaction yet is still listed. The two reads stay separate on purpose: only
+ * one of them is allowed to report money, and a single endpoint returning both would put the
+ * temptation to compute a figure from identity in reach.
+ */
+export function useFinancialsSubjects(siteLocationId: string, enabled: boolean) {
+    return useFinancialsRead<FinancialSubjectCohort>(
+        "/api/admin/financials/subjects",
+        siteLocationId,
+        enabled,
+        "Household accounts could not be loaded.",
     );
 }
 

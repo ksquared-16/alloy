@@ -13,7 +13,22 @@ import type { Scenario } from "@/lib/qa/financialsDirectorQa/scenarioCatalog";
  * only when the Director chooses one.
  */
 
-type Readiness = { scenarioKey: string; ready: boolean; unmet: string[] };
+type Readiness = {
+    scenarioKey: string;
+    ready: boolean;
+    dataReady: boolean;
+    navigationReady: boolean;
+    unmet: string[];
+    unreachable: string[];
+};
+/** Reachability of the subject on the surface a scenario navigates to — reported, never inferred. */
+type Navigation = {
+    reachable: boolean;
+    unreachableReason: string | null;
+    surface: string;
+    accountsInCohort: number;
+    truncated: boolean;
+};
 type ResultRow = { scenario_key: string; result: string; observation: string | null };
 type Subject = {
     resolved: boolean; unresolvedReason: string | null; householdLabel: string;
@@ -24,7 +39,7 @@ type Subject = {
 };
 type Payload = {
     catalogVersion: string; environment: string; deployedRevision: string;
-    subject: Subject; scenarios: Scenario[]; readiness: Readiness[]; results: ResultRow[];
+    subject: Subject; navigation: Navigation; scenarios: Scenario[]; readiness: Readiness[]; results: ResultRow[];
     baselineChanged: boolean; priorRevisions: string[];
 };
 
@@ -145,6 +160,15 @@ export default function CoreFinancialsQaReader() {
                             ["Outstanding", money(data.subject.outstandingCents)],
                             ["Collectible now", money(data.subject.collectibleCents)],
                             ["Ledger", `${data.subject.postedCount} posted · ${data.subject.draftCount} draft · ${data.subject.reductionCount} reductions · ${data.subject.paymentCount} payments`],
+                            /*
+                             * DATA AND NAVIGATION, SIDE BY SIDE. The account resolving is not the
+                             * account being reachable, and reporting only the first is how a
+                             * walkthrough gets certified that nobody can actually start.
+                             */
+                            ["Data readiness", data.subject.resolved ? "Account reads cleanly" : `NOT READY — ${data.subject.unresolvedReason ?? "unreadable"}`],
+                            ["Navigation readiness", data.navigation.reachable
+                                ? `Reachable via ${data.navigation.surface} · ${data.navigation.accountsInCohort} accounts listed`
+                                : `NOT REACHABLE — ${data.navigation.unreachableReason ?? "the account is not listed"}`],
                         ]} />
 
                         <p className="text-[13px] text-alloy-midnight/70" data-qa-progress="true">
@@ -183,7 +207,9 @@ export default function CoreFinancialsQaReader() {
                             <div className="rounded-lg border-l-[3px] border-alloy-ember bg-alloy-ember/5 px-3 py-2 text-[13px]"
                                 data-qa-not-ready="true">
                                 <strong className="font-semibold">Scenario not ready.</strong>
-                                <ul className="mt-1 list-disc pl-5">{readiness.unmet.map((u) => <li key={u}>{u}</li>)}</ul>
+                                <ul className="mt-1 list-disc pl-5">
+                                    {[...readiness.unmet, ...(readiness.unreachable ?? [])].map((u) => <li key={u}>{u}</li>)}
+                                </ul>
                             </div>
                         ) : null}
 

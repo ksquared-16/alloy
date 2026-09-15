@@ -9,6 +9,7 @@ import {
     QA_SUBJECT,
     deployedRevision,
     environmentName,
+    readNavigation,
     readSubject,
     readVmExtras,
     resolveReadiness,
@@ -59,9 +60,21 @@ export async function GET() {
 
     const revision = deployedRevision();
 
-    const [subject, extras] = await Promise.all([
+    /*
+     * RESOLVABILITY AND NAVIGABILITY, READ SEPARATELY.
+     *
+     * `readSubject` proves the account can be RESOLVED; `readNavigation` proves it can be REACHED.
+     * The harness used to measure only the first and report a scenario ready whose very first step
+     * — open Accounts, select the household — could not be performed.
+     *
+     * Asked at ORG SCOPE, with no site filter, because that is the scope this acceptance program is
+     * run at and the widest the cohort admits. A site-restricted operator sees a narrower rail; this
+     * answer is about the Director's own path and says which scope it was asked under.
+     */
+    const [subject, extras, navigation] = await Promise.all([
         readSubject(supabase, ctx.orgId),
         readVmExtras(supabase, ctx.orgId),
+        readNavigation(supabase, { orgId: ctx.orgId, siteScope: "all", activeSiteLocationId: null }),
     ]);
 
     /*
@@ -111,8 +124,9 @@ export async function GET() {
         deployedRevision: revision,
         subjectReference: QA_SUBJECT,
         subject,
+        navigation,
         scenarios: SCENARIOS,
-        readiness: resolveReadiness(subject, extras, accepted),
+        readiness: resolveReadiness(subject, extras, accepted, navigation),
         results: results ?? [],
         baselineChanged: priorRevisions.length > 0,
         priorRevisions,

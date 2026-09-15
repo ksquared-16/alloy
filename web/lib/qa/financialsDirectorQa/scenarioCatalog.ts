@@ -35,7 +35,7 @@
  * and this must be bumped whenever a scenario's meaning changes. Adding a scenario counts; fixing a
  * typo does not.
  */
-export const CATALOG_VERSION = "2026-09-14.1";
+export const CATALOG_VERSION = "2026-09-15.1";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -69,7 +69,16 @@ export type AccountStateCheck =
     | "has_named_responsibility"
     | "has_expected_funding"
     | "has_second_child_without_agreement"
-    | "is_financially_addressable";
+    /*
+     * THE ACCOUNT EXISTS AND READS. Deliberately NOT "has an enrolment agreement": the canonical
+     * account reader settled that an enrolment is one billable source and not eligibility for
+     * Financials, because a family incurs charges — a registration fee, a deposit — before they
+     * enrol. A precondition that required an agreement here would re-impose the product assumption
+     * the reader removed, on the surface whose first scenario denies it.
+     */
+    | "is_financially_addressable"
+    /** The narrower thing: a child with an enrolment to price. Only tuition actually needs it. */
+    | "has_billable_enrollment";
 
 export type Scenario = {
     /** Stable across renumbering — results are persisted against this, never against the position. */
@@ -126,7 +135,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         purpose: "Open the household and confirm the product can talk about its money at all.",
         whyItMatters:
             "An account with no financial history is an ordinary, fully supported state. The product must say so plainly rather than implying the family is unknown to it, because that is the difference between an empty account and a broken one.",
-        requires: [{ kind: "account_state", check: "is_financially_addressable", describe: "the household resolves an enrolment agreement to bill against" }],
+        requires: [{ kind: "account_state", check: "is_financially_addressable", describe: "the account to resolve" }],
         navigate: ["Open /workspace.", "Click Financials in the left sidebar.", "Open the Accounts tab.", "Select Alvarez Household (demo)."],
         doThis: ["Read the account pane, headed Account-wide financial detail.", "Reload the browser and open the same account again."],
         expectChanges: [],
@@ -496,7 +505,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "Tuition is the largest money in the product and it is not typed in by hand. A price is recommended from the catalog, somebody accepts a term — which may deliberately differ from the recommendation — and only then does a charge exist. Knowing which step created the money is how a disputed bill gets settled.",
         dispositionReason:
             "The tenant carries a live tuition catalog (offerings and rates), so the recommendation side is real. Whether the walkthrough can be completed end to end depends on the QA child having an accepted pricing term; the harness checks that live and says SCENARIO NOT READY rather than inviting a test on invalid preconditions.",
-        requires: [{ kind: "account_state", check: "is_financially_addressable", describe: "the child has an enrolment to price" }],
+        requires: [{ kind: "account_state", check: "has_billable_enrollment", describe: "the child has an enrolment to price" }],
         navigate: ["Open the tuition configuration for the organization, then the child's enrolment."],
         doThis: ["Identify the recommended rate from the catalog.", "Identify the accepted term for the child.", "Identify the charge generated from it."],
         expectChanges: ["Only the generation step creates money."],

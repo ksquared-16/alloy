@@ -1856,6 +1856,13 @@
         "helper": "assertFinancialsReadAllowed"
       }
     },
+    "app/api/admin/financials/subjects/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      }
+    },
     "app/api/admin/financials/responsibility-candidates/route.ts": {
       "GET": {
         "status": "declared",

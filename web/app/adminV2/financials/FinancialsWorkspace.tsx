@@ -24,12 +24,14 @@ import type { FinancialsSection, FinancialsWorkSection } from "@/app/adminV2/fin
 import type { FinancialActivityFeed } from "@/lib/financials/workspace/resolveFinancialActivity";
 import type { FinancialPaymentFlow } from "@/lib/financials/workspace/resolveFinancialPaymentFlow";
 import type { FinancialPositionCohort } from "@/lib/financials/workspace/resolveFinancialPosition";
+import type { FinancialSubjectCohort } from "@/lib/financials/workspace/resolveFinancialSubjects";
 
 export default function FinancialsWorkspace({
     section,
     queue,
     metrics,
     position,
+    subjects,
     flow,
     activity,
     scopeLabel,
@@ -40,6 +42,7 @@ export default function FinancialsWorkspace({
     queue: FinancialWorkQueueState;
     metrics: FinancialsReadState<FinancialsOverviewMetrics>;
     position: FinancialsReadState<FinancialPositionCohort>;
+    subjects: FinancialsReadState<FinancialSubjectCohort>;
     flow: FinancialsReadState<FinancialPaymentFlow>;
     activity: FinancialsReadState<FinancialActivityFeed>;
     scopeLabel: string;
@@ -57,7 +60,7 @@ export default function FinancialsWorkspace({
                 />
             );
         case "accounts":
-            return <FinancialsAccounts position={position} scopeLabel={scopeLabel} />;
+            return <FinancialsAccounts position={position} subjects={subjects} scopeLabel={scopeLabel} />;
         case "charges":
             return <FinancialsCharges queue={queue} position={position} scopeLabel={scopeLabel} siteSelected={siteSelected} />;
         case "payments":
