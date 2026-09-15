@@ -55,8 +55,20 @@ export type PublishedStageInputsForCurrentWork = {
     processStages: Array<{ key: string; label: string }>;
     processTracks?: ProcessTracksV1 | null;
     operatorGuidance?: string | null;
-    /** Active lifecycle process record — enables P6.S2 command authority projection. */
-    process?: LifecycleBuilderProcessRecord | null;
+    /*
+     * NOT CARRIED TO THE CLIENT. The active lifecycle process record is ~26 KB and was serialized on
+     * every subject-scoped answer — measured as part of the ~74.7 KB stage-work block that ships in
+     * BOTH the provisioning answer and the drawer VM for the same selection.
+     *
+     * It was never read. Its stated purpose was to "enable the P6.S2 command authority projection",
+     * and that projection is computed HERE, from this record, and already travels as
+     * `commandProjection`. The record is also derivable from `departmentMetadata`, which this same
+     * payload still carries, so nothing downstream lost a source.
+     *
+     * Kept as an internal local in this resolver (it still finds the stage and builds the
+     * projection); simply no longer emitted. Removing it from the type is deliberate: it makes a
+     * future consumer that wants it a compile error rather than a silent 26 KB per selection.
+     */
     /** Precomputed runtime Command projection (process selection + stage recommendation). */
     commandProjection?: ProcessRuntimeCommandProjection | null;
     /**
@@ -171,7 +183,6 @@ export function resolvePublishedStageInputsForCurrentWork(params: {
         processStages,
         processTracks: process?.tracks_v1 ?? null,
         operatorGuidance: stage?.operator_guidance?.trim() || null,
-        process: process ?? null,
         commandProjection,
         commandConfiguration: {
             // After the D-96 split these two legitimately disagree, and saying so is the point:
