@@ -222,6 +222,38 @@ describe("authority and grain are preserved", () => {
         expect(canonical).toContain('.eq("subject_type", "child")');
     });
 
+    /*
+     * THE BUILD CAUGHT THIS ONE, AND NOTHING ELSE WOULD HAVE.
+     *
+     * The first wiring resolved inside `composeOpportunityDrawerViewModel`. That module is reachable
+     * from a CLIENT component (`ChildDrawerRuntimeProofClient` → the `lib/layout/runtime` barrel →
+     * `evaluateOpportunityLayoutRuntimeBody` → the composer), so importing a `server-only` resolver
+     * there put it in the client graph: "Invalid import — 'server-only' cannot be imported from a
+     * Client Component module". Typecheck was rc=0 throughout; only `next build` saw it. The
+     * composer's own comment already warned about this exact edge for the producers, and the warning
+     * applies unchanged to any database owner. The resolution belongs in the ROUTE, beside them.
+     */
+    it("the resolver is imported by the ROUTE, never by the client-reachable composer", () => {
+        const composer = readFileSync(
+            join(process.cwd(), "lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts"),
+            "utf8",
+        );
+        expect(composer).not.toContain("resolveParticipationSubjectForOpportunity");
+        const route = readFileSync(
+            join(process.cwd(), "app/api/admin/view-models/drawer/opportunity/[id]/route.ts"),
+            "utf8",
+        );
+        expect(route).toContain("resolveParticipationSubjectForOpportunity");
+    });
+
+    it("the resolver stays server-only — the guard that made the bad edge fail loudly", () => {
+        const src = readFileSync(
+            join(process.cwd(), "lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity.ts"),
+            "utf8",
+        );
+        expect(src).toContain('import "server-only"');
+    });
+
     it("adds no cache, no readiness system, and only the one lookup", () => {
         const src = readFileSync(
             join(process.cwd(), "lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity.ts"),
