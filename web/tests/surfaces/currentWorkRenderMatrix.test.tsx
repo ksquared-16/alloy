@@ -19,7 +19,7 @@
  */
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/components/admin/focusPanel/UniversalCard", () => ({
     default: ({ children }: { children?: unknown }) => <div data-uc="1">{children as never}</div>,
@@ -35,9 +35,28 @@ vi.mock("@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination", () => ({
 import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
 import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjection";
 import { FIXTURES } from "./currentWorkFixtures";
+import { settleSpeculativeChunks } from "./settleSpeculativeChunks";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 const model = { title: "Current Work", iconName: "ListChecks", tier: "work", archetype: "checklist", span: "row" } as never;
+
+/*
+ * SETTLE THE SPECULATION THIS CARD ABANDONS BEFORE ANY TEST RUNS.
+ *
+ * Mounting `CurrentWorkCard` warms configured capabilities from a mount effect — `void import(chunk)`
+ * per executable action, deliberately discarded because in a browser nobody waits for speculation.
+ * The promise never leaves the product, so there is nothing here to await; the chunk simply resolves
+ * after vitest has disposed the environment, and that is reported as `EnvironmentTeardownError`
+ * naming whichever module lost the race. All assertions pass and the process still exits non-zero.
+ *
+ * Resolving the chunks up front leaves the dispatcher running exactly as it does in production while
+ * its `import()` returns from the module cache. No product code changes and nothing is stubbed.
+ */
+beforeAll(async () => {
+    const settled = await settleSpeculativeChunks();
+    // Guard against a silent no-op: an empty list would "fix" nothing and pass forever.
+    expect(settled.length).toBeGreaterThan(0);
+});
 
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
