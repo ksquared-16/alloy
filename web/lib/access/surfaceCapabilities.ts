@@ -34,7 +34,6 @@ import {
     ADMIN_USERS_READ,
     ADMIN_USERS_WRITE,
 } from "@/lib/admin/canManageUsersAndRoles";
-import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
 import {
     ACCESS_WORKSPACE_CHAPTERS,
@@ -124,6 +123,11 @@ export const ACCESS_SURFACE_DECLARATIONS: Record<AccessWorkspaceChapter, Surface
             "app/api/admin/users/[userId]/role/route.ts",
             "app/api/admin/users/[userId]/access-scope/route.ts",
             "app/api/admin/users/[userId]/remove/route.ts",
+            // W49-F1, RESOLVED. Access Administration Residual V1 declared this route
+            // `admin.users.write` — the key that already admits inviting and removing a person — so
+            // the surface gate and the route gate are now true for the same reason and this is an
+            // ordinary backing route rather than a divergence.
+            "app/api/admin/send-password-reset/route.ts",
             // GET ONLY — the picker reads the role list. Creating a role is the Roles chapter's
             // command, under `admin.roles.write`, and this chapter draws no control for it.
             "app/api/admin/rbac/roles/route.ts#GET",
@@ -136,22 +140,6 @@ export const ACCESS_SURFACE_DECLARATIONS: Record<AccessWorkspaceChapter, Surface
             // enforces `admin.users.read`, the same key that admits this chapter, so the surface
             // gate and the route gate are true for the same reason.
             "app/api/admin/access/history/route.ts",
-        ],
-        divergentRoutes: [
-            {
-                // W49-F1. The route enforces `ctx.role !== "admin"` and is `pending` in W-14's
-                // table, while the chapter around it is admitted by `settings.users_roles`. The
-                // divergence is REAL AND UNCHANGED — this entry is not a to-do that has been done.
-                //
-                // What has changed is that the surface no longer *promises* the command to
-                // principals the route refuses: `availableAccessCommands` resolves it from the
-                // route's own predicate and the control is withdrawn when that predicate says no.
-                // Reconciling the route itself means declaring it `settings.users_roles`, which is
-                // a one-line WIDENING of who may trigger a password-reset email — W-15's sweep to
-                // make with a product decision behind it, not a presentation workstream's.
-                route: "app/api/admin/send-password-reset/route.ts",
-                reason: "W49-F1 — enforces role `admin`, declared `pending`; presentation now agrees, the route's own declaration is W-15 + AD",
-            },
         ],
     },
     roles: {
@@ -272,18 +260,26 @@ export function visibleAccessChapters(
  */
 
 /**
- * Evaluated by calling the predicate the route's own context is derived from.
+ * Evaluated by applying the membership test each route's own gate applies.
  *
- * `getAdminContext` builds `ctx.role` via `compatibilityPortalRole(roleKeys)`, which returns
- * `"admin"` exactly when {@link hasPortalAdminMutateAccess} does. So `ctx.role !== "admin"` and this
- * function are one predicate read two ways, not two predicates that presently agree — which is what
- * `05…§7.7`'s *"true for the same reason"* requires, and what stops the drift `L8` warns about.
+ * Every command here now resolves through `permissionKeys.includes(capability)` — the body of
+ * `requireAccessAdministration` read a second way, not a second predicate that presently agrees.
+ * That is what `05…§7.7`'s *"true for the same reason"* requires, and what stops the drift `L8`
+ * warns about. Password reset was the last holdout: it mirrored the portal `admin` role because its
+ * route did, and it moved to `admin.users.write` when the route did.
  */
 export function availableAccessCommands(
     access: Pick<AdminAccessContextSuccess, "roleKeys" | "permissionKeys">
 ): AccessCommandKey[] {
     const commands: AccessCommandKey[] = [];
-    if (hasPortalAdminMutateAccess(access.roleKeys)) commands.push("password-reset");
+    /*
+     * W49-F1 IS CLOSED. This used to read `hasPortalAdminMutateAccess(access.roleKeys)`, because the
+     * route it reflects decided on the portal `admin` role and presentation may only ever mirror
+     * authorization. Access Administration Residual V1 declared that route `admin.users.write`, so
+     * the mirror moves with it — same membership test as the three below, and a custom User
+     * Administrator is now offered the control the route would accept.
+     */
+    if (access.permissionKeys.includes(ADMIN_USERS_WRITE)) commands.push("password-reset");
     /*
      * Each of the three below is resolved by the MEMBERSHIP TEST ITS ROUTE APPLIES — the body of
      * `requireAccessAdministration` is `access.permissionKeys.includes(capability)`, and so is this.

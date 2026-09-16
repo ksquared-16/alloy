@@ -438,9 +438,18 @@ describe("W-32 / RL-29 — the sign-in path renders a fixed string", () => {
     });
 
     it("matches the discipline send-password-reset already applies", () => {
-        // The comparison §18 asks for: the same rule, at both boundaries, from the same reasoning.
+        /*
+         * The comparison §18 asks for: the same rule, at both boundaries, from the same reasoning.
+         *
+         * The wording moved from "for that email" to "for that member" when Access Administration
+         * Residual V1 made the target a MEMBER of the caller's organization rather than an arbitrary
+         * address. The discipline is unchanged and is what this asserts: past the membership
+         * boundary, the provider's answer is never reported, so a missing or unconfirmed account
+         * cannot be distinguished from a delivered one.
+         */
         const reset = code(join(webRoot, "app/api/admin/send-password-reset/route.ts"));
-        expect(reset).toContain("If an account exists for that email");
+        expect(reset).toContain("If an account exists for that member");
+        expect(reset, "the provider's answer must still be swallowed").toMatch(/catch\s*\(/);
     });
 });
 

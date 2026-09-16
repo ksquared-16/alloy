@@ -39,7 +39,6 @@ import {
     isOrganizationDomainVisible,
     visibleAccessChapters,
 } from "@/lib/access/surfaceCapabilities";
-import { compatibilityPortalRole } from "@/lib/admin/adminPortalRolePick";
 import {
     projectMemberAuthentication,
     projectMemberLifecycle,
@@ -517,11 +516,14 @@ describe("Truthful Access — eleven-fixture certification matrix", () => {
             it("offers only the commands this caller's routes would accept", () => {
                 const offered = availableAccessCommands(fixture.caller);
 
-                // The oracle is the route's OWN derivation — `getAdminContext` builds `ctx.role`
-                // with `compatibilityPortalRole`, and the route refuses unless that is "admin".
-                // Deriving the expectation from `hasPortalAdminMutateAccess` instead would just be
-                // the resolver checking itself.
-                const routeWouldAccept = compatibilityPortalRole(fixture.caller.roleKeys) === "admin";
+                /*
+                 * The oracle is the route's OWN gate. It used to be `compatibilityPortalRole(...)
+                 * === "admin"`, because the route refused unless `ctx.role` was "admin"; Access
+                 * Administration Residual V1 moved it to `admin.users.write`, so the oracle moved
+                 * with it. What must NOT happen is deriving the expectation from
+                 * `availableAccessCommands` itself — that would be the resolver checking itself.
+                 */
+                const routeWouldAccept = fixture.caller.permissionKeys.includes(ADMIN_USERS_WRITE);
                 expect(offered.includes("password-reset")).toBe(routeWouldAccept);
 
                 // A principal refused the whole surface is offered no command at all — the two
