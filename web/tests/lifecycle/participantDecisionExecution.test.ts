@@ -105,6 +105,18 @@ const PLAN = parseStageOperatingPlanV1({
                     ],
                 },
                 {
+                    /*
+                     * A decision that records a status and moves nobody. It has no destination, so
+                     * nothing would bring a track into existence for it — which is the case the
+                     * "no enrollment track" refusal was really written for.
+                     */
+                    decision_key: "child_status_only",
+                    action_ref: "update_child_enrollment_status",
+                    label: "Record status only",
+                    subject_grain: "child",
+                    targets: [{ kind: "update_child_enrollment_status", disposition_key: "waitlisted" }],
+                },
+                {
                     decision_key: "child_not_enrolling",
                     action_ref: "update_child_enrollment_status",
                     label: "Not Enrolling",
@@ -152,6 +164,8 @@ function piRow(id: string, subjectId: string): PiRow {
 
 type World = {
     process_instances: PiRow[];
+    /** The lead's child memberships — who is being decided, independent of who has a track. */
+    opportunity_customer_members: Array<Record<string, unknown>>;
     opportunities: OppRow[];
     customer_members: Array<{ id: string; org_id: string; first_name: string; last_name: string }>;
 };
@@ -159,6 +173,13 @@ type World = {
 function makeWorld(): World {
     return {
         process_instances: [piRow("pi-emma", EMMA), piRow("pi-liam", LIAM), piRow("pi-noah", NOAH)],
+        opportunity_customer_members: [EMMA, LIAM, NOAH].map((id, i) => ({
+            id: `ocm-${i}`,
+            org_id: ORG,
+            opportunity_id: LEAD,
+            customer_member_id: id,
+            outcome_status_key: null,
+        })),
         opportunities: [
             {
                 id: LEAD,
@@ -191,8 +212,9 @@ function makeSupabase(world: World, opts?: { failStageMove?: boolean }) {
                     Promise.resolve({ data: { metadata: DEPT_METADATA }, error: null });
                 return chain;
             }
-            let op: "select" | "update" = "select";
+            let op: "select" | "update" | "insert" = "select";
             let patch: Record<string, unknown> | null = null;
+            let inserted: Array<Record<string, unknown>> = [];
             const filters: Record<string, unknown> = {};
             const inFilters: Array<[string, unknown[]]> = [];
             const src = (): Array<Record<string, unknown>> =>
@@ -219,8 +241,59 @@ function makeSupabase(world: World, opts?: { failStageMove?: boolean }) {
                 if (patch) for (const r of rows) Object.assign(r, patch);
                 return { rows, error: null };
             };
+            /*
+             * INSERT IS MODELLED because a first decision CREATES the child's track. Without it the
+             * seam could only ever be tested on children someone had already enrolled by hand, which
+             * is the one case the Decision stage is not for.
+             */
+            const applyInsert = () => {
+                const rows = inserted.map((r, i) => ({
+                    id: r.id ?? `${table}-new-${src().length + i}`,
+                    ...r,
+                }));
+                src().push(...rows);
+                return rows;
+            };
             const builder: Record<string, unknown> = {
                 select: () => builder,
+                insert(rows: Record<string, unknown> | Array<Record<string, unknown>>) {
+                    op = "insert";
+                    inserted = Array.isArray(rows) ? rows : [rows];
+                    return builder;
+                },
+                /*
+                 * The track bootstrap upserts on (org, process, subject, context) so a concurrent
+                 * first decision cannot mint two tracks. The fixture honours that key rather than
+                 * appending blindly — an upsert modelled as an insert would let this fixture report
+                 * a green on the exact duplicate the real one prevents.
+                 */
+                upsert(
+                    rows: Record<string, unknown> | Array<Record<string, unknown>>,
+                    options?: { onConflict?: string },
+                ) {
+                    const list = Array.isArray(rows) ? rows : [rows];
+                    const keys = (options?.onConflict ?? "").split(",").map((k) => k.trim()).filter(Boolean);
+                    const kept: Array<Record<string, unknown>> = [];
+                    for (const candidate of list) {
+                        const existing = keys.length
+                            ? src().find((r) => keys.every((k) => r[k] === candidate[k]))
+                            : undefined;
+                        if (existing) {
+                            Object.assign(existing, candidate);
+                            kept.push(existing);
+                        } else {
+                            kept.push(candidate);
+                        }
+                    }
+                    op = "insert";
+                    inserted = kept.filter((r) => !src().includes(r));
+                    const preexisting = kept.filter((r) => src().includes(r));
+                    if (preexisting.length && !inserted.length) {
+                        op = "select";
+                        filters.id = preexisting[0]!.id;
+                    }
+                    return builder;
+                },
                 update(p: Record<string, unknown>) {
                     op = "update";
                     patch = p;
@@ -234,7 +307,11 @@ function makeSupabase(world: World, opts?: { failStageMove?: boolean }) {
                     inFilters.push([col, vals]);
                     return builder;
                 },
+                // Ordering changes nothing in an in-memory fixture; it is accepted so a real reader
+                // that orders (the revision pin lookup) is not rewritten to suit the fake.
+                order: () => builder,
                 maybeSingle() {
+                    if (op === "insert") return Promise.resolve({ data: applyInsert()[0] ?? null, error: null });
                     if (op === "update") {
                         const { rows, error } = applyUpdate();
                         return Promise.resolve({ data: rows[0] ?? null, error });
@@ -242,6 +319,10 @@ function makeSupabase(world: World, opts?: { failStageMove?: boolean }) {
                     return Promise.resolve({ data: rowsFor()[0] ?? null, error: null });
                 },
                 then(resolve: (r: { data: unknown; error: unknown }) => void) {
+                    if (op === "insert") {
+                        resolve({ data: applyInsert(), error: null });
+                        return;
+                    }
                     if (op === "update") {
                         const { rows, error } = applyUpdate();
                         resolve({ data: error ? null : rows.map((r) => ({ id: r.id })), error });
@@ -389,11 +470,43 @@ describe("per-child Decision — explicit child identity", () => {
         expect(world.process_instances.every((r) => r.state === null)).toBe(true);
     });
 
-    it("refuses a child with no enrollment track rather than reporting a phantom success", async () => {
+    /*
+     * A CHILD WITH NO TRACK IS THE NORMAL CASE, NOT AN ERROR.
+     *
+     * This asserted a refusal, which described the seam accurately and described the PRODUCT
+     * backwards: at the Decision stage a child who has never been decided has no track, and the
+     * decision is what brings one into existence. Refusing meant the children the stage exists for
+     * were the ones it could not act on.
+     */
+    it("brings the child's track into existence rather than refusing them", async () => {
         const world = makeWorld();
         world.process_instances = world.process_instances.filter((r) => r.subject_id !== EMMA);
 
         const result = await run(world, { decisionKey: "child_waitlist", customerMemberId: EMMA, label: "Emma" });
+
+        expect(result.ok, result.ok === false ? result.message : "").toBe(true);
+        const created = world.process_instances.find((r) => r.subject_id === EMMA);
+        expect(created, "no track was created for Emma").toBeTruthy();
+        // The operator's ACTUAL destination, never a fabricated starting stage.
+        expect(created!.stage_key).toBe("waitlist");
+        expect(created!.state).toBe("waitlisted");
+        // Exactly one, and nobody else was touched.
+        expect(world.process_instances.filter((r) => r.subject_id === EMMA)).toHaveLength(1);
+        expect(rowOf(world, LIAM).state).toBeNull();
+        expect(rowOf(world, NOAH).state).toBeNull();
+    });
+
+    it("still refuses a decision that has no destination to create a track for", async () => {
+        // The refusal this replaced was written for a real case: a decision that records a status
+        // and moves nobody has nothing that would create a track, so its write would find no row.
+        const world = makeWorld();
+        world.process_instances = world.process_instances.filter((r) => r.subject_id !== EMMA);
+
+        const result = await run(world, {
+            decisionKey: "child_status_only",
+            customerMemberId: EMMA,
+            label: "Emma",
+        });
 
         expect(result.ok).toBe(false);
         expect(result.ok === false && result.code).toBe("participant_not_found");

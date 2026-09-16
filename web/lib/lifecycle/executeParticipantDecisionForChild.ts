@@ -49,6 +49,7 @@ import {
     readEnrollmentInstanceState,
     resolveEnrollmentInstanceIdForScope,
 } from "@/lib/process/processInstances";
+import { ensureChildEnrollmentTrack } from "@/lib/lifecycle/ensureChildEnrollmentTrack";
 import { assertSingleParticipantWrite } from "@/lib/lifecycle/assertSingleParticipantWrite";
 import {
     runPlatformTransaction,
@@ -252,7 +253,7 @@ export async function executeParticipantDecisionForChild(
         customerMemberId,
         opportunityId,
     });
-    const processInstanceId = journey.id;
+    let processInstanceId = journey.id;
     const affected: ParticipantDecisionAffected = {
         opportunity_id: opportunityId,
         customer_member_id: customerMemberId,
@@ -273,7 +274,64 @@ export async function executeParticipantDecisionForChild(
             write_error: ambiguity.ok ? undefined : ambiguity.failure,
         };
     }
-    if (!processInstanceId) {
+    /*
+     * NO TRACK YET IS THE NORMAL STATE OF A CHILD WAITING TO BE DECIDED.
+     *
+     * This refused outright on a missing journey, which is a STRICTER PRECONDITION THAN THE WRITE IT
+     * GUARDS. `applyStageOutcomeRuleTarget` bootstraps the track at its `move_to_stage` branch, and
+     * says so in terms: "Placed HERE deliberately, not in each caller. This branch is the single
+     * chokepoint every stage-move path inherits ... so the boundary is defined once and cannot be
+     * reached around." Refusing before calling it is reaching around it — and it refused exactly the
+     * children the Decision stage exists for, since Begin Enrolling is the decision that CREATES the
+     * journey. Measured: a lead whose only child had no track could reach Enrolling from no surface.
+     *
+     * The refusal is kept for the case it was really written for: a decision with NO stage move has
+     * nothing that would create a track, so its status write would find no row, and the operator
+     * should be told that rather than shown a zero-row write failure.
+     */
+    const movesToStage = bound.targets.some((t) => t.kind === "move_to_stage");
+
+    /*
+     * WHY THE CHOKEPOINT IS NOT ENOUGH ON ITS OWN.
+     *
+     * `applyStageOutcomeRuleTarget` bootstraps the track at its `move_to_stage` branch, which is the
+     * right place for every path whose FIRST act is a stage move. A participant decision's is not: a
+     * decision's targets are `[update_child_enrollment_status, move_to_stage]`, so the status write
+     * runs first, matches no row, and the single-write assertion refuses with `moved: 0` — which is
+     * precisely the half-recorded failure the grain-crossing doctrine describes, reached before the
+     * branch that would have prevented it. Measured against the execution fixture: the decision
+     * failed `write_count_violation` rather than creating the track.
+     *
+     * So the track is brought into existence here, BEFORE any target runs, through
+     * `ensureChildEnrollmentTrack` — the same canonical helper the chokepoint calls, never a second
+     * implementation of it. It is idempotent, it refuses a duplicate rather than choosing, and it
+     * creates with `stage_key` null so the move below still writes the operator's actual destination
+     * rather than a fabricated starting stage.
+     *
+     * Only when the decision genuinely moves the child into a stage. A decision that records a
+     * status and nothing else has no destination, so it earns no track.
+     */
+    if (!processInstanceId && movesToStage) {
+        const track = await ensureChildEnrollmentTrack(input.supabase, {
+            orgId: input.orgId,
+            opportunityId,
+            customerMemberId,
+            ...(identity.legacyOcmId ? { opportunityCustomerMemberId: identity.legacyOcmId } : {}),
+        });
+        if (!track.ok) {
+            return {
+                ok: false,
+                code: "participant_not_found",
+                decision_key: decisionKey,
+                affected,
+                message: track.error,
+            };
+        }
+        processInstanceId = track.instanceId;
+        affected.process_instance_id = processInstanceId;
+    }
+
+    if (!processInstanceId && !movesToStage) {
         // Caught here rather than at the write so the operator gets the real reason instead of a
         // zero-row write failure, and so nothing is attempted at all.
         return {
@@ -377,7 +435,13 @@ export async function executeParticipantDecisionForChild(
         },
         // A double-submit of the same decision for the same child joins the running transaction
         // rather than executing a second time.
-        idempotencyKey: `${input.orgId}:${processInstanceId}:${decisionKey}`,
+        /*
+         * The child, not the track, is what a double-submit is about — and on the first decision
+         * there is no track to key on yet. The instance is still preferred where it exists so this
+         * is the same key every existing flow already had; a child has at most one open track, so
+         * the two are the same identity said two ways.
+         */
+        idempotencyKey: `${input.orgId}:${processInstanceId ?? customerMemberId}:${decisionKey}`,
         onTrace: input.onTrace,
         steps: (): PlatformTransactionStep[] => [
             {
