@@ -167,7 +167,27 @@ export async function prewarmRecordWork(subjectId: string): Promise<void> {
     }
 }
 
-export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntimeState {
+export function useRecordWorkRuntime(
+    subjectId: string | null,
+    /**
+     * The participation this surface is scoped to, STATED by the caller that computed it.
+     *
+     * The Focus Panel already knows it: on a child subject it holds both the participation
+     * (`operational.subjectId`, a `process_instances.id`) and the family case it settles on, and it
+     * derives one from the other. It used to pass only the family id and leave this runtime to
+     * recover the child from `useAttentionSubject()` — a global that is **null by design on cold
+     * entry**, because a SURFACE movement clears `subject` and the surface then commits its
+     * CONFIGURED DEFAULT subject without ever moving attention to it.
+     *
+     * Measured deployed consequence: the settled request carried no `attention_subject_id` at all,
+     * so the server could not resolve the participation, `participantScope` settled null, and
+     * Attendance and Health — both gated on that scope — reported `unavailable` for a child the
+     * commit frame had just described.
+     *
+     * Null for a case-grain panel: there is no participation, and none is fabricated.
+     */
+    participationId: string | null = null,
+): RecordWorkRuntimeState {
     /*
      * THE SUBJECT OF ATTENTION TRAVELS WITH THE REQUEST — this runtime is the Focus Panel's settled
      * transport owner, and it is the only place that may add it.
@@ -183,7 +203,16 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
      * Null outside the RuntimeKernel (the modal drawer product renders above it) — that is the
      * ordinary family-grain answer, identical to the behaviour before attention was carried at all.
      */
-    const attentionSubjectId = useAttentionSubject();
+    /*
+     * PREFER WHAT THE CALLER STATED; fall back to attention for callers that state nothing.
+     *
+     * The stated value is not merely more available, it is more CURRENT: it comes from committed
+     * Focus, which is the latest commit by construction, whereas attention is an operator-expressed
+     * global that a cold entry never writes. The fallback keeps every caller that does not pass a
+     * participation (the modal drawer product) behaving exactly as before.
+     */
+    const attentionSubjectFromKernel = useAttentionSubject();
+    const attentionSubjectId = participationId?.trim() || attentionSubjectFromKernel;
 
     /*
      * This owner knows the attention subject and nothing else about the workspace — it deliberately

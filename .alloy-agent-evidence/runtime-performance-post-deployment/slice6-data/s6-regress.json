@@ -1,0 +1,30 @@
+{
+ "p01": {
+  "frames": 345,
+  "preparing_frames": 0,
+  "pendingSurface_frames": 0,
+  "boot_frames": 173,
+  "t_boot_first": 1003,
+  "t_cards": null
+ },
+ "p05": [
+  {
+   "view": "new_leads",
+   "rows": 3,
+   "ack_ms": 82,
+   "matched": true
+  },
+  {
+   "view": "new_work_view_3",
+   "rows": 1,
+   "ack_ms": 140,
+   "matched": true
+  },
+  {
+   "view": "new_work_view_4",
+   "rows": 16,
+   "ack_ms": 139,
+   "matched": true
+  }
+ ]
+}
