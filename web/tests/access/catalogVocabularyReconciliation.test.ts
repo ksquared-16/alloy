@@ -82,6 +82,14 @@ const APPROVED_ADDITIONS: Record<string, string> = {
         "20260912113000 — taking a case out of the queue; its own key so that granting `ops` processing.operate does not also hand it an archive it never had",
     "processing.documents.manage":
         "20260912113000 — renaming a source document, and deleting one with the case it opened and the stored file; deliberately NOT `documents.write`, which `ops` holds in every organization",
+    "tours.configure":
+        "20260916020000 — defining what a tour IS: availability, capacity, the windows families may book into. Director model Tours/Bookings V1; deliberately NOT scheduling.write, which would have hidden tour definition inside a key ops already holds",
+    "tours.book":
+        "20260916020000 — placing a family into a tour slot. Separate from tours.configure because booking is routine front-desk work and defining the offer is not",
+    "work.configure":
+        "20260916030000 — defining what operational work EXISTS: the queue definition and the work units it yields. Director model Work Authority V1; admin only",
+    "work.operate":
+        "20260916030000 — performing work inside a process already running: completing stage work, closing a family, recording participant decisions, executing a workflow run. Seeded to ops; deliberately NOT a work.manage spanning define-and-do, and NOT work.assign, which stays per product surface under Assignments Authority Model V1",
     "option_sets.delete":
         "20260914183000 — deleting an option set or one of its items; its own key because Config Layout Assist has no delete operation of any kind, so folding deletion into option_sets.manage would have handed ops an authority it has never held",
     "layouts.lifecycle":
