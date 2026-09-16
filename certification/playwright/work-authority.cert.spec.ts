@@ -199,6 +199,68 @@ test.describe("Work Authority V1 — mounted", () => {
      * `work.*` there must not reach this organization's work, and the workflow-run door is the
      * one that matters most: it drives `executeWorkflowRun`, which writes across six domains.
      */
+    /**
+     * W-17 COMPOSITION, THROUGH THE CANONICAL ACCESS PATHS.
+     *
+     * The direct suite already proves this logic, but it mocks the grant resolver, so it proves
+     * what the gate DECIDES and not what a real access change DELIVERS. This case changes access
+     * the way an administrator changes it — POST/DELETE on /api/admin/users/{id}/roles, the same
+     * routes the role editor drives — and then asks the product again.
+     *
+     * No direct grant-table edit, and no TTL wait: each re-ask uses a FRESH session, so a stale
+     * cached context cannot make a closed door look open or an open one look closed.
+     */
+    test("W-17: adding the operator role opens operate on the next request, removing it closes", async ({ browser }) => {
+        const CONFIGURER_USER = "c0000000-0000-4000-8000-00000000d0c1";
+        const OPERATOR_ROLE = "mcert_work_operator";
+
+        const admin = await signIn(browser, PERSONAS.defaultAdmin.email);
+        const ask = async () => {
+            const s = await signIn(browser, PERSONAS.configurer.email);
+            try {
+                return {
+                    operate: (await operateDoor(s.request, "family-close")).refusedByAuthority,
+                    configure: (await configureDoor(s.request, "work-unit-create")).refusedByAuthority,
+                };
+            } finally {
+                await s.close();
+            }
+        };
+
+        try {
+            const before = await ask();
+            expect(before.operate, "configurer starts unable to operate").toBe(true);
+            expect(before.configure, "configurer starts able to configure").toBe(false);
+
+            const added = await admin.request.post(`/api/admin/users/${CONFIGURER_USER}/roles`, {
+                data: { role: OPERATOR_ROLE },
+                failOnStatusCode: false,
+            });
+            expect(added.status(), "the canonical Access path must accept the assignment").toBeLessThan(400);
+
+            const opened = await ask();
+            expect(opened.operate, "adding the operator role must OPEN operate on the next request").toBe(false);
+            expect(opened.configure, "and configure must survive the composition").toBe(false);
+
+            const removed = await admin.request.delete(
+                `/api/admin/users/${CONFIGURER_USER}/roles/${encodeURIComponent(OPERATOR_ROLE)}`,
+                { failOnStatusCode: false },
+            );
+            expect(removed.status(), "the canonical Access path must accept the removal").toBeLessThan(400);
+
+            const closed = await ask();
+            expect(closed.operate, "removing the operator role must CLOSE operate on the next request").toBe(true);
+            expect(closed.configure, "and configure must still remain").toBe(false);
+        } finally {
+            /* Leave the persona exactly as the fixture provisions it, whatever happened above. */
+            await admin.request.delete(
+                `/api/admin/users/${CONFIGURER_USER}/roles/${encodeURIComponent(OPERATOR_ROLE)}`,
+                { failOnStatusCode: false },
+            );
+            await admin.close();
+        }
+    });
+
     test("a cross-org admin is admitted by the gate and still cannot touch this org's row", async ({ browser }) => {
         /*
          * THIS IS THE POINT OF THE CASE, AND IT IS NOT WHAT I FIRST WROTE.
