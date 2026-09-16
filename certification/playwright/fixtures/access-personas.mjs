@@ -568,6 +568,12 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.vocabManager,   role_label: "Vocabulary manager",          description: "Defines the organization's words. Changes none of its records.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.vocabTitular,   role_label: "Configuration Administrator", description: "Titled for configuration authority, holding none of it.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.programManager, role_label: "Program manager",             description: "Publishes Programs. Touches no records and no money.", is_system: false, is_active: true },
+
+        /* ENROLLMENT RECORD AUTHORITY V1. Labels are product language; the titular one is the control. */
+        { org_id: ORG, role_key: CUSTOM.enrollRecord,  role_label: "Enrollment record keeper", description: "Keeps the inquiry record. Decides no admission.",          is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.enrollDecide,  role_label: "Enrollment decider",       description: "Decides admission, placement and agreements. Edits no record fields.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.enrollBoth,    role_label: "Enrollment operator",      description: "Both Slice-1 Enrollment authorities, and no admin role.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.enrollTitular, role_label: "Enrollment Administrator", description: "Named for Enrollment, granted none of it.",               is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
 
