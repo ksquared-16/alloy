@@ -15,6 +15,7 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { CORRELATION_ID_HEADER, resolveCorrelationId } from "@/lib/api/correlationId";
 import { resolveParticipantDecisionContext } from "@/lib/lifecycle/resolveParticipantDecisionContext";
+import { WORK_OPERATE, requireWorkCapability } from "@/lib/access/workAuthority";
 import {
     executeGovernedFamilyClose,
     previewGovernedFamilyClose,
@@ -89,6 +90,15 @@ export async function POST(request: NextRequest) {
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
     const dim = scopeDimensionsFromAccess(access);
+    /*
+     * WORK AUTHORITY — closes one family's participation in a running process.
+     *
+     * Authority here was PORTAL ADMISSION, which decided nothing about
+     * whether this principal may do this job. `work.operate` is the authority now, held by
+     * grant and by nothing else.
+     */
+    const capDenied = requireWorkCapability(access, WORK_OPERATE);
+    if (capDenied) return capDenied;
 
     let body: {
         opportunity_id?: string;

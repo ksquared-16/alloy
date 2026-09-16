@@ -5,6 +5,8 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { agentV0CommitQueueDefinitionApply } from "@/lib/agent/v0/agentV0AtomicCommit";
 import { prepareQueueDefinitionPatch } from "@/lib/agent/v0/applyWorkUnitQueueDefinitionUpdate";
 import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinitionV1";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { WORK_CONFIGURE, requireWorkCapability } from "@/lib/access/workAuthority";
 
 function agentV0Enabled(): boolean {
     const v = process.env.AGENT_V0_ENABLED?.trim().toLowerCase();
@@ -56,9 +58,17 @@ function isStructuredOverride(x: unknown): x is StructuredOverride {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return jsonErr(403, "POLICY_DENIED", "Forbidden");
-    }
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    /*
+     * WORK AUTHORITY — defines a work queue, writing `work_units`.
+     *
+     * Authority here was the `admin` ROLE TITLE, which decided nothing about
+     * whether this principal may do this job. `work.configure` is the authority now, held by
+     * grant and by nothing else.
+     */
+    const capDenied = requireWorkCapability(access, WORK_CONFIGURE);
+    if (capDenied) return capDenied;
     if (!agentV0Enabled()) {
         return jsonErr(403, "FEATURE_DISABLED", "Agent v0 is disabled");
     }

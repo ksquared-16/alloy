@@ -1,0 +1,70 @@
+{
+  "trusted_host_action_id": "tha_c022ab90c50d01",
+  "query_hash": "2e8df2e9a139900713da4c8d15175144805c97b1fa75163ff6d2ed6849741ca9",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-16T02:30:23.464Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_c022ab90c50d01",
+    "query_hash": "2e8df2e9a139900713da4c8d15175144805c97b1fa75163ff6d2ed6849741ca9",
+    "authorization_id": "grnt_8c16d64182994f70",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-16T02:30:24.401Z",
+    "question_ids": [
+      "catalog",
+      "grants",
+      "custom_holders",
+      "coverage",
+      "ledger"
+    ],
+    "questions": {
+      "catalog": {
+        "question_id": "catalog",
+        "row_count": null,
+        "rows": [
+          "tours.book ~ active=true ~ group=scheduling",
+          "tours.configure ~ active=true ~ group=scheduling"
+        ]
+      },
+      "grants": {
+        "question_id": "grants",
+        "row_count": null,
+        "rows": [
+          "admin ~ tours.book ~ orgs=3",
+          "admin ~ tours.configure ~ orgs=3",
+          "ops ~ tours.book ~ orgs=3",
+          "ops ~ tours.configure ~ orgs=3"
+        ]
+      },
+      "custom_holders": {
+        "question_id": "custom_holders",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "coverage": {
+        "question_id": "coverage",
+        "row_count": null,
+        "rows": [
+          6,
+          12
+        ]
+      },
+      "ledger": {
+        "question_id": "ledger",
+        "row_count": null,
+        "rows": [
+          20260916020000
+        ]
+      }
+    },
+    "row_count": 10
+  }
+}
