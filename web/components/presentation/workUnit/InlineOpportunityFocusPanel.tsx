@@ -482,6 +482,37 @@ export function InlineOpportunityFocusPanel() {
      * mismatch.
      */
     const seedSubjectTitle = drawer.opportunityQueuePreviewSeed?.title?.trim() || null;
+    const seedSubjectImageUrl = drawer.opportunityQueuePreviewSeed?.subjectImageUrl?.trim() || null;
+    /*
+     * ── IDENTITY IS ON THE CLICK CLOCK; CONTENT IS ON THE HOLD CLOCK (P0-7.2) ──
+     *
+     * `subjectScope` is written only by the body, from `model.context.participantScope` — which during
+     * a hold is the PRIOR subject's VM. The title was already moved onto the seed (the click clock);
+     * the avatar had no seed to move onto, so it kept rendering the previous child under the new
+     * selection. Measured deployed: the row highlighted at 121 ms while the panel's subject and its
+     * images did not change until 5,960 ms.
+     *
+     * The rule this establishes: held prior CONTENT may remain for continuity; prior subject IDENTITY
+     * may not. So the image shown is, in order:
+     *   1. the image the SELECTED row is already rendering (known at click time), else
+     *   2. the scope's image ONLY while that scope is genuinely this selection's, else
+     *   3. nothing — the identity falls back to initials rather than to somebody else's face.
+     *
+     * Case (3) is the whole point. An unknown image is an honest gap; the previous child's photo
+     * labelled as this child is a false statement about who the operator is looking at.
+     */
+    const scopeIsThisSelection =
+        subjectScope != null
+        && operationalSubjectId != null
+        && (subjectScope.participationId === operationalSubjectId
+            || subjectScope.customerMemberId === operationalSubjectId);
+    const identityImageUrl = seedSubjectImageUrl ?? (scopeIsThisSelection ? subjectScope?.imageUrl ?? null : null);
+    /*
+     * The scope handed to the header carries the SELECTION's image. Everything else about the scope is
+     * left exactly as the body resolved it — this narrows one field, it does not become a second
+     * participant resolver.
+     */
+    const headerSubjectScope = subjectScope ? { ...subjectScope, imageUrl: identityImageUrl } : null;
     /*
      * ── S3-1: ACKNOWLEDGED IDENTITY IS MONOTONIC ────────────────────────────────────────────────
      *
@@ -746,7 +777,7 @@ export function InlineOpportunityFocusPanel() {
                 >
                     {visible ?
                         <OpportunityFocusPanelHeader
-                            subjectScope={subjectScope}
+                            subjectScope={headerSubjectScope}
                             title={headerTitle || drawerTitle}
                             opportunityId={visible.displayVm.entity.id}
                             record={visible.record}

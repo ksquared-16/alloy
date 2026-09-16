@@ -223,7 +223,20 @@ export function overlayChildMissionOntoSettledFocusModel(
                           trimOrNull(commitCritical.subjectIdentityTruth?.["child.resolved_photo_url"])
                           ?? trimOrNull(childRow?.resolved_photo_url)
                           ?? trimOrNull(childRow?.photo_url)
-                          ?? settled.context.participantScope?.imageUrl
+                          /*
+                           * AND NO FALLBACK TO THE SETTLED SCOPE (P0-7.2).
+                           *
+                           * This chain used to end `?? settled.context.participantScope?.imageUrl`.
+                           * During a hold that scope belongs to the PREVIOUS child, so when this
+                           * child's photo was absent from truth and `childRow` was not found in the
+                           * held family's roster, the prior child's face was laundered forward and
+                           * presented as this child's. That is not a stale frame — it is a false
+                           * statement about who the operator is looking at.
+                           *
+                           * Null is the honest answer; the avatar shows initials until the real photo
+                           * resolves. The comment above still holds for the two `childRow` terms: they
+                           * are THIS child's photo, and dropping them was the defect it describes.
+                           */
                           ?? null,
                       // Same rule as the process block below: the child's own stage, or none.
                       stageKey: situation?.stageKey ?? childOwnStageKey,

@@ -73,7 +73,28 @@ export function focusPanelSeedFromQueueRow(
             ? context.case_context.case_id.trim()
             : null);
 
-    return { title, statusLabel, ...(familyOpportunityId ? { familyOpportunityId } : {}) };
+    /*
+     * THE IMAGE THE ROW IS ALREADY SHOWING — read by the row's own rule, not a second one.
+     *
+     * `CondensedQueueRow` resolves its avatar as: the FOCUSED primary's `image_url` when Subject Focus
+     * is set, otherwise the row subject's. Deliberately no fallback between the two — a household
+     * primary's photo beside a child's display name is a mismatch, and that is the row's existing
+     * decision, copied here rather than re-invented.
+     *
+     * This is presentation identity only. It is what makes the header avatar switch on the click
+     * instead of waiting for the settled payload.
+     */
+    const subjectImageUrl = focus
+        ? (typeof focus.primary.image_url === "string" ? focus.primary.image_url.trim() : "") || null
+        : (typeof context.row_subject?.image_url === "string" ? context.row_subject.image_url.trim() : "")
+          || null;
+
+    return {
+        title,
+        statusLabel,
+        ...(subjectImageUrl ? { subjectImageUrl } : {}),
+        ...(familyOpportunityId ? { familyOpportunityId } : {}),
+    };
 }
 
 /**

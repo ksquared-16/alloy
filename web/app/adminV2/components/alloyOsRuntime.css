@@ -5240,6 +5240,28 @@ html[data-alloy-os-runtime-split="true"]
   flex: 1 1 auto;
   min-height: 0;
 }
+
+/* ── AND THE CARD INSIDE THE CELL TAKES IT TOO (P0-7.5) ──
+ *
+ * The rule above stretches the CELL to the solved band height; it stops there. The cell is
+ * `.alloy-os-focus-panel-grid--composed .alloy-os-focus-panel-grid__cell`, which sets
+ * `align-items: flex-start` — deliberately, and correctly, for the LANES composition, where
+ * "composed cells take their card's NATURAL height (no equal-height stretch) so the lanes interlock".
+ *
+ * In the SOLVED GRID that is the wrong end of the same contract. The band solver exists precisely to
+ * make cards in a band equal, the wrapper already carries its assigned height, and `flex-start` then
+ * throws that away at the last layer. Measured deployed: both wrappers 325px, Financials' visible card
+ * 325px, Business Process's visible card 232px — 93px of white space inside the Enrollment cell.
+ * Financials was not obeying the band either; it happens to reach the same number because it sets its
+ * own `min-height` while Business Process has no such mechanism.
+ *
+ * Scoped to `.alloy-os-fp-card-intrinsic`, which is rendered ONLY by the solved-grid branch — the
+ * lanes, stack and standalone/design-lab paths never create it, so their natural-height behaviour is
+ * untouched. No height is named here: the card inherits whatever the solver assigned.
+ */
+.alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell {
+  align-items: stretch;
+}
 .alloy-os-fp-grid-area > * {
   width: 100%;
 }
