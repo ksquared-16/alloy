@@ -4,6 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { money, moneyExact, shortDate } from "@/app/adminV2/financials/financialsFormat";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
+import {
+    FinancialsLedgerPeriod,
+    type FinancialsLedgerRowView,
+} from "@/components/operationalCards/FinancialsLedger";
 import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 import {
     ACCOUNT_LENSES,
@@ -216,8 +220,8 @@ export default function FinancialsAccountWorkspaceDetail({
              * is rendered inside, so it draws no border of its own — a bordered panel here would put
              * a card inside a card and reintroduce the two-object reading this pass removed.
              */}
-            <section className="flex min-h-0 flex-1 flex-col border-t border-alloy-stone/15 pt-2" data-financials-lenses="true">
-                <div className="flex shrink-0 flex-wrap items-center gap-1 px-1 pb-1.5"
+            <section className="flex min-h-0 flex-1 flex-col border-t border-alloy-stone/15 pt-1" data-financials-lenses="true">
+                <div className="flex shrink-0 flex-wrap items-center gap-1 px-1 pb-1"
                     data-financials-lensbar="true">
                     {ACCOUNT_LENSES.map((key) => (
                         <button
@@ -259,7 +263,7 @@ export default function FinancialsAccountWorkspaceDetail({
                      * stacked its two controls vertically, which read as a separate panel floating
                      * to the right of the lens bar rather than as part of it.
                      */}
-                    <span className="ml-auto flex min-h-[1.75rem] shrink-0 items-center gap-1.5"
+                    <span className="ml-auto flex min-h-[1.6rem] shrink-0 flex-nowrap items-center gap-1.5"
                         data-financials-filter-slot="true">
                         {!loading && lens !== "payments" && hasChoice(subjects) ? (
                             <Filter
@@ -292,7 +296,7 @@ export default function FinancialsAccountWorkspaceDetail({
                 </div>
 
                 {/* THE SCROLL REGION BEGINS HERE — with the activity, never with the controls. */}
-                <div className="min-h-0 flex-1 overflow-y-auto py-1" data-financials-activity-scroll="true">
+                <div className="min-h-0 flex-1 overflow-y-auto pt-0.5" data-financials-activity-scroll="true">
                     {loading ? (
                         <LedgerSkeleton />
                     ) : lens === "payments" ? (
@@ -382,6 +386,21 @@ export default function FinancialsAccountWorkspaceDetail({
  * filtered, a count of rows. A number on screen is either canonical or it is a row count, never a
  * subtotal invented by a presentation layer.
  */
+/**
+ * THE WORKSPACE LEDGER — the same primitive the Focus Panel renders through.
+ *
+ * This file used to carry its own copy of the row markup: the same eight columns, written twice, in
+ * two components, against one CSS grid. Two copies of a grid drift the moment one is edited, and
+ * the only thing keeping them identical was that nobody had edited one. The markup now lives in
+ * `FinancialsLedger` and both surfaces map their own canonical rows into its row shape.
+ *
+ * ── THE PERIOD SUMMARY IS THE SERVER'S FIGURE OR IT IS A COUNT ─────────────────────────────────
+ *
+ * Unfiltered, the canonical `ledgerPeriods[].totalCents` the server already computed; filtered, a
+ * count of rows. Summing a subset here would be this component quietly becoming a second opinion
+ * about money — the exact thing `accountLenses` refuses to do. A number on screen is either
+ * canonical or it is a row count, never a subtotal invented by a presentation layer.
+ */
 function LedgerPeriods({
     rows,
     cur,
@@ -409,122 +428,58 @@ function LedgerPeriods({
             {groups.map(([key, groupRows]) => {
                 const total = canonicalTotals?.get(key);
                 return (
-                    <section key={key || "unplaced"} className="alloy-os-fdetail__period"
-                        data-financials-ledger-period={key || "unplaced"}>
-                        <p className="alloy-os-fdetail__periodhead">
-                            <span className="alloy-os-fdetail__periodname">{periodLabel(key)}</span>
-                            <span className="alloy-os-fdetail__periodsum">
-                                {/* Never "Closed" — see the adapter's note. A zero total is a
-                                    balance of zero, not a closed accounting period. */}
-                                {total != null
-                                    ? `Balance ${moneyExact(total, cur)}`
-                                    : `${groupRows.length} ${groupRows.length === 1 ? "entry" : "entries"}`}
-                            </span>
-                        </p>
-                        <div className="alloy-os-billingdetail__ledger" role="table">
-                            {/* Child, then who owes it. See the identity note on the detail card. */}
-                            <div className="alloy-os-billingdetail__row alloy-os-billingdetail__row--head">
-                                <span>Date</span>
-                                <span>Type</span>
-                                <span>Child</span>
-                                <span>Description</span>
-                                <span>GL account</span>
-                                <span>Amount</span>
-                                <span>Status</span>
-                                <span>Responsible party</span>
-                            </div>
-                            {groupRows.map((row) => (
-                                <div key={String(row.chargeId)} className="alloy-os-billingdetail__row"
-                                    data-financials-ledger-row={String(row.chargeId)}>
-                                    <span className="alloy-os-billingdetail__when">{shortDate(row.date as string | null)}</span>
-                                    {/* The catalog's word, never the key behind it. */}
-                                    <span className="alloy-os-billingdetail__type">
-                                        {String(row.categoryLabel ?? row.categoryKey ?? "—")}
-                                    </span>
-                                    {/*
-                                     * The CHILD, or the household when the charge genuinely belongs
-                                     * to no child — a registration fee does. Never the household
-                                     * name standing in for a child the row actually names.
-                                     */}
-                                    <span className="alloy-os-billingdetail__subject"
-                                        data-financials-child={row.subjectMemberId ? "true" : "false"}>
-                                        {String(row.subjectName ?? "Household")}
-                                    </span>
-                                    <span className="alloy-os-billingdetail__desc">{String(row.description ?? "—")}</span>
-                                    {/*
-                                     * GL CONTEXT AT TRANSACTION GRAIN, in the detail card's own
-                                     * treatment: code and name on one line, an unmapped row saying
-                                     * so rather than rendering blank. `gl_accounts` and
-                                     * `gl_account_mappings` are canonical and the reader already
-                                     * carries the resolved pair.
-                                     */}
-                                    <span className="alloy-os-billingdetail__gl"
-                                        data-financials-gl={row.glCode ? String(row.glCode) : undefined}
-                                        data-financials-gl-state={row.glCode ? "mapped" : "unmapped"}
-                                        title={row.glCode && row.glAccountName ? `${String(row.glCode)} · ${String(row.glAccountName)}` : undefined}>
-                                        {row.glCode
-                                            ? row.glAccountName
-                                                ? `${String(row.glCode)} · ${String(row.glAccountName)}`
-                                                : String(row.glCode)
-                                            : "Unmapped"}
-                                    </span>
-                                    <span
-                                        className={`alloy-os-billingdetail__amount${
-                                            n(row.amountCents) < 0 ? " alloy-os-billing__entry-amount--credit" : ""
-                                        }`}
-                                    >
-                                        {moneyExact(n(row.amountCents), cur)}
-                                        {n(row.outstandingCents) !== n(row.amountCents) ? (
-                                            <span className="alloy-os-billingdetail__outstanding">
-                                                {moneyExact(n(row.outstandingCents), cur)} outstanding
-                                            </span>
-                                        ) : null}
-                                    </span>
-                                    <span className="alloy-os-billingdetail__status">
-                                        {String(row.lifecycleStatus ?? row.status ?? "—")}
-                                    </span>
-                                    {/*
-                                     * REVERSALS AND CORRECTIONS, SAID IN THE SOURCE COLUMN.
-                                     *
-                                     * The read model already decided what this row IS in relation to
-                                     * another — `correctionKind` when it corrects something,
-                                     * `reversedByChargeId` when something corrected it. Nothing here
-                                     * infers a correction from a status string; a row that stands
-                                     * says only where it came from.
-                                     */}
-                                    {/*
-                                     * WHO OWES IT — charge-grain, from the allocations the account
-                                     * reader already holds. It replaces a Source column that mostly
-                                     * repeated Type, and it answers a question Type cannot.
-                                     */}
-                                    <span className="alloy-os-billingdetail__source" data-financials-responsible="true">
-                                        {row.responsiblePartyName
-                                            ? String(row.responsiblePartyName)
-                                            : row.responsibilityUnassigned
-                                                ? "Unassigned"
-                                                : "—"}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </section>
+                    <FinancialsLedgerPeriod
+                        key={key || "unplaced"}
+                        label={periodLabel(key)}
+                        /* Never "Closed" — a zero total is a balance of zero, not a closed
+                           accounting period, which is a different and configured fact. */
+                        summary={
+                            total != null
+                                ? `Balance ${moneyExact(total, cur)}`
+                                : `${groupRows.length} ${groupRows.length === 1 ? "entry" : "entries"}`
+                        }
+                        open
+                        rows={groupRows.map((row) => ledgerRowFromWorkspaceRow(row, cur))}
+                    />
                 );
             })}
-            {/*
-             * ── THE RUNNING-BALANCE INVARIANT IS NOT AN OPERATOR MESSAGE ───────────────────────
-             *
-             * It used to be printed under every ledger: "No running balance column —
-             * `ledger_transactions` provides no authoritative running balance…". That is true, it
-             * matters, and it is ENGINEERING DOCTRINE. An operator running a childcare centre
-             * cannot act on it and did not ask; a paragraph naming a database table under a family's
-             * money is the product explaining its own implementation.
-             *
-             * The invariant is not weakened by removing the paragraph. It lives here as the reason
-             * this component computes no running total, in the doctrine document, and in the test
-             * that fails if a running-balance column ever appears.
-             */}
         </div>
     );
+}
+
+/**
+ * One canonical account row → the shared ledger's row shape.
+ *
+ * Every value is read. The GL pair is joined for display exactly as the detail card joins it; the
+ * correction lineage the read model already decided becomes the row's title rather than a column of
+ * its own; and the outstanding note appears only when money has been applied to the charge.
+ */
+function ledgerRowFromWorkspaceRow(row: Row, cur: string): FinancialsLedgerRowView {
+    const glCode = row.glCode ? String(row.glCode) : "";
+    const glName = row.glAccountName ? String(row.glAccountName) : "";
+    const corrected =
+        row.correctsChargeId ? `${String(row.correctionKind ?? "correction")} of an earlier charge`
+        : row.reversedByChargeId ? "Reversed by a correction"
+        : null;
+    return {
+        key: String(row.chargeId),
+        when: shortDate(row.date as string | null),
+        type: String(row.categoryLabel ?? row.categoryKey ?? "—"),
+        child: String(row.subjectName ?? "Household"),
+        description: String(row.description ?? "—"),
+        glLabel: glCode ? (glName ? `${glCode} · ${glName}` : glCode) : null,
+        amount: moneyExact(n(row.amountCents), cur),
+        amountNote:
+            n(row.outstandingCents) !== n(row.amountCents)
+                ? `${moneyExact(n(row.outstandingCents), cur)} outstanding`
+                : null,
+        status: String(row.lifecycleStatus ?? row.status ?? "—"),
+        responsibleParty: row.responsiblePartyName ? String(row.responsiblePartyName) : null,
+        responsibilityUnassigned: Boolean(row.responsibilityUnassigned),
+        /* History that no longer counts — a business state, never the amount's sign. */
+        tone: row.lifecycleStatus === "reversed" ? "muted" : undefined,
+        title: corrected ?? undefined,
+    };
 }
 
 /** `2026-09` → `September 2026`, through the one authority. A row with no period is unplaced. */

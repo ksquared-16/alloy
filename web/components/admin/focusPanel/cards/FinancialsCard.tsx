@@ -804,8 +804,15 @@ export default function FinancialsCard({
      */
     const provisioned = context.operationalProjection?.cards?.financials ?? null;
 
-    /* Missing projection is PROVISIONING. It is not "No financial record." */
-    const provisioningAccount = (customerId != null || scopedMemberId != null) && provisioned == null;
+    /*
+     * Missing projection is PROVISIONING — but only where a projection is actually coming. A host
+     * that supplies none is answered by the self-bootstrap below, and calling that state
+     * "provisioning" is what kept the workspace summary pending forever.
+     */
+    const provisioningAccount =
+        context.operationalProjection != null
+        && (customerId != null || scopedMemberId != null)
+        && provisioned == null;
 
     /*
      * ── S3-2: CLEAR THE DATA, KEEP THE FOOTPRINT ────────────────────────────────────────────────
@@ -869,6 +876,34 @@ export default function FinancialsCard({
         const key = customerId ?? scopedMemberId;
         if (key && deepLoadedForRef.current !== key) void load();
     }, [overlay, customerId, scopedMemberId, load]);
+
+    /*
+     * ── A HOST THAT SUPPLIES NO PROJECTION IS NOT A HOST THAT IS STILL PROVISIONING ────────────
+     *
+     * The card's bootstrap moved to `context.operationalProjection.cards.financials`: the Focus
+     * Panel hands the summary down with the subject it belongs to, and the card issues no request
+     * of its own. That is right for the Focus Panel and it silently broke the FINANCIALS WORKSPACE,
+     * which composes this card directly and builds its own context. No projection is supplied
+     * there, so `provisioned` was null, `provisioningAccount` was true, and the account summary sat
+     * in its pending frame FOREVER — three metric labels over three placeholders — while the ledger
+     * body beside it, which does its own read, hydrated normally. Measured: body hydrated with 56
+     * rows, summary still pending after 18 seconds, the card endpoint answering 200 throughout.
+     *
+     * The two states are different and were being conflated. `provisioned == null` means one of:
+     *   · the host HAS a projection pipeline and this subject has not arrived yet → wait;
+     *   · the host has no projection pipeline at all → nobody is going to send one, ever.
+     *
+     * A host declares the second by not supplying `operationalProjection`. In that case the card
+     * bootstraps itself once per subject, which is what it did before the projection existed. The
+     * Focus Panel is untouched: it supplies the object, so this never runs there.
+     */
+    const hostSuppliesProjection = context.operationalProjection != null;
+    useEffect(() => {
+        if (hostSuppliesProjection) return;
+        const key = customerId ?? scopedMemberId;
+        if (!key || deepLoadedForRef.current === key) return;
+        void load();
+    }, [hostSuppliesProjection, customerId, scopedMemberId, load]);
 
     /*
      * A SCOPED CHILD PRESELECTS THE SUBJECT FILTER.

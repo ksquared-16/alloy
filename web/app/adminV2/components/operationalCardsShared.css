@@ -800,8 +800,49 @@
   font-feature-settings: "tnum" 1;
   white-space: nowrap;
 }
+/*
+ * ── SIGN IS ARITHMETIC; COLOUR IS BUSINESS STATE ──────────────────────────────────────────────
+ *
+ * This coloured an amount Bend Pine for being NEGATIVE, and that is the rule this pass removes.
+ * A negative amount is not a good amount any more than a positive one is a bad amount: a credit
+ * reducing an obligation is negative and ordinary, a refund is negative movement and ordinary, a
+ * reversal's sign depends on what it reverses, and a negative balance is money the centre owes the
+ * family. Green on one and nothing on the other taught an operator to read arithmetic direction as
+ * a verdict.
+ *
+ * The minus sign already carries the direction. Colour is reserved for STATE, which a caller sets
+ * deliberately — `--attention` for money that needs a decision, `--muted` for history that no
+ * longer counts — and which no rule here infers from a number.
+ *
+ * Kept as a no-op rather than deleted: the class name is still emitted by the summary card's
+ * period breakdown, and leaving it defined-but-neutral is what prevents the rule creeping back in
+ * as "it used to be green".
+ */
 .alloy-os-billing__entry-amount--credit {
-  color: var(--alloy-os-bend-pine, #00a283);
+  color: inherit;
+}
+
+/*
+ * STATE, set by a caller that knows it. Attention is the canonical warning treatment — unapplied
+ * money answering nothing, a past-due figure. Muted is a reversed row: still readable, no longer
+ * counting. Neither is reachable from the amount's sign.
+ */
+.alloy-os-billingdetail__row--attention .alloy-os-billingdetail__amount,
+.alloy-os-billingdetail__row--attention .alloy-os-billingdetail__status {
+  color: #b45309;
+}
+.alloy-os-billingdetail__row--muted {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, transparent);
+}
+.alloy-os-billingdetail__row--muted .alloy-os-billingdetail__amount {
+  font-weight: 500;
+}
+/* The row's own operations, beneath the rows they act on. */
+.alloy-os-fdetail__paymentops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 2px 0 4px;
 }
 
 /* zone 3, composition B — how the bill is expected to be paid */
@@ -1324,8 +1365,8 @@
 }
 /* The ledger takes the full card width beneath the three columns — a real table needs room. */
 .alloy-os-billingdetail__ledgerband {
-  margin-top: 10px;
-  padding-top: 9px;
+  margin-top: 4px;
+  padding-top: 4px;
   border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
   display: flex;
   flex-direction: column;
@@ -1335,21 +1376,19 @@
 .alloy-os-billingdetail__row {
   display: grid;
   /*
-   * ── THE GRID IS PRIORITISED, AND DESCRIPTION IS A PREVIEW ─────────────────────────────────
+   * ── SCAN IDENTITY FIRST; DESCRIPTION LAST AND SMALLEST ────────────────────────────────────
    *
-   * Date, Type, Child, Description, GL account, Amount, Status, Responsible party.
+   * Date, Type, Child, GL account, Amount, Status, Responsible party, Description.
    *
-   * Description held the flex track and kept taking every spare pixel while the columns that
-   * IDENTIFY the row — which child, which GL account, who owes it — truncated around it. That is
-   * backwards for a surface whose job is scanning: an operator reads a ledger to find a row, and
-   * free text is the least identifying thing on it. Description is now a bounded preview that
-   * ellipses, and the full text lives where the row's detail does.
+   * Description was bounded in 5F and still sat in the visual CENTRE of the row, so an operator's
+   * eye crossed free text to get from Child to GL and again to get from Amount to who owes it. It
+   * is the least identifying thing on a financial row and it is now physically last and narrow:
+   * a preview that truncates, not a column that organises the ledger.
    *
-   * Everything else is sized to what it carries: a year-bearing date, a configured Type label, a
-   * child's name, `4000 · Tuition Revenue`, a right-aligned amount, a lifecycle word, and a
-   * person's name. Responsible party is last and gives way first.
+   * The order above IS the scan order — Date to Type to Child to GL to Amount to Status to
+   * Responsibility — and every track is sized to what it carries rather than to what is left over.
    */
-  grid-template-columns: 78px 112px 104px minmax(96px, 1fr) 134px 80px 66px 108px;
+  grid-template-columns: 78px 112px 104px 134px 84px 72px 110px minmax(80px, 0.85fr);
   gap: 8px;
   align-items: baseline;
   min-height: 21px;
@@ -1358,7 +1397,8 @@
   font-size: 0.72rem;
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
 }
-.alloy-os-billingdetail__row > :nth-child(6) {
+/* Amount is the fifth column now that Description moved to the end. */
+.alloy-os-billingdetail__row > :nth-child(5) {
   text-align: right;
 }
 .alloy-os-billingdetail__subject {
@@ -1784,8 +1824,8 @@
 .alloy-os-fdetail__strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 26px;
-  margin-top: 2px;
+  gap: 4px 24px;
+  margin-top: 1px;
 }
 .alloy-os-fdetail__stat {
   display: flex;
@@ -1819,6 +1859,32 @@
   font-weight: 700;
 }
 .alloy-os-fdetail__strip--peers { align-items: baseline; gap: 6px 32px; }
+
+/*
+ * The pending value: the same box a figure will occupy, visibly empty rather than faintly blank.
+ * It pulses so it reads as in-flight, and it is an em-dash rather than a bar so it cannot be
+ * mistaken for a rendered zero.
+ */
+.alloy-os-financials__pendingvalue {
+  display: inline-block;
+  min-width: 4.5rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, transparent);
+  /*
+   * Through a variable so the class declares `animation` exactly ONCE. Restating the selector under
+   * a media query is how a deliberate cascade becomes indistinguishable from a silent override, and
+   * the shared-stylesheet contract that refuses the second declaration is worth more than the
+   * convenience — it exists because a duplicate rule once rendered the whole stage rail vertically.
+   * Reduced motion is still honoured; the media query moves the variable rather than the property.
+   */
+  animation: var(--alloy-os-financials-pending-animation, alloy-os-financials-pending 1.4s ease-in-out infinite);
+}
+@keyframes alloy-os-financials-pending {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.85; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --alloy-os-financials-pending-animation: none; }
+}
 
 .alloy-os-fdetail__stat[data-tone="due"] .alloy-os-fdetail__statvalue { color: #b45309; }
 .alloy-os-fdetail__stat[data-tone="ok"] .alloy-os-fdetail__statvalue { color: var(--alloy-os-bend-pine, #00a283); }
@@ -1890,7 +1956,8 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  margin-top: 8px;
+  margin-top: 5px;
+  padding-bottom: 4px;
 }
 .alloy-os-fdetail__lens {
   display: inline-flex;
@@ -1921,12 +1988,29 @@
 .alloy-os-fdetail__lens--on .alloy-os-fdetail__lenscount {
   color: color-mix(in srgb, #fff 80%, transparent);
 }
+/*
+ * SIDE BY SIDE, not stacked. The two selects are one toolbar region and were wrapping to their own
+ * line and then stacking vertically — two controls taking three rows of a panel whose height is the
+ * scarcest thing it has. `flex-wrap: wrap` on the row remains, so a genuinely narrow panel still
+ * wraps; what is removed is stacking at a width that has room for both.
+ */
 .alloy-os-fdetail__lensfilters {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
   margin-left: auto;
+}
+/*
+ * The two selects shrink rather than stack. A width-keyed override would restate this selector and
+ * the shared-stylesheet contract rightly refuses a second declaration of one property on one
+ * selector — it cannot tell a deliberate cascade from a silent override, and the rule that catches
+ * silent overrides is worth more than the media query. The lens BAR still wraps the whole filter
+ * group to its own line on a genuinely narrow panel, which is the responsive behaviour wanted.
+ */
+.alloy-os-fdetail__lensfilters > * {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .alloy-os-fdetail__filter {
   border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 18%, transparent);
@@ -1937,7 +2021,7 @@
   color: var(--alloy-os-midnight, #273f52);
 }
 
-.alloy-os-fdetail__period { margin-top: 8px; }
+.alloy-os-fdetail__period { margin-top: 5px; }
 .alloy-os-fdetail__periodhead {
   margin: 0 0 2px;
   display: flex;
@@ -2150,13 +2234,21 @@
  * the same region. Previously this was summary -> action strip -> filters, three stacked bands
  * before any ledger — which is how a workstation detail spends its height on a header.
  */
+/*
+ * ── DENSITY, NOT ARCHITECTURE ─────────────────────────────────────────────────────────────────
+ *
+ * The information architecture was right and the spacing was not: summary, a gap, a divider, a gap,
+ * lenses, a gap, and the ledger starting halfway down a panel that is mostly ledger. Every value
+ * here is reduced; none is removed, and the controls are not cramped — this is the house dense-card
+ * rhythm rather than a new one.
+ */
 .alloy-os-fdetail__rollup {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px 24px;
-  padding-bottom: 8px;
+  gap: 6px 24px;
+  padding-bottom: 5px;
   border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 10%, transparent);
 }
 

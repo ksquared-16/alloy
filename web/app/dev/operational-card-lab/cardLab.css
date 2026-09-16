@@ -742,21 +742,19 @@
 .alloy-os-billingdetail__row {
   display: grid;
   /*
-   * ── THE GRID IS PRIORITISED, AND DESCRIPTION IS A PREVIEW ─────────────────────────────────
+   * ── SCAN IDENTITY FIRST; DESCRIPTION LAST AND SMALLEST ────────────────────────────────────
    *
-   * Date, Type, Child, Description, GL account, Amount, Status, Responsible party.
+   * Date, Type, Child, GL account, Amount, Status, Responsible party, Description.
    *
-   * Description held the flex track and kept taking every spare pixel while the columns that
-   * IDENTIFY the row — which child, which GL account, who owes it — truncated around it. That is
-   * backwards for a surface whose job is scanning: an operator reads a ledger to find a row, and
-   * free text is the least identifying thing on it. Description is now a bounded preview that
-   * ellipses, and the full text lives where the row's detail does.
+   * Description was bounded in 5F and still sat in the visual CENTRE of the row, so an operator's
+   * eye crossed free text to get from Child to GL and again to get from Amount to who owes it. It
+   * is the least identifying thing on a financial row and it is now physically last and narrow:
+   * a preview that truncates, not a column that organises the ledger.
    *
-   * Everything else is sized to what it carries: a year-bearing date, a configured Type label, a
-   * child's name, `4000 · Tuition Revenue`, a right-aligned amount, a lifecycle word, and a
-   * person's name. Responsible party is last and gives way first.
+   * The order above IS the scan order — Date to Type to Child to GL to Amount to Status to
+   * Responsibility — and every track is sized to what it carries rather than to what is left over.
    */
-  grid-template-columns: 78px 112px 104px minmax(96px, 1fr) 134px 80px 66px 108px;
+  grid-template-columns: 78px 112px 104px 134px 84px 72px 110px minmax(80px, 0.85fr);
   gap: 8px;
   align-items: baseline;
   min-height: 21px;
@@ -765,7 +763,8 @@
   font-size: 0.72rem;
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
 }
-.alloy-os-billingdetail__row > :nth-child(6) {
+/* Amount is the fifth column now that Description moved to the end. */
+.alloy-os-billingdetail__row > :nth-child(5) {
   text-align: right;
 }
 .alloy-os-billingdetail__subject {

@@ -35,7 +35,7 @@
  * and this must be bumped whenever a scenario's meaning changes. Adding a scenario counts; fixing a
  * typo does not.
  */
-export const CATALOG_VERSION = "2026-09-16.1";
+export const CATALOG_VERSION = "2026-09-16.2";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -504,11 +504,28 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "Two surfaces that disagree about one family's money mean one of them will ask for the wrong amount. This is the scenario that caught the collectibility defect, and it is checked after credits and reversals because that is when it broke.",
         requires: [{ kind: "scenario_passed", scenarioKey: "reverse_adjustment" }],
         navigate: ["Compare: Workspace account detail · charge detail · Collections · the payments section · Responsibility · Expected funding."],
-        doThis: ["For each of gross, net obligation, named responsibility, expected funding, payments, unapplied, outstanding and collectible: note where it is shown and whether the surfaces agree."],
+        doThis: [
+            "For each of gross, net obligation, named responsibility, expected funding, payments, unapplied, outstanding and collectible: note where it is shown and whether the surfaces agree.",
+            "Switch the lens to Credits & adjustments on BOTH surfaces. The result must be the SAME ledger, narrowed — same columns, same row shape — and never a separate Adjustments list written as sentences.",
+            "Switch to Payments on both. The same ledger family again, and no second Payments block.",
+            "Collapse a period and expand it again. The rows must come back in the columns they left in.",
+            "Read a row whose amount is negative — a credit or a refund — beside one that is positive. You should be able to tell what each IS without relying on colour: the sign carries direction, and colour is reserved for state such as past due or unapplied money.",
+            "Open an account and watch the header load. A metric must never appear as a label above an empty space that could be read as a zero.",
+        ],
         expectChanges: [],
-        expectUnchanged: ["With no subsidy in play, what the account says is owed equals what Collections says is collectible."],
+        expectUnchanged: [
+            "With no subsidy in play, what the account says is owed equals what Collections says is collectible.",
+            "The ledger's columns, whichever lens is selected and whichever surface it is read on.",
+        ],
         invariant: MONEY_INVARIANTS.GRAIN_BEFORE_MISMATCH,
-        failSymptoms: ["Collectible sitting above owed with no subsidy in play — that is the repaired defect returning.", "A surface showing a different figure for the same thing at the same scope."],
+        failSymptoms: [
+            "Collectible sitting above owed with no subsidy in play — that is the repaired defect returning.",
+            "A surface showing a different figure for the same thing at the same scope.",
+            "A lens that changes the RENDERER rather than the cohort — prose rows for adjustments, stat strips for payments, or an empty ledger with a different list beneath it.",
+            "A period that comes back from collapse in a different column grammar.",
+            "Money coloured by its sign: a negative credit in red, or a positive charge in green.",
+            "A financial metric label above a blank value that an operator could read as zero.",
+        ],
     }),
     S({
         key: "reload_switch_viewport",

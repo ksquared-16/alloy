@@ -5,6 +5,12 @@ import { useMemo, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
+import {
+    FinancialsLedgerHead,
+    FinancialsLedgerPeriod as LedgerPeriod,
+    FinancialsLedgerRow,
+    type FinancialsLedgerRowView,
+} from "@/components/operationalCards/FinancialsLedger";
 import { Action, ActionRow, FooterAction, SectionHead } from "@/components/cardLab/CardLabKit";
 import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import {
@@ -158,8 +164,15 @@ export default function FinancialsDetailCard({
         <div className="alloy-os-billing alloy-os-billing--detail" data-financials-detail="true">
             <UniversalCard
                 title="Financials"
-                insight={`${period.currentBalance} balance`}
-                supportingInsight={`${period.label} · ${evidence.historyLine}`}
+                /*
+                 * NO BALANCE IN THE TITLE. It read "-$30.13 balance" as the card's large heading
+                 * while the metric row directly beneath it carried Current balance as one of its
+                 * figures — one number, stated twice, in two type scales, and the bigger of the two
+                 * was the one an operator cannot act on. The title names the card; the metrics
+                 * carry the money.
+                 */
+                insight=""
+                supportingInsight={period.label}
                 iconName="Receipt"
                 tier="context"
                 archetype="status"
@@ -189,7 +202,18 @@ export default function FinancialsDetailCard({
                       * surfaces is allowed because their purposes differ; a different WORD for
                       * identical information is not.
                       */}
+                    {/*
+                      * ── THE SHARED CORE, IN THE SAME WORDS AS THE WORKSPACE ──────────────────
+                      *
+                      * Current balance, Due and Past due are the three the two surfaces share, and
+                      * they use the same labels, the same formatter and the same type scale.
+                      * Responsibility and Paid are the Focus Panel's own: this card is financial
+                      * context beside another process and has no lenses to reach them through,
+                      * where the workspace does. Not every contextual metric is forced onto the
+                      * workspace for visual equality.
+                      */}
                     <Stat label="Current balance" value={period.currentBalance} strong />
+                    <Stat label="Due" value={period.dueNow} />
                     <Stat label="Past due" value={pastDue ? pastDue.amount : "None"} tone={pastDue ? "due" : "ok"} />
                     <Stat label="Responsibility" value={period.familyResponsibility} />
                     <Stat label="Paid" value={period.paymentsReceived.replace("−", "")} />
@@ -203,8 +227,20 @@ export default function FinancialsDetailCard({
                       * platform. "Not recorded" implied somebody could have recorded it and had not,
                       * which is a statement about this family; the truth is about Alloy.
                       */}
-                    <Stat label="Autopay" value={evidence.payment.autopayLabel ?? "Not available yet"} tone={evidence.payment.autopayHealthy ? "ok" : undefined} />
-                    <Stat label="Next" value={evidence.payment.nextChargeLabel ?? "—"} />
+                    {/*
+                      * AUTOPAY IS DROPPED FROM THE METRIC ROW. The platform has no autopay model —
+                      * no table, no column, no writer — so the metric could only ever read "Not
+                      * available yet", which is a statement about Alloy occupying a slot meant for
+                      * a statement about this family. A metric that can never carry a value is not
+                      * a metric. The capability is still reported where it is actionable, in the
+                      * payment command's own capability lines.
+                      *
+                      * NEXT stays: a scheduled charge is a real, truthful operational fact and it
+                      * is the one thing on this row the workspace has no lens for.
+                      */}
+                    {evidence.payment.nextChargeLabel ? (
+                        <Stat label="Next" value={evidence.payment.nextChargeLabel} />
+                    ) : null}
                 </div>
 
                 {evidence.payers.length ? (
@@ -327,262 +363,102 @@ export default function FinancialsDetailCard({
                                 : `No ${ACCOUNT_LENS_LABELS[lens].toLowerCase()} in this view.`}
                         </p>
                     ) : null}
-                    {visiblePeriods.map((per) => (
-                        <section key={per.label} className="alloy-os-fdetail__period">
-                            <p className="alloy-os-fdetail__periodhead">
-                                <span className="alloy-os-fdetail__periodname">{per.label}</span>
-                                <span className="alloy-os-fdetail__periodsum">{per.summary}</span>
-                            </p>
-                            {per.open ? (
-                                <div className="alloy-os-billingdetail__ledger" role="table">
-                                    {/*
-                                      * ── THREE FINANCIAL IDENTITIES, AND THEY ARE NOT ONE ──────
-                                      *
-                                      * "Subject" was a word from the data model standing in for a
-                                      * business fact the system already knows. An operator reading a
-                                      * ledger asks three different questions — which CHILD is this
-                                      * for, who OWES it, and for a payment, who PAID — and one
-                                      * generic column answered none of them.
-                                      *
-                                      * Child and Responsible party are the charge-side pair and are
-                                      * both charge-grain in the model. Payer belongs to money IN and
-                                      * lives in the Payments lens, where a receipt names the person
-                                      * who supplied it; a payer column here would be empty on every
-                                      * charge row.
-                                      */}
-                                    <div className="alloy-os-billingdetail__row alloy-os-billingdetail__row--head">
-                                        <span>Date</span>
-                                        <span>Type</span>
-                                        <span>Child</span>
-                                        <span>Description</span>
-                                        <span>GL account</span>
-                                        <span>Amount</span>
-                                        <span>Status</span>
-                                        <span>Responsible party</span>
-                                    </div>
-                                    {per.entries.map((e, i) => (
-                                        <div key={`${e.when}-${i}`} className="alloy-os-billingdetail__row">
-                                            <span className="alloy-os-billingdetail__when">{e.when}</span>
-                                            {/* The catalog owns the label — the card never renders a raw key. */}
-                                            <span className="alloy-os-billingdetail__type">
-                                                {chargeCategoryLabel(e.type)}
-                                            </span>
-                                            <span className="alloy-os-billingdetail__subject">{e.subject}</span>
-                                            <span className="alloy-os-billingdetail__desc">{e.label}</span>
-                                            {/*
-                                              * UNMAPPED IS A STATE, NOT A DASH. An em-dash reads as
-                                              * "nothing to say here"; a charge with no GL account is
-                                              * a configuration fact somebody has to act on, so it is
-                                              * toned as one and never as a successful mapping.
-                                              */}
-                                            <span
-                                                className="alloy-os-billingdetail__gl"
-                                                data-financials-gl-state={e.glCode ? "mapped" : "unmapped"}
-                                            >
-                                                {e.glCode ?? "Unmapped"}
-                                            </span>
-                                            <span
-                                                className={clsx(
-                                                    "alloy-os-billingdetail__amount",
-                                                    e.kind === "credit" && "alloy-os-billing__entry-amount--credit",
-                                                )}
-                                            >
-                                                {e.amount}
-                                            </span>
-                                            <span className="alloy-os-billingdetail__status">{e.status ?? "—"}</span>
-                                            <span className="alloy-os-billingdetail__source" data-financials-responsible="true">
-                                                {e.responsibleParty
-                                                    ?? (e.responsibilityUnassigned ? "Unassigned" : "—")}
-                                                {/*
-                                                  * THE TRANSITIONS THIS ROW ALREADY QUALIFIES FOR.
-                                                  *
-                                                  * Both are registered actions and both were already
-                                                  * decided by the read model — the card asks, it does
-                                                  * not work out the answer from a status string. They
-                                                  * are rendered here because this is the ledger the
-                                                  * operator actually reaches: the other copy of these
-                                                  * controls sits behind a condition that cannot be
-                                                  * true, so `charge.reverse` had no way in at all.
-                                                  */}
-                                                {e.chargeId && e.offersPost && onPostCharge ? (
-                                                    <button
-                                                        type="button"
-                                                        className="alloy-os-fdetail__rowaction"
-                                                        data-charge-command="charge.post"
-                                                        data-charge-id={e.chargeId}
-                                                        onClick={() => onPostCharge({ chargeId: e.chargeId!, label: e.label })}
-                                                    >
-                                                        Post
-                                                    </button>
-                                                ) : null}
-                                                {e.chargeId && e.offersReverse && onReverseCharge ? (
-                                                    <button
-                                                        type="button"
-                                                        className="alloy-os-fdetail__rowaction"
-                                                        data-charge-command="charge.reverse"
-                                                        data-charge-id={e.chargeId}
-                                                        onClick={() => onReverseCharge({ chargeId: e.chargeId!, label: e.label })}
-                                                    >
-                                                        Reverse
-                                                    </button>
-                                                ) : null}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="alloy-os-fdetail__collapsed">Collapsed · select to expand</p>
-                            )}
-                        </section>
-                    ))}
                     {/*
-                      * The running-balance invariant holds and is not printed at the operator. It is
-                      * engineering doctrine — see the note on the workspace ledger, the doctrine
-                      * document, and the test that fails if a running-balance column appears.
+                      * ONE RENDERER. The lens has already decided the cohort; every period below it
+                      * — including a period of nothing but credits and adjustments — is drawn by the
+                      * same component as every other, in the same columns, collapsed or expanded.
                       */}
+                    {visiblePeriods.map((per) => (
+                        <LedgerPeriod
+                            key={per.label}
+                            label={per.label}
+                            summary={per.summary}
+                            open={per.open}
+                            rows={per.entries.map((e, i) => ledgerRowFromEntry(e, i, { onPostCharge, onReverseCharge }))}
+                        />
+                    ))}
                 </div>
                 ) : null}
 
                 {/*
-                  * THE RECEIPTS, AND WHAT EACH IS ANSWERING.
+                  * ── PAYMENTS AND ADJUSTMENTS ARE LEDGER ACTIVITY ──────────────────────────────
                   *
-                  * Every figure is already formatted by the adapter from the account VM's canonical
-                  * numbers. Nothing here adds, differences or decides what "applied" means — the card
-                  * would otherwise become a second opinion about money, which is the one thing a
-                  * presentation layer must never be.
+                  * Both used to be their own presentations: payments as a stack of stat strips,
+                  * adjustments as prose beneath an EMPTY ledger, because the credits lens filtered
+                  * the ledger to nothing and then rendered a different component under it. Selecting
+                  * a lens handed the operator a different document rather than a narrower ledger.
+                  *
+                  * They are the same activity in the same columns now. What each carries that a
+                  * column cannot hold — a reduction's reason, a receipt's method and payer — becomes
+                  * the Description preview and the row's title, and the row-level actions those
+                  * sections owned travel with the rows.
+                  *
+                  * Every figure is still the adapter's. Nothing here adds, differences or decides
+                  * what "applied" means.
                   */}
                 {lens === "payments" ? (
-                    <div className="alloy-os-fdetail__payments">
-                        {/*
-                          * NO SECTION HEAD. This is no longer a second report beneath the ledger —
-                          * it is the Payments LENS, and the pressed lens above already names it.
-                          * A heading here would restate the control the operator just used.
-                          */}
+                    <div className="alloy-os-billingdetail__ledger" role="table" data-financials-payments-ledger="true">
+                        <FinancialsLedgerHead />
+                        {visiblePayments.map((p) => (
+                            <FinancialsLedgerRow key={p.paymentId} row={ledgerRowFromPayment(p)} />
+                        ))}
                         {visiblePayments.length === 0 ? (
                             <p className="alloy-os-fdetail__collapsed" data-financials-payments-empty="true">
                                 No money has been received.
                             </p>
                         ) : null}
+                        {/*
+                          * The receipt's own operations, beneath the rows they act on. Move and
+                          * Apply were the reason the separate block could not simply be deleted;
+                          * they are offered here, per payment, and nothing is stranded.
+                          */}
                         {visiblePayments.map((p) => (
-                            <div key={p.paymentId} className="alloy-os-fdetail__payment" data-payment-id={p.paymentId}>
-                                <div className="alloy-os-fdetail__strip">
-                                    <Stat label="Received" value={p.receivedLabel} strong />
-                                    {/* Never a guessed name: an absent payer reads as unnamed. */}
-                                    <Stat label="From" value={p.payerLabel ?? "—"} />
-                                    <Stat label="Method" value={p.method ?? "—"} />
-                                    <Stat label="Applied" value={p.appliedLabel} />
-                                    <Stat label="Unapplied" value={p.unappliedLabel} tone={p.unappliedCents > 0 ? "due" : "ok"} />
-                                </div>
-                                {p.applications.map((a) => (
-                                    <div
-                                        key={a.allocationId}
-                                        className="alloy-os-fdetail__application"
-                                        data-application-id={a.allocationId}
-                                        data-application-status={a.status}
-                                    >
-                                        <span className="alloy-os-billing__line-label">{a.chargeLabel}</span>
-                                        <span className="alloy-os-billing__line-value">{a.amountLabel}</span>
-                                        <span className="alloy-os-fdetail__appstatus">
-                                            {a.status === "active" ? "Active" : "Reversed"}
-                                        </span>
-                                        {a.reversalReason ? (
-                                            <span className="alloy-os-fdetail__appreason">Reason: {a.reversalReason}</span>
-                                        ) : null}
-                                        {/*
-                                          * Only an ACTIVE application can be moved. A reversed row is
-                                          * history; offering to correct it again would imply the money
-                                          * is still there, and there is nothing to release.
-                                          */}
-                                        {a.status === "active" && onMovePayment ? (
-                                            <FooterAction
-                                                onClick={() =>
-                                                    onMovePayment({ paymentId: p.paymentId, allocationId: a.allocationId })
-                                                }
-                                            >
-                                                Move payment →
-                                            </FooterAction>
-                                        ) : null}
-                                    </div>
-                                ))}
-                                {/*
-                                  * Unapplied money is received money that is not answering anything —
-                                  * not a credit, not a refund. Whether it arrived that way or came back
-                                  * from a reversal, the operator's next move is the same.
-                                  */}
-                                {p.unappliedCents > 0 && onApplyPayment ? (
-                                    <div className="alloy-os-fdetail__unapplied">
-                                        <span className="alloy-os-billing__line-label">
-                                            {p.unappliedLabel} unapplied
-                                        </span>
-                                        <FooterAction onClick={() => onApplyPayment({ paymentId: p.paymentId })}>
-                                            Apply payment →
+                            <div key={`ops-${p.paymentId}`} className="alloy-os-fdetail__paymentops" data-payment-id={p.paymentId}>
+                                {p.applications
+                                    .filter((a) => a.status === "active" && onMovePayment)
+                                    .map((a) => (
+                                        <FooterAction
+                                            key={a.allocationId}
+                                            onClick={() =>
+                                                onMovePayment!({ paymentId: p.paymentId, allocationId: a.allocationId })
+                                            }
+                                        >
+                                            Move {a.amountLabel} from {a.chargeLabel} →
                                         </FooterAction>
-                                    </div>
+                                    ))}
+                                {p.unappliedCents > 0 && onApplyPayment ? (
+                                    <FooterAction onClick={() => onApplyPayment({ paymentId: p.paymentId })}>
+                                        Apply {p.unappliedLabel} →
+                                    </FooterAction>
                                 ) : null}
                             </div>
                         ))}
                     </div>
                 ) : null}
 
-                {/*
-                  * WHAT SOMEBODY DECIDED BY HAND.
-                  *
-                  * The reconciliation already says what these came to. A total cannot be reversed and
-                  * cannot be explained, so the decisions themselves are listed: what it was, which way
-                  * it went, why, and whether it still stands. Only a reduction that has not already
-                  * been reversed offers a reversal — reversing twice would credit the family twice for
-                  * one decision, and the service refuses it anyway.
-                  */}
                 {showAdjustments && (evidence.adjustments.length || onAddAdjustment) ? (
-                    <div className="alloy-os-fdetail__adjustments">
-                        <SectionHead>Adjustments</SectionHead>
+                    <div className="alloy-os-billingdetail__ledger" role="table" data-financials-adjustments-ledger="true">
+                        {/* Under the All lens these sit beneath the periods; under Credits &
+                            adjustments they ARE the cohort. Either way, the same rows. */}
+                        {evidence.adjustments.length ? <FinancialsLedgerHead /> : null}
                         {evidence.adjustments.map((a) => (
-                            <div
-                                key={a.applicationId}
-                                className="alloy-os-fdetail__adjustment"
-                                data-adjustment-id={a.applicationId}
-                                data-adjustment-reversed={a.reversed ? "true" : "false"}
-                                data-adjustment-is-reversal={a.isReversal ? "true" : "false"}
-                            >
-                                <span className="alloy-os-billing__line-label">
-                                    {a.categoryLabel}
-                                    {a.subjectName ? ` · ${a.subjectName}` : ""}
-                                </span>
-                                <span className="alloy-os-billing__line-value">{a.amountLabel}</span>
-                                <span className="alloy-os-fdetail__adjmeta" data-adjustment-applied={a.applied ? "true" : "false"}>
-                                    {/*
-                                      * A manual reduction is written as a DRAFT charge, and a draft
-                                      * is not owed. Saying only "lowers what is owed" would tell the
-                                      * operator the money had already moved when it has not.
-                                      */}
-                                    {a.applied
-                                        ? a.reducesObligation ? "Lowers what is owed" : "Raises what is owed"
-                                        : a.reducesObligation
-                                            ? "Recorded — lowers what is owed once posted"
-                                            : "Recorded — raises what is owed once posted"}
-                                    {a.recordedOn ? ` · ${a.recordedOn}` : ""}
-                                </span>
-                                {a.reason ? (
-                                    <span className="alloy-os-fdetail__adjreason">Reason: {a.reason}</span>
-                                ) : null}
-                                {a.reversed ? (
-                                    <span className="alloy-os-fdetail__adjstatus">Reversed</span>
-                                ) : a.isReversal ? (
-                                    <span className="alloy-os-fdetail__adjstatus">Reversal</span>
-                                ) : onReverseAdjustment ? (
-                                    <FooterAction
-                                        onClick={() => onReverseAdjustment({ applicationId: a.applicationId })}
-                                    >
-                                        Reverse adjustment →
-                                    </FooterAction>
-                                ) : null}
-                            </div>
+                            <FinancialsLedgerRow key={a.applicationId} row={ledgerRowFromAdjustment(a)} />
                         ))}
-                        {onAddAdjustment ? (
-                            <div className="alloy-os-fdetail__adjustadd">
+                        <div className="alloy-os-fdetail__paymentops">
+                            {evidence.adjustments
+                                .filter((a) => !a.reversed && !a.isReversal && onReverseAdjustment)
+                                .map((a) => (
+                                    <FooterAction
+                                        key={`rev-${a.applicationId}`}
+                                        onClick={() => onReverseAdjustment!({ applicationId: a.applicationId })}
+                                    >
+                                        Reverse {a.categoryLabel} {a.amountLabel} →
+                                    </FooterAction>
+                                ))}
+                            {onAddAdjustment ? (
                                 <FooterAction onClick={() => onAddAdjustment()}>Add adjustment →</FooterAction>
-                            </div>
-                        ) : null}
+                            ) : null}
+                        </div>
                     </div>
                 ) : null}
 
@@ -626,6 +502,121 @@ export default function FinancialsDetailCard({
                             </UniversalCard>
         </div>
     );
+}
+
+/**
+ * ── ONE ROW SHAPE, THREE KINDS OF ACTIVITY ─────────────────────────────────────────────────────
+ *
+ * A charge, a manual adjustment and a payment are three different business objects and ONE kind of
+ * financial activity. They used to be three presentations: a grid, a prose block and a stat strip.
+ * These functions map each into the ledger's row shape so the lens changes the cohort and never the
+ * renderer.
+ *
+ * Nothing here computes. Every label, sign and status arrives already decided by the adapter that
+ * owns it.
+ */
+function ledgerRowFromEntry(
+    e: FinancialsEvidence["ledger"][number],
+    index: number,
+    actions: {
+        onPostCharge?: (args: { chargeId: string; label: string }) => void;
+        onReverseCharge?: (args: { chargeId: string; label: string }) => void;
+    },
+): FinancialsLedgerRowView {
+    const post = e.chargeId && e.offersPost && actions.onPostCharge;
+    const reverse = e.chargeId && e.offersReverse && actions.onReverseCharge;
+    return {
+        key: e.chargeId || `${e.when}-${index}`,
+        when: e.when,
+        type: chargeCategoryLabel(e.type),
+        child: e.subject,
+        description: e.label,
+        glLabel: e.glCode,
+        amount: e.amount,
+        status: e.status ?? "—",
+        responsibleParty: e.responsibleParty,
+        responsibilityUnassigned: e.responsibilityUnassigned,
+        actions:
+            post || reverse ? (
+                <>
+                    {post ? (
+                        <button
+                            type="button"
+                            className="alloy-os-fdetail__rowaction"
+                            data-charge-command="charge.post"
+                            data-charge-id={e.chargeId!}
+                            onClick={() => actions.onPostCharge!({ chargeId: e.chargeId!, label: e.label })}
+                        >
+                            Post
+                        </button>
+                    ) : null}
+                    {reverse ? (
+                        <button
+                            type="button"
+                            className="alloy-os-fdetail__rowaction"
+                            data-charge-command="charge.reverse"
+                            data-charge-id={e.chargeId!}
+                            onClick={() => actions.onReverseCharge!({ chargeId: e.chargeId!, label: e.label })}
+                        >
+                            Reverse
+                        </button>
+                    ) : null}
+                </>
+            ) : undefined,
+    };
+}
+
+/**
+ * A manual reduction as a LEDGER ROW.
+ *
+ * It used to be prose — "Raises what is owed · Sep 14, 2026 · Reason…" — in a section of its own
+ * beneath an empty ledger. The facts it carried are all columns: what it was, for whom, how much,
+ * whether it has posted, and who owes the charge it reduces. The one fact with no column is the
+ * REASON, which is free text, so it becomes the Description preview and the row's full title.
+ *
+ * `muted` for a reversed row: history that no longer counts. That is a business state, not a sign.
+ */
+function ledgerRowFromAdjustment(a: FinancialsEvidence["adjustments"][number]): FinancialsLedgerRowView {
+    const direction = a.reducesObligation ? "Lowers what is owed" : "Raises what is owed";
+    const state = a.reversed ? "reversed" : a.isReversal ? "reversal" : a.applied ? "posted" : "draft";
+    return {
+        key: a.applicationId,
+        when: a.recordedOn ?? "—",
+        type: a.categoryLabel,
+        child: a.subjectName ?? "Household",
+        /* The reason is the description; the direction explains a row whose sign alone would not. */
+        description: a.reason ?? direction,
+        glLabel: null,
+        amount: a.amountLabel,
+        status: state,
+        responsibleParty: null,
+        tone: a.reversed ? "muted" : undefined,
+        title: [direction, a.reason, a.applied ? null : "Recorded, not yet posted"].filter(Boolean).join(" · "),
+    };
+}
+
+/**
+ * A receipt as a LEDGER ROW.
+ *
+ * Received, from whom, by what method, and what is still unapplied — the same four facts the stat
+ * strip carried, in the columns every other row uses. Unapplied money is `attention` because it is
+ * money sitting on the account answering nothing, which is a business state; the negative sign on a
+ * receipt is not.
+ */
+function ledgerRowFromPayment(p: FinancialsEvidence["payments"][number]): FinancialsLedgerRowView {
+    return {
+        key: p.paymentId,
+        when: p.receivedOn ?? "—",
+        type: "Payment",
+        child: "Household",
+        description: p.method ? `${p.method}${p.payerLabel ? ` · ${p.payerLabel}` : ""}` : (p.payerLabel ?? "Payment"),
+        glLabel: null,
+        amount: p.receivedLabel,
+        amountNote: p.unappliedCents > 0 ? `${p.unappliedLabel} unapplied` : `${p.appliedLabel} applied`,
+        status: p.unappliedCents > 0 ? "part applied" : "applied",
+        responsibleParty: p.payerLabel,
+        tone: p.unappliedCents > 0 ? "attention" : undefined,
+    };
 }
 
 /**
