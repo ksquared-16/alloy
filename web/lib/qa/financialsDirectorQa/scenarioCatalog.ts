@@ -35,7 +35,7 @@
  * and this must be bumped whenever a scenario's meaning changes. Adding a scenario counts; fixing a
  * typo does not.
  */
-export const CATALOG_VERSION = "2026-09-15.2";
+export const CATALOG_VERSION = "2026-09-16.1";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -44,7 +44,20 @@ export type ScenarioDisposition =
     | "HUMAN_WALKTHROUGH"
     | "AUTOMATED_CERTIFIED_HUMAN_PENDING"
     | "EXPLICITLY_DEFERRED"
-    | "OUT_OF_SCOPE_THREAD_11A";
+    | "OUT_OF_SCOPE_THREAD_11A"
+    /**
+     * THE CAPABILITY EXISTS IN THE PLATFORM AND HAS NO OPERATOR SURFACE.
+     *
+     * Distinct from EXPLICITLY_DEFERRED, which is "the environment cannot exercise this yet", and
+     * from OUT_OF_SCOPE, which is "another thread owns it". This says: the data model, the
+     * enforcement and the arithmetic are all present and correct, and there is no screen through
+     * which a human being can configure or inspect them. It is a PRODUCT gap, not a test gap.
+     *
+     * It exists as its own disposition so that this class of finding cannot be laundered into a
+     * PASS by inspecting the database. A tester who cannot reach a capability from the product has
+     * not accepted it, whatever `psql` says.
+     */
+    | "MISSING_PRODUCTIZATION";
 
 /** What the scenario needs to be true before the Director can meaningfully run it. */
 export type ScenarioPrecondition =
@@ -122,6 +135,8 @@ export const MONEY_INVARIANTS = Object.freeze({
     PROVIDER_RETURN_IS_NOT_A_REFUND: "A provider return is the rail giving money back. An operator refund is a decision someone made. They are different events and must not be shown as one.",
     GRAIN_BEFORE_MISMATCH: "Cross-surface comparisons only mean something at equivalent scope and period. A legitimate grain difference is explained, not filed as a defect.",
     FAILED_READ_IS_NOT_ZERO: "A read that failed must never render as a valid zero balance. Not knowing and owing nothing are different answers.",
+    BILLING_PERIOD_IS_DERIVED: "A billing period is DERIVED from the date a charge is billable on — `billable_on`, then `occurs_on`, `service_date`, `created_at`. There is no billing-period table and no billing-period setting: the period is a consequence of the charge, and a row with no usable date is reported as unplaced rather than swept into the current month.",
+    ACCOUNTING_PERIOD_IS_ATTRIBUTED_AT_WRITE: "A journal entry's accounting period is decided by the database when the entry is written, against the configured accounting calendar, and a closed period refuses the write. Nothing downstream may re-decide it, and no screen may imply the period can be changed after the fact.",
 });
 
 const S = (s: Scenario) => s;
@@ -668,6 +683,97 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         expectUnchanged: [],
         invariant: MONEY_INVARIANTS.EXPECTATION_IS_NOT_PAYMENT,
         failSymptoms: [],
+    }),
+    /*
+     * ── THE TWO PERIODS, WHICH ARE NOT THE SAME PERIOD ─────────────────────────────────────────
+     *
+     * Financials carries two period concepts and an operator who conflates them will close a month
+     * that is still open, or reopen one that is closed. They are covered separately and honestly:
+     * the billing period is walked through, because it is fully on screen; the accounting period is
+     * NOT, because the platform gives a human no way to reach it.
+     */
+    S({
+        key: "billing_period",
+        order: 33,
+        title: "The billing period is derived, and every surface agrees which one a charge is in",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Confirm a charge lands in the period its billable date implies, that the period is shown with the year, and that filtering by period never changes a figure.",
+        whyItMatters:
+            "An operator reconciling a month needs to know which month a charge belongs to and to trust that every surface agrees. A period that is shown as a bare month — 'September' — cannot be reconciled against a statement, and a period filter that quietly changed a total would make the ledger a different ledger depending on how it was looked at.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "post_charge" }],
+        navigate: [
+            "Workspace → Financials → Accounts → select the account.",
+            "The account body beneath the summary: the period-grouped ledger and its period filter.",
+        ],
+        doThis: [
+            "Read the period heading the posted charge is grouped under, and the charge's own date.",
+            "Confirm the date carries a YEAR — 'Dec 1, 2026', never '2026-12-01' and never 'Dec 1'.",
+            "Confirm the period heading reads as a period in WORDS — 'September 2026'. A heading, a filter option or a row that says '2026-09' is a defect: that is the period's internal identifier, not its name.",
+            "OPEN THE PERIOD FILTER and read the options themselves. Every option must read 'September 2026', 'October 2026'; none may read '2026-09'.",
+            "Choose that period in the filter and confirm the activity shown is that period's and only that period's; then choose All periods again and confirm the full history returns.",
+            "Check the other period surfaces for the same rule: the Charges list row context, the charge detail, and the result line after a bulk generation run.",
+            "Open the same account in a Focus Panel (Financials → Details) and compare the grouping and the filter options.",
+            "Open the charge's detail and confirm the Billing period there matches the period it is grouped under in the ledger.",
+        ],
+        expectChanges: [
+            "Filtering to one period shows only that period's rows.",
+            "The lens counts beside All / Charges / Credits & adjustments / Funding follow the filter.",
+        ],
+        expectUnchanged: [
+            "Current balance, Due and Past due in the account summary — a filter narrows what is LISTED and never what is OWED.",
+            "The period a charge is grouped under, whichever surface it is read on.",
+        ],
+        invariant: MONEY_INVARIANTS.BILLING_PERIOD_IS_DERIVED,
+        failSymptoms: [
+            "A ledger date with no year, or a raw 2026-12-01.",
+            "A billing period shown as '2026-09' anywhere a human label belongs — a heading, a filter option, a row's context line, a run result.",
+            "A charge grouped under a different period on the workspace than in the Focus Panel detail.",
+            "The summary figures moving when a period filter is applied.",
+            "A period filter that returns activity from another period, or that hides activity belonging to the chosen one.",
+            "A row with no usable date appearing in the current month rather than as unplaced.",
+        ],
+    }),
+    S({
+        key: "accounting_period",
+        order: 34,
+        title: "The accounting period a journal entry is attributed to, and who may close it",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Confirm an operator can see the accounting calendar, which period is open, and which accounting period a posted charge was attributed to — and that it is visibly a different thing from the billing period.",
+        whyItMatters:
+            "The accounting period is what a finance team closes a month against, and closing it is the act that makes a month's figures final. The platform already enforces it — `financial_accounting_calendars` and `financial_accounting_periods` are canonical, and the `attribute_financial_journal_entry` BEFORE INSERT trigger decides each entry's period and refuses a write into a closed one — so the enforcement is real. What does not exist is any way for a human being to look at it.",
+        dispositionReason:
+            "The INSPECTION half is productized as of Repair Pass 5F and is walked through below. The LIFECYCLE half is not: opening and closing a period has no governed action anywhere in the platform, so a tester can see a period's open/closed status and cannot change it. That limit is recorded rather than hidden — see the final step — and it is the one thing this scenario cannot accept.",
+        requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "a posted charge whose period can be read" }],
+        navigate: [
+            "Organization → Financials → Accounting: the GL codes list, then the Accounting calendar panel beneath it.",
+            "Workspace → Financials → Accounts → an account with a POSTED charge → open that charge's detail.",
+        ],
+        doThis: [
+            "On the Accounting chapter, read the Accounting calendar panel: its name, its shape (Calendar month / 4-4-5 / Custom), whether it is active, and which period is marked Current.",
+            "Read the period table: each period's name, its start and end dates, and whether it is Open or Closed. Confirm the dates carry the year.",
+            "Confirm the period marked Current is the one today falls inside, and that it is the only one so marked.",
+            "Open a POSTED charge's detail in the Accounts workspace and read the Posting block: Billing period, Accounting period, GL account.",
+            "Confirm Billing period and Accounting period are shown as TWO SEPARATE facts and are not the same control. They may name the same month and still be different answers.",
+            "Open a DRAFT charge's detail. Confirm the accounting period reads that it has not posted to a period yet, rather than showing a period it has not reached.",
+            "LIMIT TO RECORD, not to work around: there is no control to open or close a period. Confirm none is offered, and that the panel says so. Do not close a period in the database to test it.",
+        ],
+        expectChanges: [],
+        expectUnchanged: [
+            "The accounting period on a posted charge — it was decided when the entry was written and nothing on these screens may move it.",
+            "The billing period, which is derived from the charge's own dates and is unaffected by anything on the accounting calendar.",
+        ],
+        invariant: MONEY_INVARIANTS.ACCOUNTING_PERIOD_IS_ATTRIBUTED_AT_WRITE,
+        failSymptoms: [
+            "Any surface implying an entry's accounting period can be edited after the entry was written.",
+            "A closed period accepting a write.",
+            "This scenario being marked PASS on the strength of a database inspection.",
+            "Billing period and accounting period presented as one field, or one used as a label for the other.",
+            "A posted charge showing no accounting period, or a draft showing one.",
+            "More than one period marked Current, or none while a period covers today.",
+            "An organization with no calendar rendering an empty table rather than saying it has none.",
+        ],
     }),
 ]);
 

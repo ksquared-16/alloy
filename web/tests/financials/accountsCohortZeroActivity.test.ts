@@ -29,6 +29,15 @@ const subject = (customerId: string, householdName: string, siteLocationIds: str
     householdName,
     siteLocationIds,
     hasEnrollmentAgreement: siteLocationIds.length > 0,
+    /*
+     * The queue facets Pass 5E added. Empty here on purpose: these fixtures are about the COHORT —
+     * who is eligible and whose figures are real — and a household with no child name and no
+     * placement must still join, be listed and carry its money.
+     */
+    childNames: [],
+    contactNames: [],
+    programs: [],
+    rooms: [],
 });
 
 const subjects = (...rows: ReturnType<typeof subject>[]): FinancialSubjectCohort => ({
@@ -217,8 +226,20 @@ describe("a failed read is never rendered as a legitimate zero", () => {
         const src = read("app/adminV2/financials/sections/FinancialsAccounts.tsx");
         expect(src).toContain("subjects.data && position.data ? joinAccounts(subjects.data, position.data) : []");
         expect(src).toContain("position.error ?? subjects.error");
-        // The error branch precedes the rows, so a failure is never a screen of zeroes.
-        expect(src.indexOf("data-financials-accounts-error")).toBeLessThan(src.indexOf("data-financials-account-row"));
+        /*
+         * THE ERROR BRANCH IS FIRST IN THE LIST, so a failure is never a screen of zeroes.
+         *
+         * This used to compare source positions across the whole FILE, which stopped meaning
+         * anything the moment the row became its own component declared above the section — the
+         * ordering it measured was declaration order, not render order. It now reads the list
+         * region itself and asserts the order of the branches actually rendered there.
+         */
+        const list = src.slice(src.indexOf('data-financials-accounts-list'));
+        const error = list.indexOf("data-financials-accounts-error");
+        const rows = list.indexOf("<AccountQueueRow");
+        expect(error, "the list must have an error branch").toBeGreaterThan(-1);
+        expect(rows, "and a row branch").toBeGreaterThan(-1);
+        expect(error, "a failed read is rendered instead of rows, not after them").toBeLessThan(rows);
     });
 
     it("keeps the empty rail honest about what is missing", () => {

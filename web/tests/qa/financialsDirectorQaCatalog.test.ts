@@ -83,6 +83,42 @@ describe("the Director QA scenario catalog", () => {
         }
     });
 
+    /*
+     * ── THE INSPECTION HALF IS PRODUCTIZED; THE LIFECYCLE HALF IS NOT ─────────────────────────
+     *
+     * This scenario carried MISSING_PRODUCTIZATION while the accounting period was enforced by the
+     * database and visible to nobody. Pass 5F built the read surface — an Accounting calendar panel
+     * with each period's dates and open/closed status, and the attributed period on a charge's own
+     * detail — so a human can now accept what they can see, and the scenario became a walkthrough.
+     *
+     * What did NOT change is the honesty requirement, and the lock now guards the harder version of
+     * it: the scenario must still refuse a database query as evidence, and must still RECORD that
+     * opening and closing a period has no governed action. A walkthrough that quietly dropped the
+     * limit would read as full acceptance of a half-built capability.
+     */
+    it("walks the accounting period through the product and still records what is missing", () => {
+        const s = scenarioByKey("accounting_period")!;
+        expect(s.disposition).toBe("HUMAN_WALKTHROUGH");
+        expect(s.navigate.length, "there is somewhere to navigate to now").toBeGreaterThan(0);
+        expect(s.navigate.join(" "), "the calendar surface is named").toMatch(/Accounting/i);
+        expect(
+            s.doThis.join(" "),
+            "a database query must still be refused as evidence, in the scenario itself",
+        ).toMatch(/database/i);
+        expect(
+            s.doThis.join(" "),
+            "and the missing lifecycle action must be recorded rather than worked around",
+        ).toMatch(/no control to open or close a period/i);
+        expect(s.dispositionReason, "the reason states which half is missing").toMatch(/governed action/i);
+
+        /* The two periods must never collapse into one scenario or one disposition. */
+        expect(scenarioByKey("billing_period")!.disposition).toBe("HUMAN_WALKTHROUGH");
+        expect(
+            s.failSymptoms.join(" "),
+            "and conflating them is itself a failure the tester is told to look for",
+        ).toMatch(/one field|label for the other/i);
+    });
+
     it("keeps subsidy PROCESSING out of scope while Expected Funding stays Core", () => {
         expect(scenarioByKey("subsidy_processing")!.disposition).toBe("OUT_OF_SCOPE_THREAD_11A");
         expect(scenarioByKey("expected_funding")!.disposition).toBe("HUMAN_WALKTHROUGH");

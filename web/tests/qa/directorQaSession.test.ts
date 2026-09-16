@@ -224,3 +224,94 @@ describe("the runtime never writes testimony into the acceptance record", () => 
         }
     });
 });
+
+/**
+ * THE DEFECT THAT PASSED EVERY UNIT TEST.
+ *
+ * Position used to be mirrored into storage by a `useEffect` that wrote whatever the current render
+ * held. On every mount it fired in the same commit as the restore — before React had applied the
+ * restored index — and wrote scenario 01 over the Director's real position, correcting it some
+ * milliseconds later. The store was correct throughout, which is why its tests stayed green; the
+ * mounted test reloaded once, which is exactly one reload too few to observe it.
+ *
+ * An effect cannot distinguish "the Director moved" from "React rendered a default", so the rule is
+ * structural: no effect may write a position. These read the surfaces and hold that shape.
+ */
+describe("no render may record the Director's position", () => {
+    const read = (p: string) =>
+        require("node:fs").readFileSync(require("node:path").join(process.cwd(), p), "utf8") as string;
+
+    /** Every `useEffect(...)` body in a source file, matched by balancing braces. */
+    function effectBodies(src: string): string[] {
+        const bodies: string[] = [];
+        const needle = "useEffect(";
+        let from = 0;
+        for (;;) {
+            const at = src.indexOf(needle, from);
+            if (at < 0) break;
+            const open = src.indexOf("{", at);
+            if (open < 0) break;
+            let depth = 0;
+            let i = open;
+            for (; i < src.length; i += 1) {
+                if (src[i] === "{") depth += 1;
+                else if (src[i] === "}") {
+                    depth -= 1;
+                    if (depth === 0) break;
+                }
+            }
+            bodies.push(src.slice(open, i + 1));
+            from = i + 1;
+        }
+        return bodies;
+    }
+
+    const SURFACES = [
+        "app/dev/core-financials-qa/CoreFinancialsQaReader.tsx",
+        "app/adminV2/system/qa/core-financials/DirectorQaClient.tsx",
+    ];
+
+    it.each(SURFACES)("%s writes a position only from an explicit move", (path) => {
+        const src = read(path);
+        const bodies = effectBodies(src);
+        expect(bodies.length, "the surface mounts effects").toBeGreaterThan(0);
+        for (const body of bodies) {
+            if (!body.includes("writePosition(")) continue;
+            /*
+             * One effect is allowed to write: the restore, and only on the branch where storage held
+             * nothing usable. Writing back a position it just READ is how the clobber got in.
+             */
+            expect(
+                body.includes('source !== "stored"'),
+                "an effect that writes a position must be the restore's no-stored-value branch",
+            ).toBe(true);
+        }
+    });
+
+    it("routes every navigation control through one recorded move", () => {
+        const src = read(SURFACES[0]);
+        /* Previous, Next, resume and leaving the walkthrough all go through `goTo`. */
+        expect(src).toContain("const goTo = useCallback(");
+        const handlers = [...src.matchAll(/onClick=\{[^}]*\}/g)].map((m) => m[0]);
+        const movers = handlers.filter((h) => h.includes("setIndex(") || h.includes("setStarted("));
+        expect(movers, "no control sets position state directly; they call goTo").toEqual([]);
+    });
+
+    /* A debounce is a hole: whatever interval drafts save on, a reload can arrive inside it. */
+    it("flushes draft testimony synchronously when the page goes away", () => {
+        const src = read(SURFACES[0]);
+        expect(src).toContain("pagehide");
+        expect(src).toContain("visibilitychange");
+    });
+
+    /* A cached balance is a stale balance. The shell cache holds shape, never money. */
+    it("caches the shape of the page and never a figure", () => {
+        const store = read("lib/qa/runtime/directorQaSession.ts");
+        const start = store.indexOf("export type ShellCache");
+        const end = store.indexOf("export function readScroll");
+        const region = store.slice(start, end);
+        for (const f of ["Cents", "balance", "outstanding", "collectible"]) {
+            expect(region.includes(f), `the shell cache must not carry ${f}`).toBe(false);
+        }
+    });
+});

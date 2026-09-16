@@ -1,10 +1,17 @@
 "use client";
 
 import clsx from "clsx";
+import { useMemo, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { Action, ActionRow, FooterAction, SectionHead } from "@/components/cardLab/CardLabKit";
 import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
+import {
+    ACCOUNT_LENSES,
+    ACCOUNT_LENS_LABELS,
+    type AccountLens,
+} from "@/lib/financials/workspace/accountLenses";
 import type { FinancialsEvidence, FinancialsLedgerPeriod } from "@/lib/cardLab/cardLabTypes";
 
 /**
@@ -69,6 +76,84 @@ export default function FinancialsDetailCard({
 }) {
     const { period, pastDue } = evidence;
 
+    /*
+     * ── THE SAME FIVE LENSES THE WORKSPACE HAS ─────────────────────────────────────────────────
+     *
+     * This surface had no filtering at all: it rendered every ledger row, then a Payments section
+     * beneath the ledger, then Adjustments beneath that, and an operator looking for what an agency
+     * had funded read all three. The workspace account already answers that question with lenses,
+     * and two Financials details with two different ways of narrowing is the divergence this pass
+     * exists to end — so the lens list, the labels and the classifier are the SAME module, not a
+     * second copy of the idea.
+     *
+     * Payments is a LENS here, which is what removes the separate Payments section: money in is one
+     * angle on the account's activity, not a second report underneath it. Every action that section
+     * carried — Move payment, Apply payment — moved with it and none was stranded.
+     */
+    const [lens, setLens] = useState<AccountLens>("all");
+    const [subject, setSubject] = useState<string | null>(null);
+    const [periodLabel, setPeriodLabel] = useState<string | null>(null);
+    const [payer, setPayer] = useState<string | null>(null);
+
+    const allEntries = useMemo(() => periods.flatMap((p) => p.entries), [periods]);
+
+    /* Counts of ROWS, never sums of cents — the same rule `accountLenses` keeps. */
+    const counts = useMemo(() => {
+        const scoped = allEntries.filter(
+            (e) =>
+                (!subject || e.subject === subject)
+                && (!periodLabel || periods.some((p) => p.label === periodLabel && p.entries.includes(e))),
+        );
+        const out: Record<AccountLens, number> = {
+            all: scoped.length,
+            charges: 0,
+            credits: 0,
+            funding: 0,
+            payments: evidence.payments.length,
+        };
+        for (const e of scoped) out[e.lens] += 1;
+        return out;
+    }, [allEntries, periods, subject, periodLabel, evidence.payments.length]);
+
+    /*
+     * A FILTER IS OFFERED ONLY WHEN IT DIVIDES SOMETHING. One subject, one period or one payer is a
+     * control with a single choice, which reads as a capability this surface does not have.
+     */
+    const subjectChoices = useMemo(
+        () => [...new Set(allEntries.map((e) => e.subject))].sort((a, b) => a.localeCompare(b)),
+        [allEntries],
+    );
+    const periodChoices = useMemo(() => periods.map((p) => p.label), [periods]);
+    const payerChoices = useMemo(
+        () =>
+            [...new Set(evidence.payments.map((p) => p.payerLabel ?? "").filter(Boolean))].sort((a, b) =>
+                a.localeCompare(b),
+            ),
+        [evidence.payments],
+    );
+
+    /* The periods the ledger actually renders. A period the filter empties is not drawn at all. */
+    const visiblePeriods = useMemo(() => {
+        if (lens === "payments") return [];
+        return periods
+            .filter((p) => !periodLabel || p.label === periodLabel)
+            .map((p) => ({
+                ...p,
+                entries: p.entries.filter(
+                    (e) => (lens === "all" || e.lens === lens) && (!subject || e.subject === subject),
+                ),
+            }))
+            .filter((p) => p.entries.length > 0);
+    }, [periods, lens, subject, periodLabel]);
+
+    const visiblePayments = useMemo(
+        () => (payer ? evidence.payments.filter((p) => (p.payerLabel ?? "") === payer) : evidence.payments),
+        [evidence.payments, payer],
+    );
+
+    /* Adjustments ARE "credits & adjustments" — they belong to that lens, and to the whole view. */
+    const showAdjustments = lens === "all" || lens === "credits";
+
     return (
         <div className="alloy-os-billing alloy-os-billing--detail" data-financials-detail="true">
             <UniversalCard
@@ -96,7 +181,15 @@ export default function FinancialsDetailCard({
                 <div className="alloy-os-fdetail__rollup">
                     <div className="alloy-os-fdetail__rollup-facts">
                     <div className="alloy-os-fdetail__strip">
-                    <Stat label="Balance" value={period.currentBalance} strong />
+                    {/*
+                      * "Current balance", the same words the Accounts header uses for the same
+                      * figure. It read "Balance" here and "Current balance" there — one number,
+                      * one authority, two names — which is exactly the accidental drift the
+                      * parity audit exists to catch. Different information between the two
+                      * surfaces is allowed because their purposes differ; a different WORD for
+                      * identical information is not.
+                      */}
+                    <Stat label="Current balance" value={period.currentBalance} strong />
                     <Stat label="Past due" value={pastDue ? pastDue.amount : "None"} tone={pastDue ? "due" : "ok"} />
                     <Stat label="Responsibility" value={period.familyResponsibility} />
                     <Stat label="Paid" value={period.paymentsReceived.replace("−", "")} />
@@ -147,7 +240,72 @@ export default function FinancialsDetailCard({
                     </div>
                 </div>
 
+                {/*
+                    THE LENSES, between the rollup and the record.
+                    Selected reads in Bend Pine — the product's active operational control — from
+                    the token, never a hardcoded green and never the neutral navy that made a live
+                    selection look like an inert chip.
+                */}
+                <div className="alloy-os-fdetail__lensbar" data-financials-lenses="true">
+                    {ACCOUNT_LENSES.map((key) => (
+                        <button
+                            key={key}
+                            type="button"
+                            className={clsx(
+                                "alloy-os-fdetail__lens",
+                                lens === key && "alloy-os-fdetail__lens--on",
+                            )}
+                            data-financials-lens={key}
+                            aria-pressed={lens === key}
+                            onClick={() => setLens(key)}
+                        >
+                            {ACCOUNT_LENS_LABELS[key]}
+                            <span className="alloy-os-fdetail__lenscount">{counts[key]}</span>
+                        </button>
+                    ))}
+                    <span className="alloy-os-fdetail__lensfilters">
+                        {lens !== "payments" && subjectChoices.length > 1 ? (
+                            <LensFilter
+                                testId="subject"
+                                value={subject ?? ""}
+                                onChange={(v) => setSubject(v || null)}
+                                placeholder="Everyone"
+                                options={subjectChoices}
+                            />
+                        ) : null}
+                        {lens !== "payments" && periodChoices.length > 1 ? (
+                            <LensFilter
+                                testId="period"
+                                value={periodLabel ?? ""}
+                                onChange={(v) => setPeriodLabel(v || null)}
+                                placeholder="All periods"
+                                options={periodChoices}
+                            />
+                        ) : null}
+                        {lens === "payments" && payerChoices.length > 1 ? (
+                            <LensFilter
+                                testId="payer"
+                                value={payer ?? ""}
+                                onChange={(v) => setPayer(v || null)}
+                                placeholder="Any payer"
+                                options={payerChoices}
+                            />
+                        ) : null}
+                    </span>
+                </div>
+
+                {/*
+                  * ── THE SAME SCROLL OWNER, AT THE PANEL'S SMALLER HEIGHT ─────────────────────
+                  *
+                  * The rollup and the lens bar above are the controls; everything below is the
+                  * record. The record scrolls, the controls do not, and there is exactly ONE
+                  * scroller — the Focus Panel already bounds this card's height, and a second
+                  * scrollbar inside a bounded modal is two ways to move one surface.
+                  */}
+                <div className="alloy-os-fdetail__scroll" data-financials-detail-scroll="true">
+
                 {/* The ledger owns the detail. */}
+                {lens !== "payments" ? (
                 <div className="alloy-os-billingdetail__ledgerband">
                     <SectionHead ruled={false}>Ledger</SectionHead>
                     {/*
@@ -162,7 +320,14 @@ export default function FinancialsDetailCard({
                       * Filtering belongs here, but it belongs here WIRED.
                       */}
 
-                    {periods.map((per) => (
+                    {visiblePeriods.length === 0 ? (
+                        <p className="alloy-os-fdetail__collapsed" data-financials-ledger-empty="true">
+                            {lens === "all"
+                                ? "Nothing charged yet"
+                                : `No ${ACCOUNT_LENS_LABELS[lens].toLowerCase()} in this view.`}
+                        </p>
+                    ) : null}
+                    {visiblePeriods.map((per) => (
                         <section key={per.label} className="alloy-os-fdetail__period">
                             <p className="alloy-os-fdetail__periodhead">
                                 <span className="alloy-os-fdetail__periodname">{per.label}</span>
@@ -170,15 +335,30 @@ export default function FinancialsDetailCard({
                             </p>
                             {per.open ? (
                                 <div className="alloy-os-billingdetail__ledger" role="table">
+                                    {/*
+                                      * ── THREE FINANCIAL IDENTITIES, AND THEY ARE NOT ONE ──────
+                                      *
+                                      * "Subject" was a word from the data model standing in for a
+                                      * business fact the system already knows. An operator reading a
+                                      * ledger asks three different questions — which CHILD is this
+                                      * for, who OWES it, and for a payment, who PAID — and one
+                                      * generic column answered none of them.
+                                      *
+                                      * Child and Responsible party are the charge-side pair and are
+                                      * both charge-grain in the model. Payer belongs to money IN and
+                                      * lives in the Payments lens, where a receipt names the person
+                                      * who supplied it; a payer column here would be empty on every
+                                      * charge row.
+                                      */}
                                     <div className="alloy-os-billingdetail__row alloy-os-billingdetail__row--head">
                                         <span>Date</span>
                                         <span>Type</span>
-                                        <span>Subject</span>
+                                        <span>Child</span>
                                         <span>Description</span>
-                                        <span>GL code</span>
+                                        <span>GL account</span>
                                         <span>Amount</span>
                                         <span>Status</span>
-                                        <span>Source</span>
+                                        <span>Responsible party</span>
                                     </div>
                                     {per.entries.map((e, i) => (
                                         <div key={`${e.when}-${i}`} className="alloy-os-billingdetail__row">
@@ -189,7 +369,18 @@ export default function FinancialsDetailCard({
                                             </span>
                                             <span className="alloy-os-billingdetail__subject">{e.subject}</span>
                                             <span className="alloy-os-billingdetail__desc">{e.label}</span>
-                                            <span className="alloy-os-billingdetail__gl">{e.glCode ?? "— unmapped"}</span>
+                                            {/*
+                                              * UNMAPPED IS A STATE, NOT A DASH. An em-dash reads as
+                                              * "nothing to say here"; a charge with no GL account is
+                                              * a configuration fact somebody has to act on, so it is
+                                              * toned as one and never as a successful mapping.
+                                              */}
+                                            <span
+                                                className="alloy-os-billingdetail__gl"
+                                                data-financials-gl-state={e.glCode ? "mapped" : "unmapped"}
+                                            >
+                                                {e.glCode ?? "Unmapped"}
+                                            </span>
                                             <span
                                                 className={clsx(
                                                     "alloy-os-billingdetail__amount",
@@ -199,8 +390,9 @@ export default function FinancialsDetailCard({
                                                 {e.amount}
                                             </span>
                                             <span className="alloy-os-billingdetail__status">{e.status ?? "—"}</span>
-                                            <span className="alloy-os-billingdetail__source">
-                                                {e.source ?? "—"}
+                                            <span className="alloy-os-billingdetail__source" data-financials-responsible="true">
+                                                {e.responsibleParty
+                                                    ?? (e.responsibilityUnassigned ? "Unassigned" : "—")}
                                                 {/*
                                                   * THE TRANSITIONS THIS ROW ALREADY QUALIFIES FOR.
                                                   *
@@ -243,12 +435,13 @@ export default function FinancialsDetailCard({
                             )}
                         </section>
                     ))}
-                    <p className="alloy-os-billingdetail__note">
-                        No running balance column — <code>ledger_transactions</code> provides no authoritative
-                        running balance, and computing one here would invent an ordering the backend does not
-                        guarantee.
-                    </p>
+                    {/*
+                      * The running-balance invariant holds and is not printed at the operator. It is
+                      * engineering doctrine — see the note on the workspace ledger, the doctrine
+                      * document, and the test that fails if a running-balance column appears.
+                      */}
                 </div>
+                ) : null}
 
                 {/*
                   * THE RECEIPTS, AND WHAT EACH IS ANSWERING.
@@ -258,10 +451,19 @@ export default function FinancialsDetailCard({
                   * would otherwise become a second opinion about money, which is the one thing a
                   * presentation layer must never be.
                   */}
-                {evidence.payments.length ? (
+                {lens === "payments" ? (
                     <div className="alloy-os-fdetail__payments">
-                        <SectionHead>Payments</SectionHead>
-                        {evidence.payments.map((p) => (
+                        {/*
+                          * NO SECTION HEAD. This is no longer a second report beneath the ledger —
+                          * it is the Payments LENS, and the pressed lens above already names it.
+                          * A heading here would restate the control the operator just used.
+                          */}
+                        {visiblePayments.length === 0 ? (
+                            <p className="alloy-os-fdetail__collapsed" data-financials-payments-empty="true">
+                                No money has been received.
+                            </p>
+                        ) : null}
+                        {visiblePayments.map((p) => (
                             <div key={p.paymentId} className="alloy-os-fdetail__payment" data-payment-id={p.paymentId}>
                                 <div className="alloy-os-fdetail__strip">
                                     <Stat label="Received" value={p.receivedLabel} strong />
@@ -331,7 +533,7 @@ export default function FinancialsDetailCard({
                   * been reversed offers a reversal — reversing twice would credit the family twice for
                   * one decision, and the service refuses it anyway.
                   */}
-                {evidence.adjustments.length || onAddAdjustment ? (
+                {showAdjustments && (evidence.adjustments.length || onAddAdjustment) ? (
                     <div className="alloy-os-fdetail__adjustments">
                         <SectionHead>Adjustments</SectionHead>
                         {evidence.adjustments.map((a) => (
@@ -384,6 +586,7 @@ export default function FinancialsDetailCard({
                     </div>
                 ) : null}
 
+                {lens === "all" ? (
                 <div className="alloy-os-fdetail__upcoming">
                     <SectionHead>Upcoming</SectionHead>
                     <div className="alloy-os-fdetail__upcominglist">
@@ -398,6 +601,7 @@ export default function FinancialsDetailCard({
                         ))}
                     </div>
                 </div>
+                ) : null}
                 {/* A quiet utility link at the foot of the card — management, not a peer command,
                     and deliberately the last thing on the surface rather than a button above the
                     ledger competing with the work. */}
@@ -417,12 +621,56 @@ export default function FinancialsDetailCard({
                     </div>
                 ) : null}
 
+                </div>
+
                             </UniversalCard>
         </div>
     );
 }
 
-function Stat({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: "ok" | "due" }) {
+/**
+ * A lens context filter — the same control the workspace account uses, in this card's type scale.
+ * Value "" is the unfiltered state and is always offered, so a chosen filter can be cleared.
+ */
+function LensFilter({
+    testId,
+    value,
+    onChange,
+    placeholder,
+    options,
+}: {
+    testId: string;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder: string;
+    options: string[];
+}) {
+    /*
+     * The house dropdown, not a bare `<select>` — same reason as the workspace's copy: on macOS the
+     * native option menu is drawn by the OS and ignores the product's CSS, so a filter beside Bend
+     * Pine lenses rendered as a grey system control with a grey system popup.
+     */
+    return (
+        <AlloySelect
+            value={value}
+            onChange={onChange}
+            options={options.map((o) => ({ value: o, label: o }))}
+            placeholder={placeholder}
+            density="compact"
+            aria-label={placeholder}
+            testId={`financials-filter-${testId}`}
+        />
+    );
+}
+
+/**
+ * THE FINANCIALS STAT — exported because the account summary must BE this, not resemble it.
+ *
+ * Focus Panel → Financials → Details is the canonical Financials detail presentation, so the
+ * account summary in the Financials workspace borrows this component rather than growing a second
+ * label-over-value idiom with its own type scale. One anatomy, two placements.
+ */
+export function Stat({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: "ok" | "due" }) {
     return (
         <span className="alloy-os-fdetail__stat" data-tone={tone}>
             <span className="alloy-os-fdetail__statlabel">{label}</span>

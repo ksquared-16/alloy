@@ -59,6 +59,7 @@ import {
     resolveFinancialWorkLocation,
     type FinancialWorkLocation,
 } from "@/lib/financials/workspace/financialWorkLocation";
+import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { ID_BATCH, readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
 
 /** How many households one subject read will look at. Mirrors the position scan cap deliberately. */
@@ -80,7 +81,38 @@ export type FinancialSubjectRow = {
      * say WHY an account is org-scoped rather than leaving an operator to guess.
      */
     hasEnrollmentAgreement: boolean;
+    /**
+     * ── WHAT THE QUEUE NARROWS BY, AND WHY IT IS HERE RATHER THAN IN A SEARCH INDEX ────────────
+     *
+     * An operator looking a family up types a CHILD's name as often as the household's, and asks
+     * for "the Toddler room" or "the Preschool program" rather than for a household id. None of
+     * that is financial: it is identity and placement, which is exactly what this read already
+     * answers, so the facets ride the subject row instead of Financials growing a second search
+     * index over households it does not own.
+     *
+     * Every one is CANONICAL and none is derived:
+     *   childNames    `customer_members` — the durable household composer puts children here
+     *   contactNames  `customer_persons` less the canonical `child` role — the adult edge, the
+     *                 same predicate `resolvePayerCandidates` uses, borrowed rather than restated
+     *   programs      the CURRENT `child_placements.program_category_id`, labelled by
+     *                 `location_program_categories.label`
+     *   rooms         the CURRENT `child_placements.room_location_id`, labelled by `locations.name`
+     *
+     * "Current" means a placement that has not ended, been superseded or been cancelled. A family
+     * that left the Toddler room in June is not in the Toddler room.
+     *
+     * NOTHING HERE TOUCHES MONEY. A queue filter decides whether a household is LISTED; it can
+     * never change what that household owes, and no figure on this surface is computed from a
+     * facet.
+     */
+    childNames: string[];
+    contactNames: string[];
+    programs: FinancialSubjectFacet[];
+    rooms: FinancialSubjectFacet[];
 };
+
+/** A canonical placement fact an operator can narrow the queue by. Id for the filter, label for the eye. */
+export type FinancialSubjectFacet = { id: string; label: string };
 
 export type FinancialSubjectCohort = {
     subjects: FinancialSubjectRow[];
@@ -178,6 +210,27 @@ export async function resolveFinancialSubjectCohort(
 
     const customerIds = households.map((h) => h.id).filter(Boolean);
     const sitesByCustomer = await readAgreementSites(supabase, args.orgId, customerIds);
+    /*
+     * The queue facets, read once for the whole cohort. Each is independently tolerant: a facet
+     * read that fails leaves that facet empty rather than failing the cohort, because a household
+     * an operator cannot filter by room is still a household they must be able to reach, and a
+     * rail that refuses to render because a classroom label could not be read has turned a
+     * convenience into an outage.
+     */
+    const [childrenByCustomer, contactsByCustomer, placementsByCustomer] = await Promise.all([
+        readChildNames(supabase, args.orgId, customerIds).catch(() => new Map<string, string[]>()),
+        readContactNames(supabase, args.orgId, customerIds).catch(() => new Map<string, string[]>()),
+        readCurrentPlacements(supabase, args.orgId, customerIds).catch((e) => {
+            /*
+             * Non-fatal, and NOT silent. A household an operator cannot filter by room is still a
+             * household they must be able to reach, so the rail renders — but a swallowed facet
+             * failure once looked exactly like "this tenant has no rooms", which is how a wrong
+             * column name survived a full pass.
+             */
+            console.warn(`financial subjects: placement facets unavailable — ${e instanceof Error ? e.message : String(e)}`);
+            return new Map<string, { programs: FinancialSubjectFacet[]; rooms: FinancialSubjectFacet[] }>();
+        }),
+    ]);
 
     const subjects: FinancialSubjectRow[] = [];
     for (const household of households) {
@@ -194,6 +247,10 @@ export async function resolveFinancialSubjectCohort(
             householdName: typeof household.name === "string" && household.name.trim() ? household.name.trim() : null,
             siteLocationIds,
             hasEnrollmentAgreement: siteLocationIds.length > 0,
+            childNames: childrenByCustomer.get(household.id) ?? [],
+            contactNames: contactsByCustomer.get(household.id) ?? [],
+            programs: placementsByCustomer.get(household.id)?.programs ?? [],
+            rooms: placementsByCustomer.get(household.id)?.rooms ?? [],
         });
     }
 
@@ -276,6 +333,268 @@ async function readAgreementSites(
         add(customerId, row.site_location_id);
     }
     return byCustomer;
+}
+
+// ── THE QUEUE FACETS ────────────────────────────────────────────────────────────────────────────
+
+const named = (v: unknown): string => (v != null ? String(v).trim() : "");
+
+/** An embedded `persons` row, however PostgREST chose to shape it. Never a guess at a name. */
+function personName(embedded: unknown): string {
+    const one = Array.isArray(embedded) ? embedded[0] : embedded;
+    if (!one || typeof one !== "object") return "";
+    const row = one as { first_name?: unknown; last_name?: unknown };
+    return [named(row.first_name), named(row.last_name)].filter(Boolean).join(" ");
+}
+
+/** Deduplicated, ordered, and never containing an empty string. */
+function uniqueNames(values: Iterable<string>): string[] {
+    return [...new Set([...values].map((v) => v.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * The children on each household, from `customer_members`.
+ *
+ * The durable household composer puts a child's identity on the member row, which is why this is
+ * the child list and `customer_persons` below is the adult one. Inactive members are excluded: a
+ * child who has left is not who an operator is looking for when they type a name today.
+ */
+async function readChildNames(
+    supabase: SupabaseClient,
+    orgId: string,
+    customerIds: string[],
+): Promise<Map<string, string[]>> {
+    const out = new Map<string, Set<string>>();
+    if (customerIds.length === 0) return new Map();
+    const rows = await readInBatches<{
+        customer_id: string | null;
+        display_name: string | null;
+        first_name: string | null;
+        last_name: string | null;
+        is_active: boolean | null;
+    }>("household children", customerIds, (batch) =>
+        supabase
+            .from("customer_members")
+            .select("customer_id, display_name, first_name, last_name, is_active")
+            .eq("org_id", orgId)
+            .in("customer_id", batch),
+    );
+    for (const row of rows) {
+        if (row.is_active === false) continue;
+        const customerId = named(row.customer_id);
+        if (!customerId) continue;
+        const name =
+            named(row.display_name) || [named(row.first_name), named(row.last_name)].filter(Boolean).join(" ");
+        if (!name) continue;
+        const set = out.get(customerId) ?? new Set<string>();
+        set.add(name);
+        out.set(customerId, set);
+    }
+    return new Map([...out].map(([k, v]) => [k, uniqueNames(v)]));
+}
+
+/**
+ * The responsible adults on each household, from `customer_persons`.
+ *
+ * The predicate is BORROWED, not restated: `resolvePayerCandidates` already decided that an ended
+ * or inactive relationship is history and that the canonical `child` role type is the subject
+ * rather than a contact. Writing those three rules again here is how two surfaces end up
+ * disagreeing about who is on a household.
+ */
+async function readContactNames(
+    supabase: SupabaseClient,
+    orgId: string,
+    customerIds: string[],
+): Promise<Map<string, string[]>> {
+    const out = new Map<string, Set<string>>();
+    if (customerIds.length === 0) return new Map();
+    const rows = await readInBatches<{
+        customer_id: string | null;
+        role_type: string | null;
+        status: string | null;
+        end_date: string | null;
+        /*
+         * PostgREST types an embedded relation as an ARRAY here, and as an object where the
+         * relationship is provably to-one. Accepting both and normalising once is cheaper than
+         * being wrong about which, and a contact whose name cannot be read is simply not a name
+         * the queue can be searched by.
+         */
+        persons: unknown;
+    }>("household contacts", customerIds, (batch) =>
+        supabase
+            .from("customer_persons")
+            .select("customer_id, role_type, status, end_date, persons(first_name, last_name)")
+            .eq("org_id", orgId)
+            .in("customer_id", batch),
+    );
+    for (const row of rows) {
+        const customerId = named(row.customer_id);
+        if (!customerId) continue;
+        if (named(row.end_date)) continue;
+        if (named(row.status).toLowerCase() === "inactive") continue;
+        if (named(row.role_type).toLowerCase() === "child") continue;
+        const name = personName(row.persons);
+        if (!name) continue;
+        const set = out.get(customerId) ?? new Set<string>();
+        set.add(name);
+        out.set(customerId, set);
+    }
+    return new Map([...out].map(([k, v]) => [k, uniqueNames(v)]));
+}
+
+/**
+ * Placements that are STILL TRUE — the canonical program and room relationships.
+ *
+ * `child_placements` carries history by construction (`supersedes_placement_id` is a column), so
+ * "which room is this family in" is a question about the rows that have not ended, been superseded
+ * or been cancelled. Filtering the queue by a room a family left in June would be a filter that
+ * answers a question nobody asked.
+ *
+ * The join is placement → household via the member, because a placement names the child.
+ */
+const CURRENT_PLACEMENT_STATUSES = new Set(["planned", "active", "ending"]);
+
+async function readCurrentPlacements(
+    supabase: SupabaseClient,
+    orgId: string,
+    customerIds: string[],
+): Promise<Map<string, { programs: FinancialSubjectFacet[]; rooms: FinancialSubjectFacet[] }>> {
+    const empty = new Map<string, { programs: FinancialSubjectFacet[]; rooms: FinancialSubjectFacet[] }>();
+    if (customerIds.length === 0) return empty;
+
+    /* Household → its member ids, so a placement naming a child can be attributed to the account. */
+    const memberRows = await readInBatches<{ id: string; customer_id: string | null }>(
+        "placement members",
+        customerIds,
+        (batch) =>
+            supabase.from("customer_members").select("id, customer_id").eq("org_id", orgId).in("customer_id", batch),
+    );
+    const customerByMember = new Map<string, string>();
+    for (const row of memberRows) {
+        const memberId = named(row.id);
+        const customerId = named(row.customer_id);
+        if (memberId && customerId) customerByMember.set(memberId, customerId);
+    }
+    if (customerByMember.size === 0) return empty;
+
+    const placements = await readInBatches<{
+        customer_member_id: string | null;
+        program_category_id: string | null;
+        room_location_id: string | null;
+        status: string | null;
+    }>("current placements", [...customerByMember.keys()], (batch) =>
+        supabase
+            .from("child_placements")
+            .select("customer_member_id, program_category_id, room_location_id, status")
+            .eq("org_id", orgId)
+            .in("customer_member_id", batch),
+    );
+
+    const programIds = new Set<string>();
+    const roomIds = new Set<string>();
+    const live: Array<{ customerId: string; programId: string; roomId: string }> = [];
+    const programByMember = new Map<string, string>();
+    for (const row of placements) {
+        if (!CURRENT_PLACEMENT_STATUSES.has(named(row.status).toLowerCase())) continue;
+        const memberId = named(row.customer_member_id);
+        const customerId = customerByMember.get(memberId) ?? "";
+        if (!customerId) continue;
+        const programId = named(row.program_category_id);
+        const roomId = named(row.room_location_id);
+        if (programId) {
+            programIds.add(programId);
+            programByMember.set(memberId, programId);
+        }
+        if (roomId) roomIds.add(roomId);
+        live.push({ customerId, programId, roomId });
+    }
+
+    /*
+     * ── A PLACED CHILD'S PROGRAM, THEN A PRE-ENROLLED CHILD'S DESIRED ONE ──────────────────────
+     *
+     * `child_placements.program_category_id` is nullable, and a child who is enrolling has not been
+     * placed at all — their program lives on the enrolment participation's metadata. The scheduling
+     * route already settled that precedence and named the canonical owner in as many words
+     * ("`process_instances.metadata.program_category_id` — the canonical owner, not OCM"), so this
+     * takes the same two steps in the same order instead of deciding it a second time.
+     *
+     * Without it the Program filter is empty on a tenant whose placements carry a room and no
+     * program — which is exactly the state the census found, so this is the difference between a
+     * working control and one that never appears.
+     */
+    const unplacedProgramMembers = [...customerByMember.keys()].filter((id) => !programByMember.has(id));
+    if (unplacedProgramMembers.length) {
+        const instances = await readInBatches<{ subject_id: string | null; metadata: unknown }>(
+            "enrolment program intent",
+            unplacedProgramMembers,
+            (batch) =>
+                supabase
+                    .from("process_instances")
+                    .select("subject_id, metadata")
+                    .eq("org_id", orgId)
+                    .eq("process_key", ENROLLMENT_PROCESS_KEY)
+                    .in("subject_id", batch),
+        );
+        for (const row of instances) {
+            const memberId = named(row.subject_id);
+            const customerId = customerByMember.get(memberId) ?? "";
+            if (!customerId || programByMember.has(memberId)) continue;
+            const meta = (row.metadata ?? {}) as { program_category_id?: unknown };
+            const programId = named(meta.program_category_id);
+            if (!programId) continue;
+            programByMember.set(memberId, programId);
+            programIds.add(programId);
+            live.push({ customerId, programId, roomId: "" });
+        }
+    }
+
+    if (live.length === 0) return empty;
+
+    /*
+     * CONFIGURATION OWNS THE WORDS. A raw id never reaches a filter an operator reads.
+     *
+     * The columns are BORROWED from the operational read model's own label resolvers rather than
+     * guessed: a program is `location_program_categories.label` falling back to its `key`, and a
+     * room is `locations.label`. This was written as `locations.name` on the first pass — a column
+     * that does not exist — and because the facet read is deliberately tolerant, the error arrived
+     * as an empty Room filter rather than as a failure. Hence the warning below: a facet that
+     * cannot be read must stay non-fatal AND must stop being silent.
+     */
+    const programLabels = new Map<string, string>();
+    if (programIds.size) {
+        const rows = await readInBatches<{ id: string; label: string | null; key: string | null }>(
+            "program categories",
+            [...programIds],
+            (batch) =>
+                supabase
+                    .from("location_program_categories")
+                    .select("id, label, key")
+                    .eq("org_id", orgId)
+                    .in("id", batch),
+        );
+        for (const row of rows) programLabels.set(named(row.id), named(row.label) || named(row.key));
+    }
+    const roomLabels = new Map<string, string>();
+    if (roomIds.size) {
+        const rows = await readInBatches<{ id: string; label: string | null }>("placement rooms", [...roomIds], (batch) =>
+            supabase.from("locations").select("id, label").eq("org_id", orgId).in("id", batch),
+        );
+        for (const row of rows) roomLabels.set(named(row.id), named(row.label));
+    }
+
+    const byCustomer = new Map<string, { programs: Map<string, string>; rooms: Map<string, string> }>();
+    for (const row of live) {
+        const entry = byCustomer.get(row.customerId) ?? { programs: new Map(), rooms: new Map() };
+        const programLabel = programLabels.get(row.programId);
+        if (row.programId && programLabel) entry.programs.set(row.programId, programLabel);
+        const roomLabel = roomLabels.get(row.roomId);
+        if (row.roomId && roomLabel) entry.rooms.set(row.roomId, roomLabel);
+        byCustomer.set(row.customerId, entry);
+    }
+
+    const facets = (m: Map<string, string>): FinancialSubjectFacet[] =>
+        [...m].map(([id, label]) => ({ id, label })).sort((a, b) => a.label.localeCompare(b.label));
+    return new Map([...byCustomer].map(([k, v]) => [k, { programs: facets(v.programs), rooms: facets(v.rooms) }]));
 }
 
 /** Re-exported so callers batching alongside this module use one batch size, not two. */

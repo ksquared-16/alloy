@@ -36,7 +36,7 @@ import {
     WorkspaceOverviewStack,
 } from "@/components/workspace/WorkspaceOverviewLayout";
 import WorkspaceCard from "@/components/workspace/WorkspaceCard";
-import type { ProcessCardIcon } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
+import type { ProcessCardAccent, ProcessCardIcon } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import type {
     FinancialsOverviewMetric,
     FinancialsReadState,
@@ -46,13 +46,44 @@ import type { FinancialActivityFeed } from "@/lib/financials/workspace/resolveFi
 import { moneyExact, shortDate } from "@/app/adminV2/financials/financialsFormat";
 import type { FinancialsWorkSection } from "@/app/adminV2/financials/financialsSections";
 
-/** The headline four: what money is doing right now, and what moved in the window. */
-const HEADLINE: Array<{ key: string; icon: ProcessCardIcon }> = [
-    { key: "financials.outstanding_amount", icon: "chart" },
-    { key: "financials.currently_collectible_amount", icon: "bolt" },
-    { key: "financials.gross_charges_posted_amount", icon: "clipboard" },
-    { key: "financials.payments_received_amount", icon: "spark" },
+/**
+ * The headline four: what money is doing right now, and what moved in the window.
+ *
+ * ── ACCENT IS MEANING, NEVER DECORATION ────────────────────────────────────────────────────────
+ *
+ * These rendered with `accent: null` and `status: "ok"` on all four, so the KPI primitive drew
+ * every tile identically and the surface read as a table of four numbers. The primitive has
+ * carried identity accents and operational status all along; Financials simply never said which.
+ *
+ * Each accent is a closed-set Alloy token, chosen for what the figure MEANS:
+ *   ember    money owed to us and not yet collectible — the attention figure
+ *   gold     money we may act on right now
+ *   midnight what was billed, a neutral record of activity
+ *   pine     money that actually arrived
+ *
+ * `status` is separate and is computed per tile from the figure itself, so a zero Outstanding is
+ * healthy and a positive one is worth a glance. Nothing here derives a money value; the tiles still
+ * render `formatted_value` exactly as the metric engine produced it.
+ */
+const HEADLINE: Array<{ key: string; icon: ProcessCardIcon; accent: ProcessCardAccent; attentionWhenPositive?: boolean }> = [
+    { key: "financials.outstanding_amount", icon: "chart", accent: "ember", attentionWhenPositive: true },
+    { key: "financials.currently_collectible_amount", icon: "bolt", accent: "gold", attentionWhenPositive: true },
+    { key: "financials.gross_charges_posted_amount", icon: "clipboard", accent: "midnight" },
+    { key: "financials.payments_received_amount", icon: "spark", accent: "pine" },
 ];
+
+/**
+ * Whether a tile is worth a glance, from the engine's own number.
+ *
+ * `value` is the metric engine's, read and compared — never recomputed. A comparison against zero
+ * is not arithmetic on money: no figure is added, netted or bounded, and the formatted string the
+ * operator reads is untouched.
+ */
+function kpiStatus(metric: FinancialsOverviewMetric | undefined, attentionWhenPositive?: boolean): string {
+    if (!metric || metric.value == null) return "unknown";
+    if (!attentionWhenPositive) return "healthy";
+    return metric.value > 0 ? "warning" : "healthy";
+}
 
 /** The exception band: money or work an operator can pick up, each pointing at its section. */
 const EXCEPTIONS: Array<{ key: string; section: FinancialsWorkSection; cta: string; why: string }> = [
@@ -107,8 +138,18 @@ export default function FinancialsOverview({
 
     return (
         <WorkspaceOverviewStack data-testid="financials-overview">
-            <WorkspaceOverviewActivityBand testId="financials-overview-activity-kpis" busy={metrics.loading}>
-                {HEADLINE.map(({ key, icon }, index) => {
+            {/*
+             * NOT "TODAY'S ACTIVITY", which is the band's default eyebrow and is false here.
+             * Outstanding and Collectible now are positions, not a day's movement — they are what
+             * money is doing at this instant, over whatever window the metric pack resolved. A
+             * heading that says today would put a window on figures that do not have one.
+             */}
+            <WorkspaceOverviewActivityBand
+                eyebrow="Money right now"
+                testId="financials-overview-activity-kpis"
+                busy={metrics.loading}
+            >
+                {HEADLINE.map(({ key, icon, accent, attentionWhenPositive }, index) => {
                     const metric = resolved.get(key);
                     return (
                         <SurfaceHeaderKpiCard
@@ -117,10 +158,10 @@ export default function FinancialsOverview({
                                 slot: index + 1,
                                 label: metric?.label ?? "—",
                                 icon,
-                                accent: null,
+                                accent,
                                 /* The engine's own string. Never re-formatted here. */
                                 formattedValue: metric?.formatted_value ?? "—",
-                                status: "ok",
+                                status: kpiStatus(metric, attentionWhenPositive),
                                 sourceKey: key,
                                 drillHref: null,
                                 pending: metrics.loading && !metric,
@@ -147,11 +188,25 @@ export default function FinancialsOverview({
                     </p>
                     {EXCEPTIONS.map(({ key, section, cta, why }) => {
                         const metric = resolved.get(key);
+                        /* The engine's own value, compared against zero. Nothing is recomputed. */
+                        const waiting = (metric?.value ?? 0) > 0;
                         return (
+                            /*
+                             * ── A DECISION ROW READS AS A DECISION ─────────────────────────────
+                             *
+                             * These were grey text on white with a grey button, four identical
+                             * rows, and nothing on them said which one actually wanted attention.
+                             * The left rail now carries the state: ember when there is something
+                             * to pick up, quiet when there is not. Same tokens the account surface
+                             * uses, so a Financials operator learns one vocabulary.
+                             */
                             <div
                                 key={key}
-                                className="flex items-center justify-between gap-3 rounded-lg border border-alloy-stone/15 px-3 py-2"
+                                className={`flex items-center justify-between gap-3 rounded-lg border border-l-[3px] border-alloy-stone/15 px-3 py-2 ${
+                                    waiting ? "border-l-alloy-ember bg-alloy-ember/[0.03]" : "border-l-alloy-stone/30"
+                                }`}
                                 data-financials-overview-exception={key}
+                                data-financials-exception-state={metrics.loading && !metric ? "pending" : waiting ? "waiting" : "clear"}
                             >
                                 <div className="min-w-0">
                                     <p className="truncate text-sm text-alloy-midnight">
@@ -172,11 +227,12 @@ export default function FinancialsOverview({
                                             />
                                         ) : (
                                             <>
-                                                <span className="font-semibold tabular-nums">
+                                                <span className={`text-[15px] font-semibold tabular-nums ${
+                                                    waiting ? "text-alloy-ember" : "text-alloy-midnight"
+                                                }`}>
                                                     {metric?.formatted_value ?? "—"}
                                                 </span>
-                                                {" · "}
-                                                {metric?.label ?? "—"}
+                                                <span className="ml-2 text-alloy-midnight/70">{metric?.label ?? "—"}</span>
                                             </>
                                         )}
                                     </p>
@@ -186,7 +242,11 @@ export default function FinancialsOverview({
                                     type="button"
                                     onClick={() => onOpenSection(section)}
                                     data-financials-overview-open={section}
-                                    className="shrink-0 whitespace-nowrap rounded-md border border-alloy-stone/25 bg-white px-2.5 py-1 text-xs font-medium text-alloy-midnight/75 shadow-sm hover:bg-alloy-stone/[0.08]"
+                                    className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium shadow-sm transition ${
+                                        waiting
+                                            ? "bg-alloy-midnight text-white hover:bg-alloy-midnight/90"
+                                            : "border border-alloy-stone/25 bg-white text-alloy-midnight/70 hover:bg-alloy-stone/[0.08]"
+                                    }`}
                                 >
                                     {cta}
                                 </button>
@@ -230,22 +290,46 @@ export default function FinancialsOverview({
                             Nothing has been posted, paid or corrected for {scopeLabel.toLowerCase()} yet.
                         </p>
                     ) : (
-                        recent.map((row) => (
-                            <div
-                                key={row.entryId}
-                                className="flex items-baseline justify-between gap-3 border-b border-alloy-stone/10 pb-1.5 last:border-b-0 last:pb-0"
-                                data-financials-overview-recent-row={row.entryId}
-                            >
-                                <span className="min-w-0 truncate text-sm text-alloy-midnight">
-                                    {/* The operator's words for the event, and whose money it was. */}
-                                    {row.label}
-                                    {row.householdName ? ` · ${row.householdName}` : ""}
-                                </span>
-                                <span className="shrink-0 text-xs tabular-nums text-alloy-midnight/60">
-                                    {moneyExact(row.amountCents, row.currencyCode)} · {shortDate(row.postedAt)}
-                                </span>
-                            </div>
-                        ))
+                        /*
+                         * ── FOUR FACTS, FOUR PLACES ────────────────────────────────────────────
+                         *
+                         * This was one truncated sentence and one grey figure, so an operator
+                         * scanning for "what did the Alvarez family pay" had to read every row as
+                         * prose. Type, household, amount and date now hold fixed positions, and
+                         * money in and money out are told apart by direction rather than by reading
+                         * the label: a receipt is pine, an obligation is midnight. Nothing is
+                         * summed — an arbitrary recent slice of deltas is not a balance.
+                         */
+                        recent.map((row) => {
+                            const inbound = row.amountCents < 0;
+                            return (
+                                <div
+                                    key={row.entryId}
+                                    className="flex items-center gap-3 border-b border-alloy-stone/10 py-1.5 last:border-b-0"
+                                    data-financials-overview-recent-row={row.entryId}
+                                >
+                                    <span
+                                        aria-hidden
+                                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${inbound ? "bg-alloy-bend-pine" : "bg-alloy-midnight/35"}`}
+                                        data-financials-movement-direction={inbound ? "in" : "out"}
+                                    />
+                                    <span className="w-[8.5rem] shrink-0 truncate text-[12px] text-alloy-midnight/70">
+                                        {row.label}
+                                    </span>
+                                    <span className="min-w-0 flex-1 truncate text-[13px] text-alloy-midnight">
+                                        {row.householdName ?? "—"}
+                                    </span>
+                                    <span className={`shrink-0 text-[13px] font-medium tabular-nums ${
+                                        inbound ? "text-alloy-bend-pine" : "text-alloy-midnight"
+                                    }`}>
+                                        {moneyExact(row.amountCents, row.currencyCode)}
+                                    </span>
+                                    <span className="w-[4.5rem] shrink-0 text-right text-[11px] tabular-nums text-alloy-midnight/45">
+                                        {shortDate(row.postedAt)}
+                                    </span>
+                                </div>
+                            );
+                        })
                     )}
                 </div>
             </WorkspaceCard>

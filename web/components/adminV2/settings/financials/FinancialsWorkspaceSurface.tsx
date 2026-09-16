@@ -11,6 +11,7 @@ import { Banknote } from "lucide-react";
 import CommercialSimulatorPanel from "@/components/adminV2/commercial/CommercialSimulatorPanel";
 import TuitionPlansConfigurationPage from "@/components/adminV2/settings/financials/tuitionPlans/TuitionPlansConfigurationPage";
 import GlCodesConfigurationPage from "@/components/adminV2/settings/financials/accounting/GlCodesConfigurationPage";
+import AccountingPostingPanels from "@/components/adminV2/settings/financials/accounting/AccountingPostingPanels";
 import CatalogConfigurationPage from "@/components/adminV2/settings/financials/catalog/CatalogConfigurationPage";
 import PoliciesConfigurationPage from "@/components/adminV2/settings/financials/policies/PoliciesConfigurationPage";
 import {
@@ -174,6 +175,12 @@ export default function FinancialsWorkspaceSurface({
                 : chapter === "accounting" ?
                     <div data-testid="financials-chapter-accounting">
                         <GlCodesConfigurationPage />
+                        {/*
+                         * WHERE money posts and WHEN it posts, beneath the accounts themselves.
+                         * Both were canonical, both were enforced, and neither had a screen — see
+                         * the note on `AccountingPostingPanels`.
+                         */}
+                        <AccountingPostingPanels />
                     </div>
                 : chapter === "policies" ?
                     <div data-testid="financials-chapter-policies">

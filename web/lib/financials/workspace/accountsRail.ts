@@ -14,7 +14,10 @@
 
 import { DEFAULT_CURRENCY_CODE } from "@/lib/financials/billableSource";
 import type { FinancialPositionCohort } from "@/lib/financials/workspace/resolveFinancialPosition";
-import type { FinancialSubjectCohort } from "@/lib/financials/workspace/resolveFinancialSubjects";
+import type {
+    FinancialSubjectCohort,
+    FinancialSubjectFacet,
+} from "@/lib/financials/workspace/resolveFinancialSubjects";
 
 export type AccountRow = {
     customerId: string;
@@ -34,6 +37,18 @@ export type AccountRow = {
     noActivity: boolean;
     /** Reported by the subject cohort. Never a gate on being listed. */
     hasEnrollmentAgreement: boolean;
+    /**
+     * IDENTITY AND PLACEMENT, CARRIED FOR THE QUEUE CONTROLS — see `accountQueue`.
+     *
+     * These decide whether a row is LISTED and nothing else. They are the subject cohort's, read
+     * from canonical membership and placement; a row that the position cohort contributed but the
+     * subject read did not reach carries none of them, which narrows that row out of a facet filter
+     * rather than inventing a program for it.
+     */
+    childNames: string[];
+    contactNames: string[];
+    programs: FinancialSubjectFacet[];
+    rooms: FinancialSubjectFacet[];
 };
 
 /** Grouping, not arithmetic on meaning: each field is summed from figures the server produced. */
@@ -53,6 +68,10 @@ function groupPositionByAccount(cohort: FinancialPositionCohort): Map<string, Ac
             hasOrgScoped: false,
             noActivity: false,
             hasEnrollmentAgreement: false,
+            childNames: [],
+            contactNames: [],
+            programs: [],
+            rooms: [],
         };
         existing.outstandingCents += row.position.outstandingCents;
         existing.collectibleCents += row.position.currentlyCollectibleCents;
@@ -103,6 +122,10 @@ export function joinAccounts(
                       householdName: subject.householdName ?? posted.householdName,
                       noActivity: false,
                       hasEnrollmentAgreement: subject.hasEnrollmentAgreement,
+                      childNames: subject.childNames,
+                      contactNames: subject.contactNames,
+                      programs: subject.programs,
+                      rooms: subject.rooms,
                   }
                 : {
                       customerId: subject.customerId,
@@ -116,6 +139,10 @@ export function joinAccounts(
                       hasOrgScoped: false,
                       noActivity: true,
                       hasEnrollmentAgreement: subject.hasEnrollmentAgreement,
+                      childNames: subject.childNames,
+                      contactNames: subject.contactNames,
+                      programs: subject.programs,
+                      rooms: subject.rooms,
                   },
         );
     }

@@ -21,6 +21,7 @@
  * surfaces would then disagree about what a row IS while agreeing about what it costs.
  */
 
+import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 import {
     isCollectibleOffsetRow,
     type FinancialsLedgerRow,
@@ -164,7 +165,13 @@ export function subjectOptions(rows: readonly FinancialsLedgerRow[]): FilterOpti
     });
 }
 
-/** Newest period first — an operator is nearly always working the current one. */
+/**
+ * Newest period first — an operator is nearly always working the current one.
+ *
+ * The VALUE stays the canonical `YYYY-MM`, because that is what `filterLedger` matches on. The
+ * LABEL is the operator's: "September 2026". They were the same string, so the one control an
+ * operator uses to choose a month offered them a list of dated identifiers.
+ */
 export function periodOptions(rows: readonly FinancialsLedgerRow[]): FilterOption[] {
     const byKey = new Map<string, FilterOption>();
     for (const row of rows) {
@@ -172,7 +179,7 @@ export function periodOptions(rows: readonly FinancialsLedgerRow[]): FilterOptio
         if (!value) continue;
         const found = byKey.get(value);
         if (found) found.count += 1;
-        else byKey.set(value, { value, label: value, count: 1 });
+        else byKey.set(value, { value, label: billingPeriodLabel(value), count: 1 });
     }
     return [...byKey.values()].sort((a, b) => b.value.localeCompare(a.value));
 }
