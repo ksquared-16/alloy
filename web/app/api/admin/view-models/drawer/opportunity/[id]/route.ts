@@ -130,6 +130,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                                   supabase,
                                   orgId: gate.orgId,
                                   context: settledContext,
+                                  // The route's OWN resolved authority — the same canonical bundle
+                                  // the health endpoint reads, never anything the browser sent.
+                                  access: gate.access,
                               }),
                           },
                       },
