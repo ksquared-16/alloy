@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { evaluateOrganizationCalculationForRoom } from "@/lib/organizationCalculations/evaluateForRoom";
+import { requireAnalyticsReadAccess } from "@/lib/admin/canReadAnalytics";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,22 @@ type RouteParams = { params: Promise<{ id: string }> };
  * Body: { roomId, effectiveAt, version?: "published"|"draft"|versionId, siteId? }
  */
 export async function POST(req: NextRequest, { params }: RouteParams) {
+    /*
+     * ANALYTICS TRUTH — evaluates a calculation for a room and persists nothing.
+     *
+     * READ-LIKE DESPITE POST. Proven, not assumed: the handler delegates to an evaluator that
+     * performs no insert, update, upsert or delete, so nothing canonical changes. Gating a
+     * computation on `reports.write` because its HTTP verb is POST would withhold a preview
+     * from every Reader for no change in what the organization knows.
+     *
+     * This was reachable through ORG CONTEXT ALONE: no capability, no role, only portal
+     * admission. `reports.read` is the established owner of this family — the promoted
+     * Operational Intelligence model already declares its sibling routes under it — so no
+     * vocabulary is invented here.
+     */
+    const analyticsAuth = await requireAnalyticsReadAccess();
+    if (!analyticsAuth.ok) return analyticsAuth.response;
+
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });

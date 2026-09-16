@@ -9,6 +9,7 @@ import { parseMetricTimeWindow } from "@/lib/metrics/timeWindow";
 import { writeAllOrgMetricSnapshots, writeOrgMetricSnapshots } from "@/lib/metrics/snapshots/writeOrgMetricSnapshots";
 import type { MetricTimeWindowKey } from "@/lib/metrics/types";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { requireAnalyticsManageAccess } from "@/lib/admin/canReadAnalytics";
 
 export const dynamic = "force-dynamic";
 
@@ -42,8 +43,15 @@ export async function POST(request: NextRequest) {
     if (cronOk) {
         orgIdFilter = isRecord(body) && typeof body.org_id === "string" ? body.org_id.trim() || null : null;
     } else {
-        const forbidden = await requireAdminOrOps();
-        if (forbidden) return forbidden;
+        /*
+         * PORTAL ADMISSION WAS THE WHOLE GATE. `requireAdminOrOps()` resolves admission and no
+         * role, so any portal-admitted principal could write org metric snapshots — analytics
+         * truth — with no capability at all. `reports.write` is the established owner.
+         *
+         * The cron branch above keeps its own machine credential and is not changed.
+         */
+        const analyticsAuth = await requireAnalyticsManageAccess();
+        if (!analyticsAuth.ok) return analyticsAuth.response;
         const ctx = await getAdminAccessContextCached();
         if (!ctx.ok) return adminContextFailureResponse(ctx);
         orgIdFilter = ctx.orgId;
