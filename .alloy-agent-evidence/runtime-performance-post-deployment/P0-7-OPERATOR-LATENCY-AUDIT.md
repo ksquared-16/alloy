@@ -157,7 +157,7 @@ treatment and `aria-busy` never engage, and the modelled `yielding` phase has **
 operator sees the *previous* lens's rows, fully interactive, indistinguishable from the destination.
 
 **Earliest destination structure:** row **count** is already known before the click — settlement resolves
-每 pill's count from server-supplied locators, and the configured Default row composition is keyed on
+each pill's count from server-supplied locators, and the configured Default row composition is keyed on
 `(surfaceId, processKey)`, not the lens. **Nothing consumes either during the transition.**
 
 **Serialization:** queue and Focus Panel commit-critical are *parallel* — fields of one frozen snapshot,
