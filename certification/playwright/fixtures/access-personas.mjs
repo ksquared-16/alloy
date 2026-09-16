@@ -103,6 +103,23 @@ export const CUSTOM = {
      * Business Process configuration and Workflow configuration sit beside each other in the
      * product and must not imply one another.
      */
+    /*
+     * ── TOURS: SETTING THE HOURS IS NOT BOOKING THE FAMILY ──
+     *
+     * `tourConfigurer` sets when and where tours may be booked; `tourBooker` operates one family's
+     * tour. Each holds ONE key, because the matrix is about what each CANNOT do — a configurer who
+     * could cancel a family's tour, or a booker who could rewrite the organization's availability,
+     * would mean the split exists only on paper.
+     *
+     * `tourTitular` is the control: labelled "Tour Administrator", granted only admission.
+     * `tourScheduler` is the near-miss — it holds `scheduling.write`, the key most likely to be
+     * mistaken for tour availability, and must open nothing.
+     */
+    tourConfigurer: "mcert_tour_configurer",
+    tourBooker: "mcert_tour_booker",
+    tourTitular: "mcert_tour_titular",
+    tourScheduler: "mcert_tour_scheduler",
+
     wfWriter: "mcert_wf_writer",
     wfTitular: "mcert_wf_titular",
     wfAdjacent: "mcert_wf_adjacent",
@@ -368,6 +385,10 @@ export const P = {
     oiWriter:           { id: "c0000000-0000-4000-8000-00000000d041", email: "cert.oiwriter@northwind.invalid",    role: CUSTOM.oiWriter },
     oiReader:           { id: "c0000000-0000-4000-8000-00000000d042", email: "cert.oireader@northwind.invalid",    role: CUSTOM.oiReader },
     oiTitular:          { id: "c0000000-0000-4000-8000-00000000d043", email: "cert.oititular@northwind.invalid",   role: CUSTOM.oiTitular },
+    tourConfigurer:     { id: "c0000000-0000-4000-8000-00000000d0b1", email: "cert.tourconfig@northwind.invalid",  role: CUSTOM.tourConfigurer },
+    tourBooker:         { id: "c0000000-0000-4000-8000-00000000d0b2", email: "cert.tourbooker@northwind.invalid",  role: CUSTOM.tourBooker },
+    tourTitular:        { id: "c0000000-0000-4000-8000-00000000d0b3", email: "cert.tourtitular@northwind.invalid", role: CUSTOM.tourTitular },
+    tourScheduler:      { id: "c0000000-0000-4000-8000-00000000d0b4", email: "cert.toursched@northwind.invalid",   role: CUSTOM.tourScheduler },
     wfWriter:           { id: "c0000000-0000-4000-8000-00000000d0a1", email: "cert.wfwriter@northwind.invalid",    role: CUSTOM.wfWriter },
     wfTitular:          { id: "c0000000-0000-4000-8000-00000000d0a2", email: "cert.wftitular@northwind.invalid",   role: CUSTOM.wfTitular },
     wfAdjacent:         { id: "c0000000-0000-4000-8000-00000000d0a3", email: "cert.wfadjacent@northwind.invalid",  role: CUSTOM.wfAdjacent },
@@ -479,6 +500,10 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.bpTitular,    role_label: "Admin",              description: "Named Admin, granted no Business Process capability.",      is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.bpScoped,     role_label: "Domain process owner", description: "Designs and activates, inside one operational domain only.", is_system: false, is_active: true },
 
+        { org_id: ORG, role_key: CUSTOM.tourConfigurer, role_label: "Tour availability owner", description: "Sets when and where tours may be booked. Cannot touch a family booking.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.tourBooker,     role_label: "Tour front desk",        description: "Operates one family tour lifecycle. Cannot change availability.",      is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.tourTitular,    role_label: "Tour Administrator",     description: "Named Tour Administrator, granted no Tours authority.",               is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.tourScheduler,  role_label: "Scheduler",              description: "Holds scheduling.write only. The near-miss for tour availability.",   is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.wfWriter,  role_label: "Workflow author",       description: "Configures Workflow definitions, actions and conditions. No privileged title.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.wfTitular, role_label: "Workflow Administrator", description: "Named Workflow Administrator, granted no Workflow authority.",                 is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.wfAdjacent, role_label: "Process configurer",    description: "Adjacent configuration authority, deliberately without the Workflow key.",      is_system: false, is_active: true },
@@ -605,6 +630,12 @@ export async function setup() {
         [CUSTOM.bpComposed, ["portal.access", "business_process.configure", "business_process.activate"]],
         [CUSTOM.bpTitular, ["portal.access"]],
         [CUSTOM.bpScoped, ["portal.access", "business_process.configure", "business_process.activate"]],
+        [CUSTOM.tourConfigurer, ["portal.access", "tours.configure"]],
+        [CUSTOM.tourBooker, ["portal.access", "tours.book"]],
+        /* The label says Tour Administrator; the package says nothing. */
+        [CUSTOM.tourTitular, ["portal.access"]],
+        /* The nearest key that is NOT Tours authority. */
+        [CUSTOM.tourScheduler, ["portal.access", "scheduling.write"]],
         [CUSTOM.wfWriter, ["portal.access", "ops.workflows.write"]],
         /* The label says Workflow Administrator; the package says nothing. */
         [CUSTOM.wfTitular, ["portal.access"]],
