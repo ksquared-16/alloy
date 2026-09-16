@@ -1,0 +1,86 @@
+{
+  "trusted_host_action_id": "tha_06d7e5898cf67b",
+  "query_hash": "a43c61cefcf850452a845827b863a289c40fe08d75e27f051d932d3ebaf40817",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-16T15:29:30.411Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_06d7e5898cf67b",
+    "query_hash": "a43c61cefcf850452a845827b863a289c40fe08d75e27f051d932d3ebaf40817",
+    "authorization_id": "grnt_bb9d4c9984fa4c70",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-16T15:29:31.737Z",
+    "question_ids": [
+      "e1_defect",
+      "e2_invariant",
+      "e3_containment",
+      "e4_survivors",
+      "e5_ledger",
+      "e6_identity"
+    ],
+    "questions": {
+      "e1_defect": {
+        "question_id": "e1_defect",
+        "row_count": null,
+        "rows": [
+          0,
+          0,
+          0
+        ]
+      },
+      "e2_invariant": {
+        "question_id": "e2_invariant",
+        "row_count": null,
+        "rows": [
+          12
+        ]
+      },
+      "e3_containment": {
+        "question_id": "e3_containment",
+        "row_count": null,
+        "rows": [
+          1,
+          0,
+          47
+        ]
+      },
+      "e4_survivors": {
+        "question_id": "e4_survivors",
+        "row_count": null,
+        "rows": [
+          105,
+          5,
+          5,
+          1
+        ]
+      },
+      "e5_ledger": {
+        "question_id": "e5_ledger",
+        "row_count": null,
+        "rows": [
+          1,
+          0,
+          20260916040000,
+          451
+        ]
+      },
+      "e6_identity": {
+        "question_id": "e6_identity",
+        "row_count": null,
+        "rows": [
+          0,
+          0,
+          15,
+          777
+        ]
+      }
+    },
+    "row_count": 19
+  }
+}
