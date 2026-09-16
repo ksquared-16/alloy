@@ -22,6 +22,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { classifyChildTrackState } from "@/lib/lifecycle/familyCloseGuard";
 import { resolveChildTrackTransition } from "@/lib/lifecycle/resolveChildTrackTransition";
+import { CONCLUDED_ENROLLMENT_PROCESS_STATES } from "@/lib/process/processInstances";
 import {
     listEnrollmentInstancesForLead,
     type ProcessInstanceRow,
@@ -47,8 +48,16 @@ export type ParticipantDecisionOptionVM = {
 export type ParticipantDecisionRowVM = {
     /** `customer_members.id` — the durable child. Identity for execution, never rendered. */
     customer_member_id: string;
-    /** `process_instances.id` — this child's journey through this lead. Never rendered. */
-    process_instance_id: string;
+    /**
+     * `process_instances.id` — this child's journey, WHEN ONE EXISTS. Never rendered.
+     *
+     * Optional on purpose: at the Decision stage most children have no journey yet, because
+     * Begin Enrolling is the decision that starts one. A row is a child to decide about, not a
+     * journey to report on.
+     */
+    process_instance_id?: string;
+    /** `opportunity_customer_members.id` — this child's membership of THIS lead. Never rendered. */
+    opportunity_customer_member_id: string;
     /** Operator-facing name. */
     label: string;
     /** What the operator sees as this child's current position, in plain language. */
@@ -192,18 +201,54 @@ export async function projectParticipantDecisionRows(params: {
     const labelFor =
         params.resolveDecisionLabel ?? ((d: StageWorkParticipantDecisionV1) => d.label?.trim() || d.decision_key);
 
+    /*
+     * WHO IS BEING DECIDED vs WHAT HAS HAPPENED TO THEM.
+     *
+     * This enumerated existing Enrollment journeys and derived the children from them. For a
+     * pre-enrolment Decision that is backwards: `Begin Enrolling` is the decision that CREATES a
+     * journey, so a child who has never been enrolled had no journey, therefore no row, therefore
+     * could never be offered the decision — the children the surface exists for were exactly the
+     * ones it could not see. Measured: two Decision-stage families returned zero rows while their
+     * children were listed on the Children card beside them, and the only child that did appear
+     * had a journey because someone had already run Start enrollment on them by hand.
+     *
+     * Membership defines the participants; a journey is optional state about one. So the lead's
+     * own children are enumerated, and a journey attaches to a child when one exists.
+     */
+    const { data: membershipData } = await params.supabase
+        .from("opportunity_customer_members")
+        .select("id, customer_member_id, outcome_status_key")
+        .eq("org_id", params.orgId)
+        .eq("opportunity_id", params.opportunityId);
+
+    const memberships = ((membershipData ?? []) as {
+        id: string;
+        customer_member_id: string | null;
+        outcome_status_key: string | null;
+    }[]).filter((m) => (m.customer_member_id ?? "").trim());
+
+    /*
+     * Still read, still useful — and still under BOTH anchors. A child mid-journey must show the
+     * state they are actually in, and `listEnrollmentInstancesForLead` is what finds a journey
+     * whether it was anchored to the Opportunity or to the participation.
+     */
     const instances = await listEnrollmentInstancesForLead(params.supabase, {
         orgId: params.orgId,
         opportunityId: params.opportunityId,
     });
+    const journeyByMember = new Map<string, ProcessInstanceRow>();
+    for (const row of instances) {
+        const subject = row.subject_id?.trim();
+        if (!subject) continue;
+        // One journey per child on this surface. A re-enrolling child can hold more than one; the
+        // open one is what a Decision is about, so a concluded row never displaces it.
+        const concluded = (r: ProcessInstanceRow) =>
+            CONCLUDED_ENROLLMENT_PROCESS_STATES.includes((r.state ?? "").trim().toLowerCase());
+        const held = journeyByMember.get(subject);
+        if (!held || concluded(held)) journeyByMember.set(subject, row);
+    }
 
-    const memberIds = [
-        ...new Set(
-            instances
-                .map((row) => row.subject_id?.trim())
-                .filter((id): id is string => Boolean(id)),
-        ),
-    ];
+    const memberIds = [...new Set(memberships.map((m) => (m.customer_member_id ?? "").trim()))];
 
     const memberNames = new Map<string, string>();
     if (memberIds.length) {
@@ -224,12 +269,19 @@ export async function projectParticipantDecisionRows(params: {
     // that is going to be refused.
     const visible = configured.filter((d) => d.available !== false);
 
-    const rows: ParticipantDecisionRowVM[] = instances
-        .filter((row): row is ProcessInstanceRow & { subject_id: string } => Boolean(row.subject_id))
-        .map((row) => {
-            const customerMemberId = row.subject_id.trim();
+    const stateByMember = new Map<string, string | null>();
+    const rows: ParticipantDecisionRowVM[] = memberships
+        .map((membership) => {
+            const customerMemberId = (membership.customer_member_id ?? "").trim();
+            const journey = journeyByMember.get(customerMemberId) ?? null;
             const label = participantLabelFrom(memberNames, customerMemberId);
-            const state = row.state?.trim() || null;
+            /*
+             * The child's current position, from the journey when there is one and from the
+             * membership's own disposition when there is not. Both are canonical; neither is
+             * invented, and a child with neither is simply undecided.
+             */
+            const state = journey?.state?.trim() || membership.outcome_status_key?.trim() || null;
+            stateByMember.set(customerMemberId, state);
             const chosen = decisionForState(configured, state);
 
             const decisions: ParticipantDecisionOptionVM[] = visible.map((decision) => {
@@ -253,7 +305,8 @@ export async function projectParticipantDecisionRows(params: {
 
             return {
                 customer_member_id: customerMemberId,
-                process_instance_id: row.id,
+                opportunity_customer_member_id: membership.id,
+                ...(journey ? { process_instance_id: journey.id } : {}),
                 label,
                 state_label: stateLabelFor(state, chosen, labelFor),
                 resolved: chosen != null,
@@ -268,11 +321,13 @@ export async function projectParticipantDecisionRows(params: {
     return {
         template_key: params.templateKey.trim(),
         rows,
+        /*
+         * Counts CHILDREN, not journeys. `requires_all_participants_resolved` means every child of
+         * this lead, and deriving the count from journeys made a three-child family completable
+         * after one decision simply because the other two had never been started.
+         */
         progress: deriveParticipantDecisionProgress({
-            participants: rows.map((r) => ({
-                state:
-                    instances.find((i) => i.id === r.process_instance_id)?.state?.trim() ?? null,
-            })),
+            participants: rows.map((r) => ({ state: stateByMember.get(r.customer_member_id) ?? null })),
             decisions: configured,
         }),
     };

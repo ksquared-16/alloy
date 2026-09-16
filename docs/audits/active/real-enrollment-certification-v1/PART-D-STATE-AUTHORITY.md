@@ -294,3 +294,56 @@ required:** revision 34's `participant_decisions` are correct and complete.
 each child's journey as optional state, instead of enumerating journeys and deriving children from
 them. The anchor convergence stays either way — it is what makes an existing journey attach to the
 right child.
+
+---
+
+# Participant source converged — and a third seam behind it
+
+Built `2PwcS6a69MbI-mJ29_ts3` (rc=0, peak 10.74 GB), 3014 cut to it.
+
+## The repair
+
+`projectParticipantDecisionRows` enumerated **existing Enrollment journeys** and derived the children
+from them. It now enumerates the lead's own children — `opportunity_customer_members` for the
+opportunity, the same authority the Children card shows as "1 child · Touree Disposable0913" — and
+attaches a journey to a child when one exists.
+
+- membership defines **who** is being decided about
+- a journey is optional state about **what has already happened** to them
+- `listEnrollmentInstancesForLead` is kept, still reading **both** anchors
+- a concluded journey never displaces an open one
+- state falls back to the membership's own `outcome_status_key` when there is no journey
+- progress counts **children**, so `requires_all_participants_resolved` means every child
+- rows are keyed by the durable child, not by a journey that may not exist yet
+
+## Proven on the artifact
+
+Disposable0913 — Decision stage, child with **no journey**, previously **0 rows**:
+
+```
+progress: 0 of 1 child decided
+child: Touree Disposable0913 | journey: (none) | ocm: 4453621b… |
+       decisions: Waitlist / Begin Enrolling / Not Enrolling
+```
+
+Nine regressions on the real three-child shape (no journey / participation-anchored /
+legacy-anchored, mixed family = exactly 3 rows, no duplicate for multiple journeys, no foreign
+child, 0-of-3 → 1-of-3 → 3-of-3 completion). Planting the journey-derived source back fails six.
+The anchor suite stays green.
+
+## The third seam
+
+The browser still shows no panel, and the measurement is unambiguous: **zero requests to
+`/participant-decisions` are issued**, so `CurrentWorkParticipantDecisionsPanel` never mounts.
+
+It is hosted on `CurrentWorkCard`. The Decision surface renders **"CASE · DECISION"**, which comes
+from `buildBusinessProcessCardEvidence` → `BusinessProcessCard`. The panel is on a card this surface
+is not showing.
+
+**NEXT BLOCKER:** the per-child decision panel is mounted only on `CurrentWorkCard`, while the
+Decision stage presents through `BusinessProcessCard`. Either the decisions belong on the card that
+actually renders the stage, or that surface must render Current Work. That is a presentation-ownership
+question, not another projection bug — and it is the last thing between here and clicking Begin
+Enrolling.
+
+Revision 34 remains correct and untouched; no revision 35.

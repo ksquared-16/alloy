@@ -80,7 +80,12 @@ type PendingDecision = {
     decisionLabel: string;
     participantLabel: string;
     customerMemberId: string;
-    processInstanceId: string;
+    /**
+     * Absent for a child who has no journey yet — which at the Decision stage is most of them,
+     * because Begin Enrolling is the decision that starts one. Execution identifies the child by
+     * `customerMemberId` / the membership, so a missing journey is not a missing identity.
+     */
+    processInstanceId?: string;
     inputs: StageParticipantDecisionInputV1[];
     /** Set when the child already has a different active path — needs an explicit yes. */
     changingFrom?: string;
@@ -237,7 +242,7 @@ export default function CurrentWorkParticipantDecisionsPanel({
             rowKey: string;
             decisionKey: string;
             customerMemberId: string;
-            processInstanceId: string;
+            processInstanceId?: string;
             participantLabel: string;
             values?: Record<string, string>;
         }) => {
@@ -250,7 +255,7 @@ export default function CurrentWorkParticipantDecisionsPanel({
                     {
                         decisionKey: p.decisionKey,
                         customerMemberId: p.customerMemberId,
-                        processInstanceId: p.processInstanceId,
+                        ...(p.processInstanceId ? { processInstanceId: p.processInstanceId } : {}),
                         participantLabel: p.participantLabel,
                         inputValues: p.values ?? {},
                     },
@@ -372,7 +377,13 @@ export default function CurrentWorkParticipantDecisionsPanel({
             {configured && rows.length ?
                 <div className="mt-2 space-y-1.5">
                     {rows.map((row) => {
-                        const rowKey = row.process_instance_id;
+                        /*
+                         * KEYED BY THE CHILD, not by their journey. A row's identity has to exist
+                         * before the decision does — at the Decision stage most children have no
+                         * journey yet, and keying on one made the row that needs deciding the row
+                         * that could not be addressed.
+                         */
+                        const rowKey = row.customer_member_id;
                         const isPending = pending?.rowKey === rowKey;
                         const rowBusy = busyKey?.startsWith(`${rowKey}:`) === true;
                         return (
@@ -438,7 +449,7 @@ export default function CurrentWorkParticipantDecisionsPanel({
                                                                 decisionLabel: decision.label,
                                                                 participantLabel: row.label,
                                                                 customerMemberId: row.customer_member_id,
-                                                                processInstanceId: row.process_instance_id,
+                                                                ...(row.process_instance_id ? { processInstanceId: row.process_instance_id } : {}),
                                                                 inputs: decision.required_inputs ?? [],
                                                                 ...(changingFrom ? { changingFrom } : {}),
                                                             });
@@ -448,7 +459,7 @@ export default function CurrentWorkParticipantDecisionsPanel({
                                                             rowKey,
                                                             decisionKey: decision.decision_key,
                                                             customerMemberId: row.customer_member_id,
-                                                            processInstanceId: row.process_instance_id,
+                                                            ...(row.process_instance_id ? { processInstanceId: row.process_instance_id } : {}),
                                                             participantLabel: row.label,
                                                         });
                                                     }}
@@ -520,7 +531,7 @@ export default function CurrentWorkParticipantDecisionsPanel({
                                                         rowKey: pending.rowKey,
                                                         decisionKey: pending.decisionKey,
                                                         customerMemberId: pending.customerMemberId,
-                                                        processInstanceId: pending.processInstanceId,
+                                                        ...(pending.processInstanceId ? { processInstanceId: pending.processInstanceId } : {}),
                                                         participantLabel: pending.participantLabel,
                                                         values: inputValues,
                                                     })
@@ -546,7 +557,7 @@ export default function CurrentWorkParticipantDecisionsPanel({
                                         role="alert"
                                         data-decision-row-error="true"
                                     >
-                                        {rowError.message}
+                                        {rowError?.message}
                                     </p>
                                 :   null}
                             </div>
