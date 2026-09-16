@@ -2387,6 +2387,31 @@ export default function FinancialsCard({
             </section>
     ) : null;
 
+    /*
+     * The mode control, declared once and rendered by whichever mode's host is on screen. Two
+     * inline copies would be two places for the modes to drift apart.
+     */
+    const entryModes = (
+        <div className="alloy-os-financials__entrymodes" role="tablist" aria-label="What to add">
+            {(["charge", "adjustment"] as const).map((mode) => (
+                <button
+                    key={mode}
+                    type="button"
+                    role="tab"
+                    aria-selected={entryMode === mode}
+                    data-financials-entry-mode-tab={mode}
+                    className={entryMode === mode ? "is-selected" : undefined}
+                    onClick={() => {
+                        setEntryMode(mode);
+                        if (mode === "adjustment" && !adjustOpen) openAddAdjustment();
+                    }}
+                >
+                    {mode === "charge" ? "Charge" : "Adjustment"}
+                </button>
+            ))}
+        </div>
+    );
+
     if (overlay === "add_charge" && vm && reconciliation) {
         const templates = vm.chargeTemplates.map((tpl) => adaptChargeTemplateOption(tpl, currency));
         const selected =
@@ -2401,7 +2426,7 @@ export default function FinancialsCard({
             <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="add_charge"
                 data-financials-entry-mode={entryMode}>
                 {/*
-                 * ── ONE ENTRY, TWO OPERATIONS ─────────────────────────────────────────────────
+                 * ── ONE ENTRY, TWO OPERATIONS — AND BOTH HOSTED BY THE PLATFORM CARD ──────────
                  *
                  * A charge and an adjustment stay different financial objects with different
                  * writers, different permissions and different audit meaning. What they stopped
@@ -2410,38 +2435,38 @@ export default function FinancialsCard({
                  * files it under. The operator's job is one job — put a financial fact on this
                  * account — and the mode belongs on the command.
                  *
-                 * The segmented control is the platform's own, not a dropdown: two primary modes an
-                 * operator chooses between are not a list to be searched.
+                 * The mode control renders INSIDE the command's own card, never beside it. An
+                 * elevated Focus Panel cell makes every direct child inert and grants interaction
+                 * to `.alloy-os-ucard` alone; measured mounted, the control was visible, keyboard-
+                 * focusable and would not take a pointer click, with `elementFromPoint` returning
+                 * the depth scrim. Add charge and Payment each learned this before it.
                  */}
-                <div className="alloy-os-financials__entrymodes" role="tablist" aria-label="What to add">
-                    {(["charge", "adjustment"] as const).map((mode) => (
-                        <button
-                            key={mode}
-                            type="button"
-                            role="tab"
-                            aria-selected={entryMode === mode}
-                            data-financials-entry-mode-tab={mode}
-                            className={entryMode === mode ? "is-selected" : undefined}
-                            onClick={() => {
-                                setEntryMode(mode);
-                                if (mode === "adjustment" && !adjustOpen) openAddAdjustment();
-                            }}
-                        >
-                            {mode === "charge" ? "Charge" : "Adjustment"}
-                        </button>
-                    ))}
-                </div>
                 {entryMode === "adjustment" ? (
                     /*
-                     * The SAME canonical adjustment entry, in this shell rather than in a band under
-                     * the ledger. `billing.adjust_account` is unchanged and is still the only writer;
-                     * `openAddAdjustment` still chooses the enrolment and clears the source charge.
+                     * The SAME canonical adjustment entry, in the command's shell rather than in a
+                     * band under the ledger. `billing.adjust_account` is unchanged and is still the
+                     * only writer; `openAddAdjustment` still chooses the enrolment.
                      */
-                    <div className="alloy-os-financials__entrybody" data-financials-entry="adjustment">
-                        {adjustmentBand}
-                    </div>
+                    <UniversalCard
+                        title="Add"
+                        insight=""
+                        iconName="Receipt"
+                        tier="work"
+                        archetype="status"
+                        modalClass="command"
+                        density="expanded"
+                        gridSpan="row"
+                        data-universal-card-key="add_adjustment"
+                        footerAction={null}
+                    >
+                        <div className="alloy-os-financials__entrybody" data-financials-entry="adjustment">
+                            {entryModes}
+                            {adjustmentBand}
+                        </div>
+                    </UniversalCard>
                 ) : selected ? (
                     <AddChargeCommand
+                        modeSlot={entryModes}
                         templates={templates}
                         specimen={adaptAddChargeSpecimen({
                             template: selected,

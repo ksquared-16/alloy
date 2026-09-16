@@ -1401,3 +1401,47 @@ describe("F33 · exactly one element is the card", () => {
         expect(panel).toMatch(/data-financials-subject=/);
     });
 });
+
+describe("F34 · a command control is hosted by the platform card", () => {
+    /*
+     * ── THE THIRD TIME THIS SURFACE LEARNED IT ────────────────────────────────────────────────
+     *
+     * An elevated Focus Panel cell makes every direct child inert —
+     * `…[data-fp-elevated="true"] > * { pointer-events: none }` — and grants `pointer-events: auto`
+     * to `.alloy-os-ucard` alone. Add charge hit this first, Payment hit it second, and Pass 5H's
+     * Charge/Adjustment control hit it third: rendered as a bare div beside the command card it
+     * measured
+     *
+     *   {reachable: false, topmost: "BUTTON.alloy-os-fp-depth-scrim", pointerEvents: "none"}
+     *
+     * — visible, keyboard-focusable, and unclickable. After hosting it inside the card:
+     *
+     *   {reachable: true, topmost: "BUTTON.", pointerEvents: "auto"}
+     *
+     * The lock is that neither mode renders its controls outside a platform card.
+     */
+    it("puts the mode control inside the command's own card", () => {
+        const panel = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        /* Charge mode: the control is handed to the command card as a slot, not rendered beside it. */
+        expect(panel).toMatch(/modeSlot=\{entryModes\}/);
+        /* Adjustment mode: hosted by the platform card, exactly as Payment is. */
+        expect(panel).toMatch(/data-universal-card-key="add_adjustment"/);
+        const adjustmentHost = panel.slice(panel.indexOf('data-universal-card-key="add_adjustment"'));
+        expect(adjustmentHost.slice(0, 400), "the mode control and the band share that host").toContain(
+            "{entryModes}",
+        );
+    });
+
+    it("declares the mode control once", () => {
+        const panel = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        const declarations = panel.match(/className="alloy-os-financials__entrymodes"/g) ?? [];
+        expect(declarations.length, "one control, rendered by whichever host is on screen").toBe(1);
+    });
+
+    it("keeps the command card as the interactive host it was built to be", () => {
+        const command = code("components/operationalCards/AddChargeCommand.tsx");
+        /* The slot renders INSIDE the UniversalCard, never before it. */
+        const cardStart = command.indexOf("<UniversalCard");
+        expect(command.indexOf("{modeSlot}"), "the slot is inside the card").toBeGreaterThan(cardStart);
+    });
+});
