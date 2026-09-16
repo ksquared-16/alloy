@@ -175,3 +175,66 @@ rest of the chain was not reachable this run.
 **NEXT PRECISE BLOCKER:** why `participantDecisionScope` is null for an open, overdue
 `review_child_paths` work item on a now-operable Decision stage. That is the one thing to answer
 before the Enrolling binding and the Communications capability are worth building.
+
+---
+
+# The participant-decision seam: an un-converged anchor
+
+## Measured, not inferred
+
+The scope was never the problem. Calling the surface endpoint directly with the four scope fields:
+
+| `opportunity_id` passed | what it is | result |
+|---|---|---|
+| `ebe6cb44…` | the `opportunities` case entity the Current Work card holds | `configured: true`, **total 0, rows 0** |
+| `fcaa839f…` | the household | total 0, rows 0 |
+| `e9965c7c…` | the **participation** (`context_id` of the enrollment journey) | **total 1, row: Pathb Certopp** |
+
+With the participation id the surface returns everything: `work_label` "Review each child's path",
+progress "0 of 1 child decided", and all three configured decisions — **Waitlist**, **Begin
+Enrolling**, **Not Enrolling** — with no `configuration_issues`.
+
+So revision 34's participant decisions are intact, the scope resolves, and the panel is self-
+suppressing because it receives **zero participants**.
+
+## First lost identity boundary
+
+`listEnrollmentInstancesForLead` (`lib/process/processInstances.ts`), which
+`projectParticipantDecisionRows` uses to find the children, matched one anchor only:
+
+```ts
+.eq("context_id", args.opportunityId)
+```
+
+The module's own comment, forty lines below, describes this defect precisely — for its *sibling*
+writers:
+
+> "Every `*ByScope` helper below matched the journey with `.eq("context_id", opportunityId)`. That
+> was exact while an Enrollment journey could only anchor to an Opportunity. It is no longer:
+> `context_type = enrollment_participation`, `context_id = the exact OCM id`. So for every journey
+> the participation anchor created — **which is now every NEW journey** — those helpers compared an
+> Opportunity id against an OCM id and **matched NOTHING** … The convergence commit that taught the
+> rest of Enrollment to read either anchor never reached this module."
+
+The writers were converged. **This reader was not**, and it is the one the Decision surface depends
+on.
+
+## Root cause
+
+An un-converged anchor predicate. Not missing configuration, not a grain error, not a second fetch
+path: one reader still asks under the legacy anchor while every new journey carries the
+participation anchor.
+
+## Fix
+
+`listEnrollmentInstancesForLead` now resolves the lead's participation ids and matches **both**
+anchors. Legacy journeys keep working; participation-anchored ones stop being invisible. Nothing is
+inferred from `context_type` — matching the id set is exact.
+
+Six regression tests in `web/tests/lifecycle/participantDecisionAnchorConvergence.test.ts`, including
+a multi-child family and a negative case that must not claim another lead's journey. Planting the
+original one-anchor predicate back fails four of them.
+
+**Not yet browser-proven:** the S5 broker refused every production build for this change (deficit
+2.6 GB → 0.75 GB as the host drained, never admitted). The change is typechecked and unit-proven;
+the panel rendering and Begin Enrolling remain to be seen on a built server.

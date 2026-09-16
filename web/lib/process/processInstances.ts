@@ -640,16 +640,47 @@ export async function readEnrollmentInstanceStageKey(
 }
 
 /** Read enrollment process instances for a lead (Work View / drawer child list). */
+/**
+ * EITHER ANCHOR — the convergence this function was missed by.
+ *
+ * The comment above `resolveEnrollmentInstanceIdForScope` describes the defect exactly, for the
+ * `*ByScope` writers: a journey may anchor to the Opportunity (legacy) or to the child's
+ * participation (`context_type = enrollment_participation`, `context_id` = the OCM id), "which is
+ * now every NEW journey", and a helper matching only the Opportunity "compared an Opportunity id
+ * against an OCM id and matched NOTHING". The writers were taught to read both. This reader was
+ * not, and it is the one the Decision surface depends on.
+ *
+ * MEASURED: for the Certopp lead, asking with the Opportunity id returned 0 participants; asking
+ * with the participation id returned Pathb Certopp and all three configured decisions. So the
+ * per-child Decision panel rendered no children — not because the configuration was missing, but
+ * because the participants were being looked up under an anchor those journeys no longer use.
+ *
+ * The lead's participation ids are resolved first and BOTH anchors are matched. Legacy journeys
+ * keep working; participation-anchored ones stop being invisible. Nothing is inferred from
+ * `context_type`: matching the id set is exact, and a journey that carries neither anchor is
+ * genuinely not this lead's.
+ */
 export async function listEnrollmentInstancesForLead(
     supabase: SupabaseClient,
     args: { orgId: string; opportunityId: string },
 ): Promise<ProcessInstanceRow[]> {
+    const { data: participationRows } = await supabase
+        .from("opportunity_customer_members")
+        .select("id")
+        .eq("org_id", args.orgId)
+        .eq("opportunity_id", args.opportunityId);
+
+    const anchorIds = [
+        args.opportunityId,
+        ...((participationRows ?? []) as { id: string }[]).map((r) => r.id).filter(Boolean),
+    ];
+
     const { data, error } = await supabase
         .from(PROCESS_INSTANCES_TABLE)
         .select("*")
         .eq("org_id", args.orgId)
         .eq("process_key", ENROLLMENT_PROCESS_KEY)
-        .eq("context_id", args.opportunityId);
+        .in("context_id", anchorIds);
     if (error) return [];
     return (data ?? []) as ProcessInstanceRow[];
 }
