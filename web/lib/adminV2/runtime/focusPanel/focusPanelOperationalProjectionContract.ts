@@ -17,6 +17,7 @@ import type { ProcessCardCommandProjection } from "@/lib/adminV2/runtime/focusPa
 import type { CurrentWorkViewModel } from "@/lib/adminV2/runtime/focusPanel/currentWork/projectCurrentWork";
 import type { AttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
 import type { HealthSafetyCardVM } from "@/lib/adminV2/runtime/focusPanel/healthSafety/buildHealthSafetyCardVM";
+import type { FinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 
 export type FocusPanelOperationalProjection = {
     businessProcess: {
@@ -63,4 +64,11 @@ export type ProducerResult<T> = { state: ProducerState; data: T | null };
 export type FocusPanelCardProducerResults = {
     attendance: ProducerResult<AttendanceCardVM>;
     health: ProducerResult<HealthSafetyCardVM>;
+    /**
+     * The ACCOUNT's, not the child's.
+     *
+     * Financials is household-grain by its own rule (`resolveFinancialSubjectId`), and forcing child
+     * scope onto it would invent a second subject model for one card.
+     */
+    financials: ProducerResult<FinancialsCardVM>;
 };
