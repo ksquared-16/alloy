@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { ENROLLMENT_DECIDE, requireEnrollmentCapability } from "@/lib/access/enrollmentAuthority";
 import { adminActionsOrgTag } from "@/lib/admin/actions/cacheTags";
 import type { EnrollmentStatusDestinationKey } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract";
 import { UPDATE_ENROLLMENT_STATUS_ACTION_KEY } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract";
@@ -28,8 +29,18 @@ type Body = {
 
 /** POST — confirm and execute enrollment status transition (OCM-first). */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    /*
+     * ENROLLMENT DECISION AUTHORITY - changes the enrollment outcome, with requirement preflight
+     * and a bypass_reason that can force it past unmet requirements. Not work.operate: this is not
+     * a stage work item.
+     *
+     * Authority here was PORTAL ADMISSION - `requireAdminOrOps()` resolves admission and no
+     * role. It is a grant now, and nothing else.
+     */
+    const capDenied = requireEnrollmentCapability(access, ENROLLMENT_DECIDE);
+    if (capDenied) return capDenied;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 

@@ -60,9 +60,10 @@ const M6 = "20260807170000_w12_seed_default_rbac_enumerated_grants.sql";
  *
  * It moves whenever a program adds a capability, because a capability that is not in the seed is a
  * capability a NEW organization never receives — the cliff `20260910183000` was written to end.
- * Forms moved it here; Organization Vocabulary, then Tours, moved it since.
+ * Forms moved it here; Organization Vocabulary, then Tours, then Work moved it since, and
+ * Enrollment Record Authority V1 moves it now.
  */
-const LIVE_SEED = "20260916030000_work_authority.sql";
+const LIVE_SEED = "20260916050000_enrollment_record_authority.sql";
 
 /**
  * The migration that owns the COMPLETENESS contract — the admin-is-the-whole-catalog rule, the nine

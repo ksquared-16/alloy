@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { ENROLLMENT_RECORD_MANAGE, requireEnrollmentCapability } from "@/lib/access/enrollmentAuthority";
 import { buildAssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
 import { generateAssignmentQuoteSnapshot } from "@/lib/enrollment/generateAssignmentQuote";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
@@ -33,8 +34,18 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
  * Execution, and this route composes neither.
  */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    /*
+     * ENROLLMENT RECORD AUTHORITY - generates the tuition quote snapshot on the enrollment record.
+     * Not enrollment.pricing.override, which is the narrow authority to BEAT the recommended
+     * price.
+     *
+     * Authority here was PORTAL ADMISSION - `requireAdminOrOps()` resolves admission and no
+     * role. It is a grant now, and nothing else.
+     */
+    const capDenied = requireEnrollmentCapability(access, ENROLLMENT_RECORD_MANAGE);
+    if (capDenied) return capDenied;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

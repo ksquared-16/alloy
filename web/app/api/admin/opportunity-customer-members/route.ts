@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { ENROLLMENT_RECORD_MANAGE, requireEnrollmentCapability } from "@/lib/access/enrollmentAuthority";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 
 /** POST: link a household child member to an opportunity (creates OCM join row). */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    /*
+     * ENROLLMENT RECORD AUTHORITY - adding a child to an inquiry is candidacy, not contact
+     * identity.
+     *
+     * Authority here was PORTAL ADMISSION - `requireAdminOrOps()` resolves admission and no
+     * role. It is a grant now, and nothing else.
+     */
+    const capDenied = requireEnrollmentCapability(access, ENROLLMENT_RECORD_MANAGE);
+    if (capDenied) return capDenied;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

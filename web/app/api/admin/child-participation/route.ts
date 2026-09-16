@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { ENROLLMENT_RECORD_MANAGE, requireEnrollmentCapability } from "@/lib/access/enrollmentAuthority";
 import {
     applyChildParticipationEdit,
     type ChildParticipationPatch,
@@ -13,8 +14,17 @@ import {
  * Never creates or writes opportunity_customer_members.
  */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    /*
+     * ENROLLMENT RECORD AUTHORITY - edits a child's requested program, room, site, schedule and
+     * start.
+     *
+     * Authority here was PORTAL ADMISSION - `requireAdminOrOps()` resolves admission and no
+     * role. It is a grant now, and nothing else.
+     */
+    const capDenied = requireEnrollmentCapability(access, ENROLLMENT_RECORD_MANAGE);
+    if (capDenied) return capDenied;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

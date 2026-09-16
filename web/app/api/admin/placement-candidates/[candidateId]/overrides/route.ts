@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { ENROLLMENT_DECIDE, requireEnrollmentCapability } from "@/lib/access/enrollmentAuthority";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertExistingOpportunityMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createPlacementOverride } from "@/lib/orchestration/placement/placementOverrideMutations";
 import { PLACEMENT_OVERRIDE_KINDS, type PlacementOverrideKind } from "@/lib/orchestration/placement/placementCandidateTypes";
 import { getPlacementProfileFromRegistry } from "@/lib/orchestration/placement/placementPresetRegistry";
@@ -42,8 +42,16 @@ export async function POST(
     request: NextRequest,
     context: { params: Promise<{ candidateId: string }> }
 ) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    /*
+     * ENROLLMENT DECISION AUTHORITY - pinning a candidate overrides the computed order.
+     *
+     * Authority here was PORTAL ADMISSION - `requireAdminOrOps()` resolves admission and no
+     * role. It is a grant now, and nothing else.
+     */
+    const capDenied = requireEnrollmentCapability(access, ENROLLMENT_DECIDE);
+    if (capDenied) return capDenied;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
