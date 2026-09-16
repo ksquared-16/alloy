@@ -1723,3 +1723,97 @@ admission is deliberately not the boundary, and a failed grant read DENIES rathe
 identity, so moving Health into the root lifecycle requires threading the caller's permission keys
 into the producers. Without that the producer is either a permission bypass or denies everyone.
 
+## 29. PRODUCER AUTHORIZATION LAW
+
+> **MOVING A PROJECTION INTO ROOT PROVISIONING MUST NEVER BROADEN WHO MAY SEE IT.**
+>
+> The root producer executes as the AUTHENTICATED CALLER, under the same authorization semantics as
+> the endpoint it replaces.
+>
+> **ONE RUNTIME DOES NOT MEAN ONE PRIVILEGE LEVEL.**
+
+Producer convergence is an execution-LOCATION change. It is not a permission-model change. For the
+same caller and subject, the old endpoint's authorization decision and the new producer's decision
+must be the same decision.
+
+### 29.1 Why this became the blocker
+
+`/api/admin/health/card` deliberately does not treat route admission as its boundary: an operator who
+works Attendance holds `requireAdminOrOps` and must not receive allergies, conditions and
+medications. Invoking the Health domain owner from root provisioning would therefore have either
+**bypassed** that refusal or **denied everyone**. Neither is acceptable, and neither is visible in a
+diff that only moves a function call.
+
+### 29.2 The root already held the answer
+
+`AdminRouteGateSuccess.access` **is** `AdminAccessContextSuccess` — the same canonical resolution the
+endpoint performs, from the same per-request cached bundle. So nothing new is resolved and no new
+type exists: the producer context carries `gate.access`.
+
+It carries the WHOLE resolved authority rather than a plucked permission list, because a producer
+handed only the fact it asked for invites the next producer to invent its own channel.
+
+### 29.3 The two producers do NOT share an authorization shape
+
+This is the part that would have been wrong by assumption:
+
+| | Health | Financials |
+| --- | --- | --- |
+| key | `health.view` | `fin.read` |
+| decided by | the domain owner, inside the VM | `assertFinancialsReadAllowed`, **outside** it |
+| resolver | caller's resolved `permissionKeys` | `resolveActorPermissionGrants` via the service client |
+| VM takes `access`? | yes | **no** — it has no access argument at all |
+| denial shape | `permissionDenied` on the VM | a verdict before any figure is computed |
+
+`buildFinancialsCardVM` takes no access argument, so calling it without its gate hands the household
+balance to anyone the route admitted. A denied Financials caller now causes **no ledger read at all**.
+
+### 29.4 `forbidden` is not `unavailable`
+
+The card must say "you do not have permission" rather than render an empty surface that reads as "no
+allergies" — the health endpoint's own reasoning. A `forbidden` result carries `data: null`: returning
+the VM and trusting the card to hide it would put the facts in the payload, where a network tab is
+enough to read them.
+
+### 29.5 Root-owned readiness
+
+`cards` absent means PROVISIONING. A producer entry inside it is an explicit verdict. That only holds
+if the envelope is COMPLETE — one producer silently omitted reads, to its card, exactly like a frame
+that has not produced yet, forever. That is the Attendance spinner's shape.
+
+`tests/surfaces/rootReadinessContract.test.ts` certifies the envelope rather than any one card: every
+registered producer present, a state from the canonical vocabulary, and `data: null` on anything but
+`ready`. Proven by planting both a silent omission and a non-ready state carrying data.
+
+### 29.6 Honest notes from this slice
+
+- A leak plant (a `forbidden` Financials result carrying the VM) stayed **green**. That is not a
+  missing test: when the gate denies, the VM is never built, so `data` is already null on that branch.
+  The test that protects it asserts no ledger read occurs.
+- A Financials reload-race test passed while issuing **no request at all**. A guard assertion caught
+  the vacuous green. `load()` is reachable only through the action UI, so the file states what it does
+  not claim rather than keeping a test that proves nothing.
+- A failed Health read returns a VM carrying `unavailableReason` rather than throwing, and the
+  endpoint answers 200 with it — so `ready` is the parity-preserving mapping there, not `error`.
+- `vac run typecheck` uses `tsconfig.build.json`, which EXCLUDES tests. A producer contract change
+  passed locally and failed CI on `typecheck:tests`. Run `vac run typecheck:tests` before promoting a
+  contract change.
+
+§21.7 remains **TARGET, NOT YET MET** — see §30 for exactly what is outstanding.
+
+## 30. What is outstanding
+
+Root-owned and certified: Business Process, Current Work, Attendance, Health, Financials.
+
+Not yet done, and not claimed:
+
+1. **Current Work render matrix** — the ten-scenario mount of the real `CurrentWorkCard` /
+   `CurrentWorkFocusedSurface` with a planted defect. Outstanding.
+2. **Dormant stage-work path** — `applyStageWorkSliceToVm` / `useRecordWorkRuntime` / `?stage_work=0`
+   still merge stage-work without refreshing the canonical operational projection. Undisposed.
+3. **Recursive + cold-load census** — commit / settled / combined, against the recorded baseline.
+4. **Final browser A → B → C** across all initial cards.
+5. **Attendance data-bearing live matrix** — no waitlisted child on staging has attendance records,
+   and manufacturing them would be a business mutation on a live tenant. Identity and
+   empty/unavailable paths are live-certified; the data-bearing states remain fixture-certified only.
+
