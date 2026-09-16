@@ -430,64 +430,28 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         [kernel],
     );
 
-    // ── PHASE H — SIBLING WORK-VIEW ADJACENCY ──────────────────────────────────────────────────
-    // A pill switch pays the full ~2.8 s provisioning round-trip because hover rarely precedes the
-    // click by that long. So once THIS work unit has committed, prepare its sibling Work Views on
-    // idle — the same K2 preparation the pill click will REUSE (dedup by (target,lens) key). The
-    // click then commits from prepared state instead of starting a cold fetch. Bounded to the view
-    // set, deduped + TTL'd by K2, and idle-scheduled so it never competes with the commit-critical
-    // path.
+    // ── PHASE H — SIBLING WORK-VIEW ADJACENCY: REMOVED (S18-1) ────────────────────────────────
     //
-    // The effect keys on the STABLE comma-joined sibling-id string, NOT on the `model` reference:
-    // Settlement overlays KPI counts and hands back a new `model` object every time, and depending on
-    // that reference made the cleanup cancel the scheduled idle callback before it could fire (and the
-    // re-run then no-op'd). The sibling-id set does not change on settlement, so keying on it fires the
-    // preparation exactly once per committed view set and survives count updates.
-    const siblingViewIds =
-        model?.workViews
-            ?.filter((v) => !v.isActive && v.id !== model.activeWorkViewId)
-            .map((v) => v.id)
-            .join(",") ?? "";
-    useEffect(() => {
-        if (!siblingViewIds || typeof window === "undefined") return;
-        const ids = siblingViewIds.split(",");
-        let retryTimer: ReturnType<typeof setTimeout> | undefined;
-        // AMPLIFICATION FIX (same shape as the workspace surface's destination warms). Each sibling
-        // view costs a FULL provisioning compose plus a drawer-VM compose, and
-        // `requestIdleCallback(timeout:2000)` fires them within 2s regardless of what the reveal is
-        // doing — measured landing four of each squarely inside the selected panel's reveal window,
-        // where they compete with the very fetch the operator is waiting on. The reveal gate already
-        // guards neighbour-subject warms (`prewarmSubjectDestination`) and the workspace surface's
-        // destination warms; this speculative sweep was the one path that missed it. Hold and
-        // re-check — the siblings still warm, just not on top of the commit-critical path.
-        //
-        // Gated HERE, at the speculative scheduling site, and deliberately NOT inside
-        // `prefetchWorkView`: that same callback serves the pill hover/focus warm
-        // (`WorkUnitSurface` `onPrefetch`), which is operator INTENT and must never be deferred.
-        const run = () => {
-            if (isWorkUnitPrimaryRevealActive()) {
-                retryTimer = setTimeout(run, 500);
-                return;
-            }
-            for (const id of ids) prefetchWorkView(id);
-        };
-        const w = window as Window & {
-            requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-            cancelIdleCallback?: (handle: number) => void;
-        };
-        if (w.requestIdleCallback) {
-            const handle = w.requestIdleCallback(run, { timeout: 2000 });
-            return () => {
-                w.cancelIdleCallback?.(handle);
-                if (retryTimer) clearTimeout(retryTimer);
-            };
-        }
-        const timer = window.setTimeout(run, 250);
-        return () => {
-            window.clearTimeout(timer);
-            if (retryTimer) clearTimeout(retryTimer);
-        };
-    }, [siblingViewIds, prefetchWorkView]);
+    // This used to prepare EVERY inactive Work View on idle, so a pill click would commit from
+    // prepared state instead of paying a cold provisioning round-trip. The intent was sound and the
+    // consumer was real — the pill click reuses K2's prepared answer by (target, lens) key.
+    //
+    // What it cost was not. Measured on the production build, Work Unit entry made SEVEN provisioning
+    // requests — the active view plus six siblings — for 404 KB of an 810 KB entry, and paid it again
+    // on every view switch, because switching changes the sibling set. The operator sees one view. It
+    // is also why warm Work Unit entry was no faster than cold (Slice 16): subject reuse is complete
+    // and costs zero provisioning per switch, but entry still re-provisioned every lens.
+    //
+    // The benefit applies to at most ONE view — the one the operator switches to next — and at idle
+    // time there is no signal about which. The cost applies to all of them, every time. So the warm
+    // moves to where the signal is: `prefetchWorkView` is unchanged and still fires on pill
+    // hover/focus (`WorkUnitSurface` `onPrefetch`), which is operator intent and names the exact
+    // destination. A switch with no preceding intent loads normally, under the existing transition
+    // behaviour that retains the prior view — measured at T1 ~150 ms with no blank frame.
+    //
+    // Deliberately not replaced with a smaller sweep: a bounded guess is still a guess. The reveal
+    // gate this needed (`isWorkUnitPrimaryRevealActive` hold-and-retry) existed only because the sweep
+    // competed with the commit-critical path; nothing here needs that any more.
 
     // ── #6 ADJACENT SUBJECT PREPARATION — warm the selected subject's NEIGHBOURS on commit. ──────
     // Row → row is the operator's most frequent move; the destination's cards otherwise cold-fetch on
