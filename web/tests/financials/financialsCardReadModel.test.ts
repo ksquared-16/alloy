@@ -39,6 +39,9 @@ function row(over: Partial<FinancialsLedgerRow>): FinancialsLedgerRow {
         dueDate: null,
         glCode: null,
         glAccountName: null,
+        /* Charge-grain responsibility, absent on this fixture — see `FinancialsLedgerRow`. */
+        responsiblePartyName: null,
+        responsibilityUnassigned: false,
         source: "Template",
         ...over,
     };

@@ -139,7 +139,7 @@ describe("program and room narrow by the canonical current placement", () => {
 
     it("composes with search and with each other", () => {
         expect(
-            filterAccounts(ROWS, { search: "a", programId: PRESCHOOL.id, roomId: SUNFLOWER.id })
+            filterAccounts(ROWS, { search: "a", programId: PRESCHOOL.id, roomId: SUNFLOWER.id, state: null })
                 .map((r) => r.customerId),
         ).toEqual(["c-kurzman"]);
     });
@@ -183,7 +183,7 @@ describe("a queue filter never changes what a household owes", () => {
             { ...NO_ACCOUNT_FILTER, search: "cert" },
             { ...NO_ACCOUNT_FILTER, programId: PRESCHOOL.id },
             { ...NO_ACCOUNT_FILTER, roomId: SUNFLOWER.id },
-            { search: "a", programId: PRESCHOOL.id, roomId: SUNFLOWER.id },
+            { search: "a", programId: PRESCHOOL.id, roomId: SUNFLOWER.id, state: null },
         ]) {
             for (const survivor of filterAccounts(ROWS, filter)) {
                 const original = ROWS.find((r) => r.customerId === survivor.customerId)!;
