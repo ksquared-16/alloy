@@ -10,7 +10,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { EMPTY_BUSINESS_PROCESS_EVIDENCE } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
+import { buildBusinessProcessCardEvidence } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
 import {
     adaptBusinessProcessEvidenceToProcessCard,
     type ProcessCardActionInput,
@@ -124,7 +124,30 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
     const projected = context.operationalProjection ?? null;
     const selectedParticipantId = context.participantScope?.participationId ?? null;
     const evidence = useMemo(() => {
-        const base = projected?.businessProcess.evidence ?? EMPTY_BUSINESS_PROCESS_EVIDENCE;
+        /*
+         * ── MEANINGFUL AT COMMIT, ENRICHED AT SETTLEMENT (P0-2) ─────────────────────────────────
+         *
+         * The fallback used to be EMPTY_BUSINESS_PROCESS_EVIDENCE — evidence derived over an EMPTY
+         * context, which renders as nothing. Measured on deployed staging: this card was absent from
+         * the DOM until 20.7s from cold entry, 5.9s after every sibling card was already meaningful,
+         * because `projected` is the settlement-only projection filled by the drawer VM. The most
+         * important operational card was the last thing to exist.
+         *
+         * The committed context already answers the question the card is for: which stage this
+         * subject is in, from the provisioning answer's own `situation`. So the fallback runs the
+         * SAME canonical builder over the context we actually have instead of over an empty one.
+         *
+         * This is not a second owner and not a cache: `buildBusinessProcessCardEvidence` is the one
+         * projection from OperationalContext to card evidence, and EMPTY_BUSINESS_PROCESS_EVIDENCE
+         * was already just this builder run over `{}`. It reads `context.businessProcess.stages`, a
+         * normalised array already on the context — NOT the ~78KB of published configuration the old
+         * client-side composition needed — so nothing is fetched and no payload returns to the
+         * browser. The commit frame carries no configured rail, so `stages` is honestly empty and the
+         * rail arrives with settlement like everything else the drawer VM owns.
+         */
+        const base =
+            projected?.businessProcess.evidence
+            ?? buildBusinessProcessCardEvidence(context, { selectedParticipantId });
         if (!selectedParticipantId) return base;
         return {
             ...base,
