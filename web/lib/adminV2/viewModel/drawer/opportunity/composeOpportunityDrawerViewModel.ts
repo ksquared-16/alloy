@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjection";
+import { resolveParticipationSubjectForOpportunity } from "@/lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity";
 import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
 
@@ -246,6 +247,29 @@ export async function composeOpportunityDrawerViewModel(
      * Two frames sharing a producer but building two contexts is how they came to disagree about the
      * subject in the first place. One context, both consumers.
      */
+    /*
+     * WHICH CHILD THIS SURFACE IS ABOUT — RESOLVED, NEVER RE-DISCOVERED.
+     *
+     * `attentionSubjectId` on a child lens is `process_instances.id`. The in-truth candidate set it
+     * was matched against (`_inquiry_children`) is intake metadata keyed by inquiry-child id and a
+     * best-effort `customer_member_id`, so the match answered `not_found` for EVERY child and the
+     * settled `participantScope` was null. Attendance and Health are both keyed on that scope, so
+     * they returned `unavailable` for a child the COMMIT frame had already described in full —
+     * measured on deployed staging as an explanatory card at 13,551 ms becoming "not available for
+     * this child" at 20,113 ms.
+     *
+     * Resolving the participation against its own table restores the boundary this route already
+     * documents: the row must be this org's and must hang off THIS opportunity, so a foreign
+     * participation still yields no scope. Null here changes nothing — the existing candidate
+     * fallback below still runs.
+     */
+    const resolvedParticipant = await resolveParticipationSubjectForOpportunity({
+        supabase,
+        orgId: gate.orgId,
+        opportunityId: String(viewModel.entity.id),
+        participationId: params.attentionSubjectId ?? null,
+    });
+
     const settledOperationalContext = buildOperationalContext({
                     subjectId: String(viewModel.entity.id),
                     title: strOrEmpty(viewModel.above_fold.record?.title),
@@ -279,6 +303,11 @@ export async function composeOpportunityDrawerViewModel(
                      * settled frame able to project the subject it claims to.
                      */
                     selectedParticipationId: params.attentionSubjectId ?? null,
+                    /*
+                     * The resolved member, stated rather than inferred. `buildOperationalContext`
+                     * prefers this over the candidate scan; absent, every prior path is unchanged.
+                     */
+                    resolvedParticipant,
     });
 
     /*
