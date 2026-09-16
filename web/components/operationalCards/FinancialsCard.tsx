@@ -405,12 +405,22 @@ export function AccountSummaryPending() {
                     {["Current balance", "Due", "Past due"].map((label) => (
                         <span key={label} className="alloy-os-fdetail__stat">
                             <span className="alloy-os-fdetail__statlabel">{label}</span>
-                            <span className="alloy-os-fdetail__statvalue">
-                                <span
-                                    aria-hidden
-                                    data-financials-card-skeleton="true"
-                                    className="inline-block h-[1em] w-[4.5rem] animate-pulse rounded bg-alloy-stone/25 align-middle"
-                                />
+                            {/*
+                             * A PLACEHOLDER MUST NOT READ AS A VALUE.
+                             *
+                             * The pending slot was a pale animated bar, and at a glance a metric
+                             * label above a faint grey smear reads as a label with nothing under
+                             * it — which on a financial surface is indistinguishable from "this
+                             * account has no balance". It now carries a visible em-dash inside the
+                             * same slot, at the same size, so the frame says "not read yet" rather
+                             * than appearing to state an absence, and the value replaces it in the
+                             * same box with no layout shift.
+                             */}
+                            <span className="alloy-os-fdetail__statvalue" data-financials-card-skeleton="true">
+                                <span className="alloy-os-financials__pendingvalue" aria-hidden>
+                                    —
+                                </span>
+                                <span className="sr-only">Reading the account</span>
                             </span>
                         </span>
                     ))}
