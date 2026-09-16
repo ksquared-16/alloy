@@ -6,12 +6,6 @@ import type { ReactNode } from "react";
 import clsx from "clsx";
 import { PacketExperiencePreview } from "@/components/forms/workspace/PacketExperiencePreview";
 import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
-import {
-    TechnicalDetailDisclosure,
-    TechnicalDetailField,
-    TechnicalDetailFieldList,
-    TechnicalDetailMonospaceValue,
-} from "@/components/forms/review";
 import { FormsOperationalLink } from "@/components/forms/workspace/FormsOperationalLink";
 import { IntakeWorkspaceRegion } from "@/components/forms/workspace/IntakeWorkspaceRegion";
 import {
@@ -26,7 +20,8 @@ import {
 } from "@/components/forms/workspace/PacketStepCompositionEditor";
 import type { NewDocumentStep } from "@/components/forms/workspace/PacketAddStepChooser";
 import {
-    PacketExperienceOverview,
+    PacketReadinessChip,
+    PacketUsageLine,
     type PacketExperienceVM,
 } from "@/components/forms/workspace/PacketExperienceOverview";
 import {
@@ -40,7 +35,6 @@ import {
     packetOrchestrationStatusTone,
     packetStepReadinessLabel,
 } from "@/lib/forms/packets/packetOrchestrationPresentation";
-import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
 import PrimaryButton from "@/components/PrimaryButton";
 import {
     opCaseFileCanvas,
@@ -151,8 +145,15 @@ export function PacketBuilderWorkspaceLayout({
 
     return (
         <>
+            {/*
+             * ONE STRIP, NOT A DASHBOARD.
+             *
+             * Status, size, who requires it, whether it is ready, and the way to see it — in a
+             * single metadata row, because none of those is a task. Everything that used to be a
+             * card above the obligations is now either here in a line or gone.
+             */}
             <div className={opOrientationSurface} data-testid="packet-builder-overview">
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <FormsReviewBadge
                         label={packetOrchestrationStatusLabel(statusRow)}
                         tone={packetOrchestrationStatusTone(statusRow)}
@@ -160,13 +161,18 @@ export function PacketBuilderWorkspaceLayout({
                     <span className={opMetadata}>
                         {stepCount} step{stepCount === 1 ? "" : "s"}
                     </span>
-                    {/*
-                     * The answer to "okay, show me".
-                     *
-                     * It sits in the orientation band rather than beside Save, because it is not
-                     * part of editing — it is how an operator checks that what they configured is
-                     * what they meant, which is the question they have as soon as they stop typing.
-                     */}
+                    {experience ? (
+                        <>
+                            <span aria-hidden className="text-alloy-midnight/20">
+                                |
+                            </span>
+                            <PacketUsageLine vm={experience} />
+                            <span aria-hidden className="text-alloy-midnight/20">
+                                |
+                            </span>
+                            <PacketReadinessChip vm={experience} />
+                        </>
+                    ) : null}
                     {previewSteps.length ? (
                         <button
                             type="button"
@@ -178,9 +184,7 @@ export function PacketBuilderWorkspaceLayout({
                         </button>
                     ) : null}
                 </div>
-                {defDesc ?
-                    <p className={clsx("mt-2", opMetadata)}>{defDesc}</p>
-                :   null}
+                {defDesc ? <p className={clsx("mt-2", opMutedMeta)}>{defDesc}</p> : null}
             </div>
 
             <div className={clsx(opCaseFileCanvas, "mt-5", opStackPage)} data-testid="packet-builder-workspace">
@@ -200,7 +204,7 @@ export function PacketBuilderWorkspaceLayout({
                     data-testid="packet-region-overview"
                 >
                     <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-2 text-[12px] font-semibold text-alloy-midnight/70">
-                        Packet overview
+                        Packet settings
                         <span className="font-normal text-alloy-midnight/45">
                             {defName.trim() || "Unnamed packet"}
                             {defActive ? " · accepting new runs" : " · not accepting new runs"}
@@ -266,7 +270,6 @@ export function PacketBuilderWorkspaceLayout({
                  * document to send in. Calling all three "forms" was not shorthand, it was wrong,
                  * and it was the reason an administrator could not tell what a family would meet.
                  */}
-                <PacketExperienceOverview vm={experience ?? null} />
 
                 <section id="packet-steps" className={clsx(opRegionSeparator, "rounded-[14px] border border-alloy-stone/20 bg-white p-4")} data-testid="packet-region-steps">
                     {/*
@@ -365,33 +368,15 @@ export function PacketBuilderWorkspaceLayout({
                     </div>
                 </details>
 
-                <div className={opRegionSeparator}>
-                    <TechnicalDetailDisclosure
-                        title={FORMS_TECHNICAL_DISCLOSURE.technicalDetails.title}
-                        helperText="Internal keys, link ids, and configuration identifiers."
-                    >
-                        <TechnicalDetailFieldList>
-                            <TechnicalDetailField label="Packet definition id" fullWidth>
-                                <TechnicalDetailMonospaceValue>{packetDefId}</TechnicalDetailMonospaceValue>
-                            </TechnicalDetailField>
-                            <TechnicalDetailField label="Internal key" fullWidth>
-                                <TechnicalDetailMonospaceValue>{defKey}</TechnicalDetailMonospaceValue>
-                            </TechnicalDetailField>
-                            {links.map((L) => (
-                                <TechnicalDetailField
-                                    key={L.id}
-                                    label={`Link ${L.is_active ? "(active)" : "(inactive)"}`}
-                                    fullWidth
-                                >
-                                    <TechnicalDetailMonospaceValue>
-                                        {L.token_prefix ? `prefix ${L.token_prefix} · ` : ""}
-                                        {L.id}
-                                    </TechnicalDetailMonospaceValue>
-                                </TechnicalDetailField>
-                            ))}
-                        </TechnicalDetailFieldList>
-                    </TechnicalDetailDisclosure>
-                </div>
+                {/*
+                 * TECHNICAL DETAILS REMOVED, not collapsed.
+                 *
+                 * Packet definition ids, internal keys and link ids are diagnostic facts. They are
+                 * not configuration, an administrator has no decision that depends on them, and a
+                 * disclosure still costs a row of the screen and a moment of "should I open this?".
+                 * If a developer needs them they belong to developer tooling, which can read them
+                 * from the API this page already calls.
+                 */}
             </div>
             <PacketExperiencePreview
                 open={previewOpen}

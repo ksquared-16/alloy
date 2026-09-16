@@ -238,9 +238,26 @@ export function PacketExperiencePreview({ open, onClose, packetName, steps }: Pr
                     className="rounded-lg border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.05] px-3 py-2"
                     data-testid="packet-preview-banner"
                 >
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-bend-pine">Preview</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-bend-pine">
+                        Configuration preview
+                    </p>
                     <p className="mt-0.5 text-[12px] leading-snug text-alloy-midnight/75">
-                        Shows the configured family experience. No responses are saved and nothing is sent.
+                        Shows what this packet asks a family for, step by step. No responses are saved and nothing is
+                        sent.
+                    </p>
+                    {/*
+                     * SAID FIRST, BECAUSE IT IS THE THING MOST EASILY MISREAD.
+                     *
+                     * A family does not meet this screen. They meet one guided conversation that
+                     * works through these obligations, and the runtime that drives it is real and
+                     * already certified — it is simply not what is rendering here yet. Burying that
+                     * at the bottom of the first step let this surface pass for the runtime, which
+                     * is the one misunderstanding worth paying a line of screen to prevent.
+                     */}
+                    <p className="mt-1 text-[12px] leading-snug text-alloy-midnight/55">
+                        This is the configuration, not the family&rsquo;s experience of it: a family answers Alloy&rsquo;s
+                        guided conversation rather than filling these in. Running that conversation here is the next
+                        step.
                     </p>
                 </div>
 

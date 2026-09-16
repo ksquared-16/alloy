@@ -1,7 +1,7 @@
 "use client";
 
-import clsx from "clsx";
-import { opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
+
+import { opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
 
 export type PacketUsageVM = {
     processName: string;
@@ -21,124 +21,62 @@ export type PacketExperienceVM = {
 };
 
 /**
- * The bridge between a packet's configuration and the experience it produces.
+ * METADATA, NOT A DASHBOARD.
  *
- * An administrator configures obligations; Alloy decides the guided conversation from them. Nobody
- * authors a prompt, so the only honest way to show what a family will meet is to state the
- * obligations in order, in the words the family experiences them — which is what this reads back
- * from the configuration that is actually saved.
+ * This was three full-width cards — Family experience, Ready to use, Used by — stacked above the
+ * obligations. Between them and the packet title they pushed "What families complete", the actual
+ * object of this workspace, off the bottom of a laptop screen. An administrator opened a packet
+ * configuration screen and had to scroll past a dashboard reporting that everything was fine.
+ *
+ * Three green checks are not information; "Ready to use ✓" is. The checks come back the moment
+ * something is actually wrong, which is the only moment they were ever worth the space.
+ *
+ * The ordered obligations below already say what a family experiences, and Preview experience
+ * shows it. So the narrative card is gone rather than collapsed: it was a third telling.
  */
-export function PacketExperienceOverview({ vm }: { vm: PacketExperienceVM | null }) {
-    if (!vm) return null;
 
-    /*
-     * `items-start`: with the family-experience restatement behind a disclosure this column is two
-     * lines tall, and a stretched grid cell turned that into a tall empty card that pushed "What
-     * families complete" down for no content at all.
-     */
+/** "Ready to use ✓", or the specific things that are not ready. Same readiness owner, less paint. */
+export function PacketReadinessChip({ vm }: { vm: PacketExperienceVM }) {
+    const problems = vm.readiness.filter((r) => !r.ok);
+    if (vm.ready && problems.length === 0) {
+        return (
+            <span
+                className="inline-flex items-center gap-1 text-[12px] font-medium text-alloy-bend-pine"
+                data-testid="packet-readiness"
+            >
+                <span aria-hidden>✓</span>
+                Ready to use
+            </span>
+        );
+    }
     return (
-        <div className="grid items-start gap-4 lg:grid-cols-2" data-testid="packet-experience-overview">
-            <section className="rounded-[14px] border border-alloy-stone/20 bg-white p-4">
-                <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
-                    Family experience
-                </h3>
-                <p className={clsx("mt-1", opMutedMeta)} data-testid="packet-content-summary">
-                    {vm.familyExperience.length} step{vm.familyExperience.length === 1 ? "" : "s"}, in this order
-                    {vm.contentSummary ? ` — ${vm.contentSummary}` : ""}.
-                </p>
-                {/*
-                 * THE ORDERED LIST MOVED BEHIND A DISCLOSURE, because it is now said twice.
-                 *
-                 * "What families complete" renders the same three obligations immediately below, in
-                 * the same order, with their configuration and their verbs. Repeating them here as
-                 * prose pushed the thing an operator came to read below the fold, so the summary
-                 * line stays and the restatement — with the two paragraphs that followed it —
-                 * opens on request. Nothing was deleted; it stopped being said first.
-                 */}
-                <details className="mt-2" data-testid="packet-family-experience-disclosure">
-                    <summary className="cursor-pointer list-none text-[11px] font-medium text-alloy-midnight/45 hover:text-alloy-bend-pine">
-                        What this reads like to a family
-                    </summary>
-                    <ol className="mt-2 space-y-1.5" data-testid="packet-family-experience">
-                        {vm.familyExperience.map((line, i) => (
-                            <li key={line} className="flex gap-2 text-[12px] leading-snug text-alloy-midnight/80">
-                                <span className="shrink-0 font-semibold text-alloy-midnight/40">{i + 1}.</span>
-                                <span>{line}</span>
-                            </li>
-                        ))}
-                    </ol>
-                    <p className={clsx("mt-3", opMutedMeta)}>
-                        Alloy guides the family through these conversationally, reuses what it already knows, lets them
-                        correct it, and asks them to review before they finish. That behaviour is managed by Alloy.
-                    </p>
-                    <p className={clsx("mt-2", opMutedMeta)} data-testid="packet-after-submit">
-                        When they finish, the completed packet arrives for staff review in Processing &rsaquo; Work,
-                        with the answers, the signed acknowledgment and the uploaded document attached.
-                    </p>
-                </details>
-            </section>
+        <span className="inline-flex flex-col gap-0.5" data-testid="packet-readiness">
+            {problems.map((r) => (
+                <span key={r.label} className="inline-flex items-start gap-1 text-[12px] font-medium text-alloy-ember">
+                    <span aria-hidden className="shrink-0">
+                        !
+                    </span>
+                    {r.label}
+                </span>
+            ))}
+        </span>
+    );
+}
 
-            <div className="space-y-4">
-                <section className="rounded-[14px] border border-alloy-stone/20 bg-white p-4">
-                    <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
-                        {vm.ready ? "Ready to use" : "Not ready yet"}
-                    </h3>
-                    <ul className="mt-2 space-y-1" data-testid="packet-readiness">
-                        {vm.readiness.map((row) => (
-                            <li
-                                key={row.label}
-                                className={clsx(
-                                    "flex items-start gap-1.5 text-[12px] leading-snug",
-                                    row.ok ? "text-alloy-midnight/75" : "text-alloy-ember",
-                                )}
-                            >
-                                <span aria-hidden className="shrink-0 font-semibold">
-                                    {row.ok ? "✓" : "!"}
-                                </span>
-                                <span>{row.label}</span>
-                            </li>
-                        ))}
-                    </ul>
-                </section>
-
-                <section className="rounded-[14px] border border-alloy-stone/20 bg-white p-4">
-                    <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">Used by</h3>
-                    {vm.usage.length === 0 ? (
-                        <p className={clsx("mt-1", opMetadata)}>
-                            No business process requires this packet yet. It can still be sent on its own.
-                        </p>
-                    ) : (
-                        <ul className="mt-2 space-y-1.5" data-testid="packet-usage">
-                            {vm.usage.map((u) => (
-                                <li key={`${u.processName}-${u.stageName}`} className="text-[12px] leading-snug text-alloy-midnight/80">
-                                    <span className="font-medium text-alloy-midnight">
-                                        {u.processName} · {u.stageName} stage
-                                    </span>
-                                    <span className="text-alloy-midnight/55">
-                                        {" "}
-                                        — {u.level}
-                                        {u.blocking ? " · blocking" : ""}
-                                    </span>
-                                    {/*
-                                     * A requirement saved but not published is the difference between what
-                                     * this screen shows and what families actually meet. Saying so here is
-                                     * the whole reason usage is read from the draft at all.
-                                     */}
-                                    {!u.published ? (
-                                        <p className="mt-0.5 text-[11px] font-medium text-alloy-ember">
-                                            Saved, not published yet — families are not being asked for this until the
-                                            process is published.
-                                        </p>
-                                    ) : null}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                    <p className={clsx("mt-2", opMutedMeta)}>
-                        When a process requires this packet, it launches the family&rsquo;s work automatically.
-                    </p>
-                </section>
-            </div>
-        </div>
+/** "Enrollment · Enrolling · required · blocking" — one line, because that is all it ever said. */
+export function PacketUsageLine({ vm }: { vm: PacketExperienceVM }) {
+    if (vm.usage.length === 0) {
+        return (
+            <span className={opMutedMeta} data-testid="packet-usage">
+                Not required by a process — can be sent on its own
+            </span>
+        );
+    }
+    return (
+        <span className={opMutedMeta} data-testid="packet-usage">
+            {vm.usage
+                .map((u) => [u.processName, u.stageName, u.level, u.blocking ? "blocking" : null].filter(Boolean).join(" · "))
+                .join("  |  ")}
+        </span>
     );
 }

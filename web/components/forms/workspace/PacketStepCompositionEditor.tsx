@@ -144,11 +144,6 @@ export function PacketStepCompositionEditor({
     const [editingRow, setEditingRow] = useState<number | null>(null);
     return (
         <div data-testid="packet-step-composition">
-            <p className={opMetadata}>
-                Each step is one thing the family does, in order — answer questions, send in a document, or read
-                and agree to one. Alloy works out how to guide them through it; you configure what is asked.
-            </p>
-
             <ol className={clsx(opGroupedSurface, "mt-4")} data-testid="packet-step-list">
                 {steps.map((s, idx) => {
                     const selected = forms.find((f) => f.id === s.form_definition_id);
