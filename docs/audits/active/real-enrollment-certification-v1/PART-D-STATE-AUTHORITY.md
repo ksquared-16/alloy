@@ -107,3 +107,71 @@ The Enrollment equivalent is a real build of that same shape and does not belong
 
 Part D was not rewritten: with no reachable Decision action and no deliverable Send, the guide would
 describe a flow no operator can perform.
+
+---
+
+# Revision 34 — Decision made workable (published 2026-09-16)
+
+## The real cause, and it was not an action binding
+
+`familyStageDestinationOperability` accepts a family stage when its primary work template either
+declares `execution_mode: "outcome_led"` OR carries a `primary_action.action_ref`. Its own comment
+names this exact case: *"a template that says nothing and offers nothing has not claimed to be
+outcome-led, it is simply incomplete."*
+
+Measured across revision 33:
+
+| stage | template | primary | execution_mode | primary_action | participant_decisions |
+|---|---|---|---|---|---|
+| lead | contact_family | yes | `direct_action` | quick_message | 0 |
+| tour | work_3 | yes | `outcome_led` | — | 0 |
+| **decision** | review_child_paths | no | **(none)** | (none) | **3** |
+| waitlist | review_waitlist_position | yes | (none) | (none) | 0 |
+| enrolling | send_enrollment_packet | yes | (none) | (none) | 0 |
+
+`review_child_paths` is outcome-led in substance — it carries three child-grain participant
+decisions — and had simply never said so. Because one inoperable stage refuses the WHOLE Work View,
+that single undeclared key was refusing every queue on the process.
+
+**Lead and Tour were already operable**, so no prerequisite binding was needed to reach Decision.
+
+## REV33 → REV34, every changed key
+
+```
+processes.0.stages.2.stage_operating_plan_v1.work_templates.0.execution_mode
+    undefined -> "outcome_led"
+```
+
+**Total changed keys: 1.** Validation: 0 errors, 0 warnings. Published as revision 34
+(`6692737e-a654-4846-a2d4-e461a7252df5`). The three participant decisions were preserved intact.
+
+## Browser-proven after publication
+
+The Decision Work View now renders. The Focus Panel shows the process rail (Lead ✓ → Tour ✓ →
+**Decision** → Waitlist → Enrolling → Enrolled) and a live card:
+
+> **CASE · DECISION** — Decision · Choose each child's enrollment path after the family tour.
+> `Record outcome` · `Move to Waitlist` · `Move to Enrolling`
+
+That is the blocker from the previous run, removed.
+
+## Where it stops now
+
+`Record outcome` offers the STAGE outcomes — *Child paths chosen* and *Needs follow-up*. The
+child-grain decisions live on the work template:
+
+| label | action_ref | targets |
+|---|---|---|
+| Waitlist | `waitlist_child` | disposition `waitlisted` + `move_to_stage: waitlist` |
+| **Begin Enrolling** | `enroll_child` | **disposition `enrolling` + `move_to_stage: enrolling`** |
+| Not Enrolling | `update_child_enrollment_status` | disposition `not_enrolling` (+ reason) |
+
+**Begin Enrolling already does exactly what Part D needs** — it writes the disposition AND explicit
+stage membership. It is rendered by `CurrentWorkParticipantDecisionsPanel`, mounted only when
+`participantDecisionScope` is non-null ("the runtime has not projected a department/stage/template
+yet"). On this subject the panel does not appear, so no child could be moved to Enrolling and the
+rest of the chain was not reachable this run.
+
+**NEXT PRECISE BLOCKER:** why `participantDecisionScope` is null for an open, overdue
+`review_child_paths` work item on a now-operable Decision stage. That is the one thing to answer
+before the Enrolling binding and the Communications capability are worth building.
