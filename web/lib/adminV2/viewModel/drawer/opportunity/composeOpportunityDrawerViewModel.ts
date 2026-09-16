@@ -38,13 +38,6 @@ export type ComposeOpportunityDrawerViewModelParams = {
      * removing one server round-trip (`activity_comms_preview_ms`) from record-open.
      */
     deferCommunicationsPreview?: boolean;
-    /**
-     * Skip the stage-work projection (Current Work region) during first-paint composition and mark
-     * `workspace.stage_work` pending. The workspace VM route sets this; the client resolves the
-     * projection through the thin `…/stage-work` resource and patches the region in place. Defaults
-     * to false so any full-drawer caller keeps stage work inline.
-     */
-    deferStageWork?: boolean;
     /** The selected participation this surface is scoped to; resolved, never trusted. */
     attentionSubjectId?: string | null;
 };
@@ -116,7 +109,6 @@ export async function composeOpportunityDrawerViewModel(
      * slice is 181-380 ms against A's ~650-800 ms, so `Promise.all` hides B inside A entirely and the
      * compose still costs `max(A, B)` = A.
      */
-    const deferStageWork = params.deferStageWork === true;
     const [initial, deferred] = await Promise.all([
         buildInitialPanelResource({
             supabase,
@@ -145,7 +137,6 @@ export async function composeOpportunityDrawerViewModel(
             currentStageKey,
             currentStageLabel,
             deferCommunicationsPreview: params.deferCommunicationsPreview === true,
-            deferStageWork,
         }),
     ]);
     if (!initial.ok) {
@@ -226,9 +217,8 @@ export async function composeOpportunityDrawerViewModel(
             attention: initial.summaries.attention,
         },
         background_refresh: {
-            allowed: deferStageWork
-                ? ["task_status", "scheduled_send_status", "readiness_values", "stage_work"]
-                : ["task_status", "scheduled_send_status", "readiness_values"],
+            // Stage work is never deferred now, so it is never a background refresh target.
+            allowed: ["task_status", "scheduled_send_status", "readiness_values"],
         },
         timing: {
             compose_ms: Date.now() - composeStart,

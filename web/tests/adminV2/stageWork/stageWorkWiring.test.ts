@@ -20,7 +20,19 @@ describe("stage-work Tier-2 wiring", () => {
          * merely late, it is often not needed at all.
          */
         const route = read("app/api/admin/view-models/drawer/opportunity/[id]/route.ts");
-        expect(route).toMatch(/deferStageWork:\s*sp\.get\("stage_work"\)\s*===\s*"0"/);
+        /*
+         * `stage_work=0` is RETIRED, so the route no longer reads it at all.
+         *
+         * It restored the deferred contract, and nothing ever constructed it —
+         * `buildOpportunityDrawerViewModelUrl` is the only builder of this query and sets department,
+         * work unit and attention subject. The branch was unreachable from the product and fully
+         * alive in the code, and the patch it enabled merged stage-work truth without refreshing the
+         * operational projection beside it.
+         */
+        // The READ, not the word: the route's comment explains the retirement and naming it there
+        // is the point. What must be gone is the parameter ever reaching the composer.
+        expect(route).not.toMatch(/sp\.get\(\s*["']stage_work["']\s*\)/);
+        expect(route).not.toMatch(/deferStageWork\s*:/);
         expect(route).toMatch(/deferCommunicationsPreview:\s*sp\.get\("comms_preview"\)\s*!==\s*"1"/);
     });
 
@@ -33,22 +45,25 @@ describe("stage-work Tier-2 wiring", () => {
         expect(compose).not.toMatch(/const deferred\s*=\s*await buildDeferredDetailResource/);
     });
 
-    it("compose emits a stage_work load state and skips the projection when deferred", () => {
+    it("stage work is resolved by ONE owner and can never be marked pending", () => {
         const compose = read("lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts");
-        expect(compose).toContain("deferStageWork");
         expect(compose).toContain("stage_work: stage_work_state");
+        // The deferral parameter is gone from the composer entirely.
+        expect(compose).not.toContain("deferStageWork");
+
         /*
-         * PRE-EXISTING STALE ASSERTION, repaired rather than deleted.
+         * The load state may be `ready` or `empty` — never `pending`.
          *
-         * These two both failed before this change: `resolveOpportunityStageWorkSlice` and the
-         * pending ternary moved into `deferredDetailResource.ts` when Module B was extracted, and the
-         * guard kept reading compose. A guard that cannot pass is not protecting anything, so it now
-         * reads the file that actually owns the projection — the property it was written to protect
-         * (deferred marks pending, never a fabricated runtime) is unchanged and still asserted.
+         * `pending` was the deferred contract's marker, and the client effect that answered it wrote
+         * `stage_work_runtime` without touching `operational_projection`. A view model that carried
+         * both would describe Current Work and the card envelope from one stage-work runtime beside
+         * a later one. Making `pending` unproducible is what retires that, rather than guarding the
+         * path that consumed it.
          */
         const deferredResource = read("lib/adminV2/viewModel/drawer/opportunity/deferredDetailResource.ts");
         expect(deferredResource).toContain("resolveOpportunityStageWorkSlice");
-        expect(deferredResource).toMatch(/deferStageWork\s*\?\s*\{\s*status:\s*"pending"\s*\}/);
+        expect(deferredResource).not.toContain("deferStageWork");
+        expect(deferredResource).not.toMatch(/status:\s*"pending"/);
     });
 
     it("the thin stage-work route is NOT a second full composition", () => {
