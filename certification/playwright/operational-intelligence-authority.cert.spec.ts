@@ -39,10 +39,17 @@ const OPS = { email: "cert.ops@northwind.invalid" };
 
 type Door =
     | "calcCreate" | "calcEdit" | "calcPublish" | "calcArchive" | "calcRestore" | "calcBindRuntime"
-    | "kpiTargets" | "oiConfig" | "measurementCreate" | "measurementEdit";
+    | "kpiTargets" | "oiConfig" | "measurementCreate" | "measurementEdit"
+    // Analytics/Reporting Authority Convergence V1 — the same owner, the same family.
+    | "metricCreate" | "metricEdit" | "metricCopy" | "metricSnapshot"
+    | "placementCreate" | "rollupCreate" | "vizCreate" | "surfaceDoc"
+    | "measurementObserve" | "snapshotsRun" | "snapshotsWrite";
 
 /** The analytics READ the ops correction must not have broken. */
-type ReadDoor = "calcList" | "calcCatalog" | "calcRuntime";
+type ReadDoor = "calcList" | "calcCatalog" | "calcRuntime"
+    // READ-LIKE POSTs. They persist nothing, so they belong to `reports.read` and a Reader — and
+    // therefore ops, which holds the read key in every organization — must keep reaching them.
+    | "metricPreview" | "calcEvaluate";
 
 type Session = { page: Page; request: APIRequestContext; signedIn: boolean; close: () => Promise<void> };
 
@@ -77,6 +84,19 @@ async function knock(r: APIRequestContext, door: Door, calcId = NO_CALC): Promis
         case "oiConfig": return (await r.patch("/api/admin/metrics/oi-config", no)).status();
         case "measurementCreate": return (await r.post("/api/admin/metrics/oi-org-calc-measurements", no)).status();
         case "measurementEdit": return (await r.patch(`/api/admin/metrics/oi-org-calc-measurements/${NO_MEASUREMENT}`, no)).status();
+        // ── Analytics/Reporting Authority Convergence V1 ─────────────────────────────────────
+        // Sixteen of these were reachable through ORG CONTEXT ALONE before the convergence.
+        case "metricCreate": return (await r.post("/api/admin/analytics/metrics", no)).status();
+        case "metricEdit": return (await r.patch(`/api/admin/analytics/metrics/${NO_CALC}`, no)).status();
+        case "metricCopy": return (await r.post(`/api/admin/analytics/metrics/${NO_CALC}/copy`, no)).status();
+        case "metricSnapshot": return (await r.post(`/api/admin/analytics/metrics/${NO_CALC}/snapshot`, no)).status();
+        case "placementCreate": return (await r.post("/api/admin/analytics/placements", no)).status();
+        case "rollupCreate": return (await r.post("/api/admin/analytics/rollups", no)).status();
+        case "vizCreate": return (await r.post("/api/admin/analytics/visualizations", no)).status();
+        case "surfaceDoc": return (await r.put("/api/admin/analytics/surfaces/operational-intelligence/doc", no)).status();
+        case "measurementObserve": return (await r.post(`/api/admin/metrics/oi-org-calc-measurements/${NO_MEASUREMENT}/observe`, no)).status();
+        case "snapshotsRun": return (await r.post("/api/admin/analytics/snapshots/run", no)).status();
+        case "snapshotsWrite": return (await r.post("/api/admin/metrics/snapshots/write", no)).status();
     }
 }
 
@@ -85,14 +105,23 @@ async function read(r: APIRequestContext, door: ReadDoor): Promise<number> {
         case "calcList": return (await r.get("/api/admin/organization-calculations", { failOnStatusCode: false })).status();
         case "calcCatalog": return (await r.get("/api/admin/organization-calculations/catalog", { failOnStatusCode: false })).status();
         case "calcRuntime": return (await r.get("/api/admin/organization-calculations/runtime", { failOnStatusCode: false })).status();
+        // Read-like POSTs: invoked as POSTs, but they persist nothing and take `reports.read`.
+        case "metricPreview": return (await r.post(`/api/admin/analytics/metrics/${NO_CALC}/preview`, { data: {}, failOnStatusCode: false })).status();
+        case "calcEvaluate": return (await r.post(`/api/admin/organization-calculations/${NO_CALC}/evaluate`, { data: {}, failOnStatusCode: false })).status();
     }
 }
 
 const admitted = (s: number) => s !== 403;
 const CALC: Door[] = ["calcCreate", "calcEdit", "calcPublish", "calcArchive", "calcRestore", "calcBindRuntime"];
 const METRICS: Door[] = ["kpiTargets", "oiConfig", "measurementCreate", "measurementEdit"];
-const ALL: Door[] = [...CALC, ...METRICS];
-const READS: ReadDoor[] = ["calcList", "calcCatalog", "calcRuntime"];
+/** The Analytics mutations this convergence gave an owner. All take `reports.write`. */
+const ANALYTICS: Door[] = [
+    "metricCreate", "metricEdit", "metricCopy", "metricSnapshot",
+    "placementCreate", "rollupCreate", "vizCreate", "surfaceDoc",
+    "measurementObserve", "snapshotsRun", "snapshotsWrite",
+];
+const ALL: Door[] = [...CALC, ...METRICS, ...ANALYTICS];
+const READS: ReadDoor[] = ["calcList", "calcCatalog", "calcRuntime", "metricPreview", "calcEvaluate"];
 
 const MATRIX: Record<string, Record<string, number>> = {};
 function record(who: string, door: string, status: number) {

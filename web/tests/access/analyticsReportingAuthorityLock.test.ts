@@ -133,6 +133,21 @@ describe("RL-17 — Analytics mutations are owned, not merely reachable", () => 
         expect(entry?.capability).toBe(expected);
     });
 
+    it("the shared Analytics mutate helper decides no authority of its own", () => {
+        /*
+         * `requireAnalyticsV2AdminMutate` asked `ctx.role !== "admin"` on all thirteen Analytics
+         * mutation routes. A capability gate in front of a stricter role title is decorative in the
+         * direction that matters: the custom Writer holding `reports.write` was refused and an
+         * admin whose package withholds it was admitted. The helper still resolves context; it must
+         * never resolve authority again.
+         */
+        const src = codeOnly(
+            fs.readFileSync(path.join(WEB, "lib", "metrics", "platform", "adminApiHelpers.ts"), "utf8"),
+        );
+        expect(src).not.toMatch(/ctx\.role\s*[!=]==\s*["'`](admin|ops)["'`]/);
+        expect(src).not.toMatch(/roleKeys/);
+    });
+
     it("keeps the machine-auth branch of the dual-path endpoints", () => {
         // Converging the operator branch must not delete internal cron authentication, which is a
         // separate credential rather than a role title standing in for a capability.
