@@ -108,7 +108,19 @@ export default function FinancialsCard({
     const { period, pastDue } = evidence;
 
     return (
-        <div className="alloy-os-billing" data-financials-card="true">
+        /*
+         * ── ONE CARD ROOT OWNS THE MARKER ──────────────────────────────────────────────────────
+         *
+         * This element used to carry `data-financials-card="true"` as well, and it renders INSIDE
+         * the placement shell that carries it — so mounted instrumentation counted two cards where
+         * one was on screen, both reporting the same box, and every selector that asked for "the
+         * card" got an ambiguous answer. It is a structural element of one card, not a second card.
+         *
+         * The root is the placement shell: it is what carries the account, the subject filter, the
+         * overlay and the reserved-geometry marker. This is its BODY, and says so. Nothing about
+         * the DOM's shape changed — only which element claims to be the thing.
+         */
+        <div className="alloy-os-billing" data-financials-card-body="true">
             <UniversalCard
                 title="Financials"
                 insight=""
@@ -194,14 +206,31 @@ export default function FinancialsCard({
                         <p className="alloy-os-billing__due">{period.dueLabel}</p>
                         {/* "Add something that should be billed" is a Current Period intent, not a
                             payment one — and it stays quiet so it never competes with Pay now. */}
+                        {/*
+                            ONE COMMAND, ONE IDENTITY, WHICHEVER VARIANT RENDERS IT.
+                            These are the same two commands the account variant offers and the same
+                            handlers the same host supplies; only the presentation primitive differs.
+                            So they carry the same semantic marker, and `Details` carries a
+                            NAVIGATION marker instead — it goes somewhere rather than doing
+                            something, which is the distinction this card's footer was composed to
+                            make in the first place.
+                        */}
                         <div className="alloy-os-billing__zone-actions">
                             {onPayNow ? (
-                                <FooterAction onClick={onPayNow}>Payment →</FooterAction>
+                                <FooterAction onClick={onPayNow} data-financials-command="payment">
+                                    Payment →
+                                </FooterAction>
                             ) : null}
-                            <FooterAction onClick={onAddCharge}>Add →</FooterAction>
+                            <FooterAction onClick={onAddCharge} data-financials-command="add">
+                                Add →
+                            </FooterAction>
                             {/* Offered only where there is somewhere to drill to. In Financials →
                                 Accounts the account's own body is already open beneath this. */}
-                            {onDetails ? <FooterAction onClick={onDetails}>Details →</FooterAction> : null}
+                            {onDetails ? (
+                                <FooterAction onClick={onDetails} data-financials-nav="details">
+                                    Details →
+                                </FooterAction>
+                            ) : null}
                         </div>
                     </section>
 
@@ -514,7 +543,11 @@ function FinancialsCompactCard({
                             </Action>
                         </span>
                         {/* Navigation, not a mutation, and dressed as navigation. */}
-                        {onDetails ? <FooterAction onClick={onDetails}>Details →</FooterAction> : null}
+                        {onDetails ? (
+                            <FooterAction onClick={onDetails} data-financials-nav="details">
+                                Details →
+                            </FooterAction>
+                        ) : null}
                     </div>
                 }
             >

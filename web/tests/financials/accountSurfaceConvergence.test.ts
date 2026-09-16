@@ -1250,3 +1250,154 @@ describe("F29 · a filter that shrinks still reads", () => {
         expect(shrink.slice(0, 120), "the shrink rule no longer sets a width floor too").not.toMatch(/min-width/);
     });
 });
+
+describe("F30 · the account pane commits one geometry", () => {
+    /*
+     * ── THE DEFECT, MEASURED ON THE SURFACE IT WAS REPORTED ON ────────────────────────────────
+     *
+     * Financials → Accounts → selected account committed at 1066x120 and SHRANK to 1066x93 1.4
+     * seconds later, when the read landed. One card, one tree, one account, the same anatomy in
+     * both frames — so not a second representation, and not the data arriving either: 120px is
+     * `FOCUS_PANEL_RESERVED_MIN_HEIGHT` to the pixel.
+     *
+     * That floor was introduced for the Focus Panel's subject switch, where the card genuinely
+     * collapsed 409 → 69 → 409 because its loading state is a one-line loader. The account
+     * variant's loading state is `AccountSummaryPending`, which is the same three metrics over the
+     * same two commands as the resolved summary — already the right shape, already the right
+     * height. A floor under it could only ever be the wrong height.
+     *
+     * After: both frames 1066x93. Structural delta 0.
+     */
+    it("reserves a footprint only where the card can still collapse", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card, "the reserve is a decision, not an unconditional style").toMatch(
+            /reservesFootprint\s*=\s*reservingAccount && summaryVariant !== "account"/,
+        );
+        /* And the style follows that decision rather than the broader condition. */
+        expect(card).toMatch(/style=\{\s*reservesFootprint/);
+        expect(card, "the marker reports the same decision the style made").toMatch(
+            /data-financials-reserved=\{reservesFootprint \? "true" : undefined\}/,
+        );
+    });
+
+    it("still commits the anatomy while the account resolves", () => {
+        /*
+         * Removing the floor must not become removing the frame. The account variant's pending
+         * state is the committed anatomy; that is WHY it needs no floor, so the two facts are
+         * locked together.
+         */
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card).toMatch(/summaryVariant === "account" \?[\s\S]{0,40}<AccountSummaryPending \/>/);
+    });
+});
+
+describe("F31 · one command identity, whichever primitive renders it", () => {
+    /*
+     * The period-variant footer carried no `data-financials-command` while the account variant's
+     * identical commands did. The commands were never different — same handler props, same host.
+     * `FooterAction` simply accepted `children` and `onClick` and dropped everything else, so a
+     * command rendered through it could not say which command it was. That is the defect `Action`
+     * already carries a comment about, from the Process card.
+     */
+    it("lets the footer primitive carry a command's identity", () => {
+        const kit = code("components/cardLab/CardLabKit.tsx");
+        expect(kit, "FooterAction forwards what a caller legitimately puts on a button").toMatch(
+            /FooterAction\(\s*\{ children, \.\.\.rest \}/,
+        );
+        expect(kit, "and still owns the visual contract").toMatch(
+            /className="alloy-os-ucard__action alloy-os-ucard__action--system5"/,
+        );
+    });
+
+    it("names Payment and Add the same way in every variant", () => {
+        const compact = code("components/operationalCards/FinancialsCard.tsx");
+        const payment = compact.match(/data-financials-command="payment"/g) ?? [];
+        const add = compact.match(/data-financials-command="add"/g) ?? [];
+        /* Period footer, account summary, the pending frame, and the compact footer. */
+        expect(payment.length, "every Payment entry is named").toBeGreaterThanOrEqual(3);
+        expect(add.length, "every Add entry is named").toBeGreaterThanOrEqual(3);
+    });
+
+    it("keeps Details a navigation, not a command", () => {
+        /*
+         * Details goes somewhere; Payment and Add do something. The footer was composed to make
+         * exactly that distinction, so the marker keeps it rather than flattening all three into
+         * one vocabulary for the convenience of a selector.
+         */
+        const compact = code("components/operationalCards/FinancialsCard.tsx");
+        expect(compact).toMatch(/data-financials-nav="details"/);
+        expect(compact, "Details is never stamped as a command").not.toMatch(
+            /data-financials-command="details"/,
+        );
+    });
+});
+
+describe("F32 · the Details shell's height is not a function of its rows", () => {
+    /*
+     * ── WHAT WAS MEASURED, AND WHAT IT MEANT ──────────────────────────────────────────────────
+     *
+     * First committed Details frame vs fully hydrated, 42 rows → 95 rows:
+     *
+     *   gridArea      426 → 426   delta 0      the shell the operator sees
+     *   intrinsic     426 → 426   delta 0
+     *   detailScroll  556 → 552   delta -4     bounded; content 1474 → 4979 inside it
+     *   ledgerBand     45 → 3447               grows INSIDE the scroller, as designed
+     *   overlayRoot    52 →   84               a wrapper whose first child measures 0px
+     *
+     * So the committed shell does not grow, and the ledger body owns its own overflow. The lock is
+     * on the property that made that true: the scroll region is the single bounded owner, and no
+     * height anywhere is derived from how many rows came back in the first cohort.
+     */
+    it("gives the ledger body one bounded scroll owner", () => {
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        const rule = css.slice(css.indexOf(".alloy-os-fdetail__scroll"));
+        expect(rule.slice(0, 300), "the record scrolls").toMatch(/overflow-y:\s*auto/);
+    });
+
+    it("sizes no surface from a row count", () => {
+        for (const path of [
+            "components/operationalCards/FinancialsDetailCard.tsx",
+            "components/admin/focusPanel/cards/FinancialsCard.tsx",
+        ]) {
+            const src = code(path);
+            /*
+             * A height computed from `rows.length` is exactly the defect §3 names: commit to the
+             * first cohort's size, then enlarge when the rest arrives.
+             */
+            expect(src, `${path} derives no height from the rows`).not.toMatch(
+                /(height|minHeight|maxHeight)[^;\n]{0,40}rows\.length/,
+            );
+        }
+    });
+});
+
+describe("F33 · exactly one element is the card", () => {
+    /*
+     * Mounted instrumentation counted TWO `[data-financials-card]` elements for one card on screen:
+     * the placement shell and, nested directly inside it, the approved card's own body — same box,
+     * same height, both claiming to be the thing. Every selector that asked for "the card" got an
+     * ambiguous answer, including this suite's own probes.
+     *
+     * Stated as an instrumentation and DOM-identity defect, which is what it is. It is NOT the
+     * user-visible loading defect: that was a reserved geometry floor, measured separately, and
+     * nothing here changes what the operator sees.
+     */
+    it("keeps the marker on the placement shell and nowhere beneath it", () => {
+        const approved = code("components/operationalCards/FinancialsCard.tsx");
+        expect(approved, "the body is a body, not a second card").toContain('data-financials-card-body="true"');
+        expect(approved, "and no element in the approved card claims to be a card root").not.toMatch(
+            /data-financials-card="true"/,
+        );
+    });
+
+    it("leaves the root's identity attributes with the root", () => {
+        /*
+         * The root is the element that can answer WHICH account, WHICH subject filter and WHICH
+         * overlay — so those attributes and the marker belong to the same element.
+         */
+        const panel = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(panel).toMatch(/data-financials-card="true"/);
+        expect(panel).toMatch(/data-financials-account=/);
+        expect(panel).toMatch(/data-financials-subject=/);
+    });
+});

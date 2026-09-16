@@ -901,6 +901,25 @@ export default function FinancialsCard({
      */
     const reservingAccount = !vm && !deniedRead && (loading || subjectStillResolving || provisioningAccount);
 
+    /*
+     * ── A FLOOR IS FOR A COLLAPSE, AND THE ACCOUNT VARIANT NO LONGER COLLAPSES ──────────────────
+     *
+     * Measured in Financials → Accounts → selected account: the pane committed at 120px and then
+     * SHRANK to 93px 1.4 seconds later, when the read landed. 120px is `FOCUS_PANEL_RESERVED_MIN_
+     * HEIGHT` exactly — 7.5rem — so the shift was not the data arriving. It was this floor, held
+     * under a frame that did not need one and was 27px shorter than the floor reserving for it.
+     *
+     * The floor was introduced for the Focus Panel's subject switch, where the card genuinely went
+     * 409px → 69px → 409px because its loading state was a one-line loader. The account variant's
+     * loading state is `AccountSummaryPending` — the SAME three metrics over the same two commands
+     * as the resolved summary — so its pending frame is already the right shape and already the
+     * right height. Reserving a different one is how a stable anatomy acquires a visible jump.
+     *
+     * So the floor now applies where a collapse is actually possible, and the variant that commits
+     * its anatomy up front is trusted to hold its own geometry. The Focus Panel path is untouched.
+     */
+    const reservesFootprint = reservingAccount && summaryVariant !== "account";
+
     useEffect(() => {
         // Clear FIRST: the previous household's balance must not linger while the next resolves.
         // Any in-flight RELOAD is superseded too — its ordinal can no longer be current.
@@ -2939,9 +2958,9 @@ export default function FinancialsCard({
              * the rendered card rather than off the props it was handed.
              */
             data-financials-account={vm?.account?.customerId ?? undefined}
-            data-financials-reserved={reservingAccount ? "true" : undefined}
+            data-financials-reserved={reservesFootprint ? "true" : undefined}
             style={
-                reservingAccount
+                reservesFootprint
                     ? { minHeight: loadedHeightRef.current ?? FOCUS_PANEL_RESERVED_MIN_HEIGHT }
                     : undefined
             }
