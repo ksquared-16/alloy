@@ -90,6 +90,23 @@ export const CUSTOM = {
      * capability at all — so if any handler has quietly kept reading a job title, this is the
      * persona that passes when it should not.
      */
+    /*
+     * ── WORKFLOW AUTHORITY: AUTHORING AUTOMATION IS NOT FIRING IT ──
+     *
+     * `wfWriter` holds `ops.workflows.write` and NO privileged title, which is precisely the
+     * principal the old `requireAdmin()` gate refused while admitting an admin whose package
+     * withholds the key. `wfTitular` is the control: its LABEL is "Workflow Administrator" and it
+     * holds no Workflow capability, so it passes only if a handler is still reading a job title.
+     *
+     * `wfAdjacent` carries a NEIGHBOURING configuration authority and no Workflow key. It exists
+     * because the interesting failure is not "nobody gets in" but "somebody adjacent gets in":
+     * Business Process configuration and Workflow configuration sit beside each other in the
+     * product and must not imply one another.
+     */
+    wfWriter: "mcert_wf_writer",
+    wfTitular: "mcert_wf_titular",
+    wfAdjacent: "mcert_wf_adjacent",
+
     formsAuthor: "mcert_forms_author",
     formsReader: "mcert_forms_reader",
     formsConfirmer: "mcert_forms_confirmer",
@@ -351,6 +368,9 @@ export const P = {
     oiWriter:           { id: "c0000000-0000-4000-8000-00000000d041", email: "cert.oiwriter@northwind.invalid",    role: CUSTOM.oiWriter },
     oiReader:           { id: "c0000000-0000-4000-8000-00000000d042", email: "cert.oireader@northwind.invalid",    role: CUSTOM.oiReader },
     oiTitular:          { id: "c0000000-0000-4000-8000-00000000d043", email: "cert.oititular@northwind.invalid",   role: CUSTOM.oiTitular },
+    wfWriter:           { id: "c0000000-0000-4000-8000-00000000d0a1", email: "cert.wfwriter@northwind.invalid",    role: CUSTOM.wfWriter },
+    wfTitular:          { id: "c0000000-0000-4000-8000-00000000d0a2", email: "cert.wftitular@northwind.invalid",   role: CUSTOM.wfTitular },
+    wfAdjacent:         { id: "c0000000-0000-4000-8000-00000000d0a3", email: "cert.wfadjacent@northwind.invalid",  role: CUSTOM.wfAdjacent },
 
     commsReader:     { id: "c0000000-0000-4000-8000-00000000d052", email: "cert.commsreader@northwind.invalid",    role: CUSTOM.commsReader },
     commsSender:     { id: "c0000000-0000-4000-8000-00000000d053", email: "cert.commssender@northwind.invalid",    role: CUSTOM.commsSender },
@@ -459,6 +479,9 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.bpTitular,    role_label: "Admin",              description: "Named Admin, granted no Business Process capability.",      is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.bpScoped,     role_label: "Domain process owner", description: "Designs and activates, inside one operational domain only.", is_system: false, is_active: true },
 
+        { org_id: ORG, role_key: CUSTOM.wfWriter,  role_label: "Workflow author",       description: "Configures Workflow definitions, actions and conditions. No privileged title.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.wfTitular, role_label: "Workflow Administrator", description: "Named Workflow Administrator, granted no Workflow authority.",                 is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.wfAdjacent, role_label: "Process configurer",    description: "Adjacent configuration authority, deliberately without the Workflow key.",      is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.oiWriter,  role_label: "Intelligence author", description: "Authors Operational Intelligence - calculations, KPI targets, measurements.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.oiReader,  role_label: "Intelligence reader", description: "Reads Operational Intelligence. Changes none of it.",                    is_system: false, is_active: true },
         /* The label is the trap. It holds nothing. */
@@ -582,6 +605,11 @@ export async function setup() {
         [CUSTOM.bpComposed, ["portal.access", "business_process.configure", "business_process.activate"]],
         [CUSTOM.bpTitular, ["portal.access"]],
         [CUSTOM.bpScoped, ["portal.access", "business_process.configure", "business_process.activate"]],
+        [CUSTOM.wfWriter, ["portal.access", "ops.workflows.write"]],
+        /* The label says Workflow Administrator; the package says nothing. */
+        [CUSTOM.wfTitular, ["portal.access"]],
+        /* Adjacent configuration authority, deliberately without the Workflow key. */
+        [CUSTOM.wfAdjacent, ["portal.access", "business_process.configure", "fields.manage"]],
         [CUSTOM.oiWriter, ["portal.access", "reports.read", "reports.write"]],
         [CUSTOM.oiReader, ["portal.access", "reports.read"]],
         [CUSTOM.oiTitular, ["portal.access"]],
