@@ -2,19 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 import { adminActionsOrgTag } from "@/lib/admin/actions/cacheTags";
 import { invalidateConfigReadCache } from "@/lib/runtime/provisioning/configReadCache";
 
 /**
- * PATCH org-owned action definition.
- * Bounded fields only: label and/or is_active. Admin only.
+ * PATCH an org-owned Action definition — its operator label, and whether it is offered at all.
+ *
+ * DEFINING an Action is Business Process design, not Action execution. `business_process.configure`
+ * already owns the Actions Matrix and the Action PLACEMENTS that decide which actions a stage
+ * offers; the definition those placements point at is the same configuration one level up, and
+ * `is_active` here withdraws an Action from every stage that offers it. One surface, Settings ->
+ * Actions, and it was answering two different questions about who may change it.
+ *
+ * It asked `ctx.role !== "admin"`, which admitted an administrator whose package withholds
+ * `business_process.configure` and refused a custom Process Configurer who holds it — while the
+ * placement control beside it in the same editor already decided on the grant.
+ *
+ * EXECUTION IS NOT CONFIGURATION. Holding this key lets someone say what an Action IS; it does not
+ * let them run one. `actions/execute` stays conditional and domain-owned (Model D) and takes no
+ * Business Process key — RL-28 fails if anyone gives it one.
  */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden — admin role required" }, { status: 403 });
-    }
+    const capDenied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (capDenied) return capDenied;
 
     const { id } = await context.params;
     const defId = id.trim();
