@@ -4,6 +4,7 @@ import { requireAnalyticsV2AdminMutate } from "@/lib/metrics/platform/adminApiHe
 import { copyGlobalMetricToOrg } from "@/lib/metrics/platform/copyTemplate";
 import { loadMetricDefinitionById } from "@/lib/metrics/platform/placementResolver";
 import { apiOk, apiError } from "@/lib/api/apiResponse";
+import { requireAnalyticsManageAccess } from "@/lib/admin/canReadAnalytics";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,17 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 /** POST /api/admin/analytics/metrics/[id]/copy — copy global template to org (copy-on-first-use). */
 export async function POST(request: NextRequest, context: RouteContext) {
+    /*
+     * ANALYTICS TRUTH — copies a metric definition, inserting new definition, placement and visualization rows.
+     *
+     * This was reachable through ORG CONTEXT ALONE: no capability, no role, only portal
+     * admission. `reports.write` is the established owner of this family — the promoted
+     * Operational Intelligence model already declares its sibling routes under it — so no
+     * vocabulary is invented here.
+     */
+    const analyticsAuth = await requireAnalyticsManageAccess();
+    if (!analyticsAuth.ok) return analyticsAuth.response;
+
     const gate = await requireAnalyticsV2AdminMutate();
     if (!gate.ok) return gate.response;
 

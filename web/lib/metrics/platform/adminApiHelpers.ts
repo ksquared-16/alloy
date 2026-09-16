@@ -11,16 +11,21 @@ export async function requireAnalyticsV2AdminContext() {
     return { ok: true as const, ctx };
 }
 
+/**
+ * THE ROLE TITLE IS GONE; `reports.write` IS THE AUTHORITY.
+ *
+ * This asked `ctx.role !== "admin"`, and it sat on all thirteen Analytics mutation routes. That
+ * made the capability decorative in the one direction that matters: a custom Analytics Writer
+ * holding `reports.write` was refused, while an admin whose package withholds the key was
+ * admitted. Every caller now runs `requireAnalyticsManageAccess()` first — checked, not assumed,
+ * and asserted by RL-17 — so the title behind it only contradicted the grant.
+ *
+ * The function is KEPT rather than deleted: its callers need the resolved admin context, and
+ * removing it would have meant editing thirteen handlers to inline the same two lines. What it no
+ * longer does is decide authority.
+ */
 export async function requireAnalyticsV2AdminMutate() {
-    const gate = await requireAnalyticsV2AdminContext();
-    if (!gate.ok) return gate;
-    if (gate.ctx.role !== "admin") {
-        return {
-            ok: false as const,
-            response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
-        };
-    }
-    return gate;
+    return requireAnalyticsV2AdminContext();
 }
 
 /**
