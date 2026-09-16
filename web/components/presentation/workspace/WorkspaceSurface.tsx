@@ -22,11 +22,11 @@ import { ProcessGrid } from "./ProcessGrid";
 import { WorkspaceRightRailActions } from "@/components/presentation/rightRail/WorkspaceRightRailActions";
 import { CreateLeadEventHost } from "@/components/presentation/rightRail/CreateLeadEventHost";
 import { BosWorkspaceScopeSync } from "@/components/presentation/rightRail/BosWorkspaceScopeSync";
-import { WorkspacePendingSurface } from "./WorkspacePendingSurface";
+import { AlloyOperationalBootShell } from "@/components/admin/workspace/AlloyOperationalBootShell";
 
 export function WorkspaceSurface() {
     const model = useWorkspaceSurfaceRuntime();
-    const { orgId, orgName } = useWorkspaceOrg();
+    const { orgId } = useWorkspaceOrg();
     const siteFilter = useWorkspaceSiteFilter();
     const workspaceScrollRef = useRetainedScroll(workspaceScrollScope(orgId, siteFilter?.selectedSiteId ?? null));
 
@@ -47,12 +47,26 @@ export function WorkspaceSurface() {
                 <BosWorkspaceScopeSync departmentId={model.defaultDepartmentId} />
             ) : null}
             {!model.ready ? (
-                // The shell is already operational — global nav and search work — so the Workspace's
-                // own region shows its identity and reserves its structure rather than replacing the
-                // surface with a centred "Thinking…". Cold only: a visited Workspace is `ready`
-                // immediately from its retained seed. See WorkspacePendingSurface for what it may and
-                // may not claim while pending.
-                <WorkspacePendingSurface orgName={orgName} />
+                /*
+                 * ONE canonical operational-canvas loading owner — the SAME centered enlarged
+                 * "Thinking…" the Work Unit uses (AlloyOperationalBootShell content mode), never a
+                 * faint skeleton that reads as an empty white canvas (Kelly Blocker 3). A VISITED
+                 * Workspace is `ready` immediately from its retained seed, so this shows ONLY on a
+                 * genuine cold Workspace, then the surface reveals atomically.
+                 *
+                 * RESTORED after a measured regression. A previous slice replaced this with a
+                 * per-surface pending composition — an organisation name, "Preparing your
+                 * workspace…", and two reserved blocks whose `bg-white/60` on white made them
+                 * invisible. On deployed staging that state holds for 5–7 s and reads as a caption
+                 * on an empty page: Blocker 3 exactly. The frame harness that approved it scored
+                 * "identity" as a DOM string appearing and therefore recorded THIS loader as having
+                 * no identity, when it shows the Alloy mark from the first frame.
+                 *
+                 * If earlier organisation identity is wanted, it belongs to this one owner — which
+                 * `adminV2/loading.tsx`, `workspace/layout.tsx` and `AdminV2Shell` also render — and
+                 * not to a surface-local replacement.
+                 */
+                <AlloyOperationalBootShell variant="workspace" chrome="content" />
             ) : (
                 <>
                     {/* Workspace Header (title / subtitle / org KPIs) + Actions control band. */}

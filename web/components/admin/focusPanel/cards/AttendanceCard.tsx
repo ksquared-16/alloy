@@ -165,6 +165,8 @@ export default function AttendanceCard({ model, context, receded = false, coordi
      * not been told about. `loading` still covers the post-command re-read, which is the card's own.
      */
     const provisioning = memberId != null && provisioned == null;
+    /** The producer's own verdict, carried rather than collapsed. Null before it has run. */
+    const producerState = provisioned?.state ?? null;
 
     /*
      * S4-1 × ROOT LIFECYCLE — reserved geometry, keyed to the readiness this card now actually has.
@@ -319,9 +321,45 @@ export default function AttendanceCard({ model, context, receded = false, coordi
                      * return above, `vm` was `never` here, which is the compiler saying this
                      * branch can no longer be reached.
                      */
-                    <p className="alloy-os-attendance__empty" data-attendance-empty="loading">
-                        {loading || provisioning ? "Loading the day…" : "No attendance record."}
-                    </p>
+                    /*
+                     * ── THE PRODUCER SAID MORE THAN "NOTHING" (P0-3/P0-4) ───────────────────────
+                     *
+                     * This branch used to read `loading || provisioning ? "Loading…" : "No record."`,
+                     * which reduced a four-state producer result to a boolean. Deployed staging
+                     * reproduced the consequence: a card that had explained itself settled into a bare
+                     * absence, and the operator watched Alloy lose knowledge it had just shown.
+                     *
+                     * `ProducerResult.state` already distinguishes the cases, and its own contract says
+                     * why that matters — "`unavailable` and `error` are different facts: no subject to
+                     * read for is ordinary, a failed read is not, and collapsing them would make an
+                     * outage indistinguishable from an empty one", and a refusal "must say 'you do not
+                     * have permission' rather than render an empty surface". The states existed; only
+                     * this renderer was throwing them away.
+                     *
+                     * Nothing new is derived, fetched or persisted: each line below is the producer's
+                     * own verdict, phrased.
+                     */
+                    loading || provisioning ? (
+                        <p className="alloy-os-attendance__empty" data-attendance-empty="loading">
+                            Loading the day…
+                        </p>
+                    ) : producerState === "forbidden" ? (
+                        <p className="alloy-os-attendance__empty" data-attendance-empty="permission">
+                            You do not have permission to view attendance.
+                        </p>
+                    ) : producerState === "error" ? (
+                        <p className="alloy-os-attendance__empty" data-attendance-empty="error">
+                            Attendance could not be loaded.
+                        </p>
+                    ) : producerState === "unavailable" ? (
+                        <p className="alloy-os-attendance__empty" data-attendance-empty="unavailable">
+                            Attendance is not available for this child.
+                        </p>
+                    ) : (
+                        <p className="alloy-os-attendance__empty" data-attendance-empty="no-record">
+                            No attendance record.
+                        </p>
+                    )
                 )}
             </UniversalCard>
         </div>
