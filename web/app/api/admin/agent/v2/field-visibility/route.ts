@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { FIELDS_MANAGE, requireAgentApplyDomainAuthority } from "@/lib/access/agentApplyAuthority";
 import { agentV2CommitFieldVisibilityApply } from "@/lib/agent/v2/agentV2FieldVisibilityAtomicCommit";
 import {
     lockTimestampMatches,
@@ -62,9 +64,17 @@ function isUuid(s: string): boolean {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return jsonErr(403, "POLICY_DENIED", "Forbidden");
-    }
+    /*
+     * Agent field-visibility apply writes `field_definitions`, so the Field System
+     * owns it. The role TITLE used to decide this, which made the declared
+     * capability decorative: an organization could withhold it from its own admin
+     * role and change nothing, while a custom role holding it was refused.
+     * Authority is the grant now; the feature flag below stays a separate question.
+     */
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const capDenied = requireAgentApplyDomainAuthority(access, FIELDS_MANAGE);
+    if (capDenied) return capDenied;
     if (!agentV2FieldVisibilityEnabled()) {
         return jsonErr(403, "FEATURE_DISABLED", "Agent v2 field visibility is disabled");
     }

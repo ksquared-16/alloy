@@ -5,6 +5,7 @@ import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors"
 import { findCanonicalProfilePhotoDocumentForPerson } from "@/lib/admin/person/resolvePersonProfilePhotoDocument";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertNoCredentialInMetadata, classifyLegacyPhotoUrl } from "@/lib/documents/profilePhotoPresentation";
+import { requireDocumentWrite } from "@/lib/documents/assertDocumentAccess";
 import {
     assertDocumentAccess,
     documentAccessHttp,
@@ -124,9 +125,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const capDenied = requireDocumentWrite(ctx);
+    if (capDenied) return capDenied;
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -200,9 +200,8 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const capDenied = requireDocumentWrite(ctx);
+    if (capDenied) return capDenied;
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });

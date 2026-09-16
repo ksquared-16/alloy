@@ -6,6 +6,7 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { normalizeQueueDefinitionForCreate } from "@/lib/rrs/queue/queueDefinitionV1";
+import { WORK_CONFIGURE, requireWorkCapability } from "@/lib/access/workAuthority";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -90,9 +91,17 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    /*
+     * WORK AUTHORITY — direct CRUD on `work_units` defines what operational work EXISTS.
+     *
+     * The `admin` ROLE TITLE decided this before. Placed BEFORE the department lookup below:
+     * authority is settled before the handler queries anything, so a refused caller costs no
+     * database work and cannot probe for the existence of a row by timing or error shape.
+     */
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const capDenied = requireWorkCapability(access, WORK_CONFIGURE);
+    if (capDenied) return capDenied;
 
     let body: {
         department_id?: string;
@@ -126,8 +135,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Department not found" }, { status: 404 });
     }
 
-    const access = await getAdminAccessContextCached();
-    if (!access.ok) return adminContextFailureResponse(access);
     const postDim = scopeDimensionsFromAccess(access);
     if (!departmentIdAllowed(postDim, department_id)) {
         return NextResponse.json({ error: "Department not found" }, { status: 404 });

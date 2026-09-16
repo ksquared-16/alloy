@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { FREE_TEXT_RECIPIENT_MIGRATION_MESSAGE } from "@/lib/communications/recipients/typedRecipient";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
     COMMUNICATIONS_SEND_PERMISSION_KEY,
@@ -12,6 +11,10 @@ import {
 import { canonicalSend } from "@/lib/communications/send/canonicalSend";
 import { resolveSendRecipientMode } from "@/lib/communications/send/resolveSendRecipientMode";
 import { associateOutboundCommunicationToContactAttempt } from "@/lib/lifecycle/associateOutboundCommunicationToContactAttempt";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_SEND,
+} from "@/lib/communications/communicationsAuthority";
 
 
 const CATEGORIES = ["transactional", "operational", "marketing", "emergency"] as const;
@@ -55,12 +58,12 @@ function normalizeChannel(raw: string): "sms" | "email" | "in_app" | null {
 
 /**
  * POST /api/admin/communications/send — guarded composer enqueue (canonical path + message_queued).
- * requireAdminOrOps + {@link COMMUNICATIONS_SEND_PERMISSION_KEY} via role_permission_grants (admin/ops bypass;
+ * `communications.send` + {@link COMMUNICATIONS_SEND_PERMISSION_KEY} via role_permission_grants (admin/ops bypass;
  * legacy alias ops.messaging.write). Denied requests return 403 before enqueue.
  */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_SEND);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

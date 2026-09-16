@@ -77,35 +77,43 @@ describe("completeVmWithStageWork — single stage-work ownership", () => {
         expect(calls).toHaveLength(0);
     });
 
-    it("force=true bypasses warm seed after work-lifecycle invalidation", async () => {
+    it("a COMPOSED view model is never re-resolved — one authority, one read", async () => {
+        /*
+         * THIS REPLACES A TEST THAT CERTIFIED `force: true`.
+         *
+         * That option skipped the `pending` guard and re-fetched the stage-work slice on top of a
+         * view model the server had just composed — after a `work_lifecycle` refresh had already
+         * invalidated the caches and recomposed it. So the server had produced a fresh stage-work
+         * runtime AND the `operational_projection` computed from it, and the forced merge fetched a
+         * second runtime and wrote it over the top.
+         *
+         * `applyStageWorkSliceToVm` does not touch `operational_projection`. So the result could
+         * carry Current Work and the card envelope decided from one stage-work runtime beside a
+         * later one: two operational truths in one view model, and a second read to produce them.
+         *
+         * The composed view model is the authority for both, because the server computes them
+         * together. What is locked here is that nothing re-resolves it.
+         */
         const calls: string[] = [];
         (globalThis as { fetch?: unknown }).fetch = vi.fn(async (url: string) => {
             calls.push(String(url));
-            return {
-                ok: true,
-                json: async () => ({
-                    ...SLICE,
-                    stage_work_runtime: {
-                        ...SLICE.stage_work_runtime,
-                        primary: { template_key: "conduct_tour", state: "open", work_id: "w2" },
-                        additional: [],
-                    },
-                }),
-            } as unknown as Response;
+            return { ok: true, json: async () => SLICE } as unknown as Response;
         });
 
-        seedOpportunityStageWork(
-            {
-                opportunityId: "opp-1",
-                departmentId: "dept-1",
-                stageKey: "lead",
+        const composed = {
+            ...pendingVm(),
+            workspace: {
+                ...pendingVm().workspace,
+                // What the compose now always returns: resolved, never pending.
+                stage_work: { status: "ready" as const, value: SLICE.stage_work_runtime },
+                stage_work_runtime: SLICE.stage_work_runtime,
             },
-            SLICE as never,
-        );
+        } as never;
 
-        const forced = await completeVmWithStageWork(pendingVm(), { force: true });
-        expect(calls).toHaveLength(1);
-        expect(forced.workspace.stage_work_runtime?.primary?.template_key).toBe("conduct_tour");
+        const result = await completeVmWithStageWork(composed);
+
+        expect(calls, "a composed view model triggered a second stage-work read").toHaveLength(0);
+        expect(result).toBe(composed);
     });
 
     it("applyStageWorkSliceToVm marks the region ready so deferred fetch does not re-run", () => {

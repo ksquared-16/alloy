@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { composeOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel";
+import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 import { logDrawerVmRuntimeServer } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 import { logOpportunityDrawerViewModelComposeFailureShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
 import { logDrawerViewModelRuntimeFlagsServerSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelRuntimeFlagsServer";
@@ -50,22 +51,27 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             // unless a caller explicitly requests the seeded preview (`comms_preview=1`).
             deferCommunicationsPreview: sp.get("comms_preview") !== "1",
             /*
-             * Stage work composes INLINE, because it no longer costs anything to.
+             * Stage work composes INLINE, always. `stage_work=0` is gone.
              *
-             * It was deferred to a thin `…/stage-work` resource so it could not block first paint,
-             * and that was right while the compose awaited Module B after Module A. Now that the two
-             * run together, B carrying stage-work measures 181-380 ms against A's ~650-800 ms, so the
-             * slice finishes inside A and `max(A, B)` is unchanged.
+             * It restored a deferred contract in which the route answered `stage_work: {status:
+             * "pending"}` and the browser patched the region in place afterwards. Nothing ever sent
+             * it: `buildOpportunityDrawerViewModelUrl` is the only place this URL's query is built
+             * and it sets department, work unit and attention subject — never this. So the deferred
+             * branch was unreachable from the product while remaining fully alive in the code.
              *
-             * Deferring it, meanwhile, was never free on the client: every path derives the fetch key
-             * from `vm.workspace.lifecycle_rail.current_stage_key`, so What's Next could not even ASK
-             * for its data until the whole ~124 KB view model had landed — a second round-trip
-             * measured at 209-2065 ms after the VM, for a card whose request needs one stage key.
-             * The bytes are identical either way; the client fetched them regardless.
-             *
-             * `stage_work=0` restores the deferred contract.
+             * That mattered because the patch merges stage-work truth into the view model WITHOUT
+             * refreshing `operational_projection`. A frame that took it would have shown Current
+             * Work and the cards decided from one stage-work runtime beside a `stage_work_runtime`
+             * from a later one — two operational truths in one payload, reachable by adding four
+             * characters to a URL.
              */
-            deferStageWork: sp.get("stage_work") === "0",
+            /*
+             * NOT TRUSTED — RESOLVED. This is handed to the canonical participant resolver, which
+             * refuses a participation that does not belong to this record (`not_found`) rather than
+             * answering with somebody else's child. So naming another family's participation yields
+             * no scope and no child-scoped projection, which is the authorization boundary here.
+             */
+            attentionSubjectId: (sp.get("attention_subject_id") ?? "").trim() || null,
         });
 
         if (!result.ok) {
@@ -87,7 +93,51 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             generation: result.viewModel.generation,
             compose_ms: result.viewModel.timing.compose_ms,
         });
-        return NextResponse.json(result.viewModel, {
+
+        /*
+         * THE SETTLED FRAME'S CARD PRODUCERS RUN HERE, ABOVE THE CONTRACT BOUNDARY.
+         *
+         * The commit frame has run them since the module-boundary repair; the settled frame could
+         * not, because until the subject of attention travelled with the request there was no way to
+         * know which child the surface was scoped to — a producer run then would have resolved the
+         * sole participant and attributed one child's attendance to another. Running them in BOTH
+         * frames is what makes settlement a change of TRANSPORT rather than of AUTHORITY: a card
+         * whose truth exists only in the commit frame goes blank when the drawer VM takes over.
+         *
+         * They run in the ROUTE, not in the composer. `buildAttendanceCardVM` is `server-only`, and a
+         * client component reaches the composer through the `lib/layout/runtime` barrel — so an edge
+         * there puts a `server-only` module in the browser graph and the production build fails. It
+         * did, with all thirteen required checks green, because none of them runs a real `next build`.
+         * An App Route cannot be imported by a client component, so this is the correct owner.
+         *
+         * The context is the composer's own, not a second derivation, so the two frames cannot
+         * disagree about the subject. Producer failure is bounded by `Promise.allSettled` inside the
+         * producer module: an Attendance outage costs the operator Attendance, not the drawer.
+         */
+        const settledContext = result.operationalContext ?? null;
+        const projection = result.viewModel.workspace.operational_projection ?? null;
+        const viewModel =
+            settledContext && projection
+                ? {
+                      ...result.viewModel,
+                      workspace: {
+                          ...result.viewModel.workspace,
+                          operational_projection: {
+                              ...projection,
+                              cards: await projectFocusPanelCardProducers({
+                                  supabase,
+                                  orgId: gate.orgId,
+                                  context: settledContext,
+                                  // The route's OWN resolved authority — the same canonical bundle
+                                  // the health endpoint reads, never anything the browser sent.
+                                  access: gate.access,
+                              }),
+                          },
+                      },
+                  }
+                : result.viewModel;
+
+        return NextResponse.json(viewModel, {
             headers: {
                 "X-Alloy-Drawer-VM-Structure-Settled": "true",
                 "X-Alloy-Drawer-VM-Generation": result.viewModel.generation,

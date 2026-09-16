@@ -84,7 +84,23 @@ export default function CurrentWorkCard({
     mutation,
     presentation = "summary",
 }: Props) {
-    const evidence = useMemo(() => buildCurrentWorkCardEvidence(context), [context]);
+    /*
+     * THE SERVER PROJECTED THIS WORK. The card phrases it.
+     *
+     * `projectCurrentWork` used to run here — through this builder — which is the second reason the
+     * published configuration had to reach the browser. The projection now arrives already decided
+     * on whichever transport frame is current, and the builder is handed it rather than re-deriving.
+     *
+     * Interaction routing stays: `resolveWorkItemHandoff` runs on click, against client callbacks,
+     * and decides where a checklist item hands off to — not what the work IS.
+     */
+    const evidence = useMemo(
+        () =>
+            buildCurrentWorkCardEvidence(context, {
+                viewModel: context.operationalProjection?.currentWork ?? null,
+            }),
+        [context],
+    );
     const vm = evidence.viewModel;
     const surface = vm.surface;
     // Mutations + Tour invitation / Communications prepare must key the family opportunity

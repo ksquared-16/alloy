@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { emitEvent } from "@/lib/emitEvent";
 import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
 import { createHouseholdChildMember } from "@/lib/records/childMemberAuthority";
+import {
+    requireCrmPeopleCapability,
+    CRM_CUSTOMERS_READ,
+    CRM_CUSTOMERS_WRITE,
+} from "@/lib/access/crmPeopleAuthority";
 
 /** GET: list customer_members for org. Optional ?customer_id= filter. Admin + ops can read. */
 export async function GET(request: NextRequest) {
@@ -15,6 +19,8 @@ export async function GET(request: NextRequest) {
             { status: ctx.status }
         );
     }
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_READ);
+    if (capDenied) return capDenied;
 
     const customerId = request.nextUrl.searchParams.get("customer_id")?.trim() || undefined;
     const supabase = createAdminClient();
@@ -98,13 +104,13 @@ export async function GET(request: NextRequest) {
 
 /** POST: create customer_member. Admin + ops can create (matches OCM link path). */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return adminContextFailureResponse(ctx);
     }
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_WRITE);
+    if (capDenied) return capDenied;
 
     let body: {
         customer_id?: string;

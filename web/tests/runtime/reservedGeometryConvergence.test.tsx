@@ -233,13 +233,23 @@ describe("reserved geometry — adopter wiring", () => {
         expect(pending).toContain("style={reservedGeometry.style}");
     });
 
-    it("Attendance reserves against LOADING, not against having a record", () => {
+    it("Attendance reserves against RESOLVING — its own fetch and the root's projection", () => {
         const code = strip(read("AttendanceCard.tsx"));
-        expect(code).toMatch(/useReservedCardGeometry\(!loading\)/);
+        /*
+         * WS1 reconciliation. This was `!loading` when the card owned its bootstrap fetch. The
+         * attendance producer now runs inside the root provisioning lifecycle, so the card can also
+         * be waiting on a projection that has not arrived — which is why it renders "Loading the
+         * day…" on `loading || provisioning` rather than asserting an absence. The reserve tracks the
+         * same union: reserving against anything narrower leaves the collapse this repair removes,
+         * in the window that is now the common one on a cold panel.
+         */
+        expect(code).toMatch(/useReservedCardGeometry\(!\(loading \|\| provisioning\)\)/);
         expect(
             code,
-            "one root renders both copies, so `vm != null` would hold a recordless child reserved forever",
-        ).toMatch(/loading \? "Loading the day…" : "No attendance record\."/);
+            "the reserve and the copy must agree about what 'not settled' means",
+        ).toMatch(/loading \|\| provisioning \? "Loading the day…" : "No attendance record\."/);
+        // Still not keyed to HAVING DATA: a recordless child is an answer, not a pending state.
+        expect(code).not.toMatch(/useReservedCardGeometry\(vm != null\)/);
     });
 
     it("Health holds the ref on BOTH the settled root and the fallback root", () => {
@@ -291,5 +301,18 @@ describe("reserved geometry — adopter wiring", () => {
         const code = strip(read("FinancialsCard.tsx"));
         expect([...code.matchAll(/ref=\{shellRef\}/g)].length).toBe(2);
         expect(code).toMatch(/loadedHeightRef/);
+        /*
+         * WS1 reconciliation. The reserve was `!vm`, when the only way to have no vm was to be
+         * loading one. The root lifecycle gave this card three further vm-less answers — a permission
+         * refusal, no resolvable subject, no account — each a settled sentence entitled to its own
+         * size. So the reserve is exactly the condition under which the card says "Loading the
+         * account…", and staging's new answers stay answers.
+         */
+        expect(code).toMatch(
+            /const reservingAccount = !vm && !deniedRead && \(loading \|\| subjectStillResolving \|\| provisioningAccount\)/,
+        );
+        expect(code).toMatch(/data-financials-reserved=\{reservingAccount \? "true" : undefined\}/);
+        // Staging's account identity survives on the same root.
+        expect(code).toMatch(/data-financials-account=\{vm\?\.account\?\.customerId \?\? undefined\}/);
     });
 });

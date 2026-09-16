@@ -11,6 +11,11 @@ import {
     operatorStatusToPreferenceState,
 } from "@/lib/communications/v2/communicationPreferenceLabels";
 import type { PreferenceCategory, PreferenceState } from "@/lib/communications/v2/preferences";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+    COMMUNICATIONS_SEND,
+} from "@/lib/communications/communicationsAuthority";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -28,6 +33,8 @@ export async function GET(req: Request) {
     }
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const personId = new URL(req.url).searchParams.get("person_id")?.trim() ?? "";
     if (!UUID_RE.test(personId)) return NextResponse.json({ error: "person_id must be a UUID" }, { status: 400 });
@@ -58,6 +65,8 @@ export async function PATCH(req: Request) {
     }
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_SEND);
+    if (!auth.ok) return auth.response;
 
     let body: Record<string, unknown>;
     try {

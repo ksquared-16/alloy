@@ -105,7 +105,12 @@ export default function FinancialsDetailCard({
                      * yet, so the honest value is that it has not been recorded — and it is not
                      * toned as a problem, because an unknown is not a fault.
                      */}
-                    <Stat label="Autopay" value={evidence.payment.autopayLabel ?? "Not recorded"} tone={evidence.payment.autopayHealthy ? "ok" : undefined} />
+                    {/*
+                      * AUTOPAY IS NOT SUPPORTED YET — no table, no column, no writer anywhere in the
+                      * platform. "Not recorded" implied somebody could have recorded it and had not,
+                      * which is a statement about this family; the truth is about Alloy.
+                      */}
+                    <Stat label="Autopay" value={evidence.payment.autopayLabel ?? "Not available yet"} tone={evidence.payment.autopayHealthy ? "ok" : undefined} />
                     <Stat label="Next" value={evidence.payment.nextChargeLabel ?? "—"} />
                 </div>
 

@@ -11,81 +11,41 @@ import { getPublicSupabaseAuthDebug } from "@/lib/supabase/publicAuthEnv";
 import CTAButton from "@/components/marketing/CTAButton";
 import PasswordField from "@/components/auth/PasswordField";
 import { signInErrorMessage } from "@/lib/auth/signInErrorMessage";
+import { authCookieNameFor, browserSupabaseUrl } from "@/lib/supabase/browserTransport";
 import { MARKETING_BRAND } from "@/lib/marketing/artifactPaths";
 
-/** Dev-only: safe Supabase connectivity hints (hostname + booleans only). */
-function DevSupabaseAuthPanel() {
-  const d = getPublicSupabaseAuthDebug();
-
-  /*
-   * THE SERVER'S VIEW, FETCHED SO THE TWO CAN BE COMPARED.
-   *
-   * `d.origin` above is what THIS PAGE'S JAVASCRIPT will post to. That is not necessarily what the
-   * server is configured with: a dev server can serve a client bundle compiled against an older
-   * environment, and then the server renders one project while the browser signs in against another.
-   * Every server-side check agrees with itself and none of them can see the browser's value, so the
-   * disagreement is invisible from either side alone. It took a screenshot to find, twice.
-   *
-   * So the panel asks the server directly and says plainly when they differ.
-   */
-  const [serverOrigin, setServerOrigin] = useState<string | null | undefined>(undefined);
+/**
+ * Ask the server for its Supabase configuration, and keep it for the stale-bundle repair below.
+ *
+ * WHAT THIS USED TO BE. A visible panel on the login page printing the environment variable, the
+ * parsed origin, and a line instructing the reader which URL their sign-in would POST to. On a
+ * certification server that origin is a loopback address on the HOST, and the panel therefore told
+ * a remote operator their browser should call the host's own loopback address. It was wrong on the facts as well as out of place: the browser client
+ * rewrites a loopback URL to this app's own origin precisely so a remote browser is never sent to
+ * its own machine. Operator-facing copy that names an internal address is a defect even when the
+ * address is accurate server-side, and this one actively misdirected an operator for a full round
+ * of QA.
+ *
+ * WHAT SURVIVES, AND WHY. The fetch does. It is not a diagnostic — it is the input to the repair in
+ * `handleSubmit`, which prefers the server's configuration when this bundle was compiled against an
+ * older one. That failure is real and was expensive twice. The diagnostics now live at
+ * `/dev/supabase-connectivity`, which nobody signing in will ever see.
+ */
+function useServerSupabaseConfig(enabled: boolean) {
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     fetch("/api/dev/supabase-origin", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (cancelled) return;
-        setServerOrigin((j?.origin as string | null) ?? null);
         if (j?.url && j?.anonKey) setServerSupabaseConfig({ url: j.url as string, anonKey: j.anonKey as string });
       })
-      .catch(() => {
-        if (!cancelled) setServerOrigin(null);
-      });
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  const stale = Boolean(d.origin && serverOrigin && d.origin !== serverOrigin);
-
-  return (
-    <div
-      className="mb-4 rounded-md border border-alloy-forge/10 bg-alloy-stone/50 px-3 py-2 text-left text-[11px] leading-relaxed text-alloy-forge/80 font-mono"
-      data-testid="login-supabase-env-debug"
-    >
-      <div className="mb-1 font-sans font-semibold text-alloy-forge">Dev: Supabase connectivity</div>
-      <div>NEXT_PUBLIC_SUPABASE_URL defined: {d.urlDefined ? "yes" : "no"}</div>
-      <div>Origin: {d.origin ?? "(none — check URL)"}</div>
-      <div>URL parses: {d.urlParseError ? `no (${d.urlParseError})` : d.urlDefined ? "yes" : "n/a"}</div>
-      <div>NEXT_PUBLIC_SUPABASE_ANON_KEY defined: {d.anonKeyDefined ? "yes" : "no"}</div>
-      <div className="mt-1 break-all">
-        {/* The whole URL, straight from the parsed origin. Never rebuilt from
-            scheme + hostname: that is what invented an https URL with no port
-            and sent a certification run chasing a defect that did not exist. */}
-        Password sign-in expects: {d.authTokenUrl ? `POST ${d.authTokenUrl}` : "(set URL to see)"}
-      </div>
-      {/*
-        ALWAYS SHOWN, not only on mismatch -- this line is also the build marker.
-        "Did your reload actually take?" was guessed at four times across this incident, by me and by
-        the operator, and a guess is what kept sending us back to the wrong half of the problem. If
-        this line is absent from the panel, the page is running older JavaScript, and that is now
-        readable at a glance instead of inferred from behaviour.
-      */}
-      <div className="mt-1">
-        Server says:{" "}
-        {serverOrigin === undefined ? "(asking…)" : (serverOrigin ?? "(no answer)")}
-      </div>
-      {stale ? (
-        <div className="mt-2 rounded border border-red-300 bg-red-50 px-2 py-1.5 font-sans text-[11px] font-semibold text-red-800">
-          STALE BUNDLE — this page&rsquo;s JavaScript targets <span className="font-mono">{d.origin}</span>,
-          but the server is configured for <span className="font-mono">{serverOrigin}</span>. Sign-in will
-          fail against the wrong project. Restart the dev server and hard-reload; if it persists, open the
-          page on <span className="font-mono">127.0.0.1</span> instead of <span className="font-mono">localhost</span> —
-          a different origin, so a different cache.
-        </div>
-      ) : null}
-    </div>
-  );
+  }, [enabled]);
 }
 
 /** Where a signed-in operator belongs. Named once so the two paths here cannot drift apart. */
@@ -115,6 +75,7 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const isDev = process.env.NODE_ENV === "development";
+  useServerSupabaseConfig(isDev);
   // Origin only — the debug helper never exposes key material.
   const supabaseOrigin = isDev ? getPublicSupabaseAuthDebug().origin : null;
 
@@ -202,8 +163,25 @@ function LoginForm() {
           }
         })();
 
+      /*
+       * THE REPAIR MUST NOT UNDO THE TRANSPORT RULE.
+       *
+       * This constructed the client from the server's raw URL. On a certification host that URL is
+       * loopback, so the repair aimed a REMOTE operator's browser at its own machine — unreachable,
+       * and with the library's derived cookie name rather than the pinned one, so even a successful
+       * sign-in would have written a cookie middleware does not read. The stale-bundle problem is
+       * about WHICH PROJECT to sign in to; it was never about where the browser sends the request.
+       * `browserSupabaseUrl` and `authCookieNameFor` own that, here as everywhere else.
+       */
       const supabase = useServerConfig
-        ? createBrowserClient(serverSupabaseConfig!.url, serverSupabaseConfig!.anonKey)
+        ? createBrowserClient(
+            browserSupabaseUrl(serverSupabaseConfig!.url, window.location.origin),
+            serverSupabaseConfig!.anonKey,
+            (() => {
+              const name = authCookieNameFor(serverSupabaseConfig!.url);
+              return name ? { cookieOptions: { name } } : undefined;
+            })(),
+          )
         : createClient();
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
@@ -310,16 +288,14 @@ function LoginForm() {
                 module already makes for `misconfigured` and `unreachable` — true of every caller,
                 silent about all of them.
               */}
-              {isDev && error === signInErrorMessage(null) && supabaseOrigin ? (
+              {isDev && error === signInErrorMessage(null) ? (
                 <p className="mt-2 border-t border-red-200 pt-2 text-xs text-red-700/80">
-                  Dev: this server signs in against <span className="font-mono">{supabaseOrigin}</span>.
-                  Accounts are per project — one from another environment will not work here.
+                  This server signs in against its own non-production database. Accounts are per
+                  environment — one from another environment will not work here.
                 </p>
               ) : null}
             </div>
           )}
-
-          {isDev ? <div className="mt-6">{DevSupabaseAuthPanel()}</div> : null}
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             <div>

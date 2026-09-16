@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { rejectTaskAssistProposal } from "@/lib/agent/taskAssist/taskAssistProposalPersistence";
 import { isTaskAssistV1Uuid } from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
+import { requireAiEnrichmentUse } from "@/lib/ai/aiEnrichmentPermissions";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /**
@@ -16,6 +18,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    /*
+     * AI PROPOSAL AUTHORITY. `requireAdminOrOps()` above is portal ADMISSION, not authority — it
+     * asks whether the caller may be in the operator portal at all. The sibling door to this same
+     * `task_assist_proposals` row, `task-assist/propose`, has always required `ai.enrichment.use`
+     * through the Trust seam. This door skipped it, so the stronger door decided nothing.
+     */
+    const aiDenied = requireAiEnrichmentUse(access);
+    if (aiDenied) return aiDenied;
 
     const { id } = await context.params;
     if (!id?.trim() || !isTaskAssistV1Uuid(id)) {

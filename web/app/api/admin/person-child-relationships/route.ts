@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import {
+    requireCrmPeopleCapability,
+    CRM_CUSTOMERS_READ,
+    CRM_CUSTOMERS_WRITE,
+} from "@/lib/access/crmPeopleAuthority";
 import {
     createPersonChildRelationship,
     listPersonChildRelationships,
@@ -10,6 +14,8 @@ import {
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_READ);
+    if (capDenied) return capDenied;
     const customerMemberId = request.nextUrl.searchParams.get("customer_member_id")?.trim() || undefined;
     const personId = request.nextUrl.searchParams.get("person_id")?.trim() || undefined;
     const customerId = request.nextUrl.searchParams.get("customer_id")?.trim() || undefined;
@@ -33,8 +39,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    const denied = await requireAdminOrOps();
-    if (denied) return denied;
+    const capDenied = requireCrmPeopleCapability(ctx, CRM_CUSTOMERS_WRITE);
+    if (capDenied) return capDenied;
     const body = (await request.json()) as Record<string, unknown>;
     const customerId = String(body.customer_id ?? "").trim();
     const customerMemberId = String(body.customer_member_id ?? "").trim();

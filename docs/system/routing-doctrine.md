@@ -124,6 +124,27 @@ Slug routes (`/workspace/work-unit/:slug`) are the **operator** entry. Dept/uuid
 - Never assume department-first URLs in operator UX copy or docs.
 - Drawer URL changes must preserve warm navigation and slug-route shell (see **`platform-performance-doctrine.md`**).
 
+### Runtime mode is not audience
+
+`NODE_ENV` says which build is running. It never says who is looking.
+
+Alloy's certification and Human-QA hosts run development servers **on purpose**, and real operators
+view them over the tailnet — so `NODE_ENV !== "production"` is true on exactly the machines where
+operators are invited to look. "Dev-only" and "developer-only" are different sets.
+
+- **`NODE_ENV` alone must never determine the visibility of rendered developer or debug UI on an
+  operator surface.**
+- Developer UI requires either an explicit opt-in —
+  `process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_<AREA>_DEBUG === "1"` — or a
+  surface under **`/dev/*`**, which refuses to exist in production.
+- Enforced by the prebuild gate `check:runtime-mode-audience`
+  (`web/scripts/checkRuntimeModeAudienceGating.mjs`), whose invariant is **zero**, not a ceiling.
+  Non-rendered uses — logging, timeouts, safety refusals, tests — are untouched.
+
+Two surfaces reached an operator before this rule existed: a sign-in diagnostic that named an
+internal loopback address as the auth endpoint, and a Processing control offering to delete the
+fixture a Human-QA walkthrough was walking. Both were added inside commits about something else.
+
 ---
 
 ## Related docs
@@ -137,4 +158,5 @@ Slug routes (`/workspace/work-unit/:slug`) are the **operator** entry. Dept/uuid
 
 ## When this doc must be updated
 
-Public URL additions, middleware redirect rule changes, rewrite map changes, or drawer URL contract changes.
+Public URL additions, middleware redirect rule changes, rewrite map changes, drawer URL contract
+changes, or a new class of surface that operators may or may not see.

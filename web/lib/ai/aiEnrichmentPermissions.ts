@@ -4,6 +4,8 @@
  * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
+import { NextResponse } from "next/server";
+
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
 import type { AdminContextSuccess } from "@/lib/admin/getAdminContext";
 
@@ -18,11 +20,24 @@ function truthyEnv(name: string): boolean {
 }
 
 /**
- * When **true**, callers must have {@link AI_ENRICHMENT_USE_PERMISSION_KEY} in `permissionKeys`.
- * When **false** (default), legacy gate: portal **admin or ops** (same surface as **`requireAdminOrOps`**).
- * Set to **true** in production before live provider pilot once grants exist.
+ * FEATURE AVAILABILITY ONLY. **Never** authority.
+ *
+ * This flag used to decide WHICH AUTHORIZATION MODEL applied: true required
+ * {@link AI_ENRICHMENT_USE_PERMISSION_KEY}, and false — the default, and the
+ * value in every deployed environment, since the flag is set in tests and
+ * nowhere else — fell back to the portal admin-or-ops role title. So the
+ * capability was decorative: granting it changed nothing and withholding it
+ * changed nothing, while a custom role holding it was refused.
+ *
+ * That is the defect this module no longer has. Authorization is now the same
+ * question in every environment ({@link resolveAiEnrichmentPortalAccess}), and
+ * this flag decides only whether LIVE PROVIDER INVOCATION is switched on —
+ * feature reachability, which may legitimately differ per deployment.
+ *
+ * FEATURE ENABLED? and IS THIS PRINCIPAL AUTHORIZED? are separate questions,
+ * and no deployment configuration may answer the second.
  */
-export function isAiEnrichmentUsePermissionRequired(): boolean {
+export function isOpenAiLiveInvocationFeatureEnabled(): boolean {
     return truthyEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED");
 }
 
@@ -31,7 +46,10 @@ export function isAiEnrichmentUsePermissionRequired(): boolean {
  * {@link AI_ENRICHMENT_USE_PERMISSION_KEY} grant (routes should still pass {@link resolveAiEnrichmentPortalAccess}).
  */
 export function computeOpenAiLiveInvocationPermitted(access: AdminAccessContextSuccess): boolean {
-    return isAiEnrichmentUsePermissionRequired() && access.permissionKeys.includes(AI_ENRICHMENT_USE_PERMISSION_KEY);
+    // Feature AND authority, in that order, and both are required. The flag can
+    // only ever WITHHOLD live invocation; it can no longer admit a principal who
+    // does not hold the key, and it can no longer substitute a role title for one.
+    return isOpenAiLiveInvocationFeatureEnabled() && access.permissionKeys.includes(AI_ENRICHMENT_USE_PERMISSION_KEY);
 }
 
 export type AiEnrichmentRouteAccessFailure = {
@@ -59,28 +77,55 @@ export function resolveAiEnrichmentPortalAccess(input: {
         };
     }
 
-    if (isAiEnrichmentUsePermissionRequired()) {
-        if (!input.access.permissionKeys.includes(AI_ENRICHMENT_USE_PERMISSION_KEY)) {
-            return {
-                ok: false,
-                status: 403,
-                error: "AI_ENRICHMENT_FORBIDDEN",
-                message: `Missing permission grant: ${AI_ENRICHMENT_USE_PERMISSION_KEY}.`,
-            };
-        }
-        return { ok: true };
-    }
-
-    /** Legacy: same portal surface as `requireAdminOrOps` — **admin** or **ops** org role (not general members). */
-    if (input.ctx.role !== "admin" && input.ctx.role !== "ops") {
+    /*
+     * ONE AUTHORIZATION MODEL, IN EVERY ENVIRONMENT.
+     *
+     * No role title and no environment flag. The seeded default package is
+     * explicit that this is deliberate — "org admin role receives
+     * ai.enrichment.use only (conservative)" — so the role-title fallback that
+     * used to stand here admitted ops to the AI surface in organizations whose
+     * own package had never granted it. Measured on the deployed primary: admin
+     * holds the key in 3 of 3 organizations, ops in 1 of 3. The fallback was
+     * manufacturing authority for ops in the other two.
+     *
+     * Removing it narrows exactly those two, and that narrowing is the
+     * correction: nobody loses authority they were granted, only reach they
+     * were never given. The organization that did grant ops the key keeps it,
+     * and a custom role holding the key now genuinely works.
+     */
+    if (!input.access.permissionKeys.includes(AI_ENRICHMENT_USE_PERMISSION_KEY)) {
         return {
             ok: false,
             status: 403,
-            error: "FORBIDDEN",
-            message:
-                "AI stub routes require portal admin or ops role, or set AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true and grant ai.enrichment.use.",
+            error: "AI_ENRICHMENT_FORBIDDEN",
+            message: `Missing permission grant: ${AI_ENRICHMENT_USE_PERMISSION_KEY}.`,
         };
     }
 
     return { ok: true };
+}
+
+/**
+ * AI PROPOSAL AUTHORITY — the gate for creating and deciding Task Assist proposals.
+ *
+ * `ai.enrichment.use` is this program's promoted authority for AI COMPUTATION AND PROPOSAL. AI is not
+ * a superuser: this key never authorizes a domain mutation, which is why `task-assist/apply` answers
+ * to `communications.send` and not to anything here.
+ *
+ * WHY THIS EXISTS. `task-assist/propose` reached `createTaskAssistProposal` through the Trust
+ * authorization seam, which requires this key. `task-assist/proposals` POST reached the SAME
+ * `createTaskAssistProposal` and the same `task_assist_proposals` insert behind `requireAdminOrOps()`
+ * alone — portal admission, which is not an authority. Two doors to one durable state, one of them
+ * strictly weaker, means the stronger one decided nothing: any portal-admitted operator could write
+ * the row the seam reserved. Approve and reject moved the same row's lifecycle on the same terms.
+ *
+ * So this is not new vocabulary. It is the key the other door already required, applied to the doors
+ * that skipped it.
+ */
+export function requireAiEnrichmentUse(access: AdminAccessContextSuccess): NextResponse | null {
+    if (access.permissionKeys.includes(AI_ENRICHMENT_USE_PERMISSION_KEY)) return null;
+    return NextResponse.json(
+        { ok: false, error: "AI_ENRICHMENT_FORBIDDEN", required_permission: AI_ENRICHMENT_USE_PERMISSION_KEY },
+        { status: 403 },
+    );
 }

@@ -3,11 +3,22 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { buildTourAvailabilityRulePatch } from "@/lib/tours/admin/tourAvailabilityRuleMutation";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { TOURS_CONFIGURE, requireToursCapability } from "@/lib/access/toursAuthority";
 
 /** PATCH /api/admin/tours/availability-rules/[ruleId] */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ ruleId: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    /*
+     * TOURS CONFIGURATION — edits a tour availability rule.
+     *
+     * `requireAdminOrOps()` stood here, and despite its name it resolves PORTAL
+     * ADMISSION and no role: every principal who could enter the portal could do this.
+     * `tours.configure` is the authority now, held by grant and by nothing else.
+     */
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const capDenied = requireToursCapability(access, TOURS_CONFIGURE);
+    if (capDenied) return capDenied;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
@@ -57,8 +68,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 /** DELETE /api/admin/tours/availability-rules/[ruleId] */
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ ruleId: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    /*
+     * TOURS CONFIGURATION — removes a tour availability rule.
+     *
+     * `requireAdminOrOps()` stood here, and despite its name it resolves PORTAL
+     * ADMISSION and no role: every principal who could enter the portal could do this.
+     * `tours.configure` is the authority now, held by grant and by nothing else.
+     */
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const capDenied = requireToursCapability(access, TOURS_CONFIGURE);
+    if (capDenied) return capDenied;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 

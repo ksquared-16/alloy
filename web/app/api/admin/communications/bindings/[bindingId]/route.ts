@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
     translateBindingConstraintError,
@@ -17,6 +16,10 @@ import {
     PROJECTABLE_BINDING_COLUMNS,
 } from "@/lib/communications/identity/applyBindingIdentityProjection";
 import type { ProjectableBinding } from "@/lib/communications/identity/projectBindingIdentity";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_PROVIDER_CONFIGURE,
+} from "@/lib/communications/communicationsAuthority";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
@@ -32,8 +35,8 @@ const UUID_RE = /^[0-9a-f-]{36}$/i;
  * Org-scoped throughout.
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ bindingId: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_PROVIDER_CONFIGURE);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

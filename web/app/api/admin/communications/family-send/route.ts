@@ -16,6 +16,10 @@ import {
 import { triggerBackendMessagesQueue } from "@/lib/communications/triggerBackendMessagesQueue";
 import { deliverQueuedEmailHtml } from "@/lib/communications/deliverQueuedEmailHtml";
 import { decideEmailSubject } from "@/lib/communications/email/replySubject";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_SEND,
+} from "@/lib/communications/communicationsAuthority";
 
 /**
  * POST /api/admin/communications/family-send — UI-5G.
@@ -72,6 +76,8 @@ export async function POST(req: Request) {
     }
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_SEND);
+    if (!auth.ok) return auth.response;
 
     const sendAuth = await assertCommunicationsSendAllowed({
         orgId: ctx.orgId,

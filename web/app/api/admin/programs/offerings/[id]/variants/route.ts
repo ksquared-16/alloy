@@ -4,6 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import type { ProgramOfferingVariant, QuantityType, VariantStatus } from "@/lib/programs/programOfferingVariants";
 import { autoVariantLabel } from "@/lib/programs/programOfferingVariants";
+import { requireProgramsConfigurationCapability } from "@/lib/access/programsConfigurationAuthority";
 
 const VALID_QUANTITY_TYPES = new Set<QuantityType>([
     "days", "hours", "sessions", "weeks", "months",
@@ -98,6 +99,8 @@ export async function POST(
             { status: ctx.status },
         );
     }
+    const capDenied = requireProgramsConfigurationCapability(ctx);
+    if (capDenied) return capDenied;
     if (!["admin", "ops"].includes(ctx.role)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

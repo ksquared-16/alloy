@@ -180,8 +180,55 @@ export function discoverGrantStatements(): GrantStatement[] {
  */
 function parameterBound(statement: string): boolean {
     const m = statement.match(/\bFROM\s+unnest\s*\(\s*([a-z_][a-z0-9_]*)\s*\)\s*(?:AS\s+)?([a-z_][a-z0-9_]*)/i);
-    if (!m) return false;
-    return selectsBareVariable(statement, m[2]!);
+    if (m) return selectsBareVariable(statement, m[2]!);
+
+    /*
+     * THE SINGLE-KEY FORM. W-28's shape was an unnested caller ARRAY; the governed recovery owner
+     * writes exactly ONE key, named by a scalar parameter:
+     *
+     *     VALUES (p_org_id, btrim(p_target_role_key), btrim(p_permission_key), true)
+     *
+     * Without this it fell through to `blanket`, which is the opposite of what it is. A blanket
+     * grants whatever the catalog happens to hold; this grants one key the caller named, and its own
+     * function refuses unless that key is active. The binding is what bounds the key set, and a
+     * scalar parameter bounds it to one.
+     */
+    // Paren-aware: `VALUES (p_org_id, btrim(p_target_role_key), ...)` nests, so a `[^)]*` match
+    // stops inside the first `btrim(` and silently mis-columns everything after it.
+    const balanced = (from: number): string | null => {
+        const open = statement.indexOf("(", from);
+        if (open < 0) return null;
+        let depth = 0;
+        for (let i = open; i < statement.length; i++) {
+            if (statement[i] === "(") depth++;
+            else if (statement[i] === ")" && --depth === 0) return statement.slice(open + 1, i);
+        }
+        return null;
+    };
+    const split = (inner: string): string[] => {
+        const parts: string[] = [];
+        let depth = 0, current = "";
+        for (const ch of inner) {
+            if (ch === "(") depth++;
+            if (ch === ")") depth--;
+            if (ch === "," && depth === 0) { parts.push(current); current = ""; continue; }
+            current += ch;
+        }
+        parts.push(current);
+        return parts.map((c) => c.trim());
+    };
+
+    const colsAt = statement.search(/role_permission_grants\s*\(/i);
+    const valsAt = statement.search(/\bVALUES\s*\(/i);
+    if (colsAt < 0 || valsAt < 0) return false;
+    const colsInner = balanced(colsAt);
+    const valsInner = balanced(valsAt);
+    if (!colsInner || !valsInner) return false;
+    const at = split(colsInner).map((c) => c.toLowerCase()).indexOf("permission_key");
+    if (at < 0) return false;
+    const expr = split(valsInner)[at] ?? "";
+    // A bare parameter, or one wrapped in trimming/casting — never a subselect or a catalog read.
+    return /^(?:btrim|trim|lower|upper)?\s*\(?\s*p_[a-z0-9_]+\s*\)?(?:::[a-z]+)?$/i.test(expr);
 }
 
 function selectsBareVariable(statement: string, variable: string): boolean {

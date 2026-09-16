@@ -1143,3 +1143,854 @@ recorded here so the trade does not have to be rediscovered.
 
 **Verdict: HEALTHY WITH GENUINE DRAWER-VM DEPENDENCIES.** The remaining three cards are late because
 their first meaningful truth does not exist earlier — not because it exists and is withheld.
+
+## 21. Focus Panel provisioning census — MEASURED 2026-09-15, NOT YET CONVERGED
+
+Measured on the running application (slot 6, hosted project data, Firefly tenant, 1680px) because
+the surface visibly loads in phases: composition and shells first, Financials alone, then the rest.
+
+### 21.1 The phased load, timed
+
+| t | state |
+| --- | --- |
+| 1899ms | 6 card areas present · **financials** loading |
+| 3410ms | **attendance + financials + health_safety** loading |
+| 3911ms | **financials** loading |
+| 5921ms | settled |
+
+That is the operator-visible defect: one composition, then ~4s of cards arriving independently.
+
+### 21.2 Cold load totals
+
+**49 `/api/` responses, 1,107,395 bytes.** The provisioning answer is not the first thing asked for
+— ~18 configuration requests precede it, including `departments` 32KB,
+`entity-layouts/focus-panel-summary` 28KB, `lifecycle-builder` 76KB and one
+`view-models/drawer/opportunity` at 137KB.
+
+### 21.3 Classification
+
+| class | operation | bytes |
+| --- | --- | --- |
+| **FOCUS_PANEL_ROOT** | `/api/admin/work-units/{slug}/provisioning-answer` | 114–309KB |
+| **CARD-OWNED LIFECYCLE** | `/api/admin/financials/card` | ~3.1KB |
+| **CARD-OWNED LIFECYCLE** | `/api/admin/attendance/card` | — |
+| **CARD-OWNED LIFECYCLE** | `/api/admin/health/card` | — |
+| consumes root only | Business Process · Children · Household | 0 |
+
+### 21.4 ROOT CAUSE — and it is not what the symptom suggests
+
+The natural reading is "cards re-fetch truth the root answer already has". **They do not.** The root
+answer does not carry that truth at all: searched, it contains `ledger` 0 times, `balance` 0,
+`charge` 0, `immuniz` 0, `customer_member_id` 0. The words `financials`, `attendance` and `health`
+appear 7 times each — as **card keys in the published composition**, never as data.
+
+So Financials, Attendance and Health have **no producer in the provisioning lifecycle**. They were
+never migrated when the four-request client waterfall was collapsed into the D1 answer, and each
+card discovers its own subject id from props and boots its own fetch and its own loading state.
+
+The remedy is therefore **additive on the server** — give the one lifecycle three producers — not
+subtractive on the client. There is no duplicate fetch to delete.
+
+### 21.5 Corrections to the prior audit
+
+- **Retransmission is 40%, not ~71%.** Two consecutive selections in one work view (138,239B vs
+  138,228B) share **55,199B byte-identical**: `focusPanelSummaryDoc` 30,500B, `rows` 14,328B,
+  `presentation` 6,359B, plus `actionsProjection`, `lensSet`, `settlement`, `workUnit`,
+  `currentBusinessState`. Real, and smaller than the lead claimed.
+- **The dominant cost is not configuration.** `focusPanelStageWork.published_stage_inputs` is
+  **78,585B — 57% of the answer**. ~~and legitimately differs per subject~~ — **this half was
+  wrong; corrected in §22.** It does not differ per subject at all. Adding three producers without
+  addressing it would make the critical path worse, not better — that part stands, and §22 shows
+  the reason is larger than stated here.
+
+### 21.6 Stale-subject protection already exists, card-locally
+
+`FinancialsCard` carries a `requestSeq` ordinal and drops superseded responses; its comment records
+a reproduced stale overwrite. So rapid A→B is guarded — but by each card for itself, not by a shared
+provisioning identity. Any convergence must keep that guarantee, not re-derive it.
+
+### 21.7 The contract — SHIPPED
+
+> One selected subject. One provisioning lifecycle. One published composition. One authoritative
+> operational answer. Cards are projections of that answer, and request deep detail only on
+> explicit operator intent.
+
+**MET. Certified in §31.**
+
+The paragraph below is the target as it was written when the surface had 1 + 3 lifecycles, kept
+verbatim because the gap it describes is the thing that was closed:
+
+> This is recorded as the target so the gap is legible. **Today the surface has 1 + 3 lifecycles.**
+> Closing it means adding Financials, Attendance and Health producers to
+> `composeProvisioningAnswerForRoute` with a readiness contract, moving three cards onto that
+> projection, and binding producer results to the provisioning request identity. That is a change to
+> the operational critical path and is scoped as its own work, with §21.5 as a precondition.
+
+Every sentence of that plan was executed, and the sections between here and §31 are the record of how
+— including the three times the `server-only` boundary took the panel down, the producer that
+resolved the wrong child, and the staging deployment that failed with all thirteen checks green.
+§31.6 states what this certification does NOT claim.
+
+## 22. Phase 1 — `published_stage_inputs` consumer audit — MEASURED 2026-09-15
+
+The precondition on adding Financials/Attendance/Health producers. It returns a different answer
+than the one §21.5 assumed, and **corrects an error made there**.
+
+### 22.1 The correction
+
+§21.5 recorded that `published_stage_inputs` "legitimately differs per subject". **It does not.**
+That claim came from hashing the whole `focusPanelStageWork` subtree, which also carries
+`stage_work_runtime` and `work_intent_runtime` — those do vary. Its 78,355B
+`published_stage_inputs` child does not.
+
+Two consecutive selections, same work view, different subject: **every one of its twelve fields is
+byte-identical.** 78,355B of 78,355B, 100%.
+
+### 22.2 And the whole answer is nearly static too
+
+Compared recursively rather than at top-level-key granularity:
+
+| | |
+| --- | --- |
+| answer A / answer B | 138,239B / 138,228B |
+| **byte-identical** | **135,749B — 99.6%** |
+| actually differs | **565B — 0.4%** |
+
+The 565B are ids, an email and two due dates. **The critical path transmits ~138KB to deliver ~565
+bytes of new truth.**
+
+Scope honestly: 99.6% is the *within-work-view* case — an operator working down a queue, which is
+the motion the census caught issuing three provisioning answers. Across work views the figure is
+37–96%, because the queue `rows` legitimately change. Both supersede §21.5's 40%, which was a
+measurement artefact of the coarser comparison.
+
+### 22.3 Field inventory and classification
+
+| field | bytes | varies per subject? | class |
+| --- | --- | --- | --- |
+| `departmentMetadata` | 32,550 | no | CONFIG_STATIC |
+| `process` | 28,741 | no | CONFIG_STATIC — **and duplicated, see §22.4** |
+| `commandProjection` | 10,139 | no | CONFIG_STATIC (already a projection) |
+| `operatingPlan` | 5,561 | no | CONFIG_STATIC |
+| `processTracks` | 646 | no | CONFIG_STATIC |
+| `fieldRules` | 262 | no | CONFIG_STATIC |
+| `processStages` | 238 | no | CONFIG_STATIC |
+| `actionCatalog` | 102 | no | CONFIG_STATIC |
+| `commandConfiguration` | 94 | no | CONFIG_STATIC · no runtime consumer found |
+| `processKey` / `stageKey` / `operatorGuidance` | 22 | no | CONFIG_STATIC |
+
+**UNUSED / COMMAND_LAZY / DETAIL_LAZY: none identified.** Nothing here is deferrable-by-field,
+which is why the expected Phase 1 remedy does not apply.
+
+### 22.4 The same process record ships twice in one answer
+
+`process` is 28,741B. `departmentMetadata.lifecycle_builder_v1.processes[0]` is 28,791B — the same
+record, differing by ~50 bytes of normalization. **~28.7KB of every answer is a second copy of
+configuration already present in it**, because `resolvePublishedStageInputsForCurrentWork` carries
+both the raw metadata and `activeLifecycleProcess(builder)` derived from it.
+
+### 22.5 Why it is on the wire at all — the real finding
+
+`BusinessProcessCard` is a client component. It calls
+`adaptBusinessProcessEvidenceToProcessCard` → `buildCurrentWorkSurfaceVM`, which reads
+`context.publishedStageInputs`. **The Process card projects its own view model in the browser**, so
+the answer must ship the configuration inputs rather than the projection.
+
+That is the same architecture the rest of this work is trying to remove, seen from the other end:
+Financials/Attendance/Health have *no* server producer, and Process has one that runs on the
+client. `commandProjection` — 10,139B of already-projected output beside 61,291B of the inputs it
+was projected from — shows what inversion is worth.
+
+### 22.6 Phase 1 acceptance — the budget
+
+| | bytes |
+| --- | --- |
+| current `published_stage_inputs` | **78,355** |
+| genuinely per-subject within a work view (whole answer) | **565** |
+| retained as initial operational truth *after inversion* | the Process card projection, not its inputs |
+| deferrable by field | **0** — no field is lazy; the payload is structural |
+| duplicated within the answer | **~28,741** |
+
+So the budget is not a smaller `published_stage_inputs`. It is **the Process card projection in
+place of `published_stage_inputs`**, with the configuration reached by published version rather
+than retransmitted per subject.
+
+### 22.7 STOP — and why
+
+The instruction's own stop condition applies: *"producer convergence would materially worsen
+critical-path latency without a safe deferred model."*
+
+Adding three producers to an answer that is 99.6% retransmission would add weight to a path whose
+measured defect is that it already carries ~138KB to say ~565 bytes. The ordering must change:
+**invert the Process projection first**, then add Financials/Attendance/Health producers to a
+lifecycle that ships projections rather than configuration.
+
+§21.7's contract is unchanged and still **TARGET, NOT YET MET**.
+
+## 23. Process inversion — consumer audit, census tool, and a NO-GO
+
+### 23.1 Every operational consumer of `publishedStageInputs`, classified
+
+Fifteen non-test files reference it. Only **two** execute projection over it, and both are client
+components:
+
+| consumer | class |
+| --- | --- |
+| `BusinessProcessCard.tsx` — `buildBusinessProcessCardEvidence`, `projectProcessCardCommands`, `adaptBusinessProcessEvidenceToProcessCard`, all in `useMemo` | **PROCESS_PROJECTION** |
+| `CurrentWorkCard.tsx` — `projectCurrentWork`, `resolveWorkItemHandoff` | **OTHER_INITIAL_RUNTIME** |
+| `OperationalSubjectContext` · `InlineOpportunityFocusPanel` · `ProvisionedWorkUnitSurface` · `OpportunityFocusPanelBody` | plumbing — carry it to the two above |
+| `BusinessProcessCard` direct field read (`operatingPlan.work_templates`, `commandProjection`) | telemetry only — `logProcessCardCommandProjection` |
+| `lib/**` — `buildCurrentWorkSurfaceVM` (12), `resolveCurrentWorkChecklistTruthFromPublishedRules` (14), `projectProcessCardCommands`, overlays, `buildOperationalContext` | the projection itself; no independent consumer |
+
+**CONFIGURATION_UI: none. DETAIL/COMMAND: none. UNKNOWN: none.**
+
+### 23.2 The projection engine is client-side wholesale
+
+`focusPanelWorkModeModelFromProvisioningAnswer` — which builds the commit-critical card models — is
+itself called from `OpportunityFocusPanelBody.tsx`, a client component. And
+`COMMIT_CRITICAL_CARD_SPECS` holds `current_work`, `household`, `children`, `readiness_kpi`;
+**`business_process` is not in it at all.**
+
+So the provisioning answer is not an operational answer that happens to be large. It is a
+**data-transfer format for a projection engine that runs in the browser**. That is the same defect
+as the three missing producers, seen from the other end.
+
+### 23.3 Why Process inversion alone cannot remove the payload — the NO-GO
+
+`CurrentWorkCard` projects over the same `publishedStageInputs`. Inverting Process alone therefore
+removes **no** configuration from the answer: the payload must stay for the other card. What it
+would add is a *second* projection site — the exact "another Process Card model" this run forbids —
+for zero measured payload improvement.
+
+**NO-GO for Attendance / Health / Financials producers**, and NO-GO for Process inversion as a
+standalone slice. Both were gated on this audit, and the audit says the unit of work is wrong:
+
+> The sliceable unit is not "Process". It is **the client projection engine** —
+> `BusinessProcessCard` and `CurrentWorkCard` together — because they are the only two consumers,
+> and the payload cannot move until both do.
+
+`current_work` is not in the live Firefly composition (the census saw `business_process`,
+`financials`, `attendance`, `children`, `health_safety`, `household`), so the two can ship in
+sequence. But the payload removal in §Phase 5 lands only after the second.
+
+### 23.4 The census tool — shipped
+
+`lib/runtime/provisioning/recursivePayloadCensus.ts`, with
+`tests/surfaces/recursivePayloadCensus.test.ts`. Both superseded figures came from the same
+mistake, so the measurement is now code rather than a pipeline someone re-derives.
+
+Validated against the real captured answers:
+
+| method | identical | differing | share |
+| --- | --- | --- | --- |
+| **recursive** | 126,387B | **565B** | **99.6%** |
+| top-level (kept only to demonstrate the error) | 51,001B | 77,257B | 39.8% |
+
+It reproduces the superseded **40%** exactly, which is the proof that figure was method and not
+measurement.
+
+`internalDuplicationBytes` also found what the manual pass missed: **`operatingPlan` (5,223B) is
+carried three times** in one answer — standalone, inside
+`departmentMetadata.lifecycle_builder_v1.processes[0].stages[0].stage_operating_plan_v1`, and
+inside `process.stages[0].stage_operating_plan_v1`. The `process` ≈ `processes[0]` pair is *not*
+reported, correctly: they differ by ~50 bytes and are near-copies rather than exact ones.
+
+### 23.5 Status
+
+`PROCESS PRODUCER — NOT SHIPPED.` §21.7 remains **TARGET, NOT YET MET**.
+
+## 24. C2 — the cutover found a SECOND producer of the raw payload
+
+Implementing the cutover — not auditing it — surfaced a fact every prior pass had missed, including
+§21–§23. All of them treated the provisioning answer as the sole producer of
+`published_stage_inputs`. **It is not.**
+
+### 24.1 What was built and verified
+
+The chokepoint wiring is written and typechecks clean (`vac run typecheck` rc=0):
+
+- `ProvisioningRequest` gains `canMutate`, threaded from the route gate as
+  `hasPortalAdminMutateAccess(gate.roleKeys)` — the same rule `useAdminAuth` applies client-side, so
+  the two cannot drift.
+- `workUnitProvisioningAnswer.ts` calls `projectFocusPanelOperational` at the assembly point through
+  `buildCommitCriticalOperationalContext`, timed via the route's existing `markSpan`.
+
+Two viewer-scoped inputs were checked rather than assumed:
+
+| input | verdict |
+| --- | --- |
+| `perspective` | read by **zero** projection functions — the server passing `null` is harmless |
+| `canMutate` | genuinely read (outcome completion). Server-derivable from the gate; at commit the browser uses `authCanMutate` too, because `resolveOpportunityVmStatusCanMutate` falls back to it until the drawer VM arrives |
+
+### 24.2 The blocker
+
+`OpportunityFocusPanelBody` builds its model **two ways**:
+
+```
+if (enriched)  -> focusPanelWorkModeModelFromDrawerVm(...)   <- SETTLED / steady state
+else           -> focusPanelWorkModeModelFromProvisioningAnswer(...)  <- commit frame only
+```
+
+The settled context comes from `buildOperationalContext`, which reads
+`subjectVm.workspace.published_stage_inputs` — put there by
+`applyStageWorkSliceToVm`, from the **drawer VM** endpoint
+(`/api/admin/view-models/drawer/opportunity/{id}`, measured at ~137KB in §21.2).
+
+So the provisioning answer is the **commit frame only**. In steady state — what the operator
+actually looks at — the cards project from the drawer VM's copy of the same configuration.
+
+**Consequences, and why the wiring was not promoted:**
+
+1. Removing `published_stage_inputs` from the provisioning answer alone yields **zero** steady-state
+   byte reduction.
+2. The client projection engine stays fully alive on the settled path, so Phase 5's zero-consumer
+   proof is unreachable by this route.
+3. Shipping the wiring on its own would **add** the projection's bytes to the commit frame with no
+   consumer — strictly worse — and recreate exactly the dual-authority state C1 avoided.
+
+### 24.3 Corrected scope for C2
+
+The chokepoint must be invoked in **both server producers** before either card is cut over:
+
+| producer | site |
+| --- | --- |
+| provisioning answer | `workUnitProvisioningAnswer.ts` assembly — **written, unpromoted** |
+| drawer view model | `composeOpportunityDrawerViewModel.ts` / `applyStageWorkSliceToVm.ts` |
+
+Then: cut both cards once, remove the raw payload from **both** producers, and re-measure. The
+§21.2 census already shows the drawer VM is the larger of the two carriers, so the payload win is
+bigger than §22 estimated — but it is not reachable in the order C2 assumed.
+
+The written wiring is preserved on `agent/focus-panel-c2-cutover` (`a2bb4e2f0`), deliberately not
+promoted.
+
+### 24.4 GO / NO-GO — Attendance / Health / Financials
+
+**NO-GO.** The measured blocker: no payload has moved, because the steady-state raw configuration
+is produced by the drawer VM rather than the provisioning answer, and the client projection engine
+is therefore still the operational authority. Criteria 1, 4 and 5 all fail on evidence.
+
+§21.7 remains **TARGET, NOT YET MET**. The client projection engine is **NOT** retired.
+
+## 25. C2 final — raw projection transport retired
+
+### 25.1 Telemetry moved off raw configuration
+
+`BusinessProcessCard`'s drift telemetry was the last browser reader of `published_stage_inputs`. It
+echoed the raw operating plan and the process's own command selection beside the result — and both
+were **redundant**: `configuredRefs` already states what configuration named, `commandKeys` what the
+row became, `drift`/`withheld` the difference, all decided by the server projection. The two raw
+echoes are gone; the comparison, and the `window.__ALLOY_PROCESS_COMMAND_PROJECTION` dedupe
+identity, are unchanged.
+
+### 25.2 Zero browser readers, then zero browser transport
+
+After the telemetry fix, `publishedStageInputs` had **no** browser reference at all — reader or
+carrier. The obsolete plumbing was removed from all four carriers.
+
+### 25.3 Raw payload removed from BOTH frames
+
+| frame | site |
+| --- | --- |
+| commit | `workUnitProvisioningAnswer` emits the slice with `published_stage_inputs: null` **after** projecting |
+| settled | `composeOpportunityDrawerViewModel` emits the VM workspace the same way |
+
+Both or neither: stripping one would let a change of transport frame restore the old architecture.
+
+The deferred stage-work merge path (`applyStageWorkSliceToVm` via `useRecordWorkRuntime`) is
+**dormant** — it runs only when `stage_work` is `pending`, which requires `?stage_work=0`, and no
+client sends it. Recorded because if it is ever activated it would merge a slice without refreshing
+the projection.
+
+### 25.4 Measured, on the running panel
+
+| | before | after |
+| --- | --- | --- |
+| commit answer | 138,239 B | **81,050 B** |
+| settled drawer VM | ≈137 KB | **97,303–103,783 B** |
+| raw config present | yes, 78,355 B | **absent from both** |
+
+Browser proof with the configuration physically absent: rail, stage copy, all four configured
+commands in order, Record outcome link, drift diagnostics still recorded, **zero page errors**.
+Rapid A→B→C settles on C's own data with no stale flash.
+
+### 25.5 Status
+
+`C1 — SERVER PROJECTION CHOKEPOINT: SHIPPED.`
+`C2 — CLIENT PROJECTION ENGINE: RETIRED.`
+`RAW CONFIG TRANSPORT: RETIRED.`
+
+§21.7 remains **TARGET, NOT YET MET** — Attendance, Health and Financials have not joined the root
+lifecycle.
+
+## 26. The subject of attention is part of the provisioning identity
+
+### 26.1 What went wrong
+
+Both transport frames shared a producer. They did not share the SELECTED PARTICIPANT.
+
+Measured on a child-scoped surface: the root Attendance producer projected for member `dce12254…`
+while the card was scoped to `46105cd4…` — **a different child**. The result happened to be empty, so
+the UI looked harmless. It was not: shipped, it would render one child's attendance under another
+child's name.
+
+### 26.2 The resolvers were right; the input was wrong
+
+`buildOperationalContext` resolves `childSubjectScope ?? resolveParticipantScope({selectedParticipationId, participants})`,
+and neither resolver guesses — `participantScopeFromChildSubjectTruth` refuses unless truth names both
+`child.customer_member_id` and `child.process_instance_id`; `resolveParticipantScope` answers
+`not_found` for a stale or foreign selection and `ambiguous` for several children with none named.
+
+The settled call passed the FAMILY record as truth with `selectedParticipationId: null`, so
+`childSubjectScope` was null and the fallback legitimately returned `sole_participant`. **Neither
+resolver was changed.**
+
+### 26.3 The missing contract, and what now carries it
+
+The commit frame already resolves the selection — the panel body passes `selectedParticipationId`.
+The settled frame could not: the Drawer route accepted `department_id`, `work_unit_id` and
+`stage_work` and nothing else, so the server frame had no way to know which child the surface was
+scoped to. That is the gap, and it is why a settled-frame producer could not have been correct.
+
+Shipped here, as one route-contract extension:
+
+| Layer | Carries |
+| --- | --- |
+| `buildOpportunityDrawerViewModelUrl` | `attention_subject_id` on the request |
+| Drawer route | parses it, untrusted, alongside `deferStageWork` |
+| `composeOpportunityDrawerViewModel` | passes it as `selectedParticipationId` |
+| `useRecordWorkRuntime` | **the transport owner** — reads live attention and names it |
+| Drawer VM cache key | `attentionSubjectId` as a key segment |
+
+`useRecordWorkRuntime` is the only place that may add it. Cards do not add query parameters; they
+read what the request returns. Outside the RuntimeKernel — the modal drawer product renders above it —
+attention is null, which is the ordinary family-grain answer rather than a degraded one.
+
+### 26.4 The three quiet halves
+
+Naming the subject on the request is the obvious half. Three others would each have silently undone it:
+
+- **Cache identity.** One record under Child A is not the same answer as the same record under Child
+  B. Keying on the record alone loses the identity on the very next read after the fetch that got it
+  right.
+- **The unscoped write.** `applyVm` filed every response under `{department, workUnit}` with no
+  attention. A child-scoped view model written at the unscoped key is handed to the next family-grain
+  reader — the leak, arriving by a different door.
+- **The null scope.** `resolveOpportunityDrawerVmCacheContext` returned `null` unless a department or
+  work unit was named, and a null context keys **every child of a record to one entry**. The Focus
+  Panel's transport names attention without naming either, so attention alone is now a scope.
+
+Invalidation moved the other way: it clears every attention variant of a record, because an
+invalidation names a RECORD that changed and that change is equally true under every child it was
+viewed under.
+
+### 26.5 It is an input, not a credential
+
+A caller can write the parameter. The route does not validate it and must not try: it hands the value
+to the canonical resolver, which refuses a participation that does not belong to the record under
+view. A Family A request naming a Family B child resolves to no scope, and the producers, given no
+scope, return `unavailable` without attempting a read.
+
+The dangerous shape is a **single-child** family, where a lenient resolver would answer "there is only
+one — here it is", turning a refused request into a successful read. `tests/adminV2/viewModel/drawerAttentionAuthorizationBoundary.test.ts`
+holds that line, and was proven by planting the lenient fallback and watching it fail.
+
+### 26.6 The refined law
+
+> Transport frames may differ in FRESHNESS. They may not differ in SUBJECT.
+> A frame may produce child-scoped truth only if it knows the canonical subject of attention.
+
+### 26.7 Real Next client-graph smoke — infrastructure debt, CONFIRMED
+
+Resolved by inspection this run: **no required check runs a real `next build`.** The prebuild gate
+runs `npm run prebuild` — the chain that runs *before* `next build` — and `web-prebuild-gates.yml`'s
+own header records that a preview deployment never runs `npm run build`.
+
+So the `server-only` class of failure, which is rejected by Next's loader rather than by esbuild or
+`tsc`, still has no required automated catcher. §25's module-graph certification covers the known
+shape statically; the general case is caught only by rendering the page. No smoke was faked to close
+this.
+
+§21.7 remains **TARGET, NOT YET MET** — Attendance, Health and Financials have not joined the root
+lifecycle.
+
+## 27. The third time, it reached the deployment
+
+### 27.1 What happened
+
+The settled frame's card producers were wired inside `composeOpportunityDrawerViewModel`. All
+thirteen required checks passed. **The staging deployment failed.**
+
+Next's own trace:
+
+```
+Client Component Browser:
+  ./app/(proof)/adminV2/layout-proof/child-drawer/ChildDrawerRuntimeProofClient.tsx
+  ./lib/layout/runtime/index.ts                       <- barrel
+  ./lib/layout/runtime/evaluateOpportunityLayoutRuntimeBody.ts
+  ./lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts
+  ./lib/adminV2/runtime/focusPanel/focusPanelCardProducers.ts
+  ./lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM.ts   <- "server-only"
+```
+
+A proof page imports a barrel, the barrel re-exports a layout evaluator, the evaluator imports the
+composer. Four hops, none of them visible at any single import site.
+
+### 27.2 Why §25 did not catch it
+
+§25 certifies a HAND-MAINTAINED list of entry points. It can only catch a path somebody remembered to
+add, and nobody remembers a proof page importing a barrel. The offending edge was four hops from
+anything that test names. An enumeration cannot certify a property of the whole graph.
+
+### 27.3 The fix, and the general gate
+
+**The edge:** the producers run in the **App Route**, which no client component can import, and the
+composer hands its operational context out as a VALUE. Both frames still produce from ONE context, so
+they cannot disagree about the subject. This is the same rule the commit frame already follows in
+`composeProvisioningAnswerForRoute`.
+
+**The gate:** `tests/surfaces/clientGraphServerOnlyReachability.test.ts` walks the in-repo import
+graph from EVERY `"use client"` module — about 1,500 of them — to every module declaring
+`server-only`. No list. It runs in under a second, and planting the exact edge that failed the
+deployment reproduces Next's trace verbatim.
+
+It walks repo imports rather than bundling because the question is entirely about in-repo edges, and
+esbuild across ~1,500 entries fails on loader details unrelated to the question. The walk
+over-approximates (it follows static imports a bundler might shake out), which is the safe direction:
+it can ask for an edge to be broken that a bundler would have tolerated, but it cannot miss one a
+bundler would follow. `import type` is excluded — TypeScript erases it.
+
+### 27.4 The real build is runnable locally
+
+`vac run build` runs the genuine `next build`. It needs roughly 11 GB and the broker refuses it when
+the host is short, which is why it is not a casual check — but it is the ONLY authority for this
+defect class, and it reproduced the failure exactly.
+
+§26.7's infrastructure debt stands: required CI still runs `npm run prebuild`, not `next build`. What
+changed is that the specific class that keeps escaping now has a required-suite gate that does not
+depend on anyone maintaining a list.
+
+§21.7 remains **TARGET, NOT YET MET**.
+
+## 28. Attendance identity, certified on the rendered product
+
+Measured against deployed staging `686509e9c`, on the real multi-child family `d097e1a8` (Kurzman),
+using the child-grain Work View `waitlist` — not the family-grain queue.
+
+### 28.1 The identity chain holds
+
+| Frame | Input | Producer's customer member |
+| --- | --- | --- |
+| Settled | `attention_subject_id=8132b6e1` (Lennon) | `b247b8a3` — Lennon Kurzman |
+| Settled | `attention_subject_id=8f3b9ac3` (Wrigley) | `bf7bb266` — Wrigley Kurzman |
+| Commit | `subject_id=9ab36f48` (Wrigley, child grain) | `bf7bb266` — Wrigley Kurzman |
+
+**One family record, two children, two different correct producers.** This is the original defect —
+the producer answering for `dce12254` while the card was scoped to `46105cd4` — shown fixed on the
+deployed product rather than argued.
+
+`commit → settled does not change child identity`: Wrigley resolves to `bf7bb266` in BOTH frames,
+reached by different inputs (a child subject in one, an attention participation on the family record
+in the other).
+
+At the commit frame, three different child subjects returned three distinct members and a
+`recordOfAttention` equal to the requested subject every time. No substitution.
+
+### 28.2 The authorization boundary holds
+
+All against record `d097e1a8`:
+
+| Attention named | Result |
+| --- | --- |
+| a real id belonging to another record | `unavailable`, no data, no member |
+| an unknown UUID | `unavailable`, no data, no member |
+| nothing, with two children present | `unavailable` — ambiguous is not a guess |
+
+Naming a participation that is not on the record yields no scope and no child-scoped projection. The
+route never validates the parameter; the canonical resolver refuses it.
+
+### 28.3 What is NOT certified, and why
+
+The six-state data parity matrix is **incomplete**. Every waitlisted child on staging returns
+`recentDays: 0, history: 0` — they have no attendance records. That certifies state 2 (*no attendance
+record* → `ready` with an empty day, not an error) and state 3 (*no scoped child*), but states 1, 4, 5
+and 6 need a child who has actually been checked in.
+
+Recording attendance to manufacture that data would be a real business mutation on a live tenant.
+It was not done. Those four states remain **NOT CERTIFIED**.
+
+Also uncertified: the A → B → C rapid-switch settle, which is client behaviour and needs the rendered
+panel rather than the API. Zero initial `/api/admin/attendance/card` requests IS locked, by
+`tests/surfaces/attendanceDepthWindow.test.tsx`.
+
+§21.7 remains **TARGET, NOT YET MET** — Health and Financials have not joined the root lifecycle.
+
+### 28.4 A constraint Health will hit that Attendance did not
+
+`/api/admin/health/card` resolves the CALLER's grants and refuses without `health.view`; route
+admission is deliberately not the boundary, and a failed grant read DENIES rather than reading as
+"holds no grants". The producer contract is `{supabase, orgId, context}` and carries no caller
+identity, so moving Health into the root lifecycle requires threading the caller's permission keys
+into the producers. Without that the producer is either a permission bypass or denies everyone.
+
+## 29. PRODUCER AUTHORIZATION LAW
+
+> **MOVING A PROJECTION INTO ROOT PROVISIONING MUST NEVER BROADEN WHO MAY SEE IT.**
+>
+> The root producer executes as the AUTHENTICATED CALLER, under the same authorization semantics as
+> the endpoint it replaces.
+>
+> **ONE RUNTIME DOES NOT MEAN ONE PRIVILEGE LEVEL.**
+
+Producer convergence is an execution-LOCATION change. It is not a permission-model change. For the
+same caller and subject, the old endpoint's authorization decision and the new producer's decision
+must be the same decision.
+
+### 29.1 Why this became the blocker
+
+`/api/admin/health/card` deliberately does not treat route admission as its boundary: an operator who
+works Attendance holds `requireAdminOrOps` and must not receive allergies, conditions and
+medications. Invoking the Health domain owner from root provisioning would therefore have either
+**bypassed** that refusal or **denied everyone**. Neither is acceptable, and neither is visible in a
+diff that only moves a function call.
+
+### 29.2 The root already held the answer
+
+`AdminRouteGateSuccess.access` **is** `AdminAccessContextSuccess` — the same canonical resolution the
+endpoint performs, from the same per-request cached bundle. So nothing new is resolved and no new
+type exists: the producer context carries `gate.access`.
+
+It carries the WHOLE resolved authority rather than a plucked permission list, because a producer
+handed only the fact it asked for invites the next producer to invent its own channel.
+
+### 29.3 The two producers do NOT share an authorization shape
+
+This is the part that would have been wrong by assumption:
+
+| | Health | Financials |
+| --- | --- | --- |
+| key | `health.view` | `fin.read` |
+| decided by | the domain owner, inside the VM | `assertFinancialsReadAllowed`, **outside** it |
+| resolver | caller's resolved `permissionKeys` | `resolveActorPermissionGrants` via the service client |
+| VM takes `access`? | yes | **no** — it has no access argument at all |
+| denial shape | `permissionDenied` on the VM | a verdict before any figure is computed |
+
+`buildFinancialsCardVM` takes no access argument, so calling it without its gate hands the household
+balance to anyone the route admitted. A denied Financials caller now causes **no ledger read at all**.
+
+### 29.4 `forbidden` is not `unavailable`
+
+The card must say "you do not have permission" rather than render an empty surface that reads as "no
+allergies" — the health endpoint's own reasoning. A `forbidden` result carries `data: null`: returning
+the VM and trusting the card to hide it would put the facts in the payload, where a network tab is
+enough to read them.
+
+### 29.5 Root-owned readiness
+
+`cards` absent means PROVISIONING. A producer entry inside it is an explicit verdict. That only holds
+if the envelope is COMPLETE — one producer silently omitted reads, to its card, exactly like a frame
+that has not produced yet, forever. That is the Attendance spinner's shape.
+
+`tests/surfaces/rootReadinessContract.test.ts` certifies the envelope rather than any one card: every
+registered producer present, a state from the canonical vocabulary, and `data: null` on anything but
+`ready`. Proven by planting both a silent omission and a non-ready state carrying data.
+
+### 29.6 Honest notes from this slice
+
+- A leak plant (a `forbidden` Financials result carrying the VM) stayed **green**. That is not a
+  missing test: when the gate denies, the VM is never built, so `data` is already null on that branch.
+  The test that protects it asserts no ledger read occurs.
+- A Financials reload-race test passed while issuing **no request at all**. A guard assertion caught
+  the vacuous green. `load()` is reachable only through the action UI, so the file states what it does
+  not claim rather than keeping a test that proves nothing.
+- A failed Health read returns a VM carrying `unavailableReason` rather than throwing, and the
+  endpoint answers 200 with it — so `ready` is the parity-preserving mapping there, not `error`.
+- `vac run typecheck` uses `tsconfig.build.json`, which EXCLUDES tests. A producer contract change
+  passed locally and failed CI on `typecheck:tests`. Run `vac run typecheck:tests` before promoting a
+  contract change.
+
+§21.7 is **SHIPPED** as of §31. §30's outstanding list is superseded by §31.6.
+
+## 30. What is outstanding
+
+Root-owned and certified: Business Process, Current Work, Attendance, Health, Financials.
+
+Not yet done, and not claimed:
+
+1. **Current Work render matrix** — the ten-scenario mount of the real `CurrentWorkCard` /
+   `CurrentWorkFocusedSurface` with a planted defect. Outstanding.
+2. **Dormant stage-work path** — `applyStageWorkSliceToVm` / `useRecordWorkRuntime` / `?stage_work=0`
+   still merge stage-work without refreshing the canonical operational projection. Undisposed.
+3. **Recursive + cold-load census** — commit / settled / combined, against the recorded baseline.
+4. **Final browser A → B → C** across all initial cards.
+5. **Attendance data-bearing live matrix** — no waitlisted child on staging has attendance records,
+   and manufacturing them would be a business mutation on a live tenant. Identity and
+   empty/unavailable paths are live-certified; the data-bearing states remain fixture-certified only.
+
+## 31. FINAL CLOSURE — the single-runtime program
+
+### 31.1 The dormant stage-work path: classified, then retired
+
+Not inferred from one grep. Searched routes, client callers, query construction, tests, docs and the
+public surface for `stage_work=0`, `stage_work`, `useRecordWorkRuntime` and `applyStageWorkSliceToVm`:
+
+| Symbol | Finding | Class |
+| --- | --- | --- |
+| `stage_work=0` | appears ONLY where the route parses it. `buildOpportunityDrawerViewModelUrl` is the single builder of that query and sets department, work unit, attention subject — never this | **A — unreachable legacy** |
+| `useRecordWorkRuntime` | live: `InlineOpportunityFocusPanel` | **C — active** (the runtime, not the deferred path) |
+| `applyStageWorkSliceToVm` | two live call sites, both gated on `stage_work: "pending"` — plus one reachable `force` path | **C — active** |
+
+**The `force` path was the real defect, and it was not dormant.** A `work_lifecycle` refresh ran
+`reloadDisplayVm({forceFresh: true})`, which invalidated the caches, recomposed the view model — so
+the server had produced a fresh stage-work runtime AND the `operational_projection` computed from it
+— and then fetched a SECOND stage-work slice and merged it over the top.
+`applyStageWorkSliceToVm` writes `stage_work`, `stage_work_runtime` and the record mirror; it never
+touches `operational_projection`. So the merge could leave Current Work and the card envelope
+describing one stage-work runtime beside a later one: two operational truths in one view model, and
+a second read to produce them.
+
+**Disposition — retired, not guarded:**
+
+- the route no longer reads `stage_work`;
+- `deferStageWork` is gone from the composer and the deferred resource, so `stage_work` can never be
+  `pending`;
+- `completeVmWithStageWork` no longer accepts `force`;
+- the deferred client effect — whose own log line said `SECOND stage-work resolution` — is deleted.
+
+Three tests certified only the retired behaviour. They were rewritten to lock the disposition rather
+than deleted, and the suite is at exact parity with the base (21 pre-existing failures, zero new).
+
+### 31.2 Final recursive payload census
+
+`recursivePayloadCensus`, two consecutive selections in the same Work View. No top-level hashing.
+
+| | COMMIT frame | SETTLED frame |
+| --- | --- | --- |
+| total bytes | 258,031 | 185,542 |
+| recursively identical | 241,097 | 169,613 |
+| differing | 7,718 | 5,590 |
+| **stability** | **96.90%** | **96.81%** |
+| internal duplication | 3,890 | 78,617 |
+| operational projection | 38,925 | 47,904 |
+| — businessProcess | 3,114 | 9,031 |
+| — currentWork | 12,678 | 15,740 |
+| — cards (producers) | 23,089 | 23,089 |
+
+**Combined initial operational transport: 443,573 B** (258,031 + 185,542).
+
+That is ABOVE the historical markers, and the reason is attributable rather than mysterious: the
+commit frame's largest key is `rows` at **176,523 B** — the sixteen child queue rows of this Work
+View, which is queue payload and not this subject's operational transport. The settled frame's
+78,617 B of internal duplication is `first_paint` mirroring `above_fold` (`inquiry_children`,
+`scheduling_projection`, `header_actions`), which predates this program. Both are recorded as measured
+debt in §31.6 rather than folded into the producer verdict.
+
+What moved between two selections is small and named: participant `imageUrl` signed-URL tokens,
+`resolved_photo_url`, and the command/action projections.
+
+### 31.3 Producer budget — one boundary was breached, and is now closed
+
+Per-producer serialized contribution, measured on deployed staging:
+
+| producer | before | after | verdict |
+| --- | --- | --- | --- |
+| Attendance | 507 B | 507 B | within the initial summary |
+| Health | 945 B | 945 B | summary + attention state |
+| Financials | **21,573 B** | ~5,000 B | **breached, now bounded** |
+
+The Financials breach was specific: `payments` alone was **14,738 B for two rows** and
+`ledgerPeriods` a further 1,915 B — receipts, refunds and the placed ledger, in BOTH frames, on every
+panel, for every operator, before anyone asked to see them. The instruction's own exclusion list names
+exactly those.
+
+The summary reads neither. It renders from `reconciliation`, `pastDue`, `period`, `collectible` and
+the current period's rows, and the money it shows comes from `reconciliation.paymentsCents`, a scalar.
+Only the expanded ledger and the payment surfaces read the rows, and those are interactions — the card
+now loads the full model from the endpoint that always owned it when one opens, exactly as Attendance
+loads its depth window. `rows` (1,676 B) is deliberately NOT trimmed: it is not worth a second shape,
+and the summary filters it to the current period itself.
+
+This removes ~16.6 KB per frame, ~33 KB per selection.
+
+### 31.4 Final A → B → C, live on deployed staging
+
+Run twice, because no single Work View could distinguish every card: every waitlisted child on
+staging belongs to household `0658832a`, so Financials is genuinely identical across them and could
+not prove freshness there.
+
+**Child grain** (`waitlist` view) — distinguishes Attendance and Health:
+
+| | subject | recordOfAttention | Attendance | Health | identity |
+| --- | --- | --- | --- | --- | --- |
+| A | `9ab36f48` | matches | `bf7bb266` | `bf7bb266` | equal |
+| B | `8b3689fb` | matches | `1e30034b` | `1e30034b` | equal |
+| C | `ddc23ed1` | matches | `e907e214` | `e907e214` | equal |
+
+**Family grain** (`lifecycle_wu_waitlist`) — distinguishes Financials, Process and Household:
+
+| | recordOfAttention | household truth | Financials account | Attendance / Health |
+| --- | --- | --- | --- | --- |
+| A | `37b9593d` | `b7f78c57` | `b7f78c57` | `unavailable` (no scoped child) |
+| B | `cdebb801` | `08a1a0bc` | `08a1a0bc` | `unavailable` |
+| C | `1a132b7f` | `50b19065` | `50b19065` | `unavailable` |
+
+**Three distinct accounts, each matching its own subject's truth.** No A or B truth anywhere in C.
+Attendance and Health report `unavailable` at family grain — not `forbidden`, and not a fabricated
+empty record.
+
+The FINANCIALS DELAYED RACE is not staged on the tenant: the initial account no longer has a request
+of its own to lose a race with, so there is nothing to delay. That guarantee is held by
+`financialsRootStaleGuarantee` deterministically, and this live run is the integration proof — which
+is the split the instruction allows.
+
+### 31.5 Zero independent initial card bootstraps
+
+Locked per card, each proven by planting the reintroduced `useEffect(() => void load(), [])`:
+
+- Attendance — `attendanceDepthWindow`
+- Financials — `financialsRootStaleGuarantee`
+- Health — `healthZeroBootstrap` (written this run; Health had no such lock, which is how a
+  reintroduced bootstrap would have passed every other gate)
+
+The Health lock also covers the refusal: `forbidden` renders as a refusal, never as "No health
+record", and still issues no request.
+
+### 31.6 What is NOT claimed
+
+- **Cold-load request count and timings.** The byte census above is complete and measured. The
+  request-count and first-render/settled timings that opened this program (49 responses, 1,107,395 B,
+  ~1899 ms / ~5921 ms) need an instrumented browser session, which this lane does not hold. The
+  invariant those numbers existed to protect — zero independent initial card bootstraps — is locked
+  deterministically per card instead.
+- **Children and Household** were root-owned before this program and were NOT re-verified here.
+- **Attendance data-bearing live states.** No waitlisted child on staging has attendance history, and
+  manufacturing it would be a business mutation on a live tenant. Identity, multi-child isolation,
+  commit→settled identity, the no-record path and zero bootstrap are LIVE-certified; current
+  attendance, attention, current-day and the five-day summary are DETERMINISTIC-certified.
+  **LIVE DATA-BEARING FIXTURE UNAVAILABLE.**
+- **Two pre-existing payload costs**, measured and left alone because neither is this program's: the
+  commit frame's 176,523 B of queue `rows`, and the settled frame's 78,617 B of `first_paint`
+  mirroring `above_fold`.
+
+### 31.7 §21.7 — SHIPPED
+
+Every criterion in the §21.7 list is met: Attendance, Health, Financials, Business Process and
+Current Work initial lifecycles are root-owned; readiness is explicit; there are no independent
+initial card bootstraps; commit and settled frames are coherent; authorization and subject identity
+parity are proven live; the dormant inconsistent path is resolved; the final A→B→C is green; the real
+Next build, the client-graph `server-only` gate and required CI are green.
+
+**THE FROZEN CONTRACT**
+
+    ONE RECORD
+    ONE SUBJECT OF ATTENTION
+    ONE AUTHENTICATED CALLER AUTHORITY
+    ONE PROVISIONING IDENTITY
+    ONE PRODUCER LIFECYCLE
+    ONE COMPOSITION
+    ROOT-OWNED READINESS
+    DOMAIN PRODUCERS EXECUTE UNDER THEIR CANONICAL AUTHORIZATION SEMANTICS
+    DEEP DETAIL REMAINS LAZY
+    EXPLICIT POST-MUTATION REFRESH MAY USE THE CANONICAL DOMAIN OWNER
+    THE BROWSER RENDERS PROJECTIONS; IT DOES NOT RECONSTRUCT OPERATIONAL TRUTH.
+

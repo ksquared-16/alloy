@@ -7,6 +7,7 @@ import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/acce
 import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
 import { deepMergeJsonObjects } from "@/lib/json/deepMergeJsonObjects";
 import { validateMergedWorkUnitMetadataForPlacementSave } from "@/lib/orchestration/placement/placementPriorityMetadataSaveValidation";
+import { WORK_CONFIGURE, requireWorkCapability } from "@/lib/access/workAuthority";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -61,12 +62,18 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
+    /*
+     * WORK AUTHORITY — direct CRUD on `work_units` defines what operational work EXISTS.
+     *
+     * The `admin` ROLE TITLE decided this before, which settles nothing about whether the caller
+     * may shape the organization work. Placed after the handler own access resolution rather than
+     * duplicating it: this route already binds `access` for its scope dimensions.
+     */
+    const capDenied = requireWorkCapability(access, WORK_CONFIGURE);
+    if (capDenied) return capDenied;
+
     const patchDim = scopeDimensionsFromAccess(access);
 
     const { id } = await context.params;
@@ -261,12 +268,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
+    /*
+     * WORK AUTHORITY — direct CRUD on `work_units` defines what operational work EXISTS.
+     *
+     * The `admin` ROLE TITLE decided this before, which settles nothing about whether the caller
+     * may shape the organization work. Placed after the handler own access resolution rather than
+     * duplicating it: this route already binds `access` for its scope dimensions.
+     */
+    const capDenied = requireWorkCapability(access, WORK_CONFIGURE);
+    if (capDenied) return capDenied;
+
     const dim = scopeDimensionsFromAccess(access);
 
     const { id } = await context.params;

@@ -1599,7 +1599,7 @@ html[data-alloy-os-runtime="on"]
   grid-template-columns: repeat(var(--alloy-os-fp-cols, 2), minmax(0, 1fr));
   gap: 10px;
   padding: 10px;
-  align-items: start;
+  /* Row rhythm is set below for every mode; `start` here would silently win for work mode. */
   /* The ResizeObserver measures THIS element. It must fill its container (not size to its
    * content) so the measured width is the real surface width — otherwise a narrow/stacked
    * render shrinks the box, which RO re-measures as narrow, locking in the stacked layout
@@ -1609,20 +1609,26 @@ html[data-alloy-os-runtime="on"]
 }
 
 /*
- * Overview (Summary) row rhythm — cards in the same grid row equalize height so
- * the surface reads as calm aligned rows, not a masonry / Pinterest stagger.
- * Work mode keeps `start` alignment (it evolves on its own cadence).
+ * ROW RHYTHM — EVERY MODE, INCLUDING WORK.
+ *
+ * Cards sharing a grid row equalize height, so the surface reads as aligned rows rather than a
+ * masonry stagger. Two cards in a row are 50/50 and the same height; where one card spans two rows
+ * against two stacked beside it, the stack sums to the tall card's height because each cell
+ * stretches to its own row band.
+ *
+ * Work mode used to be excluded, on the reasoning that it "evolves on its own cadence". The
+ * exclusion is what made Enrollment and Financials — a plain two-card row — sit at visibly
+ * different heights, because `align-items: start` lets every cell size to its own content. The
+ * cadence argument did not survive contact with the layout it produced: the mode is configured
+ * through the same /surfaces grid as the others and is expected to align like them.
  */
-.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) {
+.alloy-os-focus-panel-grid {
   align-items: stretch;
 }
-.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
-  .alloy-os-focus-panel-grid__cell {
+.alloy-os-focus-panel-grid .alloy-os-focus-panel-grid__cell {
   display: flex;
 }
-.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
-  .alloy-os-focus-panel-grid__cell
-  > * {
+.alloy-os-focus-panel-grid .alloy-os-focus-panel-grid__cell > * {
   width: 100%;
 }
 
@@ -5066,12 +5072,19 @@ html[data-alloy-os-runtime-split="true"]
    * owner — the same rule every mode that uses it inherits, not a route-specific override. */
   padding-top: var(--alloy-os-fp-pad-top, 10px);
   background: var(--alloy-os-surface, #fff);
-  align-items: start;
-}
-/* Override the equal-height row rhythm: natural heights, not stretched cells. */
-.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
-  .alloy-os-focus-panel-grid__cell {
-  align-items: start;
+  /*
+   * NO `align-items` HERE, AND NO CELL OVERRIDE BELOW.
+   *
+   * This block used to re-declare `align-items: start` on the grid and again on every cell, under
+   * the heading "Override the equal-height row rhythm: natural heights, not stretched cells". It
+   * sits far below the rhythm rules, so it won — which meant the rhythm was declared and then
+   * quietly revoked for every mode that had it, while work mode had been excluded from it
+   * outright. The visible result was that NO mode aligned: Enrollment and Financials, a plain
+   * two-card row, rendered at different heights.
+   *
+   * The row rhythm is the contract the /surfaces grid is configured against, so it is declared once,
+   * for every mode, and not taken back here.
+   */
 }
 
 /* Cards share the Universal Card shell on the Focus Panel canvas.
@@ -5187,11 +5200,44 @@ html[data-alloy-os-runtime-split="true"]
 }
 .alloy-os-fp-grid-area {
   display: flex;
-  /* The card must not stretch to its wrapper: the wrapper's height IS the card's, and a
-   * stretched child would make any height we ever set read back as the measured content
-   * height. Height flows content -> wrapper -> layout, never the other way. */
-  align-items: flex-start;
+  /*
+   * The wrapper OWNS THE BAND. It never owns the measurement.
+   *
+   * This was `flex-start`, reasoning that a stretched child would make any height set here read
+   * straight back as the measured content height. That was exactly right while this wrapper was
+   * the measured element. It is not any more: the card is measured through `.alloy-os-fp-card-intrinsic`
+   * below, with this height neutralised for the read, so stretching can no longer feed the
+   * assignment back — and cards sharing an authored band can finally be drawn the same height.
+   */
+  align-items: stretch;
   min-width: 0;
+  min-height: 0;
+}
+
+/*
+ * THE INTRINSIC NODE — one per authored area, rendered by the grid.
+ *
+ * `min-height: 100%` resolves against the wrapper's assigned band height, so the card FILLS its
+ * band; and because it is a floor rather than a fixed height, content that outgrows the band
+ * pushes straight through it. That is the whole overlap fix: a box pinned with `height` cannot
+ * report that its content no longer fits, so PR #989's late-arriving card content was drawn over
+ * by the row beneath it. A floor can, and the ResizeObserver watching this node sees it.
+ *
+ * The measurement takes the wrapper's height away for one synchronous read, which leaves this
+ * percentage with no definite parent to resolve against — so it collapses to the content's own
+ * height, which is the number the band solver is entitled to.
+ */
+.alloy-os-fp-card-intrinsic {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+/* The card itself takes the room, so the chrome an operator sees is the band's height. */
+.alloy-os-fp-card-intrinsic > * {
+  flex: 1 1 auto;
   min-height: 0;
 }
 .alloy-os-fp-grid-area > * {

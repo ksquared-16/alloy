@@ -1,0 +1,52 @@
+{
+  "trusted_host_action_id": "tha_5c9510807d49a9",
+  "query_hash": "1c727d8c9c05294cd3fc9370f10670a9f9b7b79fea66985ebc445ef3ccb971bf",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-15T17:43:09.745Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_5c9510807d49a9",
+    "query_hash": "1c727d8c9c05294cd3fc9370f10670a9f9b7b79fea66985ebc445ef3ccb971bf",
+    "authorization_id": "grnt_7d0f66cdd35d4e56",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-15T17:43:10.678Z",
+    "question_ids": [
+      "m915160000",
+      "ledger_version",
+      "ledger_head"
+    ],
+    "questions": {
+      "m915160000": {
+        "question_id": "m915160000",
+        "row_count": null,
+        "rows": [
+          "access_rpc_boundary ~ closed ~ no_actor_taking_function_open_to_clients ~ true",
+          "access_rpc_boundary ~ non_vacuous ~ guards_more_than_ten_functions ~ true",
+          "access_rpc_boundary ~ usable ~ every_owner_keeps_service_role ~ true",
+          "access_rpc_boundary ~ covers ~ the_four_authority_owners ~ true"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20260915160000 ~ registered ~ present ~ true"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20260915160000
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}

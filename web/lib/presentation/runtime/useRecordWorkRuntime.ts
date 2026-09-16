@@ -16,7 +16,7 @@
  * configured Focus Panel cards stayed empty until a click. Sourcing the subject from committed Focus
  * makes the VM load on the first operational frame. Do not reintroduce a subject read from the drawer.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     logCurrentWorkInit,
     nextCurrentWorkInstanceId,
@@ -58,6 +58,7 @@ import {
 } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { OPPORTUNITY_QUEUE_UPDATED_EVENT, parseOpportunityQueueUpdatedDetail } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { fetchOpportunityDrawerHeaderActionsFromRecord } from "@/lib/admin/opportunityDrawerHeaderActionsPrefetch";
+import { useAttentionSubject } from "@/lib/runtime/kernel/useAttentionCardFocus";
 import { patchOpportunityDrawerVmDisplayRecord } from "@/lib/adminV2/viewModel/drawer/vmRuntime/patchOpportunityDrawerVmDisplayRecord";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import {
@@ -120,13 +121,31 @@ export async function resolveStageWorkSliceForVm(
     }
 }
 
-/** Merge stage-work into a VM before apply so the applied VM is COMPLETE (never `pending`). */
+/**
+ * Merge stage-work into a VM that arrived without it. A NO-OP on every composed view model.
+ *
+ * ── WHY THIS NO LONGER FORCES ──
+ *
+ * It used to accept `{force: true}`, which skipped the `pending` guard and re-fetched the stage-work
+ * slice on top of a view model that had just been composed. On a `work_lifecycle` refresh that ran
+ * AFTER the caches were invalidated and the VM recomposed — so the server had already produced a
+ * fresh stage-work runtime AND the `operational_projection` computed from it, and this fetched a
+ * second one and merged it over the top.
+ *
+ * `applyStageWorkSliceToVm` writes `stage_work`, `stage_work_runtime` and the record mirror. It does
+ * not touch `operational_projection`. So the forced merge could leave Current Work and the card
+ * envelope describing one stage-work runtime while `stage_work_runtime` held a later one: two
+ * operational truths in one view model, and a second read to produce them.
+ *
+ * The composed view model is the authority for both, because the server computes them together. The
+ * `pending` branch below is retained for a view model that genuinely arrives without stage work;
+ * nothing produces one today, and the guard is what makes that provable rather than assumed.
+ */
 export async function completeVmWithStageWork(
     vm: OpportunityDrawerViewModel,
-    opts?: { force?: boolean },
 ): Promise<OpportunityDrawerViewModel> {
-    if (!opts?.force && vm.workspace.stage_work?.status !== "pending") return vm;
-    const slice = await resolveStageWorkSliceForVm(vm, opts);
+    if (vm.workspace.stage_work?.status !== "pending") return vm;
+    const slice = await resolveStageWorkSliceForVm(vm);
     return slice ? applyStageWorkSliceToVm(vm, slice) : markStageWorkErrorOnVm(vm);
 }
 
@@ -149,6 +168,37 @@ export async function prewarmRecordWork(subjectId: string): Promise<void> {
 }
 
 export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntimeState {
+    /*
+     * THE SUBJECT OF ATTENTION TRAVELS WITH THE REQUEST — this runtime is the Focus Panel's settled
+     * transport owner, and it is the only place that may add it.
+     *
+     * The commit frame already resolves the selected participation (the panel body passes it as
+     * `selectedParticipationId`); the settled frame could not, because the Drawer route accepted only
+     * department/work-unit. A frame that cannot name the child cannot project child-scoped truth, and
+     * a producer asked to anyway falls back to the sole participant — which measurably resolved the
+     * WRONG child on a multi-child family.
+     *
+     * Cards do not add query parameters. They read what this request returns.
+     *
+     * Null outside the RuntimeKernel (the modal drawer product renders above it) — that is the
+     * ordinary family-grain answer, identical to the behaviour before attention was carried at all.
+     */
+    const attentionSubjectId = useAttentionSubject();
+
+    /*
+     * This owner knows the attention subject and nothing else about the workspace — it deliberately
+     * never reads `AdminDrawerContext`, so it has no department or work unit to name. Empty strings
+     * are the honest answer and the URL builder omits them; the attention subject is the one scope
+     * this request is actually asserting.
+     */
+    const transportContext = useMemo(
+        () =>
+            attentionSubjectId
+                ? { work_unit_id: "", department_id: "", attention_subject_id: attentionSubjectId }
+                : null,
+        [attentionSubjectId],
+    );
+
     const [displayVm, setDisplayVm] = useState<OpportunityDrawerViewModel | null>(null);
     const [coldLoading, setColdLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -182,6 +232,15 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
             {
                 departmentId: vm.workspace.department_id ?? null,
                 workUnitId: vm.workspace.work_unit_id ?? null,
+                /*
+                 * UNDER THE CHILD IT WAS FETCHED FOR.
+                 *
+                 * This VM was requested with an attention subject, so it carries child-scoped
+                 * operational truth. Writing it at the unscoped key would hand Child A's answer to
+                 * the next family-grain reader — the leak the attention segment exists to stop. The
+                 * request's own subject is the only correct place to file the response.
+                 */
+                attentionSubjectId,
             },
         );
         prefetchDrawerLayoutRuntimeBody({
@@ -194,7 +253,7 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         });
         const applyMs = typeof performance !== "undefined" ? Math.round(performance.now() - startedAt) : 0;
         logDrawerVmRuntime("payload_ready", { opportunity_id: vm.entity.id, reason, generation: vm.generation, payload_apply_ms: applyMs });
-    }, []);
+    }, [attentionSubjectId]);
 
     // ── Subject resolution — the ONE effect that turns a committed subject into a VM. Latest-wins via
     //    the generation guard; the prior VM is held (never cleared) so a subject swap shows the prior
@@ -244,7 +303,7 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         });
         logDrawerVmRuntime("cold_fetch_start", { opportunity_id: validSubject, runtime: "opportunity", hold_prior: Boolean(displayVm) });
 
-        void loadOpportunityDrawerViaViewModel(validSubject, null).then(async (result) => {
+        void loadOpportunityDrawerViaViewModel(validSubject, transportContext).then(async (result) => {
             if (gen !== fetchGenRef.current) return; // superseded by a newer subject — never lands (its begin owns the reveal)
             if (!result.ok) {
                 setColdLoading(false);
@@ -279,7 +338,9 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         // On success, applyVm changes displayVm → this effect re-runs → this cleanup ends the reveal
         // (flushing deferred prewarm). Also covers subject swap + unmount. Idempotent.
         return () => endWorkUnitPrimaryReveal();
-    }, [validSubject, displayVm, applyVm]);
+        // `transportContext` is in the deps deliberately: when attention moves to another child the
+        // settled frame is answering about a DIFFERENT subject and must be re-requested, not reused.
+    }, [validSubject, displayVm, applyVm, transportContext]);
 
     const patchDisplayRecord = useCallback(
         (patchFn: (prev: Record<string, unknown>) => Record<string, unknown>) => {
@@ -322,16 +383,16 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
             invalidateVmCachesForSubject(validSubject);
             invalidateOpportunityStageWorkCache({ opportunityId: validSubject });
         }
-        const result = await loadOpportunityDrawerViaViewModel(validSubject, null);
+        const result = await loadOpportunityDrawerViaViewModel(validSubject, transportContext);
         if (subjectGen !== fetchGenRef.current || reloadGen !== reloadGenRef.current) return;
         if (!result.ok || !isOpportunityDrawerViewModelPreload(result.preload)) return;
-        const completeVm = await completeVmWithStageWork(result.preload.viewModel, {
-            force: forceFresh,
-        });
+        // No `force`: the recomposed view model already carries stage work and the projection
+        // computed from it. Re-fetching a slice here is what put two operational truths in one VM.
+        const completeVm = await completeVmWithStageWork(result.preload.viewModel);
         if (subjectGen !== fetchGenRef.current || reloadGen !== reloadGenRef.current) return;
         // Same atomic contract as the initial load — reload reveals a complete VM, not a resize.
         applyVm(completeVm, forceFresh ? "reload_fresh" : "reload");
-    }, [validSubject, applyVm, invalidateVmCachesForSubject]);
+    }, [validSubject, applyVm, invalidateVmCachesForSubject, transportContext]);
 
     // ── Targeted refresh: record-patch + queue-updated events (same contracts as the drawer path). ──
     useEffect(() => {
@@ -408,67 +469,22 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         };
     }, [validSubject, patchDisplayRecord, reloadDisplayVm, invalidateVmCachesForSubject]);
 
-    // ── Deferred stage work (Tier 2) — resolve Current Work after first paint, scoped to the subject. ──
-    // Only when the applied VM still marks stage_work pending (seed miss / incomplete cold path).
-    // A valid CP-2 seed makes cold apply non-pending — this effect must not issue a second fetch.
-    const stageWorkStatus = displayVm?.workspace.stage_work?.status;
-    const stageWorkOppId = displayVm?.entity.id ?? null;
-    const stageWorkStageKey = displayVm?.workspace.lifecycle_rail?.current_stage_key ?? null;
-    const stageWorkDeptId = displayVm?.workspace.department_id ?? null;
-    const stageWorkStageLabel = displayVm?.workspace.stage_context?.stage_label ?? null;
-    useEffect(() => {
-        if (!validSubject || !stageWorkOppId) return;
-        if (stageWorkStatus !== "pending") return;
-        if (String(validSubject) !== String(stageWorkOppId)) return;
-
-        const params = {
-            opportunityId: stageWorkOppId,
-            departmentId: stageWorkDeptId,
-            stageKey: stageWorkStageKey,
-            stageLabel: stageWorkStageLabel,
-        };
-        const applyIfCurrent = (slice: OpportunityStageWorkSlice) =>
-            setDisplayVm((vm) => (vm && String(vm.entity.id) === String(stageWorkOppId) ? applyStageWorkSliceToVm(vm, slice) : vm));
-
-        if (!opportunityStageWorkCacheKey(params)) {
-            applyIfCurrent({ stage_work_runtime: null, published_stage_inputs: null, work_intent_runtime: null });
-            return;
-        }
-        let cancelled = false;
-        const warm = getOpportunityStageWorkWarm(params);
-        if (warm) {
-            logCurrentWorkInit("recordRuntime.deferred.warm", {
-                subjectId: stageWorkOppId,
-                runtimeId: runtimeIdRef.current,
-                cache: "hit",
-                note: "deferred stage-work served warm (no network)",
-            });
-            applyIfCurrent(warm);
-            return;
-        }
-        logCurrentWorkInit("recordRuntime.deferred.fetch", {
-            subjectId: stageWorkOppId,
-            runtimeId: runtimeIdRef.current,
-            cache: "deferred",
-            preloadSource: "live",
-            note: "stage_work still pending after apply — SECOND stage-work resolution",
-        });
-        const pending = getOpportunityStageWorkInflight(params) ?? prefetchOpportunityStageWork(params);
-        void pending
-            .then((slice) => {
-                if (cancelled) return;
-                if (slice) applyIfCurrent(slice);
-                else setDisplayVm((vm) => (vm && String(vm.entity.id) === String(stageWorkOppId) ? markStageWorkErrorOnVm(vm) : vm));
-            })
-            .catch(() => {
-                if (cancelled) return;
-                setDisplayVm((vm) => (vm && String(vm.entity.id) === String(stageWorkOppId) ? markStageWorkErrorOnVm(vm) : vm));
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [validSubject, stageWorkOppId, stageWorkStatus, stageWorkStageKey, stageWorkDeptId, stageWorkStageLabel]);
-
+    /*
+     * ── THE DEFERRED STAGE-WORK PATCH IS RETIRED ──
+     *
+     * A second effect used to resolve Current Work after first paint whenever the applied view model
+     * still marked `stage_work` pending, and patch the region in place. Only the deferred compose
+     * produced that state, and only `stage_work=0` produced the deferred compose — which nothing ever
+     * constructed. So it was unreachable in the product and fully alive in the code.
+     *
+     * Its own log line named the cost: "SECOND stage-work resolution". And the patch it applied wrote
+     * `stage_work_runtime` without touching `operational_projection`, so a frame that took it would
+     * have carried Current Work and the card envelope decided from one stage-work runtime beside a
+     * later one.
+     *
+     * The composed view model now always carries stage work and the projection computed from it, in
+     * the same answer. One authority, one read.
+     */
     const holdPriorPayload = displayVm != null && validSubject != null && String(displayVm.entity.id) !== String(validSubject);
 
     return {

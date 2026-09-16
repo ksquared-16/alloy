@@ -95,10 +95,6 @@ export type ProcessCardCommandProjectionEvent = {
     stageKey: string | null;
     configuredRefs: string[];
     commandKeys: string[];
-    /** The published operating plan's templates as the runtime received them. */
-    planTemplates?: Array<{ label: string; helpful: string[] }>;
-    /** The process's own command selection, when the published inputs carry one. */
-    commandProjection?: unknown;
 };
 
 export function logProcessCardCommandProjection(event: ProcessCardCommandProjectionEvent): void {

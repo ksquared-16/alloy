@@ -63,6 +63,13 @@ describe("POST /api/admin/agent/v1/record-overview-layout", () => {
             userId,
             role: "admin",
         });
+        mockGetAdminAccessContext.mockResolvedValue({
+            ok: true,
+            orgId,
+            userId,
+            permissionKeys: ["layouts.manage"],
+            roleKeys: ["admin"],
+        });
     });
 
     afterEach(() => {
@@ -197,4 +204,29 @@ describe("POST /api/admin/agent/v1/record-overview-layout", () => {
         expect(j.ok).toBe(true);
         expect(j.execution.terminal_status).toBe("success");
     });
+});
+
+/*
+ * THE ACCESS CONTEXT IS NOW PART OF THE GATE.
+ *
+ * This route admitted on the role TITLE and needed only the admin context. It
+ * now resolves the caller's granted capabilities, so a suite that mocks only
+ * the admin context gets a 401 from the unmocked access lookup — which reads
+ * as "the route broke" when it means "the test has not said what this
+ * principal may do". Saying so explicitly is the point: the capability is the
+ * authority, so every case must declare it.
+ */
+const { mockGetAdminAccessContext } = vi.hoisted(() => ({
+    mockGetAdminAccessContext: vi.fn(),
+}));
+
+vi.mock("@/lib/admin/getAdminAccessContext", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/getAdminAccessContext")>(
+        "@/lib/admin/getAdminAccessContext"
+    );
+    return {
+        ...actual,
+        getAdminAccessContext: mockGetAdminAccessContext,
+        getAdminAccessContextCached: mockGetAdminAccessContext,
+    };
 });

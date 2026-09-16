@@ -90,7 +90,15 @@ function WorkflowAssistReadCardBody({
     /** When set (e.g. ops user), show copy instead of propose CTAs. */
     mutationBlockedReason?: string | null;
 }) {
-    const showParseHint = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
+    /*
+     * Runtime mode is not audience. This hint prints the intent classifier's internal reasoning, and
+     * "not production" is true on every certification and Human-QA host — where operators, not
+     * developers, are looking. It shares the Command Surface's existing debug flag rather than
+     * inventing a second one for the same surface.
+     */
+    const showParseHint =
+        process.env.NODE_ENV === "development"
+        && process.env.NEXT_PUBLIC_COMMAND_SURFACE_SEARCH_DEBUG === "1";
     const parseHint = showParseHint ? (
         <div className="text-[10px]" style={{ color: CMD.textLabel }} data-command-surface-workflow-assist-parse-reason>
             Intent: {intent.sub_intent} ({intent.parse_reason})

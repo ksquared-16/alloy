@@ -103,6 +103,24 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     const noFinancialSubject = !subjectStillResolving && !customerId && !scopedMemberId;
 
     const [vm, setVm] = useState<FinancialsCardVM | null>(null);
+    /*
+     * A REFUSAL IS NOT AN EMPTY ACCOUNT.
+     *
+     * The endpoint answers 403 with `required_permission` when the caller lacks `fin.read`, and this
+     * card used to discard that and fall through to its empty state — telling an operator who may not
+     * see the ledger that there is nothing to see. The root producer reports the refusal explicitly,
+     * so the card can say what is actually true.
+     */
+    const [deniedRead, setDeniedRead] = useState(false);
+    /**
+     * WHICH ACCOUNT'S FULL MODEL IS LOADED — null while the card holds the root's bounded summary.
+     *
+     * The initial projection carries the account summary without `payments` or `ledgerPeriods`:
+     * 16.6 KB of receipts and placed ledger that the summary never reads. Every surface that DOES
+     * read them is an interaction, so opening one loads the full model from the endpoint that was
+     * always its owner.
+     */
+    const deepLoadedForRef = useRef<string | null>(null);
     const [loading, setLoading] = useState(false);
     /*
      * ONE overlay at a time, and the Focus Panel's OWN depth layer renders it.
@@ -147,6 +165,16 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     } | null>(null);
     const [payAmount, setPayAmount] = useState<string>("");
     const [payMethod, setPayMethod] = useState<string>("cash");
+    /*
+     * WHOSE MONEY THIS IS — asked, never inferred.
+     *
+     * The record path wrote no payer at all, so every cash payment on every account was money from
+     * nobody. `payments.payer_entity_type` / `payer_entity_id` have existed since Thread 6 and
+     * `payment.record` already accepts them; the operator was simply never given a way to say. The
+     * empty string means "not stated", which stays a legitimate answer: a cheque arriving in the
+     * post with no name on it is better recorded as unattributed than as a guess.
+     */
+    const [payPayerPersonId, setPayPayerPersonId] = useState<string>("");
     /**
      * THE REFUND THE OPERATOR IS COMPOSING.
      *
@@ -252,7 +280,10 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
             const json = (await res.json()) as { ok?: boolean; vm?: FinancialsCardVM };
             if (!current()) return;
-            setVm(json?.ok && json.vm ? json.vm : null);
+            const fresh = json?.ok && json.vm ? json.vm : null;
+            // The endpoint's answer is the FULL model; record which account now has it.
+            if (fresh) deepLoadedForRef.current = customerId ?? scopedMemberId;
+            setVm(fresh);
         } catch {
             if (!current()) return;
             setVm(null);
@@ -733,6 +764,28 @@ export default function FinancialsCard({ model, context, receded = false, coordi
 
 
     /*
+     * THE ROOT PROVISIONED THIS ACCOUNT. The card renders it.
+     *
+     * This used to `fetch(/api/admin/financials/card)` on mount. The financials producer now runs
+     * inside the root provisioning lifecycle, under the SAME `fin.read` gate the endpoint applies,
+     * so the projection arrives already refused if this operator may not see the ledger.
+     *
+     * ── THE STALE GUARANTEE IS STRONGER HERE, NOT WEAKER ──
+     *
+     * `requestSeq` exists because a slow earlier response could land on top of a newer one — A → B
+     * → C with A resolving last, reproduced in the browser. The initial read no longer has a request
+     * of its own to lose that race with: the projection arrives WITH the answer whose subject it
+     * belongs to, and the root lifecycle already drops superseded answers wholesale.
+     *
+     * `requestSeq` stays for `load()`, which is the RELOAD after a financial action — an interaction,
+     * not a bootstrap, and still capable of racing itself.
+     */
+    const provisioned = context.operationalProjection?.cards?.financials ?? null;
+
+    /* Missing projection is PROVISIONING. It is not "No financial record." */
+    const provisioningAccount = (customerId != null || scopedMemberId != null) && provisioned == null;
+
+    /*
      * ── S3-2: CLEAR THE DATA, KEEP THE FOOTPRINT ────────────────────────────────────────────────
      *
      * Clearing below is correct and stays: a previous household's balance must never linger under
@@ -759,11 +812,41 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         if (h > 0) loadedHeightRef.current = h;
     }, [vm]);
 
+    /*
+     * ── RECONCILIATION: WHAT THE RESERVE IS FOR ─────────────────────────────────────────────────
+     *
+     * The reserve was written as `!vm`, when the only way to have no vm was to be loading one. The
+     * root lifecycle gave this card three further answers that also carry no vm — a permission
+     * refusal, no resolvable subject, and no account — and each of those is a SETTLED sentence the
+     * card is entitled to render at its own size. Reserving through them would pad a card that has
+     * finished, which is the failure the sibling cards were corrected for in the same programme.
+     *
+     * So the reserve tracks exactly the condition under which this card says "Loading the account…",
+     * and nothing else. Both intents survive: the collapse is still removed while the account
+     * resolves, and staging's new answers are still allowed to be answers.
+     */
+    const reservingAccount = !vm && !deniedRead && (loading || subjectStillResolving || provisioningAccount);
+
     useEffect(() => {
         // Clear FIRST: the previous household's balance must not linger while the next resolves.
-        setVm(null);
-        void load();
-    }, [load]);
+        // Any in-flight RELOAD is superseded too — its ordinal can no longer be current.
+        requestSeq.current += 1;
+        setVm(provisioned?.state === "ready" ? provisioned.data : null);
+        setDeniedRead(provisioned?.state === "forbidden");
+        // A new projection is the BOUNDED summary by construction, whichever account it is for.
+        deepLoadedForRef.current = null;
+    }, [provisioned]);
+
+    /*
+     * DEPTH IS AN INTERACTION. Opening any of the account's deep surfaces — the ledger, the payment
+     * flow, add-charge — loads the full model once per account. The initial panel still issues no
+     * request at all, which is the invariant; this is the operator asking.
+     */
+    useEffect(() => {
+        if (!overlay) return;
+        const key = customerId ?? scopedMemberId;
+        if (key && deepLoadedForRef.current !== key) void load();
+    }, [overlay, customerId, scopedMemberId, load]);
 
     /*
      * A SCOPED CHILD PRESELECTS THE SUBJECT FILTER.
@@ -1173,7 +1256,11 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     return { ok: false as const, error: err ?? "That could not be done." };
                 }
                 // A card collection keeps the panel open: the operator still has to enter a card.
-                if (actionKey !== "payment.collect_card") setPayTarget(null);
+                if (actionKey !== "payment.collect_card") {
+                    setPayTarget(null);
+                    /* The next payment is a fresh question about who paid, not a carried answer. */
+                    setPayPayerPersonId("");
+                }
                 /*
                  * THE RESULT IS THE EXECUTION RESULT, not a `detail` inside it.
                  *
@@ -1753,6 +1840,35 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                             </option>
                             <option value="other">Other</option>
                         </select>
+                        {/*
+                         * ── WHO ACTUALLY PAID — a different question from who owes it ───────────
+                         *
+                         * Candidates are household membership, not responsibility, and the list is
+                         * ordered by primary contact rather than by who carries the obligation:
+                         * ordering it by responsibility is how an operator records the responsible
+                         * party as the payer without noticing. A grandparent settling a bill is a
+                         * payer and is responsible for nothing.
+                         *
+                         * Naming a payer confers no responsibility, and attributing the money to
+                         * somebody's SHARE remains a separate, explicit act.
+                         */}
+                        {vm.payerCandidates.length ? (
+                            <select
+                                value={payPayerPersonId}
+                                aria-label="Who paid"
+                                data-financials-payment-payer="true"
+                                onChange={(e) => setPayPayerPersonId(e.target.value)}
+                            >
+                                <option value="">Who paid? (optional)</option>
+                                {vm.payerCandidates.map((c) => (
+                                    <option key={c.personId} value={c.personId}>
+                                        {c.name}
+                                        {c.roleType ? ` · ${c.roleType.replace(/_/g, " ")}` : ""}
+                                        {c.alsoResponsible ? " · also responsible" : ""}
+                                    </option>
+                                ))}
+                            </select>
+                        ) : null}
                         <span className="alloy-os-financials__preview-actions">
                             <button
                                 type="button"
@@ -1787,6 +1903,15 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                                 amount_cents: cents,
                                                 payment_method: payMethod,
                                                 charge_label: payTarget.label,
+                                                /* Identity of the payer. Omitted entirely when
+                                                   nobody was named — never defaulted to whoever
+                                                   happens to be responsible. */
+                                                ...(payPayerPersonId
+                                                    ? {
+                                                          payer_entity_type: "person",
+                                                          payer_entity_id: payPayerPersonId,
+                                                      }
+                                                    : {}),
                                             },
                                             subject,
                                         );
@@ -2534,6 +2659,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 className="alloy-os-financials"
                 data-financials-card="true"
                 data-financials-subject={subjectFilter}
+                /* WHICH ACCOUNT IS ON SCREEN — the household, not the child filter. */
+                data-financials-account={vm.account?.customerId ?? undefined}
             >
                 <ApprovedFinancialsCard
                     evidence={adaptFinancialsVmToFinancialsCard({
@@ -2578,8 +2705,21 @@ export default function FinancialsCard({ model, context, receded = false, coordi
             className="alloy-os-financials"
             data-financials-card="true"
             data-financials-subject={subjectFilter}
-            data-financials-reserved={!vm ? "true" : undefined}
-            style={!vm ? { minHeight: loadedHeightRef.current ?? FOCUS_PANEL_RESERVED_MIN_HEIGHT } : undefined}
+            /*
+             * WHICH ACCOUNT IS ON SCREEN — the household, not the child filter.
+             *
+             * `data-financials-subject` is the subject FILTER inside the account; it cannot answer
+             * "whose account is this". The sibling cards already name their subject this way
+             * (`data-attendance-subject`), and a stale-overwrite proof needs to read the answer off
+             * the rendered card rather than off the props it was handed.
+             */
+            data-financials-account={vm?.account?.customerId ?? undefined}
+            data-financials-reserved={reservingAccount ? "true" : undefined}
+            style={
+                reservingAccount
+                    ? { minHeight: loadedHeightRef.current ?? FOCUS_PANEL_RESERVED_MIN_HEIGHT }
+                    : undefined
+            }
         >
             <UniversalCard
                 title={model.title}
@@ -2597,11 +2737,13 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     <p
                         className="alloy-os-financials__empty"
                         data-financials-empty={
-                            loading || subjectStillResolving
-                                ? "loading"
-                                : noFinancialSubject
-                                  ? "no-subject"
-                                  : "no-account"
+                            deniedRead
+                                ? "permission"
+                                : loading || subjectStillResolving || provisioningAccount
+                                  ? "loading"
+                                  : noFinancialSubject
+                                    ? "no-subject"
+                                    : "no-account"
                         }
                     >
                         {/*
@@ -2613,9 +2755,11 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                          * state that renders as $0.00 with Add charge available. What the card
                          * actually meant was that it could not resolve an account to ask about.
                          */}
-                        {loading || subjectStillResolving
-                            ? "Loading the account…"
-                            : "Financial account unavailable"}
+                        {deniedRead
+                            ? "You do not have permission to view financial information."
+                            : loading || subjectStillResolving || provisioningAccount
+                              ? "Loading the account…"
+                              : "Financial account unavailable"}
                     </p>
                 ) : (
                     <>

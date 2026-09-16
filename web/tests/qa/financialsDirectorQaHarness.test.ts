@@ -229,6 +229,7 @@ describe("scenario readiness", () => {
         for (const key of ["card_collection", "ach_processing", "provider_return", "subsidy_processing"]) {
             expect(scenarioByKey(key)!.disposition).not.toBe("HUMAN_WALKTHROUGH");
         }
-        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(27);
+        /* 28 since Repair Pass 3 added the actual-payer scenario the payer chooser made possible. */
+        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(28);
     });
 });

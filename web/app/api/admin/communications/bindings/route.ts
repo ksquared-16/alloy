@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import {
     activeOutboundBindings,
     availableComposerChannels,
@@ -40,6 +39,11 @@ import {
     validateStatus,
 } from "@/lib/communications/bindingConfigInput";
 import { buildLocationHierarchy, type LocationRow } from "@/lib/communications/locationHierarchy";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_PROVIDER_CONFIGURE,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
@@ -139,6 +143,8 @@ function sanitizeBindings(
 export async function GET() {
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const supabase = createAdminClient();
     const { data, error } = await supabase
@@ -322,8 +328,8 @@ export async function GET() {
  * the answer rather than being a second control that could disagree with it.
  */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_PROVIDER_CONFIGURE);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

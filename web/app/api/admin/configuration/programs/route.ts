@@ -46,6 +46,18 @@ type ActionBody = {
     patch?: Record<string, unknown>;
 };
 
+/**
+ * THE ROLE-TITLE FALLBACK IS GONE FROM BOTH OF THESE.
+ *
+ * Each opened with `context.roleKeys.some((role) => ["admin", "ops"].includes(role))` — a role KEY,
+ * recorded in no grant table, satisfying a capability check on its own. It is the layer `W-13`
+ * removed from the rest of the platform, and here it made the capability decorative: an organization
+ * could withhold `settings.manage` from its `admin` role and change nothing.
+ *
+ * Removing it costs that population nothing. `settings.read` and `settings.manage` are both granted
+ * to `admin` and `ops` in every organization, so the title admitted exactly the principals the
+ * grants already admit — while denying a custom role holding the same package.
+ */
 export function canReadProgramPublication(context: {
     roleKeys: string[];
     permissionKeys: string[];
@@ -53,7 +65,6 @@ export function canReadProgramPublication(context: {
     return (
         context.permissionKeys.includes("settings.read")
         || context.permissionKeys.includes("settings.manage")
-        || context.roleKeys.some((role) => ["admin", "ops"].includes(role))
     );
 }
 
@@ -61,10 +72,7 @@ export function canManageProgramPublication(context: {
     roleKeys: string[];
     permissionKeys: string[];
 }): boolean {
-    return (
-        context.permissionKeys.includes("settings.manage")
-        || context.roleKeys.some((role) => ["admin", "ops"].includes(role))
-    );
+    return context.permissionKeys.includes("settings.manage");
 }
 
 function requiredString(value: unknown, label: string): string {

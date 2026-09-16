@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
+import { getAdminAuthCached } from "@/lib/adminAuth";
 import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertExistingJobMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { OPS_JOBS_WRITE, requireSchedulingJobsCapability } from "@/lib/access/schedulingJobsAuthority";
 
 /**
  * POST: trigger workflow(s) to apply job.assigned_vendor_id to all upcoming schedules.
@@ -13,10 +14,10 @@ import { assertExistingJobMutableInAdminScope, scopeDimensionsFromAccess } from 
  * with event_type "job_default_vendor_applied" and action apply_job_vendor_to_upcoming.
  */
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireSchedulingJobsCapability(ctx, OPS_JOBS_WRITE);
+    if (denied) return denied;
     const auth = await getAdminAuthCached();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id: jobId } = await context.params;

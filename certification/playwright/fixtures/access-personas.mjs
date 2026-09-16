@@ -90,6 +90,52 @@ export const CUSTOM = {
      * capability at all — so if any handler has quietly kept reading a job title, this is the
      * persona that passes when it should not.
      */
+    /*
+     * ── WORKFLOW AUTHORITY: AUTHORING AUTOMATION IS NOT FIRING IT ──
+     *
+     * `wfWriter` holds `ops.workflows.write` and NO privileged title, which is precisely the
+     * principal the old `requireAdmin()` gate refused while admitting an admin whose package
+     * withholds the key. `wfTitular` is the control: its LABEL is "Workflow Administrator" and it
+     * holds no Workflow capability, so it passes only if a handler is still reading a job title.
+     *
+     * `wfAdjacent` carries a NEIGHBOURING configuration authority and no Workflow key. It exists
+     * because the interesting failure is not "nobody gets in" but "somebody adjacent gets in":
+     * Business Process configuration and Workflow configuration sit beside each other in the
+     * product and must not imply one another.
+     */
+    /*
+     * ── TOURS: SETTING THE HOURS IS NOT BOOKING THE FAMILY ──
+     *
+     * `tourConfigurer` sets when and where tours may be booked; `tourBooker` operates one family's
+     * tour. Each holds ONE key, because the matrix is about what each CANNOT do — a configurer who
+     * could cancel a family's tour, or a booker who could rewrite the organization's availability,
+     * would mean the split exists only on paper.
+     *
+     * `tourTitular` is the control: labelled "Tour Administrator", granted only admission.
+     * `tourScheduler` is the near-miss — it holds `scheduling.write`, the key most likely to be
+     * mistaken for tour availability, and must open nothing.
+     */
+    /*
+     * WORK. The two keys are deliberately split across two roles that each hold one half, because
+     * the whole Director model is that defining work and doing work are different powers. A single
+     * persona holding both would prove nothing about the boundary between them.
+     *
+     * `workTitular` is the control: labelled "Work Administrator", granted admission and nothing
+     * else. `aiUser` is the adjacency control — real authority in another family, none here.
+     */
+    workConfigurer: "mcert_work_configurer",
+    workOperator: "mcert_work_operator",
+    workTitular: "mcert_work_titular",
+    aiUser: "mcert_ai_user",
+    tourConfigurer: "mcert_tour_configurer",
+    tourBooker: "mcert_tour_booker",
+    tourTitular: "mcert_tour_titular",
+    tourScheduler: "mcert_tour_scheduler",
+
+    wfWriter: "mcert_wf_writer",
+    wfTitular: "mcert_wf_titular",
+    wfAdjacent: "mcert_wf_adjacent",
+
     formsAuthor: "mcert_forms_author",
     formsReader: "mcert_forms_reader",
     formsConfirmer: "mcert_forms_confirmer",
@@ -204,6 +250,89 @@ export const CUSTOM = {
      * it. `oiTitular` is labelled Admin and holds neither.
      */
     oiWriter: "mcert_oi_writer",
+
+    /*
+     * ── THE FIVE COMMUNICATIONS AUTHORITIES, ONE ROLE PER CLAIM ──
+     *
+     * Communications had two capability keys and five materially different powers, and the gap was
+     * filled by `requireAdminOrOps()` — portal admission wearing the name of a role check. The only
+     * way to show the five are genuinely five, rather than one authority wearing five names, is to
+     * give a different person each one alone and watch the product answer differently for each.
+     *
+     * `commsSender` deliberately does NOT hold `communications.read`. If sending implied reading,
+     * this persona would see the organization's conversations, and the non-implication the model
+     * claims would be false in the direction nobody checks.
+     *
+     * `commsTitular` is the control, and it is the one that would have caught the defect this
+     * closed: its LABEL is "Communications Administrator" and it holds no Communications capability
+     * at all. The send path really did open with `roleKeys.some(r => r === "admin" || r === "ops")`,
+     * so a role whose TITLE claims authority is the thing worth pointing a persona at.
+     *
+     * `commsOperator` carries exactly the seeded `ops` package for this area. A custom role with the
+     * same grants must behave identically to the system role — that is the whole promise of
+     * configurable roles, and the role-title check broke it in both directions.
+     */
+    commsReader: "mcert_comms_reader",
+    commsSender: "mcert_comms_sender",
+    commsTemplates: "mcert_comms_templates",
+    commsProvider: "mcert_comms_provider",
+    commsBulk: "mcert_comms_bulk",
+    commsOperator: "mcert_comms_operator",
+    commsFull: "mcert_comms_full",
+    commsTitular: "mcert_comms_titular",
+    commsPortalOnly: "mcert_comms_portal_only",
+    /* The union half: held ALONGSIDE commsReader, never alone. Carries no admission of its own. */
+    commsUnionBulk: "mcert_comms_union_bulk",
+
+    /*
+     * THE CONVERSATION ASSIGNER — the persona that proves assignment is its own authority.
+     *
+     * It can route the organization's inbox and cannot answer a single message. If assignment had
+     * been folded into `communications.send`, this role could not exist, and the scope-escalation
+     * path would still be open: `claim` assigns a thread to the ACTOR, and an assigned thread
+     * bypasses site scope, so every site-restricted sender could have helped themselves to any
+     * conversation in the organization.
+     */
+    commsAssigner: "mcert_comms_assigner",
+
+    /*
+     * ── THE FAMILY RECORD, ONE ROLE PER CLAIM ──
+     *
+     * `crm.customers.read` and `crm.customers.write` were catalogued since the permission grid and
+     * granted to admin and ops everywhere, while the routes they describe were decided by
+     * `requireAdminOrOps()`, `ctx.role !== "admin"`, and in four places nothing at all. These four
+     * roles are what makes the two keys mean something: each holds a different half.
+     *
+     * `crmTitular` is the control, and it is pointed at the defect that was actually here: nine
+     * handlers gated on the WORD "admin". Its label says Customer Administrator and it holds
+     * admission and nothing else.
+     */
+    crmReader: "mcert_crm_reader",
+    crmWriter: "mcert_crm_writer",
+    crmWriteOnly: "mcert_crm_write_only",
+    crmTitular: "mcert_crm_titular",
+
+    /*
+     * ── ORGANIZATION VOCABULARY, AND THE NEIGHBOURS IT MUST NOT REACH ──
+     *
+     * `configuration.vocabulary.manage` exists because no adjacent Configuration authority truthfully
+     * meant it. These roles are what turns that argument into a product answer: a vocabulary manager
+     * who cannot touch fields or option sets, and a field manager and an option-set manager who
+     * cannot touch vocabulary. `vocabTitular` is labelled Configuration Administrator and holds
+     * nothing — eight of these mutations were gated on the word "admin".
+     */
+    vocabManager: "mcert_vocab_manager",
+    vocabTitular: "mcert_vocab_titular",
+
+    /*
+     * ── PROGRAMS ──
+     *
+     * `settings.manage` is the authority Programs already declared, and until this slice it had
+     * exactly one enforcement site. This role holds it ALONE, which is what makes it possible to ask
+     * whether Programs authority is independently useful: it may publish a Program and distribute it
+     * to Locations, and it may not touch fields, option sets, vocabulary, CRM records or money.
+     */
+    programManager: "mcert_program_manager",
     oiReader: "mcert_oi_reader",
     oiTitular: "mcert_oi_titular",
 };
@@ -268,6 +397,43 @@ export const P = {
     oiWriter:           { id: "c0000000-0000-4000-8000-00000000d041", email: "cert.oiwriter@northwind.invalid",    role: CUSTOM.oiWriter },
     oiReader:           { id: "c0000000-0000-4000-8000-00000000d042", email: "cert.oireader@northwind.invalid",    role: CUSTOM.oiReader },
     oiTitular:          { id: "c0000000-0000-4000-8000-00000000d043", email: "cert.oititular@northwind.invalid",   role: CUSTOM.oiTitular },
+    defaultAdmin:       { id: "c0000000-0000-4000-8000-00000000d0c5", email: "cert.defaultadmin@northwind.invalid", role: "admin" },
+    workConfigurer:     { id: "c0000000-0000-4000-8000-00000000d0c1", email: "cert.workconfig@northwind.invalid",   role: CUSTOM.workConfigurer },
+    workOperator:       { id: "c0000000-0000-4000-8000-00000000d0c2", email: "cert.workoperate@northwind.invalid",  role: CUSTOM.workOperator },
+    workTitular:        { id: "c0000000-0000-4000-8000-00000000d0c3", email: "cert.worktitular@northwind.invalid",  role: CUSTOM.workTitular },
+    aiUser:             { id: "c0000000-0000-4000-8000-00000000d0c4", email: "cert.aiuser@northwind.invalid",       role: CUSTOM.aiUser },
+    tourConfigurer:     { id: "c0000000-0000-4000-8000-00000000d0b1", email: "cert.tourconfig@northwind.invalid",  role: CUSTOM.tourConfigurer },
+    tourBooker:         { id: "c0000000-0000-4000-8000-00000000d0b2", email: "cert.tourbooker@northwind.invalid",  role: CUSTOM.tourBooker },
+    tourTitular:        { id: "c0000000-0000-4000-8000-00000000d0b3", email: "cert.tourtitular@northwind.invalid", role: CUSTOM.tourTitular },
+    tourScheduler:      { id: "c0000000-0000-4000-8000-00000000d0b4", email: "cert.toursched@northwind.invalid",   role: CUSTOM.tourScheduler },
+    wfWriter:           { id: "c0000000-0000-4000-8000-00000000d0a1", email: "cert.wfwriter@northwind.invalid",    role: CUSTOM.wfWriter },
+    wfTitular:          { id: "c0000000-0000-4000-8000-00000000d0a2", email: "cert.wftitular@northwind.invalid",   role: CUSTOM.wfTitular },
+    wfAdjacent:         { id: "c0000000-0000-4000-8000-00000000d0a3", email: "cert.wfadjacent@northwind.invalid",  role: CUSTOM.wfAdjacent },
+
+    commsReader:     { id: "c0000000-0000-4000-8000-00000000d052", email: "cert.commsreader@northwind.invalid",    role: CUSTOM.commsReader },
+    commsSender:     { id: "c0000000-0000-4000-8000-00000000d053", email: "cert.commssender@northwind.invalid",    role: CUSTOM.commsSender },
+    commsTemplates:  { id: "c0000000-0000-4000-8000-00000000d054", email: "cert.commstemplates@northwind.invalid", role: CUSTOM.commsTemplates },
+    commsProvider:   { id: "c0000000-0000-4000-8000-00000000d055", email: "cert.commsprovider@northwind.invalid",  role: CUSTOM.commsProvider },
+    commsBulk:       { id: "c0000000-0000-4000-8000-00000000d056", email: "cert.commsbulk@northwind.invalid",      role: CUSTOM.commsBulk },
+    commsOperator:   { id: "c0000000-0000-4000-8000-00000000d057", email: "cert.commsoperator@northwind.invalid",  role: CUSTOM.commsOperator },
+    commsFull:       { id: "c0000000-0000-4000-8000-00000000d058", email: "cert.commsfull@northwind.invalid",      role: CUSTOM.commsFull },
+    commsTitular:    { id: "c0000000-0000-4000-8000-00000000d059", email: "cert.commstitular@northwind.invalid",   role: CUSTOM.commsTitular },
+    commsPortalOnly: { id: "c0000000-0000-4000-8000-00000000d060", email: "cert.commsportal@northwind.invalid",    role: CUSTOM.commsPortalOnly },
+    /*
+     * THE UNION PERSONA. Two roles, neither sufficient: `commsReader` carries admission and read,
+     * `commsUnionBulk` carries bulk and no admission. Effective authority is the union, so this
+     * person must reach both a read and a campaign route — and still be refused templates and
+     * provider, which neither role holds. `also` is the second role; see the user_roles insert.
+     */
+    commsUnion:      { id: "c0000000-0000-4000-8000-00000000d061", email: "cert.commsunion@northwind.invalid",     role: CUSTOM.commsReader, also: [CUSTOM.commsUnionBulk] },
+    commsAssigner:   { id: "c0000000-0000-4000-8000-00000000d062", email: "cert.commsassign@northwind.invalid",    role: CUSTOM.commsAssigner },
+    crmReader:       { id: "c0000000-0000-4000-8000-00000000d063", email: "cert.crmreader@northwind.invalid",      role: CUSTOM.crmReader },
+    crmWriter:       { id: "c0000000-0000-4000-8000-00000000d064", email: "cert.crmwriter@northwind.invalid",      role: CUSTOM.crmWriter },
+    crmWriteOnly:    { id: "c0000000-0000-4000-8000-00000000d065", email: "cert.crmwriteonly@northwind.invalid",   role: CUSTOM.crmWriteOnly },
+    crmTitular:      { id: "c0000000-0000-4000-8000-00000000d066", email: "cert.crmtitular@northwind.invalid",     role: CUSTOM.crmTitular },
+    vocabManager:    { id: "c0000000-0000-4000-8000-00000000d067", email: "cert.vocabmgr@northwind.invalid",       role: CUSTOM.vocabManager },
+    vocabTitular:    { id: "c0000000-0000-4000-8000-00000000d068", email: "cert.vocabtitular@northwind.invalid",   role: CUSTOM.vocabTitular },
+    programManager:  { id: "c0000000-0000-4000-8000-00000000d069", email: "cert.programmgr@northwind.invalid",     role: CUSTOM.programManager },
 };
 
 async function principal(p) {
@@ -351,10 +517,41 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.bpTitular,    role_label: "Admin",              description: "Named Admin, granted no Business Process capability.",      is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.bpScoped,     role_label: "Domain process owner", description: "Designs and activates, inside one operational domain only.", is_system: false, is_active: true },
 
+        { org_id: ORG, role_key: CUSTOM.workConfigurer, role_label: "Work definition owner", description: "Defines what operational work exists. Performs none of it.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.workOperator,   role_label: "Work operator",        description: "Performs work inside running processes. Defines none of it.",  is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.workTitular,    role_label: "Work Administrator",   description: "Named Work Administrator, granted no Work authority.",         is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.aiUser,         role_label: "AI enrichment user",   description: "Holds AI authority. Holds no Work authority.",                  is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.tourConfigurer, role_label: "Tour availability owner", description: "Sets when and where tours may be booked. Cannot touch a family booking.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.tourBooker,     role_label: "Tour front desk",        description: "Operates one family tour lifecycle. Cannot change availability.",      is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.tourTitular,    role_label: "Tour Administrator",     description: "Named Tour Administrator, granted no Tours authority.",               is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.tourScheduler,  role_label: "Scheduler",              description: "Holds scheduling.write only. The near-miss for tour availability.",   is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.wfWriter,  role_label: "Workflow author",       description: "Configures Workflow definitions, actions and conditions. No privileged title.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.wfTitular, role_label: "Workflow Administrator", description: "Named Workflow Administrator, granted no Workflow authority.",                 is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.wfAdjacent, role_label: "Process configurer",    description: "Adjacent configuration authority, deliberately without the Workflow key.",      is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.oiWriter,  role_label: "Intelligence author", description: "Authors Operational Intelligence - calculations, KPI targets, measurements.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.oiReader,  role_label: "Intelligence reader", description: "Reads Operational Intelligence. Changes none of it.",                    is_system: false, is_active: true },
         /* The label is the trap. It holds nothing. */
         { org_id: ORG, role_key: CUSTOM.oiTitular, role_label: "Admin",                description: "Named Admin, granted no Operational Intelligence authority.",           is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsReader,    role_label: "Communications reader",        description: "Reads the organization's communications. Sends nothing.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsSender,    role_label: "Communications sender",        description: "Sends an individual message. Deliberately cannot read the org's conversations.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsTemplates, role_label: "Template author",              description: "Authors templates. Delivers nothing.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsProvider,  role_label: "Delivery administrator",       description: "Configures delivery infrastructure. Messages nobody.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsBulk,      role_label: "Campaign sender",              description: "Addresses the whole organization. Authors no template.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsOperator,  role_label: "Communications operator",      description: "The seeded ops package for this area, as a CUSTOM role.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsFull,      role_label: "Communications administrator", description: "All five, as a custom role rather than by job title.", is_system: false, is_active: true },
+        /* The title control. Named like an administrator, granted nothing. */
+        { org_id: ORG, role_key: CUSTOM.commsTitular,   role_label: "Communications Administrator", description: "Titled for authority, holding none of it.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsPortalOnly,role_label: "Portal only",                  description: "The census persona: admission and nothing else.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsUnionBulk, role_label: "Campaign sender (union half)", description: "Second role in the multi-role union proof.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.commsAssigner,  role_label: "Conversation assigner",       description: "Routes the inbox. Answers nothing.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.crmReader,      role_label: "Family record reader",        description: "Reads families and people. Changes none of them.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.crmWriter,      role_label: "Family record operator",      description: "Reads and maintains family records.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.crmWriteOnly,   role_label: "Family record writer (write only)", description: "Holds write and not read — the separation, from the other side.", is_system: false, is_active: true },
+        /* The title control. Named for authority over customers, granted none of it. */
+        { org_id: ORG, role_key: CUSTOM.crmTitular,     role_label: "Customer Administrator",      description: "Titled for authority, holding none of it.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.vocabManager,   role_label: "Vocabulary manager",          description: "Defines the organization's words. Changes none of its records.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.vocabTitular,   role_label: "Configuration Administrator", description: "Titled for configuration authority, holding none of it.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.programManager, role_label: "Program manager",             description: "Publishes Programs. Touches no records and no money.", is_system: false, is_active: true },
     ]);
     if (rdErr) throw new Error(`role_definitions: ${rdErr.message}`);
 
@@ -454,9 +651,66 @@ export async function setup() {
         [CUSTOM.bpComposed, ["portal.access", "business_process.configure", "business_process.activate"]],
         [CUSTOM.bpTitular, ["portal.access"]],
         [CUSTOM.bpScoped, ["portal.access", "business_process.configure", "business_process.activate"]],
+        [CUSTOM.workConfigurer, ["portal.access", "work.configure"]],
+        [CUSTOM.workOperator, ["portal.access", "work.operate"]],
+        [CUSTOM.workTitular, ["portal.access"]],
+        [CUSTOM.aiUser, ["portal.access", "ai.enrichment.use"]],
+        [CUSTOM.tourConfigurer, ["portal.access", "tours.configure"]],
+        [CUSTOM.tourBooker, ["portal.access", "tours.book"]],
+        /* The label says Tour Administrator; the package says nothing. */
+        [CUSTOM.tourTitular, ["portal.access"]],
+        /* The nearest key that is NOT Tours authority. */
+        [CUSTOM.tourScheduler, ["portal.access", "scheduling.write"]],
+        [CUSTOM.wfWriter, ["portal.access", "ops.workflows.write"]],
+        /* The label says Workflow Administrator; the package says nothing. */
+        [CUSTOM.wfTitular, ["portal.access"]],
+        /* Adjacent configuration authority, deliberately without the Workflow key. */
+        [CUSTOM.wfAdjacent, ["portal.access", "business_process.configure", "fields.manage"]],
         [CUSTOM.oiWriter, ["portal.access", "reports.read", "reports.write"]],
         [CUSTOM.oiReader, ["portal.access", "reports.read"]],
         [CUSTOM.oiTitular, ["portal.access"]],
+
+        /*
+         * Each of the five held ALONE, because the matrix is about what each one CANNOT do. A
+         * template author who can also reconfigure delivery, or a campaign sender who can rewrite
+         * every template, would mean the split exists only on paper.
+         */
+        [CUSTOM.commsReader, ["portal.access", "communications.read"]],
+        /* No `communications.read`. Send must not imply read — that is the half nobody checks. */
+        [CUSTOM.commsSender, ["portal.access", "communications.send"]],
+        [CUSTOM.commsTemplates, ["portal.access", "communications.templates.manage"]],
+        [CUSTOM.commsProvider, ["portal.access", "communications.provider.configure"]],
+        [CUSTOM.commsBulk, ["portal.access", "communications.bulk.send"]],
+        /* Exactly the seeded ops package for this area, carried by a custom role. */
+        [CUSTOM.commsOperator, ["portal.access", "communications.read", "communications.send"]],
+        [CUSTOM.commsFull, ["portal.access", "communications.read", "communications.send",
+                            "communications.templates.manage", "communications.provider.configure",
+                            "communications.bulk.send"]],
+        /* Titled "Communications Administrator". Holds admission and nothing else. */
+        [CUSTOM.commsTitular, ["portal.access"]],
+        [CUSTOM.commsPortalOnly, ["portal.access"]],
+        /* Supplies bulk to the union persona and carries no admission of its own. */
+        [CUSTOM.commsUnionBulk, ["communications.bulk.send"]],
+        /* Assignment ALONE. No send, no read, no management — the separation, held by a person. */
+        [CUSTOM.commsAssigner, ["portal.access", "communications.assign"]],
+
+        /*
+         * Read without write, write without read, and both. The middle one exists because the
+         * catalog has always had two keys here and nothing ever checked either: if a mutation
+         * quietly accepted the read key, only a reader could prove it.
+         */
+        [CUSTOM.crmReader, ["portal.access", "crm.customers.read"]],
+        [CUSTOM.crmWriter, ["portal.access", "crm.customers.read", "crm.customers.write"]],
+        [CUSTOM.crmWriteOnly, ["portal.access", "crm.customers.write"]],
+        /* Labelled "Customer Administrator". Holds admission and nothing else. */
+        [CUSTOM.crmTitular, ["portal.access"]],
+
+        /* Vocabulary ALONE: no fields, no option sets, no CRM records, no assignment execution. */
+        [CUSTOM.vocabManager, ["portal.access", "configuration.vocabulary.manage"]],
+        /* Labelled "Configuration Administrator". Holds admission and nothing else. */
+        [CUSTOM.vocabTitular, ["portal.access"]],
+        /* settings.manage ALONE — no fields, no option sets, no vocabulary, no CRM, no money. */
+        [CUSTOM.programManager, ["portal.access", "settings.manage"]],
     ]) {
         const { error } = await sb.rpc("replace_role_permission_grants", {
             p_org_id: ORG,
@@ -525,8 +779,15 @@ export async function setup() {
         user_id: P.bpScoped.id, org_id: ORG, department_id: BP_DEPT_ALLOWED,
     });
     if (udaErr) throw new Error(`user_department_access: ${udaErr.message}`);
+    /*
+     * One row per role a persona holds, not one per persona. Multi-role is not an edge case here:
+     * effective authority is the UNION of a person's roles, and a matrix that only ever gives
+     * someone one role cannot tell a union from a single grant.
+     */
     const { error: urErr } = await sb.from("user_roles").insert(
-        Object.values(P).map((p) => ({ user_id: p.id, org_id: p.org ?? ORG, role: p.role })),
+        Object.values(P).flatMap((p) =>
+            [p.role, ...(p.also ?? [])].map((role) => ({ user_id: p.id, org_id: p.org ?? ORG, role })),
+        ),
     );
     if (urErr) throw new Error(`user_roles: ${urErr.message}`);
     return sb;

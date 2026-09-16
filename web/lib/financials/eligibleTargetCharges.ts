@@ -71,10 +71,12 @@ function labelFor(row: ChargeCandidate, labelByTemplateId: Map<string, string>):
     if (described) return described;
     const category = typeof row.charge_category === "string" ? row.charge_category.trim() : "";
     if (!category) return "Charge";
-    const known = chargeCategoryLabel(category);
-    if (known !== category) return known;
-    const words = category.replace(/[_-]+/g, " ").trim();
-    return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Charge";
+    /*
+     * The humanising rule used to live here privately, which is why the chooser said "Late pickup
+     * fee" while the receipt for the same charge said `late_pickup_fee`. It belongs to the
+     * vocabulary, and `chargeCategoryLabel` now owns it for every surface.
+     */
+    return chargeCategoryLabel(category) || "Charge";
 }
 
 /**

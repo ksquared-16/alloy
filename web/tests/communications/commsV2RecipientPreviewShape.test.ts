@@ -20,6 +20,14 @@ function basePreview(over: Partial<AudiencePreview> = {}): AudiencePreview {
     };
 }
 
+/*
+ * THE GATE THIS PINNED HAS BEEN REPLACED, AND THE PIN IS NOW TIGHTER.
+ *
+ * This asserted `await requireAdminOrOps()` as the admin pattern. That helper resolves portal
+ * admission and nothing else, so what the assertion really locked in was that the route asked for
+ * no functional authority. Naming the capability instead means this contract now fails if the route
+ * is gated on the WRONG authority, which the old form could not detect.
+ */
 describe("audiencePreviewResponse (new shape)", () => {
     it("maps families-grain preview: matched_families, total_recipients, resolved per_filter", () => {
         const r = audiencePreviewResponse(
@@ -99,7 +107,7 @@ describe("recipient-preview route — source contract (B8D)", () => {
     });
 
     it("admin pattern + org scoped, no provider/send/schedule, no legacy enrollment sources", () => {
-        expect(SRC).toMatch(/await requireAdminOrOps\(\)/);
+        expect(SRC).toMatch(/await requireCommunicationsAuthority\(COMMUNICATIONS_BULK_SEND\)/);
         expect(SRC).toMatch(/if \(!ctx\.ok\) return adminContextFailureResponse\(ctx\)/);
         expect(SRC).toMatch(/\.eq\("org_id", orgId\)/);
         expect(SRC).not.toMatch(/twilio|sendgrid|resend|webhook/i);

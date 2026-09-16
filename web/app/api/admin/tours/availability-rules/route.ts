@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { fetchOpportunityForTourAdmin, assertBookingLocationMatchesOpportunity } from "@/lib/tours/admin/opportunityTourContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { TOURS_CONFIGURE, requireToursCapability } from "@/lib/access/toursAuthority";
 
 type RuleInsert = {
     location_id?: string | null;
@@ -40,8 +42,17 @@ export async function GET(request: NextRequest) {
 
 /** POST /api/admin/tours/availability-rules */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    /*
+     * TOURS CONFIGURATION — creates a tour availability rule.
+     *
+     * `requireAdminOrOps()` stood here, and despite its name it resolves PORTAL
+     * ADMISSION and no role: every principal who could enter the portal could do this.
+     * `tours.configure` is the authority now, held by grant and by nothing else.
+     */
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const capDenied = requireToursCapability(access, TOURS_CONFIGURE);
+    if (capDenied) return capDenied;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 

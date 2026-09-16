@@ -1,0 +1,145 @@
+{
+  "trusted_host_action_id": "tha_8da7d10f2aa034",
+  "query_hash": "66c7b3130d5153688c57ea3f795c6e82dbc208f5d768ea3a4fafbd12eaa78b56",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-16T01:16:44.496Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_8da7d10f2aa034",
+    "query_hash": "66c7b3130d5153688c57ea3f795c6e82dbc208f5d768ea3a4fafbd12eaa78b56",
+    "authorization_id": "grnt_ecf990b7964d4f30",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-16T01:16:45.979Z",
+    "question_ids": [
+      "columns",
+      "volume",
+      "recency",
+      "shape",
+      "status_vocab",
+      "members",
+      "capability",
+      "scale"
+    ],
+    "questions": {
+      "columns": {
+        "question_id": "columns",
+        "row_count": null,
+        "rows": [
+          "id",
+          "source",
+          "lost_reason",
+          "assigned_to",
+          "job_date",
+          "job_time_window",
+          "appointment_id",
+          "customer_notes",
+          "monetary_value_cents",
+          "estimated_price_cents",
+          "recurring_price_cents",
+          "vertical_id",
+          "price_breakdown",
+          "external_source",
+          "external_id",
+          "metadata",
+          "created_at",
+          "updated_at",
+          "title",
+          "org_id",
+          "discount_code_id",
+          "discount_code",
+          "customer_id",
+          "quote_subtotal",
+          "discount_amount",
+          "quote_total",
+          "discount_validated_at",
+          "status_key",
+          "primary_person_id",
+          "discount_program_id",
+          "opportunity_number",
+          "quote_is_overridden",
+          "quote_override_total",
+          "primary_contact_id",
+          "quote_override_reason",
+          "work_unit_id",
+          "stage_key",
+          "close_reason_key",
+          "stage_entered_at",
+          "location_id",
+          "name",
+          "pipeline_id",
+          "pipeline_stage_id"
+        ]
+      },
+      "volume": {
+        "question_id": "volume",
+        "row_count": null,
+        "rows": [
+          7,
+          1
+        ]
+      },
+      "recency": {
+        "question_id": "recency",
+        "row_count": null,
+        "rows": [
+          6,
+          7,
+          "2026-09-15 20:03:36.852306+00"
+        ]
+      },
+      "shape": {
+        "question_id": "shape",
+        "row_count": null,
+        "rows": [
+          7,
+          7,
+          7,
+          4
+        ]
+      },
+      "status_vocab": {
+        "question_id": "status_vocab",
+        "row_count": null,
+        "rows": [
+          "new ~ rows=4",
+          "new_inquiry ~ rows=1",
+          "open ~ rows=2"
+        ]
+      },
+      "members": {
+        "question_id": "members",
+        "row_count": null,
+        "rows": [
+          8,
+          2
+        ]
+      },
+      "capability": {
+        "question_id": "capability",
+        "row_count": null,
+        "rows": [
+          "crm.opportunities.read ~ active=true",
+          "crm.opportunities.write ~ active=true",
+          "crm.opportunities.read ~ role=admin ~ allowed=true ~ orgs=3",
+          "crm.opportunities.read ~ role=ops ~ allowed=true ~ orgs=1",
+          "crm.opportunities.write ~ role=admin ~ allowed=true ~ orgs=3",
+          "crm.opportunities.write ~ role=ops ~ allowed=true ~ orgs=1"
+        ]
+      },
+      "scale": {
+        "question_id": "scale",
+        "row_count": null,
+        "rows": [
+          3
+        ]
+      }
+    },
+    "row_count": 64
+  }
+}

@@ -1,6 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { SUITE_KEY } from "@/lib/qa/financialsDirectorQa/scenarioCatalog";
+import {
+    EMPTY_DRAFT,
+    clearDrafts,
+    readDraft,
+    readPosition,
+    resolveResumeIndex,
+    writeDraft,
+    writePosition,
+    type DraftRead,
+    type QaScope,
+} from "@/lib/qa/runtime/directorQaSession";
 
 import type { Scenario } from "@/lib/qa/financialsDirectorQa/scenarioCatalog";
 
@@ -58,6 +71,7 @@ type Subject = {
     billableChildren: Array<{ customerMemberId: string; displayName: string }>;
 };
 type Payload = {
+    suiteKey?: string;
     catalogVersion: string;
     environment: string;
     deployedRevision: string;
@@ -88,6 +102,9 @@ export default function DirectorQaClient() {
     const [expected, setExpected] = useState("");
     const [classification, setClassification] = useState<string>("");
     const [evidence, setEvidence] = useState("");
+    const [carriedFrom, setCarriedFrom] = useState<DraftRead["carriedFrom"]>(null);
+    const restoredRef = useRef(false);
+    const loadedDraftForRef = useRef<string | null>(null);
 
     const load = useCallback(async () => {
         try {
@@ -122,6 +139,67 @@ export default function DirectorQaClient() {
     const current = walkthrough[view.index];
     const currentReadiness = data?.readiness.find((r) => r.scenarioKey === current?.key);
 
+    /*
+     * THE SAME PLACE-AND-DRAFT CONTRACT THE LOCAL READER KEEPS, from the same module.
+     *
+     * The hosted harness carries the identical defect: position and half-written testimony lived in
+     * React state, so any reload — a deploy, a session refresh, a stray navigation — returned the
+     * Director to the landing surface with an empty notes field. One implementation, two surfaces;
+     * a second copy of this rule is how the two would eventually disagree about what was saved.
+     */
+    const scope: QaScope | null = useMemo(
+        () => (data
+            ? {
+                  suiteKey: data.suiteKey ?? SUITE_KEY,
+                  environment: data.environment,
+                  catalogVersion: data.catalogVersion,
+                  deployedRevision: data.deployedRevision,
+              }
+            : null),
+        [data],
+    );
+
+    const resume = useCallback(() => {
+        if (!scope || walkthrough.length === 0) return { index: 0, started: false, source: "start" as const };
+        return resolveResumeIndex({
+            scenarioKeys: walkthrough.map((s) => s.key),
+            resultOf,
+            stored: readPosition(scope),
+        });
+    }, [scope, walkthrough, resultOf]);
+
+    useEffect(() => {
+        if (restoredRef.current || !scope || walkthrough.length === 0) return;
+        restoredRef.current = true;
+        const at = resume();
+        if (at.started) setView({ mode: "scenario", index: at.index });
+        else setView((v) => (v.mode === "landing" ? { mode: "landing", index: at.index } : v));
+    }, [scope, walkthrough.length, resume]);
+
+    useEffect(() => {
+        if (!scope || !restoredRef.current || !current) return;
+        writePosition(scope, current.key, view.mode === "scenario");
+    }, [scope, current, view.mode]);
+
+    useEffect(() => {
+        if (!scope || !current) return;
+        if (loadedDraftForRef.current === current.key) return;
+        loadedDraftForRef.current = current.key;
+        const found = readDraft(scope, current.key);
+        setObservation(found.draft.observation);
+        setExpected(found.draft.expected);
+        setClassification(found.draft.classification);
+        setCarriedFrom(found.carriedFrom);
+    }, [scope, current]);
+
+    useEffect(() => {
+        if (!scope || !current || loadedDraftForRef.current !== current.key) return;
+        const t = setTimeout(() => {
+            writeDraft(scope, current.key, { observation, expected, classification });
+        }, 300);
+        return () => clearTimeout(t);
+    }, [scope, current, observation, expected, classification]);
+
     const record = useCallback(async (result: string) => {
         if (!current) return;
         setSaving(true);
@@ -137,7 +215,15 @@ export default function DirectorQaClient() {
             });
             const json = (await res.json()) as { error?: string };
             if (!res.ok) { setError(json.error ?? "Could not record that result."); return; }
-            setError(null); setObservation(""); setExpected(""); setClassification(""); setEvidence("");
+            /* Submitted, so the draft is spent — see the local reader for the same rule. */
+            if (scope) clearDrafts(scope, current.key);
+            loadedDraftForRef.current = null;
+            setError(null);
+            setObservation(EMPTY_DRAFT.observation);
+            setExpected(EMPTY_DRAFT.expected);
+            setClassification(EMPTY_DRAFT.classification);
+            setEvidence("");
+            setCarriedFrom(null);
             await load();
         } finally { setSaving(false); }
     }, [current, observation, expected, classification, evidence, load]);
@@ -213,7 +299,7 @@ export default function DirectorQaClient() {
                 </Panel>
 
                 <div className="flex flex-wrap gap-2">
-                    <Primary onClick={() => setView({ mode: "scenario", index: firstUnfinished(walkthrough, resultOf) })}
+                    <Primary onClick={() => setView({ mode: "scenario", index: resume().index })}
                         testId="start-walkthrough">
                         {started ? "Resume walkthrough" : "Start walkthrough"}
                     </Primary>
@@ -346,6 +432,16 @@ export default function DirectorQaClient() {
             </Panel>
 
             <Panel title="Record your result" testId="record-result">
+                {carriedFrom ? (
+                    /* Offered, never adopted — the same rule the local reader keeps. */
+                    <p className="mb-2 rounded-md border-l-[3px] border-alloy-stone/40 bg-alloy-stone/5 px-3 py-2 text-xs text-alloy-midnight/70"
+                        data-qa-draft-carried="true">
+                        These notes were saved against build{" "}
+                        <strong className="font-medium">{carriedFrom.deployedRevision.slice(0, 12)}</strong>
+                        {" "}(definitions {carriedFrom.catalogVersion}), not this one. Keep them if they still apply,
+                        or clear the fields.
+                    </p>
+                ) : null}
                 <textarea className="w-full rounded-md border border-alloy-stone/25 bg-white p-2 text-sm"
                     rows={3} placeholder="What did you actually observe?" value={observation}
                     onChange={(e) => setObservation(e.target.value)} data-qa-observation="true" id="qa-observation" />
@@ -385,11 +481,6 @@ export default function DirectorQaClient() {
             </div>
         </Shell>
     );
-}
-
-function firstUnfinished(list: Scenario[], resultOf: (k: string) => string) {
-    const i = list.findIndex((s) => resultOf(s.key) === "not_run");
-    return i < 0 ? 0 : i;
 }
 
 function Shell({ children }: { children: React.ReactNode }) {

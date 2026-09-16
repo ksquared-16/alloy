@@ -35,7 +35,7 @@
  * and this must be bumped whenever a scenario's meaning changes. Adding a scenario counts; fixing a
  * typo does not.
  */
-export const CATALOG_VERSION = "2026-09-15.1";
+export const CATALOG_VERSION = "2026-09-15.2";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -352,8 +352,40 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         failSymptoms: ["A different amount.", "A missing payer or method.", "Two receipts."],
     }),
     S({
-        key: "apply_payment",
+        key: "actual_payer_is_not_responsibility",
         order: 15,
+        title: "The person who paid is not necessarily the person who owes",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Record a payment from a household adult who carries no responsibility, and read both facts back.",
+        whyItMatters:
+            "Responsibility is who owes it; payer is who supplied the money. A grandparent settling a bill is a payer and is responsible for nothing, and a product that collapses the two will eventually chase the wrong person. The chooser is deliberately ordered by primary contact rather than by who owes, so the responsible party is never the accidental default.",
+        requires: [
+            { kind: "account_state", check: "has_posted_obligation", describe: "an obligation to pay against" },
+            { kind: "scenario_passed", scenarioKey: "manage_responsibility" },
+        ],
+        navigate: ["From the account pane, record a payment against a posted obligation.", "Open the Who paid? chooser."],
+        doThis: [
+            "Read the chooser: every current household adult appears, not only the responsible one.",
+            "Choose an adult who is NOT marked also responsible.",
+            "Use Cash, enter part of what is owed, and confirm.",
+            "Open the Payments lens on the account and read the receipt.",
+        ],
+        expectChanges: ["The receipt names the person you chose as the payer."],
+        expectUnchanged: [
+            "Responsibility shares are exactly as they were — paying does not make somebody responsible.",
+            "The responsible party's assigned amount is unchanged.",
+        ],
+        invariant: MONEY_INVARIANTS.PAYER_IS_HISTORY,
+        failSymptoms: [
+            "The chooser offers only the responsible party.",
+            "The chooser is missing entirely.",
+            "The receipt names the responsible party instead of who you chose.",
+            "Responsibility changes because a payment was recorded.",
+        ],
+    }),
+    S({
+        key: "apply_payment",
+        order: 16,
         title: "What is owed falls by what was applied",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Confirm the obligation is settled and the balance fell by the applied amount, not the receipt.",
@@ -369,7 +401,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "partial_unapplied",
-        order: 16,
+        order: 17,
         title: "Received, applied and unapplied are three different numbers",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Place some of the leftover money on another obligation without creating a new receipt.",
@@ -385,7 +417,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "move_payment",
-        order: 17,
+        order: 18,
         title: "Moving a payment changes where it sits, not what it is",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Move an application from one obligation to another and confirm the receipt is untouched.",
@@ -401,7 +433,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "failed_reapply_recovery",
-        order: 18,
+        order: 19,
         title: "A half-finished move leaves the money visible, not lost",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Force the second half of a move to fail and confirm the product tells the truth about it.",
@@ -417,7 +449,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "refund",
-        order: 19,
+        order: 20,
         title: "A refund is money going back, recorded separately",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Refund part of a receipt and confirm the original receipt survives untouched.",
@@ -433,7 +465,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "reverse_charge",
-        order: 20,
+        order: 21,
         title: "Reversing a charge appends, it does not erase",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Reverse a posted charge and confirm the original remains readable.",
@@ -449,7 +481,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "cross_surface_consistency",
-        order: 21,
+        order: 22,
         title: "Every surface tells the same story",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Compare the account, the charge detail and Collections at the same scope and period.",
@@ -465,7 +497,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "reload_switch_viewport",
-        order: 22,
+        order: 23,
         title: "Reload, switch household, and shrink the window",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Confirm no stale financial state survives navigation, and the account is usable on a phone.",
@@ -481,7 +513,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "overview_smoke",
-        order: 23,
+        order: 24,
         title: "Overview agrees with the Charges list",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Compare the Overview drafts figure with the Awaiting posting list.",
@@ -497,7 +529,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "tuition_chain",
-        order: 24,
+        order: 25,
         title: "Recommendation, acceptance, then a charge",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Follow a tuition price from what the catalog suggests, through what was agreed, to the charge that results.",
@@ -515,7 +547,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "discount_vs_adjustment",
-        order: 25,
+        order: 26,
         title: "An authored discount is not a manual correction",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Tell the two kinds of reduction apart and be able to explain the difference afterwards.",
@@ -531,7 +563,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "multi_child_attribution",
-        order: 26,
+        order: 27,
         title: "Which child, and what belongs to the household",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Use the second child to tell child-level money apart from household-level responsibility.",
@@ -549,7 +581,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "subsidy_exclusion",
-        order: 27,
+        order: 28,
         title: "Where Core Financials stops",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Confirm the boundary: Expected Funding is Core, subsidy processing is not.",
@@ -567,14 +599,14 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     // ── NOT WALKED THROUGH, AND WHY ─────────────────────────────────────────────────────────────
     S({
         key: "card_collection",
-        order: 28,
+        order: 29,
         title: "Collecting a card payment",
         disposition: "EXPLICITLY_DEFERRED",
         purpose: "Take a card payment through the product and recognise the provider's result.",
         whyItMatters:
             "Most families pay by card. The product must start the collection, recognise what the processor says, and represent a failure as a failure.",
         dispositionReason:
-            "NO PAYMENT PROVIDER IS CONFIGURED ON THIS TENANT. The canonical account read returns paymentSetup: null, so there is no merchant to collect against and no test-mode credential to use. Deferred rather than out of scope: the product has payment.collect_card, and this becomes a walkthrough as soon as a test-mode merchant exists. Real card details must never be used.",
+            "NO PAYMENT PROVIDER IS CONFIGURED ON THIS TENANT. The canonical account read reports takePaymentCard as not_configured, because no active merchant row exists for this organisation, so there is no merchant to collect against and no test-mode credential to use. Deferred rather than out of scope: the product has payment.collect_card, and this becomes a walkthrough as soon as a test-mode merchant exists. Real card details must never be used.",
         requires: [],
         navigate: [],
         doThis: [],
@@ -585,14 +617,14 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "ach_processing",
-        order: 29,
+        order: 30,
         title: "ACH initiation, processing and recognition",
         disposition: "EXPLICITLY_DEFERRED",
         purpose: "Distinguish an ACH collection that has started from one that has actually settled.",
         whyItMatters:
             "ACH is not instant. Treating initiation as settlement would show money the business does not have yet, and a return days later would arrive as a surprise.",
         dispositionReason:
-            "NOT AVAILABLE ON THIS TENANT: the canonical account read returns achAvailable: false and paymentSetup: null. There is nothing to initiate and nothing to await. Deferred, with the settlement distinction recorded here so it is not lost.",
+            "NOT AVAILABLE ON THIS TENANT: the canonical account read reports achAvailable false and takePaymentAch as not_configured. There is nothing to initiate and nothing to await. Deferred, with the settlement distinction recorded here so it is not lost.",
         requires: [],
         navigate: [],
         doThis: [],
@@ -603,7 +635,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "provider_return",
-        order: 30,
+        order: 31,
         title: "A provider return is not an operator refund",
         disposition: "EXPLICITLY_DEFERRED",
         purpose: "Tell money the rail took back apart from money somebody decided to give back.",
@@ -621,7 +653,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "subsidy_processing",
-        order: 31,
+        order: 32,
         title: "Subsidy claims, submission, remittance and variance",
         disposition: "OUT_OF_SCOPE_THREAD_11A",
         purpose: "Claim agency money, submit it, reconcile what arrives and resolve the difference.",

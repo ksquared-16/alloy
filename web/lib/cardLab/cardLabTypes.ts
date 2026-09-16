@@ -602,6 +602,21 @@ export type ProcessEvidence = {
     dueLine: string | null;
     /** Actions whose SUBJECT is the case. */
     actions: ProcessAction[];
+    /**
+     * Resolving the current work — carried apart from `actions` because it is not a peer of them.
+     *
+     * The other commands start something new; this one closes what the stage already says is open,
+     * so it reads under the stage's own line as a consequence of it rather than as a fifth button
+     * competing for the same row. Splitting it is also what lets the command row stay one row at a
+     * consistent size: five content-sized commands wrapped, and a wrapped command reads as a
+     * separate, lesser group.
+     *
+     * The CARD does not decide which command this is — it renders whatever the runtime puts here.
+     * Null or absent whenever the stage projects no outcome affordance, which is most stages — and
+     * absent in every design-lab specimen, which has no runtime to resolve work against. Optional
+     * for that reason rather than to spare callers the field.
+     */
+    outcomeAction?: ProcessAction | null;
     stillNeeded: string[];
     /**
      * Canonical activity, revealed ON DEMAND. **No row is printed onto the card face** — the whole

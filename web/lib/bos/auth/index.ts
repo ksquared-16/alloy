@@ -9,7 +9,7 @@ import { getBosCapabilityDefinition } from "@/lib/bos/bosCapabilityRegistry";
 export {
     AI_ENRICHMENT_USE_PERMISSION_KEY,
     computeOpenAiLiveInvocationPermitted,
-    isAiEnrichmentUsePermissionRequired,
+    isOpenAiLiveInvocationFeatureEnabled,
     resolveAiEnrichmentPortalAccess,
     type AiEnrichmentRouteAccessFailure,
 } from "@/lib/ai/aiEnrichmentPermissions";

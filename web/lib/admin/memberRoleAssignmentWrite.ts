@@ -19,7 +19,7 @@ import type { AccessMutationAudit } from "@/lib/access/accessMutationAudit";
  */
 export type MemberRoleWriteResult =
     | { ok: true; roleKey: string; changed: boolean; roleKeys: string[] }
-    | { ok: false; kind: "unknown_role" | "error"; error: string };
+    | { ok: false; kind: "unknown_role" | "forbidden" | "error"; error: string };
 
 type Args = {
     supabase: SupabaseClient;
@@ -51,6 +51,24 @@ async function callRoleRpc(fn: "assign_member_role_audited" | "remove_member_rol
         // letting a constraint string reach the operator.
         if (/unknown_role_key/i.test(error.message)) {
             return { ok: false, kind: "unknown_role", error: "Invalid or inactive role for this org" };
+        }
+        /*
+         * THE ASSIGNMENT CEILING IS AN AUTHORIZATION ANSWER, NOT A FAULT.
+         *
+         * Without this the refusal fell through to `error` and the route answered 500 — a well-formed
+         * request, correctly refused, reported to the operator as though the server had broken. The
+         * mounted certification caught exactly that. 403 and the operator's own vocabulary, the same
+         * shape W-18's grant route gives its refusal.
+         */
+        const beyond = error.message.match(/assignment_ceiling:([^\s"]+)/);
+        if (beyond) {
+            return {
+                ok: false,
+                kind: "forbidden",
+                error:
+                    "You can only give someone access you hold yourself. Not assigned: "
+                    + beyond[1].split(",").join(", "),
+            };
         }
         return { ok: false, kind: "error", error: error.message };
     }

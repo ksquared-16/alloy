@@ -77,14 +77,25 @@ describe("authorization precedes minting, not just disclosure", () => {
         }
     });
 
-    it("gates the mutating profile-photo handlers on admin", () => {
-        // POST/DELETE set the canonical pointer. They are role-gated rather than
-        // document-gated, which is the stricter of the two.
+    it("gates the mutating profile-photo handlers on documents.write", () => {
+        /*
+         * THIS ASSERTED `ctx.role !== "admin"`, AND ITS OWN COMMENT GAVE THE REASON: the handlers
+         * were "role-gated rather than document-gated, which is the stricter of the two". That was
+         * true, and it was true because `documents.write` was DORMANT — catalogued, granted to admin
+         * and ops in every organization, and named by no source file at all. A title really is
+         * stricter than a key nothing consults.
+         *
+         * The CRM/People slice gave the key its first enforcement sites, so the comparison inverts:
+         * the capability is now the real gate and the title is the weaker claim — it cannot be
+         * granted, cannot be withheld, and denied `ops` a document write its package already
+         * carried. Same route, same strictness intent, honest instrument.
+         */
         const src = code("app/api/admin/persons/[id]/profile-photo/route.ts");
         const posts = src.split(/export async function (?:POST|DELETE)\b/).slice(1);
         expect(posts).toHaveLength(2);
         for (const handler of posts) {
-            expect(handler).toMatch(/ctx\.role !== "admin"/);
+            expect(handler).toMatch(/requireDocumentWrite\(ctx\)/);
+            expect(handler, "a role title must not be the authority here").not.toMatch(/ctx\.role !== "admin"/);
         }
     });
 

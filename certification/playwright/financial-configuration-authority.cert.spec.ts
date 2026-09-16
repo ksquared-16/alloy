@@ -42,13 +42,24 @@ const PERSONAS = {
 } as const;
 const OPS = { email: "cert.ops@northwind.invalid" };
 
-type Door = "commercialProduct" | "ratePlan" | "pricingMode" | "pricingMatrix" | "simulate" | "paymentsPatch" | "paymentsRun";
+type Door = "commercialProduct" | "ratePlan" | "pricingMode" | "pricingMatrix" | "simulate" | "paymentsPatch" | "paymentsRun"
+    // Financials Declared-vs-Effective Repair V1 — the two Accounts handlers whose declared
+    // `fin.write` was decorative behind `ctx.role !== "admin"`.
+    | "accountCreate" | "accountEdit";
 
 const no = { data: {}, failOnStatusCode: false } as const;
 async function knock(r: APIRequestContext, door: Door): Promise<number> {
     switch (door) {
         // ── fin.write: ordinary money CONFIGURATION ──
         case "commercialProduct": return (await r.post("/api/admin/commercial/products", no)).status();
+        /*
+         * THE POINT OF THIS SLICE. Before the repair a Financial Writer holding `fin.write` was
+         * refused here by a role title running immediately after the capability check, while the
+         * route inventory declared it capability-owned. These two doors are what proves the
+         * declaration became true.
+         */
+        case "accountCreate": return (await r.post("/api/admin/financials/accounts", no)).status();
+        case "accountEdit": return (await r.patch(`/api/admin/financials/accounts/${NO_ID}`, no)).status();
         case "ratePlan": return (await r.post("/api/admin/financial/rate-plans", no)).status();
         case "pricingMode": return (await r.patch(`/api/admin/pricing-modes/${NO_ID}`, no)).status();
         case "pricingMatrix": return (await r.patch(`/api/admin/pricing/matrix/${NO_ID}`, no)).status();
@@ -60,7 +71,7 @@ async function knock(r: APIRequestContext, door: Door): Promise<number> {
     }
 }
 
-const CONFIG: Door[] = ["commercialProduct", "ratePlan", "pricingMode", "pricingMatrix"];
+const CONFIG: Door[] = ["commercialProduct", "ratePlan", "pricingMode", "pricingMatrix", "accountCreate", "accountEdit"];
 const COMPUTE: Door[] = ["simulate"];
 /**
  * `paymentsRun` is NOT here, and that is a finding rather than an omission.

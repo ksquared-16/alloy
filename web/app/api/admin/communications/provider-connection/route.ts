@@ -9,6 +9,10 @@ import {
 } from "@/lib/communications/orgProviderCredential";
 import { verifyResendApiKey } from "@/lib/communications/resendConnection";
 import { verifyTwilioCredentials } from "@/lib/communications/twilioConnection";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_PROVIDER_CONFIGURE,
+} from "@/lib/communications/communicationsAuthority";
 
 /**
  * Connect, replace or revoke an organization's own provider account.
@@ -102,6 +106,8 @@ async function findOrCreateOrgAccount(
 export async function POST(request: Request) {
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_PROVIDER_CONFIGURE);
+    if (!auth.ok) return auth.response;
     const admin = await getAdminContextCached();
     if (!admin.ok) return adminContextFailureResponse(admin);
 
@@ -273,6 +279,8 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_PROVIDER_CONFIGURE);
+    if (!auth.ok) return auth.response;
     const admin = await getAdminContextCached();
     if (!admin.ok) return adminContextFailureResponse(admin);
 
