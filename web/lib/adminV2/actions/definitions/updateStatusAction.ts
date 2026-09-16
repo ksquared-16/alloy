@@ -20,6 +20,8 @@ import { randomUUID } from "crypto";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { validateOpportunityStatusTransitionForAction } from "@/lib/admin/actions/entryLifecycleActions";
 import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
+import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
+import { ENROLLMENT_DECIDE } from "@/lib/access/enrollmentAuthority";
 import { emitEvent } from "@/lib/emitEvent";
 import {
     eligible,
@@ -164,6 +166,36 @@ export const updateStatusAction: RegisteredAction = {
                 status: 400,
                 error: "A new status is required.",
                 blockers: [{ code: "missing_required_input", message: "Select a new status.", field: "status_key" }],
+            };
+        }
+
+        /*
+         * ENROLLMENT DECISION AUTHORITY — this is the second door to the same business truth.
+         *
+         * Changing an opportunity's `status_key` is an enrollment outcome, and the canonical door
+         * (`/api/admin/enrollment-status-transition/execute`) has required `enrollment.decide`
+         * since Enrollment Record Authority V1. This action reaches the same mutation through the
+         * generic Action executor, whose route gate is PORTAL ADMISSION — so without this check the
+         * capability was bypassable by anyone who could reach the portal.
+         *
+         * THE CHECK LIVES HERE, NOT IN `updateOpportunityStatusWithEvent`, and that placement is
+         * deliberate. The write helper has four callers, and two of them —
+         * `emitDomainLifecycleStatusChangedEvent` and `stageOutcomeRuleTargetExecutor` — are
+         * SYSTEM paths executing configured rules with no operator to authorize. Gating the shared
+         * helper would demand an operator capability from automation that has none. This action is
+         * the narrowest layer that is always an operator decision.
+         *
+         * `resolveActorPermissionGrants` returns `null` when the actor is unidentified or the grant
+         * read FAILED. That is denial, never "no grants needed" — an empty list is a real answer, a
+         * failed read is not. Resolved BEFORE the transition is validated and long before any write.
+         */
+        const grants = await resolveActorPermissionGrants(supabase, ctx.orgId, ctx.userId);
+        if (!grants.permissionKeys?.includes(ENROLLMENT_DECIDE)) {
+            return {
+                ok: false,
+                correlationId,
+                status: 403,
+                error: "Changing enrollment status requires the enrollment decision permission.",
             };
         }
 

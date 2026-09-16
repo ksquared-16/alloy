@@ -34,6 +34,7 @@ import {
     type OperationalContextSignals,
     type OperationalContextStatus,
     type OperationalEmploymentPerson,
+    type OperationalParticipantScope,
     type OperationalEmploymentSignal,
     type OperationalWorkItem,
     type OperationalWorkUrgency,
@@ -61,6 +62,17 @@ export type BuildOperationalContextInput = {
      * answer rather than an instruction to resolve one.
      */
     selectedParticipationId?: string | null;
+    /**
+     * The participation the composer RESOLVED to its authoritative member, scoped to this record.
+     *
+     * Stated, not re-discovered. The candidate scan below matches against `truth._inquiry_children`,
+     * which on a family-shaped settled record is intake metadata in a DIFFERENT id space from the
+     * child-lens attention id (`process_instances.id`) — so it answered `not_found` for every child,
+     * `participantScope` settled null, and the Attendance/Health producers, both keyed on that scope,
+     * reported `unavailable` for a subject the commit frame had already described. Absent means the
+     * composer had nothing to resolve, and every prior path behaves exactly as before.
+     */
+    resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
     /** Optional overrides; default `ready` (cards mount only when ready). */
     status?: OperationalContextStatus;
     maskedChannels?: boolean;
@@ -365,6 +377,33 @@ function participantCandidatesFromTruth(truth: Record<string, unknown>): Partici
         .filter((c): c is NonNullable<typeof c> => c !== null);
 }
 
+/**
+ * The resolved participation as a scope — identity from the resolver, presentation from truth.
+ *
+ * The member id is the authority here; a candidate row is consulted ONLY to borrow the child's name
+ * and photo so the settled scope looks the same as the commit one. No candidate is required, because
+ * the whole reason this input exists is that the candidate set could not name this child.
+ */
+function scopeFromResolvedParticipant(
+    resolved: { participationId: string; customerMemberId: string } | null,
+    truth: Record<string, unknown>,
+): OperationalParticipantScope | null {
+    if (!resolved) return null;
+    const presentation =
+        participantCandidatesFromTruth(truth).find(
+            (c) => (c.customerMemberId ?? null) === resolved.customerMemberId,
+        ) ?? null;
+    return {
+        participationId: resolved.participationId,
+        customerMemberId: resolved.customerMemberId,
+        personId: presentation?.personId ?? null,
+        displayName: presentation?.name ?? null,
+        imageUrl: presentation?.imageUrl ?? null,
+        stageKey: presentation?.stageKey ?? null,
+        stageLabel: presentation?.stageLabel ?? null,
+    };
+}
+
 export function buildOperationalContext(input: BuildOperationalContextInput): OperationalContext {
     const { subjectVm, truth, perspective, statusLabel, canMutate } = input;
 
@@ -456,6 +495,17 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
          */
         participantScope:
             childSubjectScope
+            /*
+             * The composer's RESOLVED participation outranks the candidate scan: it was read from
+             * `process_instances` under this org and THIS opportunity, which is both more
+             * authoritative than intake metadata and the authorization boundary the drawer route
+             * already documents. It never overrides `childSubjectScope` — a frame carrying `child.*`
+             * truth has been told its subject directly and needs no resolution.
+             *
+             * Presentation is still borrowed from the candidate row when one names the same member,
+             * so the scope keeps its name and photo; identity comes from the resolver either way.
+             */
+            ?? scopeFromResolvedParticipant(input.resolvedParticipant ?? null, truth)
             ?? resolveParticipantScope({
                 selectedParticipationId: input.selectedParticipationId ?? null,
                 participants: participantCandidatesFromTruth(truth),

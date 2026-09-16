@@ -4,6 +4,7 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { composeOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel";
 import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
+import { resolveParticipationSubjectForOpportunity } from "@/lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity";
 import { logDrawerVmRuntimeServer } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 import { logOpportunityDrawerViewModelComposeFailureShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
 import { logDrawerViewModelRuntimeFlagsServerSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelRuntimeFlagsServer";
@@ -38,6 +39,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         work_unit_id: (sp.get("work_unit_id") ?? "").trim() || null,
     });
     try {
+        const attentionSubjectId = (sp.get("attention_subject_id") ?? "").trim() || null;
+
         const result = await composeOpportunityDrawerViewModel({
             supabase,
             gate,
@@ -71,7 +74,28 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
              * answering with somebody else's child. So naming another family's participation yields
              * no scope and no child-scoped projection, which is the authorization boundary here.
              */
-            attentionSubjectId: (sp.get("attention_subject_id") ?? "").trim() || null,
+            attentionSubjectId: attentionSubjectId,
+            /*
+             * THE SAME ID, ACTUALLY RESOLVED.
+             *
+             * The comment above described this resolution as the authorization boundary, and the
+             * intent was right — but on a child lens the id is a `process_instances.id` while the
+             * composer's only candidate set (`truth._inquiry_children`) is intake metadata keyed by
+             * inquiry-child id. Different id spaces, so it answered `not_found` for EVERY child and
+             * the settled `participantScope` was null. Attendance and Health are both gated on that
+             * scope, so they reported `unavailable` for a child the commit frame had described in
+             * full. Resolving against `process_instances` — scoped to this org AND this opportunity —
+             * is what makes the refusal above real instead of universal.
+             *
+             * It runs HERE rather than inside the composer because it queries the database and the
+             * composer is reachable from a client component, exactly as the producers below are.
+             */
+            resolvedParticipant: await resolveParticipationSubjectForOpportunity({
+                supabase,
+                orgId: gate.orgId,
+                opportunityId: opportunityId.trim(),
+                participationId: attentionSubjectId,
+            }),
         });
 
         if (!result.ok) {

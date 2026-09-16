@@ -40,6 +40,13 @@ export type ComposeOpportunityDrawerViewModelParams = {
     deferCommunicationsPreview?: boolean;
     /** The selected participation this surface is scoped to; resolved, never trusted. */
     attentionSubjectId?: string | null;
+    /**
+     * `attentionSubjectId` already resolved to its authoritative member by the ROUTE, scoped to this
+     * org and this opportunity. Passed in rather than resolved here because the resolver queries the
+     * database and this module is reachable from a client component — see the note at the context
+     * build below. Absent means nothing was resolvable, and the candidate fallback stands.
+     */
+    resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
 };
 
 export async function composeOpportunityDrawerViewModel(
@@ -246,6 +253,22 @@ export async function composeOpportunityDrawerViewModel(
      * Two frames sharing a producer but building two contexts is how they came to disagree about the
      * subject in the first place. One context, both consumers.
      */
+    /*
+     * WHICH CHILD THIS SURFACE IS ABOUT — RESOLVED BY THE ROUTE, NOT HERE.
+     *
+     * `attentionSubjectId` on a child lens is `process_instances.id`. The in-truth candidate set it
+     * was matched against (`_inquiry_children`) is intake metadata keyed by inquiry-child id and a
+     * best-effort `customer_member_id`, so the match answered `not_found` for EVERY child and the
+     * settled `participantScope` was null. Attendance and Health are both keyed on that scope, so
+     * they returned `unavailable` for a child the COMMIT frame had already described in full.
+     *
+     * THE RESOLUTION DOES NOT HAPPEN IN THIS FILE, for the same reason the producers do not: a client
+     * component reaches this composer (`ChildDrawerRuntimeProofClient` → the `lib/layout/runtime`
+     * barrel → `evaluateOpportunityLayoutRuntimeBody` → here), so importing the `server-only`
+     * resolver from here puts it in the client graph and fails the build. It did — the note below
+     * about the producers describes this exact edge, and it applies unchanged to any database owner.
+     * The route resolves and passes the answer in; `null` leaves every prior path untouched.
+     */
     const settledOperationalContext = buildOperationalContext({
                     subjectId: String(viewModel.entity.id),
                     title: strOrEmpty(viewModel.above_fold.record?.title),
@@ -279,6 +302,11 @@ export async function composeOpportunityDrawerViewModel(
                      * settled frame able to project the subject it claims to.
                      */
                     selectedParticipationId: params.attentionSubjectId ?? null,
+                    /*
+                     * The resolved member, stated rather than inferred. `buildOperationalContext`
+                     * prefers this over the candidate scan; absent, every prior path is unchanged.
+                     */
+                    resolvedParticipant: params.resolvedParticipant ?? null,
     });
 
     /*
