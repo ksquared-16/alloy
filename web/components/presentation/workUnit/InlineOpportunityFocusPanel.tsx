@@ -156,7 +156,23 @@ export function InlineOpportunityFocusPanel() {
         holdPriorPayload,
         patchDisplayRecord,
         reloadDisplayVm,
-    } = useRecordWorkRuntime(settlementSubjectId);
+    } = useRecordWorkRuntime(
+        settlementSubjectId,
+        /*
+         * STATE THE PARTICIPATION; do not make the transport owner re-derive it.
+         *
+         * This component computed `isChildSubject` and holds the participation in
+         * `operationalSubjectId` two lines above, then used to hand the runtime only the family id.
+         * The runtime's fallback (`useAttentionSubject()`) is null on a cold entry — a SURFACE
+         * movement clears `subject`, and committing the surface's DEFAULT subject moves attention
+         * nowhere — so the settled request named no participation and the child-scoped producers
+         * lost their subject at settlement.
+         *
+         * Case grain passes null: there is no participation to name, and inventing one would send an
+         * opportunity id into a field the server resolves against `process_instances`.
+         */
+        isChildSubject ? operationalSubjectId : null,
+    );
     if (typeof window !== "undefined") {
         (window as Window & { __ALLOY_FOCUS_SETTLEMENT_DIAG__?: Record<string, unknown> }).__ALLOY_FOCUS_SETTLEMENT_DIAG__ = {
             isChildSubject,
