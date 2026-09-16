@@ -22,11 +22,11 @@ import { ProcessGrid } from "./ProcessGrid";
 import { WorkspaceRightRailActions } from "@/components/presentation/rightRail/WorkspaceRightRailActions";
 import { CreateLeadEventHost } from "@/components/presentation/rightRail/CreateLeadEventHost";
 import { BosWorkspaceScopeSync } from "@/components/presentation/rightRail/BosWorkspaceScopeSync";
-import { AlloyOperationalBootShell } from "@/components/admin/workspace/AlloyOperationalBootShell";
+import { WorkspacePendingSurface } from "./WorkspacePendingSurface";
 
 export function WorkspaceSurface() {
     const model = useWorkspaceSurfaceRuntime();
-    const { orgId } = useWorkspaceOrg();
+    const { orgId, orgName } = useWorkspaceOrg();
     const siteFilter = useWorkspaceSiteFilter();
     const workspaceScrollRef = useRetainedScroll(workspaceScrollScope(orgId, siteFilter?.selectedSiteId ?? null));
 
@@ -47,12 +47,12 @@ export function WorkspaceSurface() {
                 <BosWorkspaceScopeSync departmentId={model.defaultDepartmentId} />
             ) : null}
             {!model.ready ? (
-                // ONE canonical operational-canvas loading owner — the SAME centered enlarged
-                // "Thinking…" the Work Unit uses (AlloyOperationalBootShell content mode), never a
-                // faint skeleton that reads as an empty white canvas (Kelly Blocker 3). A VISITED
-                // Workspace is `ready` immediately from its retained seed, so this shows ONLY on a
-                // genuine cold Workspace, then the surface reveals atomically.
-                <AlloyOperationalBootShell variant="workspace" chrome="content" />
+                // The shell is already operational — global nav and search work — so the Workspace's
+                // own region shows its identity and reserves its structure rather than replacing the
+                // surface with a centred "Thinking…". Cold only: a visited Workspace is `ready`
+                // immediately from its retained seed. See WorkspacePendingSurface for what it may and
+                // may not claim while pending.
+                <WorkspacePendingSurface orgName={orgName} />
             ) : (
                 <>
                     {/* Workspace Header (title / subtitle / org KPIs) + Actions control band. */}
