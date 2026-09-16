@@ -246,3 +246,47 @@ describe("diagnostics", () => {
         );
     });
 });
+
+/**
+ * THE VOCABULARY IS THE PLATFORM'S, NOT THIS MODULE'S.
+ *
+ * The classifier held its own two sets, which were a narrower copy of `DISPOSITION_TO_STAGE_KEY`.
+ * They disagreed on `new_inquiry` — the canonical "undispositioned, brand-new lead" — and that
+ * disagreement refused every per-child decision on the Decision stage with "is in an enrollment
+ * state this process does not recognize", for exactly the children that stage exists to decide.
+ */
+describe("the child track classifier reads the canonical disposition vocabulary", () => {
+    it("treats a brand-new lead as live, the same as no decision at all", () => {
+        // Measured on a real lead: outcome_status_key = "new_inquiry", every decision disabled.
+        for (const key of ["new_inquiry", "new_lead", "new", "open"]) {
+            expect(classifyChildTrackState(key), key).toBe("active_pre_enrollment");
+        }
+        // Which is what `null` already meant, and still means.
+        expect(classifyChildTrackState(null)).toBe("active_pre_enrollment");
+    });
+
+    it("keeps the five states it always knew classified exactly as before", () => {
+        expect(classifyChildTrackState("waitlisted")).toBe("active_pre_enrollment");
+        expect(classifyChildTrackState("enrolling")).toBe("active_pre_enrollment");
+        expect(classifyChildTrackState("enrolled")).toBe("enrolled_blocking");
+        expect(classifyChildTrackState("withdrawn")).toBe("terminal");
+        expect(classifyChildTrackState("not_enrolling")).toBe("terminal");
+    });
+
+    it("classifies the rest of the vocabulary by the stage it places a child at", () => {
+        // Offer Pending is a Waitlist position and Future Start an Enrolling one — both live.
+        expect(classifyChildTrackState("offer_pending")).toBe("active_pre_enrollment");
+        expect(classifyChildTrackState("future_start")).toBe("active_pre_enrollment");
+        // Declined and closed tracks are ENDED. They no longer block a family close, because a
+        // finished child cannot be stranded by one.
+        expect(classifyChildTrackState("declined")).toBe("terminal");
+        expect(classifyChildTrackState("closed")).toBe("terminal");
+    });
+
+    it("still fails closed on a state the platform has not been taught", () => {
+        // The whole point of the classification: guessing is how the invariant gets broken.
+        expect(classifyChildTrackState("banana")).toBe("unknown_blocking");
+        expect(classifyChildTrackState("pending_review")).toBe("unknown_blocking");
+        expect(classifyChildTrackState(undefined)).toBe("unknown_blocking");
+    });
+});

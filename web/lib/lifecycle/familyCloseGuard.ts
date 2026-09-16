@@ -14,6 +14,7 @@
  * cannot mutate a child, and a test can prove that by construction.
  */
 
+import { resolveChildProcessStageKey } from "@/lib/lifecycle/childEnrollmentProcessStageLabel";
 import type { ProcessInstanceRow } from "@/lib/process/processInstances";
 
 /**
@@ -34,11 +35,29 @@ export type ChildTrackClassification =
     /** Unreadable or unrecognised. Blocks, because guessing is how the invariant gets broken. */
     | "unknown_blocking";
 
-/** Terminal child enrollment states — the only two that end a track. */
-const TERMINAL_STATES = new Set(["withdrawn", "not_enrolling"]);
-
-/** Live pre-enrollment states. `null` belongs here: it is the canonical "in process" value. */
-const ACTIVE_PRE_ENROLLMENT_STATES = new Set(["waitlisted", "enrolling"]);
+/**
+ * ONE ENROLLMENT VOCABULARY, NOT TWO.
+ *
+ * This held its own sets — `{withdrawn, not_enrolling}` terminal, `{waitlisted, enrolling}` active —
+ * which is a second, narrower copy of the disposition vocabulary the platform already publishes as
+ * `DISPOSITION_TO_STAGE_KEY`. That table knows `new_inquiry`, `new_lead`, `new`, `open`,
+ * `offer_pending`, `future_start`, `declined` and `closed` as well, and the two disagreed exactly
+ * where it hurt: `new_inquiry` — the canonical "undispositioned, brand-new lead" — classified as
+ * UNKNOWN here, so the Decision stage refused every per-child decision with "is in an enrollment
+ * state this process does not recognize", on the children the stage exists to decide. Measured on a
+ * real lead: `opportunity_customer_members.outcome_status_key = "new_inquiry"`, all three decisions
+ * disabled, and no route to Enrolling for that child from any surface.
+ *
+ * So the classification is DERIVED from the stage each state maps to. `resolveChildProcessStageKey`
+ * is the same resolver every other surface uses to place a child on the rail, which is what makes
+ * this a faithful reading rather than a wider guess — and it means a state the platform learns in
+ * one place is learned here too, instead of stranding a child the day the vocabulary grows.
+ *
+ * Fail-closed is unchanged: a state that maps to no stage is still `unknown_blocking`.
+ */
+const ENROLLED_STAGE_KEY = "enrolled";
+/** The stages that END a track — a family close cannot strand a child who is already finished. */
+const TERMINAL_STAGE_KEYS = new Set(["closed_withdrawn", "closed"]);
 
 /**
  * Classify one child's durable enrollment state.
@@ -53,9 +72,14 @@ export function classifyChildTrackState(state: string | null | undefined): Child
 
     const key = state.trim();
     if (!key) return "active_pre_enrollment";
-    if (TERMINAL_STATES.has(key)) return "terminal";
-    if (ACTIVE_PRE_ENROLLMENT_STATES.has(key)) return "active_pre_enrollment";
-    if (key === "enrolled") return "enrolled_blocking";
+
+    // The stage this state places the child at — the platform's own answer, not a local table.
+    const stageKey = resolveChildProcessStageKey({ dispositionKey: key });
+    if (stageKey === ENROLLED_STAGE_KEY) return "enrolled_blocking";
+    if (stageKey && TERMINAL_STAGE_KEYS.has(stageKey)) return "terminal";
+    // Every other stage on the enrollment spine — lead, tour, decision, waitlist, enrolling — is a
+    // live pre-enrollment position, which is what a child riding the family track actually is.
+    if (stageKey) return "active_pre_enrollment";
 
     // An unrecognised state is a vocabulary the platform has not been taught. Blocking is the only
     // honest answer: treating it as terminal would strand a child, treating it as active would be
