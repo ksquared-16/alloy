@@ -74,7 +74,26 @@ const PLAN = parseStageOperatingPlanV1({
     attention_rules: [],
 })!;
 
-function makeSupabase(instances: Array<{ id: string; subject_id: string; state: string | null }>) {
+/**
+ * MEMBERSHIP IS WHO, JOURNEY IS WHAT HAPPENED.
+ *
+ * The surface used to derive its children from Enrollment journeys, so this fixture supplied only
+ * journeys. It now asks `opportunity_customer_members` who the lead's children ARE — at the Decision
+ * stage most of them have no journey yet, and the child who needs deciding was the child who could
+ * not be shown. Unless a test says otherwise, the lead's children are exactly the subjects of the
+ * journeys it names, which keeps each case below stating one thing.
+ */
+function makeSupabase(
+    instances: Array<{ id: string; subject_id: string; state: string | null }>,
+    members?: Array<{ customer_member_id: string; outcome_status_key?: string | null }>,
+) {
+    const memberships = (
+        members ?? [...new Set(instances.map((i) => i.subject_id))].map((id) => ({ customer_member_id: id }))
+    ).map((m, i) => ({
+        id: `ocm-${i}`,
+        customer_member_id: m.customer_member_id,
+        outcome_status_key: m.outcome_status_key ?? null,
+    }));
     return {
         from(table: string) {
             const builder: Record<string, unknown> = {};
@@ -93,6 +112,10 @@ function makeSupabase(instances: Array<{ id: string; subject_id: string; state: 
                         })),
                         error: null,
                     });
+                    return;
+                }
+                if (table === "opportunity_customer_members") {
+                    resolve({ data: memberships, error: null });
                     return;
                 }
                 if (table === "customer_members") {
@@ -165,6 +188,35 @@ describe("participant decision surface", () => {
         expect(row.customer_member_id).toBe(EMMA);
         expect(row.process_instance_id).toBe("pi-emma");
         expect(row.label).toBe("Emma Rivera");
+    });
+
+    it("shows a child who has no Enrollment journey at all", async () => {
+        /*
+         * THE WHOLE POINT OF THE DECISION STAGE. Liam is a member of this lead and has never had an
+         * Enrollment journey, which is the ordinary state of a child waiting to be decided. Requiring
+         * a journey to render the row made the decision unreachable for exactly the children it is
+         * for.
+         */
+        const surface = await projectParticipantDecisionRows({
+            supabase: makeSupabase(
+                [{ id: "pi-emma", subject_id: EMMA, state: null }],
+                [{ customer_member_id: EMMA }, { customer_member_id: LIAM }],
+            ),
+            orgId: ORG,
+            opportunityId: LEAD,
+            plan: PLAN,
+            templateKey: "review_child_paths",
+            resolveDecisionLabel: (d) => d.label ?? d.decision_key,
+        });
+
+        expect(surface?.rows.map((r) => r.label)).toEqual(["Emma Rivera", "Liam Rivera"]);
+        const liam = surface!.rows[1]!;
+        expect(liam.customer_member_id).toBe(LIAM);
+        // No journey, so no instance to execute against — and the decisions are offered regardless.
+        expect(liam.process_instance_id).toBeUndefined();
+        expect(liam.decisions.map((d) => d.label)).toEqual(["Waitlist", "Begin Enrolling"]);
+        // Progress counts CHILDREN, so an undecided child without a journey still holds the gate.
+        expect(surface!.progress.summary).toBe("0 of 2 children decided");
     });
 
     it("renders nothing when the work template configures no per-child decisions", async () => {

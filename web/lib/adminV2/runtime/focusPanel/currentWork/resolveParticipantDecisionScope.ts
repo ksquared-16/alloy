@@ -1,4 +1,5 @@
 import type { ParticipantDecisionScope } from "@/lib/lifecycle/participantDecisionClient";
+import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { CurrentWorkSurfaceVM } from "./currentWorkSurfaceTypes";
 
 /**
@@ -26,13 +27,55 @@ export function resolveParticipantDecisionScope(args: {
     opportunityId: string | null | undefined;
     surface: Pick<CurrentWorkSurfaceVM, "stageKey" | "primaryWorkItem" | "runtime"> | null | undefined;
 }): ParticipantDecisionScope | null {
-    const opportunityId = args.opportunityId?.trim() ?? "";
     const surface = args.surface;
-    if (!opportunityId || !surface) return null;
+    if (!surface) return null;
+    return resolveParticipantDecisionScopeFromRuntime({
+        opportunityId: args.opportunityId,
+        runtime: surface.runtime,
+        /*
+         * The surface has already committed to a stage and a primary item, so ITS answers are the
+         * ones that count — coerced to "" rather than left undefined so a surface that has no primary
+         * work still resolves to null here, exactly as it did before this delegation existed, instead
+         * of silently widening to whatever the runtime's primary happens to be.
+         */
+        stageKey: surface.stageKey ?? "",
+        templateKey: surface.primaryWorkItem?.template_key ?? "",
+    });
+}
 
-    const departmentId = surface.runtime?.execution?.department_id?.trim() ?? "";
-    const stageKey = surface.stageKey?.trim() ?? "";
-    const templateKey = surface.primaryWorkItem?.template_key?.trim() ?? "";
+/**
+ * THE SAME SCOPE, FOR A HOST THAT IS NOT THE CURRENT WORK SURFACE.
+ *
+ * The per-child decisions are the primary work of a stage, and the card that presents that stage is
+ * not always Current Work — the Business Process card SUPERSEDES it for an active process, which is
+ * why a published layout composes no `current_work` cell at all. Measured on the Decision stage: the
+ * surface rendered, the endpoint was correct, and zero `/participant-decisions` requests were made,
+ * because the only component that asks lived on a card that was not on screen.
+ *
+ * So the scope is resolved from the runtime projection both hosts already hold, and
+ * `resolveParticipantDecisionScope` delegates here. One implementation, two entry points: a Process
+ * card and a Current Work card cannot disagree about which work's decisions they are showing.
+ */
+export function resolveParticipantDecisionScopeFromRuntime(args: {
+    opportunityId: string | null | undefined;
+    runtime: StageWorkRuntimeProjection | null | undefined;
+    /** Optional overrides when the host has already committed to narrower answers. */
+    stageKey?: string | null;
+    templateKey?: string | null;
+}): ParticipantDecisionScope | null {
+    const opportunityId = args.opportunityId?.trim() ?? "";
+    const runtime = args.runtime;
+    if (!opportunityId || !runtime) return null;
+
+    const departmentId = runtime.execution?.department_id?.trim() ?? "";
+    const stageKey = (args.stageKey ?? runtime.stage_key)?.trim() ?? "";
+    /*
+     * The stage's primary work when the host named none. `primary` is the template the plan marked
+     * primary; a stage whose only work is unflagged still answers through `additional`, which is the
+     * exact shape the Decision stage has — `review_child_paths` is required but not flagged primary.
+     */
+    const templateKey =
+        (args.templateKey ?? runtime.primary?.template_key ?? runtime.additional?.[0]?.template_key)?.trim() ?? "";
     if (!departmentId || !stageKey || !templateKey) return null;
 
     return { opportunityId, departmentId, stageKey, templateKey };

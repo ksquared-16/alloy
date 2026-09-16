@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
@@ -92,8 +94,24 @@ export default function ProcessCard({
     onViewAllActivity,
     receded = false,
     fallbackTitle,
+    participantDecisions = null,
 }: {
     evidence: ProcessEvidence;
+    /**
+     * PER-PARTICIPANT WORK, SUPPLIED BY THE HOST.
+     *
+     * A stage whose work is decided per participant has work this card's evidence contract cannot
+     * express: `evidence.actions` is the set of actions whose SUBJECT IS THE CASE, and a per-child
+     * decision is not one of them. It arrives as a node for exactly the reason the case actions do
+     * not — this card composes owners, and the participant decisions have an owner already.
+     *
+     * The same slot exists on Current Work, filled by the same component. That matters because
+     * `current_work` is `supersededBy: "business_process"` in the card registry: on a record with an
+     * active process, THIS card is the only one on screen, so a control that lives only on the other
+     * one is a control that does not exist. Null on every stage that configures no such decision,
+     * and the component self-suppresses besides, so an unconfigured tenant renders nothing here.
+     */
+    participantDecisions?: ReactNode;
     /** Production dims non-focused cards; the lab never does. Presentation only. */
     receded?: boolean;
     /**
@@ -236,6 +254,11 @@ export default function ProcessCard({
                         </ActionRow>
                     </div>
                 </div>
+
+                {/* 2b · PER-PARTICIPANT WORK — below the case work, because it IS the case work at
+                    this stage, taken one participant at a time. Absent on every stage that does not
+                    configure it. */}
+                {participantDecisions}
 
                 {/* 3 · ONE FOOT ROW — participants left, activity right.
                     Two bands became one. The rail already says who is where, so the left half

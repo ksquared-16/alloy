@@ -20,6 +20,7 @@ import {
     type ProcessCardCommand,
 } from "@/lib/adminV2/runtime/focusPanel/businessProcess/projectProcessCardCommands";
 import { resolveTourCommandPresentation } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveTourCommandPresentation";
+import { resolveParticipantDecisionScopeFromRuntime } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveParticipantDecisionScope";
 import {
     logProcessCardCommandDrift,
     logProcessCardCommandWithheld,
@@ -31,6 +32,7 @@ import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDr
 import { warmCurrentWorkCapabilityOnIntent } from "@/lib/adminV2/runtime/focusPanel/currentWork/warmCurrentWorkCapabilities";
 import ProcessCard from "@/components/operationalCards/ProcessCard";
 import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
+import CurrentWorkParticipantDecisionsPanel from "@/components/admin/focusPanel/cards/CurrentWorkParticipantDecisionsPanel";
 import { buildCurrentWorkActivityPreviewItemsFromContext } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
 import { currentWorkActivityRowKey } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkActivityRowKey";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -404,6 +406,45 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
         context.businessProcess.stageKey,
     ]);
 
+    /*
+     * ── PER-PARTICIPANT WORK ON THE AUTHORITATIVE STAGE SURFACE ──
+     *
+     * The decisions are configured on a stage work TEMPLATE, and `completeStageWorkWithOutcome`
+     * refuses the outcome while any participant is undecided. The place that RAISES that requirement
+     * has to be the place that offers it — otherwise the operator reads an instruction with no
+     * corresponding control, which is precisely what was measured: the surface rendered, the endpoint
+     * was correct, and the browser made zero requests for the decisions, because the only component
+     * that asks lived on the card the registry supersedes.
+     *
+     * So this card hosts the SAME component Current Work hosts, resolving the SAME scope through the
+     * SAME function. Not a copy and not a Process-specific panel: one presentation with two hosts, so
+     * the two surfaces cannot come to disagree about which work's participants they are deciding.
+     *
+     * Duplication is structural, not conventional: `current_work` is `supersededBy: "business_process"`
+     * in the card registry, and the workspace branch above returns CurrentWorkCard INSTEAD of this
+     * summary — so exactly one host is ever mounted.
+     */
+    const participantDecisionScope = useMemo(
+        () =>
+            resolveParticipantDecisionScopeFromRuntime({
+                opportunityId: context.subject?.id ?? null,
+                runtime: context.stageWorkRuntime ?? null,
+            }),
+        [context.subject?.id, context.stageWorkRuntime],
+    );
+    const handleParticipantDecisionChanged = useCallback(
+        (affected: { opportunityId: string; customerMemberId?: string }) => {
+            // A decision moves a participant's participation, which changes the work's own completion
+            // eligibility and shows up on the record's activity. The same scoped update Current Work
+            // dispatches — one refresh contract, whichever host the operator happened to be on.
+            dispatchOpportunityDrawerScopedUpdate(affected.opportunityId, "participant_decision", [
+                "header_actions",
+                "activity",
+            ]);
+        },
+        [],
+    );
+
     const processEvidence = useMemo(
         () =>
             adaptBusinessProcessEvidenceToProcessCard({
@@ -429,6 +470,19 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
             receded={receded}
             fallbackTitle={model.title}
             onViewAllActivity={() => coordination?.openFocusPanelMode?.("activity")}
+            participantDecisions={
+                // Self-suppressing: the panel asks the configured surface and renders nothing when
+                // the stage's work declares no participant decisions. A null scope means the runtime
+                // has not projected a department/stage/template yet — never a reason to query some
+                // other work item's decisions and present them as this stage's.
+                participantDecisionScope ?
+                    <CurrentWorkParticipantDecisionsPanel
+                        scope={participantDecisionScope}
+                        canMutate={context.capabilities.canMutate}
+                        onChanged={handleParticipantDecisionChanged}
+                    />
+                :   null
+            }
         />
     );
 }
