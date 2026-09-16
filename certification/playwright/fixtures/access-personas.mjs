@@ -333,6 +333,18 @@ export const CUSTOM = {
      * to Locations, and it may not touch fields, option sets, vocabulary, CRM records or money.
      */
     programManager: "mcert_program_manager",
+
+    /*
+     * ENROLLMENT RECORD AUTHORITY V1. Four roles, because the two keys must be shown to come
+     * apart: a Record Manager who cannot decide, a Decision Manager who cannot edit the record,
+     * the composition of both, and a role LABELLED "Enrollment Administrator" holding admission
+     * and nothing else. A matrix with only the first two could not tell a real split from one key
+     * wearing two names.
+     */
+    enrollRecord: "mcert_enroll_record",
+    enrollDecide: "mcert_enroll_decide",
+    enrollBoth: "mcert_enroll_both",
+    enrollTitular: "mcert_enroll_titular",
     oiReader: "mcert_oi_reader",
     oiTitular: "mcert_oi_titular",
 };
@@ -434,6 +446,10 @@ export const P = {
     vocabManager:    { id: "c0000000-0000-4000-8000-00000000d067", email: "cert.vocabmgr@northwind.invalid",       role: CUSTOM.vocabManager },
     vocabTitular:    { id: "c0000000-0000-4000-8000-00000000d068", email: "cert.vocabtitular@northwind.invalid",   role: CUSTOM.vocabTitular },
     programManager:  { id: "c0000000-0000-4000-8000-00000000d069", email: "cert.programmgr@northwind.invalid",     role: CUSTOM.programManager },
+    enrollRecord:    { id: "c0000000-0000-4000-8000-00000000d070", email: "cert.enrollrecord@northwind.invalid",   role: CUSTOM.enrollRecord },
+    enrollDecide:    { id: "c0000000-0000-4000-8000-00000000d071", email: "cert.enrolldecide@northwind.invalid",   role: CUSTOM.enrollDecide },
+    enrollBoth:      { id: "c0000000-0000-4000-8000-00000000d072", email: "cert.enrollboth@northwind.invalid",     role: CUSTOM.enrollBoth },
+    enrollTitular:   { id: "c0000000-0000-4000-8000-00000000d073", email: "cert.enrolltitular@northwind.invalid",  role: CUSTOM.enrollTitular },
 };
 
 async function principal(p) {
@@ -711,6 +727,17 @@ export async function setup() {
         [CUSTOM.vocabTitular, ["portal.access"]],
         /* settings.manage ALONE — no fields, no option sets, no vocabulary, no CRM, no money. */
         [CUSTOM.programManager, ["portal.access", "settings.manage"]],
+
+        /*
+         * ENROLLMENT. Each role holds admission plus exactly the key under certification, so a
+         * refusal cannot be blamed on a missing neighbour. The titular role is the control: its
+         * label says Enrollment Administrator and it holds admission alone.
+         */
+        [CUSTOM.enrollRecord, ["portal.access", "enrollment.record.manage"]],
+        [CUSTOM.enrollDecide, ["portal.access", "enrollment.decide"]],
+        [CUSTOM.enrollBoth, ["portal.access", "enrollment.record.manage", "enrollment.decide"]],
+        /* Labelled "Enrollment Administrator". Holds admission and nothing else. */
+        [CUSTOM.enrollTitular, ["portal.access"]],
     ]) {
         const { error } = await sb.rpc("replace_role_permission_grants", {
             p_org_id: ORG,

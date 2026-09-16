@@ -64,6 +64,10 @@ const APPROVED_ADDITIONS: Record<string, string> = {
     "enrollment.requirement_exception.manage":
         "20260901120000 — excepting an Enrollment requirement is not working the Enrollment queue",
     "enrollment.pricing.override": "20260906130000 — overriding recommended tuition, admin only",
+    "enrollment.record.manage":
+        "20260916050000 — D1, keeping the enrollment record: the inquiry, the children on it, and their requested program, room, site, start date and quote. Replaced portal admission on six mutations, one of which (lead-location) had no gate at all",
+    "enrollment.decide":
+        "20260916050000 — D1, changing the enrollment outcome: status, the agreement that binds it, placement, and waitlist position. Separated from record.manage because correcting a requested start date is not being trusted to mark a family Enrolled",
     "fin.adjust": "20260907150000 — deciding by hand that a family owes less is not billing them",
     "fin.responsibility": "20260908130000 — who contractually bears a family's obligations",
     "fin.subsidy": "20260909130000 — administering agency funding",

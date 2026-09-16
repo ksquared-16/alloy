@@ -46,29 +46,43 @@ const executable = (src: string) =>
 const LEGACY_KEYS = ["crm.opportunities.read", "crm.opportunities.write"] as const;
 const FORBIDDEN_NEW_KEYS = ["opportunities.manage", "pipeline.manage", "opportunities.write", "lead.manage"] as const;
 
-/** Bounded Opportunity mutations with a truthful owner TODAY. */
+/**
+ * Bounded Opportunity mutations with a truthful owner TODAY.
+ *
+ * The last four arrived with ENROLLMENT RECORD AUTHORITY V1 (Slice 1). This lock recorded them as
+ * owed because no key in the catalog could truthfully own them; the Director created
+ * `enrollment.record.manage` and they are now owned rather than pending. That is the debt being
+ * PAID, which is why the entries move up here instead of the assertion below being relaxed.
+ */
 const OWNED: ReadonlyArray<readonly [string, string, string]> = [
     ["app/api/admin/opportunities/[id]/form-send/route.ts", "POST", "forms.submissions"],
     ["app/api/admin/opportunities/[id]/form-deliver/route.ts", "POST", "forms.submissions"],
     ["app/api/admin/opportunities/[id]/enrollment-packet-launch/route.ts", "POST", "communications.send"],
+    ["app/api/admin/opportunities/[id]/route.ts", "PATCH", "enrollment.record.manage"],
+    ["app/api/admin/opportunities/[id]/lead-location/route.ts", "PATCH", "enrollment.record.manage"],
+    ["app/api/admin/opportunity-customer-members/route.ts", "POST", "enrollment.record.manage"],
+    /*
+     * The conditional owner. The table can name one capability and this handler has two: a body
+     * carrying `outcome_status_key` requires `enrollment.decide`. The value here is the
+     * ordinary-path owner; RL-25 owns the fork, and the understatement is recorded in the table's
+     * ROUTE_INVENTORY_CONDITIONAL_OWNER_DEBT.
+     */
+    ["app/api/admin/opportunity-customer-members/[id]/route.ts", "PATCH", "enrollment.record.manage"],
 ];
 
 /**
  * Bounded Opportunity mutations with NO truthful owner in the current catalog. Each needs an
  * Enrollment/Lead authority that does not exist, which is a Director decision and not a slice's to
  * make. Listed so they are explicitly OWED rather than silently pending.
+ *
+ * ONE LEFT. D2 approved `enrollment.record.delete` as ADMIN-ONLY and held it back to Slice 2, so
+ * Delete Lead keeps its original authority and stays pending here. Fifteen tables of hard deletion
+ * — persons and communication history included — is certified on its own, not carried in behind a
+ * record-management slice.
  */
 const DIRECTOR_GATE: Record<string, string> = {
     "app/api/admin/opportunities/[id]/delete/route.ts":
-        "Delete Lead — needs Enrollment/Lead authority; no current key owns destroying a household inquiry",
-    "app/api/admin/opportunities/[id]/lead-location/route.ts":
-        "Change Lead location — scope-bearing; needs Enrollment/Lead authority",
-    "app/api/admin/opportunities/[id]/route.ts":
-        "Lead record edit — there is no generic entity WRITE route (entity/[type]/[id] exports GET only), so this is the record-edit path and needs Enrollment/Lead authority",
-    "app/api/admin/opportunity-customer-members/route.ts":
-        "Child inquiry membership — enrollment candidacy columns; crm.customers.write governs contacts and must not substitute",
-    "app/api/admin/opportunity-customer-members/[id]/route.ts":
-        "Child inquiry membership edit — same owner question",
+        "Delete Lead — Slice 2. D1 approved enrollment.record.delete and D2 made it admin-only, but it is not catalogued or enforced until its own slice certifies the 15-table deletion, the preview, and the audit trail",
 };
 
 describe("RL-24 — Opportunity runtime survives; its legacy authority does not", () => {
