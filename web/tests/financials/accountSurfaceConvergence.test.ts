@@ -575,7 +575,7 @@ describe("F11 · the three metrics are peers", () => {
         const from = card.indexOf("export function AccountSummaryPending");
         const pending = card.slice(from, card.indexOf("\nfunction ", from));
         /* The same three labels, the same two commands, the same classes — so nothing moves. */
-        for (const label of ["Current balance", "Due", "Past due", "Payment", "Add charge"]) {
+        for (const label of ["Current balance", "Due", "Past due", "Payment", "Add"]) {
             expect(pending, `${label} is present in the pending frame`).toContain(label);
         }
         expect(pending).toContain("alloy-os-fdetail__strip--peers");
@@ -917,7 +917,8 @@ describe("F20 · the two Financials headers do not drift by accident", () => {
         ]) {
             const src = code(path);
             expect(src, `${path} enters payment by the same word`).toMatch(/>\s*Payment\s*</);
-            expect(src, `${path} offers Add charge as its peer`).toMatch(/>\s*Add charge\s*</);
+            /* `Add`, not `Add charge`: one command carries both modes, so the label names the act. */
+            expect(src, `${path} offers Add as its peer`).toMatch(/>\s*Add\s*</);
         }
     });
 });
@@ -1075,5 +1076,177 @@ describe("F24 · a host without a projection still gets an account", () => {
          */
         const adapter = code("app/adminV2/financials/FinancialsAccountDetail.tsx");
         expect(adapter, "the adapter does not fabricate a projection").not.toContain("operationalProjection");
+    });
+});
+
+describe("F25 · Details is one surface, committed when it is asked for", () => {
+    /*
+     * ── THE DEFECT ────────────────────────────────────────────────────────────────────────────
+     *
+     * Opening Details produced four surfaces in a row: the compact card, a pending card, a second
+     * card at a different span, then the hydrated detail. The cause was that the Details tree was
+     * guarded on `vm && reconciliation`, so a deep read in flight fell THROUGH it into the generic
+     * card at the bottom of the component — which renders a different anatomy, at `gridSpan="row"`
+     * precisely because `expanded` is true.
+     *
+     * The lock is on the branch, not on the comment explaining it: there must be a Details branch
+     * that fires when the data is NOT ready, and it must render the detail card rather than
+     * anything else.
+     */
+    it("renders the Details anatomy before its figures arrive", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card, "a Details branch exists for the state where the read has not landed").toMatch(
+            /overlay === "detail" && \(!vm \|\| !reconciliation\)/,
+        );
+        /* And what it renders is the detail card, in its hydrating frame — not a second anatomy. */
+        expect(card).toMatch(/<FinancialsDetailCard hydrating/);
+        /* Same container and same overlay identity, so the surface is not replaced when data lands. */
+        expect(card).toMatch(/data-financials-hydrating="true"/);
+    });
+
+    it("states no figure it has not read", () => {
+        /*
+         * `$0.00` from a loading state is a financial claim about a family. The hydrating evidence
+         * must carry the em dash — the card's own vocabulary for "no answer yet" — and no money.
+         */
+        const adapter = code("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts");
+        const start = adapter.indexOf("export function hydratingFinancialsEvidence");
+        expect(start, "the hydrating frame exists").toBeGreaterThan(-1);
+        const body = adapter.slice(start);
+        expect(body, "no money literal in a frame that has read nothing").not.toMatch(/\$\d/);
+        expect(body, "and no zero standing in for an unread figure").not.toMatch(/: 0[,\s]/);
+        expect(body).toContain("—");
+    });
+
+    it("keeps the loading ledger's columns rather than claiming the family has none", () => {
+        const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
+        /* "Nothing charged yet" must not be reachable while the account is still being read. */
+        expect(detail).toMatch(/hydrating \?[\s\S]{0,400}data-financials-ledger-hydrating/);
+        /* The same head component as the hydrated ledger, so the grid does not shift underneath. */
+        const hydratingBlock = detail.slice(detail.indexOf("data-financials-ledger-hydrating"));
+        expect(hydratingBlock.slice(0, 400)).toContain("<FinancialsLedgerHead />");
+    });
+});
+
+describe("F26 · the row carries its own actions", () => {
+    /*
+     * The detail surface used to end in a footer of links — Reverse credit → Reverse credit → …
+     * → Add adjustment — one entry per transaction, stacked under a ledger that already had a row
+     * for each. An operator had to match a link to a row by reading both.
+     */
+    it("offers Reverse and Adjust on the transaction itself", () => {
+        const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
+        expect(detail, "a posted charge can be unwound from its row").toContain('data-charge-command="charge.reverse"');
+        expect(detail, "and adjusted from the same row").toContain('data-charge-command="billing.adjust_account"');
+    });
+
+    it("has no footer link farm left to fall back to", () => {
+        const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
+        expect(detail, "the stacked payment/adjustment link farm is gone").not.toContain("alloy-os-fdetail__paymentops");
+    });
+
+    it("does not hide a row action behind hover alone", () => {
+        /*
+         * Accessibility is not a hover state. Every row action is a real button with a title and an
+         * accessible name, and the CSS may reveal it on hover but must not be the only way to it —
+         * so the lock is that the actions are focusable buttons in the markup, which keyboard
+         * traversal reaches whatever the pointer does.
+         */
+        const ledger = code("components/operationalCards/FinancialsLedger.tsx");
+        expect(ledger).toMatch(/<button[\s\S]{0,300}data-financials-row-action/);
+        expect(ledger).toMatch(/aria-label=\{title\}/);
+    });
+
+    it("keeps Reverse and Adjust distinct", () => {
+        const detail = read("components/operationalCards/FinancialsDetailCard.tsx");
+        /*
+         * Read WITH comments on purpose: the two verbs mean different things to a business and the
+         * distinction has to survive in the titles an operator actually reads.
+         */
+        expect(detail).toMatch(/title="Unwind this charge[^"]*"/);
+        expect(detail).toMatch(/title="Adjust this charge[^"]*"/);
+    });
+});
+
+describe("F27 · manual entry honours the configured review boundary", () => {
+    /*
+     * ── WHAT WAS THROWN AWAY ──────────────────────────────────────────────────────────────────
+     *
+     * `resolveChargeFromTemplate` has always computed whether a charge needs review — the
+     * `posting_review` Financial Policy OR'd with the template's own `review_required` — and
+     * `writeTemplateDraftCharge` discarded it. So manual Add imposed the same ceremony on every
+     * organization, including the ones that had configured no review boundary at all. Nothing new
+     * was invented to fix it: the decision the tenant had already made is now carried to the caller.
+     */
+    it("carries the resolver's answer out of the draft writer", () => {
+        const service = code("lib/financials/chargeLifecycle/chargeLifecycleService.ts");
+        expect(service).toMatch(/reviewRequired: boolean/);
+        expect(service, "sourced from the resolver, never recomputed").toMatch(/reviewRequired: intent\.reviewRequired/);
+    });
+
+    it("posts through the canonical writer when no boundary is configured", () => {
+        const actions = code("lib/adminV2/actions/definitions/financialChargeActions.ts");
+        expect(actions).toMatch(/!written\.reviewRequired/);
+        expect(actions, "the one posting authority, not a second one").toContain("postChildcareCharge");
+        /* And it reports what it did, so the surface never has to guess. */
+        expect(actions).toMatch(/review_required/);
+        expect(actions).toMatch(/posted/);
+    });
+
+    it("writes no second charge path of its own", () => {
+        const actions = code("lib/adminV2/actions/definitions/financialChargeActions.ts");
+        expect(actions, "still exactly one draft writer").toContain("writeTemplateDraftCharge");
+        expect(actions, "and no direct insert beside it").not.toMatch(/from\("financial_charges"\)[\s\S]{0,80}\.insert/);
+    });
+});
+
+describe("F28 · one entry command, and a footer that ranks its commands", () => {
+    it("offers Payment, then Add, then Details as navigation", () => {
+        const compact = code("components/operationalCards/FinancialsCard.tsx");
+        expect(compact).toMatch(/data-financials-command="payment"/);
+        expect(compact).toMatch(/data-financials-command="add"/);
+        /* `Add charge` was the old label; the command now carries the mode, so the label is `Add`. */
+        expect(compact, "no surface still says Add charge").not.toMatch(/>Add charge</);
+    });
+
+    it("puts charge and adjustment in one shell rather than two places", () => {
+        const panel = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(panel).toMatch(/data-financials-entry-mode-tab/);
+        expect(panel).toMatch(/role="tablist"/);
+        /* One writer each, still: the mode chooses the body, not a new action. */
+        expect(panel).toContain("billing.adjust_account");
+    });
+
+    it("binds the source transaction when Adjust is raised from a row", () => {
+        const panel = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(panel).toMatch(/openAdjustForCharge/);
+        expect(panel, "the row's charge becomes the adjustment's source").toMatch(
+            /setAdjustSourceChargeId\(args\.chargeId\)/,
+        );
+        expect(panel, "and the unified command opens in Adjustment mode").toMatch(
+            /setEntryMode\("adjustment"\)[\s\S]{0,80}setOverlay\("add_charge"\)/,
+        );
+    });
+});
+
+describe("F29 · a filter that shrinks still reads", () => {
+    /*
+     * The select primitive's base rule is `width: 100%; min-width: 0`, which is right in a form
+     * column and collapses in a shrink-to-fit rail: the value ellipsises to nothing and the operator
+     * is left with a chevron, or a clipped one. The workspace header rail was repaired for exactly
+     * this; the lens rail needed the same content floor.
+     */
+    it("gives the lens rail's selects a content floor and a ceiling", () => {
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        const rule = css.slice(css.indexOf(".alloy-os-fdetail__lensfilters .alloy-select"));
+        expect(rule.slice(0, 200), "the rail's selects size to their content").toMatch(/width:\s*auto/);
+        expect(rule.slice(0, 200), "with a floor wide enough for the ordinary labels").toMatch(/min-width:\s*[\d.]+rem/);
+        expect(rule.slice(0, 200), "and a ceiling so one label cannot eat the bar").toMatch(/max-width:\s*[\d.]+rem/);
+    });
+
+    it("keeps one owner for the property", () => {
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        const shrink = css.slice(css.indexOf(".alloy-os-fdetail__lensfilters > *"));
+        expect(shrink.slice(0, 120), "the shrink rule no longer sets a width floor too").not.toMatch(/min-width/);
     });
 });

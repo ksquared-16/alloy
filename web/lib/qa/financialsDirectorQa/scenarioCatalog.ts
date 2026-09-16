@@ -35,7 +35,7 @@
  * and this must be bumped whenever a scenario's meaning changes. Adding a scenario counts; fixing a
  * typo does not.
  */
-export const CATALOG_VERSION = "2026-09-16.2";
+export const CATALOG_VERSION = "2026-09-16.3";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -136,7 +136,9 @@ export const MONEY_INVARIANTS = Object.freeze({
     GRAIN_BEFORE_MISMATCH: "Cross-surface comparisons only mean something at equivalent scope and period. A legitimate grain difference is explained, not filed as a defect.",
     FAILED_READ_IS_NOT_ZERO: "A read that failed must never render as a valid zero balance. Not knowing and owing nothing are different answers.",
     BILLING_PERIOD_IS_DERIVED: "A billing period is DERIVED from the date a charge is billable on — `billable_on`, then `occurs_on`, `service_date`, `created_at`. There is no billing-period table and no billing-period setting: the period is a consequence of the charge, and a row with no usable date is reported as unplaced rather than swept into the current month.",
-    ACCOUNTING_PERIOD_IS_ATTRIBUTED_AT_WRITE: "A journal entry's accounting period is decided by the database when the entry is written, against the configured accounting calendar, and a closed period refuses the write. Nothing downstream may re-decide it, and no screen may imply the period can be changed after the fact.",
+    ACCOUNTING_PERIOD_IS_ATTRIBUTED_AT_WRITE: "A journal entry's accounting period is decided by the database when the entry is written, against the configured accounting calendar. Nothing downstream may re-decide it, and no screen may imply the period can be changed after the fact. A CLOSED period does not refuse the entry: it DEFERS it to the earliest later open period and records the date it was deferred from, so the work is never lost and the closed books are never reopened. The write is refused only when there is no later open period to carry it \u2014 a calendar that has run out, not a closed month.",
+    REVIEW_IS_CONFIGURED_NOT_ASSUMED: "Whether a new charge waits for review is the tenant's configured answer \u2014 the posting_review Financial Policy, OR a charge template that marks itself review_required \u2014 not a property of having used a manual command. An organization that has configured no review boundary must not be made to confirm the same intent twice.",
+    POSTED_IS_NOT_PERIOD_CLOSED: "Posting makes an obligation real. Closing an accounting period ends bookkeeping for a span of time. A posted charge is not a closed period, a closed period posts nothing, and neither word may be used for the other.",
 });
 
 const S = (s: Scenario) => s;
@@ -156,23 +158,47 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         expectChanges: [],
         expectUnchanged: ["The household name and its figures survive a reload."],
         invariant: MONEY_INVARIANTS.FAILED_READ_IS_NOT_ZERO,
-        failSymptoms: ["The words No financial record.", "A stuck Financial account unavailable.", "A blank pane.", "Add charge missing on an account that has no activity."],
+        failSymptoms: ["The words No financial record.", "A stuck Financial account unavailable.", "A blank pane.", "Add missing on an account that has no activity."],
     }),
     S({
-        key: "add_charge_draft",
+        /*
+         * KEY CHANGED DELIBERATELY. The old key `add_charge_draft` asserted that Add always creates
+         * a draft. That is no longer the product's claim, and a prior PASS against the old key is
+         * not evidence for the new one, so the earlier result does not carry over.
+         */
+        key: "add_charge_honours_review_boundary",
         order: 2,
-        title: "Add Charge creates a draft",
+        title: "Add puts the charge where the configured review boundary says",
         disposition: "HUMAN_WALKTHROUGH",
-        purpose: "Raise a new obligation and watch it arrive as a draft rather than as money owed.",
+        purpose: "Raise a new obligation and watch it land where this organization's configuration says it should.",
         whyItMatters:
-            "Billing someone is a two-step decision on purpose. Creating the charge and committing to it are separate acts, so a mistake can be caught before a family is ever asked for the money.",
+            "Review before billing is a real business control and some organizations run it. It is CONFIGURED \u2014 the posting_review Financial Policy, or a charge template that marks itself review_required \u2014 and where it is configured a new charge waits to be reviewed. Where it is NOT configured, an operator who chose the charge, the child, the amount and the date has already made the decision, and asking them to confirm that same intent again in another tab is ceremony rather than control.",
         requires: [{ kind: "account_state", check: "is_financially_addressable", describe: "the household can be billed" }],
-        navigate: ["From the account pane, find Add charge →."],
-        doThis: ["Click Add charge →.", "Choose a charge type from the menu.", "Read the preview.", "Click Add charge to confirm.", "Open the Charges tab and look at Awaiting posting."],
-        expectChanges: ["The new charge appears in Awaiting posting."],
-        expectUnchanged: ["Everything the account says is owed."],
-        invariant: MONEY_INVARIANTS.DRAFT_IS_NOT_OWED,
-        failSymptoms: ["The preview claims the balance has already changed.", "The draft never appears.", "Being refused for a date on an event-billed charge is CORRECT, not a defect."],
+        navigate: ["Note what the account says is owed.", "From the account pane, find Add."],
+        doThis: [
+            "Click Add.",
+            "Leave the mode on Charge.",
+            "Choose a charge type from the menu.",
+            "Read the preview.",
+            "Confirm.",
+            "Open the Charges tab and look at Awaiting posting.",
+        ],
+        expectChanges: [
+            "WITH a review boundary configured: the charge appears in Awaiting posting and what is owed does not move.",
+            "WITHOUT one: the charge is posted, and what is owed rises by exactly the charge.",
+        ],
+        expectUnchanged: [
+            "Payments received.",
+            "The named responsible adult.",
+            "Whichever of the two above did not apply \u2014 a charge cannot both wait for review and be owed.",
+        ],
+        invariant: MONEY_INVARIANTS.REVIEW_IS_CONFIGURED_NOT_ASSUMED,
+        failSymptoms: [
+            "A draft on an organization that configured no review boundary \u2014 the defect this scenario exists to catch.",
+            "A posted charge on an organization that DID configure one.",
+            "The preview claiming the balance has already changed before you confirm.",
+            "Being refused for a date on an event-billed charge is CORRECT, not a defect.",
+        ],
     }),
     S({
         key: "draft_moves_nothing",
@@ -181,8 +207,8 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Confirm from the totals, not from the wording, that drafting moved no money.",
         whyItMatters:
-            "This is the claim the preview makes to the operator. If the totals disagree with it, the product is telling an operator one thing and doing another — which is worse than either being wrong alone.",
-        requires: [{ kind: "account_state", check: "has_draft", describe: "a draft charge exists to inspect" }],
+            "This is the claim the preview makes to the operator. If the totals disagree with it, the product is telling an operator one thing and doing another — which is worse than either being wrong alone. The law is unchanged by the review decision: a draft is still not owed. What changed is how a draft ARRIVES — from a generated or tuition run, or from a manual Add on an organization that configured a review boundary. Where no boundary is configured there is no draft to inspect, the precondition is unmet, and this scenario is not runnable. That is the correct outcome, not a skipped test.",
+        requires: [{ kind: "account_state", check: "has_draft", describe: "a draft charge exists to inspect — generated, or manual under a configured review boundary" }],
         navigate: ["Return to the account pane."],
         doThis: ["Compare what is owed with the figure you noted before drafting."],
         expectChanges: [],
@@ -197,8 +223,8 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Commit the draft and watch the obligation appear, once and for the right amount.",
         whyItMatters:
-            "Posting is the moment a family genuinely owes money. It must move the balance by exactly the charge and never by a penny more, and it must happen once.",
-        requires: [{ kind: "account_state", check: "has_draft", describe: "a draft to post" }],
+            "Posting is the moment a family genuinely owes money. It must move the balance by exactly the charge and never by a penny more, and it must happen once. Posting is also the ONLY authoritative money write, whoever asks for it: the review boundary decides whether an operator is asked to press this a second time, never whether posting is what makes the obligation real.",
+        requires: [{ kind: "account_state", check: "has_draft", describe: "a draft to post — generated, or manual under a configured review boundary" }],
         navigate: ["Charges tab → Awaiting posting → the draft you created."],
         doThis: ["Post the draft.", "Return to the account."],
         expectChanges: ["The charge leaves Awaiting posting.", "It appears as posted.", "Gross and what is owed each rise by exactly the charge amount."],
@@ -295,7 +321,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "A credit is a financial correction someone decided to make. It must say which obligation it applies to, and like a charge it must not take effect until it is posted.",
         requires: [{ kind: "account_state", check: "has_obligation_with_room_to_reduce", describe: "an obligation that still has something left to reduce" }],
-        navigate: ["From the account pane, click Add adjustment →."],
+        navigate: ["From the account pane, click Add.", "Switch the mode to Adjustment."],
         doThis: ["Against charge → choose the obligation.", "Type → Credit — lowers what the family owes.", "Enter Amount, Reason and Effective date.", "Confirm."],
         expectChanges: ["The adjustment is listed, reading Recorded — lowers what is owed once posted."],
         expectUnchanged: ["What is owed."],
@@ -327,7 +353,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "An obligation reduced past zero would mean the business owes the family money it never received. The floor is what keeps a credit from silently becoming a debt.",
         requires: [{ kind: "account_state", check: "has_posted_reduction", describe: "an obligation already reduced to nothing" }],
-        navigate: ["Add adjustment → against the obligation you just reduced to zero."],
+        navigate: ["Add → Adjustment, against the obligation you just reduced to zero."],
         doThis: ["Attempt a further credit of one cent.", "Read the refusal.", "Re-read the account."],
         expectChanges: [],
         expectUnchanged: ["The obligation stays at zero.", "The account position is untouched."],
@@ -586,7 +612,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "A discount comes from how the business prices things — a sibling rate, a staff rate, a promotion someone configured. An adjustment is a human deciding to correct one family's bill. Confusing them makes pricing policy look like a favour, and a favour look like policy.",
         requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "an obligation that can carry a reduction" }],
-        navigate: ["Look at where discounts are authored in the organization's financial configuration, then at Add adjustment → on the account."],
+        navigate: ["Look at where discounts are authored in the organization's financial configuration, then at Add → Adjustment on the account."],
         doThis: ["Identify a reduction that came from authored pricing.", "Identify a reduction that a person recorded by hand.", "Note how each is labelled on the account."],
         expectChanges: [],
         expectUnchanged: ["The two are distinguishable on the account without reading code."],

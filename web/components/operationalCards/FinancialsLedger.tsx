@@ -71,6 +71,41 @@ export type FinancialsLedgerRowView = {
     title?: string;
 };
 
+/**
+ * A TRANSACTION'S OWN COMMAND, on the transaction.
+ *
+ * These were footer links: "Reverse Credit →" repeated once per credit, "Move payment →" once per
+ * allocation, and an operator could not tell which row any of them acted on except by matching an
+ * amount by eye. A command that belongs to a row belongs ON the row.
+ *
+ * A real button, always in the DOM and always reachable by keyboard — never a hover-only affordance,
+ * which is invisible to a keyboard and to a touch screen and is exactly how a command becomes
+ * unreachable for the operators least able to work around it. It carries its own accessible name
+ * through `title`, because "Reverse" alone does not say what it reverses.
+ */
+export function RowAction({
+    label,
+    title,
+    onClick,
+}: {
+    label: string;
+    title: string;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            className="alloy-os-fdetail__rowaction"
+            data-financials-row-action={label.toLowerCase()}
+            title={title}
+            aria-label={title}
+            onClick={onClick}
+        >
+            {label}
+        </button>
+    );
+}
+
 /** The column vocabulary, defined once so no surface can invent a seventh heading. */
 export function FinancialsLedgerHead() {
     return (

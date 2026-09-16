@@ -198,7 +198,7 @@ export default function FinancialsCard({
                             {onPayNow ? (
                                 <FooterAction onClick={onPayNow}>Payment →</FooterAction>
                             ) : null}
-                            <FooterAction onClick={onAddCharge}>Add charge →</FooterAction>
+                            <FooterAction onClick={onAddCharge}>Add →</FooterAction>
                             {/* Offered only where there is somewhere to drill to. In Financials →
                                 Accounts the account's own body is already open beneath this. */}
                             {onDetails ? <FooterAction onClick={onDetails}>Details →</FooterAction> : null}
@@ -376,8 +376,13 @@ function FinancialsAccountSummaryCard({
                         <Action primary onClick={onPayNow} data-financials-command="payment">
                             Payment
                         </Action>
-                        <Action onClick={onAddCharge} data-financials-command="add_charge">
-                            Add charge
+                        {/*
+                         * ONE ENTRY, BOTH OBJECTS. A charge and an adjustment stay different
+                         * financial objects with different writers and different permissions; what
+                         * they stopped being is two unrelated PLACES. The command carries the mode.
+                         */}
+                        <Action onClick={onAddCharge} data-financials-command="add">
+                            Add
                         </Action>
                     </div>
                 </div>
@@ -430,8 +435,8 @@ export function AccountSummaryPending() {
                 <Action primary disabled title="Reading the account" data-financials-command="payment">
                     Payment
                 </Action>
-                <Action disabled title="Reading the account" data-financials-command="add_charge">
-                    Add charge
+                <Action disabled title="Reading the account" data-financials-command="add">
+                    Add
                 </Action>
             </div>
         </div>
@@ -484,19 +489,31 @@ function FinancialsCompactCard({
                 gridSpan={1}
                 data-universal-card-key="financials"
                 footerAction={
-                    <div className="alloy-os-billing__footer">
-                        {/*
-                            TAKING MONEY IS A FOOTER INTENT WHEN NOTHING IS OVERDUE.
-                            `Pay now` above answers past due and only past due, so an account that
-                            simply owes something current had no way into the settle operation at
-                            all — the rails existed, the panel existed, and no representation an
-                            operator could open offered a way in. Supplied by the host or absent.
-                        */}
-                        {onPayNow ? (
-                            <FooterAction onClick={onPayNow}>Payment →</FooterAction>
-                        ) : null}
-                        <FooterAction onClick={onAddCharge}>Add charge →</FooterAction>
-                        {/* Offered only where there is somewhere to drill to. */}
+                    /*
+                     * ── THREE EQUAL LINKS WERE NOT A HIERARCHY ───────────────────────────────
+                     *
+                     * "Payment → Add charge → Details →" gave one row of the card to three
+                     * arrows of identical weight, and two of them are not the same KIND of thing:
+                     * Payment and Add mutate money, Details navigates. An operator scanning a
+                     * compact card could not tell the primary act from the way out.
+                     *
+                     * Primary Payment, secondary Add, and Details as the quiet way out — which is
+                     * also what lets the row sit on ONE line instead of wrapping, and is most of
+                     * the height this card gives back.
+                     */
+                    <div className="alloy-os-billing__footer alloy-os-billing__footer--commands">
+                        <span className="alloy-os-billing__footer-commands">
+                            {onPayNow ? (
+                                <Action primary onClick={onPayNow} data-financials-command="payment">
+                                    Payment
+                                </Action>
+                            ) : null}
+                            {/* ONE entry for both financial objects — see the note on the command. */}
+                            <Action onClick={onAddCharge} data-financials-command="add">
+                                Add
+                            </Action>
+                        </span>
+                        {/* Navigation, not a mutation, and dressed as navigation. */}
                         {onDetails ? <FooterAction onClick={onDetails}>Details →</FooterAction> : null}
                     </div>
                 }

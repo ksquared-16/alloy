@@ -529,3 +529,58 @@ export function adaptAddChargeSpecimen(input: {
         previewAfter: money(input.balanceCents, input.currency),
     };
 }
+
+/**
+ * ── THE DETAILS ANATOMY BEFORE ITS DATA ARRIVES ─────────────────────────────────────────────────
+ *
+ * Opening Details used to produce FOUR surfaces in a row: the compact card, then a pending card,
+ * then a second card at a different size, then the hydrated detail. The cause was structural, not
+ * cosmetic — the Details tree was guarded on `vm && reconciliation`, so while the deep read was in
+ * flight the component fell THROUGH the Details branch into the generic card below it and rendered
+ * a different anatomy at a different span. The operator watched the surface be rebuilt underneath
+ * them, twice, after an interaction they had already committed to.
+ *
+ * The answer is not a spinner and not a delay. It is that the SHAPE of Details is known the instant
+ * the operator asks for it — the metric row, the two commands, the lenses, the ledger's eight
+ * columns — while only the VALUES are still being read. So this returns that shape with every
+ * figure as an em dash, which is the card's own vocabulary for "no answer yet" and is the one thing
+ * a placeholder must never be mistaken for: a zero. `$0.00` here would be a financial claim about
+ * a family, made by a loading state.
+ *
+ * Nothing about it is a second model. It is the same `FinancialsEvidence` the adapter returns, with
+ * no rows, no payers and no payments, so the card cannot render a fact nobody has read yet.
+ */
+export function hydratingFinancialsEvidence(): FinancialsEvidence {
+    const dash = "—";
+    return {
+        caseLabel: "",
+        compact: { dueLine: dash, lines: [], paymentLine: null, paymentHealthy: false },
+        subjects: [],
+        period: {
+            label: dash,
+            charges: [],
+            reductions: [],
+            funding: [],
+            familyResponsibility: dash,
+            responsibility: null,
+            expectedFunding: [],
+            collectibleNow: null,
+            paymentsReceived: dash,
+            currentBalance: dash,
+            dueNow: dash,
+            dueLabel: "",
+        },
+        /*
+         * NOT `null`. Null is the card's answer for "nothing is past due", which is a fact about
+         * the family that nobody has established yet. The hydrating frame says it does not know.
+         */
+        pastDue: null,
+        ledger: [],
+        payers: [],
+        payment: { autopayLabel: null, autopayHealthy: false, nextChargeLabel: null },
+        historyLine: "",
+        upcoming: [],
+        payments: [],
+        adjustments: [],
+    };
+}
