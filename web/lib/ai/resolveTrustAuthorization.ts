@@ -134,6 +134,18 @@ const DESCRIPTORS: Readonly<Record<TrustAuthorizationConsumerKey, TrustAuthoriza
     },
 };
 
+/**
+ * The capability this seam enforces, named as a LITERAL so the route capability inventory can bind a
+ * declaration to the module that actually does the enforcing (its third join reads executable lines,
+ * and an imported constant is not one).
+ *
+ * The type annotation is the point: it is the canonical constant's own type, so if this literal and
+ * `AI_ENRICHMENT_USE_PERMISSION_KEY` ever drift apart the compiler fails here rather than letting the
+ * inventory keep citing a key this seam no longer requires. A duplicated string would have been a
+ * second source of truth; this is the same one, restated where the checker can see it.
+ */
+export const TRUST_SEAM_ENFORCED_PERMISSION_KEY: typeof AI_ENRICHMENT_USE_PERMISSION_KEY = "ai.enrichment.use";
+
 export function describeTrustAuthorizationConsumer(key: TrustAuthorizationConsumerKey) {
     return DESCRIPTORS[key];
 }
