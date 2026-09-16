@@ -1,3 +1,4 @@
+import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import type { FamilyCommunicationWorkspacePreviewVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
@@ -5,6 +6,7 @@ import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opport
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
+import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import type { OperationalSummaryRiskHint } from "@/lib/ai/enrichmentContracts";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import type {
@@ -163,6 +165,13 @@ export type OpportunityDrawerViewModel = {
         /** Published builder stage config for Current Work (operating plan + catalog + field rules). */
         published_stage_inputs?: PublishedStageInputsForCurrentWork | null;
         /**
+         * The server's operational projection for this subject, settled frame.
+         *
+         * The same contract the provisioning answer carries at commit, produced by the same server
+         * chokepoint — so the browser switching transport frames cannot change projection authority.
+         */
+        operational_projection?: FocusPanelOperationalProjection | null;
+        /**
          * Deferred-load state for the Current Work region. When absent (legacy / full compose that
          * resolved inline) consumers fall back to `stage_work_runtime` presence. When `pending` the
          * Current Work region shows a neutral loading treatment, NOT the empty state.
@@ -246,7 +255,23 @@ export type OpportunityDrawerViewModelSkipped = {
 };
 
 export type OpportunityDrawerViewModelResult =
-    | { ok: true; viewModel: OpportunityDrawerViewModel }
+    | {
+          ok: true;
+          viewModel: OpportunityDrawerViewModel;
+          /**
+           * The operational context the projection was built from, handed to the CALLER.
+           *
+           * The settled frame's card producers need it, and they need `buildAttendanceCardVM`, which
+           * is `server-only`. The composer cannot import them: a client component reaches it through
+           * the `lib/layout/runtime` barrel, so that edge puts a `server-only` module in the browser
+           * graph and the production build fails. Passing the context out instead lets the App Route
+           * — which no client component can import — run the producers from the SAME context, so the
+           * two frames still cannot disagree about the subject.
+           *
+           * A type, not an edge: `OperationalContext` is already browser-importable.
+           */
+          operationalContext?: OperationalContext | null;
+      }
     | { ok: false; skipped: OpportunityDrawerViewModelSkipped };
 
 /** Canonical operational subject VM result alias (Phase C). */

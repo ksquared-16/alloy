@@ -98,28 +98,100 @@ describe("the platform owns the expanded widths — no card-specific modal", () 
 });
 
 describe("card height flows from content, never from the box we drew", () => {
-    it("imposes no height of any kind on a placed card", () => {
+    /*
+     * THE GUARD MOVED; THE HAZARD DID NOT.
+     *
+     * This used to assert that a placed card carried no height at all, because a `min-height`
+     * here was read straight back by the measurement and became the card's height forever. The
+     * composition now assigns a band height — which is the only way cards sharing an authored
+     * band can be drawn the same height, since the canvas positions every area absolutely and
+     * CSS `align-items` is inert on absolutely positioned children.
+     *
+     * So the assertion changes shape but guards the same thing: the assignment is applied as an
+     * exact `height` (never a `min-height`, which could only ratchet upward), and the
+     * measurement neutralises it before reading. Both halves are asserted — either one alone
+     * brings the growth loop back.
+     */
+    it("assigns an exact band height, never a floor that could only ratchet up", () => {
         const absoluteBranch = grid.slice(grid.indexOf(": boxOf"), grid.indexOf("// First paint"));
+        expect(absoluteBranch).toContain("height: `${boxOf.height}px`");
         expect(absoluteBranch).not.toContain("minHeight");
-        expect(absoluteBranch).not.toContain("height:");
     });
 
-    it("measures the wrapper, which nothing sizes, rather than a stretched child", () => {
-        expect(hook).toContain("const measured = el.getBoundingClientRect().height;");
-        expect(hook).not.toContain("firstElementChild as HTMLElement).offsetHeight");
+    it("neutralises the assigned height before measuring, so it cannot return as intrinsic", () => {
+        // The other half of the guard above. Without this the card grows on every frame.
+        const at = hook.indexOf("const wrapper = el.parentElement;");
+        expect(at, "the measurement must reach the wrapper that carries the assignment").toBeGreaterThan(-1);
+        const block = hook.slice(at, at + 420);
+        expect(block).toContain('wrapper.style.height = "auto"');
+        expect(block).toContain("const measured = el.getBoundingClientRect().height;");
+        expect(block, "the assignment must be restored in the same synchronous block").toContain(
+            "wrapper.style.height = assigned;",
+        );
     });
 
-    it("observes the wrapper, so a card that swaps its subtree on load stays measured", () => {
+    it("measures the INTRINSIC NODE, which the layout never sizes, not the wrapper it stretches", () => {
+        // PR #989 measured the wrapper and pinned it in the same breath, so a card whose
+        // content outgrew its band could not report it and the row beneath was drawn over it.
+        const grid = readSrc("components/admin/focusPanel/FocusPanelCardGrid.tsx");
+        expect(grid).toContain('className="alloy-os-fp-card-intrinsic"');
+        // The ref — and therefore the measurement and both observers — is on that node.
+        const at = grid.indexOf('className="alloy-os-fp-card-intrinsic"');
+        expect(grid.slice(at - 200, at)).toContain("stack.registerCard(area.card)");
+        // And the grid renders it, so it outlives any subtree the card swaps in.
+        expect(grid.slice(at, at + 400)).toContain("renderCellBox(area.card");
+    });
+
+    it("lets content outgrow its band, which is what stops the overlap", () => {
+        // A floor can report that it was exceeded; a fixed height cannot.
+        const at = css.indexOf(".alloy-os-fp-card-intrinsic {");
+        expect(at).toBeGreaterThan(-1);
+        const rule = css.slice(at, css.indexOf("}", at));
+        expect(rule).toContain("min-height: 100%");
+        expect(rule).not.toMatch(/\n\s*height:/);
+    });
+
+    it("watches content for the shrink a ResizeObserver cannot see", () => {
+        expect(hook).toContain("new MutationObserver");
+        const at = hook.indexOf("ensureContentObserver()?.observe(node,");
+        expect(at, "the content observer must watch the intrinsic node").toBeGreaterThan(-1);
+        const call = hook.slice(at, at + 200);
+        expect(call).toContain("childList: true");
+        expect(call).toContain("subtree: true");
+        // Never attributes: the engine writes inline style on the wrapper, and watching
+        // attributes here would let the measurement re-trigger itself.
+        expect(call).not.toContain("attributes: true");
+    });
+
+    it("observes a node the GRID renders, so a card that swaps its subtree stays measured", () => {
         const from = hook.indexOf("const registerCard");
         const register = hook.slice(from, hook.indexOf("useLayoutEffect", from));
         expect(from).toBeGreaterThan(-1);
         expect(register).toContain("ro.observe(node)");
-        // The observed target is the wrapper — never whichever child happened to exist at mount.
-        expect(register).not.toMatch(/ro\.observe\((?!node\)).*firstElementChild/);
+        /*
+         * The node handed to this ref is `.alloy-os-fp-card-intrinsic`, which the grid owns.
+         * Never `firstElementChild` — that was whichever element the card happened to have
+         * rendered at mount, and a card loading asynchronously replaced it with one nobody
+         * was watching. Owning the node keeps that fix while moving off the wrapper, whose
+         * box is the layout's own output.
+         */
+        const code = register
+            .split("\n")
+            .filter((line) => {
+                const t = line.trimStart();
+                return !t.startsWith("*") && !t.startsWith("/*") && !t.startsWith("//");
+            })
+            .join("\n");
+        expect(code).not.toContain("firstElementChild");
     });
 
-    it("stops the card stretching to any height a wrapper might carry", () => {
+    it("lets the card fill the band the composition assigned it", () => {
+        /*
+         * The inverse of what this asserted before, and safe for one reason only: the wrapper's
+         * box is no longer the measurement. A stretched child was previously how the imposed
+         * height laundered itself back into the heights map.
+         */
         const at = css.indexOf(".alloy-os-fp-grid-area {");
-        expect(css.slice(at, css.indexOf("}", at))).toContain("align-items: flex-start");
+        expect(css.slice(at, css.indexOf("}", at))).toContain("align-items: stretch");
     });
 });

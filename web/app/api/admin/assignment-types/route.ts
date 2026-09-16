@@ -8,6 +8,7 @@ import {
     type AssignmentTypeWriteInput,
 } from "@/lib/operationalAssignments/assignmentTypeService";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import { requireOrganizationVocabularyCapability } from "@/lib/access/organizationVocabularyAuthority";
 
 function parseWriteInput(body: Record<string, unknown>): AssignmentTypeWriteInput {
     const subjectTypesRaw = Array.isArray(body.subjectTypes) ? body.subjectTypes : ["child"];
@@ -47,6 +48,8 @@ export async function GET() {
 export async function POST(request: Request) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const capDenied = requireOrganizationVocabularyCapability(ctx);
+    if (capDenied) return capDenied;
     const supabase = createAdminClient();
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     try {

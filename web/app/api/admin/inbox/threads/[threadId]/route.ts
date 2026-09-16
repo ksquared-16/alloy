@@ -3,7 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { setInboxThreadArchived } from "@/lib/communications/inboxThreadsService";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_SEND,
+} from "@/lib/communications/communicationsAuthority";
 
 type RouteContext = { params: Promise<{ threadId: string }> };
 
@@ -12,8 +15,8 @@ type RouteContext = { params: Promise<{ threadId: string }> };
  * Body: { "archived": true | false }
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_SEND);
+    if (!auth.ok) return auth.response;
 
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;

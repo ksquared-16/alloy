@@ -145,6 +145,17 @@ import {
 } from "@/lib/runtime/provisioning/childGrainSurfaceComposition";
 import { resolveChildGrainFocusPanelScope } from "@/lib/runtime/provisioning/childGrainScope";
 import type { ChildParticipationIdentity } from "@/lib/lifecycle/childParticipationIdentity";
+import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjection";
+/*
+ * The TYPE comes from the contract, never from the server-only implementation.
+ *
+ * `ProvisioningAnswer` is imported as a type by client components, and a type import from a
+ * `server-only` module still pulls that module into the client graph — which took the whole Focus
+ * Panel down with "Ecmascript file had an error" at `import "server-only"`. Neither typecheck graph
+ * sees this; only a real render does.
+ */
+import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
+import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
 export const PROVISIONING_ROW_PAGE_CAP = 100;
@@ -260,7 +271,20 @@ export type SubjectIdentityTruth = Record<string, unknown>;
  * RESOLVED: nothing published applies, the code default IS the composition. A null projection means
  * unresolved (read failed) — the client degrades to its own fetch, never an operational failure.
  */
-export type FocusPanelSummaryDocProjection = { doc: LayoutDoc | null };
+/**
+ * The published Summary composition the answer carries, WITH its identity.
+ *
+ * `doc` is omitted when the client stated it already holds this exact published record — see
+ * `summaryConfigHeldIds` on the request. Identity is the authoritative `entity_layouts` row
+ * (`id` + `version`), never a hash of the document and never a version on its own: two different
+ * published records can share a version number, and a scope that resolves a different record must
+ * never be served another record's document.
+ */
+export type FocusPanelSummaryDocProjection = {
+    id: string | null;
+    version: number | null;
+    doc?: LayoutDoc | null;
+};
 
 export type ProvisioningAnswer =
     | {
@@ -340,6 +364,17 @@ export type ProvisioningAnswer =
            * unresolved (degrades to the drawer-VM load; never an operational failure).
            */
           focusPanelStageWork: OpportunityStageWorkSlice | null;
+          /**
+           * THE OPERATIONAL PROJECTIONS, DECIDED HERE.
+           *
+           * Business Process and Current Work used to be projected in the browser from
+           * `focusPanelStageWork.published_stage_inputs`, which is why that ~78KB of configuration —
+           * measured byte-identical between consecutive subject selections — had to travel at all.
+           * The server runs the same canonical owners now and sends what it decided.
+           *
+           * Null when there is no operational subject to project for.
+           */
+          focusPanelOperationalProjection: FocusPanelOperationalProjection | null;
           /** A — commit-critical subject identity truth bindings, domain-declared + opaque to the platform (see {@link SubjectIdentityTruth}). */
           subjectIdentityTruth: SubjectIdentityTruth | null;
           /** A — the published Summary composition for the committed scope (see {@link FocusPanelSummaryDocProjection}). */
@@ -410,6 +445,36 @@ export type ProvisioningAnswer =
           navigationFrame: {
               lensSet: LensSetEntry[];
               activeWorkView: { id: string; label: string };
+          } | null;
+          /**
+           * THE COHORT THIS REFUSAL DID NOT INVALIDATE.
+           *
+           * `navigationFrame` above exists because "a refusal must not also remove the way out" — it
+           * carries the lens set the answer had already resolved. This is the same sentence one level
+           * deeper, and it repairs the half that was left: the lens set survived a refusal and the
+           * ROWS did not, so a subject that could not compose unmounted a queue that was never in
+           * question. Measured on Firefly: the same Work Unit and Work View answered `operational`
+           * with seven rows, and `error` with zero, on nothing but the addition of a `subject_id`.
+           *
+           * Present ONLY for refusals raised after the cohort resolved — the six subject-level sites.
+           * `null`/absent for everything before it (`unauthorized`, `work_unit_not_found`,
+           * `no_business_process`, `no_active_view`, `grain_ambiguous`, `grain_unsupported`,
+           * `records_unavailable`), where there is genuinely no cohort and inventing one would be the
+           * false affordance this field exists to prevent.
+           *
+           * The terminal stays `error`. This does not soften the refusal — the subject truly cannot
+           * compose, and the Focus Panel is the owner that says so. It only stops the refusal from
+           * being charged to the Work View.
+           */
+          queueFrame?: {
+              rows: ProvisioningRow[];
+              rowGrain: RowGrain;
+              subjectGrain: { grain: OperationalGrain; subjectType: OperationalSubjectType };
+              presentation: OperationalPresentation;
+              businessProcess: { key: string; name: string };
+              actionsProjection: WorkUnitActionsProjection;
+              /** The subject the caller named, so the queue can keep it selected while it refuses. */
+              requestedSubjectId: string | null;
           } | null;
           timings: ProvisioningTimings;
       }
@@ -508,6 +573,18 @@ export type ProvisioningRequest = {
      * still valid — its rows simply carry no avatar and present initials.
      */
     documentActor?: DocumentActor | null;
+    /**
+     * The actor's mutate access, resolved ONCE by the caller's route gate.
+     *
+     * The operational projections read `capabilities.canMutate` — an outcome cannot be completed
+     * without edit access — so the server needs the same verdict the browser used to reach. It is
+     * the gate's `hasPortalAdminMutateAccess(roleKeys)`, which is exactly what `useAdminAuth`
+     * computes client-side, and it is resolved here rather than re-derived so the two cannot drift.
+     *
+     * Optional and defaulting to `false`: a caller that cannot state the actor's access gets the
+     * read-only projection, which is the safe direction to be wrong in.
+     */
+    canMutate?: boolean;
     workUnitSlug: string;
     /** Attention is an INPUT, never derived from the route inside this resource (K1 owns intent). */
     requestedWorkViewId?: string | null;
@@ -532,6 +609,15 @@ export type ProvisioningRequest = {
     requestedSubjectEntityType?: string | null;
     /** Contextual only — the card + row inside the panel (the kernel's ASPECT). */
     requestedAspect?: { cardKey: string; itemId: string | null } | null;
+    /**
+     * S6-1 — the CLIENT states it already holds this department's published configuration.
+     *
+     * A claim, not permission: only this composer knows whether a pinned revision makes this
+     * subject's department metadata differ from the live record the client holds.
+     */
+    departmentConfigHeldIds?: readonly string[];
+    /** S5-3 — published Summary records the CLIENT states it already holds, as `id:version`. */
+    summaryConfigHeldIds?: readonly string[];
 };
 
 /**
@@ -1290,6 +1376,145 @@ export async function composeWorkUnitProvisioningAnswer(
      * This is not a weakening of the guard. An id that names no member of this lens still fails, and
      * nothing is ever substituted — the refusal below is untouched for genuine non-members.
      */
+    // The FAMILY NAMES the child page can honestly cite. `baseRows` are the in-scope opportunities the
+    // answer already fetched (for the child grain they ARE the scope), so this is a pure lookup — no
+    // extra read, and no invented name when the row carries none.
+    const familyNamesByOpportunityId = new Map<string, string | null>(
+        childRows
+            ? ((baseRows ?? []) as Array<Record<string, unknown>>).map((o) => [
+                  String(o.id),
+                  strOrNull(o.name) ?? strOrNull(o.title),
+              ])
+            : [],
+    );
+
+    /*
+     * ── THE COHORT, RESOLVED ONCE, FOR BOTH OUTCOMES ─────────────────────────────────────────────
+     *
+     * The rows this answer publishes, built in ONE place and reachable from two exits: the
+     * operational return below, and a subject-level refusal (`cohortRefusal`).
+     *
+     * This exists because `fail()` is scope-blind. Six refusal sites fire AFTER the Work Unit, the
+     * lens set and the evaluated page have all resolved, and each of them used to discard that
+     * resolved cohort — so one unconfigurable subject unmounted a seven-row queue that was never in
+     * question. The queue is not a second owner and this is not a fallback path: it is the SAME
+     * mapping, memoised, so the refusal cannot drift from the operational answer by construction.
+     *
+     * CONCURRENCY. Nothing here starts work. `enrichedPromise` (kicked off above) and
+     * `presentationPromise` are already in flight, and `focusPanelStageWorkPromise` is started
+     * BELOW every refusal site — so awaiting this on the refusal path serialises nothing on the
+     * operational path, which awaits exactly what it awaited before, in the same order.
+     */
+    let cohortRowsMemo: Promise<{
+        enriched: readonly Record<string, unknown>[];
+        rows: ProvisioningRow[];
+        presentation: OperationalPresentation;
+    }> | null = null;
+    const cohortRowsOnce = () =>
+        (cohortRowsMemo ??= (async () => {
+        const enriched = await enrichedPromise;
+        // Child rows are published from the PROVIDER's own normalization — the same rows membership was
+        // decided over — with a PI-NATIVE presentation context. Leaving `context` null was not the neutral
+        // choice it looked like: a queue row renders entirely from its context, so thirteen children
+        // rendered as thirteen raw participation UUIDs. The context carries only what a child row knows,
+        // and leaves every Settlement-owned signal null rather than borrowing the family's.
+        const stageLabelsByKey = Object.fromEntries(
+            stages.filter((s) => s.key.trim() && s.label.trim()).map((s) => [s.key.trim(), s.label.trim()]),
+        );
+        const rowsUnsorted: ProvisioningRow[] = childRows
+            ? childRows.slice(0, PROVISIONING_ROW_PAGE_CAP).map((r) => {
+                  const placed = r as ChildProvisioningRowWithPlacement;
+                  return {
+                      id: String(r.participationId ?? ""),
+                      stageKey: r.stageKey,
+                      statusKey: r.statusKey,
+                      updatedAt: r.updatedAt,
+                      title: r.title,
+                      context: childQueueRowContext({
+                          row: placed,
+                          stageLabel: (r.stageKey ? stageLabelsByKey[r.stageKey] : null) ?? r.stageKey ?? "",
+                          stageLabelsByKey,
+                          lifecycleKey: process.key,
+                          familyName: r.contextId ? familyNamesByOpportunityId.get(r.contextId) ?? null : null,
+                      }),
+                      ...(placed.placementWaitlistRow
+                          ? {
+                                _placement_waitlist_row: placed.placementWaitlistRow,
+                                placementCandidateId: placed.placementCandidateId ?? null,
+                            }
+                          : {}),
+                  };
+              })
+            : enriched.map((r) => ({
+                  id: String((r as Record<string, unknown>).id),
+                  stageKey: strOrNull((r as Record<string, unknown>).stage_key),
+                  statusKey: strOrNull((r as Record<string, unknown>).status_key),
+                  updatedAt: strOrNull((r as Record<string, unknown>).updated_at),
+                  title: strOrNull((r as Record<string, unknown>).name),
+                  context: queueRowContextOf(r as Record<string, unknown>),
+              }));
+        // Join: await the presentation branch that ran CONCURRENTLY with projection + enrichment above.
+        // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
+        const presentation = await presentationPromise;
+        timings.presentation_ms = now() - tPres;
+
+        // Published Queue Row variant groupBy + sortCriteria drive child-grain Waitlist order.
+        // Canonical config owner = the matched published variant (not a second Work View authority).
+        let rows: ProvisioningRow[] = rowsUnsorted;
+        if (childRows && rowsUnsorted.length > 0 && presentation.queue.rowVariants.length > 0) {
+            const stageKey = rowsUnsorted[0]?.stageKey ?? null;
+            const matched = resolveQueueRowVariant(presentation.queue.rowVariants, {
+                stageKey,
+                workViewId: activeView.id,
+                processKey: process.key,
+                grain: "child",
+            });
+            if (matched) {
+                const groupBy = normalizeGroupByCriteria(matched);
+                const criteria = normalizeSortCriteria(matched);
+                if (groupBy.length || criteria.length) {
+                    rows = applyQueueRowVariantGroupAndSortCriteria(
+                        rowsUnsorted as unknown as Array<Record<string, unknown>>,
+                        groupBy,
+                        criteria,
+                    ) as unknown as ProvisioningRow[];
+                }
+            }
+        }
+            return { enriched, rows, presentation };
+        })());
+
+    /*
+     * A SUBJECT-LEVEL REFUSAL THAT KEEPS ITS COHORT.
+     *
+     * Mirrors the `navigationFrame` precedent exactly: that field exists because "a refusal must not
+     * also remove the way out", and it carried the lens set through the error terminal so the
+     * operator kept an exit. It carried no rows, so the exit survived and the queue did not.
+     *
+     * `queueFrame` is that same sentence one level deeper — the resolved cohort, propagated across
+     * the error boundary. The terminal stays `error` and the message stays verbatim: the subject
+     * genuinely cannot compose, and the Focus Panel is where that is said.
+     */
+    const cohortRefusal = async (code: ProvisioningErrorCode, message: string): Promise<ProvisioningAnswer> => {
+        const { rows, presentation } = await cohortRowsOnce();
+        const actionsProjection = await actionsProjectionPromise;
+        const refused = fail(code, message, workUnit, navFrame);
+        if (refused.terminal !== "error") return refused;
+        return {
+            ...refused,
+            queueFrame: {
+                rows,
+                rowGrain: grain.grain,
+                subjectGrain,
+                presentation,
+                businessProcess: { key: process.key, name: process.name },
+                actionsProjection,
+                requestedSubjectId: req.requestedSubjectId ?? null,
+            },
+        };
+    };
+
+
     const requested = req.requestedSubjectId
         ? subjectRows.find((s) => s.entityId === req.requestedSubjectId) ??
           resolveTargetedWorkViewMember({
@@ -1310,11 +1535,9 @@ export async function composeWorkUnitProvisioningAnswer(
         // active lens, or in another work unit. It means THIS surface cannot honestly present it, which
         // is exactly what the honest terminal below already exists to say. Substituting is never the
         // truthful answer; the default subject remains reachable by asking for it without a subject id.
-        return fail(
+        return await cohortRefusal(
             "subject_unavailable",
             `the requested subject is not present in this work unit's evaluated page — refusing to substitute a different subject`,
-            workUnit,
-            navFrame,
         );
     }
     const chosen =
@@ -1322,11 +1545,9 @@ export async function composeWorkUnitProvisioningAnswer(
         resolveDefaultOperationalSubject(subjectRows, strategy, { currentUserId: req.currentUserId ?? null });
     if (!chosen) {
         // Rows exist but no subject could be chosen — honest, never a fabricated subject.
-        return fail(
+        return await cohortRefusal(
             "subject_unavailable",
             "the configured strategy resolved no subject from the evaluated page",
-            workUnit,
-            navFrame,
         );
     }
     // ── U-P5/U-O4 current business state + U-O5 truthful primary action. ──
@@ -1338,18 +1559,6 @@ export async function composeWorkUnitProvisioningAnswer(
         childSubjectRow ??
         page.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId) ??
         familyMembership.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId)!;
-
-    // The FAMILY NAMES the child page can honestly cite. `baseRows` are the in-scope opportunities the
-    // answer already fetched (for the child grain they ARE the scope), so this is a pure lookup — no
-    // extra read, and no invented name when the row carries none.
-    const familyNamesByOpportunityId = new Map<string, string | null>(
-        childRows
-            ? ((baseRows ?? []) as Array<Record<string, unknown>>).map((o) => [
-                  String(o.id),
-                  strOrNull(o.name) ?? strOrNull(o.title),
-              ])
-            : [],
-    );
 
     // Child Waitlist: attach Placement ranking (derived position / wait_since / program) onto rows.
     // Membership stays PI-owned; ranking authority is placement_candidates + overrides.
@@ -1439,7 +1648,7 @@ export async function composeWorkUnitProvisioningAnswer(
         if (!composed.ok) {
             // Same refusal the family path makes, for the same reason: a surface cannot describe a
             // position the Business Process does not define.
-            return fail("no_truthful_primary_action", composed.reason, workUnit, navFrame);
+            return await cohortRefusal("no_truthful_primary_action", composed.reason);
         }
         childComposition = composed.composition;
         stage = childComposition.stage;
@@ -1463,11 +1672,9 @@ export async function composeWorkUnitProvisioningAnswer(
         const missionStageKey = mission.primaryMissionStageKey;
         const found = stages.find((s) => s.key === missionStageKey) ?? null;
         if (!found || !missionStageKey) {
-            return fail(
+            return await cohortRefusal(
                 "no_truthful_primary_action",
                 `subject holds no resolvable Mission stage (context="${contextStageKey}", epp=[${mission.missionStageKeys.join(",")}])`,
-                workUnit,
-                navFrame,
             );
         }
         // ── ONE definition of "can a family surface be entered here" ──
@@ -1483,7 +1690,7 @@ export async function composeWorkUnitProvisioningAnswer(
             missionDerivedFromEffectiveParticipants: mission.derivedFromEffectiveParticipants,
         });
         if (!operability.ok) {
-            return fail("no_truthful_primary_action", operability.reason, workUnit, navFrame);
+            return await cohortRefusal("no_truthful_primary_action", operability.reason);
         }
 
         const foundPlan = found.stage_operating_plan_v1 ?? null;
@@ -1492,11 +1699,9 @@ export async function composeWorkUnitProvisioningAnswer(
         if (!foundPlan || !template) {
             // Unreachable — the operability rule above already refused exactly this case. Kept as a
             // type narrowing so it can never silently degrade into a different answer.
-            return fail(
+            return await cohortRefusal(
                 "no_truthful_primary_action",
                 `stage "${found.key}" offers no work templates — the answer will not claim operational on identity alone`,
-                workUnit,
-                navFrame,
             );
         }
         stage = found;
@@ -1544,6 +1749,8 @@ export async function composeWorkUnitProvisioningAnswer(
                   stageKey: stage.key,
                   stageLabel: stage.label,
                   departmentMetadata: deptRow?.metadata,
+                  clientHoldsLiveDepartmentConfig:
+                      (req.departmentConfigHeldIds ?? []).includes(String(wuRow.department_id ?? "")),
                   customerMemberId: childSubjectRow.subjectId,
                   processInstanceId: childSubjectRow.participationId,
                   opportunityCustomerMemberId: childSubjectRow.legacyOcmId,
@@ -1557,78 +1764,12 @@ export async function composeWorkUnitProvisioningAnswer(
               stageKey: stage.key,
               stageLabel: stage.label,
               departmentMetadata: deptRow?.metadata,
+              clientHoldsLiveDepartmentConfig:
+                      (req.departmentConfigHeldIds ?? []).includes(String(wuRow.department_id ?? "")),
           }).catch(() => null /* stage-work is additive to the commit — never fail the operational answer on it */);
 
     // ── JOIN: enrichment (queue rows) + presentation + actions + stage-work, all kicked off above. ──
-    const enriched = await enrichedPromise;
-    // Child rows are published from the PROVIDER's own normalization — the same rows membership was
-    // decided over — with a PI-NATIVE presentation context. Leaving `context` null was not the neutral
-    // choice it looked like: a queue row renders entirely from its context, so thirteen children
-    // rendered as thirteen raw participation UUIDs. The context carries only what a child row knows,
-    // and leaves every Settlement-owned signal null rather than borrowing the family's.
-    const stageLabelsByKey = Object.fromEntries(
-        stages.filter((s) => s.key.trim() && s.label.trim()).map((s) => [s.key.trim(), s.label.trim()]),
-    );
-    const rowsUnsorted: ProvisioningRow[] = childRows
-        ? childRows.slice(0, PROVISIONING_ROW_PAGE_CAP).map((r) => {
-              const placed = r as ChildProvisioningRowWithPlacement;
-              return {
-                  id: String(r.participationId ?? ""),
-                  stageKey: r.stageKey,
-                  statusKey: r.statusKey,
-                  updatedAt: r.updatedAt,
-                  title: r.title,
-                  context: childQueueRowContext({
-                      row: placed,
-                      stageLabel: (r.stageKey ? stageLabelsByKey[r.stageKey] : null) ?? r.stageKey ?? "",
-                      stageLabelsByKey,
-                      lifecycleKey: process.key,
-                      familyName: r.contextId ? familyNamesByOpportunityId.get(r.contextId) ?? null : null,
-                  }),
-                  ...(placed.placementWaitlistRow
-                      ? {
-                            _placement_waitlist_row: placed.placementWaitlistRow,
-                            placementCandidateId: placed.placementCandidateId ?? null,
-                        }
-                      : {}),
-              };
-          })
-        : enriched.map((r) => ({
-              id: String((r as Record<string, unknown>).id),
-              stageKey: strOrNull((r as Record<string, unknown>).stage_key),
-              statusKey: strOrNull((r as Record<string, unknown>).status_key),
-              updatedAt: strOrNull((r as Record<string, unknown>).updated_at),
-              title: strOrNull((r as Record<string, unknown>).name),
-              context: queueRowContextOf(r as Record<string, unknown>),
-          }));
-    // Join: await the presentation branch that ran CONCURRENTLY with projection + enrichment above.
-    // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
-    const presentation = await presentationPromise;
-    timings.presentation_ms = now() - tPres;
-
-    // Published Queue Row variant groupBy + sortCriteria drive child-grain Waitlist order.
-    // Canonical config owner = the matched published variant (not a second Work View authority).
-    let rows: ProvisioningRow[] = rowsUnsorted;
-    if (childRows && rowsUnsorted.length > 0 && presentation.queue.rowVariants.length > 0) {
-        const stageKey = rowsUnsorted[0]?.stageKey ?? null;
-        const matched = resolveQueueRowVariant(presentation.queue.rowVariants, {
-            stageKey,
-            workViewId: activeView.id,
-            processKey: process.key,
-            grain: "child",
-        });
-        if (matched) {
-            const groupBy = normalizeGroupByCriteria(matched);
-            const criteria = normalizeSortCriteria(matched);
-            if (groupBy.length || criteria.length) {
-                rows = applyQueueRowVariantGroupAndSortCriteria(
-                    rowsUnsorted as unknown as Array<Record<string, unknown>>,
-                    groupBy,
-                    criteria,
-                ) as unknown as ProvisioningRow[];
-            }
-        }
-    }
+    const { enriched, rows, presentation } = await cohortRowsOnce();
     // B: the actions projection ran concurrently above — join it here (no serial latency added).
     const actionsProjection = await actionsProjectionPromise;
     let focusPanelStageWork = await focusPanelStageWorkPromise;
@@ -1828,15 +1969,68 @@ export async function composeWorkUnitProvisioningAnswer(
     // client doc provider sends (`workViewId` + committed stage; Business Process / status stay
     // wildcard), so the carried doc and any later client re-fetch resolve identically.
     const summaryLayoutRows = await focusPanelSummaryRowsPromise;
+    const summaryRecord = summaryLayoutRows
+        ? resolvePublishedFocusPanelSummaryRecord(summaryLayoutRows, {
+              workViewId: contextFrame.workViewId,
+              stageKey: stage.key,
+          })
+        : null;
+    /*
+     * S5-3. The client may state which published Summary records it already holds; the answer drops
+     * the duplicate document only when the record IT RESOLVED for this scope is one of them.
+     *
+     * The comparison is `id:version`, and the server does it against its own resolution — a claim is
+     * never taken as permission. That is what makes scope safe without the client having to know the
+     * scope: a subject whose stage resolves a DIFFERENT published variant yields a different id, so
+     * the claim cannot match and the document is included.
+     *
+     * Unlike department metadata (S6-1) there is no pin here to refuse: the Summary resolver reads
+     * published org layouts and selects a variant, with no governing-revision overlay, so the record
+     * the client holds and the record this answer resolved are the same kind of thing.
+     */
+    const summaryHeldByClient =
+        summaryRecord != null
+        && typeof summaryRecord.version === "number"
+        && (req.summaryConfigHeldIds ?? []).includes(`${summaryRecord.id}:${summaryRecord.version}`);
     const focusPanelSummaryDoc: FocusPanelSummaryDocProjection | null = summaryLayoutRows
         ? {
-              doc:
-                  resolvePublishedFocusPanelSummaryRecord(summaryLayoutRows, {
-                      workViewId: contextFrame.workViewId,
-                      stageKey: stage.key,
-                  })?.doc ?? null,
+              id: summaryRecord?.id ?? null,
+              version: typeof summaryRecord?.version === "number" ? summaryRecord.version : null,
+              ...(summaryHeldByClient ? {} : { doc: summaryRecord?.doc ?? null }),
           }
         : null;
+
+    /*
+     * ONE CONTEXT, BUILT ONCE — the sync projection and the async card producers read the same
+     * subject. Building it twice would be two answers to "who is this panel about".
+     */
+    const focusPanelProjectionContext = buildCommitCriticalOperationalContext({
+            // Business Process and Current Work are WORK-mode cards; the mode names the
+            // Focus Panel surface, not the provisioning request kind.
+            mode: "work",
+            subjectId: chosen.entityId,
+            title: strOrNull((subjectRow as Record<string, unknown>)?.title) ?? "",
+            statusLabel: currentBusinessState?.stageLabel ?? null,
+            statusKey: currentBusinessState?.stageKey ?? null,
+            canMutate: req.canMutate ?? false,
+            perspective: null,
+            stageWorkRuntime: focusPanelStageWork?.stage_work_runtime ?? null,
+            // SERVER-SIDE PROJECTION INPUT. It is stripped from the answer below; the projection is
+            // what travels, and it is produced here from this.
+            publishedStageInputs: focusPanelStageWork?.published_stage_inputs ?? null,
+            situation: currentBusinessState
+                ? {
+                      stageKey: currentBusinessState.stageKey,
+                      stageLabel: currentBusinessState.stageLabel,
+                      purpose: currentBusinessState.purpose ?? null,
+                  }
+                : null,
+            primaryAction: primaryAction
+                ? { actionRef: primaryAction.actionRef, label: primaryAction.label }
+                : null,
+            subjectIdentityTruth,
+            subjectGrain,
+    });
 
     const answer: ProvisioningAnswer = {
         terminal: "operational",
@@ -1898,8 +2092,35 @@ export async function composeWorkUnitProvisioningAnswer(
         primaryAction,
         primaryActionAbsence: childComposition?.primaryActionAbsence ?? familyMissionPrimaryAbsence,
         childIdentity: childComposition?.identity ?? null,
-        focusPanelStageWork,
+        /*
+         * THE SLICE WITHOUT ITS RAW INPUTS.
+         *
+         * `published_stage_inputs` was ~78,355B of published configuration — measured byte-identical
+         * between consecutive subject selections — carried so the BROWSER could project the cards
+         * from it. The server projects now, below, and no browser reader remains, so the
+         * configuration stops travelling. The runtime halves of the slice stay: they are this
+         * subject's own state, not configuration.
+         */
+        focusPanelStageWork: focusPanelStageWork
+            ? {
+                  stage_work_runtime: focusPanelStageWork.stage_work_runtime,
+                  work_intent_runtime: focusPanelStageWork.work_intent_runtime,
+                  published_stage_inputs: null,
+              }
+            : null,
         subjectIdentityTruth,
+        focusPanelOperationalProjection: (() => {
+            /*
+             * THE PROJECTION CHOKEPOINT. One call, here, where every ingredient already exists.
+             *
+             * Perspective is deliberately null: no projection reads it — verified across both card
+             * projectors — and inventing a server-side one would be guessing at a viewer's lens.
+             */
+            const startedAt = now();
+            const projected = projectFocusPanelOperational({ context: focusPanelProjectionContext });
+            markSpan("focus_panel_operational_projection", startedAt);
+            return projected;
+        })(),
         focusPanelSummaryDoc,
         presentation,
         settlement,

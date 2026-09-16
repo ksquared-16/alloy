@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { isInternalCronAuthorized } from "@/lib/admin/cronAuth";
 import { getAdminContextCached, adminContextFailureResponse } from "@/lib/admin/getAdminContext";
+import { requireAnalyticsManageAccess } from "@/lib/admin/canReadAnalytics";
 import {
     runAllOrgMetricPlatformSnapshots,
     runMetricSnapshotsForOrg,
@@ -20,9 +21,20 @@ export async function POST(request: NextRequest) {
     if (!cronOk) {
         const ctx = await getAdminContextCached();
         if (!ctx.ok) return adminContextFailureResponse(ctx);
-        if (ctx.role !== "admin") {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
+        /*
+         * THE OPERATOR BRANCH ASKS FOR ANALYTICS AUTHORITY; THE CRON BRANCH IS UNTOUCHED.
+         *
+         * Running snapshots materialises analytics truth into metric_platform_snapshots, so an
+         * operator invoking it needs `reports.write` — the key the promoted Operational
+         * Intelligence model already uses for the sibling routes. The role TITLE that stood here
+         * admitted an admin whose package withholds that key and refused a custom Analytics
+         * Writer who holds it.
+         *
+         * `isInternalCronAuthorized` above is machine authentication on a separate credential and
+         * is deliberately left alone: it is not a role title standing in for a capability.
+         */
+        const analyticsAuth = await requireAnalyticsManageAccess();
+        if (!analyticsAuth.ok) return analyticsAuth.response;
         orgId = ctx.orgId;
     }
 

@@ -1,0 +1,77 @@
+{
+  "trusted_host_action_id": "tha_8420a94883a6eb",
+  "query_hash": "034d766d9f7b0b16600f9f9e433cc7a40d2b7936201076df383be2d4729a0243",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-16T00:45:54.262Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_8420a94883a6eb",
+    "query_hash": "034d766d9f7b0b16600f9f9e433cc7a40d2b7936201076df383be2d4729a0243",
+    "authorization_id": "grnt_999401f8408445fb",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-16T00:45:57.729Z",
+    "question_ids": [
+      "catalog",
+      "grants",
+      "custom_holders",
+      "scale",
+      "role_keys"
+    ],
+    "questions": {
+      "catalog": {
+        "question_id": "catalog",
+        "row_count": null,
+        "rows": [
+          "ops.workflows.read ~ active=true",
+          "ops.workflows.write ~ active=true"
+        ]
+      },
+      "grants": {
+        "question_id": "grants",
+        "row_count": null,
+        "rows": [
+          "ops.workflows.read ~ role=admin ~ allowed=true ~ orgs=3",
+          "ops.workflows.read ~ role=director ~ allowed=true ~ orgs=1",
+          "ops.workflows.read ~ role=ops ~ allowed=true ~ orgs=2",
+          "ops.workflows.write ~ role=admin ~ allowed=true ~ orgs=3",
+          "ops.workflows.write ~ role=ops ~ allowed=true ~ orgs=2"
+        ]
+      },
+      "custom_holders": {
+        "question_id": "custom_holders",
+        "row_count": null,
+        "rows": [
+          "ops.workflows.read ~ custom_roles=1"
+        ]
+      },
+      "scale": {
+        "question_id": "scale",
+        "row_count": null,
+        "rows": [
+          3
+        ]
+      },
+      "role_keys": {
+        "question_id": "role_keys",
+        "row_count": null,
+        "rows": [
+          "_w17_a ~ orgs=1",
+          "_w17_b ~ orgs=1",
+          "admin ~ orgs=3",
+          "assistant_director ~ orgs=1",
+          "director ~ orgs=1",
+          "ops ~ orgs=3",
+          "regional_lead ~ orgs=3",
+          "school_director ~ orgs=3"
+        ]
+      }
+    },
+    "row_count": 17
+  }
+}

@@ -99,13 +99,25 @@ export const CAPABILITY_AREAS: readonly CapabilityArea[] = Object.freeze([
     { key: "financials", label: "Financials", description: "The financial workspace — accounts, charges, payments, adjustments, responsibility and subsidy.", order: 58 },
     { key: "billing", label: "Billing (legacy)", description: "The superseded billing capability pair. Retained because the catalog still seeds it; nothing consults it.", order: 60 },
     /*
-     * Enrollment holds two authorities that are exceptions to configured policy — overriding the
-     * recommended tuition and excepting an enrollment requirement. Neither is Families and neither
-     * is Financials: both are decisions about admitting a child on terms the configuration did not
-     * produce, and an operator looking for "who may override enrollment policy" looks for
-     * Enrollment.
+     * Enrollment now holds FOUR authorities, and they are two different kinds.
+     *
+     * Two are the original exceptions to configured policy — overriding the recommended tuition and
+     * excepting an enrollment requirement. Neither is Families and neither is Financials: both are
+     * decisions about admitting a child on terms the configuration did not produce.
+     *
+     * Two are the operating authorities Enrollment Record Authority V1 added: keeping the
+     * enrollment record, and deciding the outcome. Until that slice, sixteen enrollment mutations
+     * were reachable by portal admission alone, so this area described exceptions to a policy
+     * nothing enforced.
+     *
+     * The description names both kinds, because an operator opening this area is now answering two
+     * questions — who runs enrollment, and who may depart from its configured policy — and a
+     * heading that mentions only the second would read as if the first were somewhere else.
+     *
+     * NOT process design. Which stages exist and which configuration is live stays under Business
+     * Processes; there is deliberately no Enrollment configuration row to duplicate it.
      */
-    { key: "enrollment", label: "Enrollment", description: "Exceptions to configured enrollment policy — pricing overrides and requirement exceptions.", order: 25 },
+    { key: "enrollment", label: "Enrollment", description: "Running enrollment — the inquiry record, the decision to enrol, and the exceptions to configured enrollment policy.", order: 25 },
     { key: "reports", label: "Reports", description: "Reports and analytics.", order: 70 },
     { key: "workflows", label: "Workflows", description: "Operational workflows.", order: 80 },
     /*

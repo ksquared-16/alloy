@@ -23,6 +23,7 @@ import {
 } from "@/lib/opportunities/enrollmentOperationalMetadata";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertExistingOpportunityMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { ENROLLMENT_RECORD_MANAGE, requireEnrollmentCapability } from "@/lib/access/enrollmentAuthority";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import {
     enforceDrawerFieldPoliciesOnPatch,
@@ -136,6 +137,16 @@ export async function PATCH(
 
         const access = await getAdminAccessContextCached();
         if (!access.ok) return adminContextFailureResponse(access);
+        /*
+         * ENROLLMENT RECORD AUTHORITY — editing the Lead/Inquiry record itself.
+         *
+         * Authority here was a 401 check and nothing more: any session that resolved an admin
+         * context could rewrite a family's inquiry. `enrollment.record.manage` is the authority
+         * now, held by grant and by nothing else — no role title, and not the inert
+         * `crm.opportunities.write` this route's table shares a name with.
+         */
+        const capDenied = requireEnrollmentCapability(access, ENROLLMENT_RECORD_MANAGE);
+        if (capDenied) return capDenied;
         const scopeDim = scopeDimensionsFromAccess(access);
         if (!(await assertExistingOpportunityMutableInAdminScope(supabase, ctx.orgId, scopeDim, id))) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });

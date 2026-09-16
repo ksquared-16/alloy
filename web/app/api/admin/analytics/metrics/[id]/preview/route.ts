@@ -7,12 +7,29 @@ import { requireAnalyticsV2AdminContext, metricValidationError } from "@/lib/met
 import { loadMetricDefinitionById } from "@/lib/metrics/platform/placementResolver";
 import { evaluateMetricDefinition } from "@/lib/metrics/platform/metricEvaluator";
 import { apiOk, apiError } from "@/lib/api/apiResponse";
+import { requireAnalyticsReadAccess } from "@/lib/admin/canReadAnalytics";
 
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, context: RouteContext) {
+    /*
+     * ANALYTICS TRUTH — evaluates a metric for preview and persists nothing.
+     *
+     * READ-LIKE DESPITE POST. Proven, not assumed: the handler delegates to an evaluator that
+     * performs no insert, update, upsert or delete, so nothing canonical changes. Gating a
+     * computation on `reports.write` because its HTTP verb is POST would withhold a preview
+     * from every Reader for no change in what the organization knows.
+     *
+     * This was reachable through ORG CONTEXT ALONE: no capability, no role, only portal
+     * admission. `reports.read` is the established owner of this family — the promoted
+     * Operational Intelligence model already declares its sibling routes under it — so no
+     * vocabulary is invented here.
+     */
+    const analyticsAuth = await requireAnalyticsReadAccess();
+    if (!analyticsAuth.ok) return analyticsAuth.response;
+
     const gate = await requireAnalyticsV2AdminContext();
     if (!gate.ok) return gate.response;
 

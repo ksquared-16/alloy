@@ -64,9 +64,21 @@ export async function POST(request: NextRequest) {
             { status: 403 },
         );
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    /*
+     * THE ROLE TITLE THAT STOOD HERE MADE `fin.write` DECORATIVE.
+     *
+     * `assertFinancialsWriteAllowed` above already answers the question this route asks —
+     * may this principal manage financial account state — and this handler is DECLARED
+     * `fin.write` in the route inventory. Running `ctx.role !== "admin"` immediately after it
+     * meant the declaration was false in the one direction that matters: a custom Financial
+     * Writer holding the key was refused, while an admin whose package withholds it was
+     * admitted by the capability check and then waved through by the title.
+     *
+     * Measured before removing it: `fin.write` is granted to admin in 3 of 3 organizations and
+     * to ops in 2 of 3. So creating a financial account opens to ops exactly where the
+     * organization already granted the key — the title was withholding what the package
+     * declares — and nobody loses authority they were granted.
+     */
     let body: Record<string, unknown> = {};
     try {
         body = (await request.json()) as Record<string, unknown>;

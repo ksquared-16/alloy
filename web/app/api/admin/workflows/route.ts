@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdmin } from "@/lib/adminAuth";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { requireWorkflowConfigurationCapability } from "@/lib/access/workflowAuthority";
 
 const WORKFLOW_CREATE_KEYS = ["name", "description", "event_type", "entity_type", "enabled", "metadata"] as const;
 
@@ -25,8 +27,19 @@ export async function GET() {
 
 /** POST: create workflow (admin only); org_id is always server-set. */
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdmin();
-    if (forbidden) return forbidden;
+    /*
+     * WORKFLOW CONFIGURATION — creates a Workflow definition.
+     *
+     * `requireAdmin()` stood here, and it is a ROLE TITLE (`auth.role !== "admin"`), not an
+     * authority: it admitted an admin whose package withholds `ops.workflows.write` and
+     * refused a custom Workflow Writer who holds it. The key has owned this operation since
+     * AI + Agent Authority V2 activated it for the Workflow Assist apply path, which commits
+     * into these same tables, so nothing is invented here.
+     */
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const capDenied = requireWorkflowConfigurationCapability(access);
+    if (capDenied) return capDenied;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     try {

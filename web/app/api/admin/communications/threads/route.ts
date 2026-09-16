@@ -3,6 +3,10 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { fetchRelatedPersonIdsForCommunicationsDrawer } from "@/lib/communications/threadRelatedPersonIds";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
 
 /** Match /api/admin/activity entity_type normalization. */
 function normalizeEntityTypeParam(raw: string): string | null {
@@ -94,6 +98,8 @@ async function attachLastPreviews(
 export async function GET(request: NextRequest) {
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const { searchParams } = new URL(request.url);
     const entityTypeRaw = (searchParams.get("entity_type") ?? "").trim();

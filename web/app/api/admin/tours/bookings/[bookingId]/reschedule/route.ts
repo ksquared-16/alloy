@@ -3,13 +3,24 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { rescheduleTourBooking } from "@/lib/tours/bookings/tourBookingService";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { TOURS_BOOK, requireToursCapability } from "@/lib/access/toursAuthority";
 
 type Body = { start_at?: string; end_at?: string; timezone?: string | null; location_id?: string | null };
 
 /** POST /api/admin/tours/bookings/[bookingId]/reschedule */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ bookingId: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    /*
+     * TOURS BOOKING — reschedules one family's tour.
+     *
+     * `requireAdminOrOps()` stood here, and despite its name it resolves PORTAL
+     * ADMISSION and no role: every principal who could enter the portal could do this.
+     * `tours.book` is the authority now, held by grant and by nothing else.
+     */
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const capDenied = requireToursCapability(access, TOURS_BOOK);
+    if (capDenied) return capDenied;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 

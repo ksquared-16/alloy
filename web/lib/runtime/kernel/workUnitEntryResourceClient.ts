@@ -8,6 +8,8 @@
  * It is called at GESTURE TIME by K2, not at route commit and not at destination mount. Nothing here
  * touches the router, the pathname, or the DOM: the AttentionRef carries the whole cause.
  */
+import { retainedDepartmentConfigIds } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
+import { heldFocusPanelSummaryIdentities } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import type { AttentionRef } from "./attention";
 import type { EntryResource } from "./provisioning";
 import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
@@ -23,7 +25,13 @@ export function workUnitEntryResourceClient(): EntryResource {
         // The whole cause, including whether a cohort was selected at all. Dropping `cohort` here was
         // enough on its own to defeat contextual focus end to end: attention stated it, the URL carried
         // it, and this seam quietly asked for the default-lens answer instead.
-        const url = provisioningAnswerUrl(ref.target, ref.lens, ref.subject, ref.cohort, ref.aspect);
+        const url = provisioningAnswerUrl(
+            ref.target, ref.lens, ref.subject, ref.cohort, ref.aspect,
+            // S6-1. Both provisioning paths compute this the same way from the same owner, so a
+            // prewarm and the click that consumes it produce the SAME key and still coalesce.
+            retainedDepartmentConfigIds(),
+            heldFocusPanelSummaryIdentities(),
+        );
 
         // Blank-time removal: if operator intent (hover/focus) warmed this exact answer, K2's single
         // round-trip resolves from the warm cache — the click commits immediately. A warm miss or a

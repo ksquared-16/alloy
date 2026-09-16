@@ -1,9 +1,9 @@
 {
-  "trusted_host_action_id": "tha_8d8b517ce4fd0b",
-  "query_hash": "3528e048c8ca3d3f0a076019ec817f67bcb2814027692a25a2f466cc09747dc6",
+  "trusted_host_action_id": "tha_6f0ce7ec0aad42",
+  "query_hash": "0eaba55c78423ba1801ae12843e4edb365ca0f5d89157d32ec7e5240dde116be",
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-14T21:42:51.729Z",
+    "census_run_at": "2026-09-16T15:43:32.382Z",
     "question_ids": [
       "ledger",
       "ledger_head",
@@ -114,34 +114,46 @@
           20260914200000,
           20260915090000,
           20260915091000,
-          20260915120000
+          20260915120000,
+          20260915130000,
+          20260915140000,
+          20260915150000,
+          20260915160000,
+          20260915170000,
+          20260915180000,
+          20260915190000,
+          20260915200000,
+          20260915210000,
+          20260916020000,
+          20260916030000,
+          20260916040000
         ]
       },
       "ledger_head": {
         "question_id": "ledger_head",
         "row_count": null,
         "rows": [
-          20260915120000
+          20260916040000
         ]
       },
       "ledger_total": {
         "question_id": "ledger_total",
         "row_count": null,
         "rows": [
-          439
+          451
         ]
       }
     },
-    "row_count": 103
+    "row_count": 115
   },
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-09-14T21:42:50.451Z",
+    "executed_at": "2026-09-16T15:43:30.973Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_8d8b517ce4fd0b",
-    "query_hash": "3528e048c8ca3d3f0a076019ec817f67bcb2814027692a25a2f466cc09747dc6",
-    "authorization_id": "grnt_cae3ca84d38e427c",
+    "trusted_host_action_id": "tha_6f0ce7ec0aad42",
+    "query_hash": "0eaba55c78423ba1801ae12843e4edb365ca0f5d89157d32ec7e5240dde116be",
+    "authorization_id": "grnt_2e4f8046fb064dc8",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null

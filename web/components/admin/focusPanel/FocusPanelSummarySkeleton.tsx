@@ -19,7 +19,7 @@
  * Only Summary is a composed grid; other modes reserve a simple stable placeholder.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
@@ -45,6 +45,69 @@ import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanel
  * and drops the animation and the fake bars: bars imply content that does not exist yet, which is
  * both construction and a small lie about what is known.
  */
+/**
+ * THE RESERVED-GEOMETRY FLOOR, stated once.
+ *
+ * Exported because reserved geometry is a Focus Panel CONTRACT, not a detail of this skeleton: a
+ * card that legitimately clears its data during a subject switch must keep a footprint, or every
+ * card below it moves. `FinancialsCard` consumes this for exactly that case. Anything adopting the
+ * contract uses this token rather than inventing a height.
+ */
+export const FOCUS_PANEL_RESERVED_MIN_HEIGHT = "7.5rem";
+
+/**
+ * THE RESERVED-GEOMETRY CONTRACT, as a hook — for cards that legitimately clear their data.
+ *
+ * Financials proved the shape in Slice 4 and this is the same contract, not a competing one: keep the
+ * card's footprint while its data is cleared, so every card below it does not move down and back.
+ * Extracted only once a third and fourth adopter existed (Attendance, Health & Safety); a card with
+ * ONE occurrence should still just express it inline.
+ *
+ * Geometry only. This reserves space — it never keeps the previous subject's values on screen, and
+ * it never changes when a card clears or what it clears.
+ *
+ * `hasContent` is the card's own truth: true once its data is settled, false while cleared/pending.
+ * The remembered footprint is per card instance, so a legitimate unmount (a subject refusal removing
+ * the card) simply starts again from the shared floor — no external state survives it.
+ */
+/**
+ * THE RESERVED-CARD GEOMETRY CONTRACT, stated once — Slice 4's Financials repair, expressed for the
+ * cards that share its shape.
+ *
+ * `settled` means THE CARD HAS THE ANSWER, whatever the answer is: a loaded record, "no attendance
+ * record", "select a child", a permission refusal. It does NOT mean "has data". A card that is
+ * resolving the next subject is the only thing this reserves against, because that is the only state
+ * whose height is about to change for a reason the operator did not ask for.
+ *
+ * Two rules the adopters must honour, both learned the hard way in Slice 4:
+ *  - the `ref` goes on EVERY root the card can return through while settled, or the footprint is
+ *    never measured and the reserve silently falls back to the shared floor;
+ *  - an interaction-opened overlay (history, detail) is NOT one of those roots — measuring it would
+ *    remember the overlay's footprint as the card's.
+ *
+ * Geometry only. Nothing here retains, restores or delays the prior subject's content.
+ */
+export function useReservedCardGeometry(settled: boolean): {
+    ref: React.RefObject<HTMLDivElement | null>;
+    style: React.CSSProperties | undefined;
+    reserved: boolean;
+} {
+    const ref = useRef<HTMLDivElement | null>(null);
+    const lastSettledHeight = useRef<number | null>(null);
+    useEffect(() => {
+        if (!settled || !ref.current) return;
+        const h = Math.round(ref.current.getBoundingClientRect().height);
+        if (h > 0) lastSettledHeight.current = h;
+    }, [settled]);
+    return {
+        ref,
+        style: settled
+            ? undefined
+            : { minHeight: lastSettledHeight.current ?? FOCUS_PANEL_RESERVED_MIN_HEIGHT },
+        reserved: !settled,
+    };
+}
+
 function ReservedSettlementRegion() {
     return (
         <div
@@ -52,7 +115,7 @@ function ReservedSettlementRegion() {
             data-focus-panel-skeleton-card="true"
             data-focus-panel-settlement-reserved="true"
             aria-hidden="true"
-            style={{ minHeight: "7.5rem", padding: "0.875rem" }}
+            style={{ minHeight: FOCUS_PANEL_RESERVED_MIN_HEIGHT, padding: "0.875rem" }}
         />
     );
 }

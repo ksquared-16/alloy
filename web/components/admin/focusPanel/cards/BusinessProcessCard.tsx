@@ -10,13 +10,13 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { buildBusinessProcessCardEvidence } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
+import { EMPTY_BUSINESS_PROCESS_EVIDENCE } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
 import {
     adaptBusinessProcessEvidenceToProcessCard,
     type ProcessCardActionInput,
 } from "@/lib/adminV2/runtime/focusPanel/businessProcess/adaptBusinessProcessEvidenceToProcessCard";
 import {
-    projectProcessCardCommands,
+    EMPTY_COMMAND_PROJECTION,
     type ProcessCardCommand,
 } from "@/lib/adminV2/runtime/focusPanel/businessProcess/projectProcessCardCommands";
 import { resolveTourCommandPresentation } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveTourCommandPresentation";
@@ -110,16 +110,31 @@ export default function BusinessProcessCard({
 }
 
 function BusinessProcessSummary({ model, context, receded = false, coordination }: Props) {
-    const evidence = useMemo(
-        () =>
-            buildBusinessProcessCardEvidence(context, {
-                // THE CANONICAL CARRIER. The case remains the panel subject; this only says which
-                // participant is the operator's current concern. Absent is ordinary and means no
-                // emphasis — never "pick one".
-                selectedParticipantId: context.participantScope?.participationId ?? null,
-            }),
-        [context],
-    );
+    /*
+     * THE SERVER DECIDED THIS. The card reads it.
+     *
+     * `buildBusinessProcessCardEvidence` used to run here, which is why ~78KB of published
+     * configuration had to reach the browser at all. It now runs once in the server projection
+     * chokepoint, in both transport frames, and this file no longer resolves stage or work.
+     *
+     * Participant emphasis is re-applied below because it is EPHEMERAL BROWSER STATE — which child
+     * the operator is currently concerned with. The server projects with none, and marking one is
+     * presentation over an already-projected list, not a decision about what is true.
+     */
+    const projected = context.operationalProjection ?? null;
+    const selectedParticipantId = context.participantScope?.participationId ?? null;
+    const evidence = useMemo(() => {
+        const base = projected?.businessProcess.evidence ?? EMPTY_BUSINESS_PROCESS_EVIDENCE;
+        if (!selectedParticipantId) return base;
+        return {
+            ...base,
+            participants: base.participants.map((p) => ({
+                ...p,
+                scoped:
+                    p.id === selectedParticipantId || (p.customerMemberId ?? null) === selectedParticipantId,
+            })),
+        };
+    }, [projected, selectedParticipantId]);
 
     const viewerTimeZone = useAdminViewerTimezone();
     // The SAME canonical projection the Focus Panel activity mode reads. No Process-local activity
@@ -147,7 +162,10 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
      * commands and in WHAT ORDER, and the action/capability platform decides whether each one can
      * run right now. Both verdicts arrive decided; this file adds neither.
      */
-    const projection = useMemo(() => projectProcessCardCommands(context), [context]);
+    const projection = useMemo(
+        () => projected?.businessProcess.commands ?? EMPTY_COMMAND_PROJECTION,
+        [projected],
+    );
 
     /*
      * EXECUTION IS THE SHARED HOST'S. The card plans through the platform's own planner and hands
@@ -377,23 +395,23 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
         for (const row of projection.withheld) {
             logProcessCardCommandWithheld({ processKey, stageKey, ...row });
         }
-        // Both halves together: what configuration named, and what the row became.
-        const psi = context.publishedStageInputs as
-            | { operatingPlan?: { work_templates?: Array<Record<string, unknown>> }; commandProjection?: unknown }
-            | null
-            | undefined;
+        /*
+         * WHAT CONFIGURATION NAMED, AND WHAT THE ROW BECAME — both halves, from the projection.
+         *
+         * This used to read `context.publishedStageInputs` to echo the raw operating plan and the
+         * process's own command selection beside the result. That echo was the LAST browser reader
+         * of ~78KB of configuration, and it was redundant: `configuredRefs` already states what
+         * configuration named, `commandKeys` what the row became, and `drift`/`withheld` the
+         * difference — all decided by the same server projection the card renders.
+         *
+         * Diagnostics follow authority. The comparison is unchanged and the dedupe identity is
+         * untouched, so `window.__ALLOY_PROCESS_COMMAND_PROJECTION` reads exactly as before.
+         */
         logProcessCardCommandProjection({
             processKey,
             stageKey,
             configuredRefs: projection.configuredRefs,
             commandKeys: projection.commands.map((c) => c.key),
-            planTemplates: (psi?.operatingPlan?.work_templates ?? []).map((t) => ({
-                label: String((t as { label?: unknown }).label ?? ""),
-                helpful: (((t as { helpful_actions?: Array<{ action_ref?: string }> }).helpful_actions) ?? []).map(
-                    (h) => String(h.action_ref ?? ""),
-                ),
-            })),
-            commandProjection: psi?.commandProjection ?? null,
         });
     }, [
         projection.drift,

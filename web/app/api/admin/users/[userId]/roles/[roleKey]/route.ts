@@ -43,7 +43,8 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
         audit: accessMutationAudit(access),
     });
     if (!result.ok) {
-        return NextResponse.json({ error: result.error }, { status: result.kind === "unknown_role" ? 400 : 500 });
+        const status = result.kind === "unknown_role" ? 400 : result.kind === "forbidden" ? 403 : 500;
+        return NextResponse.json({ error: result.error }, { status });
     }
 
     invalidateAdminShellContextCache(userId);

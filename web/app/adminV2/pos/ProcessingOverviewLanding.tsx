@@ -75,6 +75,21 @@ export default function ProcessingOverviewLanding({
     const [dragActive, setDragActive] = useState(false);
     const [importErr, setImportErr] = useState<string | null>(null);
     const [cleanupOpen, setCleanupOpen] = useState(false);
+
+    /*
+     * RUNTIME MODE IS NOT AUDIENCE.
+     *
+     * This control used to appear whenever NODE_ENV was not production, which reads as "only a
+     * developer will see it" and is false here: Alloy's certification and Human-QA hosts run
+     * development servers on purpose, and real operators view them over the tailnet. So an operator
+     * walking Processing for QA was offered a button that deletes the fixture they are walking.
+     *
+     * The second gate is the decision. NODE_ENV says which build is running; the explicit flag says
+     * who asked for developer tooling, and only the person who set it has.
+     */
+    const showDeveloperReset =
+        process.env.NODE_ENV === "development" &&
+        process.env.NEXT_PUBLIC_PROCESSING_DEBUG === "1";
     const { kpis: overviewKpis, loading: overviewKpisLoading } = useProcessingOverviewKpis();
 
     useEffect(() => {
@@ -294,7 +309,7 @@ export default function ProcessingOverviewLanding({
                         </ul>
                     </WorkspaceCard>
                 </WorkspaceOverviewInfoGrid>
-                {process.env.NODE_ENV !== "production" ? (
+                {showDeveloperReset ? (
                     <div className="rounded-lg border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-[11px] text-amber-950">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                             <span>

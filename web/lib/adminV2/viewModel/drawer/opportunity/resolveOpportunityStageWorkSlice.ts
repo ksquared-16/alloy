@@ -45,6 +45,8 @@ export type ResolveOpportunityStageWorkSliceParams = {
     customerMemberId?: string | null;
     opportunityCustomerMemberId?: string | null;
     processInstanceId?: string | null;
+    /** S6-1 — client asserts it already holds the live department configuration. */
+    clientHoldsLiveDepartmentConfig?: boolean;
 };
 
 const EMPTY_SLICE: OpportunityStageWorkSlice = {
@@ -105,6 +107,8 @@ export async function resolveOpportunityStageWorkSlice(
         departmentMetadata: departmentMetadata as Record<string, unknown> | null,
         builderStageKey: stageKey,
         governingBuilderPayload,
+        clientHoldsLiveDepartmentConfig: params.clientHoldsLiveDepartmentConfig === true,
+        departmentId: params.departmentId ?? null,
     });
 
     return {

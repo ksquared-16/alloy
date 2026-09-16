@@ -290,6 +290,17 @@ export type WorkUnitSurfaceModel = {
      */
     selectedSubject: WorkUnitSelectedSubject;
     /**
+     * A refusal that belongs to the SELECTED SUBJECT, not to the Work View.
+     *
+     * Set only when the provisioning answer refused after its cohort had already resolved and carried
+     * that cohort through (`queueFrame`). The queue renders normally; this is what the Focus Panel —
+     * the owner of the selected subject — renders in place of a composition it could not build.
+     *
+     * Optional: every other surface has no such state, and absence must keep them byte-for-byte as
+     * they were.
+     */
+    subjectRefusal?: { kind: "authorization" | "configuration" | "subject" | "records"; message: string } | null;
+    /**
      * Configured Right Rail actions resolved for this work unit (`surface=work_unit,right_rail`),
      * flattened to the client action shape. Empty until the lane resolves (or when none are
      * configured) — RR.SURFACE stays a zero-footprint anchor while empty, then reveals. Rendered +

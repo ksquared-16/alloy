@@ -129,7 +129,19 @@ describe("Workflow Assist edit_workflow propose → apply (integration)", () => 
             userId,
             role: "admin",
         });
-        mockGetAdminAccessContextCached.mockResolvedValue(baseAccess([AI_ENRICHMENT_USE_PERMISSION_KEY]));
+        /*
+         * PROPOSE AND APPLY ARE DIFFERENT POWERS, so this path needs both keys.
+         *
+         * `ai.enrichment.use` buys the proposal; committing it into `workflows`
+         * and `workflow_actions` is a Workflow mutation and costs
+         * `ops.workflows.write`. The suite used to grant only the AI key, which
+         * passed when apply was gated on the `admin` role title — the title the
+         * mocked principal happened to carry. The separation is asserted
+         * directly below.
+         */
+        mockGetAdminAccessContextCached.mockResolvedValue(
+            baseAccess([AI_ENRICHMENT_USE_PERMISSION_KEY, "ops.workflows.write"]),
+        );
         mockCreateAdminClient.mockImplementation(() => ({
             from: (table: string) => {
                 if (table === "org_settings") return orgSettingsChain;
@@ -187,4 +199,43 @@ describe("Workflow Assist edit_workflow propose → apply (integration)", () => 
         expect(applyJson.workflow_id).toBe(wfId);
         expect(applyJson.workflow?.name).toBe("Renamed via Assist");
     });
+    it("lets an AI-only principal propose, and refuses it the apply", async () => {
+        vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "true");
+        vi.stubEnv("AI_ENRICHMENT_STUB_ENABLED", "true");
+        // AI authority alone. No workflow write.
+        mockGetAdminAccessContextCached.mockResolvedValue(baseAccess([AI_ENRICHMENT_USE_PERMISSION_KEY]));
+
+        const proposeRes = await POST_PROPOSE(
+            new NextRequest("http://localhost/api/admin/ai/workflow-assist/propose", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    version: 1,
+                    proposal_kind: "edit_workflow",
+                    workflow_id: wfId,
+                    patch: { name: "Renamed via Assist" },
+                }),
+            }),
+        );
+        // Suggesting is open to the AI principal.
+        expect(proposeRes.status).toBe(200);
+        const proposed = await proposeRes.json();
+
+        const applyRes = await POST_APPLY(
+            new NextRequest("http://localhost/api/admin/ai/workflow-assist/apply", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    version: 1,
+                    suggestion_id: proposed.suggestion.suggestion_id,
+                    proposal: proposed.suggestion,
+                    confirm: true,
+                }),
+            }),
+        );
+        // Applying is not. AI is not a superuser.
+        expect(applyRes.status).toBe(403);
+        expect(await applyRes.json()).toMatchObject({ required_permission: "ops.workflows.write" });
+    });
+
 });

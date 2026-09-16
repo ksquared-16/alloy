@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdmin } from "@/lib/adminAuth";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { requireWorkflowConfigurationCapability } from "@/lib/access/workflowAuthority";
 
 /** GET: list conditions for a workflow in caller org. */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -46,8 +48,19 @@ function normalizeFieldPath(targetEntity: string | null, fieldPath: string): str
 
 /** PUT: replace all conditions (admin only). */
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const forbidden = await requireAdmin();
-    if (forbidden) return forbidden;
+    /*
+     * WORKFLOW CONFIGURATION — replaces a Workflow's conditions.
+     *
+     * `requireAdmin()` stood here, and it is a ROLE TITLE (`auth.role !== "admin"`), not an
+     * authority: it admitted an admin whose package withholds `ops.workflows.write` and
+     * refused a custom Workflow Writer who holds it. The key has owned this operation since
+     * AI + Agent Authority V2 activated it for the Workflow Assist apply path, which commits
+     * into these same tables, so nothing is invented here.
+     */
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const capDenied = requireWorkflowConfigurationCapability(access);
+    if (capDenied) return capDenied;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const { id } = await context.params;

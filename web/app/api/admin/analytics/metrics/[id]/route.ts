@@ -9,6 +9,7 @@ import { validateMetricDefinitionUpdate } from "@/lib/metrics/platform/metricDef
 import { loadMetricDefinitionById } from "@/lib/metrics/platform/placementResolver";
 import { validateSourceAggregation, validateSourceFilters, validateSourceDimensions } from "@/lib/metrics/platform/metricSourceRegistry";
 import { apiOk, apiError } from "@/lib/api/apiResponse";
+import { requireAnalyticsManageAccess } from "@/lib/admin/canReadAnalytics";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,17 @@ export async function GET(request: NextRequest, context: RouteContext) {
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
+    /*
+     * ANALYTICS TRUTH — edits a metric definition.
+     *
+     * This was reachable through ORG CONTEXT ALONE: no capability, no role, only portal
+     * admission. `reports.write` is the established owner of this family — the promoted
+     * Operational Intelligence model already declares its sibling routes under it — so no
+     * vocabulary is invented here.
+     */
+    const analyticsAuth = await requireAnalyticsManageAccess();
+    if (!analyticsAuth.ok) return analyticsAuth.response;
+
     const gate = await requireAnalyticsV2AdminMutate();
     if (!gate.ok) return gate.response;
 

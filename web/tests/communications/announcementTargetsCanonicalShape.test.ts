@@ -21,14 +21,23 @@ const announcementId = "cccccccc-0000-4000-8000-000000000001";
 /** Rows the route hands to `.insert()`, captured per test. */
 const insertedRows: Array<Record<string, unknown>> = [];
 
-const { mockRequireAdminOrOps, mockGetAdminContextCached } = vi.hoisted(() => ({
-    mockRequireAdminOrOps: vi.fn(),
+/*
+ * THE GATE MOVED. This mocked `requireAdminOrOps`, which resolved portal admission and no
+ * capability, so the double admitted the request by returning `null`. The route now asks for
+ * `communications.bulk.send`, and the double admits by returning the success arm of that
+ * contract — `{ ok: true }` — so the test still exercises the body it is about while the
+ * authority it stands in for is the real one.
+ */
+const { mockRequireCommunicationsAuthority, mockGetAdminContextCached } = vi.hoisted(() => ({
+    mockRequireCommunicationsAuthority: vi.fn(),
     mockGetAdminContextCached: vi.fn(),
 }));
 
-vi.mock("@/lib/adminAuth", async () => {
-    const actual = await vi.importActual<typeof import("@/lib/adminAuth")>("@/lib/adminAuth");
-    return { ...actual, requireAdminOrOps: mockRequireAdminOrOps };
+vi.mock("@/lib/communications/communicationsAuthority", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/communications/communicationsAuthority")>(
+        "@/lib/communications/communicationsAuthority"
+    );
+    return { ...actual, requireCommunicationsAuthority: mockRequireCommunicationsAuthority };
 });
 
 vi.mock("@/lib/admin/getAdminContext", async () => {
@@ -106,7 +115,7 @@ describe("P0-4 — the targets route writes the canonical shape", () => {
     beforeEach(() => {
         insertedRows.length = 0;
         vi.clearAllMocks();
-        mockRequireAdminOrOps.mockResolvedValue(null);
+        mockRequireCommunicationsAuthority.mockResolvedValue({ ok: true, access: { orgId, userId: "u1" } });
         mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, role: "admin", userId: "u1" });
     });
 

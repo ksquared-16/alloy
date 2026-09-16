@@ -3,6 +3,10 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_READ,
+} from "@/lib/communications/communicationsAuthority";
+import {
     fetchJobDrawerEmailRecipients,
     fetchOpportunityDrawerEmailRecipients,
     fetchPersonDrawerEmailRecipients,
@@ -17,6 +21,8 @@ const UUID_RE = /^[0-9a-f-]{36}$/i;
 export async function GET(request: NextRequest) {
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_READ);
+    if (!auth.ok) return auth.response;
 
     const entityTypeRaw = request.nextUrl.searchParams.get("entity_type")?.trim().toLowerCase() ?? "";
     const entityId = request.nextUrl.searchParams.get("entity_id")?.trim() ?? "";

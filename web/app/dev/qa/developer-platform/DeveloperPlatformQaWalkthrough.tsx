@@ -11,11 +11,17 @@
  * durable. That tradeoff is stated on the page itself rather than hidden: the
  * operator is told where their answers live and how to get them out.
  *
- * NO SECRET EVER TOUCHES THIS PAGE. Notes are free text and are stored in the
- * browser, so the page says so beside the field and the command panel never
- * accepts or renders a client secret — the operator substitutes it in their own
- * terminal. The one-time reveal is the product's job, and re-displaying it here
- * would defeat the control DP-QA-13 exists to verify.
+ * NO SECRET EVER TOUCHES THIS PAGE. Notes are free text and stored in the
+ * browser, so the page says so beside the field. Live verification issues and
+ * revokes its own credential server-side and returns only sentences; the secret
+ * the OPERATOR sees in DP-QA-12 is never read here. Re-displaying it would
+ * defeat the control DP-QA-13 exists to verify.
+ *
+ * MACHINE EVIDENCE NEVER SETS A RESULT. Deterministic checks answer "did the
+ * boundary hold"; they cannot answer "would an external developer understand
+ * this", which is the only question this instrument exists to ask. So evidence
+ * renders beside the human question and the four result buttons stay untouched
+ * by it — the operator reads the evidence and still decides.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -24,10 +30,18 @@ import {
     ALL_STEPS,
     SECTIONS,
     SEVERITIES,
+    STEP_SURFACES,
     type QaStep,
     type Severity,
     type StepResult,
 } from "./steps";
+
+type FixtureRow = { key: string; slug: string; name: string; proves: string; installationId: string };
+type FixtureState =
+    | { ok: true; installations: FixtureRow[] }
+    | { ok: false; code: string; detail: string; repairCommand: string };
+type MachineCheck = { id: string; steps: string[]; label: string; verdict: "PASS" | "FAIL" | "BLOCKED"; evidence: string };
+type Verification = { ok: boolean; ranAt: string; checks: MachineCheck[]; blockedReason?: string };
 
 const STORAGE_KEY = "alloy.qa.developer-platform.v1";
 
@@ -36,13 +50,14 @@ type Acceptance = "" | "PARTNER_READY" | "WITH_FOLLOWUPS" | "REPAIR_REQUIRED";
 type RunState = {
     entries: Record<string, Entry>;
     operator: string;
+    started: boolean;
     openSection: string;
     acceptance: Acceptance;
     acceptanceNotes: string;
     updatedAt?: string;
 };
 
-const EMPTY: RunState = { entries: {}, operator: "", openSection: "A", acceptance: "", acceptanceNotes: "" };
+const EMPTY: RunState = { entries: {}, operator: "", started: false, openSection: "A", acceptance: "", acceptanceNotes: "" };
 
 const ACCEPTANCE: { value: Exclude<Acceptance, "">; label: string; blurb: string; tone: string }[] = [
     {
@@ -76,7 +91,7 @@ const HARD_FAILURE_RULES = [
     "Revoked credentials remain usable.",
     "Suspended Installations remain usable contrary to contract.",
     "A one-time credential secret can be recovered after leaving or reloading.",
-    "A real credential or private customer datum appears in external documentation.",
+    "A real Credential, token, customer datum, or private identifier appears in external documentation.",
     "Attendance is represented as a currently available public mutation.",
     "An unverified Classroom Coach capability is represented as fact.",
     "The Classroom Coach packet exposes internal security findings.",
@@ -100,6 +115,7 @@ function load(): RunState {
         return {
             entries: parsed.entries ?? {},
             operator: parsed.operator ?? "",
+            started: parsed.started ?? false,
             openSection: parsed.openSection ?? "A",
             acceptance: parsed.acceptance ?? "",
             acceptanceNotes: parsed.acceptanceNotes ?? "",
@@ -115,6 +131,11 @@ export default function DeveloperPlatformQaWalkthrough() {
     const [state, setState] = useState<RunState>(EMPTY);
     const [restored, setRestored] = useState(false);
     const [copied, setCopied] = useState<string | null>(null);
+    const [fixture, setFixture] = useState<FixtureState | null>(null);
+    const [preparing, setPreparing] = useState(false);
+    const [verification, setVerification] = useState<Verification | null>(null);
+    const [verifying, setVerifying] = useState(false);
+    const [envOpen, setEnvOpen] = useState(false);
     const baseUrl = useRef<string>("");
 
     // Restore before first paint of the interactive controls, so a reload never
@@ -124,6 +145,84 @@ export default function DeveloperPlatformQaWalkthrough() {
         setRestored(true);
         baseUrl.current = window.location.origin;
     }, []);
+
+    /**
+     * The environment prepares itself.
+     *
+     * Asking an operator to run a fixture script before they may begin is
+     * administration, not QA. The page ensures the fixture on load and only
+     * involves a human when preparation actually fails — and then with one exact
+     * command rather than an explanation.
+     */
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            setPreparing(true);
+            try {
+                /*
+                 * ASK BEFORE REBUILDING.
+                 *
+                 * This rebuilt on every load, which is destructive-then-recreate. For one operator
+                 * that is invisible; for anything that opens the page more than once in quick
+                 * succession it is a race, and a second load could observe the half-built state the
+                 * first was still writing. Rebuild only when the fixture is not already intact.
+                 */
+                const status = await fetch("/api/dev/qa/developer-platform", { cache: "no-store" });
+                const current = ((await status.json()) as { fixture: FixtureState }).fixture;
+                if (current.ok) {
+                    if (!cancelled) setFixture(current);
+                    return;
+                }
+                const res = await fetch("/api/dev/qa/developer-platform", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ action: "ensure_fixture" }),
+                });
+                const body = (await res.json()) as { fixture: FixtureState };
+                if (!cancelled) setFixture(body.fixture);
+            } catch (err) {
+                if (!cancelled) {
+                    setFixture({
+                        ok: false,
+                        code: "qa_backend_unreachable",
+                        detail: String((err as Error)?.message ?? err),
+                        repairCommand: "npm run qa:developer-platform -- ensure",
+                    });
+                }
+            } finally {
+                if (!cancelled) setPreparing(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    const runVerification = useCallback(async () => {
+        setVerifying(true);
+        try {
+            const res = await fetch("/api/dev/qa/developer-platform", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ action: "verify" }),
+            });
+            setVerification((await res.json()) as Verification);
+        } catch (err) {
+            setVerification({
+                ok: false, ranAt: new Date().toISOString(), checks: [],
+                blockedReason: String((err as Error)?.message ?? err),
+            });
+        } finally {
+            setVerifying(false);
+        }
+    }, []);
+
+    /** Machine evidence, indexed by the step it informs. It never sets a result. */
+    const evidenceByStep = useMemo(() => {
+        const map: Record<string, MachineCheck[]> = {};
+        for (const c of verification?.checks ?? []) {
+            for (const id of c.steps) (map[id] ??= []).push(c);
+        }
+        return map;
+    }, [verification]);
 
     useEffect(() => {
         if (!restored) return;
@@ -177,14 +276,14 @@ export default function DeveloperPlatformQaWalkthrough() {
         () =>
             ALL_STEPS.flatMap((step) => {
                 const e = state.entries[step.id];
-                if (e?.result !== "FAIL" && e?.result !== "NEEDS_REVIEW") return [];
+                if (e?.result !== "FAIL" && e?.result !== "BLOCKED" && e?.result !== "NEEDS_REVIEW") return [];
                 return [{
                     step: step.id,
                     area: step.area,
                     observed: e.notes?.trim() || "(operator recorded no observation)",
                     expected: step.expected.join(" "),
                     notes: e.notes?.trim() ?? "",
-                    severity: e.severity ?? (e.result === "NEEDS_REVIEW" ? "P3" : "unassigned"),
+                    severity: e.severity ?? (e.result === "FAIL" ? "unassigned" : "P3"),
                     evidence: e.evidence?.trim() ?? "",
                     owner: ownerFor(step),
                     result: e.result,
@@ -194,9 +293,9 @@ export default function DeveloperPlatformQaWalkthrough() {
     );
 
     const answered = ALL_STEPS.length - tally.unanswered;
-    const hardGateFailures = ALL_STEPS.filter(
-        (s) => s.hardGate && state.entries[s.id]?.result === "FAIL",
-    );
+    const hardGates = ALL_STEPS.filter((s) => s.hardGate);
+    const hardGateFailures = hardGates.filter((s) => state.entries[s.id]?.result === "FAIL");
+    const hardGatePasses = hardGates.filter((s) => state.entries[s.id]?.result === "PASS");
 
     const markdown = useCallback(() => {
         const lines: string[] = [
@@ -206,14 +305,17 @@ export default function DeveloperPlatformQaWalkthrough() {
             `Exported: ${new Date().toISOString()}`,
             "",
             "```text",
-            "Developer Platform Human QA",
+            "DEVELOPER PLATFORM HUMAN QA",
             "",
-            `Total steps:   ${ALL_STEPS.length}`,
+            `Total steps: ${ALL_STEPS.length}`,
             `Passed:        ${tally.PASS}`,
             `Failed:        ${tally.FAIL}`,
             `Blocked:       ${tally.BLOCKED}`,
             `Needs Review:  ${tally.NEEDS_REVIEW}`,
             `Unanswered:    ${tally.unanswered}`,
+            "",
+            `Hard gates passed: ${hardGatePasses.length} of ${hardGates.length}`,
+            `Hard gates failed: ${hardGateFailures.length}`,
             "",
             `P0 defects:    ${severityTally.P0}`,
             `P1 defects:    ${severityTally.P1}`,
@@ -239,9 +341,10 @@ export default function DeveloperPlatformQaWalkthrough() {
                 for (const d of group) {
                     lines.push(
                         `- **${d.step}** · ${d.area} · ${d.result}`,
-                        `    - Observed: ${d.observed}`,
-                        `    - Expected: ${d.expected}`,
-                        `    - Evidence: ${d.evidence || "(none)"}`,
+                        `    - Observed behavior: ${d.observed}`,
+                        `    - Expected behavior: ${d.expected}`,
+                        `    - Operator notes: ${d.notes || "(none)"}`,
+                        `    - Evidence reference: ${d.evidence || "(none)"}`,
                         `    - Recommended owner: ${d.owner}`,
                     );
                 }
@@ -250,19 +353,21 @@ export default function DeveloperPlatformQaWalkthrough() {
         }
         for (const section of SECTIONS) {
             lines.push(`## Section ${section.id} — ${section.title}`, "");
+            // Every step, including the ones that passed: the report should
+            // preserve what was actually reviewed, not only what went wrong.
             for (const step of section.steps) {
                 const e = state.entries[step.id];
-                if (!e?.result && !e?.notes) continue;
                 lines.push(
                     `- **${step.id}** (${step.area}) — ${e?.result ?? "unanswered"}` +
                         (e?.severity ? ` · ${e.severity}` : "") +
+                        (step.hardGate ? " · hard gate" : "") +
                         (e?.notes ? `\n    - ${e.notes.replace(/\n/g, "\n    - ")}` : ""),
                 );
             }
             lines.push("");
         }
         return lines.join("\n");
-    }, [state, tally, severityTally, hardGateFailures, defects]);
+    }, [state, tally, severityTally, hardGates, hardGatePasses, hardGateFailures, defects]);
 
     const copy = useCallback(async (text: string, key: string) => {
         try {
@@ -321,119 +426,169 @@ export default function DeveloperPlatformQaWalkthrough() {
                 </div>
             )}
 
-            <section style={S.setup}>
-                <h2 style={S.h2}>Before you start</h2>
-                <ol style={S.ol}>
-                    <li>
-                        Prepare the fixture — three installations shaped for the org-wide, restricted and
-                        no-capability questions:
-                        <Cmd
-                            text="node scripts/qa/developerPlatformQaFixture.mjs ensure"
-                            id="fixture"
-                            copied={copied}
-                            onCopy={copy}
+            {!state.started ? (
+                <section style={S.start}>
+                    <p style={S.startLead}>
+                        82 acceptance checks across thirteen sections. Your progress is saved in this
+                        browser as you go, so you can stop and come back.
+                    </p>
+                    {/*
+                      * The account, named before anything else.
+                      *
+                      * This QA runs against the synthetic certification database, so an operator's
+                      * real Alloy credentials do not exist here at all — and the failure looks like
+                      * a broken login rather than the wrong environment. Saying which account to
+                      * use costs two lines and saves that investigation.
+                      */}
+                    <div style={S.identityNote}>
+                        <p style={S.identityLine}>
+                            <strong>QA operator:</strong> <code>qa-slot8-product@example.com</code>
+                        </p>
+                        <p style={S.identityDetail}>
+                            This QA runs against the synthetic <strong>alloy-cert</strong> environment.
+                            Your normal Alloy account will not work here — it does not exist in this
+                            database. The certification-only password is on this machine at{" "}
+                            <code>~/.config/alloy-dev/slot8-qa-cert-password</code>.
+                        </p>
+                    </div>
+                    {fixture?.ok === false ? (
+                        <div style={S.blocked}>
+                            <strong>QA environment BLOCKED — {fixture.code}</strong>
+                            <p style={S.blockedDetail}>{fixture.detail}</p>
+                            <p style={S.blockedDetail}>Repair command:</p>
+                            <pre style={S.pre}>{fixture.repairCommand}</pre>
+                            <p style={S.blockedDetail}>
+                                This is a Vacilando environment problem, not a QA step. Re-open this page
+                                once it succeeds.
+                            </p>
+                        </div>
+                    ) : (
+                        <p style={S.startReady}>
+                            {preparing
+                                ? "Preparing the certification fixture…"
+                                : fixture?.ok
+                                    ? `Certification fixture ready — ${fixture.installations.length} installations prepared for you.`
+                                    : "Checking the certification environment…"}
+                        </p>
+                    )}
+                    <label style={S.label}>
+                        Your name, for the exported record
+                        <input
+                            style={S.input}
+                            value={state.operator}
+                            placeholder="Operator"
+                            onChange={(e) => setState((p) => ({ ...p, operator: e.target.value }))}
                         />
-                        Re-run it any time to restore a known state; <code>reset</code> removes it entirely.
-                    </li>
-                    <li>Sign in to this server as an operator who can administer the organization.</li>
-                    <li>
-                        Keep a secure scratch space for the one client secret you will copy in DP-QA-13.
-                        <strong> Do not paste it into this page.</strong>
-                    </li>
-                </ol>
-                <label style={S.label}>
-                    Operator
-                    <input
-                        style={S.input}
-                        value={state.operator}
-                        placeholder="Your name, for the exported record"
-                        onChange={(e) => setState((p) => ({ ...p, operator: e.target.value }))}
-                    />
-                </label>
-                <p style={S.note}>
-                    Your results and notes are saved in this browser as you go and survive a reload. They are
-                    not stored on a server — there is no QA persistence authority in Alloy today — so export
-                    the run when you finish.
-                </p>
-                <div style={S.row}>
-                    <button style={S.btn} onClick={() => copy(markdown(), "md")} type="button">
-                        {copied === "md" ? "Copied" : "Copy summary (Markdown)"}
-                    </button>
+                    </label>
                     <button
-                        style={S.btn}
                         type="button"
-                        onClick={() => download(markdown(), "developer-platform-qa.md", "text/markdown")}
+                        style={{ ...S.startBtn, opacity: fixture?.ok ? 1 : 0.55 }}
+                        disabled={!fixture?.ok}
+                        onClick={() => setState((p) => ({ ...p, started: true }))}
                     >
-                        Download Markdown
+                        Start QA
                     </button>
-                    <button
-                        style={S.btn}
-                        type="button"
-                        onClick={() =>
-                            download(JSON.stringify(state, null, 2), "developer-platform-qa.json", "application/json")
-                        }
-                    >
-                        Download JSON
-                    </button>
-                    <button
-                        style={{ ...S.btn, borderColor: "#b42318", color: "#b42318" }}
-                        type="button"
-                        onClick={() => {
-                            if (window.confirm("Clear every result and note for this walkthrough?")) setState(EMPTY);
-                        }}
-                    >
-                        Reset run
-                    </button>
+                </section>
+            ) : (
+                <section style={S.verifyPanel}>
+                    <div style={S.verifyHead}>
+                        <div>
+                            <h2 style={S.h2}>Live verification</h2>
+                            <p style={S.note}>
+                                Runs the deterministic technical checks through this server&apos;s own HTTP
+                                boundary and reports what it found. It never marks a step for you — the
+                                evidence appears beside the human question, and the decision stays yours.
+                            </p>
+                        </div>
+                        <button type="button" style={S.btnPrimary} onClick={runVerification} disabled={verifying}>
+                            {verifying ? "Running…" : verification ? "Run again" : "Run live verification"}
+                        </button>
+                    </div>
+                    {verification?.blockedReason && (
+                        <div style={S.blocked}>
+                            <strong>Verification BLOCKED</strong>
+                            <p style={S.blockedDetail}>{verification.blockedReason}</p>
+                        </div>
+                    )}
+                    {verification?.checks?.length ? (
+                        <div style={S.evidenceGrid}>
+                            {verification.checks.map((c, i) => (
+                                <div key={`${c.id}-${i}`} style={S.evidenceRow}>
+                                    <span style={{ ...S.verdict, ...verdictTone(c.verdict) }}>{c.verdict}</span>
+                                    <div>
+                                        <strong style={S.evidenceLabel}>{c.label}</strong>
+                                        <p style={S.evidenceText}>{c.evidence}</p>
+                                    </div>
+                                </div>
+                            ))}
+                            <p style={S.note}>Ran {new Date(verification.ranAt).toLocaleTimeString()}.</p>
+                        </div>
+                    ) : null}
+                </section>
+            )}
+
+            {state.started && (
+            <details style={S.envPanel} open={envOpen} onToggle={(e) => setEnvOpen((e.target as HTMLDetailsElement).open)}>
+                <summary style={S.envSummary}>QA environment &amp; troubleshooting</summary>
+                <div style={S.envBody}>
+                    <p style={S.note}>
+                        Nothing here is part of the walkthrough. It is what to look at when something
+                        misbehaves.
+                    </p>
+                    <h3 style={S.h3}>Certification fixture</h3>
+                    {fixture?.ok ? (
+                        <ul style={S.ul}>
+                            {fixture.installations.map((f) => (
+                                <li key={f.key}>
+                                    <strong>{f.name}</strong> — {f.proves}
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p style={S.note}>{fixture?.detail ?? "Not prepared."}</p>
+                    )}
+                    <p style={S.note}>Rebuild or inspect it from a terminal:</p>
+                    <pre style={S.pre}>{`npm run qa:developer-platform -- ensure
+npm run qa:developer-platform -- status
+npm run qa:developer-platform -- reset`}</pre>
+                    <h3 style={S.h3}>How live verification works</h3>
+                    <p style={S.note}>
+                        It issues a credential per fixture installation through the canonical authority,
+                        drives the real `/api/v1` endpoints over HTTP, and revokes every credential before
+                        returning. No secret is sent to this page, stored, or rendered. The credential you
+                        issue yourself in DP-QA-12 is never read.
+                    </p>
+                    <h3 style={S.h3}>Your answers</h3>
+                    <p style={S.note}>
+                        Saved in this browser only — there is no QA persistence service in Alloy today.
+                        Export the run when you finish.
+                    </p>
+                    <div style={S.row}>
+                        <button style={S.btn} onClick={() => copy(markdown(), "md")} type="button">
+                            {copied === "md" ? "Copied" : "Copy report (Markdown)"}
+                        </button>
+                        <button
+                            style={S.btn}
+                            type="button"
+                            onClick={() => download(JSON.stringify(state, null, 2), "developer-platform-qa.json", "application/json")}
+                        >
+                            Download JSON
+                        </button>
+                        <button
+                            style={{ ...S.btn, borderColor: "#b42318", color: "#b42318" }}
+                            type="button"
+                            onClick={() => {
+                                if (window.confirm("Clear every result and note for this walkthrough?")) setState(EMPTY);
+                            }}
+                        >
+                            Reset run
+                        </button>
+                    </div>
                 </div>
-            </section>
+            </details>
+            )}
 
-            <section style={S.setup}>
-                <h2 style={S.h2}>Commands for Section H</h2>
-                <p style={S.note}>
-                    Run these in your own terminal. Set <code>CLIENT_ID</code> and <code>CLIENT_SECRET</code>{" "}
-                    from the one-time reveal — this page never stores or renders a secret.
-                </p>
-                <Cmd
-                    id="token"
-                    copied={copied}
-                    onCopy={copy}
-                    text={`BASE=${baseUrl.current || "http://127.0.0.1:3018"}
-CLIENT_ID=<paste from the one-time reveal>
-CLIENT_SECRET=<paste from the one-time reveal>
-
-TOKEN=$(curl -s -X POST "$BASE/api/v1/oauth/token" \\
-  -H 'content-type: application/json' \\
-  -d "{\\"grant_type\\":\\"client_credentials\\",\\"client_id\\":\\"$CLIENT_ID\\",\\"client_secret\\":\\"$CLIENT_SECRET\\"}" \\
-  | jq -r .access_token)
-echo "$TOKEN" | head -c 12`}
-                />
-                <Cmd
-                    id="calls"
-                    copied={copied}
-                    onCopy={copy}
-                    text={`curl -s "$BASE/api/v1/context" -H "authorization: Bearer $TOKEN" | jq
-curl -s "$BASE/api/v1/locations?limit=2" -H "authorization: Bearer $TOKEN" | jq
-curl -s "$BASE/api/v1/locations?limit=200" -H "authorization: Bearer $TOKEN" | jq '.data | length'
-curl -s "$BASE/api/v1/context?org_id=00000000-0000-4000-8000-000000000999" -H "authorization: Bearer $TOKEN" | jq .organization`}
-                />
-                <Cmd
-                    id="refusals"
-                    copied={copied}
-                    onCopy={copy}
-                    text={`# DP-QA-33 — wrong secret
-curl -s -i -X POST "$BASE/api/v1/oauth/token" -H 'content-type: application/json' \\
-  -d "{\\"grant_type\\":\\"client_credentials\\",\\"client_id\\":\\"$CLIENT_ID\\",\\"client_secret\\":\\"definitely-wrong\\"}" | head -20
-
-# DP-QA-37 — a filter must not reach past the boundary
-curl -s "$BASE/api/v1/locations?location_id=00000000-0000-4000-8000-000000000011" \\
-  -H "authorization: Bearer $TOKEN" | jq '.data | length'
-
-# DP-QA-38 — rate limit headers on an ordinary response
-curl -s -D - -o /dev/null "$BASE/api/v1/context" -H "authorization: Bearer $TOKEN" | grep -i ratelimit`}
-                />
-            </section>
-
-            {SECTIONS.map((section) => {
+            {state.started && SECTIONS.map((section) => {
                 const open = state.openSection === section.id;
                 const sectionAnswered = section.steps.filter((s) => state.entries[s.id]?.result).length;
                 return (
@@ -462,6 +617,7 @@ curl -s -D - -o /dev/null "$BASE/api/v1/context" -H "authorization: Bearer $TOKE
                                         key={step.id}
                                         step={step}
                                         entry={state.entries[step.id] ?? {}}
+                                        evidence={evidenceByStep[step.id] ?? []}
                                         onChange={(patch) => update(step.id, patch)}
                                     />
                                 ))}
@@ -471,16 +627,20 @@ curl -s -D - -o /dev/null "$BASE/api/v1/context" -H "authorization: Bearer $TOKE
                 );
             })}
 
+            {state.started && (
             <section style={S.setup} id="summary">
                 <h2 style={S.h2}>Final QA summary</h2>
-                <pre style={S.summaryPre}>{`Developer Platform Human QA
+                <pre style={S.summaryPre}>{`DEVELOPER PLATFORM HUMAN QA
 
-Total steps:   ${ALL_STEPS.length}
+Total steps: ${ALL_STEPS.length}
 Passed:        ${tally.PASS}
 Failed:        ${tally.FAIL}
 Blocked:       ${tally.BLOCKED}
 Needs Review:  ${tally.NEEDS_REVIEW}
 Unanswered:    ${tally.unanswered}
+
+Hard gates passed: ${hardGatePasses.length} of ${hardGates.length}
+Hard gates failed: ${hardGateFailures.length}
 
 P0 defects:    ${severityTally.P0}
 P1 defects:    ${severityTally.P1}
@@ -570,6 +730,7 @@ ${acceptanceLabel(state.acceptance)}`}</pre>
                     </button>
                 </div>
             </section>
+            )}
 
             <footer style={S.footer}>
                 <p style={S.note}>
@@ -585,12 +746,15 @@ ${acceptanceLabel(state.acceptance)}`}</pre>
 function StepCard({
     step,
     entry,
+    evidence,
     onChange,
 }: {
     step: QaStep;
     entry: Entry;
+    evidence: MachineCheck[];
     onChange: (patch: Partial<Entry>) => void;
 }) {
+    const surfaces = STEP_SURFACES[step.id] ?? [];
     return (
         <article style={{ ...S.card, borderLeftColor: entry.result ? colorFor(entry.result) : "#e4e7ec" }}>
             <div style={S.cardHead}>
@@ -602,10 +766,36 @@ function StepCard({
                 <span style={S.area}>{step.area}</span>
             </div>
             <p style={S.objective}>{step.objective}</p>
+
+            {surfaces.length > 0 && (
+                <div style={S.surfaceRow}>
+                    {surfaces.map((sf) => (
+                        <a key={sf.href} href={sf.href} target="_blank" rel="noreferrer" style={S.surfaceLink}>
+                            {sf.label} ↗
+                        </a>
+                    ))}
+                </div>
+            )}
+
+            {evidence.length > 0 && (
+                <div style={S.machineBlock}>
+                    <span style={S.machineLabel}>Machine evidence</span>
+                    {evidence.map((c, i) => (
+                        <div key={`${c.id}-${i}`} style={S.machineRow}>
+                            <span style={{ ...S.verdict, ...verdictTone(c.verdict) }}>{c.verdict}</span>
+                            <p style={S.machineText}>{c.evidence}</p>
+                        </div>
+                    ))}
+                    <p style={S.machineFoot}>
+                        This is a deterministic fact, not your answer. Record your judgment below.
+                    </p>
+                </div>
+            )}
+
             <Field label="Starting state">{step.startingState}</Field>
             <Field label="Action">{step.action}</Field>
-            <div style={S.field}>
-                <span style={S.fieldLabel}>Expected</span>
+            <div style={{ ...S.field, ...S.seeBlock }}>
+                <span style={S.seeLabel}>What you should see</span>
                 <ul style={S.ul}>
                     {step.expected.map((e) => (
                         <li key={e}>{e}</li>
@@ -613,7 +803,10 @@ function StepCard({
                 </ul>
             </div>
             <Field label="Why it matters">{step.why}</Field>
-            {step.humanQuestion && <p style={S.humanQ}>{step.humanQuestion}</p>}
+            <div style={S.judgeBlock}>
+                <span style={S.judgeLabel}>Your judgment</span>
+                <p style={S.judgeText}>{step.humanQuestion ?? step.objective}</p>
+            </div>
 
             <div style={S.controls}>
                 <div style={S.resultRow}>
@@ -636,7 +829,7 @@ function StepCard({
                         );
                     })}
                 </div>
-                {entry.result === "FAIL" && (
+                {(entry.result === "FAIL" || entry.result === "BLOCKED" || entry.result === "NEEDS_REVIEW") && (
                     <label style={S.label}>
                         Severity
                         <select
@@ -662,7 +855,7 @@ function StepCard({
                         onChange={(e) => onChange({ notes: e.target.value })}
                     />
                 </label>
-                {(entry.result === "FAIL" || entry.result === "NEEDS_REVIEW") && (
+                {(entry.result === "FAIL" || entry.result === "BLOCKED" || entry.result === "NEEDS_REVIEW") && (
                     <label style={S.label}>
                         Evidence reference (screenshot filename, request id, timestamp)
                         <input
@@ -729,6 +922,12 @@ function ownerFor(step: QaStep) {
     return "Documentation & APIs lane (acceptance)";
 }
 
+function verdictTone(v: "PASS" | "FAIL" | "BLOCKED"): React.CSSProperties {
+    if (v === "PASS") return { borderColor: "#0f7b4f", color: "#0f7b4f" };
+    if (v === "FAIL") return { borderColor: "#b42318", color: "#b42318" };
+    return { borderColor: "#b54708", color: "#b54708" };
+}
+
 function colorFor(result: StepResult) {
     return RESULTS.find((r) => r.value === result)?.tone ?? "#e4e7ec";
 }
@@ -776,6 +975,38 @@ const S: Record<string, React.CSSProperties> = {
     pre: { margin: 0, padding: "12px 14px", background: "#101828", color: "#e4e7ec", borderRadius: 8, fontSize: 12.5, lineHeight: 1.55, overflowX: "auto", whiteSpace: "pre" },
     copyBtn: { position: "absolute", top: 8, right: 8, border: "1px solid #475467", background: "#1d2939", color: "#e4e7ec", borderRadius: 6, padding: "3px 9px", fontSize: 11, cursor: "pointer" },
     h3: { fontSize: 14, margin: "18px 0 6px" },
+    start: { marginTop: 28, padding: 24, border: "1px solid #e4e7ec", borderRadius: 12, background: "#fcfcfd" },
+    startLead: { margin: "0 0 14px", fontSize: 14, color: "#475467", lineHeight: 1.6 },
+    identityNote: { margin: "0 0 14px", padding: "12px 14px", border: "1px solid #b2cced", background: "#eff8ff", borderRadius: 8 },
+    identityLine: { margin: 0, fontSize: 13.5, color: "#101828" },
+    identityDetail: { margin: "6px 0 0", fontSize: 13, color: "#344054", lineHeight: 1.6 },
+    startReady: { margin: "0 0 14px", fontSize: 13, color: "#0f7b4f", fontWeight: 600 },
+    startBtn: { marginTop: 14, border: 0, background: "#175cd3", color: "#fff", borderRadius: 8, padding: "10px 22px", fontSize: 15, fontWeight: 600, cursor: "pointer" },
+    blocked: { padding: "12px 14px", border: "1px solid #fda29b", background: "#fef3f2", borderRadius: 8, fontSize: 13, color: "#912018", margin: "0 0 14px" },
+    blockedDetail: { margin: "6px 0 0", fontSize: 13, lineHeight: 1.55 },
+    verifyPanel: { marginTop: 22, padding: 18, border: "1px solid #e4e7ec", borderRadius: 12, background: "#fcfcfd" },
+    verifyHead: { display: "flex", gap: 16, justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap" },
+    btnPrimary: { border: 0, background: "#175cd3", color: "#fff", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+    evidenceGrid: { marginTop: 14, display: "grid", gap: 8 },
+    evidenceRow: { display: "flex", gap: 10, alignItems: "flex-start" },
+    evidenceLabel: { fontSize: 13 },
+    evidenceText: { margin: "2px 0 0", fontSize: 13, color: "#475467", lineHeight: 1.55 },
+    verdict: { border: "1px solid", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700, flexShrink: 0 },
+    envPanel: { marginTop: 18, border: "1px solid #e4e7ec", borderRadius: 12, background: "#fff" },
+    envSummary: { padding: "12px 18px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#475467" },
+    envBody: { padding: "0 18px 18px" },
+    surfaceRow: { display: "flex", flexWrap: "wrap", gap: 8, margin: "0 0 12px" },
+    surfaceLink: { display: "inline-block", border: "1px solid #b2cced", background: "#eff8ff", color: "#175cd3", borderRadius: 8, padding: "5px 11px", fontSize: 12.5, textDecoration: "none", fontWeight: 600 },
+    machineBlock: { margin: "0 0 12px", padding: "10px 12px", border: "1px solid #d0d5dd", borderRadius: 8, background: "#f9fafb" },
+    machineLabel: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#475467" },
+    machineRow: { display: "flex", gap: 9, alignItems: "flex-start", marginTop: 7 },
+    machineText: { margin: 0, fontSize: 13, lineHeight: 1.55, color: "#344054" },
+    machineFoot: { margin: "9px 0 0", fontSize: 11.5, color: "#667085", fontStyle: "italic" },
+    seeBlock: { padding: "10px 12px", border: "1px solid #e4e7ec", borderRadius: 8, background: "#fff" },
+    seeLabel: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#667085" },
+    judgeBlock: { marginTop: 12, padding: "10px 12px", borderLeft: "3px solid #175cd3", background: "#eff8ff", borderRadius: "0 8px 8px 0" },
+    judgeLabel: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#175cd3" },
+    judgeText: { margin: "4px 0 0", fontSize: 13.5, lineHeight: 1.6, color: "#101828" },
     summaryPre: { margin: 0, padding: "14px 16px", background: "#f9fafb", border: "1px solid #e4e7ec", borderRadius: 8, fontSize: 12.5, lineHeight: 1.6, whiteSpace: "pre" },
     defectList: { display: "grid", gap: 8 },
     defect: { border: "1px solid #e4e7ec", borderRadius: 8, padding: "10px 12px", background: "#fff" },

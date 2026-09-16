@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useReservedCardGeometry } from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ApprovedAttendanceCard from "@/components/operationalCards/AttendanceCard";
@@ -62,6 +63,17 @@ export default function AttendanceCard({ model, context, receded = false, coordi
     const [running, setRunning] = useState<string | null>(null);
     const [commandError, setCommandError] = useState<string | null>(null);
 
+    /*
+     * WHICH CHILD'S FULL WINDOW IS ACTUALLY LOADED — null while the card holds the root's projection.
+     *
+     * The initial projection is deliberately FIVE days: a month of history on the critical path to
+     * draw a week of it is what the root lifecycle exists to stop. But `recentDays` bounds the fold's
+     * whole window, so the same five days are all the `history` the depth layer would get — and the
+     * detail opens on "Month" and offers "All". Reading depth out of the initial projection silently
+     * turned a month into five days with no error and a plausible-looking count.
+     */
+    const depthLoadedForRef = useRef<string | null>(null);
+
     const load = useCallback(async () => {
         if (!memberId) {
             setVm(null);
@@ -76,7 +88,10 @@ export default function AttendanceCard({ model, context, receded = false, coordi
             const json = (await res.json()) as { ok?: boolean; vm?: AttendanceCardVM };
             // Keyed on the member the request was FOR: a slower response for the child the operator
             // just left must never paint over the child they are looking at now.
-            setVm(json?.ok && json.vm?.participant?.customerMemberId === memberId ? json.vm : null);
+            const fresh = json?.ok && json.vm?.participant?.customerMemberId === memberId ? json.vm : null;
+            // The endpoint's window is the DEPTH window; record that this child now has it.
+            if (fresh) depthLoadedForRef.current = memberId;
+            setVm(fresh);
         } catch {
             setVm(null);
         } finally {
@@ -132,11 +147,65 @@ export default function AttendanceCard({ model, context, receded = false, coordi
         [load, memberId, running],
     );
 
+    /*
+     * THE ROOT PROVISIONED THIS DAY. The card renders it.
+     *
+     * This used to `fetch(/api/admin/attendance/card)` on mount — its own bootstrap, its own loading
+     * state, its own stale-guard — which is what made the Focus Panel one lifecycle plus three. The
+     * attendance producer now runs inside the root provisioning lifecycle, bound to the same subject,
+     * so the projection arrives already keyed to the child this panel is about.
+     *
+     * `load()` remains for the REFRESH after a command: recording attendance must re-read the day,
+     * and that is an interaction, not a bootstrap.
+     */
+    const provisioned = context.operationalProjection?.cards?.attendance ?? null;
+    /*
+     * READINESS IS THE ROOT'S. A projection that has not arrived is PROVISIONING, and saying
+     * "No attendance record." then would be a false empty — the card asserting an absence it has
+     * not been told about. `loading` still covers the post-command re-read, which is the card's own.
+     */
+    const provisioning = memberId != null && provisioned == null;
+
+    /*
+     * S4-1 × ROOT LIFECYCLE — reserved geometry, keyed to the readiness this card now actually has.
+     *
+     * Attendance clears its day when the subject changes and renders a one-line body while the next
+     * child resolves, so its footprint collapsed exactly as Financials' did. The contract is that
+     * SETTLED means the card has an answer — a loaded day, "no attendance record.", "select a child"
+     * — and only a card still resolving is worth holding a footprint for.
+     *
+     * The reconciliation is in the predicate. Runtime Performance V2 keyed this to `!loading`, the
+     * card's own fetch. Since then the attendance producer moved into the root provisioning
+     * lifecycle, so the card can also be waiting on a projection that has not arrived — which is
+     * exactly why staging renders "Loading the day…" on `loading || provisioning` rather than
+     * asserting an absence. Reserving on anything narrower would leave the collapse this repair
+     * exists to remove, in the one window that is now the common one on a cold panel.
+     *
+     * So the reserve tracks the same union the copy does. Measured note kept from the original: an
+     * earlier `vm != null` predicate held this card reserved in 79 of 80 sampled frames at 124px
+     * against a natural 69px, because these subjects carry no scoped participant at all — reserving
+     * against "has data" rather than "is resolving" is the mistake this predicate avoids.
+     *
+     * Geometry only: the day still clears first, and no child's attendance survives the switch.
+     */
+    const reservedGeometry = useReservedCardGeometry(!(loading || provisioning));
     useEffect(() => {
         // Clear FIRST: the previous child's day must not linger while the next one resolves.
-        setVm(null);
-        void load();
-    }, [load]);
+        setVm(provisioned?.state === "ready" ? provisioned.data : null);
+        // A new projection is the SHALLOW window by construction, whichever child it is for.
+        depthLoadedForRef.current = null;
+    }, [provisioned]);
+
+    /*
+     * Opening the record over time is an INTERACTION, so it may fetch — that is the boundary the
+     * producers module already states: initial card truth is the root's, the history a card opens on
+     * demand stays with the endpoint. This keeps the initial request count at zero and still opens on
+     * the full window. The five days already in hand render immediately and fill in.
+     */
+    const openHistory = useCallback(() => {
+        setShowHistory(true);
+        if (memberId && depthLoadedForRef.current !== memberId) void load();
+    }, [load, memberId]);
 
     useReportPerspective(coordination, "attendance", showHistory ? "focused" : "base");
     useDismissSignal(coordination, "attendance", () => setShowHistory(false));
@@ -176,12 +245,13 @@ export default function AttendanceCard({ model, context, receded = false, coordi
     if (vm) {
         return (
             <div
+                ref={reservedGeometry.ref}
                 className="alloy-os-attendance"
                 data-attendance-card="true"
                 data-attendance-subject={memberId ?? undefined}
             >
                 <ApprovedAttendanceCard
-                    onViewHistory={() => setShowHistory(true)}
+                    onViewHistory={openHistory}
                     evidence={adaptAttendanceVmToAttendanceCard(vm)}
                     /*
                      * NO COMMANDS WHEN THERE IS NOTHING TO COMMAND. A child with no attendable
@@ -212,10 +282,17 @@ export default function AttendanceCard({ model, context, receded = false, coordi
     }
 
     return (
-        <div className="alloy-os-attendance" data-attendance-card="true" data-attendance-subject={memberId ?? undefined}>
+        <div
+            ref={reservedGeometry.ref}
+            className="alloy-os-attendance"
+            data-attendance-card="true"
+            data-attendance-subject={memberId ?? undefined}
+            data-attendance-reserved={reservedGeometry.reserved ? "true" : undefined}
+            style={reservedGeometry.style}
+        >
             <UniversalCard
                 title={model.title}
-                insight={insightFor(vm, name, Boolean(memberId), loading)}
+                insight={insightFor(vm, name, Boolean(memberId), loading || provisioning)}
                 iconName={model.iconName}
                 tier={model.tier}
                 archetype={model.archetype}
@@ -243,7 +320,7 @@ export default function AttendanceCard({ model, context, receded = false, coordi
                      * branch can no longer be reached.
                      */
                     <p className="alloy-os-attendance__empty" data-attendance-empty="loading">
-                        {loading ? "Loading the day…" : "No attendance record."}
+                        {loading || provisioning ? "Loading the day…" : "No attendance record."}
                     </p>
                 )}
             </UniversalCard>

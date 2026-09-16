@@ -1,4 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjection";
+import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
+import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
+
+/** A title the projection can name the subject by; never a fabricated one. */
+const strOrEmpty = (v: unknown): string => (typeof v === "string" ? v : "");
 
 import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
 import {
@@ -32,13 +38,8 @@ export type ComposeOpportunityDrawerViewModelParams = {
      * removing one server round-trip (`activity_comms_preview_ms`) from record-open.
      */
     deferCommunicationsPreview?: boolean;
-    /**
-     * Skip the stage-work projection (Current Work region) during first-paint composition and mark
-     * `workspace.stage_work` pending. The workspace VM route sets this; the client resolves the
-     * projection through the thin `…/stage-work` resource and patches the region in place. Defaults
-     * to false so any full-drawer caller keeps stage work inline.
-     */
-    deferStageWork?: boolean;
+    /** The selected participation this surface is scoped to; resolved, never trusted. */
+    attentionSubjectId?: string | null;
 };
 
 export async function composeOpportunityDrawerViewModel(
@@ -108,7 +109,6 @@ export async function composeOpportunityDrawerViewModel(
      * slice is 181-380 ms against A's ~650-800 ms, so `Promise.all` hides B inside A entirely and the
      * compose still costs `max(A, B)` = A.
      */
-    const deferStageWork = params.deferStageWork === true;
     const [initial, deferred] = await Promise.all([
         buildInitialPanelResource({
             supabase,
@@ -137,7 +137,6 @@ export async function composeOpportunityDrawerViewModel(
             currentStageKey,
             currentStageLabel,
             deferCommunicationsPreview: params.deferCommunicationsPreview === true,
-            deferStageWork,
         }),
     ]);
     if (!initial.ok) {
@@ -218,9 +217,8 @@ export async function composeOpportunityDrawerViewModel(
             attention: initial.summaries.attention,
         },
         background_refresh: {
-            allowed: deferStageWork
-                ? ["task_status", "scheduled_send_status", "readiness_values", "stage_work"]
-                : ["task_status", "scheduled_send_status", "readiness_values"],
+            // Stage work is never deferred now, so it is never a background refresh target.
+            allowed: ["task_status", "scheduled_send_status", "readiness_values"],
         },
         timing: {
             compose_ms: Date.now() - composeStart,
@@ -228,8 +226,99 @@ export async function composeOpportunityDrawerViewModel(
         },
     };
 
+    /*
+     * THE SETTLED FRAME'S OPERATIONAL PROJECTION — the same chokepoint the commit frame runs.
+     *
+     * The drawer VM is the steady-state carrier: once Settlement arrives, the cards take their
+     * context from here rather than from the provisioning answer. Projecting in both producers is
+     * what makes that a change of TRANSPORT rather than a change of AUTHORITY — before this, the
+     * settled frame republished the raw configuration and the browser re-derived the card's truth
+     * from it, which is why removing the payload from the answer alone would have freed nothing.
+     *
+     * `selectedParticipantId` is deliberately absent. It marks one child for emphasis and is
+     * ephemeral browser state; the renderer applies it over the supplied projection, which is
+     * presentation, not a decision about what may run.
+     */
+    const tProjection = Date.now();
+    /*
+     * The context is hoisted because the CARD PRODUCERS need the same one.
+     *
+     * Two frames sharing a producer but building two contexts is how they came to disagree about the
+     * subject in the first place. One context, both consumers.
+     */
+    const settledOperationalContext = buildOperationalContext({
+                    subjectId: String(viewModel.entity.id),
+                    title: strOrEmpty(viewModel.above_fold.record?.title),
+                    subjectVm: viewModel,
+                    truth: viewModel.above_fold.record,
+                    // No projection function reads perspective — verified across both card
+                    // projectors — and the server has no viewer lens to state.
+                    perspective: null,
+                    // `StatusControlVm` is a union; only the dropdown variant names a label.
+                    statusLabel:
+                        viewModel.header?.status && "label" in viewModel.header.status
+                            ? viewModel.header.status.label
+                            : null,
+                    /*
+                     * THE VM'S OWN VERDICT, not a second interpretation.
+                     *
+                     * `resolveOpportunityVmStatusCanMutate` — the client's rule — prefers
+                     * `header.status_can_mutate` and falls back to the gate only when the VM is
+                     * absent. Here the VM exists, so reading its verdict is exactly what the browser
+                     * would have concluded, including any narrowing for a closed record. The commit
+                     * frame has no VM and so uses the gate rule; that difference is the frames', not
+                     * two permission models.
+                     */
+                    canMutate: viewModel.header?.status_can_mutate ?? hasPortalAdminMutateAccess(gate.roleKeys ?? []),
+                    /*
+                     * THE SAME SUBJECT THE SURFACE IS SCOPED TO.
+                     *
+                     * This was `null`, and the canonical resolver then fell through to
+                     * `sole_participant` — a DIFFERENT child from the one on screen. The resolver was
+                     * right; the input was wrong. Passing the attention identity is what makes the
+                     * settled frame able to project the subject it claims to.
+                     */
+                    selectedParticipationId: params.attentionSubjectId ?? null,
+    });
+
+    /*
+     * THE PRODUCERS DO NOT RUN HERE, AND THIS MODULE MUST NOT IMPORT THEM.
+     *
+     * They need `buildAttendanceCardVM`, which is `server-only` because it queries the database. A
+     * client component reaches this composer — `ChildDrawerRuntimeProofClient` imports the
+     * `lib/layout/runtime` barrel, which re-exports `evaluateOpportunityLayoutRuntimeBody`, which
+     * imports this file — so an edge from here to the producers puts a `server-only` module in the
+     * browser graph and the production build fails outright. It did: the staging deployment for the
+     * first attempt failed while all thirteen required checks were green, because no required check
+     * runs a real `next build`.
+     *
+     * So the context travels OUT instead, and the App Route above — which cannot be imported by a
+     * client component — runs the producers with it. That is the same rule the commit frame follows
+     * in `composeProvisioningAnswerForRoute`: CONTRACTS may cross to the browser, SERVER
+     * IMPLEMENTATIONS may not. Handing the context out costs no second derivation, so both frames
+     * still produce from ONE context.
+     */
+    const projectedViewModel: OpportunityDrawerViewModel = {
+        ...viewModel,
+        workspace: {
+            ...viewModel.workspace,
+            /*
+             * The settled frame stops carrying the configuration too — both frames or neither, or a
+             * change of transport would restore the architecture this migration removed.
+             */
+            published_stage_inputs: null,
+            operational_projection: projectFocusPanelOperational({ context: settledOperationalContext }),
+        },
+    };
+    phases.operational_projection_ms = Date.now() - tProjection;
+
     // `phases` is referenced by viewModel.timing.phases_ms — these post-literal writes still surface.
     phases.serialization_ms = Date.now() - tSerialize0;
     phases.total_ms = Date.now() - composeStart;
-    return finishCompose({ ok: true, viewModel });
+    return finishCompose({
+        ok: true,
+        viewModel: projectedViewModel,
+        // The context the projection was built from, for the route's producers. A VALUE, not an edge.
+        operationalContext: settledOperationalContext,
+    });
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FOCUS_PANEL_RESERVED_MIN_HEIGHT } from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import {
@@ -124,6 +125,24 @@ export default function FinancialsCard({
     const noFinancialSubject = !subjectStillResolving && !customerId && !scopedMemberId;
 
     const [vm, setVm] = useState<FinancialsCardVM | null>(null);
+    /*
+     * A REFUSAL IS NOT AN EMPTY ACCOUNT.
+     *
+     * The endpoint answers 403 with `required_permission` when the caller lacks `fin.read`, and this
+     * card used to discard that and fall through to its empty state — telling an operator who may not
+     * see the ledger that there is nothing to see. The root producer reports the refusal explicitly,
+     * so the card can say what is actually true.
+     */
+    const [deniedRead, setDeniedRead] = useState(false);
+    /**
+     * WHICH ACCOUNT'S FULL MODEL IS LOADED — null while the card holds the root's bounded summary.
+     *
+     * The initial projection carries the account summary without `payments` or `ledgerPeriods`:
+     * 16.6 KB of receipts and placed ledger that the summary never reads. Every surface that DOES
+     * read them is an interaction, so opening one loads the full model from the endpoint that was
+     * always its owner.
+     */
+    const deepLoadedForRef = useRef<string | null>(null);
     const [loading, setLoading] = useState(false);
     /*
      * ONE overlay at a time, and the Focus Panel's OWN depth layer renders it.
@@ -244,8 +263,33 @@ export default function FinancialsCard({
      * a superseded response is simply dropped rather than cancelled, so nothing else changes.
      */
     const requestSeq = useRef(0);
+    /*
+     * ── THE REQUEST'S OWN IDENTITY, WHICH IS NOT THE SAME AS ITS INPUTS ──────────────────────────
+     *
+     * Measured on Firefly: this card issued `financials/card?customer_id=50b19065…` TWICE per Work
+     * Unit entry, and they were the two slowest requests in the sample. One mounted instance, no
+     * remount — proven with a mount counter and a per-request correlation header, because the DOM
+     * card-role counts that suggested a second instance were three roles across six cards.
+     *
+     * The cause is that `load` depended on `[customerId, scopedMemberId]` while the request it
+     * builds depends on the FIRST of them that is present. The participant resolves after the
+     * household, so `scopedMemberId` went `null → a227e460…`, `load`'s identity changed, the mount
+     * effect re-ran — and produced a byte-identical request, because `customerId` had won the
+     * ternary both times.
+     *
+     * Keying on the composed query is therefore not a cache and not a dedupe layer: it is this
+     * effect depending on what it actually sends. An input change that cannot change the request no
+     * longer re-issues it, and a change that CAN (the member-scoped branch, when no household is
+     * present) still does.
+     */
+    const requestQuery = useMemo(() => {
+        if (customerId) return `customer_id=${encodeURIComponent(customerId)}`;
+        if (scopedMemberId) return `customer_member_id=${encodeURIComponent(scopedMemberId)}`;
+        return null;
+    }, [customerId, scopedMemberId]);
+
     const load = useCallback(async () => {
-        if (!customerId && !scopedMemberId) {
+        if (!requestQuery) {
             requestSeq.current += 1;
             setVm(null);
             return;
@@ -254,13 +298,14 @@ export default function FinancialsCard({
         const current = () => seq === requestSeq.current;
         setLoading(true);
         try {
-            const query = customerId
-                ? `customer_id=${encodeURIComponent(customerId)}`
-                : `customer_member_id=${encodeURIComponent(scopedMemberId as string)}`;
-            const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
+            const query = requestQuery;
+                const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
             const json = (await res.json()) as { ok?: boolean; vm?: FinancialsCardVM };
             if (!current()) return;
-            setVm(json?.ok && json.vm ? json.vm : null);
+            const fresh = json?.ok && json.vm ? json.vm : null;
+            // The endpoint's answer is the FULL model; record which account now has it.
+            if (fresh) deepLoadedForRef.current = customerId ?? scopedMemberId;
+            setVm(fresh);
         } catch {
             if (!current()) return;
             setVm(null);
@@ -268,7 +313,7 @@ export default function FinancialsCard({
             // A superseded request must not clear the spinner belonging to the one that replaced it.
             if (current()) setLoading(false);
         }
-    }, [customerId, scopedMemberId]);
+    }, [requestQuery]);
 
     /*
      * ── MOVING MONEY BETWEEN OBLIGATIONS ─────────────────────────────────────────────────────────
@@ -740,11 +785,90 @@ export default function FinancialsCard({
 
 
 
+    /*
+     * THE ROOT PROVISIONED THIS ACCOUNT. The card renders it.
+     *
+     * This used to `fetch(/api/admin/financials/card)` on mount. The financials producer now runs
+     * inside the root provisioning lifecycle, under the SAME `fin.read` gate the endpoint applies,
+     * so the projection arrives already refused if this operator may not see the ledger.
+     *
+     * ── THE STALE GUARANTEE IS STRONGER HERE, NOT WEAKER ──
+     *
+     * `requestSeq` exists because a slow earlier response could land on top of a newer one — A → B
+     * → C with A resolving last, reproduced in the browser. The initial read no longer has a request
+     * of its own to lose that race with: the projection arrives WITH the answer whose subject it
+     * belongs to, and the root lifecycle already drops superseded answers wholesale.
+     *
+     * `requestSeq` stays for `load()`, which is the RELOAD after a financial action — an interaction,
+     * not a bootstrap, and still capable of racing itself.
+     */
+    const provisioned = context.operationalProjection?.cards?.financials ?? null;
+
+    /* Missing projection is PROVISIONING. It is not "No financial record." */
+    const provisioningAccount = (customerId != null || scopedMemberId != null) && provisioned == null;
+
+    /*
+     * ── S3-2: CLEAR THE DATA, KEEP THE FOOTPRINT ────────────────────────────────────────────────
+     *
+     * Clearing below is correct and stays: a previous household's balance must never linger under
+     * the next subject's name. What was wrong was the GEOMETRY of that clear. Frame-sampled on
+     * Firefly across one subject switch, this card went 409px → 69px → 409px — it was the only
+     * audited card that collapsed, and the ~340px round trip shoved every card beneath it down and
+     * back while the account loaded.
+     *
+     * The Focus Panel already has a reserved-geometry contract for exactly this transition
+     * (`FOCUS_PANEL_RESERVED_MIN_HEIGHT`, the floor `ReservedSettlementRegion` reserves). This card
+     * adopts it, and reserves its OWN last loaded footprint when it has one — geometry is not data,
+     * so remembering how much room the card occupied leaks nothing about the previous account, and
+     * it adapts per subject instead of freezing one height for every account. The shared token is
+     * the floor for the first load, where there is nothing to remember yet.
+     *
+     * A genuinely different next subject still resizes the card once, on arrival. That is honest;
+     * the artificial collapse to a one-line loader in between is what this removes.
+     */
+    const shellRef = useRef<HTMLDivElement | null>(null);
+    const loadedHeightRef = useRef<number | null>(null);
+    useEffect(() => {
+        if (!vm || !shellRef.current) return;
+        const h = Math.round(shellRef.current.getBoundingClientRect().height);
+        if (h > 0) loadedHeightRef.current = h;
+    }, [vm]);
+
+    /*
+     * ── RECONCILIATION: WHAT THE RESERVE IS FOR ─────────────────────────────────────────────────
+     *
+     * The reserve was written as `!vm`, when the only way to have no vm was to be loading one. The
+     * root lifecycle gave this card three further answers that also carry no vm — a permission
+     * refusal, no resolvable subject, and no account — and each of those is a SETTLED sentence the
+     * card is entitled to render at its own size. Reserving through them would pad a card that has
+     * finished, which is the failure the sibling cards were corrected for in the same programme.
+     *
+     * So the reserve tracks exactly the condition under which this card says "Loading the account…",
+     * and nothing else. Both intents survive: the collapse is still removed while the account
+     * resolves, and staging's new answers are still allowed to be answers.
+     */
+    const reservingAccount = !vm && !deniedRead && (loading || subjectStillResolving || provisioningAccount);
+
     useEffect(() => {
         // Clear FIRST: the previous household's balance must not linger while the next resolves.
-        setVm(null);
-        void load();
-    }, [load]);
+        // Any in-flight RELOAD is superseded too — its ordinal can no longer be current.
+        requestSeq.current += 1;
+        setVm(provisioned?.state === "ready" ? provisioned.data : null);
+        setDeniedRead(provisioned?.state === "forbidden");
+        // A new projection is the BOUNDED summary by construction, whichever account it is for.
+        deepLoadedForRef.current = null;
+    }, [provisioned]);
+
+    /*
+     * DEPTH IS AN INTERACTION. Opening any of the account's deep surfaces — the ledger, the payment
+     * flow, add-charge — loads the full model once per account. The initial panel still issues no
+     * request at all, which is the invariant; this is the operator asking.
+     */
+    useEffect(() => {
+        if (!overlay) return;
+        const key = customerId ?? scopedMemberId;
+        if (key && deepLoadedForRef.current !== key) void load();
+    }, [overlay, customerId, scopedMemberId, load]);
 
     /*
      * A SCOPED CHILD PRESELECTS THE SUBJECT FILTER.
@@ -2579,9 +2703,15 @@ export default function FinancialsCard({
         );
         return (
             <div
+                // SAME SHELL REF as the fallback return below. The loaded card renders through THIS
+                // branch, so without the ref the footprint it is reserving on the next subject switch
+                // could never be measured — the reserved height silently fell back to the shared floor.
+                ref={shellRef}
                 className="alloy-os-financials"
                 data-financials-card="true"
                 data-financials-subject={subjectFilter}
+                /* WHICH ACCOUNT IS ON SCREEN — the household, not the child filter. */
+                data-financials-account={vm.account?.customerId ?? undefined}
             >
                 <ApprovedFinancialsCard
                     evidence={adaptFinancialsVmToFinancialsCard({
@@ -2623,7 +2753,27 @@ export default function FinancialsCard({
     }
 
     return (
-        <div className="alloy-os-financials" data-financials-card="true" data-financials-subject={subjectFilter}>
+        <div
+            ref={shellRef}
+            className="alloy-os-financials"
+            data-financials-card="true"
+            data-financials-subject={subjectFilter}
+            /*
+             * WHICH ACCOUNT IS ON SCREEN — the household, not the child filter.
+             *
+             * `data-financials-subject` is the subject FILTER inside the account; it cannot answer
+             * "whose account is this". The sibling cards already name their subject this way
+             * (`data-attendance-subject`), and a stale-overwrite proof needs to read the answer off
+             * the rendered card rather than off the props it was handed.
+             */
+            data-financials-account={vm?.account?.customerId ?? undefined}
+            data-financials-reserved={reservingAccount ? "true" : undefined}
+            style={
+                reservingAccount
+                    ? { minHeight: loadedHeightRef.current ?? FOCUS_PANEL_RESERVED_MIN_HEIGHT }
+                    : undefined
+            }
+        >
             <UniversalCard
                 title={model.title}
                 insight={insightFor(vm, reconciliation, loading, currency)}
@@ -2638,7 +2788,7 @@ export default function FinancialsCard({
             >
                 {!vm ? (
                     /*
-                     * THREE STATES, AND ONLY ONE OF THEM IS TERMINAL.
+                     * FOUR STATES, AND ONLY ONE OF THEM IS TERMINAL.
                      *
                      * "No financial record" was wrong in every case it was shown. It reads as a
                      * statement about the FAMILY — that they have no financial history — and having
@@ -2646,33 +2796,36 @@ export default function FinancialsCard({
                      * renders as $0.00 with Add charge available. What the card actually meant was
                      * that it could not resolve an account to ask about.
                      *
-                     * ── AND LOADING IS NOT A SENTENCE ──────────────────────────────────────────
+                     * ── THE MERGE THAT PRODUCED THIS BRANCH ────────────────────────────────────
                      *
-                     * The unresolved state used to be one line of text in an otherwise empty card,
-                     * which in the Financials workspace — where this card is the account's primary
-                     * summary — meant selecting an account produced a large box reading "Loading the
-                     * account…" while the detail beneath it was already showing its ledger. The
-                     * card's own shape is known before its figures are, so the shape is what it
-                     * draws: labelled regions with placeholders inside them, never a number and
-                     * never a zero, because a placeholder mistaken for $0.00 is worse than a wait.
+                     * Two independent corrections met here and BOTH are kept, because each answers
+                     * a question the other does not:
+                     *
+                     *   from staging   `deniedRead` and `provisioningAccount` — a reader without
+                     *                  permission must be told that, not shown "unavailable", and
+                     *                  an account still being provisioned is loading rather than
+                     *                  absent.
+                     *
+                     *   from 11A       LOADING IS NOT A SENTENCE. The unresolved state used to be
+                     *                  one line of text in an otherwise empty card, which in the
+                     *                  Financials workspace — where this card is the account's
+                     *                  primary summary — meant selecting an account produced a
+                     *                  large box reading "Loading the account…" while the detail
+                     *                  beneath it was already showing its ledger. The card's shape
+                     *                  is known before its figures are, so the shape is what it
+                     *                  draws.
+                     *
+                     * Taking either side wholesale would have dropped the other's fix.
                      */
-                    loading || subjectStillResolving ? (
+                    deniedRead ? (
+                        <p className="alloy-os-financials__empty" data-financials-empty="permission">
+                            You do not have permission to view financial information.
+                        </p>
+                    ) : loading || subjectStillResolving || provisioningAccount ? (
                         /*
-                         * ── THE ANATOMY IS KNOWN BEFORE THE FIGURES ARE ───────────────────────
-                         *
-                         * Selecting an account used to assemble in phases: an empty canvas, then a
-                         * partial card, then the filters, then the ledger — four layouts in a row,
-                         * each one moving the controls the operator was reaching for. Nothing about
-                         * that was unavoidable. At the instant of the click the system already knows
-                         * the card's shape, which three metrics it carries, where Payment and Add
-                         * charge sit and which lenses exist; only the NUMBERS are outstanding.
-                         *
-                         * So the committed anatomy renders immediately, in the same components and
-                         * the same classes the settled card uses, with placeholders where values
-                         * will land. The API finishing then changes text, never layout.
-                         *
-                         * Placeholders, never zeroes: a $0.00 that is really "not read yet" is a
-                         * financial claim, and this surface may not make one it cannot support.
+                         * The committed anatomy, with placeholders where values will land — never a
+                         * number and never a zero, because a placeholder mistaken for $0.00 is
+                         * worse than a wait.
                          */
                         summaryVariant === "account" ? (
                             <AccountSummaryPending />

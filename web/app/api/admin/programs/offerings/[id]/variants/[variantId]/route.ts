@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import type { QuantityType, VariantStatus } from "@/lib/programs/programOfferingVariants";
+import { requireProgramsConfigurationCapability } from "@/lib/access/programsConfigurationAuthority";
 
 const VALID_QUANTITY_TYPES = new Set<QuantityType>([
     "days", "hours", "sessions", "weeks", "months",
@@ -31,6 +32,8 @@ export async function PATCH(
             { status: ctx.status },
         );
     }
+    const capDenied = requireProgramsConfigurationCapability(ctx);
+    if (capDenied) return capDenied;
     if (!["admin", "ops"].includes(ctx.role)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -132,6 +135,8 @@ export async function DELETE(
             { status: ctx.status },
         );
     }
+    const capDenied = requireProgramsConfigurationCapability(ctx);
+    if (capDenied) return capDenied;
     if (!["admin"].includes(ctx.role)) {
         return NextResponse.json({ error: "Forbidden — admin required" }, { status: 403 });
     }

@@ -42,6 +42,14 @@ export type BusinessProcessParticipant = {
     /** First name only: the rail is a marker, not a roster. */
     firstName: string;
     imageUrl: string | null;
+    /**
+     * The durable child identity, when the participation names one.
+     *
+     * Carried because participant EMPHASIS is applied by the renderer from ephemeral browser state,
+     * and "either stable identity may name the participant" — so the projection has to expose both
+     * or the durable-child branch could never match.
+     */
+    customerMemberId: string | null;
     /** The stable key that decided placement. */
     stageKey: string;
     /** Presentation, carried for the marker's tooltip/label — never used to place. */
@@ -168,6 +176,7 @@ export function buildBusinessProcessCardEvidence(
             name: child.name,
             firstName: firstNameOf(child.name),
             imageUrl: child.imageUrl ?? null,
+            customerMemberId: child.customerMemberId ?? null,
             stageKey,
             stageLabel: child.status ?? null,
             // Either stable identity may name the participant — the participation row or the
@@ -263,3 +272,28 @@ function safeCurrentWork(context: OperationalContext): BusinessProcessCardEviden
         return null;
     }
 }
+
+/**
+ * The evidence for a surface with nothing published to say — DERIVED, never hand-written.
+ *
+ * The renderer needs an empty value for the frame before the server projection arrives. Writing one
+ * out by hand would be a second definition of "no process" that drifts the moment this type gains a
+ * field, so it is produced by the builder itself over an empty context.
+ */
+export const EMPTY_BUSINESS_PROCESS_EVIDENCE: BusinessProcessCardEvidence =
+    buildBusinessProcessCardEvidence({
+        grain: "case",
+        subject: { type: "opportunity", id: "", label: "" },
+        businessProcess: { key: null, label: null, stageKey: null },
+        perspective: null,
+        truth: {},
+        signals: {
+            work: { nextActionLabel: null, nextActionRef: null, openWorkCount: 0, workItems: [] },
+            attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
+            tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
+            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
+            billing: { billingConfigured: false, billingContactName: null, billingContactEmail: null, tuitionRateLabel: null, feeBalanceCents: null },
+        },
+        capabilities: { canMutate: false, maskedChannels: false },
+        status: "ready",
+    } as unknown as OperationalContext);

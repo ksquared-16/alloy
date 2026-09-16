@@ -89,7 +89,7 @@ export {
 
 export {
     AI_ENRICHMENT_USE_PERMISSION_KEY,
-    isAiEnrichmentUsePermissionRequired,
+    isOpenAiLiveInvocationFeatureEnabled,
     computeOpenAiLiveInvocationPermitted,
     resolveAiEnrichmentPortalAccess,
     type AiEnrichmentRouteAccessFailure,

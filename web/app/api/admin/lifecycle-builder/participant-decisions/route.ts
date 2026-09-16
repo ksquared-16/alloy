@@ -17,6 +17,7 @@ import { CORRELATION_ID_HEADER, resolveCorrelationId } from "@/lib/api/correlati
 import { resolveParticipantDecisionContext } from "@/lib/lifecycle/resolveParticipantDecisionContext";
 import { projectParticipantDecisionRows } from "@/lib/lifecycle/projectParticipantDecisionRows";
 import { executeParticipantDecisionForChild } from "@/lib/lifecycle/executeParticipantDecisionForChild";
+import { WORK_OPERATE, requireWorkCapability } from "@/lib/access/workAuthority";
 
 /** GET — render the participant decision surface for one family's work item. */
 export async function GET(request: NextRequest) {
@@ -95,6 +96,15 @@ export async function POST(request: NextRequest) {
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
     const dim = scopeDimensionsFromAccess(access);
+    /*
+     * WORK AUTHORITY — records a participant decision inside a running process.
+     *
+     * Authority here was PORTAL ADMISSION, which decided nothing about
+     * whether this principal may do this job. `work.operate` is the authority now, held by
+     * grant and by nothing else.
+     */
+    const capDenied = requireWorkCapability(access, WORK_OPERATE);
+    if (capDenied) return capDenied;
 
     let body: {
         opportunity_id?: string;

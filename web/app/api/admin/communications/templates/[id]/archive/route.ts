@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import {
+    requireCommunicationsAuthority,
+    COMMUNICATIONS_TEMPLATES_MANAGE,
+} from "@/lib/communications/communicationsAuthority";
 
 /**
  * Communications V2 — template archive (Phase 1 / B2).
  * Soft archive: status = 'archived'. No row delete, no provider behavior.
- * Pattern: requireAdminOrOps -> getAdminContextCached -> createAdminClient; org_id scoped.
+ * Pattern: `communications.templates.manage` -> getAdminContextCached -> createAdminClient; org_id scoped.
  */
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
@@ -15,8 +18,8 @@ const TEMPLATE_COLS =
 
 /** POST /api/admin/communications/templates/[id]/archive — set status='archived'. */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await requireCommunicationsAuthority(COMMUNICATIONS_TEMPLATES_MANAGE);
+    if (!auth.ok) return auth.response;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);

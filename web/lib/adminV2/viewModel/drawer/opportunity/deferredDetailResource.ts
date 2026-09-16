@@ -28,7 +28,6 @@ export type BuildDeferredDetailResourceParams = {
     currentStageKey: string | null;
     currentStageLabel: string | null;
     deferCommunicationsPreview: boolean;
-    deferStageWork: boolean;
 };
 
 /** Resolve the deep/deferred (Tier-3) composition for the opportunity drawer VM. */
@@ -45,7 +44,6 @@ export async function buildDeferredDetailResource(
         currentStageKey,
         currentStageLabel,
         deferCommunicationsPreview,
-        deferStageWork,
     } = params;
     const phases_ms: Record<string, number> = {};
 
@@ -72,34 +70,36 @@ export async function buildDeferredDetailResource(
               return preview;
           })();
 
-    // Stage work (Current Work region) is heavy — two operational_tasks reads — and does NOT feed the
-    // above-fold render model. On the workspace inline Focus Panel path it is deferred to a thin canonical
-    // resource resolved after first paint; the VM carries a `pending` load state (neutral loading, never a
-    // false "No active work").
+    /*
+     * Stage work resolves INLINE, always.
+     *
+     * It was once deferred here so first paint did not wait on two operational_tasks reads, with the
+     * VM carrying a `pending` load state and the browser patching the region afterwards. That is
+     * retired: the compose now runs it beside the rest (measured at 181-380 ms inside A's ~650-800 ms,
+     * so `Promise.all` hides it), and the patch it enabled merged stage-work truth without refreshing
+     * the operational projection computed beside it.
+     */
     const [stageSlice, communicationsPreviewVm] = await Promise.all([
-        deferStageWork
-            ? Promise.resolve({
-                  stage_work_runtime: null,
-                  published_stage_inputs: null,
-                  work_intent_runtime: null,
-              })
-            : resolveOpportunityStageWorkSlice({
-                  supabase,
-                  orgId,
-                  opportunityId,
-                  departmentId,
-                  stageKey: currentStageKey,
-                  stageLabel: currentStageLabel,
-                  departmentMetadata: deptMetadata,
-              }),
+        resolveOpportunityStageWorkSlice({
+            supabase,
+            orgId,
+            opportunityId,
+            departmentId,
+            stageKey: currentStageKey,
+            stageLabel: currentStageLabel,
+            departmentMetadata: deptMetadata,
+        }),
         communicationsPreviewP,
     ]);
     const { stage_work_runtime, published_stage_inputs, work_intent_runtime } = stageSlice;
-    const stage_work: StageWorkLoadState = deferStageWork
-        ? { status: "pending" }
-        : stage_work_runtime
-          ? { status: "ready", value: stage_work_runtime }
-          : { status: "empty" };
+    /*
+     * NEVER `pending`. The deferred contract that produced it is retired: nothing constructed the
+     * `stage_work=0` that reached it, and the browser patch it enabled merged stage-work truth
+     * without refreshing the operational projection beside it.
+     */
+    const stage_work: StageWorkLoadState = stage_work_runtime
+        ? { status: "ready", value: stage_work_runtime }
+        : { status: "empty" };
 
     return {
         workspace_detail: {

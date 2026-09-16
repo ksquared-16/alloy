@@ -1,29 +1,29 @@
 {
-  "title": "W-11 \u2014 catalog / enforcement reconciliation, and the enumerated deletion list",
-  "why_this_file_exists": "The plan (03\u2026\u00a77, W-11) makes one thing an exit artifact rather than an implementation detail: 'Deletions must be enumerated and shown to the operator before the migration runs, not discovered afterward.' This file is that enumeration. It is the operator's review list for migration M5 and the input to the decision recorded under `operator_decision_required`. Nothing here has been applied; no migration was authored.",
+  "title": "W-11 — catalog / enforcement reconciliation, and the enumerated deletion list",
+  "why_this_file_exists": "The plan (03…§7, W-11) makes one thing an exit artifact rather than an implementation detail: 'Deletions must be enumerated and shown to the operator before the migration runs, not discovered afterward.' This file is that enumeration. It is the operator's review list for migration M5 and the input to the decision recorded under `operator_decision_required`. Nothing here has been applied; no migration was authored.",
   "mission": {
     "mission_id": "msn_f74ed02c126c88d7ff",
     "mission_version": 1,
     "assignment_id": "asg_ddd008f2c3d92a",
     "content_hash": "3c36b58117e46b2363ef602b385409e7",
-    "phase": "Wave 3 \u2014 One vocabulary (W-11)"
+    "phase": "Wave 3 — One vocabulary (W-11)"
   },
   "plan_of_record": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
-  "plan_section": "\u00a77 \u2014 W-11",
+  "plan_section": "§7 — W-11",
   "derivation": {
     "method": "static, from this repository's migration tree and product sources at this commit",
-    "catalog_source": "every region of supabase/migrations/*.sql that can write a catalog row \u2014 an INSERT into permission_definitions / permissions / permission_keys, a DO block containing one, or a function body containing one",
+    "catalog_source": "every region of supabase/migrations/*.sql that can write a catalog row — an INSERT into permission_definitions / permissions / permission_keys, a DO block containing one, or a function body containing one",
     "enforcement_source": "key-shaped string literals on comment-stripped executable lines of web/app, web/lib, web/components, web/scripts",
     "files_scanned": 6201,
     "instrument": "web/tests/access/permissionCatalogDiscovery.ts",
-    "guard": "web/tests/access/catalogVocabularyReconciliation.test.ts \u2014 asserts the lists below still equal the tree",
-    "not_a_live_measurement": "This is the tree, not the database. Live catalog width, live grant counts, and any key seeded on the target outside the tree are M5 preflight subjects (\u00a711)."
+    "guard": "web/tests/access/catalogVocabularyReconciliation.test.ts — asserts the lists below still equal the tree",
+    "not_a_live_measurement": "This is the tree, not the database. Live catalog width, live grant counts, and any key seeded on the target outside the tree are M5 preflight subjects (§11)."
   },
   "catalog_width": 57,
   "enforced_count": 27,
   "deletion_candidate_count": 30,
-  "w13_restatement": "Enforced was 21 and the deletion list 36 until W-13/AD-22 removed the `portalEligible` role literal from `requirePortalOrUsersRolesManageAuth`, which gave `settings.users_roles.read` its first enforcement site. Catalog width is unchanged at 57 \u2014 one key moved between the two sets, and it moved OUT of the deletion list, which is the only such movement this initiative has recorded.",
-  "financials_restatement": "2026-09-10. Enforced was 22 and the deletion list 35 until `fin.read` and `fin.write` were recovered from it. Both had in fact been enforced for some time and nothing re-derived the measurement \u2014 the same staleness, in the same direction, that `web/lib/admin/unenforcedPermissionKeys.json` carried, where it had the sharper consequence of making Financials ungrantable from the role editor. Catalog width is unchanged by this movement, and as with W-13 the movement is OUT of the deletion list, which is the direction that means the product grew a real gate rather than lost one.",
+  "w13_restatement": "Enforced was 21 and the deletion list 36 until W-13/AD-22 removed the `portalEligible` role literal from `requirePortalOrUsersRolesManageAuth`, which gave `settings.users_roles.read` its first enforcement site. Catalog width is unchanged at 57 — one key moved between the two sets, and it moved OUT of the deletion list, which is the only such movement this initiative has recorded.",
+  "financials_restatement": "2026-09-10. Enforced was 22 and the deletion list 35 until `fin.read` and `fin.write` were recovered from it. Both had in fact been enforced for some time and nothing re-derived the measurement — the same staleness, in the same direction, that `web/lib/admin/unenforcedPermissionKeys.json` carried, where it had the sharper consequence of making Financials ungrantable from the role editor. Catalog width is unchanged by this movement, and as with W-13 the movement is OUT of the deletion list, which is the direction that means the product grew a real gate rather than lost one.",
   "addition_candidate_count": 1,
   "discovery": {
     "finding": "The catalog is 57 keys. Every static instrument in this workstream measured 35, because the parser they shared was pinned to one INSERT column order.",
@@ -32,12 +32,12 @@
     "syntaxes_the_pinned_parser_could_not_reach": [
       {
         "syntax": "transposed columns",
-        "where": "20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql \u2014 seed_default_rbac() writes (key, label, group_key, description); every other seed writes (key, group_key, label, \u2026)",
+        "where": "20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql — seed_default_rbac() writes (key, label, group_key, description); every other seed writes (key, group_key, label, …)",
         "keys_hidden": 22
       },
       {
         "syntax": "variable-driven",
-        "where": "20260722000000_operational_expectations_authority_model_p1_wave_c.sql \u2014 keys live in a FOR k, lbl, dsc IN VALUES list; the INSERT carries variables, not literals",
+        "where": "20260722000000_operational_expectations_authority_model_p1_wave_c.sql — keys live in a FOR k, lbl, dsc IN VALUES list; the INSERT carries variables, not literals",
         "keys_hidden": 2
       }
     ],
@@ -65,17 +65,25 @@
       "ops.schedules.read",
       "ops.schedules.write"
     ],
-    "consequence_for_prior_records": "W-10's execution record states 25 projected rows over 35 keys and 'the grid can represent all of them'. The projection is total, so the second clause holds; the numbers do not. Against the real catalog the same projection renders more rows over 57 keys. W-10's exit criterion is unaffected; its arithmetic is restated in \u00a77."
+    "consequence_for_prior_records": "W-10's execution record states 25 projected rows over 35 keys and 'the grid can represent all of them'. The projection is total, so the second clause holds; the numbers do not. Against the real catalog the same projection renders more rows over 57 keys. W-10's exit criterion is unaffected; its arithmetic is restated in §7."
   },
   "enforced": [
     {
       "key": "ai.enrichment.use",
       "sites": [
         "web/lib/ai/aiEnrichmentPermissions.ts",
+        "web/lib/ai/resolveTrustAuthorization.ts",
         "web/lib/bos/auth/index.ts",
         "web/lib/bos/bosCapabilityRegistry.ts"
       ],
-      "note": "conditional \u2014 only when AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true; otherwise the routes fall back to portal admin/ops"
+      "note": "UNCONDITIONAL since AI + Agent Authority V2. It was previously enforced only when AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true — a flag set in tests and in no deployed configuration — so every real environment fell back to the portal admin/ops role title and the capability was decorative. The flag now governs live provider invocation only, which is feature availability; it can narrow admission but never grant it."
+    },
+    {
+      "key": "communications.read",
+      "sites": [
+        "web/lib/communications/communicationsAuthority.ts"
+      ],
+      "note": "RECOVERED 2026-09-15 by the Communications authority model, the same story as fin.read and crm.customers.read: catalogued since Phase 0, offered in the role editor, granted to admin and ops, and consulted by nothing. The 22 read handlers across the Communications surface asked requireAdminOrOps() instead, which resolves portal admission only, so every portal principal read the organization's communications and the catalog advertised a boundary the product did not apply."
     },
     {
       "key": "communications.send",
@@ -122,19 +130,33 @@
       "note": "Recovered by the Forms authority cleanup (20260912020000). The CRM entity search under Forms was gated on the literal `admin` role; it reads persons, customers and customer_members, so it now enforces the CRM read capability that already existed and had never been enforced anywhere."
     },
     {
+      "key": "crm.customers.write",
+      "sites": [
+        "web/lib/access/crmPeopleAuthority.ts"
+      ],
+      "note": "RECOVERED 2026-09-15 by the CRM/People record model — the third key found in this exact state, after fin.read and communications.read. Catalogued since the permission grid, granted to admin and ops in every organization, offered in the role editor, and named by NO source file. The 18 record mutations it describes were decided by requireAdminOrOps(), by ctx.role !== \"admin\", and on four contact mutations by nothing at all."
+    },
+    {
       "key": "data_quality.view",
       "sites": [
         "web/lib/agent/configLayoutAssist/configurationProposalAccess.ts",
         "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts",
         "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"
       ],
-      "note": "gates config-assist proposals only \u2014 the same edit made through the normal configuration surface is not checked against it"
+      "note": "gates config-assist proposals only — the same edit made through the normal configuration surface is not checked against it"
     },
     {
       "key": "documents.read",
       "sites": [
         "web/lib/documents/assertDocumentAccess.ts"
       ]
+    },
+    {
+      "key": "documents.write",
+      "sites": [
+        "web/lib/documents/assertDocumentAccess.ts"
+      ],
+      "note": "RECOVERED 2026-09-15 by the same slice. Its first enforcement sites are the two person profile-photo mutations, which are documents-backed and whose GET was already declared documents.read. Granted to admin and ops everywhere and enforced nowhere until now."
     },
     {
       "key": "fields.editability.manage",
@@ -168,7 +190,7 @@
       "sites": [
         "web/lib/financials/financialsPermissions.ts"
       ],
-      "note": "assertFinancialsReadAllowed \u2014 the five Financials workspace read routes, and from 2026-09-10 the twelve financial record-data routes that had been on admission alone. Appended rather than sorted into place: this array's order records when each key was measured."
+      "note": "assertFinancialsReadAllowed — the five Financials workspace read routes, and from 2026-09-10 the twelve financial record-data routes that had been on admission alone. Appended rather than sorted into place: this array's order records when each key was measured."
     },
     {
       "key": "fin.write",
@@ -204,11 +226,24 @@
       ]
     },
     {
+      "key": "ops.jobs.write",
+      "sites": [
+        "web/lib/access/schedulingJobsAuthority.ts",
+        "web/app/api/admin/jobs/route.ts",
+        "web/app/api/admin/jobs/[id]/route.ts",
+        "web/app/api/admin/jobs/[id]/archive/route.ts",
+        "web/app/api/admin/jobs/[id]/unarchive/route.ts",
+        "web/app/api/admin/jobs/[id]/assign-vendor/route.ts",
+        "web/app/api/admin/jobs/[id]/location/route.ts"
+      ],
+      "note": "Same shape as scheduling.write: catalogued long ago, enforced nowhere, now gating the six non-money job mutations. jobs/[id]/charges is deliberately NOT here — a posted receivable charge is fin.post."
+    },
+    {
       "key": "ops.messaging.write",
       "sites": [
         "web/lib/communications/communicationPermissions.ts"
       ],
-      "note": "the legacy alias for communications.send \u2014 the only key of the 22-key legacy seed vocabulary that anything consults"
+      "note": "the legacy alias for communications.send — the only key of the 22-key legacy seed vocabulary that anything consults"
     },
     {
       "key": "option_sets.manage",
@@ -230,6 +265,17 @@
       "sites": [
         "web/lib/admin/canReadAnalytics.ts"
       ]
+    },
+    {
+      "key": "scheduling.write",
+      "sites": [
+        "web/lib/access/schedulingJobsAuthority.ts",
+        "web/app/api/admin/schedules/route.ts",
+        "web/app/api/admin/schedules/[id]/route.ts",
+        "web/app/api/admin/schedules/[id]/cancel/route.ts",
+        "web/app/api/admin/schedules/[id]/location/route.ts"
+      ],
+      "note": "Catalogued in 20260505164000 and enforced NOWHERE until the Schedules + Jobs authority cleanup: its only executable reference was the unenforced-permission list. Now gates the four non-money schedule mutations. The three money postings served from under schedules/ are deliberately NOT here — they are fin.post."
     },
     {
       "key": "sections.manage",
@@ -263,31 +309,15 @@
       "sites": [
         "web/lib/admin/canManageUsersAndRoles.ts"
       ],
-      "note": "W-13/AD-22 \u2014 acquired an enforcement site when `requirePortalOrUsersRolesManageAuth` stopped admitting on `portalEligible` and started reading the RBAC catalog read capability. Moved here from `deletion_candidates`: it was inert only because the gate above it was a role literal."
+      "note": "W-13/AD-22 — acquired an enforcement site when `requirePortalOrUsersRolesManageAuth` stopped admitting on `portalEligible` and started reading the RBAC catalog read capability. Moved here from `deletion_candidates`: it was inert only because the gate above it was a role literal."
     },
     {
-      "key": "scheduling.write",
+      "key": "ops.workflows.write",
       "sites": [
-        "web/lib/access/schedulingJobsAuthority.ts",
-        "web/app/api/admin/schedules/route.ts",
-        "web/app/api/admin/schedules/[id]/route.ts",
-        "web/app/api/admin/schedules/[id]/cancel/route.ts",
-        "web/app/api/admin/schedules/[id]/location/route.ts"
+        "web/lib/access/agentApplyAuthority.ts",
+        "web/app/api/admin/ai/workflow-assist/apply/route.ts"
       ],
-      "note": "Catalogued in 20260505164000 and enforced NOWHERE until the Schedules + Jobs authority cleanup: its only executable reference was the unenforced-permission list. Now gates the four non-money schedule mutations. The three money postings served from under schedules/ are deliberately NOT here \u2014 they are fin.post."
-    },
-    {
-      "key": "ops.jobs.write",
-      "sites": [
-        "web/lib/access/schedulingJobsAuthority.ts",
-        "web/app/api/admin/jobs/route.ts",
-        "web/app/api/admin/jobs/[id]/route.ts",
-        "web/app/api/admin/jobs/[id]/archive/route.ts",
-        "web/app/api/admin/jobs/[id]/unarchive/route.ts",
-        "web/app/api/admin/jobs/[id]/assign-vendor/route.ts",
-        "web/app/api/admin/jobs/[id]/location/route.ts"
-      ],
-      "note": "Same shape as scheduling.write: catalogued long ago, enforced nowhere, now gating the six non-money job mutations. jobs/[id]/charges is deliberately NOT here \u2014 a posted receivable charge is fin.post."
+      "note": "activated by AI + Agent Authority V2 — Workflow Assist apply requires it before writing `workflows` and `workflow_actions`. Catalogued and active since Phase 0, granted to admin in 3 of 3 organizations and ops in 2 of 3, and enforced by no source file until this slice. `ops.workflows.read` is deliberately NOT activated with it."
     }
   ],
   "deletion_candidates": [
@@ -295,11 +325,8 @@
     "ai.telemetry.review",
     "billing.read",
     "billing.write",
-    "communications.read",
-    "crm.customers.write",
     "crm.opportunities.read",
     "crm.opportunities.write",
-    "documents.write",
     "operational_expectations.authority.assign",
     "operational_expectations.authority.manage",
     "ops.contacts.read",
@@ -315,14 +342,13 @@
     "ops.schedules.read",
     "ops.schedules.write",
     "ops.workflows.read",
-    "ops.workflows.write",
     "scheduling.read",
     "settings.users_roles.read"
   ],
   "deletion_candidates_by_vocabulary": {
     "legacy_ops_fin_admin_seed_set": {
-      "count": 18,
-      "seeded_by": "20260329165048_remote_schema.sql (seed_default_rbac), re-seeded by 20260729120000_\u2026phase0\u2026.sql",
+      "count": 17,
+      "seeded_by": "20260329165048_remote_schema.sql (seed_default_rbac), re-seeded by 20260729120000_…phase0….sql",
       "operator_meaning": "An operator has never been offered these as controls in a product surface, but since W-10 the grid projects the whole catalog, so they became visible controls that change nothing.",
       "keys": [
         "admin.roles.read",
@@ -341,14 +367,13 @@
         "ops.opportunities.write",
         "ops.schedules.read",
         "ops.schedules.write",
-        "ops.workflows.read",
-        "ops.workflows.write"
+        "ops.workflows.read"
       ]
     },
     "grid_vocabulary": {
       "count": 9,
-      "seeded_by": "20260505164000_permission_grid_keys.sql, re-seeded by 20260729120000_\u2026phase0\u2026.sql",
-      "operator_meaning": "These are the ones that will surprise. They have been operator-visible controls with real labels \u2014 'Billing / payments', 'Customers / families', 'Scheduling' \u2014 since the grid shipped. An operator may have set one to None believing it removed access.",
+      "seeded_by": "20260505164000_permission_grid_keys.sql, re-seeded by 20260729120000_…phase0….sql",
+      "operator_meaning": "These are the ones that will surprise. They have been operator-visible controls with real labels — 'Billing / payments', 'Customers / families', 'Scheduling' — since the grid shipped. An operator may have set one to None believing it removed access.",
       "w13_departure": "`settings.users_roles.read` left this group when W-13/AD-22 gave it an enforcement site. It is the one deletion candidate this initiative has RECOVERED rather than deleted, and the reason generalises: a key can be inert because nothing needs it, or inert because the gate that should have read it was reading a role literal instead. Only the first kind is a deletion candidate, and the two are indistinguishable until the literal is removed.",
       "keys": [
         "billing.read",
@@ -381,8 +406,8 @@
         "web/lib/communications/canonicalOutboundEnqueue.ts"
       ],
       "declared_as": "EMERGENCY_SEND_PERMISSION_KEY",
-      "what_it_gates": "the one branch that allows an emergency send to override an opted-out or suppressed recipient (evaluateEligibility: category === 'emergency' && emergencyPermitted !== true \u2192 refuse), and it is written into the enqueue record as the permission the send was made under",
-      "why_the_row_alone_is_not_a_fix": "No production caller ever sets emergencyPermitted to true \u2014 every path passes `req.emergencyPermitted ?? false`, and the only `true` values in the tree are in tests. So the key is not merely ungrantable, it is unbindable: seeding a catalog row would make it grantable and still change nothing. Binding it to the resolved permission set is an enforcement-sweep item (W-15), not W-11's.",
+      "what_it_gates": "the one branch that allows an emergency send to override an opted-out or suppressed recipient (evaluateEligibility: category === 'emergency' && emergencyPermitted !== true → refuse), and it is written into the enqueue record as the permission the send was made under",
+      "why_the_row_alone_is_not_a_fix": "No production caller ever sets emergencyPermitted to true — every path passes `req.emergencyPermitted ?? false`, and the only `true` values in the tree are in tests. So the key is not merely ungrantable, it is unbindable: seeding a catalog row would make it grantable and still change nothing. Binding it to the resolved permission set is an enforcement-sweep item (W-15), not W-11's.",
       "recommendation": "seed the catalog row under W-11 so the vocabulary is complete and the key is grantable; record the binding as a W-15 item so the row is not read as having made emergency sends possible"
     }
   ],
@@ -411,14 +436,14 @@
       "keys_enforced_by_nothing": 0,
       "keys_grantable_but_unbindable": 1,
       "note": "communications.send.emergency is the one. It is the residual gap, and it is one key, named.",
-      "w13_restatement": "Was 36 deleted / width 22 / 21 enforced. `settings.users_roles.read` is now enforced rather than deleted, so the surviving catalog is one key wider. OD-3's review list is correspondingly one key shorter \u2014 and had that review been executed before W-13, the key would have been deleted out from under the gate that now reads it."
+      "w13_restatement": "Was 36 deleted / width 22 / 21 enforced. `settings.users_roles.read` is now enforced rather than deleted, so the surviving catalog is one key wider. OD-3's review list is correspondingly one key shorter — and had that review been executed before W-13, the key would have been deleted out from under the gate that now reads it."
     },
-    "what_this_does_not_close": "'Enforced' here means a product source names the key. It does not mean a route declares it, and it does not mean the enforcement is reachable \u2014 8 of the 21 gate config-assist proposals only, and 1 is env-conditional. The declared-route-capability set does not exist until W-14, and the standing check that every catalog key resolves to \u22651 enforcement site is W-50/RL-35. W-11 makes those checks authorable; it does not perform them."
+    "what_this_does_not_close": "'Enforced' here means a product source names the key. It does not mean a route declares it, and it does not mean the enforcement is reachable — 8 of the 21 gate config-assist proposals only, and 1 is env-conditional. The declared-route-capability set does not exist until W-14, and the standing check that every catalog key resolves to ≥1 enforcement site is W-50/RL-35. W-11 makes those checks authorable; it does not perform them."
   },
   "operator_decision_required": {
     "gate": "The plan makes this review a precondition of M5: deletions are shown before the migration runs. No migration was authored in this assignment.",
-    "the_ask": "Approve, amend, or reject the 36-key deletion list above \u2014 and separately, the sequencing question below.",
-    "why_it_cannot_be_decided_by_a_worker": "11 of the 36 have been operator-visible controls with meaningful labels. Deleting them is correct if a control that changes nothing is worse than no control \u2014 which is this plan's stated position (05\u2026\u00a77 item 5, and the brief's first rejection condition) \u2014 but it removes settings an operator may believe are load-bearing.",
+    "the_ask": "Approve, amend, or reject the 36-key deletion list above — and separately, the sequencing question below.",
+    "why_it_cannot_be_decided_by_a_worker": "11 of the 36 have been operator-visible controls with meaningful labels. Deleting them is correct if a control that changes nothing is worse than no control — which is this plan's stated position (05…§7 item 5, and the brief's first rejection condition) — but it removes settings an operator may believe are load-bearing.",
     "options": [
       {
         "id": "delete_all_36",
@@ -430,7 +455,7 @@
       },
       {
         "id": "deactivate_not_delete",
-        "description": "Set is_active = false rather than DELETE. Reversible, avoids the FK problem entirely, and keeps grant rows intact \u2014 but leaves the rows in the table, so 'one vocabulary' becomes 'one vocabulary plus a graveyard', and W-50's build check would need an is_active predicate."
+        "description": "Set is_active = false rather than DELETE. Reversible, avoids the FK problem entirely, and keeps grant rows intact — but leaves the rows in the table, so 'one vocabulary' becomes 'one vocabulary plus a graveyard', and W-50's build check would need an is_active predicate."
       }
     ]
   },
@@ -443,20 +468,20 @@
     {
       "id": "P2",
       "finding": "The deletion is not durable unless the same migration edits seed_default_rbac's catalog literal.",
-      "detail": "The live seed_default_rbac() \u2014 as rewritten by Phase 0 \u2014 inserts all 57 keys into permission_definitions on every call, ON CONFLICT DO NOTHING. Creating one organization after M5 re-creates every key M5 deleted. The plan sequences W-11 before W-12 so that W-12's enumeration knows what to enumerate; that ordering is right for the grant half and insufficient for the catalog half. M5 must either rewrite the function's catalog insert itself or land in the same migration as M6.",
-      "status": "raised against the plan \u2014 see \u00a77"
+      "detail": "The live seed_default_rbac() — as rewritten by Phase 0 — inserts all 57 keys into permission_definitions on every call, ON CONFLICT DO NOTHING. Creating one organization after M5 re-creates every key M5 deleted. The plan sequences W-11 before W-12 so that W-12's enumeration knows what to enumerate; that ordering is right for the grant half and insufficient for the catalog half. M5 must either rewrite the function's catalog insert itself or land in the same migration as M6.",
+      "status": "raised against the plan — see §7"
     },
     {
       "id": "P3",
       "finding": "Live preflight is required and has not been run.",
-      "detail": "Everything here is derived from the tree. M5's \u00a711 preflight must establish, on the target: the live catalog width (is it 57?), whether any key exists live that no migration seeds, the grant-row count per deletion candidate, and whether any org holds a grant on a key the tree does not know about. Channel is the trusted host action database.read_census, as for M1."
+      "detail": "Everything here is derived from the tree. M5's §11 preflight must establish, on the target: the live catalog width (is it 57?), whether any key exists live that no migration seeds, the grant-row count per deletion candidate, and whether any org holds a grant on a key the tree does not know about. Channel is the trusted host action database.read_census, as for M1."
     }
   ],
   "status": {
     "exit_criteria": {
-      "enumerated_deletion_list_reviewed": "not met \u2014 the list is produced and presented; operator review is the open gate",
-      "catalog_and_enforced_set_reconciled": "not met \u2014 reconciliation is measured, not applied; no migration authored",
-      "residual_gap_is_a_written_number": "met \u2014 see residual_gap_after_w11"
+      "enumerated_deletion_list_reviewed": "not met — the list is produced and presented; operator review is the open gate",
+      "catalog_and_enforced_set_reconciled": "not met — reconciliation is measured, not applied; no migration authored",
+      "residual_gap_is_a_written_number": "met — see residual_gap_after_w11"
     },
     "migration_authored": false,
     "migration_applied": false,

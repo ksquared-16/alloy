@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AI_POLICY_METADATA_KEY } from "@/lib/ai/aiPolicy";
 import {
     AI_ENRICHMENT_USE_PERMISSION_KEY,
-    isAiEnrichmentUsePermissionRequired,
+    isOpenAiLiveInvocationFeatureEnabled,
     resolveAiEnrichmentPortalAccess,
 } from "@/lib/ai/aiEnrichmentPermissions";
 import {
@@ -46,35 +46,51 @@ describe("resolveAiEnrichmentPortalAccess", () => {
         if (!r.ok) expect(r.error).toBe("ORG_CONTEXT_MISMATCH");
     });
 
-    it("legacy mode: allows admin or ops when permission strict is off", () => {
-        vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "false");
-        expect(isAiEnrichmentUsePermissionRequired()).toBe(false);
-        const okAdmin = resolveAiEnrichmentPortalAccess({ ctx: adminCtx, access: accessBase });
-        expect(okAdmin.ok).toBe(true);
-        const okOps = resolveAiEnrichmentPortalAccess({ ctx: opsCtx, access: accessBase });
-        expect(okOps.ok).toBe(true);
-        const badOther = resolveAiEnrichmentPortalAccess({
-            ctx: { ok: true as const, orgId: "org-1", role: "manager", userId: "u1", permissionKeys: [] },
-            access: accessBase,
-        });
-        expect(badOther.ok).toBe(false);
+    /*
+     * THERE IS NO LEGACY MODE AND NO STRICT MODE.
+     *
+     * These two cases asserted opposite outcomes for the SAME principal
+     * depending on `AI_ENRICHMENT_USE_PERMISSION_REQUIRED`: with it off, admin
+     * and ops were admitted holding no grant at all; with it on, an admin
+     * holding no grant was refused. The flag was set in tests and in no
+     * deployed configuration, so the first case described production and the
+     * second described only itself.
+     *
+     * One question now, asked the same way everywhere.
+     */
+    it("refuses a principal without the grant, whatever their role title", () => {
+        for (const ctx of [adminCtx, opsCtx]) {
+            const denied = resolveAiEnrichmentPortalAccess({ ctx, access: accessBase });
+            expect(denied.ok).toBe(false);
+            if (!denied.ok) expect(denied.error).toBe("AI_ENRICHMENT_FORBIDDEN");
+        }
     });
 
-    it("strict mode: requires ai.enrichment.use grant", () => {
-        vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "true");
-        expect(isAiEnrichmentUsePermissionRequired()).toBe(true);
-        const denied = resolveAiEnrichmentPortalAccess({ ctx: adminCtx, access: accessBase });
-        expect(denied.ok).toBe(false);
-        if (!denied.ok) expect(denied.error).toBe("AI_ENRICHMENT_FORBIDDEN");
+    it("admits any principal holding the grant, including one with no privileged title", () => {
+        const granted = { ...accessBase, permissionKeys: [AI_ENRICHMENT_USE_PERMISSION_KEY] };
+        for (const ctx of [
+            adminCtx,
+            opsCtx,
+            { ok: true as const, orgId: "org-1", role: "manager", userId: "u1", permissionKeys: [] },
+        ]) {
+            expect(resolveAiEnrichmentPortalAccess({ ctx, access: granted }).ok).toBe(true);
+        }
+    });
 
-        const allowed = resolveAiEnrichmentPortalAccess({
-            ctx: opsCtx,
-            access: {
-                ...accessBase,
-                permissionKeys: [AI_ENRICHMENT_USE_PERMISSION_KEY],
-            },
-        });
-        expect(allowed.ok).toBe(true);
+    it("gives the same answer whatever the live-provider feature flag says", () => {
+        const granted = { ...accessBase, permissionKeys: [AI_ENRICHMENT_USE_PERMISSION_KEY] };
+        for (const v of ["false", "true", "0", "yes"]) {
+            vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", v);
+            expect(resolveAiEnrichmentPortalAccess({ ctx: adminCtx, access: accessBase }).ok).toBe(false);
+            expect(resolveAiEnrichmentPortalAccess({ ctx: adminCtx, access: granted }).ok).toBe(true);
+        }
+    });
+
+    it("keeps the flag meaningful for FEATURE availability only", () => {
+        vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "false");
+        expect(isOpenAiLiveInvocationFeatureEnabled()).toBe(false);
+        vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "true");
+        expect(isOpenAiLiveInvocationFeatureEnabled()).toBe(true);
     });
 });
 

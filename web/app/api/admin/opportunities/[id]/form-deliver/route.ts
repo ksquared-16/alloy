@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
+import { FORMS_SUBMISSIONS, requireFormsCapability } from "@/lib/access/formsAuthority";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { mintExistingRecordFormLinkForAdmin } from "@/lib/forms/existingRecord/mintExistingRecordFormLinkForAdmin";
@@ -44,6 +45,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (forbidden) return forbidden;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    /*
+     * FORMS AUTHORITY. `requireAdminOrOps()` above is portal ADMISSION, not authority.
+     *
+     * This route delivers a form to a household and deactivates the links it replaces — the links
+     * are copied into emails, texts and third-party pages, so this reaches people outside the
+     * organization. Its sibling `form-send`, which MINTS the same link for the same record, has
+     * required `forms.submissions` since the Forms slice; that key's recorded meaning is "handling
+     * submissions that change records or reach people: sending, submitting on behalf, linking by
+     * hand, generating a document". Delivering the link is that power, so this is the Forms
+     * authority applied to the door that skipped it — not new vocabulary, and deliberately NOT any
+     * Opportunity or CRM key.
+     */
+    const formsDenied = requireFormsCapability(ctx, FORMS_SUBMISSIONS);
+    if (formsDenied) return formsDenied;
 
     const { id: rawId } = await context.params;
     const opportunityId = parseUuidParam(rawId, "id");

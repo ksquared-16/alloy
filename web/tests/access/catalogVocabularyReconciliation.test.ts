@@ -64,6 +64,10 @@ const APPROVED_ADDITIONS: Record<string, string> = {
     "enrollment.requirement_exception.manage":
         "20260901120000 — excepting an Enrollment requirement is not working the Enrollment queue",
     "enrollment.pricing.override": "20260906130000 — overriding recommended tuition, admin only",
+    "enrollment.record.manage":
+        "20260916050000 — D1, keeping the enrollment record: the inquiry, the children on it, and their requested program, room, site, start date and quote. Replaced portal admission on six mutations, one of which (lead-location) had no gate at all",
+    "enrollment.decide":
+        "20260916050000 — D1, changing the enrollment outcome: status, the agreement that binds it, placement, and waitlist position. Separated from record.manage because correcting a requested start date is not being trusted to mark a family Enrolled",
     "fin.adjust": "20260907150000 — deciding by hand that a family owes less is not billing them",
     "fin.responsibility": "20260908130000 — who contractually bears a family's obligations",
     "fin.subsidy": "20260909130000 — administering agency funding",
@@ -82,6 +86,14 @@ const APPROVED_ADDITIONS: Record<string, string> = {
         "20260912113000 — taking a case out of the queue; its own key so that granting `ops` processing.operate does not also hand it an archive it never had",
     "processing.documents.manage":
         "20260912113000 — renaming a source document, and deleting one with the case it opened and the stored file; deliberately NOT `documents.write`, which `ops` holds in every organization",
+    "tours.configure":
+        "20260916020000 — defining what a tour IS: availability, capacity, the windows families may book into. Director model Tours/Bookings V1; deliberately NOT scheduling.write, which would have hidden tour definition inside a key ops already holds",
+    "tours.book":
+        "20260916020000 — placing a family into a tour slot. Separate from tours.configure because booking is routine front-desk work and defining the offer is not",
+    "work.configure":
+        "20260916030000 — defining what operational work EXISTS: the queue definition and the work units it yields. Director model Work Authority V1; admin only",
+    "work.operate":
+        "20260916030000 — performing work inside a process already running: completing stage work, closing a family, recording participant decisions, executing a workflow run. Seeded to ops; deliberately NOT a work.manage spanning define-and-do, and NOT work.assign, which stays per product surface under Assignments Authority Model V1",
     "option_sets.delete":
         "20260914183000 — deleting an option set or one of its items; its own key because Config Layout Assist has no delete operation of any kind, so folding deletion into option_sets.manage would have handed ops an authority it has never held",
     "layouts.lifecycle":
@@ -92,6 +104,20 @@ const APPROVED_ADDITIONS: Record<string, string> = {
         "20260914113000 — posting a financial consequence that arises from operational work: a customer receipt, a vendor payout, a completion journal entry, a manual receivable charge. Financials-owned though enforced from under schedules/ and jobs/, because authority follows the business consequence rather than the URL folder",
     "processing.dev_cleanup":
         "20260912113000 — the Processing test-data reset; necessary and not sufficient, because the route and the planner both refuse in production whoever holds it",
+    /*
+     * The three Communications authorities. `communications.read` and `communications.send` are NOT
+     * here: both predate the artifact, and `communications.read` is recorded as a RECOVERY in
+     * `enforced` — catalogued, granted and consulted by nothing until this slice, the same story the
+     * artifact already tells about `fin.read` and `crm.customers.read`.
+     */
+    "communications.templates.manage":
+        "20260915180000 — authoring and lifecycle of organization templates; its own key because folding it into communications.send would mean anyone who may answer a family may also rewrite every template the organization sends",
+    "communications.provider.configure":
+        "20260915180000 — the delivery services and channel bindings messages travel over; selects credential REFERENCES and is never authority to read secret material",
+    "configuration.vocabulary.manage":
+        "20260915200000 — defining the organization's reusable labels, types and relationship vocabulary. Its own key because no existing Configuration authority truthfully meant it: fields.manage, option_sets.manage, layouts.manage and sections.manage each have established narrower meanings, and the Director declined to stretch one. Status definitions are deliberately NOT under it — editing one can rebind a process stage, so they take business_process.configure",
+    "communications.bulk.send":
+        "20260915180000 — organization-wide, announcement and campaign sends, separated from communications.send because the blast radius is materially different and no product statement ever said one implied the other",
 };
 
 describe("W-11 — the catalog is discovered completely", () => {
@@ -184,8 +210,10 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         // Financials workspace and the financial action package gave `fin.read` and `fin.write`
         // theirs, which the artifact records as `financials_restatement`; 24 until the Forms
         // authority cleanup gave `crm.customers.read` its first enforcement site anywhere — the CRM
-        // entity search under Forms, which had been gated on the literal `admin` role.
-        expect(enforced.length).toBe(25 + added.length);
+        // entity search under Forms, which had been gated on the literal `admin` role; 25 until the
+        // Communications authority model recovered `communications.read`, whose 22 read handlers had
+        // been asking for portal admission and calling it authority.
+        expect(enforced.length).toBe(28 + added.length);
         /*
          * A health key that is SEEDED but not ENFORCED would be the D-H6 failure mode: the catalogue
          * would advertise a boundary the product does not apply. Both keys must have call sites.
@@ -212,19 +240,42 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         // recorded IN: `settings.users_roles.read` is retired, so nothing consults it any more. That
         // is not a gate the product lost — it is a gate the product replaced with four narrower ones,
         // and the honest record of a retirement is a key that no longer has a site.
-        expect(unenforced.length).toBe(27);
+        //
+        // 27 until the Communications authority model recovered `communications.read` — the same
+        // story once more: catalogued since Phase 0, granted to `admin` and `ops` in every
+        // organization, offered in the role editor, and consulted by nothing, while 22 read handlers
+        // asked `requireAdminOrOps()` and admitted any principal who could enter the portal. Its
+        // three companion keys are additions rather than recoveries, so they never appeared here.
+        // 26 until the CRM/People record model recovered `crm.customers.write` and
+        // `documents.write` — two more keys catalogued, granted everywhere, and consulted by
+        // nothing, whose routes were decided by portal admission and a role title instead.
+        // 23 since AI + Agent Authority V2 activated `ops.workflows.write`: Workflow Assist
+        // apply now gates on it before writing `workflows` and `workflow_actions`, so it is no
+        // longer a control that changes nothing.
+        expect(unenforced.length).toBe(23);
     });
 
-    it("C13 resolves against the measurement: nothing enforces a workflows key", () => {
-        // `01…§2.3`'s C13 — Phase 0 grants `ops.workflows.*` to every org's admin; W-3 removed the grid
-        // row; W-10's projection returned it. The plan's M2 amendment binds the outcome to this
-        // measurement: the row returns iff W-11 seeds a workflows key that something enforces. It does
-        // not, so both keys are on the deletion list and the row goes with them — reached by
-        // enumeration, not silently.
+    it("C13 resolves the other way for the WRITE key, because the measurement moved", () => {
+        /*
+         * `01…§2.3`'s C13 — Phase 0 grants `ops.workflows.*` to every org's admin; W-3 removed the
+         * grid row; W-10's projection returned it. The plan's M2 amendment binds the outcome to a
+         * MEASUREMENT rather than to a preference: the row returns iff something enforces a
+         * workflows key.
+         *
+         * For three sprints nothing did, so both keys sat on the deletion list. AI + Agent
+         * Authority V2 changed the measured fact: `ai/workflow-assist/apply` writes `workflows`
+         * and `workflow_actions`, and now requires `ops.workflows.write` to do it. The decision is
+         * not being overridden — its own condition has resolved, and this asserts the resolution
+         * rather than the stale half of it.
+         *
+         * READ IS UNCHANGED. This slice enforced the write key only; claiming the read key had
+         * also come alive would be the same theatre in the other direction.
+         */
         expect(scan.sitesByKey.get("ops.workflows.read") ?? []).toEqual([]);
-        expect(scan.sitesByKey.get("ops.workflows.write") ?? []).toEqual([]);
         expect(artifact.deletion_candidates).toContain("ops.workflows.read");
-        expect(artifact.deletion_candidates).toContain("ops.workflows.write");
+
+        expect(scan.sitesByKey.get("ops.workflows.write") ?? []).not.toEqual([]);
+        expect(artifact.deletion_candidates).not.toContain("ops.workflows.write");
     });
 
     it("the one enforced key with no catalog row is still the only one", () => {

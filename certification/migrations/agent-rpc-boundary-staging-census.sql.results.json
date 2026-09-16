@@ -1,0 +1,43 @@
+{
+  "trusted_host_action_id": "tha_11f84cbc63a240",
+  "query_hash": "36460868fb31de7611dbbb340c18d372773518736e4a1f5f6f3a5d224a09047e",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-15T22:19:56.726Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_11f84cbc63a240",
+    "query_hash": "36460868fb31de7611dbbb340c18d372773518736e4a1f5f6f3a5d224a09047e",
+    "authorization_id": "grnt_3f2145fa2e014c20",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-15T22:19:58.025Z",
+    "question_ids": [
+      "covered",
+      "covered_total"
+    ],
+    "questions": {
+      "covered": {
+        "question_id": "covered",
+        "row_count": null,
+        "rows": [
+          "agent_v0_commit_queue_definition_apply",
+          "agent_v1_commit_record_overview_layout_apply",
+          "agent_v2_commit_field_visibility_apply"
+        ]
+      },
+      "covered_total": {
+        "question_id": "covered_total",
+        "row_count": null,
+        "rows": [
+          3
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}

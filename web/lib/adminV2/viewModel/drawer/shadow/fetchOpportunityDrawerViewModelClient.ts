@@ -14,6 +14,13 @@ export function buildOpportunityDrawerViewModelUrl(
     const wu = workspaceContext?.work_unit_id?.trim() ?? "";
     if (dept) qs.set("department_id", dept);
     if (wu) qs.set("work_unit_id", wu);
+    /*
+     * The settled frame projects child-scoped truth, so it must be told WHICH child. The client
+     * already knows — `attentionSubjectId` — and until now had no way to say it, which is how the
+     * settled producer resolved a different participant than the surface was scoped to.
+     */
+    const attention = workspaceContext?.attention_subject_id?.trim() ?? "";
+    if (attention) qs.set("attention_subject_id", attention);
     const q = qs.toString();
     return `/api/admin/view-models/drawer/opportunity/${encodeURIComponent(opportunityId)}${q ? `?${q}` : ""}`;
 }

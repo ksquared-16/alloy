@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "npm run verify:module-imports && npm run check:service-client-principal && npm run check:unauthenticated-side-effects && npm run check:route-capabilities",
+    "prebuild": "npm run verify:module-imports && npm run check:service-client-principal && npm run check:unauthenticated-side-effects && npm run check:route-capabilities && npm run check:runtime-mode-audience",
     "build": "next build",
     "verify:module-imports": "tsx --tsconfig tsconfig.json scripts/verifyWebModuleImports.ts",
     "check:service-client-principal": "node scripts/checkServiceClientPrincipal.mjs",
@@ -21,6 +21,7 @@
     "test:watch": "vitest",
     "test:trust-adoption": "vitest run tests/trust tests/metrics/trustMetrics.test.ts tests/ai/openAiCompatibleProviderAdapter.test.ts tests/scripts/migrationPreflight.test.ts tests/scripts/governedReconciliationExecutor.test.ts tests/processing tests/pos/commit",
     "test:surfaces-focus-panel": "vitest run tests/surfaces tests/focusPanel tests/adminV2/runtime/focusPanelCardPlacementParity.test.ts tests/adminV2/runtime/focusPanelPublishedLayout.test.ts tests/adminV2/runtime/focusPanelPublishedLayoutOps.test.ts tests/adminV2/runtime/focusPanelGridLayout.test.ts tests/adminV2/runtime/focusPanelSummaryNoPublishedDoc.test.ts tests/adminV2/runtime/focusPanelSummarySkeleton.test.tsx tests/adminV2/currentWorkSecondaryWork.test.ts tests/adminV2/actionScopeComposition.test.ts tests/adminV2/stageWorkStartIsExecutable.test.ts tests/adminV2/commandSurfaceHost.test.ts tests/adminV2/runtime/currentWorkSecondaryWorkIsReachable.test.tsx tests/adminV2/sourcePresenceIsNotRuntimeProof.test.tsx",
+    "test:focus-panel-geometry": "playwright test --config playwright.geometry.config.ts",
     "test:pricing-smoke": "vitest run tests/pricing/jobPricing.smoke.test.ts",
     "test:payments-smoke": "vitest run tests/payments/paymentsTask2.smoke.test.ts",
     "test:playwright-smoke": "playwright test playwright/tests/smoke-field-registry.spec.ts",
@@ -101,7 +102,9 @@
     "dev:cert:seed-financials-demo-tenant": "node scripts/seedFinancialsDemoTenant.mjs",
     "dev:qa:converge-placement-waitlisted": "tsx --tsconfig tsconfig.json scripts/qaConvergePlacementWaitlistedChildren.ts",
     "test:playwright-current-work": "playwright test playwright/tests/current-work-journey.spec.ts",
-    "dev:certify:enrollment-e2e": "NODE_ENV=test tsx --tsconfig tsconfig.json scripts/certifyEnrollmentE2E.ts"
+    "dev:certify:enrollment-e2e": "NODE_ENV=test tsx --tsconfig tsconfig.json scripts/certifyEnrollmentE2E.ts",
+    "qa:developer-platform": "tsx --tsconfig tsconfig.json scripts/qa/developerPlatformQaFixture.ts",
+    "check:runtime-mode-audience": "node scripts/checkRuntimeModeAudienceGating.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -132,6 +135,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dotenv": "^17.3.1",
+    "esbuild": "0.27.7",
     "eslint": "^9",
     "eslint-config-next": "16.0.8",
     "jsdom": "^29.1.1",
