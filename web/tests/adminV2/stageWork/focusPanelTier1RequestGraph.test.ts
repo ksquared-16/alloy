@@ -15,9 +15,14 @@ const read = (rel: string) => readFileSync(resolve(web, rel), "utf8");
 describe("Tier-1 compose defers the heavy secondary work", () => {
     const compose = read("lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts");
 
-    it("communications preview and stage work are deferred out of the blocking compose", () => {
+    it("communications preview is deferred out of the blocking compose; stage work is not", () => {
         expect(compose).toContain("deferCommunicationsPreview");
-        expect(compose).toContain("deferStageWork");
+        /*
+         * Stage work is no longer deferrable. Composing it beside the rest costs nothing measurable
+         * (181-380 ms inside A's ~650-800 ms), and the deferred contract's client patch merged
+         * stage-work truth without refreshing the operational projection computed beside it.
+         */
+        expect(compose).not.toContain("deferStageWork");
         // The compose resolves the record + above-fold; it does not fetch activity / related / person
         // / child drawer VMs inline (those are client secondary loads).
         expect(compose).not.toContain("/api/admin/activity");

@@ -111,6 +111,15 @@ export default function FinancialsCard({ model, context, receded = false, coordi
      * so the card can say what is actually true.
      */
     const [deniedRead, setDeniedRead] = useState(false);
+    /**
+     * WHICH ACCOUNT'S FULL MODEL IS LOADED — null while the card holds the root's bounded summary.
+     *
+     * The initial projection carries the account summary without `payments` or `ledgerPeriods`:
+     * 16.6 KB of receipts and placed ledger that the summary never reads. Every surface that DOES
+     * read them is an interaction, so opening one loads the full model from the endpoint that was
+     * always its owner.
+     */
+    const deepLoadedForRef = useRef<string | null>(null);
     const [loading, setLoading] = useState(false);
     /*
      * ONE overlay at a time, and the Focus Panel's OWN depth layer renders it.
@@ -247,7 +256,10 @@ export default function FinancialsCard({ model, context, receded = false, coordi
             const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
             const json = (await res.json()) as { ok?: boolean; vm?: FinancialsCardVM };
             if (!current()) return;
-            setVm(json?.ok && json.vm ? json.vm : null);
+            const fresh = json?.ok && json.vm ? json.vm : null;
+            // The endpoint's answer is the FULL model; record which account now has it.
+            if (fresh) deepLoadedForRef.current = customerId ?? scopedMemberId;
+            setVm(fresh);
         } catch {
             if (!current()) return;
             setVm(null);
@@ -755,7 +767,20 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         requestSeq.current += 1;
         setVm(provisioned?.state === "ready" ? provisioned.data : null);
         setDeniedRead(provisioned?.state === "forbidden");
+        // A new projection is the BOUNDED summary by construction, whichever account it is for.
+        deepLoadedForRef.current = null;
     }, [provisioned]);
+
+    /*
+     * DEPTH IS AN INTERACTION. Opening any of the account's deep surfaces — the ledger, the payment
+     * flow, add-charge — loads the full model once per account. The initial panel still issues no
+     * request at all, which is the invariant; this is the operator asking.
+     */
+    useEffect(() => {
+        if (!overlay) return;
+        const key = customerId ?? scopedMemberId;
+        if (key && deepLoadedForRef.current !== key) void load();
+    }, [overlay, customerId, scopedMemberId, load]);
 
     /*
      * A SCOPED CHILD PRESELECTS THE SUBJECT FILTER.
