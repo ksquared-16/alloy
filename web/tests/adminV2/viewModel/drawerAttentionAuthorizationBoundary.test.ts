@@ -80,6 +80,10 @@ describe("given no scope, the producers read nothing", () => {
             orgId: "org-1",
             // What a refused foreign participation produces: a context with no participant scope.
             context: { participantScope: null } as never,
+            // The route's resolved caller authority. Irrelevant to this test's claim — with no scope
+            // there is nothing to read for at all — but the producer requires it, because a producer
+            // that could run without the caller's authority is the defect that contract prevents.
+            access: { permissionKeys: [] } as never,
         });
 
         expect(results.attendance.state).toBe("unavailable");
