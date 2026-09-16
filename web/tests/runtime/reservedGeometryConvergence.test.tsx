@@ -244,10 +244,18 @@ describe("reserved geometry — adopter wiring", () => {
          * in the window that is now the common one on a cold panel.
          */
         expect(code).toMatch(/useReservedCardGeometry\(!\(loading \|\| provisioning\)\)/);
+        /*
+         * The intent is that the RESERVE and the pending COPY agree about what "not settled" means.
+         * P0-3 split the old single ternary so that a producer failure, a refusal and a genuine
+         * absence stop sharing one sentence, so this asserts the agreement rather than the literal
+         * expression it used to take: the loading copy is still gated on exactly `loading ||
+         * provisioning`, which is the predicate the reserve negates.
+         */
         expect(
             code,
             "the reserve and the copy must agree about what 'not settled' means",
-        ).toMatch(/loading \|\| provisioning \? "Loading the day…" : "No attendance record\."/);
+        ).toMatch(/loading \|\| provisioning \? \(/);
+        expect(code).toMatch(/data-attendance-empty="loading"/);
         // Still not keyed to HAVING DATA: a recordless child is an answer, not a pending state.
         expect(code).not.toMatch(/useReservedCardGeometry\(vm != null\)/);
     });

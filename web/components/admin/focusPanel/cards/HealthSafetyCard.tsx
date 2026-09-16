@@ -130,6 +130,8 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
      * Attendance spinning.
      */
     const provisioning = memberId != null && provisioned == null;
+    /** The producer's own verdict, carried rather than collapsed. Null before it has run. */
+    const producerState = provisioned?.state ?? null;
 
     useEffect(() => {
         // Clear FIRST. Health data from the previous child must not linger for even one frame.
@@ -330,9 +332,41 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
                         {vm.unavailableReason}
                     </p>
                 ) : !vm ? (
-                    <p className="alloy-os-health__empty" data-health-empty="loading">
-                        {loading || provisioning ? "Loading health information…" : "No health record."}
-                    </p>
+                    /*
+                     * ── THE PRODUCER SAID MORE THAN "NOTHING" (P0-3/P0-4) ───────────────────────
+                     *
+                     * This branch used to read `loading || provisioning ? "Loading…" : "No record."`,
+                     * which reduced a four-state producer result to a boolean. Deployed staging
+                     * reproduced the consequence: a card that had explained itself settled into a bare
+                     * absence, and the operator watched Alloy lose knowledge it had just shown.
+                     *
+                     * `ProducerResult.state` already distinguishes the cases, and its own contract says
+                     * why that matters — "`unavailable` and `error` are different facts: no subject to
+                     * read for is ordinary, a failed read is not, and collapsing them would make an
+                     * outage indistinguishable from an empty one", and a refusal "must say 'you do not
+                     * have permission' rather than render an empty surface". The states existed; only
+                     * this renderer was throwing them away.
+                     *
+                     * Nothing new is derived, fetched or persisted: each line below is the producer's
+                     * own verdict, phrased.
+                     */
+                    loading || provisioning ? (
+                        <p className="alloy-os-health__empty" data-health-empty="loading">
+                            Loading health information…
+                        </p>
+                    ) : producerState === "error" ? (
+                        <p className="alloy-os-health__empty" data-health-empty="error">
+                            Health information could not be loaded.
+                        </p>
+                    ) : producerState === "unavailable" ? (
+                        <p className="alloy-os-health__empty" data-health-empty="unavailable">
+                            Health information is not available for this child.
+                        </p>
+                    ) : (
+                        <p className="alloy-os-health__empty" data-health-empty="no-record">
+                            No health record.
+                        </p>
+                    )
                 ) : (
                     <>
                         {/* 1 · CRITICAL SAFETY — the region an operator must not miss. */}
