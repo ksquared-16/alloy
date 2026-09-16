@@ -53,6 +53,25 @@ export function useAttentionCardFocus(): { focus: AttentionCardFocus | null; sub
  * Keying the seed on live attention makes the identity available at the click, from canonical
  * queue-row context that the client already holds.
  */
+/**
+ * The lens (Work View) attention is currently pointed at, or null outside the kernel.
+ *
+ * Sibling of {@link useAttentionSubject}, same subscription, one field further along the ref. It
+ * exists so a consumer can tell the lens the operator ASKED for from the lens the committed snapshot
+ * is still showing — the difference between those two is exactly the window in which held rows were
+ * being presented as live destination rows (P0-7.3).
+ */
+export function useAttentionLens(): string | null {
+    const kernel = useRuntimeKernelOptional();
+    const subscribe = useMemo(
+        () => (kernel ? (fn: () => void) => kernel.attention.subscribe(fn) : NO_SUBSCRIBE),
+        [kernel],
+    );
+    const getSnapshot = useCallback(() => (kernel ? kernel.attention.get() : null), [kernel]);
+    const ref = useSyncExternalStore(subscribe, getSnapshot, kernel ? getSnapshot : NO_REF);
+    return ref?.lens ?? null;
+}
+
 export function useAttentionSubject(): string | null {
     const kernel = useRuntimeKernelOptional();
     const subscribe = useMemo(

@@ -11,6 +11,17 @@ export type OpportunityDrawerQueuePreviewSeed = {
      * From queue `drawer_open.entity_id` — never the process_instance Attention id.
      */
     familyOpportunityId?: string | null;
+    /**
+     * The subject image the SELECTED ROW already rendered — presentation identity, on the click clock.
+     *
+     * Not a new authority: it is read with the same rule `CondensedQueueRow` uses (focused primary when
+     * Subject Focus is set, else the row subject), from the same queue-row presentation source. It exists
+     * because the header avatar had NO click-clocked owner at all, so it could only follow the held
+     * payload — and the previous child's face stayed under the new selection for ~5.8 s (P0-7.2).
+     *
+     * Display only. No business truth is promoted from a preview by carrying it.
+     */
+    subjectImageUrl?: string | null;
     /** Authoritative status key echo for chip tone — display-only, from queue row context. */
     statusKey?: string | null;
     stageLabel?: string | null;
