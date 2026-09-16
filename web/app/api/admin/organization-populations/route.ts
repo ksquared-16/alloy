@@ -1,5 +1,25 @@
+/**
+ * ORGANIZATION POPULATIONS — who a measurement counts, which is a reporting definition.
+ *
+ * A Population names the subject set an Operational Intelligence calculation measures
+ * (`expected_in_room_on_date`, room-grain), and `evaluateForRoom` and the Calculation Library read
+ * it to produce a number. Defining one is analytics configuration, and `reports.write` —
+ * ANALYTICS_MANAGE_PERMISSION — already owns every mutation under `organization-calculations/` and
+ * `metrics/` that consumes it.
+ *
+ * It asked `ctx.role !== "admin"`, which admitted an administrator whose package withholds the key
+ * and refused a custom Analytics Manager who holds it, on a surface where the Calculation Library
+ * beside it had already been decided on the grant.
+ *
+ * THE AUTHORITY IS BOUNDED BY THE HANDLER, NOT BY THE COLUMN. The draft lands in
+ * `org_settings.metadata` under this family's own key: the caller names a population, never a
+ * metadata path, so holding `reports.write` does not become a licence to write organization
+ * settings generally. That is the same boundary Business Process drew when it declined the
+ * attention-rules metadata shape.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requireAnalyticsManageAccess } from "@/lib/admin/canReadAnalytics";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
     createOrganizationPopulationDraft,
@@ -42,9 +62,8 @@ export async function POST(req: NextRequest) {
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Admin role required" }, { status: 403 });
-    }
+    const analyticsAuth = await requireAnalyticsManageAccess();
+    if (!analyticsAuth.ok) return analyticsAuth.response;
     let body: unknown;
     try {
         body = await req.json();
