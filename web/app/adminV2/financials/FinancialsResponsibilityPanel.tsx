@@ -28,6 +28,7 @@
 import { useCallback, useState } from "react";
 
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
+import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 
 export const CONFIGURE_RESPONSIBILITY_ACTION_KEY = "billing.configure_responsibility";
 
@@ -274,8 +275,12 @@ export default function FinancialsResponsibilityPanel({
                             {arrangement.shares.length === 1
                                 ? "1 responsible party"
                                 : `${arrangement.shares.length} responsible parties`}
-                            {arrangement.effectiveStart ? ` from ${arrangement.effectiveStart}` : ""}. This posted
-                            charge is not divided under it.
+                            {/* "from 2026-09-06" — a raw ISO date in operator prose, which the
+                                presentation doctrine forbids as plainly as it forbids one in a
+                                ledger cell. Through the platform's formatter like every other date. */}
+                            {arrangement.effectiveStart
+                                ? ` from ${formatDisplayDate(arrangement.effectiveStart)}`
+                                : ""}. This posted charge is not divided under it.
                         </p>
                     ) : (
                         /* A statement of fact and an invitation — not a reason the control is unusable. */

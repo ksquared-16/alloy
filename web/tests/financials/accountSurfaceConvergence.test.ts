@@ -865,3 +865,30 @@ describe("F19 · the operator surface carries no engineering copy", () => {
         expect(src).toContain("Expected funding");
     });
 });
+
+describe("F20 · the two Financials headers do not drift by accident", () => {
+    /*
+     * The surfaces carry DIFFERENT information on purpose — the Focus Panel is financial context
+     * beside another process and states autopay and the next charge; the Accounts header is the
+     * dedicated workspace's three-figure position. What they must never do is give the SAME figure
+     * two different names, which is what "Balance" here and "Current balance" there was.
+     */
+    it("uses one label for the balance on both surfaces", () => {
+        const accounts = code("components/operationalCards/FinancialsCard.tsx");
+        const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
+        expect(accounts).toContain('label="Current balance"');
+        expect(detail).toContain('label="Current balance"');
+        expect(detail, "and not the short form it used to carry").not.toMatch(/label="Balance"/);
+    });
+
+    it("keeps one action grammar", () => {
+        for (const path of [
+            "components/operationalCards/FinancialsCard.tsx",
+            "components/operationalCards/FinancialsDetailCard.tsx",
+        ]) {
+            const src = code(path);
+            expect(src, `${path} enters payment by the same word`).toMatch(/>\s*Payment\s*</);
+            expect(src, `${path} offers Add charge as its peer`).toMatch(/>\s*Add charge\s*</);
+        }
+    });
+});

@@ -272,6 +272,18 @@ export async function resolveChargeDetail(
      */
     const billing = placeInBillingPeriod(charge as unknown as Record<string, unknown>);
 
+    /* Configuration owns the word an operator reads. See the note on `label` below. */
+    let templateLabel = "";
+    if (t(charge.charge_template_id)) {
+        const { data: template } = await supabase
+            .from("financial_charge_templates")
+            .select("label")
+            .eq("org_id", args.orgId)
+            .eq("id", t(charge.charge_template_id))
+            .maybeSingle();
+        templateLabel = t((template as { label?: unknown } | null)?.label);
+    }
+
     let accountingPeriod: ChargeDetail["accountingPeriod"] = null;
     try {
         const { data: entry } = await supabase
@@ -380,7 +392,17 @@ export async function resolveChargeDetail(
     return {
         chargeId: charge.id,
         orgId: args.orgId,
-        label: t(charge.description) || null,
+        /*
+         * THE CONFIGURED LABEL, NEVER THE TEMPLATE KEY.
+         *
+         * `writeTemplateDraftCharge` stores `description: intent.templateKey`, so a charge's stored
+         * description is `field_trip` — an internal key that was being shown to an operator as the
+         * charge's NAME on its own detail. The ledger already resolves this through the template's
+         * configured label and has for some time; the detail did not, so one charge had two names
+         * depending on which surface you opened. A charge whose template has since been retired
+         * keeps its stored description rather than losing its identity.
+         */
+        label: templateLabel || t(charge.description) || null,
         description: t(charge.description) || null,
         currencyCode: t(charge.currency_code) || "USD",
         status: t(charge.status),

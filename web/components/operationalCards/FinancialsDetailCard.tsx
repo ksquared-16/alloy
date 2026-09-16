@@ -181,7 +181,15 @@ export default function FinancialsDetailCard({
                 <div className="alloy-os-fdetail__rollup">
                     <div className="alloy-os-fdetail__rollup-facts">
                     <div className="alloy-os-fdetail__strip">
-                    <Stat label="Balance" value={period.currentBalance} strong />
+                    {/*
+                      * "Current balance", the same words the Accounts header uses for the same
+                      * figure. It read "Balance" here and "Current balance" there — one number,
+                      * one authority, two names — which is exactly the accidental drift the
+                      * parity audit exists to catch. Different information between the two
+                      * surfaces is allowed because their purposes differ; a different WORD for
+                      * identical information is not.
+                      */}
+                    <Stat label="Current balance" value={period.currentBalance} strong />
                     <Stat label="Past due" value={pastDue ? pastDue.amount : "None"} tone={pastDue ? "due" : "ok"} />
                     <Stat label="Responsibility" value={period.familyResponsibility} />
                     <Stat label="Paid" value={period.paymentsReceived.replace("−", "")} />
