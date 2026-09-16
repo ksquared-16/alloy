@@ -1604,3 +1604,61 @@ this.
 §21.7 remains **TARGET, NOT YET MET** — Attendance, Health and Financials have not joined the root
 lifecycle.
 
+## 27. The third time, it reached the deployment
+
+### 27.1 What happened
+
+The settled frame's card producers were wired inside `composeOpportunityDrawerViewModel`. All
+thirteen required checks passed. **The staging deployment failed.**
+
+Next's own trace:
+
+```
+Client Component Browser:
+  ./app/(proof)/adminV2/layout-proof/child-drawer/ChildDrawerRuntimeProofClient.tsx
+  ./lib/layout/runtime/index.ts                       <- barrel
+  ./lib/layout/runtime/evaluateOpportunityLayoutRuntimeBody.ts
+  ./lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts
+  ./lib/adminV2/runtime/focusPanel/focusPanelCardProducers.ts
+  ./lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM.ts   <- "server-only"
+```
+
+A proof page imports a barrel, the barrel re-exports a layout evaluator, the evaluator imports the
+composer. Four hops, none of them visible at any single import site.
+
+### 27.2 Why §25 did not catch it
+
+§25 certifies a HAND-MAINTAINED list of entry points. It can only catch a path somebody remembered to
+add, and nobody remembers a proof page importing a barrel. The offending edge was four hops from
+anything that test names. An enumeration cannot certify a property of the whole graph.
+
+### 27.3 The fix, and the general gate
+
+**The edge:** the producers run in the **App Route**, which no client component can import, and the
+composer hands its operational context out as a VALUE. Both frames still produce from ONE context, so
+they cannot disagree about the subject. This is the same rule the commit frame already follows in
+`composeProvisioningAnswerForRoute`.
+
+**The gate:** `tests/surfaces/clientGraphServerOnlyReachability.test.ts` walks the in-repo import
+graph from EVERY `"use client"` module — about 1,500 of them — to every module declaring
+`server-only`. No list. It runs in under a second, and planting the exact edge that failed the
+deployment reproduces Next's trace verbatim.
+
+It walks repo imports rather than bundling because the question is entirely about in-repo edges, and
+esbuild across ~1,500 entries fails on loader details unrelated to the question. The walk
+over-approximates (it follows static imports a bundler might shake out), which is the safe direction:
+it can ask for an edge to be broken that a bundler would have tolerated, but it cannot miss one a
+bundler would follow. `import type` is excluded — TypeScript erases it.
+
+### 27.4 The real build is runnable locally
+
+`vac run build` runs the genuine `next build`. It needs roughly 11 GB and the broker refuses it when
+the host is short, which is why it is not a casual check — but it is the ONLY authority for this
+defect class, and it reproduced the failure exactly.
+
+§26.7's infrastructure debt stands: required CI still runs `npm run prebuild`, not `next build`. What
+changed is that the specific class that keeps escaping now has a required-suite gate that does not
+depend on anyone maintaining a list.
+
+§21.7 remains **TARGET, NOT YET MET**.
+
