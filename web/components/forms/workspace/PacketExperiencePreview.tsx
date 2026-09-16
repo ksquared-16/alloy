@@ -98,12 +98,29 @@ export function PacketExperiencePreview({ open, onClose, packetDefId, packetName
             objective: () => fetch(`${base}/objective`, { credentials: "same-origin" }),
             turn: (body) => post("turn", body),
             /*
-             * Upload is refused at the boundary, not here: the ephemeral client fails closed on
-             * storage, so an attempt returns an error instead of putting a preview file in a real
-             * bucket. The control stays visible because a family sees it — what it will not do is
-             * quietly succeed.
+             * UPLOAD IS THE ONE BOUNDARY PREVIEW CANNOT CROSS, and it says so rather than pretending.
+             *
+             * `outstandingRequiredEvidence` computes what the family still owes from the `documents`
+             * table — explicitly "read from `documents`, not from a submission payload, because the
+             * obligation must be answerable before any artifact has been prepared". So an evidence
+             * obligation is satisfied by a CANONICAL DOCUMENT and by nothing else. There is no
+             * ephemeral representation to inject: the only way to satisfy it in preview would be to
+             * fabricate a Document row, which would be preview claiming a real record exists.
+             *
+             * The real control stays on screen, because that is what a family meets. It refuses
+             * locally — no request is made at all, so there is nothing to fail closed on server-side
+             * either.
              */
-            upload: (body) => post("turn", { ...body, preview_upload_refused: true }),
+            upload: async () =>
+                new Response(
+                    JSON.stringify({
+                        ok: false,
+                        error:
+                            "File upload is disabled in preview. A real document is what satisfies this step, " +
+                            "and preview does not create one.",
+                    }),
+                    { status: 200, headers: { "content-type": "application/json" } },
+                ),
         };
     }, [packetDefId, previewId]);
 

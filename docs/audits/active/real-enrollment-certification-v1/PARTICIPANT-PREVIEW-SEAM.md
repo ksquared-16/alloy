@@ -100,3 +100,49 @@ required → canonical Health truth.
 Enrollment must not invent a competing vaccine model. Filing a document under a type is not reading
 what is inside it, and the packet step says so today. This is a post-E2E follow-up and is not part
 of the preview work above.
+
+---
+
+# Closeout: where preview stops, and why it is not a suppression
+
+Reached through the real runtime, with the QA accelerator driving the SAME turn functions:
+
+- 79 turns, 0 refusals, Admissions work 15/80 → 79/80 (99%)
+- every party offer declined through `applyPartyResponse` (`outcome: declined`)
+- the runtime then asked, conversationally: **"Before I prepare the paperwork, please attach
+  Immunization record."** — classification `Immunization record`, family-facing wording, no
+  extraction claimed
+
+## The boundary, exactly
+
+`outstandingRequiredEvidence` computes what is still owed from a set the module's own comment
+describes as:
+
+> "the set of field ids a canonical Document already satisfies for this session — read from
+> `documents`, not from a submission payload, because the obligation must be answerable before any
+> artifact has been prepared or submitted."
+
+So an evidence obligation is satisfied by a **canonical Document and nothing else**. There is no
+submission-payload representation to inject, which means there is no clean seam for an ephemeral
+upload. `POST /api/public/forms/[token]/enrollment-upload` writes both a Supabase Storage object and
+a `documents` row; the ephemeral client refuses both.
+
+Satisfying it in preview would require fabricating a `documents` row — preview asserting a real
+record exists. That is the fake runtime state the slice was told to stop at, so preview stops here
+and the upload control refuses locally and says why.
+
+## What this gates
+
+The evidence request comes BEFORE paperwork preparation, so the artifact phase — Family Handbook
+presentation, acknowledgment, signature, and completion — sits behind this same single boundary.
+They are not separately blocked; there is one gate.
+
+## What would unblock it
+
+An evidence-satisfaction seam that can be answered by session-scoped state as well as by a Document
+— i.e. `outstandingRequiredEvidence` taking its `onFile` set from an injected resolver rather than
+reading `documents` directly. That is a runtime change with real product consequences for the
+operational path and is explicitly NOT something to slip in behind a preview.
+
+The signature asset has the same shape: `enrollment-signature-asset` writes `documents` + Storage.
+It is behind the evidence gate, so it was not reached, and it is named here so it is not rediscovered.

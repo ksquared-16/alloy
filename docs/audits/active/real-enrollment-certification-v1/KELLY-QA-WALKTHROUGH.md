@@ -29,173 +29,58 @@ If EXPECT does not match, stop at that step number and report it.
 
 The QA child is **Pathb Certopp** (household *Certopp Family*).
 
-# PART 0 — Where is this configured?
+## PART 0 — Admin acceptance (short)
 
-**Read this part first, and answer the question at the end.** Twelve steps, ten minutes. Parts A–G
-below are the long certification pass and they wait on your answer.
+Everything below this section is implementation certification that is already done. Part 0 is now
+the whole of what you need to look at.
 
-Last time this section asked you to *look* at the packet. This time it asks you to **open each
-obligation and change something**, because the question you asked was the right one: *how was this
-stuff decided?* Every answer should be a place in the product, not an explanation from us.
+**0.1 DO** — Open **/workspace → Processing → Studio → Packets → Enrollment Paperwork 2026–2027**.
 
----
+**EXPECT** — One compact strip: `Ready to launch · 3 steps · Enrollment · Enrolling · required ·
+blocking · ✓ Ready to use`, a **Preview experience** button, collapsed **Packet settings**, then
+**What families complete** with the three obligations — Admissions Information (Collect
+information), Family Handbook (Read & acknowledge), Immunization record (Upload a document). No
+Technical details section.
 
-**0.1. DO** — Open **/workspace** → **Processing** → **Studio** → **Packets**.
-**EXPECT** — One card: **Enrollment Paperwork 2026–2027**, *3 steps · Active*.
+**0.2 DO** — Click **Preview experience**.
 
-**0.2. DO** — Open it and read the line under **Family experience**.
-**EXPECT** — *3 steps, in this order — **1 Form and 2 document obligations**.*
+**EXPECT** — An Alloy **conversation**, not a Form. A progress bar, Alloy saying it already has most
+of the child's information and will ask for what is missing, and ONE question with a composer.
+If you see eighty empty inputs, stop — that is the old preview and it is a defect.
 
-> That sentence is the answer to "why don't I see the other forms in Studio → Forms?". This packet
-> contains **one** Form. The other two are not Forms and never were — one is a document a family
-> reads and agrees to, the other is a document they send in.
+**0.3 DO** — Type: **What do I still need to do?**
 
-**0.3. DO** — Scroll to **What families complete** and read the grey type label on each step card.
-**EXPECT** — **Form**, **Document acknowledgment**, **Document upload**.
+**EXPECT** — Alloy ANSWERS in the thread ("You have 3 of 3 forms left to complete. Right now I
+need…") and the question it was already asking is unchanged. Your question must not be recorded as
+the answer.
 
----
+**0.4 DO** — Answer two or three questions in your own words. Then click **Edit** beside a fact
+under *What you told us*.
 
-**0.4. DO** — On **Admissions Information**, click **Configure**.
-**EXPECT** — *Completion method: Collect information*, and under **Where its questions live**:
-*Admissions Information — configured in Forms*, with **Manage form →**.
+**EXPECT** — The answers appear as *YOU* in the thread, Alloy moves on, and Edit opens an inline
+editor with Save/Cancel. This is the same interaction a family gets.
 
-> This is the ownership rule stated where you need it: the **Form** owns its questions, which are
-> required, and where each answer goes. The **packet** owns only that the Form is included, its
-> order, and the step name the family sees. Change the step name here; change the questions in Forms.
+**0.5 DO** — You do NOT need to answer all sixty-five Admissions questions. If you want to see the
+Immunization step, ask the engineer to run the QA accelerator on your preview — it answers the
+remaining needs through the same runtime, and is admin-only, preview-only.
 
-**0.4a. DO** — Still in Configure, read **What makes this complete** and **What Alloy retains or
-updates**.
-**EXPECT** — Complete when the family has answered what the Form requires and submitted it. Retained:
-answers connected to Alloy update the child or family record, answers that are not connected stay
-with this Form's submission, and the submission is kept as evidence.
+**EXPECT, once accelerated** — The SAME conversation continues into: *"Before I prepare the
+paperwork, please attach Immunization record"*, with **Attach**, in the same thread as your answers.
 
-> Every obligation now answers the same two questions — what makes it complete, and what Alloy keeps
-> — so you can compare a Form, a document to read, and a document to send in without translating
-> between three different vocabularies.
+**0.6 KNOWN BOUNDARY** — **Attach does nothing in preview, by design.** An evidence obligation is
+satisfied only by a real stored Document, so preview refuses rather than inventing one. Family
+Handbook acknowledgment, signature and completion sit behind that same gate and are therefore not
+reachable in preview yet. This is one boundary, named, not a list of broken things.
 
-**0.5. DO** — Click **Manage form →**, click **Student Date of Birth:**, then **Student Name:**.
-**EXPECT** — The inspector says *Alloy already knows this when available…* for the first and
-*Stored with this form — Not written to the child or family record* for the second. Every question
-carries **Required** or **Optional**; four carry an **Alloy** mark.
+**0.7 NOTHING WAS CREATED** — No packet session, submission, Document, Processing work,
+communication, canonical record or stage change. Measured before and after every run.
 
-> Questions 3, 4 and 5 of yours — what is required, what updates Alloy, what stays with the form —
-> are all answered here, and all changed here.
+### The acceptance question
 
----
+> Does this feel like the family Enrollment experience you configured?
 
-**0.6. DO** — Go back to the packet. On **Family Handbook**, click **Configure**.
-**EXPECT** — A configuration panel, not a summary:
-
-- **Completion method** — Read & acknowledge *(and a sentence saying it cannot be changed)*
-- **Document the family reads** — a picker, currently the 2026–2027 Handbook, with **View document →**
-- **Acknowledgment** — Required, and why it cannot be switched off
-- **Signature** — a checkbox you can actually untick
-- **Completion evidence** — what completion records
-- **What the family is told** — the participant instruction
-
-**0.7. DO** — Click **View document →**.
-**EXPECT** — The actual 2026–2027 Family Handbook opens in a new tab.
-
-> This did nothing when you clicked it last time. It was reading the wrong field off the response, so
-> there was no tab and no error either — the click simply died. If it fails now it will *tell* you
-> why instead of going quiet.
-
-**0.7a. DO** — Read **What makes this complete** and **What Alloy retains or updates**.
-**EXPECT** — Completion is *the family acknowledges this document and provides the required
-signature*. Alloy retains: which document was acknowledged, the acknowledgment and its time, the
-signature — typed or drawn — and a signed PDF of what was agreed, and the packet session it belongs
-to. Then, plainly: **no child or household fields are updated from this document**.
-
-**0.7b. DO** — Read **Data mapping**.
-**EXPECT** — **None**, and: *This step records acknowledgment of the document. It does not extract or
-map the document's contents into Alloy records. The family is shown the document before acknowledging
-it.*
-
-> This is the direct answer to your question about how Handbook data gets mapped: **it doesn't**.
-> This is an attestation — it records that a specific document was agreed to, by whom, and when.
-> Note the careful wording about being *shown* the document: the family is shown it before they can
-> agree, but Alloy does not track that they read it, so the product does not claim a "viewed" step it
-> cannot prove.
-
-**0.7c. DO** — Untick **Require a signature**, watch the completion sentence, then tick it back and
-**Save configuration**.
-**EXPECT** — The completion sentence drops the signature and the retention list drops the signature
-line while unticked, and the card still says *Signature required* afterwards.
-
-> **STOP** if you are ever shown a *Form* here. Alloy builds a hidden one-question form to record the
-> agreement; that is machinery and you should never have to know it exists.
-
----
-
-**0.8. DO** — On **Immunization record**, click **Configure**.
-**EXPECT** —
-
-- **Completion method** — Upload a document
-- **Filed as** — a picker set to **Immunization record**
-- **Required** — explained truthfully: every step in a packet must be completed, so requiredness
-  belongs to the packet, and there is no per-step toggle pretending otherwise
-- **Managed by Alloy** — the family uploads, can view what they sent, and can replace it before
-  finishing
-- **Document intelligence** — **Not configured**
-- **What the family is told**
-
-> **Filed as** is the answer to "how does the immunization form get set to be import enabled?" — and
-> the question contains the collision worth naming. *You* importing a document to help configure
-> Alloy is one thing, owned by Processing. *A family* sending in a document to satisfy an obligation
-> is a different thing, owned right here. Immunization is the second.
->
-> **Information extraction: Not configured** is deliberate and correct, and it is the answer to your
-> question. If extraction is not configured, how are we pulling immunization information and mapping
-> it? **We are not.** Today this step means: the family provides evidence, Alloy stores the document
-> and files it as an Immunization record, and that satisfies the obligation. It does **not** mean the
-> document is read, doses are extracted, or the child's Health record is updated.
->
-> Filing a document under a type is not the same as reading what is inside it. Structured dose truth
-> belongs to Health, and the vaccine grid stays truthfully blank until Health supplies it.
-
-**0.8a. DO** — Read **What makes this complete** and **What Alloy retains or updates**.
-**EXPECT** — Complete when *the family provides the document — receiving it is what completes this
-step*. Retained: the document filed as **Immunization record** against the child, which packet
-session and step it arrived from, and the most recent file if the family replaced an earlier one.
-
-> **STOP AND TELL US** if anything on this screen suggests Alloy is reading values out of the
-> document. Nothing should. Zero health facts are extracted by this step today.
-
----
-
-**0.9. DO** — Click **+ Add step**.
-**EXPECT** — Three choices in family language — **Collect information**, **Upload a document**,
-**Read & acknowledge** — and choosing one asks for that obligation's configuration: a Form to use, or
-a document type to file under, or a document to read plus whether a signature is taken.
-
-**0.10. DO** — Click **Cancel**. Nothing is added.
-
-> This is how the three steps you just inspected were created. Nothing about this packet required
-> knowing how the database works.
-
-**0.11. DO** — Use **Move up** / **Move down** on any step, then put it back.
-**EXPECT** — Order is yours, and it is the order the family meets them in.
-
-**0.12. DO** — Back on **Packets**, click **New packet**.
-**EXPECT** — A small dialog asking for a **Name**, optionally a **Description**, and *nothing about
-Forms*: *You will choose what families complete next — questions to answer, a document to read and
-agree to, or a document to send in.*
-
-> This is the last thing that was wrong. **New packet** used to open the old composer — pick some
-> Forms, pick a household, mint a link — so the product only made sense for a packet somebody else
-> had already created. Creating one now starts from the same obligation model you just inspected.
->
-> You do not have to build one. If you want to: name it, **Create packet**, and you land in this
-> same editor with **no obligations yet** and *Needs setup — add at least one step*, where
-> **+ Add step** offers the same three choices. An empty packet is a draft — it cannot be sent and
-> is not ready — until it has at least one step.
->
-> Sending a one-off packet to a family still exists, beside **New packet**, under its own name.
-
-**0.13. DO** — Go to **Studio → Forms**.
-**EXPECT** — **Admissions Information**, and a line above the list: *Forms collect information from
-families. Documents a family reads and agrees to, or sends in, are obligations configured inside a
-packet — they are not Forms and do not appear here.*
+**YES** → Admin V0.5 accepted → proceed to real E2E.
+**NO** → stop and say what felt wrong.
 
 ---
 
