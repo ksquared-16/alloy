@@ -133,3 +133,25 @@ describe("operational cards shared stylesheet", () => {
         }
     });
 });
+
+/*
+ * ── THE LAB'S COPY AND THE PRODUCT'S COPY ARE ONE LEDGER ──────────────────────────────────────
+ *
+ * `cardLab.css` holds a duplicate of the Financials detail ledger's grid, and it drifted: the
+ * shared stylesheet was widened so a year-bearing date ("Aug 20, 2026") fits its column, and the
+ * lab kept the 56px track sized for "Aug 20" — so the lab showed the date running into the Type
+ * beside it while the product surface was correct. The lab is where this card is REVIEWED, and a
+ * review surface that disagrees with the product is worse than no review surface.
+ */
+describe("the ledger row grid is one grid", () => {
+    const track = (css: string) => {
+        const m = /\.alloy-os-billingdetail__row \{([^}]*)\}/.exec(css.replace(/\/\*[\s\S]*?\*\//g, ""));
+        expect(m, "the ledger row rule must exist in both stylesheets").toBeTruthy();
+        const g = /grid-template-columns:\s*([^;]+);/.exec(m![1]!);
+        expect(g, "and it must declare its columns").toBeTruthy();
+        return g![1]!.trim().replace(/\s+/g, " ");
+    };
+    it("declares the same columns in the product stylesheet and the lab's copy", () => {
+        expect(track(readFileSync(LAB_CSS, "utf8"))).toBe(track(readFileSync(SHARED_CSS, "utf8")));
+    });
+});

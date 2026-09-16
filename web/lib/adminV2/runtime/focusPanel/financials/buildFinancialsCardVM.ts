@@ -221,6 +221,25 @@ export type FinancialsLedgerRow = {
     /** Operator-facing GL code, or null when nothing maps it. Never silently blank. */
     glCode: string | null;
     glAccountName: string | null;
+    /**
+     * WHO OWNS THIS CHARGE'S OBLIGATION — at the grain the model actually has.
+     *
+     * `financial_responsibility_allocations` is keyed by `charge_id`, so responsibility IS
+     * charge-grain and a ledger row can state its own responsible party without inventing one. It
+     * is deliberately NOT the same question as `subjectName`: the subject is the CHILD the charge is
+     * for, the responsible party is the person who owes it, and one child's tuition may be owed by
+     * a parent who is not on any other row. Conflating them is how a surface ends up telling an
+     * operator that a four-year-old owes $1,850.
+     *
+     * Null with `responsibilityUnassigned` false means no allocation exists for the charge at all —
+     * which is different from an allocation that exists and names nobody. Both are real states and
+     * neither is a person.
+     *
+     * NO ARITHMETIC. The name is read; the amounts stay where `readResponsibility` computes them.
+     */
+    responsiblePartyName: string | null;
+    /** An allocation exists for this charge and deliberately names no party. */
+    responsibilityUnassigned: boolean;
     /** Where the row came from — template key, or the manual service. */
     source: string | null;
 };
@@ -531,11 +550,15 @@ export async function readResponsibility(
     responsibility: FinancialsCardVM["responsibility"];
     payers: FinancialsCardVM["payers"];
     expectedFunding: FinancialsCardVM["expectedFunding"];
+    /** The same allocations, indexed by charge, so a ledger row can name who owes it. */
+    responsibilityByCharge: Map<string, { name: string | null; unassigned: boolean }>;
 }> {
     const empty = {
         responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
         payers: [],
         expectedFunding: [],
+        /* No allocations read means no row can name a responsible party. It never means nobody owes. */
+        responsibilityByCharge: new Map<string, { name: string | null; unassigned: boolean }>(),
     };
     if (chargeIds.length === 0) return empty;
 
@@ -567,6 +590,7 @@ export async function readResponsibility(
     if (allocations.length === 0) {
         return { ...empty, responsibility: { ...empty.responsibility, hasUnresolvedCharges: true } };
     }
+
 
     const { data: attributionRows } = await supabase
         .from("payment_responsibility_attributions")
@@ -626,7 +650,37 @@ export async function readResponsibility(
 
     const allocatedCents = parties.reduce((acc, p) => acc + p.assignedCents, 0);
     const chargesWithAllocations = new Set(allocations.map((a) => a.charge_id));
+
+    /*
+     * ── THE SAME ALLOCATIONS, INDEXED BY CHARGE ────────────────────────────────────────────────
+     *
+     * So a ledger row can say who owes it. Nothing is re-read and nothing is summed: this walks the
+     * rows already in hand. A charge whose allocations name two different people is reported as
+     * SPLIT rather than as one of them — picking a winner would be this projection deciding a
+     * responsibility question the allocations deliberately left as two.
+     */
+    const byCharge = new Map<string, { names: Set<string>; unassigned: boolean }>();
+    for (const a of allocations) {
+        const entry = byCharge.get(a.charge_id) ?? { names: new Set<string>(), unassigned: false };
+        if (a.is_unassigned || !a.responsible_party_id) entry.unassigned = true;
+        else entry.names.add(nameById.get(a.responsible_party_id) ?? "Responsible party");
+        byCharge.set(a.charge_id, entry);
+    }
+    const responsibilityByCharge = new Map<string, { name: string | null; unassigned: boolean }>(
+        [...byCharge].map(([chargeId, entry]) => [
+            chargeId,
+            {
+                name:
+                    entry.names.size === 1 ? [...entry.names][0]!
+                    : entry.names.size > 1 ? "Split"
+                    : null,
+                unassigned: entry.unassigned,
+            },
+        ]),
+    );
+
     return {
+        responsibilityByCharge,
         responsibility: {
             parties,
             unassignedCents,
@@ -1047,6 +1101,9 @@ export async function buildFinancialsCardVM(
             dueDate: t(c.due_date) || null,
             glCode: account?.code ?? null,
             glAccountName: account?.name ?? null,
+            /* Filled in below, once the responsibility read has answered. Absent until then. */
+            responsiblePartyName: null,
+            responsibilityUnassigned: false,
             /*
              * PROVENANCE, not a key. `metadata.charge_template_key` is `field_trip`; the operator
              * configured that template and already sees its LABEL in the description, so this column
@@ -1066,6 +1123,15 @@ export async function buildFinancialsCardVM(
      * come from the allocations, and what a party still owes is assigned less attributed.
      */
     const responsibilityRead = await readResponsibility(supabase, args.orgId, rows.map((r) => r.chargeId));
+    /*
+     * The responsible party lands on the ROW, from the allocations already read. A second query
+     * here would be a second answer to the same question; this is the same answer, indexed.
+     */
+    for (const row of rows) {
+        const owned = responsibilityRead.responsibilityByCharge.get(row.chargeId);
+        row.responsiblePartyName = owned?.name ?? null;
+        row.responsibilityUnassigned = owned?.unassigned ?? false;
+    }
 
     /*
      * COLLECTIBILITY, SUMMED FROM THE PERIOD'S POSTED OBLIGATIONS.

@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { money, moneyExact } from "@/app/adminV2/financials/financialsFormat";
+import { money, moneyExact, shortDate } from "@/app/adminV2/financials/financialsFormat";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
+import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 import {
     ACCOUNT_LENSES,
     ACCOUNT_LENS_LABELS,
@@ -61,6 +63,8 @@ import {
 type Row = Record<string, any>;
 type Vm = {
     account?: Row; period?: Row; payers?: Row[]; rows?: Row[]; reductions?: Row[]; payments?: Row[];
+    /** The reader's own period grouping, with its own totals. Read, never recomputed. */
+    ledgerPeriods?: Row[];
     reconciliation?: Record<string, number>; collectible?: Record<string, number>;
     responsibility?: { parties?: Row[]; allocatedCents?: number; unassignedCents?: number };
     expectedFunding?: Row[]; subjects?: Row[]; pastDue?: Row; achAvailable?: boolean;
@@ -82,20 +86,11 @@ export default function FinancialsAccountWorkspaceDetail({
     customerId,
     householdName = null,
     currencyCode = "USD",
-    actions = null,
 }: {
     customerId: string;
     /** Known at the instant of the click. The name never waits on a network read. */
     householdName?: string | null;
     currencyCode?: string;
-    /**
-     * The canonical command surface, composed by the caller and PLACED here.
-     *
-     * This file owns where the actions sit in the reading order — high, above the record — and owns
-     * nothing about what they do. Splitting it that way is what keeps "one capability, several
-     * placements, one executor" true as placements multiply.
-     */
-    actions?: React.ReactNode;
 }) {
     const [vm, setVm] = useState<Vm | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -159,6 +154,27 @@ export default function FinancialsAccountWorkspaceDetail({
         [payments, payer],
     );
 
+    /*
+     * THE SERVER'S OWN PERIOD TOTALS — offered to the ledger only while the view is UNFILTERED.
+     *
+     * `vm.ledgerPeriods` is the grouping the account reader already produced, with its own totals.
+     * The moment a lens or a subject filter is on, those totals describe more rows than are on
+     * screen, so handing them to a filtered ledger would label a subset with the whole's balance.
+     * Null then, and the ledger states a row count instead. No subtotal is ever computed here.
+     */
+    const canonicalPeriodTotals = useMemo(() => {
+        const unfiltered = lens === "all" && !subject && !periodKey;
+        if (!unfiltered) return null;
+        const groups = (vm?.ledgerPeriods ?? []) as Row[];
+        const byKey = new Map<string, number>();
+        for (const g of groups) {
+            const key = String((g.period as Row | undefined)?.key ?? "");
+            if (!key) continue;
+            byKey.set(key, n(g.totalCents));
+        }
+        return byKey;
+    }, [vm, lens, subject, periodKey]);
+
     if (error) {
         return (
             <p className="px-4 py-6 text-sm text-alloy-ember" data-financials-detail-error="true">{error}</p>
@@ -173,73 +189,36 @@ export default function FinancialsAccountWorkspaceDetail({
     const name = householdName ?? String(vm?.account?.label ?? "") ?? null;
 
     return (
-        <div className="flex flex-col gap-3 pb-6" data-financials-workspace-detail={customerId}
+        /*
+         * ── ONE SCROLL OWNER, AND IT IS NOT THE ACCOUNT ────────────────────────────────────────
+         *
+         * The controls an operator works an account WITH — the balance, the two commands, the
+         * lenses and the context filters — used to scroll away the moment a family had a year of
+         * history, so reading September meant losing the Payment button. The card above this and
+         * the lens bar below stay put; the financial activity is what moves.
+         *
+         * A flex column with a min-height of zero and exactly ONE `overflow-y-auto` inside it,
+         * rather than sticky offsets that would need the summary's height as a magic number, and
+         * rather than a second scroller nested in the first.
+         */
+        <div className="flex min-h-0 flex-1 flex-col" data-financials-workspace-detail={customerId}
             data-financials-detail-hydrated={loading ? "false" : "true"}>
 
-            {/* ── 1 · STATE BAND — what this account is, before anything else ───────────────────── */}
-            <section className="rounded-xl border border-alloy-stone/15 bg-white/70 px-4 py-3"
-                data-financials-state-band="true">
-                <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
-                    <div className="min-w-0">
-                        <p className="truncate text-[15px] font-semibold text-alloy-midnight"
-                            data-financials-detail-household="true">
-                            {name || "Household"}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
-                            <span data-financials-billing-period={String(vm?.period?.key ?? "")}>
-                                {loading ? <Skeleton w="7rem" /> : `Billing period · ${String(vm?.period?.label ?? "—")}`}
-                            </span>
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
-                        <Headline label="Outstanding" loading={loading} value={moneyExact(n(r.balanceCents), cur)} />
-                        <Figure label="Collectible now" loading={loading} value={moneyExact(n(c.currentlyCollectibleCents), cur)} />
-                        <Figure label="Gross charged" loading={loading} value={money(n(r.grossCents), cur)} />
-                        <Figure label="Payments received" loading={loading} value={money(n(r.paymentsCents), cur)} />
-                    </div>
-                </div>
-
-                {/* State reads as state: a chip, not a paragraph. Colour carries meaning, never decoration. */}
-                {!loading ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5" data-financials-state-chips="true">
-                        {pastDueCents > 0 ? <Chip tone="due">{money(pastDueCents, cur)} past due</Chip> : null}
-                        {n(vm?.responsibility?.unassignedCents) > 0 ? (
-                            <Chip tone="due" testId="unassigned">
-                                {moneyExact(n(vm?.responsibility?.unassignedCents), cur)} unassigned
-                            </Chip>
-                        ) : null}
-                        {n(c.submittedClaimSuppressionCents) > 0 ? (
-                            <Chip tone="hold">{money(n(c.submittedClaimSuppressionCents), cur)} with an agency</Chip>
-                        ) : null}
-                        {rows.length === 0 && payments.length === 0 ? (
-                            <Chip tone="quiet">No financial activity yet</Chip>
-                        ) : null}
-                        {rows.length > 0 && n(r.balanceCents) <= 0 && pastDueCents <= 0 ? (
-                            <Chip tone="ok">Settled</Chip>
-                        ) : null}
-                        <Chip tone="quiet">
-                            {(vm?.subjects ?? []).length
-                                ? `Billed for ${(vm?.subjects ?? []).map((s) => String(s.displayName)).join(", ")}`
-                                : "Household account"}
-                        </Chip>
-                    </div>
-                ) : null}
-            </section>
-
-            {/* ── 2 · WHAT CAN I DO NEXT — above the record, not beneath it ─────────────────────── */}
             {/*
-             * The commands are the card's. Re-implementing Add charge, Record payment, Add
-             * adjustment, Move and Apply here would be a second action path over the same money,
-             * which is exactly what the surface decision forbids — so the card is COMPOSED by the
-             * caller and only its PLACEMENT is decided here. It used to sit behind a disclosure
-             * underneath the whole ledger, which is the last place an operator looks for the thing
-             * they came to do.
+             * NO SUMMARY HERE. The Financials card composed directly above this is the account's
+             * one summary — balance, past due, responsibility, received, payment state, actions.
+             * This band used to repeat those figures under different labels, which gave the surface
+             * two summaries and no hierarchy. What follows is DETAIL, and only detail.
              */}
-            {actions}
-
             {/* ── 3 · THE MONEY, THROUGH ONE LENS AT A TIME ─────────────────────────────────────── */}
-            <section className="rounded-xl border border-alloy-stone/15 bg-white/60" data-financials-lenses="true">
-                <div className="flex flex-wrap items-center gap-1 border-b border-alloy-stone/10 px-2 py-1.5">
+            {/*
+             * A DIVIDER, NOT A NEW SURFACE. This region is the lower half of the Financials card it
+             * is rendered inside, so it draws no border of its own — a bordered panel here would put
+             * a card inside a card and reintroduce the two-object reading this pass removed.
+             */}
+            <section className="flex min-h-0 flex-1 flex-col border-t border-alloy-stone/15 pt-2" data-financials-lenses="true">
+                <div className="flex shrink-0 flex-wrap items-center gap-1 px-1 pb-1.5"
+                    data-financials-lensbar="true">
                     {ACCOUNT_LENSES.map((key) => (
                         <button
                             key={key}
@@ -249,17 +228,23 @@ export default function FinancialsAccountWorkspaceDetail({
                             onClick={() => setLens(key)}
                             disabled={loading}
                             className={`rounded-md px-2.5 py-1 text-[12px] transition disabled:opacity-40 ${
+                                /* Bend Pine is the product's active operational control; navy read
+                                   as a neutral chip rather than a live selection. Token, not a hex. */
                                 lens === key
-                                    ? "bg-alloy-midnight text-white"
+                                    ? "bg-alloy-bend-pine text-white"
                                     : "text-alloy-midnight/70 hover:bg-alloy-stone/10"
                             }`}
                         >
                             {ACCOUNT_LENS_LABELS[key]}
-                            {!loading ? (
-                                <span className={`ml-1.5 tabular-nums ${lens === key ? "text-white/70" : "text-alloy-midnight/40"}`}>
-                                    {counts[key]}
-                                </span>
-                            ) : null}
+                            {/*
+                             * The count SLOT is always present, so the lens bar is the same width
+                             * before and after the read. It used to appear with the data and shift
+                             * every lens to its right — a control moving under the cursor at the
+                             * moment an operator reaches for it.
+                             */}
+                            <span className={`ml-1.5 inline-block min-w-[1.25ch] text-center tabular-nums ${lens === key ? "text-white/80" : "text-alloy-midnight/40"}`}>
+                                {loading ? "·" : counts[key]}
+                            </span>
                         </button>
                     ))}
 
@@ -268,7 +253,14 @@ export default function FinancialsAccountWorkspaceDetail({
                      * one payer would be a dropdown with a single choice, which reads as a
                      * capability this surface does not have. Every control shown here works.
                      */}
-                    <span className="ml-auto flex flex-wrap items-center gap-1.5">
+                    {/*
+                     * The filter row keeps its height while the account reads, for the same reason,
+                     * and stays on ONE line beside the lenses. It wrapped to a second row and then
+                     * stacked its two controls vertically, which read as a separate panel floating
+                     * to the right of the lens bar rather than as part of it.
+                     */}
+                    <span className="ml-auto flex min-h-[1.75rem] shrink-0 items-center gap-1.5"
+                        data-financials-filter-slot="true">
                         {!loading && lens !== "payments" && hasChoice(subjects) ? (
                             <Filter
                                 testId="subject"
@@ -299,7 +291,8 @@ export default function FinancialsAccountWorkspaceDetail({
                     </span>
                 </div>
 
-                <div className="px-3 py-2">
+                {/* THE SCROLL REGION BEGINS HERE — with the activity, never with the controls. */}
+                <div className="min-h-0 flex-1 overflow-y-auto py-1" data-financials-activity-scroll="true">
                     {loading ? (
                         <LedgerSkeleton />
                     ) : lens === "payments" ? (
@@ -311,63 +304,58 @@ export default function FinancialsAccountWorkspaceDetail({
                     ) : ledger.length === 0 ? (
                         <Empty>
                             {lens === "all"
-                                ? "Nothing has been charged on this account yet."
+                                ? "Nothing charged yet"
                                 : `No ${ACCOUNT_LENS_LABELS[lens].toLowerCase()} in this view.`}
                         </Empty>
                     ) : (
-                        <LedgerTable rows={ledger as unknown as Row[]} cur={cur} />
+                        <LedgerPeriods
+                            rows={ledger as unknown as Row[]}
+                            cur={cur}
+                            canonicalTotals={canonicalPeriodTotals}
+                        />
                     )}
-                </div>
+            {/*
+             * ── 4 · FUNDING, UNDER THE FUNDING LENS ────────────────────────────────────────────
+             *
+             * This band used to sit under EVERY ledger, on every account, permanently: "Who owes
+             * it / No responsibility assigned / Expected funding / No expected funding / Not
+             * claimed here: autopay, payer_split". Four of those five lines were an absence, and
+             * the fifth named two database fields. An operator scrolled a year of real activity to
+             * arrive at a footer telling them nothing had been arranged and that two facts were
+             * unclaimed.
+             *
+             * Neither concept left the product. WHO OWES IT is now on every row, at the grain the
+             * model actually has — the Responsible party column — which is where the question is
+             * asked and where an unassigned charge is visible rather than summarised into
+             * "No responsibility assigned". EXPECTED FUNDING keeps its own lens: it is an
+             * expectation rather than activity, it must never be read as money received, and an
+             * operator asks for it deliberately.
+             *
+             * "Not claimed here" is gone outright. Which facts this surface does not carry is a
+             * statement about our implementation, not about the family whose account is open.
+             */}
+            {lens === "funding" ? (
+            <section className="mt-2.5 border-t border-alloy-stone/15 pt-2.5" data-financials-arrangements="true">
+                <Sub title="An expectation, not money received. It does not reduce what is owed.">
+                    Expected funding
+                </Sub>
+                {loading ? (
+                    <Skeleton w="12rem" />
+                ) : (vm?.expectedFunding ?? []).length === 0 ? (
+                    <Empty>Nothing is expected from a third party</Empty>
+                ) : (
+                    <ul className="space-y-1">
+                        {(vm?.expectedFunding ?? []).map((f, i) => (
+                            <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
+                                <span className="text-alloy-midnight">{String(f.label)}</span>
+                                <span className="tabular-nums text-alloy-midnight">{moneyExact(n(f.expectedCents), cur)}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </section>
-
-            {/* ── 4 · WHO OWES IT, AND WHO IS FUNDING IT ────────────────────────────────────────── */}
-            <section className="rounded-xl border border-alloy-stone/15 bg-white/60 px-4 py-3">
-                <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                        <Sub>Who owes it</Sub>
-                        {loading ? (
-                            <Skeleton w="12rem" />
-                        ) : (vm?.responsibility?.parties ?? []).length === 0 ? (
-                            <Empty>No responsibility has been arranged for this account.</Empty>
-                        ) : (
-                            <ul className="space-y-1">
-                                {(vm?.responsibility?.parties ?? []).map((p) => (
-                                    <li key={String(p.personId)} className="flex items-baseline justify-between gap-3 text-sm"
-                                        data-financials-responsible-party={String(p.personId)}>
-                                        <span className="text-alloy-midnight">{String(p.name)}</span>
-                                        <span className="tabular-nums text-alloy-midnight">{moneyExact(n(p.assignedCents), cur)}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
-                    <div>
-                        <Sub>Expected funding</Sub>
-                        {loading ? (
-                            <Skeleton w="12rem" />
-                        ) : (vm?.expectedFunding ?? []).length === 0 ? (
-                            <Empty>Nothing is expected from a third party.</Empty>
-                        ) : (
-                            <ul className="space-y-1">
-                                {(vm?.expectedFunding ?? []).map((f, i) => (
-                                    <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
-                                        <span className="text-alloy-midnight">{String(f.label)}</span>
-                                        <span className="tabular-nums text-alloy-midnight">{moneyExact(n(f.expectedCents), cur)}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                        {/* The line the whole distinction exists for. */}
-                        <p className="mt-1 text-[11px] text-alloy-midnight/50">
-                            Expected funding is an expectation, not money received. It does not reduce what is owed.
-                        </p>
-                    </div>
+            ) : null}
                 </div>
-                {!loading && (vm?.unavailable ?? []).length ? (
-                    <p className="mt-2 text-[11px] text-alloy-midnight/45" data-financials-not-claimed="true">
-                        Not claimed here: {(vm?.unavailable ?? []).map((u) => String(u.fact)).join(", ")}.
-                    </p>
-                ) : null}
             </section>
         </div>
     );
@@ -375,57 +363,173 @@ export default function FinancialsAccountWorkspaceDetail({
 
 // ── LENS CONTENT ────────────────────────────────────────────────────────────────────────────────
 
-function LedgerTable({ rows, cur }: { rows: Row[]; cur: string }) {
+/**
+ * THE LEDGER — Focus Panel → Financials → Details' anatomy, rendered over the workspace's rows.
+ *
+ * This surface used to draw its own `<table>`: its own header typography, its own row density, its
+ * own GL treatment, its own flat chronological order with a Period COLUMN. Details groups by
+ * period, heads each group, and lays eight fixed columns on a grid. Two Financials ledgers with two
+ * different anatomies is the thing this pass exists to end, so the workspace now renders the
+ * canonical one — the same `alloy-os-billingdetail__*` classes, so the typography is literally
+ * shared rather than approximated.
+ *
+ * ── THE PERIOD SUMMARY IS THE SERVER'S FIGURE OR IT IS A COUNT ─────────────────────────────────
+ *
+ * Details states a period balance because it renders the server's own groups, whole. Here the rows
+ * have been through a lens and possibly a subject filter, and summing a SUBSET would be this
+ * component quietly becoming a second opinion about money — the exact thing `accountLenses` refuses
+ * to do. So: unfiltered, the canonical `ledgerPeriods[].totalCents` the server already computed;
+ * filtered, a count of rows. A number on screen is either canonical or it is a row count, never a
+ * subtotal invented by a presentation layer.
+ */
+function LedgerPeriods({
+    rows,
+    cur,
+    canonicalTotals,
+}: {
+    rows: Row[];
+    cur: string;
+    /** period key → the server's own total for that period, when the view is unfiltered. */
+    canonicalTotals: Map<string, number> | null;
+}) {
+    const groups = useMemo(() => {
+        const byKey = new Map<string, Row[]>();
+        for (const row of rows) {
+            const key = String(row.periodKey ?? "");
+            const found = byKey.get(key);
+            if (found) found.push(row);
+            else byKey.set(key, [row]);
+        }
+        /* Newest period first — an operator is nearly always working the current one. */
+        return [...byKey.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+    }, [rows]);
+
     return (
-        <div className="overflow-x-auto">
-            <table className="w-full min-w-[46rem] border-collapse text-sm">
-                <thead>
-                    <tr className="border-b border-alloy-stone/15 text-left text-[11px] uppercase tracking-wide text-alloy-midnight/45">
-                        <Th>Date</Th><Th>Period</Th><Th>Type</Th><Th>Subject</Th><Th>Description</Th>
-                        <Th>GL</Th><Th>Status</Th><Th right>Amount</Th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((row) => (
-                        <tr key={String(row.chargeId)} className="border-b border-alloy-stone/8"
-                            data-financials-ledger-row={String(row.chargeId)}>
-                            <Td>{String(row.date ?? "—")}</Td>
-                            <Td>{String(row.periodKey ?? "—")}</Td>
-                            {/* The catalog's word, never the key behind it. */}
-                            <Td>{String(row.categoryLabel ?? row.categoryKey ?? "—")}</Td>
-                            <Td>{String(row.subjectName ?? "Household")}</Td>
-                            <Td>{String(row.description ?? "—")}</Td>
-                            {/*
-                             * GL CONTEXT AT TRANSACTION GRAIN. `gl_accounts` and
-                             * `gl_account_mappings` are canonical and the reader already carries the
-                             * resolved code and name. Code and name together, because a code alone
-                             * is unreadable and a name alone is unsearchable.
-                             */}
-                            <Td>
-                                {row.glCode ? (
-                                    <span data-financials-gl={String(row.glCode)}>
-                                        <span className="font-mono text-xs">{String(row.glCode)}</span>
-                                        {row.glAccountName ? (
-                                            <span className="block text-[11px] text-alloy-midnight/50">{String(row.glAccountName)}</span>
+        <div className="alloy-os-billingdetail__ledgerband" data-financials-ledger="true">
+            {groups.map(([key, groupRows]) => {
+                const total = canonicalTotals?.get(key);
+                return (
+                    <section key={key || "unplaced"} className="alloy-os-fdetail__period"
+                        data-financials-ledger-period={key || "unplaced"}>
+                        <p className="alloy-os-fdetail__periodhead">
+                            <span className="alloy-os-fdetail__periodname">{periodLabel(key)}</span>
+                            <span className="alloy-os-fdetail__periodsum">
+                                {/* Never "Closed" — see the adapter's note. A zero total is a
+                                    balance of zero, not a closed accounting period. */}
+                                {total != null
+                                    ? `Balance ${moneyExact(total, cur)}`
+                                    : `${groupRows.length} ${groupRows.length === 1 ? "entry" : "entries"}`}
+                            </span>
+                        </p>
+                        <div className="alloy-os-billingdetail__ledger" role="table">
+                            {/* Child, then who owes it. See the identity note on the detail card. */}
+                            <div className="alloy-os-billingdetail__row alloy-os-billingdetail__row--head">
+                                <span>Date</span>
+                                <span>Type</span>
+                                <span>Child</span>
+                                <span>Description</span>
+                                <span>GL account</span>
+                                <span>Amount</span>
+                                <span>Status</span>
+                                <span>Responsible party</span>
+                            </div>
+                            {groupRows.map((row) => (
+                                <div key={String(row.chargeId)} className="alloy-os-billingdetail__row"
+                                    data-financials-ledger-row={String(row.chargeId)}>
+                                    <span className="alloy-os-billingdetail__when">{shortDate(row.date as string | null)}</span>
+                                    {/* The catalog's word, never the key behind it. */}
+                                    <span className="alloy-os-billingdetail__type">
+                                        {String(row.categoryLabel ?? row.categoryKey ?? "—")}
+                                    </span>
+                                    {/*
+                                     * The CHILD, or the household when the charge genuinely belongs
+                                     * to no child — a registration fee does. Never the household
+                                     * name standing in for a child the row actually names.
+                                     */}
+                                    <span className="alloy-os-billingdetail__subject"
+                                        data-financials-child={row.subjectMemberId ? "true" : "false"}>
+                                        {String(row.subjectName ?? "Household")}
+                                    </span>
+                                    <span className="alloy-os-billingdetail__desc">{String(row.description ?? "—")}</span>
+                                    {/*
+                                     * GL CONTEXT AT TRANSACTION GRAIN, in the detail card's own
+                                     * treatment: code and name on one line, an unmapped row saying
+                                     * so rather than rendering blank. `gl_accounts` and
+                                     * `gl_account_mappings` are canonical and the reader already
+                                     * carries the resolved pair.
+                                     */}
+                                    <span className="alloy-os-billingdetail__gl"
+                                        data-financials-gl={row.glCode ? String(row.glCode) : undefined}
+                                        data-financials-gl-state={row.glCode ? "mapped" : "unmapped"}
+                                        title={row.glCode && row.glAccountName ? `${String(row.glCode)} · ${String(row.glAccountName)}` : undefined}>
+                                        {row.glCode
+                                            ? row.glAccountName
+                                                ? `${String(row.glCode)} · ${String(row.glAccountName)}`
+                                                : String(row.glCode)
+                                            : "Unmapped"}
+                                    </span>
+                                    <span
+                                        className={`alloy-os-billingdetail__amount${
+                                            n(row.amountCents) < 0 ? " alloy-os-billing__entry-amount--credit" : ""
+                                        }`}
+                                    >
+                                        {moneyExact(n(row.amountCents), cur)}
+                                        {n(row.outstandingCents) !== n(row.amountCents) ? (
+                                            <span className="alloy-os-billingdetail__outstanding">
+                                                {moneyExact(n(row.outstandingCents), cur)} outstanding
+                                            </span>
                                         ) : null}
                                     </span>
-                                ) : <span className="text-alloy-midnight/35">—</span>}
-                            </Td>
-                            <Td>{String(row.lifecycleStatus ?? row.status ?? "—")}</Td>
-                            <Td right>
-                                <span className="tabular-nums">{moneyExact(n(row.amountCents), cur)}</span>
-                                {n(row.outstandingCents) !== n(row.amountCents) ? (
-                                    <span className="block text-[11px] text-alloy-midnight/50">
-                                        {moneyExact(n(row.outstandingCents), cur)} outstanding
+                                    <span className="alloy-os-billingdetail__status">
+                                        {String(row.lifecycleStatus ?? row.status ?? "—")}
                                     </span>
-                                ) : null}
-                            </Td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+                                    {/*
+                                     * REVERSALS AND CORRECTIONS, SAID IN THE SOURCE COLUMN.
+                                     *
+                                     * The read model already decided what this row IS in relation to
+                                     * another — `correctionKind` when it corrects something,
+                                     * `reversedByChargeId` when something corrected it. Nothing here
+                                     * infers a correction from a status string; a row that stands
+                                     * says only where it came from.
+                                     */}
+                                    {/*
+                                     * WHO OWES IT — charge-grain, from the allocations the account
+                                     * reader already holds. It replaces a Source column that mostly
+                                     * repeated Type, and it answers a question Type cannot.
+                                     */}
+                                    <span className="alloy-os-billingdetail__source" data-financials-responsible="true">
+                                        {row.responsiblePartyName
+                                            ? String(row.responsiblePartyName)
+                                            : row.responsibilityUnassigned
+                                                ? "Unassigned"
+                                                : "—"}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                );
+            })}
+            {/*
+             * ── THE RUNNING-BALANCE INVARIANT IS NOT AN OPERATOR MESSAGE ───────────────────────
+             *
+             * It used to be printed under every ledger: "No running balance column —
+             * `ledger_transactions` provides no authoritative running balance…". That is true, it
+             * matters, and it is ENGINEERING DOCTRINE. An operator running a childcare centre
+             * cannot act on it and did not ask; a paragraph naming a database table under a family's
+             * money is the product explaining its own implementation.
+             *
+             * The invariant is not weakened by removing the paragraph. It lives here as the reason
+             * this component computes no running total, in the doctrine document, and in the test
+             * that fails if a running-balance column ever appears.
+             */}
         </div>
     );
+}
+
+/** `2026-09` → `September 2026`, through the one authority. A row with no period is unplaced. */
+function periodLabel(key: string): string {
+    return billingPeriodLabel(key) || "Unplaced";
 }
 
 function PaymentsLens({
@@ -453,7 +557,7 @@ function PaymentsLens({
     return (
         <>
             {payments.length === 0 ? (
-                <Empty>No money has been received on this account.</Empty>
+                <Empty>No payments received</Empty>
             ) : (
                 <ul className="space-y-3">
                     {payments.map((p) => <PaymentCard key={String(p.paymentId)} p={p} cur={cur} />)}
@@ -495,7 +599,7 @@ function PaymentCard({ p, cur }: { p: Row; cur: string }) {
                             {String(p.payerLabel ?? "unnamed payer")}
                         </strong>
                         {p.method ? ` · ${String(p.method)}` : ""}
-                        {p.receivedAt ? ` · ${String(p.receivedAt).slice(0, 10)}` : ""}
+                        {p.receivedAt ? ` · ${shortDate(String(p.receivedAt))}` : ""}
                     </span>
                 </div>
                 {p.reference ? <span className="font-mono text-[11px] text-alloy-midnight/45">{String(p.reference)}</span> : null}
@@ -587,6 +691,19 @@ const Chip = ({ children, tone, testId }: { children: React.ReactNode; tone: "du
     );
 };
 
+/**
+ * A CONTEXT FILTER, IN THE PLATFORM'S OWN DROPDOWN — not a raw browser select.
+ *
+ * This was a bare `<select>`: a grey OS control with black text sitting beside Bend Pine lenses and
+ * Alloy buttons, and on macOS its open menu is painted by the operating system and ignores the
+ * product's CSS entirely. `AlloySelect` is the house control — the one the Financials workspace's
+ * own site filter already uses — and it owns the border, radius, chevron, hover, focus, open state
+ * and the white-and-midnight menu. Adopting it is how these stop being the one place in Financials
+ * that looks like an admin form.
+ *
+ * The count stays in the option label: it is the only reason to prefer one filter value over
+ * another before opening it.
+ */
 const Filter = ({ testId, value, onChange, placeholder, options }: {
     testId: string;
     value: string;
@@ -594,18 +711,23 @@ const Filter = ({ testId, value, onChange, placeholder, options }: {
     placeholder: string;
     options: Array<{ value: string; label: string; count: number }>;
 }) => (
-    <select
-        value={value}
-        aria-label={placeholder}
-        data-financials-filter={testId}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[12px] text-alloy-midnight"
-    >
-        <option value="">{placeholder}</option>
-        {options.map((o) => (
-            <option key={o.value} value={o.value}>{o.label} ({o.count})</option>
-        ))}
-    </select>
+    /*
+     * SIZED BY A WRAPPER, not by a class on the control. `.alloy-select` sets `width: 100%`, so a
+     * width utility on the same element is a specificity coin-toss against the primitive's own
+     * stylesheet — and as a bare flex item it collapsed to its content and truncated its own
+     * placeholder to "All perio…". The wrapper gives it a width to be 100% OF.
+     */
+    <span className="inline-block w-[10.5rem] shrink-0">
+        <AlloySelect
+            value={value}
+            onChange={onChange}
+            options={options.map((o) => ({ value: o.value, label: `${o.label} (${o.count})` }))}
+            placeholder={placeholder}
+            density="compact"
+            aria-label={placeholder}
+            testId={`financials-filter-${testId}`}
+        />
+    </span>
 );
 
 const LedgerSkeleton = () => (
@@ -619,8 +741,11 @@ const LedgerSkeleton = () => (
     </div>
 );
 
-const Sub = ({ children }: { children: React.ReactNode }) => (
-    <p className="mb-1 text-[11px] uppercase tracking-wide text-alloy-midnight/45">{children}</p>
+const Sub = ({ children, title }: { children: React.ReactNode; title?: string }) => (
+    <p className={`mb-1 text-[11px] uppercase tracking-wide text-alloy-midnight/45 ${title ? "cursor-help decoration-dotted underline-offset-2 [text-decoration-line:underline]" : ""}`}
+        title={title}>
+        {children}
+    </p>
 );
 const Empty = ({ children }: { children: React.ReactNode }) => (
     <p className="text-sm text-alloy-midnight/50">{children}</p>

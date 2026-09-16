@@ -229,7 +229,19 @@ describe("scenario readiness", () => {
         for (const key of ["card_collection", "ach_processing", "provider_return", "subsidy_processing"]) {
             expect(scenarioByKey(key)!.disposition).not.toBe("HUMAN_WALKTHROUGH");
         }
-        /* 28 since Repair Pass 3 added the actual-payer scenario the payer chooser made possible. */
-        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(28);
+        /*
+         * 29 since Repair Pass 5D added the billing-period walkthrough. Its sibling — the
+         * ACCOUNTING period — is deliberately not one of them: it carries MISSING_PRODUCTIZATION
+         * because the platform enforces it and shows it to nobody, and offering a walkthrough for a
+         * surface that does not exist would invite a PASS resting on a database query.
+         */
+        /*
+         * 30 since Repair Pass 5F productized the accounting period's INSPECTION half — a calendar
+         * panel and the attributed period on a charge's detail — which turned its scenario from a
+         * recorded gap into something a human can actually drive. The gap that remains is the
+         * lifecycle action, and the scenario records it rather than the catalog hiding it.
+         */
+        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(30);
+        expect(scenarioByKey("accounting_period")!.disposition).toBe("HUMAN_WALKTHROUGH");
     });
 });

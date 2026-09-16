@@ -1334,8 +1334,23 @@
 }
 .alloy-os-billingdetail__row {
   display: grid;
-  grid-template-columns: 56px 92px 82px minmax(0, 1fr) 124px 88px 96px 150px;
-  gap: 10px;
+  /*
+   * ── THE GRID IS PRIORITISED, AND DESCRIPTION IS A PREVIEW ─────────────────────────────────
+   *
+   * Date, Type, Child, Description, GL account, Amount, Status, Responsible party.
+   *
+   * Description held the flex track and kept taking every spare pixel while the columns that
+   * IDENTIFY the row — which child, which GL account, who owes it — truncated around it. That is
+   * backwards for a surface whose job is scanning: an operator reads a ledger to find a row, and
+   * free text is the least identifying thing on it. Description is now a bounded preview that
+   * ellipses, and the full text lives where the row's detail does.
+   *
+   * Everything else is sized to what it carries: a year-bearing date, a configured Type label, a
+   * child's name, `4000 · Tuition Revenue`, a right-aligned amount, a lifecycle word, and a
+   * person's name. Responsible party is last and gives way first.
+   */
+  grid-template-columns: 78px 112px 104px minmax(96px, 1fr) 134px 80px 66px 108px;
+  gap: 8px;
   align-items: baseline;
   min-height: 21px;
   padding: 1px 0;
@@ -1362,6 +1377,18 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/*
+ * A ROW WITH NO GL ACCOUNT IS A CONFIGURATION FACT SOMEBODY MUST ACT ON.
+ *
+ * It read "— unmapped" in the same grey as a mapped account, which is the visual grammar of a
+ * successful value. Posting cannot be trusted while categories have no account behind them, so the
+ * state is toned as the attention it is — the same amber the Past due figure uses.
+ */
+.alloy-os-billingdetail__gl[data-financials-gl-state="unmapped"] {
+  color: #b45309;
+  font-weight: 600;
+  font-variant-numeric: normal;
+}
 .alloy-os-billingdetail__row--head {
   border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, transparent);
 }
@@ -1371,6 +1398,11 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--alloy-os-text-tertiary, #9ca3af);
+  /* The VALUES clip; the headers did not, so DESCRIPTION overran GL CODE at narrow widths and the
+     two headings read as one word. A header must obey its own column. */
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 .alloy-os-billingdetail__when,
 .alloy-os-billingdetail__amount {
@@ -1390,10 +1422,26 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/*
+ * TYPE IS A CLASSIFICATION AND A TRUNCATED CLASSIFICATION IS UNREADABLE. It keeps the ellipsis as a
+ * last resort at very narrow widths, but it is never the column asked to give way first — that is
+ * Description, which is free text and flexes by construction.
+ */
+.alloy-os-billingdetail__type { min-width: 0; }
 .alloy-os-billingdetail__desc {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/*
+ * What a row still owes, under its own amount. Present only when money has been applied to the
+ * charge — the read model's per-row figure, not a difference computed on screen.
+ */
+.alloy-os-billingdetail__outstanding {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
 }
 .alloy-os-billingdetail__note {
   margin: 5px 0 0;
@@ -1762,6 +1810,16 @@
   font-size: 1rem;
   font-weight: 700;
 }
+/*
+ * PEERS. Equal label, equal value, equal baseline — the account summary's three figures answer one
+ * question between them and none of them outranks the others. Semantic colour still applies.
+ */
+.alloy-os-fdetail__strip--peers .alloy-os-fdetail__statvalue {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.alloy-os-fdetail__strip--peers { align-items: baseline; gap: 6px 32px; }
+
 .alloy-os-fdetail__stat[data-tone="due"] .alloy-os-fdetail__statvalue { color: #b45309; }
 .alloy-os-fdetail__stat[data-tone="ok"] .alloy-os-fdetail__statvalue { color: var(--alloy-os-bend-pine, #00a283); }
 .alloy-os-fdetail__payers {
@@ -1792,6 +1850,93 @@
   color: var(--alloy-os-text-tertiary, #9ca3af);
   margin-right: 2px;
 }
+/*
+ * ── THE LENS BAR ──────────────────────────────────────────────────────────────────────────────
+ *
+ * Five angles on one account, sitting between the rollup and the record. The pressed lens takes
+ * BEND PINE from the token — the product's active operational control. It was navy on the
+ * workspace, which reads as a neutral chip rather than a live selection, and a hardcoded green
+ * would be a sixth definition of the brand colour.
+ */
+/*
+ * ── THE DETAIL'S CONTROLS STAY; ITS RECORD SCROLLS ────────────────────────────────────────────
+ *
+ * The card body used to scroll as a whole, so reading August took the balance, the two commands
+ * and the lenses off the top of the panel. The body now holds its height and hands the overflow to
+ * one region — the ledger, payments, adjustments and upcoming beneath the lens bar.
+ *
+ * Scoped to the DETAIL card. The summary card and every command overlay keep the body scrolling
+ * they already had.
+ */
+.alloy-os-billing--detail > .alloy-os-ucard > .alloy-os-ucard__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.alloy-os-billing--detail .alloy-os-fdetail__rollup,
+.alloy-os-billing--detail .alloy-os-fdetail__lensbar {
+  flex: 0 0 auto;
+}
+.alloy-os-fdetail__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.alloy-os-fdetail__lensbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+.alloy-os-fdetail__lens {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  border: 0;
+  border-radius: 6px;
+  padding: 3px 9px;
+  background: transparent;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 70%, transparent);
+  cursor: pointer;
+}
+.alloy-os-fdetail__lens:hover {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
+.alloy-os-fdetail__lens--on,
+.alloy-os-fdetail__lens--on:hover {
+  background: var(--alloy-os-bend-pine, #00a283);
+  color: #fff;
+}
+.alloy-os-fdetail__lenscount {
+  font-size: 0.64rem;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, transparent);
+}
+.alloy-os-fdetail__lens--on .alloy-os-fdetail__lenscount {
+  color: color-mix(in srgb, #fff 80%, transparent);
+}
+.alloy-os-fdetail__lensfilters {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.alloy-os-fdetail__filter {
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 18%, transparent);
+  border-radius: 6px;
+  padding: 2px 6px;
+  background: #fff;
+  font-size: 0.68rem;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
 .alloy-os-fdetail__period { margin-top: 8px; }
 .alloy-os-fdetail__periodhead {
   margin: 0 0 2px;

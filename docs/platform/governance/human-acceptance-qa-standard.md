@@ -140,6 +140,46 @@ That is worth stating plainly because it decides what to fix. **Do not add persi
 reload loop the app itself is causing** — find and fix that. But when the reload is external and
 legitimate, persistence is the fix, not a workaround.
 
+### The invariant: the tool owns operator continuity
+
+**A QA tool that loses the operator's place is not fit to certify anything.** This is not a quality
+of implementation; it is a precondition for the testimony being worth recording. A Director who has
+been thrown back to Scenario 01 three times stops trusting the record, and a half-written
+observation that vanished is evidence that no longer exists.
+
+So, stated as an invariant a future suite must satisfy before it is used for human certification:
+
+> While the operator is on Scenario N, **only the operator may change the scenario.** A readiness
+> refresh, a baseline change, a re-render, a remount and a reload must all leave them on N, with
+> their draft observation, expected result and classification intact.
+
+The failure that produced this rule is worth recording, because it is easy to reproduce by accident:
+position was mirrored into storage by a `useEffect` that wrote whatever the current render held. On
+every mount that effect fired in the same commit as the restore — *before* React had applied the
+restored index — and wrote scenario 01 over the operator's real position, correcting it some
+milliseconds later. Any reload, tab close or navigation landing in that window lost the place.
+
+**An effect cannot distinguish "the operator moved" from "React rendered a default."** That is
+exactly the distinction the invariant turns on, so position must be written by the handlers that
+move it — Previous, Next, start, resume — and by nothing else. A surface with no code path from a
+render to a position write cannot violate the rule by accident.
+
+Two corollaries, both learned the same way:
+
+* **A reload must not blank the surface.** Showing "Reading the environment…" for a second and a
+  half on every reload reads as having been reset, whatever the runtime does with position
+  afterwards. Cache the *shape* of the page — the scenario catalog, the environment labels — and
+  never the figures: a cached balance is a stale balance, and a QA tool that showed one would be
+  testifying about a number nobody just looked up.
+* **A debounce is a hole.** Whatever interval you save drafts on, a reload can arrive inside it.
+  Flush synchronously on `pagehide` and on losing visibility, or the last fraction of a sentence is
+  lost exactly when the operator was mid-thought.
+
+**And automated proof of this is not sufficient on its own.** The unit tests for the store were
+green and the mounted test reloaded once, which is precisely one reload too few to see the clobber.
+Certifying operator continuity requires a human-equivalent soak: a real dwell, real tab switching,
+real reloads, and an assertion afterwards that the scenario and the draft are both still there.
+
 ### What persists where
 
 | State | Owner | Lifetime |

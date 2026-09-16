@@ -9,9 +9,10 @@ import {
     lifecycleLabel,
     type CollectionRail,
 } from "@/lib/financials/payments/collectionLifecycle";
-import ApprovedFinancialsCard from "@/components/operationalCards/FinancialsCard";
+import ApprovedFinancialsCard, { AccountSummaryPending } from "@/components/operationalCards/FinancialsCard";
 import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
 import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
+import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import CardCollectionField from "./CardCollectionField";
 import {
     useDismissSignal,
@@ -44,6 +45,20 @@ type Props = {
     context: OperationalContext;
     receded?: boolean;
     coordination?: FocusPanelCoordination;
+    /**
+     * Whether this placement offers the `Details →` drill-down.
+     *
+     * True in the Focus Panel, where the card is financial context beside another subject. False in
+     * Financials → Accounts, where the account's own activity is already on screen beneath it.
+     */
+    showDetailsAction?: boolean;
+    /**
+     * Which summary this placement wants — see `summaryVariant` on the approved card.
+     *
+     * The Focus Panel keeps the period reconciliation. Financials → Accounts takes the account
+     * summary: balance, due, past due, `Payment`, `Add charge`, and nothing else in the header.
+     */
+    summaryVariant?: "period" | "account";
 };
 
 /**
@@ -81,7 +96,14 @@ type Props = {
  * row is never itself reversed — the bound is the database's (`20260902140000`) and the read model
  * projects it, so this card renders the answer rather than deciding it.
  */
-export default function FinancialsCard({ model, context, receded = false, coordination }: Props) {
+export default function FinancialsCard({
+    model,
+    context,
+    receded = false,
+    coordination,
+    showDetailsAction = true,
+    summaryVariant = "period",
+}: Props) {
     const scope = context.participantScope ?? null;
     const scopedMemberId = scope?.customerMemberId ?? null;
     const customerId = householdIdFrom(context);
@@ -1469,9 +1491,13 @@ export default function FinancialsCard({ model, context, receded = false, coordi
      * detail representation — the density where an operator is actually working the ledger — carry
      * the operation, which is where FinancialsDetailCard's own `Payment` action already pointed.
      */
-    const paymentBand = vm ? (
+    /*
+     * The band's own heading is suppressed inside the Payment COMMAND, where the command's title
+     * already says "Payment" one line above it. Two headings, one word, one surface.
+     */
+    const paymentBandFor = (labelled: boolean) => vm ? (
             <section className="alloy-os-financials__band" data-financials-band="payment">
-                <p className="alloy-os-financials__band-label">Payment</p>
+                {labelled ? <p className="alloy-os-financials__band-label">Payment</p> : null}
                 {/*
                     ONLY CANONICAL PAYMENT STATE THAT ACTUALLY EXISTS.
                     This region used to print the platform's own limitations at
@@ -1801,6 +1827,13 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                         <p className="alloy-os-financials__note">
                             {money(payTarget.outstandingCents, currency)} outstanding
                         </p>
+                        {/*
+                         * LABELLED, like every other Alloy command field. This was three bare
+                         * controls in a column — an amount, a method and a payer with nothing
+                         * saying which was which, which is what made the command read as a raw form
+                         * rather than a financial operation.
+                         */}
+                        <p className="alloy-os-financials__fieldlabel">Amount</p>
                         <input
                             type="number"
                             min="0.01"
@@ -1810,6 +1843,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                             data-financials-payment-amount="true"
                             onChange={(e) => setPayAmount(e.target.value)}
                         />
+                        <p className="alloy-os-financials__fieldlabel">Method</p>
                         <select
                             value={payMethod}
                             aria-label="Payment method"
@@ -1853,6 +1887,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                          * somebody's SHARE remains a separate, explicit act.
                          */}
                         {vm.payerCandidates.length ? (
+                            <>
+                            <p className="alloy-os-financials__fieldlabel">Who paid</p>
                             <select
                                 value={payPayerPersonId}
                                 aria-label="Who paid"
@@ -1868,6 +1904,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                     </option>
                                 ))}
                             </select>
+                            </>
                         ) : null}
                         <span className="alloy-os-financials__preview-actions">
                             <button
@@ -2182,7 +2219,11 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                  * class. No new layer numbers, and the scrim keeps protecting the background.
                  */}
                 <UniversalCard
-                    title="Take payment"
+                    /*
+                     * "Payment", the same word the control that opens it now uses. A command whose
+                     * button says one thing and whose title says another reads as two commands.
+                     */
+                    title="Payment"
                     insight=""
                     iconName="Receipt"
                     tier="work"
@@ -2191,21 +2232,31 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     density="expanded"
                     gridSpan="row"
                     data-universal-card-key="payment"
+                    /*
+                     * "Back to details" is navigation language, and it only means something where a
+                     * details destination exists. In the Focus Panel the operator arrived here from
+                     * Details and going back is a real move. In Financials → Accounts there is no
+                     * Details — the account is already open behind this overlay — so the control
+                     * pointed at a place that does not exist, and the backdrop, Escape and Cancel
+                     * all already return there. Same flag that governs the drill-down itself.
+                     */
                     footerAction={
-                        <button
-                            type="button"
-                            className="alloy-os-financials__action"
-                            data-financials-payment-close="true"
-                            onClick={() => {
-                                setPayTarget(null);
-                                setOverlay("detail");
-                            }}
-                        >
-                            ← Back to details
-                        </button>
+                        showDetailsAction ? (
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action"
+                                data-financials-payment-close="true"
+                                onClick={() => {
+                                    setPayTarget(null);
+                                    setOverlay("detail");
+                                }}
+                            >
+                                ← Back to details
+                            </button>
+                        ) : null
                     }
                 >
-                    {paymentBand}
+                    {paymentBandFor(false)}
                 </UniversalCard>
             </div>
         );
@@ -2244,7 +2295,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                 {moveTargets.map((t) => (
                                     <option key={t.chargeId} value={t.chargeId}>
                                         {t.label}
-                                        {t.serviceDate ? ` · ${t.serviceDate}` : ""}
+                                        {t.serviceDate ? ` · ${formatDisplayDate(t.serviceDate)}` : ""}
                                         {` · ${(t.outstandingCents / 100).toLocaleString(undefined, {
                                             style: "currency",
                                             currency,
@@ -2639,7 +2690,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     Details is where an operator works the ledger, and a ledger that cannot show what
                     was received is only half of one.
                 */}
-                {paymentBand}
+                {paymentBandFor(true)}
             </div>
         );
     }
@@ -2684,7 +2735,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                      * placement should not silently change which questions the card answers.
                      */
                     span={model.density === "compact" ? 1 : "row"}
-                    onDetails={() => setOverlay("detail")}
+                    /* No drill-down where the account's own body is already open beneath this. */
+                    onDetails={showDetailsAction ? () => setOverlay("detail") : undefined}
                     onAddCharge={() => setOverlay("add_charge")}
                     /*
                      * `Pay now` was always this card's primary action and the Focus Panel never wired
@@ -2694,6 +2746,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                      * and the commit button cannot be clicked — visible, enabled, and unreachable.
                      */
                     onPayNow={openSettle}
+                    summaryVariant={summaryVariant}
                 />
             </div>
         );
@@ -2734,33 +2787,77 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 footerAction={null}
             >
                 {!vm ? (
-                    <p
-                        className="alloy-os-financials__empty"
-                        data-financials-empty={
-                            deniedRead
-                                ? "permission"
-                                : loading || subjectStillResolving || provisioningAccount
-                                  ? "loading"
-                                  : noFinancialSubject
-                                    ? "no-subject"
-                                    : "no-account"
-                        }
-                    >
-                        {/*
-                         * THREE STATES, AND ONLY ONE OF THEM IS TERMINAL.
-                         *
-                         * "No financial record" was wrong in every case it was shown. It reads as a
-                         * statement about the FAMILY — that they have no financial history — and
-                         * having no financial activity is a perfectly ordinary, fully supported
-                         * state that renders as $0.00 with Add charge available. What the card
-                         * actually meant was that it could not resolve an account to ask about.
-                         */}
-                        {deniedRead
-                            ? "You do not have permission to view financial information."
-                            : loading || subjectStillResolving || provisioningAccount
-                              ? "Loading the account…"
-                              : "Financial account unavailable"}
-                    </p>
+                    /*
+                     * FOUR STATES, AND ONLY ONE OF THEM IS TERMINAL.
+                     *
+                     * "No financial record" was wrong in every case it was shown. It reads as a
+                     * statement about the FAMILY — that they have no financial history — and having
+                     * no financial activity is a perfectly ordinary, fully supported state that
+                     * renders as $0.00 with Add charge available. What the card actually meant was
+                     * that it could not resolve an account to ask about.
+                     *
+                     * ── THE MERGE THAT PRODUCED THIS BRANCH ────────────────────────────────────
+                     *
+                     * Two independent corrections met here and BOTH are kept, because each answers
+                     * a question the other does not:
+                     *
+                     *   from staging   `deniedRead` and `provisioningAccount` — a reader without
+                     *                  permission must be told that, not shown "unavailable", and
+                     *                  an account still being provisioned is loading rather than
+                     *                  absent.
+                     *
+                     *   from 11A       LOADING IS NOT A SENTENCE. The unresolved state used to be
+                     *                  one line of text in an otherwise empty card, which in the
+                     *                  Financials workspace — where this card is the account's
+                     *                  primary summary — meant selecting an account produced a
+                     *                  large box reading "Loading the account…" while the detail
+                     *                  beneath it was already showing its ledger. The card's shape
+                     *                  is known before its figures are, so the shape is what it
+                     *                  draws.
+                     *
+                     * Taking either side wholesale would have dropped the other's fix.
+                     */
+                    deniedRead ? (
+                        <p className="alloy-os-financials__empty" data-financials-empty="permission">
+                            You do not have permission to view financial information.
+                        </p>
+                    ) : loading || subjectStillResolving || provisioningAccount ? (
+                        /*
+                         * The committed anatomy, with placeholders where values will land — never a
+                         * number and never a zero, because a placeholder mistaken for $0.00 is
+                         * worse than a wait.
+                         */
+                        summaryVariant === "account" ? (
+                            <AccountSummaryPending />
+                        ) : (
+                        <div className="alloy-os-financials__empty" data-financials-empty="loading" aria-busy="true">
+                            <div className="flex flex-wrap gap-x-8 gap-y-3">
+                                {/*
+                                  * The labels the summary actually settles into. They used to read
+                                  * "Current period", which is the one field this surface no longer
+                                  * carries — a skeleton promising a field that never arrives.
+                                  */}
+                                {["Balance", "Past due", "Payments"].map((label) => (
+                                    <div key={label}>
+                                        <p className="text-[10px] uppercase tracking-wide text-alloy-midnight/40">{label}</p>
+                                        <span
+                                            aria-hidden
+                                            data-financials-card-skeleton="true"
+                                            className="mt-1 inline-block h-[1.1em] w-20 animate-pulse rounded bg-alloy-stone/25 align-middle"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        )
+                    ) : (
+                        <p
+                            className="alloy-os-financials__empty"
+                            data-financials-empty={noFinancialSubject ? "no-subject" : "no-account"}
+                        >
+                            Financial account unavailable
+                        </p>
+                    )
                 ) : (
                     <>
                         {/* ── CURRENT PERIOD · PAST DUE / PAYMENT ─────────────────────────────── */}
@@ -2938,7 +3035,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                     )}
                                 </section>
 
-                                {paymentBand}
+                                {paymentBandFor(true)}
                             </div>
                             )}
                         </div>
@@ -3101,7 +3198,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                                         data-financials-row={row.chargeId}
                                                     >
                                                         <span className="alloy-os-financials__cell alloy-os-financials__cell--date">
-                                                            {row.date ?? "—"}
+                                                            {formatDisplayDate(row.date) || "—"}
                                                         </span>
                                                         <span className="alloy-os-financials__cell">
                                                             {row.subjectName ?? "—"}
@@ -3187,16 +3284,32 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                             </>
                         ) : null}
 
-                        <button
-                            type="button"
-                            className="alloy-os-financials__details"
-                            data-financials-details="true"
-                            // The overlay state owns elevation now; reporting perspective here as
-                            // well would give the depth layer two authorities for one card.
-                            onClick={() => setOverlay(expanded ? null : "detail")}
-                        >
-                            {expanded ? "← Less" : "Details →"}
-                        </button>
+                        {/*
+                         * ── DETAILS IS A DRILL-DOWN, AND SOME PLACEMENTS HAVE NOWHERE TO DRILL ──
+                         *
+                         * In the Focus Panel this card is financial CONTEXT beside some other
+                         * subject, so `Details →` is how an operator asks to see the account. In
+                         * Financials → Accounts they have already asked: they opened the Financials
+                         * workspace, chose Accounts, and selected a household. The account's own
+                         * activity is on screen beneath this card. Offering a drill-down there is
+                         * asking them to request what they are already looking at, and it opened a
+                         * scrimmed overlay over the surface that was already showing it.
+                         *
+                         * Defaults to present, so the Focus Panel is untouched.
+                         */}
+
+                        {showDetailsAction ? (
+                            <button
+                                type="button"
+                                className="alloy-os-financials__details"
+                                data-financials-details="true"
+                                // The overlay state owns elevation now; reporting perspective here as
+                                // well would give the depth layer two authorities for one card.
+                                onClick={() => setOverlay(expanded ? null : "detail")}
+                            >
+                                {expanded ? "← Less" : "Details →"}
+                            </button>
+                        ) : null}
                     </>
                 )}
             </UniversalCard>

@@ -43,6 +43,8 @@ import {
     type AccountArrangement,
 } from "@/lib/financials/responsibility/readAccountArrangement";
 import type { CollectiblePosition } from "@/lib/financials/subsidy/collectiblePosition";
+import { billingPeriodLabel, placeInBillingPeriod } from "@/lib/financials/billingPeriod";
+import { CHARGE_CATEGORY_GL_MAPPING_KEY } from "@/lib/financials/chargeCategories";
 
 /** One payment that satisfied part of this charge, as the operator needs to read it. */
 export type ChargeDetailApplication = {
@@ -110,6 +112,33 @@ export type ChargeDetail = {
     /** WHAT HAS ACTUALLY BEEN PAID AGAINST IT. */
     applications: ChargeDetailApplication[];
 
+    /**
+     * ── WHEN WAS THIS BILLED, AND IN WHICH ACCOUNTING PERIOD DID IT POST ───────────────────────
+     *
+     * Two different periods, and an operator must be able to tell them apart without conflating
+     * them. They are on the DETAIL rather than in the ledger deliberately: the ledger groups by
+     * billing period because that is the customer-facing month, and a second permanent period
+     * column would cost scan density to answer a question asked occasionally.
+     *
+     *   billingPeriod     DERIVED from the charge's own dates — `billable_on`, then `occurs_on`,
+     *                     `service_date`, `created_at`. No table and no configuration, by design.
+     *
+     *   accountingPeriod  CONFIGURED, and decided by the database when the journal entry was
+     *                     written: `attribute_financial_journal_entry` resolves it at INSERT
+     *                     against the org's active calendar and refuses a closed period. This is
+     *                     READ from the entry — never recomputed here, because recomputing it would
+     *                     be a second opinion about where money landed, and the trigger's answer is
+     *                     the one the books were closed on. Null for a charge that has not posted a
+     *                     journal entry, which is an ordinary state for a draft.
+     *
+     *   glAccount         where the charge's category posts, through the mapping chain. Null when
+     *                     the category has no mapping — a configuration fact, not a blank.
+     */
+    billingPeriodKey: string | null;
+    billingPeriodLabel: string | null;
+    accountingPeriod: { key: string; label: string | null; status: string; startsOn: string; endsOn: string } | null;
+    glAccount: { code: string; name: string | null } | null;
+
     /*
      * THE ACCOUNT'S ARRANGEMENT, WHICH IS NOT THIS CHARGE'S ALLOCATION.
      *
@@ -143,7 +172,8 @@ export async function resolveChargeDetail(
         .from("charges")
         .select(
             "id, billable_source_type, billable_source_id, amount_cents, currency_code, status, "
-            + "service_date, posted_at, description, charge_template_id",
+            + "service_date, posted_at, description, charge_template_id, billable_on, occurs_on, created_at, "
+            + "charge_category, charge_type, metadata",
         )
         .eq("org_id", args.orgId)
         .eq("id", chargeId)
@@ -162,6 +192,13 @@ export async function resolveChargeDetail(
         posted_at: string | null;
         description: string | null;
         charge_template_id: string | null;
+        /* The period and GL inputs. `placeInBillingPeriod` reads the date columns by name. */
+        billable_on: string | null;
+        occurs_on: string | null;
+        created_at: string | null;
+        charge_category: string | null;
+        charge_type: string | null;
+        metadata: Record<string, unknown> | null;
     };
 
     /*
@@ -221,6 +258,103 @@ export async function resolveChargeDetail(
     const responsibilityRead = await readResponsibility(supabase, args.orgId, [chargeId]);
     const accountArrangement = await readAccountArrangement(supabase, { orgId: args.orgId, customerId });
 
+    /*
+     * ── THE TWO PERIODS AND THE GL ACCOUNT ─────────────────────────────────────────────────────
+     *
+     * The billing period is derived from the charge's own dates by the one authority that derives
+     * it. The accounting period is READ from the journal entry the database already attributed —
+     * never recomputed, because the trigger's answer is the one the books were closed on. The GL
+     * account travels the same mapping chain the ledger does, so the detail and the ledger cannot
+     * disagree about where a category posts.
+     *
+     * Each is independently tolerant: a charge whose journal entry or GL mapping cannot be read is
+     * still a charge an operator must be able to open.
+     */
+    const billing = placeInBillingPeriod(charge as unknown as Record<string, unknown>);
+
+    /* Configuration owns the word an operator reads. See the note on `label` below. */
+    let templateLabel = "";
+    if (t(charge.charge_template_id)) {
+        const { data: template } = await supabase
+            .from("financial_charge_templates")
+            .select("label")
+            .eq("org_id", args.orgId)
+            .eq("id", t(charge.charge_template_id))
+            .maybeSingle();
+        templateLabel = t((template as { label?: unknown } | null)?.label);
+    }
+
+    let accountingPeriod: ChargeDetail["accountingPeriod"] = null;
+    try {
+        const { data: entry } = await supabase
+            .from("financial_journal_entries")
+            .select("accounting_period_id")
+            .eq("org_id", args.orgId)
+            .eq("charge_id", chargeId)
+            .not("accounting_period_id", "is", null)
+            .limit(1)
+            .maybeSingle();
+        const periodId = t((entry as { accounting_period_id?: unknown } | null)?.accounting_period_id);
+        if (periodId) {
+            const { data: period } = await supabase
+                .from("financial_accounting_periods")
+                .select("period_key, label, status, starts_on, ends_on")
+                .eq("org_id", args.orgId)
+                .eq("id", periodId)
+                .maybeSingle();
+            const row = period as {
+                period_key?: string;
+                label?: string | null;
+                status?: string;
+                starts_on?: string;
+                ends_on?: string;
+            } | null;
+            if (row?.period_key) {
+                accountingPeriod = {
+                    key: row.period_key,
+                    label: row.label?.trim() || null,
+                    status: t(row.status) || "open",
+                    startsOn: t(row.starts_on),
+                    endsOn: t(row.ends_on),
+                };
+            }
+        }
+    } catch {
+        accountingPeriod = null;
+    }
+
+    let glAccount: ChargeDetail["glAccount"] = null;
+    try {
+        const categoryKey = t(charge.charge_category) || t(charge.charge_type) || "one_time";
+        const metadata = (charge.metadata ?? {}) as Record<string, unknown>;
+        const mappingKey =
+            t(metadata.gl_mapping_key)
+            || CHARGE_CATEGORY_GL_MAPPING_KEY[categoryKey as keyof typeof CHARGE_CATEGORY_GL_MAPPING_KEY]
+            || "";
+        if (mappingKey) {
+            const { data: mapping } = await supabase
+                .from("gl_account_mappings")
+                .select("gl_account_id, is_active")
+                .eq("org_id", args.orgId)
+                .eq("key", mappingKey)
+                .maybeSingle();
+            const accountId = t((mapping as { gl_account_id?: unknown; is_active?: boolean } | null)?.gl_account_id);
+            const mappingActive = (mapping as { is_active?: boolean } | null)?.is_active !== false;
+            if (accountId && mappingActive) {
+                const { data: account } = await supabase
+                    .from("gl_accounts")
+                    .select("code, name")
+                    .eq("org_id", args.orgId)
+                    .eq("id", accountId)
+                    .maybeSingle();
+                const row = account as { code?: string; name?: string | null } | null;
+                if (row?.code) glAccount = { code: row.code, name: row.name?.trim() || null };
+            }
+        }
+    } catch {
+        glAccount = null;
+    }
+
     const { data: allocationRows, error: allocationError } = await supabase
         .from("payment_allocations")
         .select("payment_id, allocated_amount_cents, status")
@@ -258,12 +392,26 @@ export async function resolveChargeDetail(
     return {
         chargeId: charge.id,
         orgId: args.orgId,
-        label: t(charge.description) || null,
+        /*
+         * THE CONFIGURED LABEL, NEVER THE TEMPLATE KEY.
+         *
+         * `writeTemplateDraftCharge` stores `description: intent.templateKey`, so a charge's stored
+         * description is `field_trip` — an internal key that was being shown to an operator as the
+         * charge's NAME on its own detail. The ledger already resolves this through the template's
+         * configured label and has for some time; the detail did not, so one charge had two names
+         * depending on which surface you opened. A charge whose template has since been retired
+         * keeps its stored description rather than losing its identity.
+         */
+        label: templateLabel || t(charge.description) || null,
         description: t(charge.description) || null,
         currencyCode: t(charge.currency_code) || "USD",
         status: t(charge.status),
         serviceDate: charge.service_date,
         postedAt: charge.posted_at,
+        billingPeriodKey: billing.key,
+        billingPeriodLabel: billing.key ? billingPeriodLabel(billing.key) : null,
+        accountingPeriod,
+        glAccount,
         customerId,
         customerMemberId,
         householdName,

@@ -4,6 +4,7 @@ import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { Action, ActionRow, FooterAction } from "@/components/cardLab/CardLabKit";
+import { Stat } from "@/components/operationalCards/FinancialsDetailCard";
 import type { FinancialsEvidence } from "@/lib/cardLab/cardLabTypes";
 
 /**
@@ -48,6 +49,7 @@ export default function FinancialsCard({
     onAddCharge,
     onPayNow,
     onManagePayment,
+    summaryVariant = "period",
 }: {
     evidence: FinancialsEvidence;
     /**
@@ -68,7 +70,31 @@ export default function FinancialsCard({
     /** Wired by the Focus Panel; the lab leaves them undefined and the buttons are inert. */
     onPayNow?: () => void;
     onManagePayment?: () => void;
+    /**
+     * WHICH QUESTION THE SUMMARY IS ANSWERING.
+     *
+     *   "period"   the Focus Panel's reconciliation — what happened this billing period, with the
+     *              arithmetic visible, because the panel is where a period is worked.
+     *   "account"  the Financials workspace's account header — the standing position of the
+     *              ACCOUNT, which is three figures and two commands and nothing else. An account
+     *              is not a period, and reading a period breakdown as an account state is how an
+     *              operator ends up quoting a family a number that was only ever this month's.
+     *
+     * The detail beneath the account summary carries everything the period breakdown used to say
+     * here, filtered and period-grouped, so nothing was removed from the surface — only from the
+     * header, which now has one job.
+     */
+    summaryVariant?: "period" | "account";
 }) {
+    if (summaryVariant === "account") {
+        return (
+            <FinancialsAccountSummaryCard
+                evidence={evidence}
+                onAddCharge={onAddCharge}
+                onPayNow={onPayNow}
+            />
+        );
+    }
     if (span === 1) {
         return (
             <FinancialsCompactCard
@@ -170,10 +196,12 @@ export default function FinancialsCard({
                             payment one — and it stays quiet so it never competes with Pay now. */}
                         <div className="alloy-os-billing__zone-actions">
                             {onPayNow ? (
-                                <FooterAction onClick={onPayNow}>Take payment →</FooterAction>
+                                <FooterAction onClick={onPayNow}>Payment →</FooterAction>
                             ) : null}
                             <FooterAction onClick={onAddCharge}>Add charge →</FooterAction>
-                            <FooterAction onClick={onDetails}>Details →</FooterAction>
+                            {/* Offered only where there is somewhere to drill to. In Financials →
+                                Accounts the account's own body is already open beneath this. */}
+                            {onDetails ? <FooterAction onClick={onDetails}>Details →</FooterAction> : null}
                         </div>
                     </section>
 
@@ -211,8 +239,13 @@ export default function FinancialsCard({
                             className="alloy-os-billing__autopay"
                             data-autopay-ok={evidence.payment.autopayHealthy ? "true" : undefined}
                         >
-                            {/* "No autopay" was asserted from a hardcoded null; unknown now reads as unknown. */}
-                            {evidence.payment.autopayLabel ?? "Autopay not recorded"}
+                            {/*
+                             * AUTOPAY DOES NOT EXIST IN THIS PLATFORM — no table, no column, no
+                             * writer. "Not recorded" implied somebody could have recorded it and
+                             * had not, which is a statement about this family; the truth is about
+                             * Alloy. See `resolvePaymentSetup`, which reports it `unsupported`.
+                             */}
+                            {evidence.payment.autopayLabel ?? "Autopay not available yet"}
                         </p>
                         {evidence.payment.nextChargeLabel ? (
                             <p className="alloy-os-billing__next">Next · {evidence.payment.nextChargeLabel}</p>
@@ -237,15 +270,160 @@ export default function FinancialsCard({
                                 </div>
                             ))}
                         </div>
-                        {/* Manage payment owns payers, split, methods, autopay and recovery — so it
-                            sits under the payment facts, not in a generic footer. */}
-                        <FooterAction onClick={onManagePayment}>Manage payment →</FooterAction>
+                        {/*
+                         * MANAGE PAYMENT OWNS payers, split, methods, autopay and recovery — so it
+                         * sits under the payment facts rather than in a generic footer. It is
+                         * offered ONLY when a host actually passed a handler: every write it would
+                         * make needs provider tokenisation, which is not configured, and a control
+                         * that opens onto nothing tells an operator a capability exists. The same
+                         * gate the detail card already keeps.
+                         */}
+                        {onManagePayment ? (
+                            <FooterAction onClick={onManagePayment}>Manage payment →</FooterAction>
+                        ) : null}
                     </section>
                     </div>
                 </div>
 
                 {pastDue ? <p className="alloy-os-billing__history">{evidence.historyLine}</p> : null}
             </UniversalCard>
+        </div>
+    );
+}
+
+/**
+ * THE ACCOUNT SUMMARY — three figures, two commands, and a hard stop.
+ *
+ * ── WHAT THE THREE FIGURES ARE, AND WHOSE NUMBERS THEY ARE ─────────────────────────────────────
+ *
+ *   Current balance   `reconciliation.balanceCents`              responsibility − payments
+ *   Due               `collectible.currentlyCollectibleCents`    outstanding − claim suppression
+ *   Past due          `pastDue.amountCents`                      the portion whose due date passed
+ *
+ * All three already existed and all three have exactly one owner each. Nothing here adds,
+ * differences or re-derives; `Due` in particular is Thread 9's governed collectible figure and not
+ * a fourth number invented for a header — see `FinancialsPeriod.dueNow`.
+ *
+ * ── AND WHAT IS DELIBERATELY NOT HERE ──────────────────────────────────────────────────────────
+ *
+ * Responsibility, paid, autopay, current period, next charge, the charge breakdown, the discount
+ * breakdown and the explanatory sentences are all GONE from the header. Every one of them is still
+ * on the surface — in the filtered, period-grouped detail immediately beneath — but a summary that
+ * answers nine questions answers none of them first, and an operator opening an account needs to
+ * know the position before they need the composition.
+ *
+ * The anatomy is borrowed from Focus Panel → Financials → Details (`Stat`, `__rollup`, `__strip`,
+ * `__actions`), which is the canonical Financials detail presentation. Two placements, one grammar.
+ */
+function FinancialsAccountSummaryCard({
+    evidence,
+    onAddCharge,
+    onPayNow,
+}: {
+    evidence: FinancialsEvidence;
+    onAddCharge?: () => void;
+    onPayNow?: () => void;
+}) {
+    const { period, pastDue } = evidence;
+    return (
+        <div className="alloy-os-billing" data-financials-card="account">
+            <UniversalCard
+                title="Financials"
+                insight=""
+                iconName="Receipt"
+                tier="context"
+                archetype="status"
+                density="compact"
+                gridSpan="row"
+                data-universal-card-key="financials"
+                footerAction={null}
+            >
+                <div className="alloy-os-fdetail__rollup" data-financials-account-summary="true">
+                    <div className="alloy-os-fdetail__rollup-facts">
+                        {/*
+                         * ── THREE PEERS, AT ONE SIZE ───────────────────────────────────────────
+                         *
+                         * Current balance carried the detail card's `strong` treatment and was
+                         * therefore half again the size of the other two, which made a typographic
+                         * claim nobody intended: that the balance matters more than what can be
+                         * collected today or what is already late. On an ACCOUNT summary these are
+                         * three answers to one question and they rank equally.
+                         *
+                         * Colour still carries meaning — past due in the attention treatment, a
+                         * clear account in Bend Pine — because that is semantic rather than
+                         * hierarchical. Size is not.
+                         */}
+                        <div className="alloy-os-fdetail__strip alloy-os-fdetail__strip--peers">
+                            <Stat label="Current balance" value={period.currentBalance} />
+                            <Stat label="Due" value={period.dueNow} />
+                            <Stat
+                                label="Past due"
+                                value={pastDue ? pastDue.amount : "None"}
+                                tone={pastDue ? "due" : "ok"}
+                            />
+                        </div>
+                    </div>
+                    {/*
+                     * PRIMARY ACCOUNT COMMANDS, AS BUTTONS.
+                     *
+                     * These were footer links reading "Take payment →" and "Add charge →", which is
+                     * the platform's idiom for navigating to somewhere else. Neither navigates:
+                     * both open a command in place. `Payment` is the primary because settling is
+                     * what an operator opens an account to do; `Add charge` is its peer because it
+                     * changes what is owed rather than settling it.
+                     */}
+                    <div className="alloy-os-fdetail__actions">
+                        <Action primary onClick={onPayNow} data-financials-command="payment">
+                            Payment
+                        </Action>
+                        <Action onClick={onAddCharge} data-financials-command="add_charge">
+                            Add charge
+                        </Action>
+                    </div>
+                </div>
+            </UniversalCard>
+        </div>
+    );
+}
+
+/**
+ * THE ACCOUNT SUMMARY BEFORE ITS FIGURES — the same anatomy, with placeholders in the value slots.
+ *
+ * Exported so the Focus Panel adapter renders THIS while the account is read, rather than a second
+ * loading shape of its own. That is the whole point: the pending frame and the settled frame are
+ * the same components with the same classes in the same positions, so the API finishing changes
+ * text and never layout. A separate skeleton would drift from the card within a pass.
+ *
+ * The commands render, disabled and titled: an operator can see that Payment and Add charge are
+ * where they will be, and cannot fire one at an account whose position is not yet known.
+ */
+export function AccountSummaryPending() {
+    return (
+        <div className="alloy-os-fdetail__rollup" data-financials-account-summary="pending" aria-busy="true">
+            <div className="alloy-os-fdetail__rollup-facts">
+                <div className="alloy-os-fdetail__strip alloy-os-fdetail__strip--peers">
+                    {["Current balance", "Due", "Past due"].map((label) => (
+                        <span key={label} className="alloy-os-fdetail__stat">
+                            <span className="alloy-os-fdetail__statlabel">{label}</span>
+                            <span className="alloy-os-fdetail__statvalue">
+                                <span
+                                    aria-hidden
+                                    data-financials-card-skeleton="true"
+                                    className="inline-block h-[1em] w-[4.5rem] animate-pulse rounded bg-alloy-stone/25 align-middle"
+                                />
+                            </span>
+                        </span>
+                    ))}
+                </div>
+            </div>
+            <div className="alloy-os-fdetail__actions">
+                <Action primary disabled title="Reading the account" data-financials-command="payment">
+                    Payment
+                </Action>
+                <Action disabled title="Reading the account" data-financials-command="add_charge">
+                    Add charge
+                </Action>
+            </div>
         </div>
     );
 }
@@ -305,10 +483,11 @@ function FinancialsCompactCard({
                             operator could open offered a way in. Supplied by the host or absent.
                         */}
                         {onPayNow ? (
-                            <FooterAction onClick={onPayNow}>Take payment →</FooterAction>
+                            <FooterAction onClick={onPayNow}>Payment →</FooterAction>
                         ) : null}
                         <FooterAction onClick={onAddCharge}>Add charge →</FooterAction>
-                        <FooterAction onClick={onDetails}>Details →</FooterAction>
+                        {/* Offered only where there is somewhere to drill to. */}
+                        {onDetails ? <FooterAction onClick={onDetails}>Details →</FooterAction> : null}
                     </div>
                 }
             >
