@@ -115,6 +115,18 @@ export const CUSTOM = {
      * `tourScheduler` is the near-miss — it holds `scheduling.write`, the key most likely to be
      * mistaken for tour availability, and must open nothing.
      */
+    /*
+     * WORK. The two keys are deliberately split across two roles that each hold one half, because
+     * the whole Director model is that defining work and doing work are different powers. A single
+     * persona holding both would prove nothing about the boundary between them.
+     *
+     * `workTitular` is the control: labelled "Work Administrator", granted admission and nothing
+     * else. `aiUser` is the adjacency control — real authority in another family, none here.
+     */
+    workConfigurer: "mcert_work_configurer",
+    workOperator: "mcert_work_operator",
+    workTitular: "mcert_work_titular",
+    aiUser: "mcert_ai_user",
     tourConfigurer: "mcert_tour_configurer",
     tourBooker: "mcert_tour_booker",
     tourTitular: "mcert_tour_titular",
@@ -385,6 +397,11 @@ export const P = {
     oiWriter:           { id: "c0000000-0000-4000-8000-00000000d041", email: "cert.oiwriter@northwind.invalid",    role: CUSTOM.oiWriter },
     oiReader:           { id: "c0000000-0000-4000-8000-00000000d042", email: "cert.oireader@northwind.invalid",    role: CUSTOM.oiReader },
     oiTitular:          { id: "c0000000-0000-4000-8000-00000000d043", email: "cert.oititular@northwind.invalid",   role: CUSTOM.oiTitular },
+    defaultAdmin:       { id: "c0000000-0000-4000-8000-00000000d0c5", email: "cert.defaultadmin@northwind.invalid", role: "admin" },
+    workConfigurer:     { id: "c0000000-0000-4000-8000-00000000d0c1", email: "cert.workconfig@northwind.invalid",   role: CUSTOM.workConfigurer },
+    workOperator:       { id: "c0000000-0000-4000-8000-00000000d0c2", email: "cert.workoperate@northwind.invalid",  role: CUSTOM.workOperator },
+    workTitular:        { id: "c0000000-0000-4000-8000-00000000d0c3", email: "cert.worktitular@northwind.invalid",  role: CUSTOM.workTitular },
+    aiUser:             { id: "c0000000-0000-4000-8000-00000000d0c4", email: "cert.aiuser@northwind.invalid",       role: CUSTOM.aiUser },
     tourConfigurer:     { id: "c0000000-0000-4000-8000-00000000d0b1", email: "cert.tourconfig@northwind.invalid",  role: CUSTOM.tourConfigurer },
     tourBooker:         { id: "c0000000-0000-4000-8000-00000000d0b2", email: "cert.tourbooker@northwind.invalid",  role: CUSTOM.tourBooker },
     tourTitular:        { id: "c0000000-0000-4000-8000-00000000d0b3", email: "cert.tourtitular@northwind.invalid", role: CUSTOM.tourTitular },
@@ -500,6 +517,10 @@ export async function setup() {
         { org_id: ORG, role_key: CUSTOM.bpTitular,    role_label: "Admin",              description: "Named Admin, granted no Business Process capability.",      is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.bpScoped,     role_label: "Domain process owner", description: "Designs and activates, inside one operational domain only.", is_system: false, is_active: true },
 
+        { org_id: ORG, role_key: CUSTOM.workConfigurer, role_label: "Work definition owner", description: "Defines what operational work exists. Performs none of it.", is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.workOperator,   role_label: "Work operator",        description: "Performs work inside running processes. Defines none of it.",  is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.workTitular,    role_label: "Work Administrator",   description: "Named Work Administrator, granted no Work authority.",         is_system: false, is_active: true },
+        { org_id: ORG, role_key: CUSTOM.aiUser,         role_label: "AI enrichment user",   description: "Holds AI authority. Holds no Work authority.",                  is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.tourConfigurer, role_label: "Tour availability owner", description: "Sets when and where tours may be booked. Cannot touch a family booking.", is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.tourBooker,     role_label: "Tour front desk",        description: "Operates one family tour lifecycle. Cannot change availability.",      is_system: false, is_active: true },
         { org_id: ORG, role_key: CUSTOM.tourTitular,    role_label: "Tour Administrator",     description: "Named Tour Administrator, granted no Tours authority.",               is_system: false, is_active: true },
@@ -630,6 +651,10 @@ export async function setup() {
         [CUSTOM.bpComposed, ["portal.access", "business_process.configure", "business_process.activate"]],
         [CUSTOM.bpTitular, ["portal.access"]],
         [CUSTOM.bpScoped, ["portal.access", "business_process.configure", "business_process.activate"]],
+        [CUSTOM.workConfigurer, ["portal.access", "work.configure"]],
+        [CUSTOM.workOperator, ["portal.access", "work.operate"]],
+        [CUSTOM.workTitular, ["portal.access"]],
+        [CUSTOM.aiUser, ["portal.access", "ai.enrichment.use"]],
         [CUSTOM.tourConfigurer, ["portal.access", "tours.configure"]],
         [CUSTOM.tourBooker, ["portal.access", "tours.book"]],
         /* The label says Tour Administrator; the package says nothing. */

@@ -4,6 +4,8 @@
  * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
+import { NextResponse } from "next/server";
+
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
 import type { AdminContextSuccess } from "@/lib/admin/getAdminContext";
 
@@ -101,4 +103,29 @@ export function resolveAiEnrichmentPortalAccess(input: {
     }
 
     return { ok: true };
+}
+
+/**
+ * AI PROPOSAL AUTHORITY — the gate for creating and deciding Task Assist proposals.
+ *
+ * `ai.enrichment.use` is this program's promoted authority for AI COMPUTATION AND PROPOSAL. AI is not
+ * a superuser: this key never authorizes a domain mutation, which is why `task-assist/apply` answers
+ * to `communications.send` and not to anything here.
+ *
+ * WHY THIS EXISTS. `task-assist/propose` reached `createTaskAssistProposal` through the Trust
+ * authorization seam, which requires this key. `task-assist/proposals` POST reached the SAME
+ * `createTaskAssistProposal` and the same `task_assist_proposals` insert behind `requireAdminOrOps()`
+ * alone — portal admission, which is not an authority. Two doors to one durable state, one of them
+ * strictly weaker, means the stronger one decided nothing: any portal-admitted operator could write
+ * the row the seam reserved. Approve and reject moved the same row's lifecycle on the same terms.
+ *
+ * So this is not new vocabulary. It is the key the other door already required, applied to the doors
+ * that skipped it.
+ */
+export function requireAiEnrichmentUse(access: AdminAccessContextSuccess): NextResponse | null {
+    if (access.permissionKeys.includes(AI_ENRICHMENT_USE_PERMISSION_KEY)) return null;
+    return NextResponse.json(
+        { ok: false, error: "AI_ENRICHMENT_FORBIDDEN", required_permission: AI_ENRICHMENT_USE_PERMISSION_KEY },
+        { status: 403 },
+    );
 }

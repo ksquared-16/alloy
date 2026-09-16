@@ -1,0 +1,113 @@
+{
+  "trusted_host_action_id": "tha_bcdc00d7d8cc90",
+  "query_hash": "9547560823743926c7d805646fa6cb1fd2d2c983ba58af1c9f25e7052d52c6f2",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-16T03:52:03.188Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_bcdc00d7d8cc90",
+    "query_hash": "9547560823743926c7d805646fa6cb1fd2d2c983ba58af1c9f25e7052d52c6f2",
+    "authorization_id": "grnt_89540dce4d9c47aa",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-16T03:52:04.609Z",
+    "question_ids": [
+      "w1_exactly_once",
+      "w2_holders",
+      "w3_asymmetry",
+      "w4_revoked",
+      "w5_forbidden",
+      "w6_ledger",
+      "w7_seed_fn",
+      "w8_population"
+    ],
+    "questions": {
+      "w1_exactly_once": {
+        "question_id": "w1_exactly_once",
+        "row_count": null,
+        "rows": [
+          1,
+          1,
+          1,
+          1,
+          2
+        ]
+      },
+      "w2_holders": {
+        "question_id": "w2_holders",
+        "row_count": null,
+        "rows": [
+          "_w17_a ~ is_system=false ~ configure=0 ~ operate=0 ~ orgs=1",
+          "_w17_b ~ is_system=false ~ configure=0 ~ operate=0 ~ orgs=1",
+          "admin ~ is_system=true ~ configure=3 ~ operate=3 ~ orgs=3",
+          "assistant_director ~ is_system=false ~ configure=0 ~ operate=0 ~ orgs=1",
+          "director ~ is_system=false ~ configure=0 ~ operate=0 ~ orgs=1",
+          "ops ~ is_system=true ~ configure=0 ~ operate=3 ~ orgs=3",
+          "regional_lead ~ is_system=true ~ configure=0 ~ operate=0 ~ orgs=3",
+          "school_director ~ is_system=true ~ configure=0 ~ operate=0 ~ orgs=3"
+        ]
+      },
+      "w3_asymmetry": {
+        "question_id": "w3_asymmetry",
+        "row_count": null,
+        "rows": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "w4_revoked": {
+        "question_id": "w4_revoked",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "w5_forbidden": {
+        "question_id": "w5_forbidden",
+        "row_count": null,
+        "rows": [
+          0,
+          0
+        ]
+      },
+      "w6_ledger": {
+        "question_id": "w6_ledger",
+        "row_count": null,
+        "rows": [
+          1,
+          0,
+          20260916030000,
+          450,
+          0
+        ]
+      },
+      "w7_seed_fn": {
+        "question_id": "w7_seed_fn",
+        "row_count": null,
+        "rows": [
+          true,
+          true,
+          true,
+          false
+        ]
+      },
+      "w8_population": {
+        "question_id": "w8_population",
+        "row_count": null,
+        "rows": [
+          3,
+          16
+        ]
+      }
+    },
+    "row_count": 32
+  }
+}
