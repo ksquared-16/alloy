@@ -40,11 +40,11 @@ const childRow = (imageUrl: string | null) =>
 
 describe("P0-7.2 — the identity seed carries the image the row is already showing", () => {
     it("the seed exposes the selected row's subject image", () => {
-        expect(focusPanelSeedFromQueueRow(childRow("https://img/ava.png"))?.subjectImageUrl).toBe("https://img/ava.png");
+        expect(focusPanelSeedFromQueueRow(childRow("https://img/ava.png"), null)?.subjectImageUrl).toBe("https://img/ava.png");
     });
 
     it("a row with no image yields no image — absence is not invented", () => {
-        expect(focusPanelSeedFromQueueRow(childRow(null))?.subjectImageUrl).toBeUndefined();
+        expect(focusPanelSeedFromQueueRow(childRow(null), null)?.subjectImageUrl).toBeUndefined();
     });
 
     it("it reads the image by the ROW's own rule, not a second one", () => {
@@ -59,7 +59,7 @@ describe("P0-7.2 — the identity seed carries the image the row is already show
     });
 
     it("carries presentation identity ONLY — no business truth is promoted from a preview", () => {
-        const seed = focusPanelSeedFromQueueRow(childRow("https://img/ava.png"))!;
+        const seed = focusPanelSeedFromQueueRow(childRow("https://img/ava.png"), null)!;
         for (const forbidden of ["attendance", "health", "financial", "balance", "enrolment", "enrollment"]) {
             expect(JSON.stringify(seed).toLowerCase()).not.toContain(forbidden);
         }
