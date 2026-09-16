@@ -4,6 +4,15 @@
  * Validation is a deliberate act, not a side effect of typing (any save resets the draft to
  * unvalidated). This gives the operator the answer to "could I publish this?" before they commit
  * to changing what runtime serves.
+ *
+ * IT IS NOT A READ, AND THAT IS THE WHOLE REASON IT IS GATED. A route-level scan for
+ * `.insert/.update/.upsert/.delete` finds nothing here and reports this handler as read-like; the
+ * write is one call away, in `recordDraftValidation`, which sets `business_process_drafts`
+ * `draft_status` to `validated` along with `validation_errors`, `validated_at` and `validated_by`.
+ * That status is precisely what `publish` requires, so validating is the step that unlocks
+ * publication — and `publish` has been `business_process.configure` since Business Process Family
+ * Convergence V2. Leaving admission alone in front of this one let any portal-admitted principal
+ * advance the publication workflow for a draft they could not publish.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -26,12 +35,15 @@ import {
     summarizeBusinessProcessEditorState,
 } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
 import { validateBusinessProcessForPublish } from "@/lib/businessProcesses/configuration/businessProcessPublishValidation";
+import { BUSINESS_PROCESS_CONFIGURE, requireBusinessProcessCapability } from "@/lib/access/businessProcessAuthority";
 
 export async function POST(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const denied = requireBusinessProcessCapability(ctx, BUSINESS_PROCESS_CONFIGURE);
+    if (denied) return denied;
 
     let body: { department_id?: string } = {};
     try {

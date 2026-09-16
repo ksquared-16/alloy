@@ -296,9 +296,10 @@ export default function FinancialsOverview({
                          * This was one truncated sentence and one grey figure, so an operator
                          * scanning for "what did the Alvarez family pay" had to read every row as
                          * prose. Type, household, amount and date now hold fixed positions, and
-                         * money in and money out are told apart by direction rather than by reading
-                         * the label: a receipt is pine, an obligation is midnight. Nothing is
-                         * summed — an arbitrary recent slice of deltas is not a balance.
+                         * money in and money out are told apart by a direction marker rather than
+                         * by reading the label — and by a marker rather than by colouring the money,
+                         * because a sign is a direction and not a verdict. Nothing is summed: an
+                         * arbitrary recent slice of deltas is not a balance.
                          */
                         recent.map((row) => {
                             const inbound = row.amountCents < 0;
@@ -319,9 +320,17 @@ export default function FinancialsOverview({
                                     <span className="min-w-0 flex-1 truncate text-[13px] text-alloy-midnight">
                                         {row.householdName ?? "—"}
                                     </span>
-                                    <span className={`shrink-0 text-[13px] font-medium tabular-nums ${
-                                        inbound ? "text-alloy-bend-pine" : "text-alloy-midnight"
-                                    }`}>
+                                    {/*
+                                     * THE MONEY IS NOT COLOURED BY ITS SIGN.
+                                     *
+                                     * This read Bend Pine for any negative amount, which taught an
+                                     * operator that negative is good — and a negative amount is
+                                     * simply a direction. A credit reducing an obligation, a refund
+                                     * and a reversal are all negative and none is a verdict. The
+                                     * DIRECTION dot beside the row still says in or out, because
+                                     * that is what direction is for; the figure reads as a figure.
+                                     */}
+                                    <span className="shrink-0 text-[13px] font-medium tabular-nums text-alloy-midnight">
                                         {moneyExact(row.amountCents, row.currencyCode)}
                                     </span>
                                     <span className="w-[4.5rem] shrink-0 text-right text-[11px] tabular-nums text-alloy-midnight/45">

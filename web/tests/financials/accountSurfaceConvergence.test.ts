@@ -88,10 +88,16 @@ describe("F5A · operator labels resolve through the owning catalog", () => {
 
 describe("F5B · GL context is shown at transaction grain", () => {
     it("renders the resolved GL code and account name in the ledger", () => {
+        /*
+         * The surface joins code and name; the shared renderer draws the result and decides the
+         * mapped/unmapped state. A code alone is unreadable and a name alone is unsearchable, so
+         * the join is the fact worth locking here.
+         */
         const src = read(WORKSPACE_DETAIL);
         expect(src).toContain("glCode");
         expect(src).toContain("glAccountName");
-        expect(src).toContain("data-financials-gl");
+        expect(src, "code and name are joined for display").toMatch(/\$\{glCode\} · \$\{glName\}/);
+        expect(read("components/operationalCards/FinancialsLedger.tsx")).toContain("data-financials-gl-state");
     });
 });
 
@@ -310,8 +316,8 @@ describe("F7 · one truth, two grains", () => {
             .not.toMatch(/alloy-os-billing__period|Current period/);
         const detail = read(WORKSPACE_DETAIL);
         expect(detail, "and the ledger still carries it").toContain("financials-filter-");
-        expect(detail, "as a grouping, in the detail card's own period anatomy")
-            .toContain("alloy-os-fdetail__periodhead");
+        expect(detail, "as a grouping, through the shared period renderer")
+            .toMatch(/FinancialsLedgerPeriod/);
         expect(detail).toContain("periodKey");
     });
 
@@ -561,14 +567,19 @@ describe("F11 · the three metrics are peers", () => {
 
     it("renders the committed anatomy before the figures arrive", () => {
         const card = read("components/operationalCards/FinancialsCard.tsx");
-        const pending = card.slice(card.indexOf("export function AccountSummaryPending"));
+        /*
+         * The whole function, not a character budget. This sliced the first 2000 characters and
+         * broke when a comment grew — measuring how much prose the function carries rather than
+         * what it renders.
+         */
+        const from = card.indexOf("export function AccountSummaryPending");
+        const pending = card.slice(from, card.indexOf("\nfunction ", from));
         /* The same three labels, the same two commands, the same classes — so nothing moves. */
         for (const label of ["Current balance", "Due", "Past due", "Payment", "Add charge"]) {
-            expect(pending.slice(0, 2000), `${label} is present in the pending frame`).toContain(label);
+            expect(pending, `${label} is present in the pending frame`).toContain(label);
         }
-        expect(pending.slice(0, 2000)).toContain("alloy-os-fdetail__strip--peers");
-        expect(pending.slice(0, 2000), "placeholders, never a zero that reads as a balance")
-            .not.toMatch(/\$0|0\.00/);
+        expect(pending).toContain("alloy-os-fdetail__strip--peers");
+        expect(pending, "placeholders, never a zero that reads as a balance").not.toMatch(/\$0|0\.00/);
         const host = read("components/admin/focusPanel/cards/FinancialsCard.tsx");
         expect(host, "and the account placement uses it while loading").toContain("<AccountSummaryPending />");
     });
@@ -622,14 +633,21 @@ describe("F13 · the ledger grid is prioritised", () => {
         const px = (t: string) => Number((/^(\d+)px$/.exec(t) ?? [])[1] ?? NaN);
         expect(px(tracks[1]!), "Type is fixed and wide enough for a configured label")
             .toBeGreaterThanOrEqual(112);
-        /*
-         * Description flexes AND has a floor. Pass 5F demoted it from primary column to preview —
-         * the identity columns beside it (Child, GL account, Responsible party) now hold real
-         * width — but a flex track with no minimum collapses to nothing at a narrow container, and
-         * a zero-width preview is worse than a truncated one.
-         */
-        expect(tracks[3], "Description is the column that flexes").toMatch(/^minmax\(\d+px, 1fr\)$/);
         expect(px(tracks[0]!), "Date fits a year-bearing date").toBeGreaterThanOrEqual(78);
+        /*
+         * DESCRIPTION IS LAST, FLEXIBLE, AND FLOORED.
+         *
+         * 5F bounded it and it still sat in the visual CENTRE of the row, so the eye crossed free
+         * text to get from Child to GL and again from Amount to who owes it. The scan order is now
+         * the column order — Date, Type, Child, GL, Amount, Status, Responsible party — and
+         * Description is the eighth and only flexible track, taking less than a full fraction so it
+         * cannot grow into the identity columns' share. The floor stays because a flex track with
+         * no minimum collapses to nothing, and a zero-width preview is worse than a truncated one.
+         */
+        expect(tracks[7], "Description is last and is the flexible track").toMatch(/^minmax\(\d+px, 0?\.\d+fr\)$/);
+        for (const i of [0, 1, 2, 3, 4, 5, 6]) {
+            expect(tracks[i], `track ${i} is a fixed identity column`).toMatch(/^\d+px$/);
+        }
 
         /*
          * ── DESCRIPTION IS A PREVIEW, AND MUST NOT DOMINATE ───────────────────────────────────
@@ -652,7 +670,7 @@ describe("F13 · the ledger grid is prioritised", () => {
         const fixed = tracks.filter((t) => /^\d+px$/.test(t)).reduce((sum, t) => sum + px(t), 0);
         const description = 899 - fixed - gap * 7;
         expect(description, `Description would be ${description}px at the workspace's ledger width`)
-            .toBeGreaterThanOrEqual(120);
+            .toBeGreaterThanOrEqual(100);
         const widestFixed = Math.max(...tracks.filter((t) => /^\d+px$/.test(t)).map(px));
         expect(
             description,
@@ -693,14 +711,27 @@ describe("F15 · the ledger names business identities, not model words", () => {
      * and a payer is who supplied money. Conflating the first two is how a surface ends up telling
      * an operator that a four-year-old owes $1,850.
      */
-    it("heads the ledger with Child and Responsible party on both surfaces", () => {
+    it("heads the ledger with Child and Responsible party, from ONE renderer", () => {
+        /*
+         * The headings used to be asserted in each surface, which was the weaker claim: it proved
+         * two files said the same words on the day it was written, not that they could not drift.
+         * Both surfaces now render through `FinancialsLedger`, so the vocabulary is asserted once
+         * where it is defined — and each surface is asserted NOT to hand-roll a row of its own,
+         * which is the fact that keeps them identical.
+         */
+        const ledger = code("components/operationalCards/FinancialsLedger.tsx");
+        expect(ledger).toMatch(/<span>Child<\/span>/);
+        expect(ledger).toMatch(/<span>Responsible party<\/span>/);
+        expect(ledger, 'no column is headed "Subject"').not.toMatch(/<span>Subject<\/span>/);
+        expect(ledger, 'no column is headed "Source"').not.toMatch(/<span>Source<\/span>/);
+
         for (const path of LEDGERS) {
             const src = code(path);
-            expect(src, `${path} names the child`).toMatch(/<span>Child<\/span>/);
-            expect(src, `${path} names who owes it`).toMatch(/<span>Responsible party<\/span>/);
-            expect(src, `${path} no longer heads a column "Subject"`).not.toMatch(/<span>Subject<\/span>/);
-            /* Source mostly repeated Type and has given its column to an identity. */
-            expect(src, `${path} no longer heads a column "Source"`).not.toMatch(/<span>Source<\/span>/);
+            expect(src, `${path} renders through the shared ledger`).toMatch(/FinancialsLedger/);
+            expect(
+                src,
+                `${path} must not hand-roll a ledger row — that is how two grids drift`,
+            ).not.toMatch(/alloy-os-billingdetail__row alloy-os-billingdetail__row--head/);
         }
     });
 
@@ -726,12 +757,10 @@ describe("F15 · the ledger names business identities, not model words", () => {
 
 describe("F16 · GL is truthful", () => {
     it("states an unmapped row as a state, never as a dash", () => {
-        for (const path of [WORKSPACE_DETAIL, "components/operationalCards/FinancialsDetailCard.tsx"]) {
-            const src = code(path);
-            expect(src, `${path} says Unmapped`).toContain('"Unmapped"');
-            expect(src, `${path} no longer renders the em-dash form`).not.toContain("— unmapped");
-            expect(src, `${path} marks the state for the eye and for a test`).toContain("data-financials-gl-state");
-        }
+        const ledger = code("components/operationalCards/FinancialsLedger.tsx");
+        expect(ledger, "the one renderer says Unmapped").toContain('"Unmapped"');
+        expect(ledger, "and never the em-dash form").not.toContain("— unmapped");
+        expect(ledger, "and marks the state for the eye and for a test").toContain("data-financials-gl-state");
         const css = read("app/adminV2/components/operationalCardsShared.css");
         expect(css, "and it is toned as attention rather than as a successful value").toMatch(
             /gl-state="unmapped"\]\s*\{[^}]*color:/,
@@ -890,5 +919,161 @@ describe("F20 · the two Financials headers do not drift by accident", () => {
             expect(src, `${path} enters payment by the same word`).toMatch(/>\s*Payment\s*</);
             expect(src, `${path} offers Add charge as its peer`).toMatch(/>\s*Add charge\s*</);
         }
+    });
+});
+
+// ── PASS 5G · ONE LEDGER, ONE MONEY RULE ────────────────────────────────────────────────────────
+
+describe("F21 · the lens changes the cohort, never the renderer", () => {
+    const LEDGER = "components/operationalCards/FinancialsLedger.tsx";
+    const DETAIL = "components/operationalCards/FinancialsDetailCard.tsx";
+
+    /*
+     * ── THE ROOT CAUSE OF THE "INTERMITTENT" FORMATTING ───────────────────────────────────────
+     *
+     * The Details card carried THREE row presentations for one concept: the eight-column grid for
+     * charges, a prose block for adjustments ("Raises what is owed · Sep 14, 2026 · Reason…"), and
+     * a stack of stat strips for payments. Two of them appeared CONDITIONALLY — the adjustments
+     * block rendered under BOTH the All lens and the Credits lens, so the very same lens showed
+     * grid rows on an account with no manual reductions and grid rows followed by prose rows on an
+     * account with some. Nothing was corrupting a grid; sometimes the thing on screen simply was
+     * not the ledger. That is the shape of a defect reported as "sometimes broken formatting".
+     */
+    it("has exactly one row renderer, and the surfaces do not carry their own", () => {
+        const ledger = code(LEDGER);
+        expect(ledger, "the row markup is defined here").toContain("alloy-os-billingdetail__row");
+        for (const path of [DETAIL, WORKSPACE_DETAIL]) {
+            const src = code(path);
+            expect(src, `${path} must not define a ledger row of its own`).not.toMatch(
+                /className="alloy-os-billingdetail__row alloy-os-billingdetail__row--head"/,
+            );
+        }
+        /* The retired presentations are gone, not merely unreferenced. */
+        expect(code(DETAIL), "no prose adjustment row survives").not.toContain("alloy-os-fdetail__adjustment\"");
+        expect(code(DETAIL), "no stat-strip payment block survives").not.toContain("alloy-os-fdetail__payment\"");
+        expect(code(DETAIL), "adjustments render as ledger rows").toContain("ledgerRowFromAdjustment");
+        expect(code(DETAIL), "payments render as ledger rows").toContain("ledgerRowFromPayment");
+    });
+
+    it("draws a collapsed period with the same component as an expanded one", () => {
+        const ledger = code(LEDGER);
+        const period = ledger.slice(ledger.indexOf("export function FinancialsLedgerPeriod"));
+        expect(period, "collapse changes what is shown, not how").toContain("Collapsed · select to expand");
+        expect(period, "and the open branch uses the shared head and row").toMatch(
+            /FinancialsLedgerHead[\s\S]{0,400}FinancialsLedgerRow/,
+        );
+    });
+});
+
+describe("F22 · sign is arithmetic; colour is business state", () => {
+    /*
+     * A negative amount is not a bad amount. A credit reducing an obligation is negative and
+     * ordinary; a refund is negative movement; a reversal's sign depends on what it reverses; a
+     * negative balance is money the centre owes the family. Colouring by sign taught an operator to
+     * read arithmetic direction as a verdict.
+     */
+    it("has no sign-derived colour anywhere in the shared ledger", () => {
+        const ledger = code("components/operationalCards/FinancialsLedger.tsx");
+        expect(ledger, "no ternary on the amount's sign").not.toMatch(/amount(Cents)?\s*<\s*0/);
+        expect(ledger, "no credit-coloured class").not.toMatch(/--credit/);
+        expect(ledger, "tone arrives from the caller, as business state").toContain("row.tone");
+
+        /* And the Financials surfaces do not colour a figure by its sign either. */
+        for (const path of [
+            WORKSPACE_DETAIL,
+            "components/operationalCards/FinancialsDetailCard.tsx",
+            "app/adminV2/financials/sections/FinancialsOverview.tsx",
+        ]) {
+            const src = code(path);
+            expect(src, `${path} must not colour money by its sign`).not.toMatch(
+                /amountCents\s*<\s*0[^\n]{0,120}(text-alloy-bend-pine|text-alloy-ember|text-red)/,
+            );
+        }
+
+        /* The retired rule stays defined-and-neutral so it cannot creep back as "it used to be green". */
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        expect(css).toMatch(/__entry-amount--credit \{\s*color: inherit;/);
+        /*
+         * State tones exist, are named for the STATE, and actually reach the figure. Asserting the
+         * class name alone passed while a plant renamed half the selector — a lock that proves a
+         * string is present, not that a rule applies.
+         */
+        expect(css, "attention tones the amount").toMatch(
+            /__row--attention \.alloy-os-billingdetail__amount[\s\S]{0,160}color:/,
+        );
+        expect(css, "muted is a row-level treatment").toMatch(/__row--muted \{[^}]*color:/);
+    });
+});
+
+describe("F23 · one financial summary grammar", () => {
+    it("states the balance once on the detail card", () => {
+        const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
+        expect(detail, "the card title no longer repeats the balance").not.toMatch(
+            /insight=\{`\$\{period\.currentBalance\} balance`\}/,
+        );
+        expect(detail, "and the metric row still carries it").toContain('label="Current balance"');
+    });
+
+    it("shares the core metrics, in the same words, with the workspace", () => {
+        const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
+        const account = code("components/operationalCards/FinancialsCard.tsx");
+        for (const label of ["Current balance", "Due", "Past due"]) {
+            expect(detail, `Focus Panel states ${label}`).toContain(`label="${label}"`);
+            expect(account, `the workspace states ${label}`).toContain(`label="${label}"`);
+        }
+        /*
+         * Autopay is gone from the metric row: the platform has no autopay model, so the metric
+         * could only ever read "Not available yet" — a statement about Alloy in a slot meant for a
+         * statement about this family.
+         */
+        expect(detail, "autopay is not a metric").not.toContain('label="Autopay"');
+    });
+
+    it("never renders a metric label above an apparently empty value", () => {
+        const account = code("components/operationalCards/FinancialsCard.tsx");
+        const from = account.indexOf("export function AccountSummaryPending");
+        const pending = account.slice(from, account.indexOf("\nfunction ", from));
+        expect(pending, "the pending slot is visibly a placeholder").toContain(
+            "alloy-os-financials__pendingvalue",
+        );
+        expect(pending, "and never a zero").not.toMatch(/\$0|0\.00/);
+    });
+});
+
+describe("F24 · a host without a projection still gets an account", () => {
+    /*
+     * ── THE REGRESSION THIS LOCKS ─────────────────────────────────────────────────────────────
+     *
+     * The card's bootstrap moved to `context.operationalProjection.cards.financials`: the Focus
+     * Panel hands the summary down and the card issues no request of its own. Right for the Focus
+     * Panel, and it silently broke the Financials WORKSPACE, which composes the same card and
+     * builds its own context with no projection in it. `provisioned` was null, that was read as
+     * "still provisioning", and the account summary sat in its pending frame indefinitely — three
+     * labels over three placeholders — while the ledger beside it hydrated normally.
+     *
+     * Measured before the repair: body hydrated with 56 rows, summary still pending after 18
+     * seconds, the card endpoint answering 200 throughout. The two states are different:
+     * "the projection has not arrived yet" and "nobody is sending one" are not the same claim.
+     */
+    it("distinguishes a pending projection from a host that supplies none", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card, "provisioning is only claimed where a projection is actually coming").toMatch(
+            /provisioningAccount =\s*context\.operationalProjection != null/,
+        );
+        expect(card, "and a projection-less host bootstraps the card itself").toContain(
+            "hostSuppliesProjection",
+        );
+        /* The Focus Panel path is untouched: it supplies the object, so the fallback never runs. */
+        expect(card).toMatch(/if \(hostSuppliesProjection\) return;/);
+    });
+
+    it("keeps the workspace placement free of a projection it cannot build", () => {
+        /*
+         * The workspace adapter composes a synthetic context deliberately — it is not a Focus Panel
+         * and has no projection pipeline. That is allowed, and the card must cope with it rather
+         * than the adapter faking a projection shape it does not own.
+         */
+        const adapter = code("app/adminV2/financials/FinancialsAccountDetail.tsx");
+        expect(adapter, "the adapter does not fabricate a projection").not.toContain("operationalProjection");
     });
 });
