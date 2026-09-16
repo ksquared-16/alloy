@@ -314,63 +314,47 @@ export default function FinancialsAccountWorkspaceDetail({
                             canonicalTotals={canonicalPeriodTotals}
                         />
                     )}
-            {/* ── 4 · WHO OWES IT, AND WHO IS FUNDING IT ────────────────────────────────────────
-                Inside the scroll region, beneath the ledger: it is context for the activity, not a
-                control, so it travels with what it explains. */}
+            {/*
+             * ── 4 · FUNDING, UNDER THE FUNDING LENS ────────────────────────────────────────────
+             *
+             * This band used to sit under EVERY ledger, on every account, permanently: "Who owes
+             * it / No responsibility assigned / Expected funding / No expected funding / Not
+             * claimed here: autopay, payer_split". Four of those five lines were an absence, and
+             * the fifth named two database fields. An operator scrolled a year of real activity to
+             * arrive at a footer telling them nothing had been arranged and that two facts were
+             * unclaimed.
+             *
+             * Neither concept left the product. WHO OWES IT is now on every row, at the grain the
+             * model actually has — the Responsible party column — which is where the question is
+             * asked and where an unassigned charge is visible rather than summarised into
+             * "No responsibility assigned". EXPECTED FUNDING keeps its own lens: it is an
+             * expectation rather than activity, it must never be read as money received, and an
+             * operator asks for it deliberately.
+             *
+             * "Not claimed here" is gone outright. Which facts this surface does not carry is a
+             * statement about our implementation, not about the family whose account is open.
+             */}
+            {lens === "funding" ? (
             <section className="mt-2.5 border-t border-alloy-stone/15 pt-2.5" data-financials-arrangements="true">
-                <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                        <Sub>Who owes it</Sub>
-                        {loading ? (
-                            <Skeleton w="12rem" />
-                        ) : (vm?.responsibility?.parties ?? []).length === 0 ? (
-                            <Empty>No responsibility assigned</Empty>
-                        ) : (
-                            <ul className="space-y-1">
-                                {(vm?.responsibility?.parties ?? []).map((p) => (
-                                    <li key={String(p.personId)} className="flex items-baseline justify-between gap-3 text-sm"
-                                        data-financials-responsible-party={String(p.personId)}>
-                                        <span className="text-alloy-midnight">{String(p.name)}</span>
-                                        <span className="tabular-nums text-alloy-midnight">{moneyExact(n(p.assignedCents), cur)}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
-                    <div>
-                        <Sub title="An expectation, not money received. It does not reduce what is owed.">
-                            Expected funding
-                        </Sub>
-                        {loading ? (
-                            <Skeleton w="12rem" />
-                        ) : (vm?.expectedFunding ?? []).length === 0 ? (
-                            <Empty>No expected funding</Empty>
-                        ) : (
-                            <ul className="space-y-1">
-                                {(vm?.expectedFunding ?? []).map((f, i) => (
-                                    <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
-                                        <span className="text-alloy-midnight">{String(f.label)}</span>
-                                        <span className="tabular-nums text-alloy-midnight">{moneyExact(n(f.expectedCents), cur)}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                        {/*
-                         * THE DISTINCTION STAYS; THE PARAGRAPH GOES.
-                         *
-                         * Misreading expected funding as money received is a real financial risk, so
-                         * the warning is kept — but as a hint on the label rather than three lines of
-                         * teaching on every account an operator opens for the rest of the product's
-                         * life. Progressive disclosure, not permanent instruction.
-                         */}
-                    </div>
-                </div>
-                {!loading && (vm?.unavailable ?? []).length ? (
-                    <p className="mt-2 text-[11px] text-alloy-midnight/45" data-financials-not-claimed="true">
-                        Not claimed here: {(vm?.unavailable ?? []).map((u) => String(u.fact)).join(", ")}.
-                    </p>
-                ) : null}
+                <Sub title="An expectation, not money received. It does not reduce what is owed.">
+                    Expected funding
+                </Sub>
+                {loading ? (
+                    <Skeleton w="12rem" />
+                ) : (vm?.expectedFunding ?? []).length === 0 ? (
+                    <Empty>Nothing is expected from a third party</Empty>
+                ) : (
+                    <ul className="space-y-1">
+                        {(vm?.expectedFunding ?? []).map((f, i) => (
+                            <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
+                                <span className="text-alloy-midnight">{String(f.label)}</span>
+                                <span className="tabular-nums text-alloy-midnight">{moneyExact(n(f.expectedCents), cur)}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </section>
+            ) : null}
                 </div>
             </section>
         </div>
@@ -438,15 +422,16 @@ function LedgerPeriods({
                             </span>
                         </p>
                         <div className="alloy-os-billingdetail__ledger" role="table">
+                            {/* Child, then who owes it. See the identity note on the detail card. */}
                             <div className="alloy-os-billingdetail__row alloy-os-billingdetail__row--head">
                                 <span>Date</span>
                                 <span>Type</span>
-                                <span>Subject</span>
+                                <span>Child</span>
                                 <span>Description</span>
-                                <span>GL code</span>
+                                <span>GL account</span>
                                 <span>Amount</span>
                                 <span>Status</span>
-                                <span>Source</span>
+                                <span>Responsible party</span>
                             </div>
                             {groupRows.map((row) => (
                                 <div key={String(row.chargeId)} className="alloy-os-billingdetail__row"
@@ -456,7 +441,13 @@ function LedgerPeriods({
                                     <span className="alloy-os-billingdetail__type">
                                         {String(row.categoryLabel ?? row.categoryKey ?? "—")}
                                     </span>
-                                    <span className="alloy-os-billingdetail__subject">
+                                    {/*
+                                     * The CHILD, or the household when the charge genuinely belongs
+                                     * to no child — a registration fee does. Never the household
+                                     * name standing in for a child the row actually names.
+                                     */}
+                                    <span className="alloy-os-billingdetail__subject"
+                                        data-financials-child={row.subjectMemberId ? "true" : "false"}>
                                         {String(row.subjectName ?? "Household")}
                                     </span>
                                     <span className="alloy-os-billingdetail__desc">{String(row.description ?? "—")}</span>
@@ -468,12 +459,14 @@ function LedgerPeriods({
                                      * carries the resolved pair.
                                      */}
                                     <span className="alloy-os-billingdetail__gl"
-                                        data-financials-gl={row.glCode ? String(row.glCode) : undefined}>
+                                        data-financials-gl={row.glCode ? String(row.glCode) : undefined}
+                                        data-financials-gl-state={row.glCode ? "mapped" : "unmapped"}
+                                        title={row.glCode && row.glAccountName ? `${String(row.glCode)} · ${String(row.glAccountName)}` : undefined}>
                                         {row.glCode
                                             ? row.glAccountName
                                                 ? `${String(row.glCode)} · ${String(row.glAccountName)}`
                                                 : String(row.glCode)
-                                            : "— unmapped"}
+                                            : "Unmapped"}
                                     </span>
                                     <span
                                         className={`alloy-os-billingdetail__amount${
@@ -499,12 +492,17 @@ function LedgerPeriods({
                                      * infers a correction from a status string; a row that stands
                                      * says only where it came from.
                                      */}
-                                    <span className="alloy-os-billingdetail__source">
-                                        {row.correctsChargeId
-                                            ? `${String(row.correctionKind ?? "correction")} of a charge`
-                                            : row.reversedByChargeId
-                                                ? "Reversed by a correction"
-                                                : String(row.categoryLabel ?? "—")}
+                                    {/*
+                                     * WHO OWES IT — charge-grain, from the allocations the account
+                                     * reader already holds. It replaces a Source column that mostly
+                                     * repeated Type, and it answers a question Type cannot.
+                                     */}
+                                    <span className="alloy-os-billingdetail__source" data-financials-responsible="true">
+                                        {row.responsiblePartyName
+                                            ? String(row.responsiblePartyName)
+                                            : row.responsibilityUnassigned
+                                                ? "Unassigned"
+                                                : "—"}
                                     </span>
                                 </div>
                             ))}
@@ -512,11 +510,19 @@ function LedgerPeriods({
                     </section>
                 );
             })}
-            <p className="alloy-os-billingdetail__note">
-                No running balance column — <code>ledger_transactions</code> provides no authoritative
-                running balance, and computing one here would invent an ordering the backend does not
-                guarantee.
-            </p>
+            {/*
+             * ── THE RUNNING-BALANCE INVARIANT IS NOT AN OPERATOR MESSAGE ───────────────────────
+             *
+             * It used to be printed under every ledger: "No running balance column —
+             * `ledger_transactions` provides no authoritative running balance…". That is true, it
+             * matters, and it is ENGINEERING DOCTRINE. An operator running a childcare centre
+             * cannot act on it and did not ask; a paragraph naming a database table under a family's
+             * money is the product explaining its own implementation.
+             *
+             * The invariant is not weakened by removing the paragraph. It lives here as the reason
+             * this component computes no running total, in the doctrine document, and in the test
+             * that fails if a running-balance column ever appears.
+             */}
         </div>
     );
 }

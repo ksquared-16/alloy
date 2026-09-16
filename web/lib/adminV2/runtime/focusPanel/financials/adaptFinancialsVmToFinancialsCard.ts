@@ -404,6 +404,8 @@ export function adaptFinancialsVmToLedgerPeriods(input: {
             kind: row.amountCents < 0 ? "credit" : "charge",
             status: row.lifecycleStatus,
             source: row.categoryLabel,
+            responsibleParty: row.responsiblePartyName,
+            responsibilityUnassigned: row.responsibilityUnassigned,
             /* Borrowed, not restated — the one classifier both Financials surfaces filter by. */
             lens: ledgerLensOf(row),
             /*

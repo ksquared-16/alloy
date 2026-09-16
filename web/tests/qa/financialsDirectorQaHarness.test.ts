@@ -235,7 +235,13 @@ describe("scenario readiness", () => {
          * because the platform enforces it and shows it to nobody, and offering a walkthrough for a
          * surface that does not exist would invite a PASS resting on a database query.
          */
-        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(29);
-        expect(scenarioByKey("accounting_period")!.disposition).toBe("MISSING_PRODUCTIZATION");
+        /*
+         * 30 since Repair Pass 5F productized the accounting period's INSPECTION half — a calendar
+         * panel and the attributed period on a charge's detail — which turned its scenario from a
+         * recorded gap into something a human can actually drive. The gap that remains is the
+         * lifecycle action, and the scenario records it rather than the catalog hiding it.
+         */
+        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(30);
+        expect(scenarioByKey("accounting_period")!.disposition).toBe("HUMAN_WALKTHROUGH");
     });
 });

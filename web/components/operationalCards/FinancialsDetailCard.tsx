@@ -327,15 +327,30 @@ export default function FinancialsDetailCard({
                             </p>
                             {per.open ? (
                                 <div className="alloy-os-billingdetail__ledger" role="table">
+                                    {/*
+                                      * ── THREE FINANCIAL IDENTITIES, AND THEY ARE NOT ONE ──────
+                                      *
+                                      * "Subject" was a word from the data model standing in for a
+                                      * business fact the system already knows. An operator reading a
+                                      * ledger asks three different questions — which CHILD is this
+                                      * for, who OWES it, and for a payment, who PAID — and one
+                                      * generic column answered none of them.
+                                      *
+                                      * Child and Responsible party are the charge-side pair and are
+                                      * both charge-grain in the model. Payer belongs to money IN and
+                                      * lives in the Payments lens, where a receipt names the person
+                                      * who supplied it; a payer column here would be empty on every
+                                      * charge row.
+                                      */}
                                     <div className="alloy-os-billingdetail__row alloy-os-billingdetail__row--head">
                                         <span>Date</span>
                                         <span>Type</span>
-                                        <span>Subject</span>
+                                        <span>Child</span>
                                         <span>Description</span>
-                                        <span>GL code</span>
+                                        <span>GL account</span>
                                         <span>Amount</span>
                                         <span>Status</span>
-                                        <span>Source</span>
+                                        <span>Responsible party</span>
                                     </div>
                                     {per.entries.map((e, i) => (
                                         <div key={`${e.when}-${i}`} className="alloy-os-billingdetail__row">
@@ -346,7 +361,18 @@ export default function FinancialsDetailCard({
                                             </span>
                                             <span className="alloy-os-billingdetail__subject">{e.subject}</span>
                                             <span className="alloy-os-billingdetail__desc">{e.label}</span>
-                                            <span className="alloy-os-billingdetail__gl">{e.glCode ?? "— unmapped"}</span>
+                                            {/*
+                                              * UNMAPPED IS A STATE, NOT A DASH. An em-dash reads as
+                                              * "nothing to say here"; a charge with no GL account is
+                                              * a configuration fact somebody has to act on, so it is
+                                              * toned as one and never as a successful mapping.
+                                              */}
+                                            <span
+                                                className="alloy-os-billingdetail__gl"
+                                                data-financials-gl-state={e.glCode ? "mapped" : "unmapped"}
+                                            >
+                                                {e.glCode ?? "Unmapped"}
+                                            </span>
                                             <span
                                                 className={clsx(
                                                     "alloy-os-billingdetail__amount",
@@ -356,8 +382,9 @@ export default function FinancialsDetailCard({
                                                 {e.amount}
                                             </span>
                                             <span className="alloy-os-billingdetail__status">{e.status ?? "—"}</span>
-                                            <span className="alloy-os-billingdetail__source">
-                                                {e.source ?? "—"}
+                                            <span className="alloy-os-billingdetail__source" data-financials-responsible="true">
+                                                {e.responsibleParty
+                                                    ?? (e.responsibilityUnassigned ? "Unassigned" : "—")}
                                                 {/*
                                                   * THE TRANSITIONS THIS ROW ALREADY QUALIFIES FOR.
                                                   *
@@ -400,11 +427,11 @@ export default function FinancialsDetailCard({
                             )}
                         </section>
                     ))}
-                    <p className="alloy-os-billingdetail__note">
-                        No running balance column — <code>ledger_transactions</code> provides no authoritative
-                        running balance, and computing one here would invent an ordering the backend does not
-                        guarantee.
-                    </p>
+                    {/*
+                      * The running-balance invariant holds and is not printed at the operator. It is
+                      * engineering doctrine — see the note on the workspace ledger, the doctrine
+                      * document, and the test that fails if a running-balance column appears.
+                      */}
                 </div>
                 ) : null}
 

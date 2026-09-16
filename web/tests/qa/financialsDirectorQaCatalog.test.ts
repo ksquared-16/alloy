@@ -84,26 +84,39 @@ describe("the Director QA scenario catalog", () => {
     });
 
     /*
-     * ── A PRODUCT GAP MAY NOT BE LAUNDERED INTO A TEST RESULT ─────────────────────────────────
+     * ── THE INSPECTION HALF IS PRODUCTIZED; THE LIFECYCLE HALF IS NOT ─────────────────────────
      *
-     * The accounting period is enforced by the database and reachable by nobody. The catalog must
-     * say so in its own vocabulary, and must not offer a human a walkthrough of a screen that does
-     * not exist — that is the route by which a `psql` query becomes a reported PASS.
+     * This scenario carried MISSING_PRODUCTIZATION while the accounting period was enforced by the
+     * database and visible to nobody. Pass 5F built the read surface — an Accounting calendar panel
+     * with each period's dates and open/closed status, and the attributed period on a charge's own
+     * detail — so a human can now accept what they can see, and the scenario became a walkthrough.
+     *
+     * What did NOT change is the honesty requirement, and the lock now guards the harder version of
+     * it: the scenario must still refuse a database query as evidence, and must still RECORD that
+     * opening and closing a period has no governed action. A walkthrough that quietly dropped the
+     * limit would read as full acceptance of a half-built capability.
      */
-    it("records the accounting period as a product gap, not as a passed or deferred scenario", () => {
+    it("walks the accounting period through the product and still records what is missing", () => {
         const s = scenarioByKey("accounting_period")!;
-        expect(s.disposition).toBe("MISSING_PRODUCTIZATION");
-        expect(s.navigate, "there is nowhere to navigate to").toEqual([]);
-        expect(s.dispositionReason).toMatch(/MISSING_PRODUCTIZATION/);
-        expect(s.dispositionReason, "and it must name the smallest productization")
-            .toMatch(/productization/i);
+        expect(s.disposition).toBe("HUMAN_WALKTHROUGH");
+        expect(s.navigate.length, "there is somewhere to navigate to now").toBeGreaterThan(0);
+        expect(s.navigate.join(" "), "the calendar surface is named").toMatch(/Accounting/i);
         expect(
             s.doThis.join(" "),
-            "a database query must be refused as evidence, in the scenario itself",
-        ).toMatch(/database query/i);
+            "a database query must still be refused as evidence, in the scenario itself",
+        ).toMatch(/database/i);
+        expect(
+            s.doThis.join(" "),
+            "and the missing lifecycle action must be recorded rather than worked around",
+        ).toMatch(/no control to open or close a period/i);
+        expect(s.dispositionReason, "the reason states which half is missing").toMatch(/governed action/i);
 
-        /* Its sibling IS on screen and IS walked through — the two must not share a disposition. */
+        /* The two periods must never collapse into one scenario or one disposition. */
         expect(scenarioByKey("billing_period")!.disposition).toBe("HUMAN_WALKTHROUGH");
+        expect(
+            s.failSymptoms.join(" "),
+            "and conflating them is itself a failure the tester is told to look for",
+        ).toMatch(/one field|label for the other/i);
     });
 
     it("keeps subsidy PROCESSING out of scope while Expected Funding stays Core", () => {

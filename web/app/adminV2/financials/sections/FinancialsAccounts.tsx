@@ -53,12 +53,18 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
+import {
+    WS_FIELD_SEARCH_CHROME,
+    WS_QUEUE_TOOLBAR_CHROME,
+} from "@/components/workspace/workspaceTokens";
 import FinancialsAccountDetail from "@/app/adminV2/financials/FinancialsAccountDetail";
 import FinancialsAccountWorkspaceDetail from "@/app/adminV2/financials/FinancialsAccountWorkspaceDetail";
 import { money, moneyExact } from "@/app/adminV2/financials/financialsFormat";
 import type { FinancialsReadState } from "@/app/adminV2/financials/useFinancialsReads";
 import {
+    ACCOUNT_STATE_FILTERS,
     NO_ACCOUNT_FILTER,
+    advancedFilterCount,
     filterAccounts,
     isAccountFilterActive,
     programDivides,
@@ -66,6 +72,7 @@ import {
     resolveAccountSelection,
     roomDivides,
     roomOptions,
+    stateCounts,
 } from "@/lib/financials/workspace/accountQueue";
 import { accountState, joinAccounts, type AccountRow } from "@/lib/financials/workspace/accountsRail";
 import {
@@ -205,6 +212,7 @@ export default function FinancialsAccounts({
      */
     const [chosen, setChosen] = useState<string | null>(null);
     const [filter, setFilter] = useState(NO_ACCOUNT_FILTER);
+    const [filtersOpen, setFiltersOpen] = useState(false);
     /*
      * Typing must never wait on re-filtering two thousand rows. The input stays the operator's;
      * the list catches up. React's own deferral rather than a hand-rolled debounce with a timer
@@ -242,6 +250,8 @@ export default function FinancialsAccounts({
         [accounts, filter, deferredSearch],
     );
     const narrowed = isAccountFilterActive({ ...filter, search: deferredSearch });
+    const advancedCount = advancedFilterCount(filter);
+    const counts = useMemo(() => stateCounts(accounts), [accounts]);
 
     const selected = resolveAccountSelection(visible, chosen);
     const selectedAccount = visible.find((a) => a.customerId === selected) ?? null;
@@ -297,49 +307,137 @@ export default function FinancialsAccounts({
                  * never change what any household owes. And no site control here — the workspace
                  * already owns site scope, server-side, and a second one would be a second answer.
                  */}
-                <div className="flex flex-col gap-1.5 border-b border-alloy-stone/10 px-2 py-2"
+                {/*
+                 * ── SEARCH ALWAYS; FILTERS ON REQUEST ──────────────────────────────────────────
+                 *
+                 * The Program and Room controls used to sit open on the rail permanently, so two
+                 * dropdowns an operator rarely touches took height from the queue on every visit.
+                 * The house pattern — the work-unit queue's `QueueFilterControls` — is Search plus a
+                 * `Filters` button carrying a count, and an inline panel that opens only when asked.
+                 * Same chrome tokens, same button grammar, same count badge, same Clear and the same
+                 * "N of M" caption, because a Financials-only filter drawer is exactly the drift
+                 * this pass exists to end.
+                 */}
+                <div className={`flex flex-col gap-1.5 px-2 py-2 ${WS_QUEUE_TOOLBAR_CHROME}`}
                     data-financials-accounts-controls="true">
-                    <input
-                        type="search"
-                        value={filter.search}
-                        onChange={(e) => setFilter((f) => ({ ...f, search: e.target.value }))}
-                        placeholder="Search household, child or contact"
-                        aria-label="Search accounts"
-                        data-financials-account-search="true"
-                        className="w-full rounded-lg border border-alloy-stone/25 bg-white px-2.5 py-1.5 text-[12px] text-alloy-midnight placeholder:text-alloy-midnight/40 focus:border-alloy-bend-pine/60 focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/15"
-                    />
-                    {/*
-                     * Offered only where they divide something — the same rule the ledger lenses
-                     * keep. A control with one choice reads as a capability the surface has not got.
-                     */}
-                    {showProgram || showRoom ? (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                            {/* A width to be 100% OF — see the note on the detail's Filter. */}
-                            {showProgram ? (
-                                <span className="min-w-0 flex-1">
-                                    <AlloySelect
-                                        value={filter.programId ?? ""}
-                                        onChange={(v) => setFilter((f) => ({ ...f, programId: v || null }))}
-                                        options={programs.map((p) => ({ value: p.id, label: p.label }))}
-                                        placeholder="All programs"
-                                        density="compact"
-                                        aria-label="Filter by program"
-                                        testId="financials-account-program"
-                                    />
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="search"
+                            value={filter.search}
+                            onChange={(e) => setFilter((f) => ({ ...f, search: e.target.value }))}
+                            placeholder="Search household, child or contact"
+                            aria-label="Search accounts"
+                            data-financials-account-search="true"
+                            className={`min-w-0 flex-1 ${WS_FIELD_SEARCH_CHROME}`}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setFiltersOpen((v) => !v)}
+                            aria-expanded={filtersOpen}
+                            data-financials-account-filters-toggle="true"
+                            className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-semibold shadow-[0_1px_3px_rgba(24,39,58,0.06)] transition-colors ${
+                                filtersOpen || advancedCount > 0
+                                    ? "border-alloy-bend-pine/50 bg-alloy-bend-pine/10 text-alloy-bend-pine"
+                                    : "border-alloy-stone/55 bg-white text-alloy-midnight/70 hover:border-alloy-bend-pine/40 hover:text-alloy-bend-pine"
+                            }`}
+                        >
+                            Filters
+                            {advancedCount > 0 ? (
+                                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-alloy-pine px-1 text-[10px] font-bold tabular-nums text-white">
+                                    {advancedCount}
                                 </span>
                             ) : null}
-                            {showRoom ? (
-                                <span className="min-w-0 flex-1">
-                                    <AlloySelect
-                                        value={filter.roomId ?? ""}
-                                        onChange={(v) => setFilter((f) => ({ ...f, roomId: v || null }))}
-                                        options={rooms.map((r) => ({ value: r.id, label: r.label }))}
-                                        placeholder="All rooms"
-                                        density="compact"
-                                        aria-label="Filter by room"
-                                        testId="financials-account-room"
-                                    />
+                        </button>
+                        {narrowed ? (
+                            <button
+                                type="button"
+                                onClick={() => setFilter(NO_ACCOUNT_FILTER)}
+                                data-financials-account-filters-clear="true"
+                                className="shrink-0 rounded-md px-2 py-1.5 text-[12px] font-semibold text-alloy-pine hover:bg-alloy-pine/10"
+                            >
+                                Clear
+                            </button>
+                        ) : null}
+                    </div>
+
+                    {narrowed ? (
+                        <p className="text-[11px] tabular-nums text-alloy-midnight/45"
+                            data-financials-account-filter-caption="true">
+                            {visible.length} of {accounts.length}
+                        </p>
+                    ) : null}
+
+                    {filtersOpen ? (
+                        <div className="flex flex-col gap-1.5 rounded-lg border border-alloy-stone/25 bg-alloy-stone/[0.04] px-2.5 py-2"
+                            data-financials-account-filters-panel="true">
+                            {/*
+                             * FINANCIAL STATE, in the rail's own canonical vocabulary — the same
+                             * `accountState` precedence the rows wear as chips, so the filter and
+                             * the badge can never disagree about what an account IS.
+                             */}
+                            <span className="block">
+                                <span className="mb-1 block text-[10px] uppercase tracking-wide text-alloy-midnight/45">
+                                    Financial state
                                 </span>
+                                <span className="flex flex-wrap gap-1">
+                                    {ACCOUNT_STATE_FILTERS.map((option) => {
+                                        const on = filter.state === option.value;
+                                        const count = counts[option.value];
+                                        return (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                data-financials-account-state-filter={option.value}
+                                                aria-pressed={on}
+                                                disabled={count === 0 && !on}
+                                                onClick={() =>
+                                                    setFilter((f) => ({ ...f, state: on ? null : option.value }))
+                                                }
+                                                className={`rounded-md px-2 py-1 text-[11.5px] font-medium transition disabled:opacity-35 ${
+                                                    on
+                                                        ? "bg-alloy-bend-pine text-white"
+                                                        : "bg-white text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                                                }`}
+                                            >
+                                                {option.label}
+                                                <span className={`ml-1.5 tabular-nums ${on ? "text-white/80" : "text-alloy-midnight/40"}`}>
+                                                    {count}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </span>
+                            </span>
+
+                            {showProgram || showRoom ? (
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    {showProgram ? (
+                                        <span className="min-w-0 flex-1">
+                                            <AlloySelect
+                                                value={filter.programId ?? ""}
+                                                onChange={(v) => setFilter((f) => ({ ...f, programId: v || null }))}
+                                                options={programs.map((p) => ({ value: p.id, label: p.label }))}
+                                                placeholder="All programs"
+                                                density="compact"
+                                                aria-label="Filter by program"
+                                                testId="financials-account-program"
+                                            />
+                                        </span>
+                                    ) : null}
+                                    {showRoom ? (
+                                        <span className="min-w-0 flex-1">
+                                            <AlloySelect
+                                                value={filter.roomId ?? ""}
+                                                onChange={(v) => setFilter((f) => ({ ...f, roomId: v || null }))}
+                                                options={rooms.map((r) => ({ value: r.id, label: r.label }))}
+                                                placeholder="All rooms"
+                                                density="compact"
+                                                aria-label="Filter by room"
+                                                testId="financials-account-room"
+                                            />
+                                        </span>
+                                    ) : null}
+                                </div>
                             ) : null}
                         </div>
                     ) : null}

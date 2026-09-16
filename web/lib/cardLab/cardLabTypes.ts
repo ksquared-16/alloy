@@ -220,6 +220,14 @@ export type LedgerEntry = {
     type: string;
     /** Resolved via `resolveGlMapping` from the charge category. Null = genuinely unmapped. */
     glCode: string | null;
+    /**
+     * WHO OWES THIS ROW — charge-grain, exactly as `financial_responsibility_allocations` holds it.
+     * "Split" where one charge's allocations name two people; null where no allocation exists at
+     * all, which is a different state from an allocation that names nobody.
+     */
+    responsibleParty: string | null;
+    /** An allocation exists and deliberately names no party. Rendered as a state, not as a blank. */
+    responsibilityUnassigned: boolean;
     label: string;
     /** Signed and formatted upstream. Account-balance direction: charge +, payment/credit −. */
     amount: string;

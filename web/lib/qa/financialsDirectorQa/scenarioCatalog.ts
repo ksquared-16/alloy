@@ -35,7 +35,7 @@
  * and this must be bumped whenever a scenario's meaning changes. Adding a scenario counts; fixing a
  * typo does not.
  */
-export const CATALOG_VERSION = "2026-09-15.4";
+export const CATALOG_VERSION = "2026-09-16.1";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -714,6 +714,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "Choose that period in the filter and confirm the activity shown is that period's and only that period's; then choose All periods again and confirm the full history returns.",
             "Check the other period surfaces for the same rule: the Charges list row context, the charge detail, and the result line after a bulk generation run.",
             "Open the same account in a Focus Panel (Financials → Details) and compare the grouping and the filter options.",
+            "Open the charge's detail and confirm the Billing period there matches the period it is grouped under in the ledger.",
         ],
         expectChanges: [
             "Filtering to one period shows only that period's rows.",
@@ -737,26 +738,41 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         key: "accounting_period",
         order: 34,
         title: "The accounting period a journal entry is attributed to, and who may close it",
-        disposition: "MISSING_PRODUCTIZATION",
+        disposition: "HUMAN_WALKTHROUGH",
         purpose:
-            "Confirm an operator can see which accounting period an entry was attributed to, see the configured calendar, and close and reopen a period.",
+            "Confirm an operator can see the accounting calendar, which period is open, and which accounting period a posted charge was attributed to — and that it is visibly a different thing from the billing period.",
         whyItMatters:
             "The accounting period is what a finance team closes a month against, and closing it is the act that makes a month's figures final. The platform already enforces it — `financial_accounting_calendars` and `financial_accounting_periods` are canonical, and the `attribute_financial_journal_entry` BEFORE INSERT trigger decides each entry's period and refuses a write into a closed one — so the enforcement is real. What does not exist is any way for a human being to look at it.",
         dispositionReason:
-            "MISSING_PRODUCTIZATION. The census for this pass found the model, the trigger and the shape arithmetic (`lib/financials/accountingPeriod.ts`) all present, with four consumers — `financialJournalService.ts`, `resolveFinancialActivity.ts`, `deletionEligibility.ts`, `FinancialsActivity.tsx` — and ZERO configuration or inspection surface anywhere under `app/` or `components/`. There is no screen that lists calendars, no screen that opens or closes a period, and no per-transaction display of the period an entry was attributed to. This scenario is therefore recorded as unrunnable rather than passed: a tester cannot accept from the product what the product does not show, and confirming it with a database query would be certifying the schema while telling the Director the product was tested. The smallest honest productization is stated below.",
-        requires: [],
-        navigate: [],
+            "The INSPECTION half is productized as of Repair Pass 5F and is walked through below. The LIFECYCLE half is not: opening and closing a period has no governed action anywhere in the platform, so a tester can see a period's open/closed status and cannot change it. That limit is recorded rather than hidden — see the final step — and it is the one thing this scenario cannot accept.",
+        requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "a posted charge whose period can be read" }],
+        navigate: [
+            "Organization → Financials → Accounting: the GL codes list, then the Accounting calendar panel beneath it.",
+            "Workspace → Financials → Accounts → an account with a POSTED charge → open that charge's detail.",
+        ],
         doThis: [
-            "NOT RUNNABLE, and it does not become runnable by inspection. Do not substitute a database query for this scenario — a passing SELECT proves the trigger, not the product — and do not accept it on the strength of the BILLING period reading correctly. They are different periods with different owners.",
-            "Smallest productization that would make it runnable, in order: (1) show the attributed accounting period on the charge/journal detail beside the billing period, read-only — the value already exists on the entry; (2) a read-only Accounting calendar view under Financials settings listing each period with its status and date range; (3) an operator-governed close/reopen action on that view, with the trigger's own refusal surfaced as the error.",
+            "On the Accounting chapter, read the Accounting calendar panel: its name, its shape (Calendar month / 4-4-5 / Custom), whether it is active, and which period is marked Current.",
+            "Read the period table: each period's name, its start and end dates, and whether it is Open or Closed. Confirm the dates carry the year.",
+            "Confirm the period marked Current is the one today falls inside, and that it is the only one so marked.",
+            "Open a POSTED charge's detail in the Accounts workspace and read the Posting block: Billing period, Accounting period, GL account.",
+            "Confirm Billing period and Accounting period are shown as TWO SEPARATE facts and are not the same control. They may name the same month and still be different answers.",
+            "Open a DRAFT charge's detail. Confirm the accounting period reads that it has not posted to a period yet, rather than showing a period it has not reached.",
+            "LIMIT TO RECORD, not to work around: there is no control to open or close a period. Confirm none is offered, and that the panel says so. Do not close a period in the database to test it.",
         ],
         expectChanges: [],
-        expectUnchanged: [],
+        expectUnchanged: [
+            "The accounting period on a posted charge — it was decided when the entry was written and nothing on these screens may move it.",
+            "The billing period, which is derived from the charge's own dates and is unaffected by anything on the accounting calendar.",
+        ],
         invariant: MONEY_INVARIANTS.ACCOUNTING_PERIOD_IS_ATTRIBUTED_AT_WRITE,
         failSymptoms: [
             "Any surface implying an entry's accounting period can be edited after the entry was written.",
             "A closed period accepting a write.",
             "This scenario being marked PASS on the strength of a database inspection.",
+            "Billing period and accounting period presented as one field, or one used as a label for the other.",
+            "A posted charge showing no accounting period, or a draft showing one.",
+            "More than one period marked Current, or none while a period covers today.",
+            "An organization with no calendar rendering an empty table rather than saying it has none.",
         ],
     }),
 ]);

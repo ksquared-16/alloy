@@ -622,26 +622,42 @@ describe("F13 · the ledger grid is prioritised", () => {
         const px = (t: string) => Number((/^(\d+)px$/.exec(t) ?? [])[1] ?? NaN);
         expect(px(tracks[1]!), "Type is fixed and wide enough for a configured label")
             .toBeGreaterThanOrEqual(112);
-        expect(tracks[3], "Description is the column that flexes").toContain("minmax(0, 1fr)");
+        /*
+         * Description flexes AND has a floor. Pass 5F demoted it from primary column to preview —
+         * the identity columns beside it (Child, GL account, Responsible party) now hold real
+         * width — but a flex track with no minimum collapses to nothing at a narrow container, and
+         * a zero-width preview is worse than a truncated one.
+         */
+        expect(tracks[3], "Description is the column that flexes").toMatch(/^minmax\(\d+px, 1fr\)$/);
         expect(px(tracks[0]!), "Date fits a year-bearing date").toBeGreaterThanOrEqual(78);
 
         /*
-         * ── AND THE FIXED TRACKS MUST LEAVE DESCRIPTION A COLUMN ──────────────────────────────
+         * ── DESCRIPTION IS A PREVIEW, AND MUST NOT DOMINATE ───────────────────────────────────
          *
-         * Widening Type is only half the correction. The first attempt made the seven fixed tracks
-         * sum to more than the ledger had, and Description — the flexible one — was measured on the
-         * running build at 55px. A budget that starves the flex track is the same defect as one
-         * that starves Type, and neither is visible in a rule that only checks Type's width.
+         * Two failures, in opposite directions, are both locked here because both have happened.
          *
-         * The workspace ledger measures ~850px at a 1512px viewport. Fixed tracks plus gaps must
-         * leave Description at least 180px there.
+         * STARVED: an over-corrected budget once made the seven fixed tracks sum to more than the
+         * ledger had, and Description measured 55px on the running build.
+         *
+         * DOMINANT: before that, Description held the only flex track and took every spare pixel
+         * while the columns that IDENTIFY a row — which child, which GL account, who owes it —
+         * truncated around it. A ledger is scanned, and free text is the least identifying thing
+         * on it.
+         *
+         * So: Description flexes, never collapses, and is never the widest column on the row. The
+         * workspace ledger measures ~899px at a 1512px viewport after Pass 5E reclaimed the gutter.
          */
         const gapMatch = /\.alloy-os-billingdetail__row \{[\s\S]*?gap:\s*(\d+)px/.exec(css);
         const gap = Number(gapMatch?.[1] ?? 10);
         const fixed = tracks.filter((t) => /^\d+px$/.test(t)).reduce((sum, t) => sum + px(t), 0);
-        const description = 850 - fixed - gap * 7;
+        const description = 899 - fixed - gap * 7;
         expect(description, `Description would be ${description}px at the workspace's ledger width`)
-            .toBeGreaterThanOrEqual(180);
+            .toBeGreaterThanOrEqual(120);
+        const widestFixed = Math.max(...tracks.filter((t) => /^\d+px$/.test(t)).map(px));
+        expect(
+            description,
+            `Description (${description}px) must not dominate the row — the widest identity column is ${widestFixed}px`,
+        ).toBeLessThanOrEqual(widestFixed * 1.6);
 
         /* And the lab's copy still agrees — the review surface must not show a different ledger. */
         const lab = read("app/dev/operational-card-lab/cardLab.css");
@@ -662,5 +678,190 @@ describe("F14 · the queue filters are the house control", () => {
             expect(src, `${path} must not hand-roll a <select> for a filter`)
                 .not.toMatch(/<select\b[\s\S]{0,400}data-financials-filter/);
         }
+    });
+});
+
+// ── PASS 5F · BILLING, CHARGES AND LEDGER, CLOSED ───────────────────────────────────────────────
+
+describe("F15 · the ledger names business identities, not model words", () => {
+    const LEDGERS = [WORKSPACE_DETAIL, "components/operationalCards/FinancialsDetailCard.tsx"];
+
+    /*
+     * "Subject" was a word from the data model standing in for a fact the system already knows.
+     * Child, Responsible party and Payer are THREE different financial identities and the product
+     * must not collapse them: a child is who a charge is FOR, a responsible party is who OWES it,
+     * and a payer is who supplied money. Conflating the first two is how a surface ends up telling
+     * an operator that a four-year-old owes $1,850.
+     */
+    it("heads the ledger with Child and Responsible party on both surfaces", () => {
+        for (const path of LEDGERS) {
+            const src = code(path);
+            expect(src, `${path} names the child`).toMatch(/<span>Child<\/span>/);
+            expect(src, `${path} names who owes it`).toMatch(/<span>Responsible party<\/span>/);
+            expect(src, `${path} no longer heads a column "Subject"`).not.toMatch(/<span>Subject<\/span>/);
+            /* Source mostly repeated Type and has given its column to an identity. */
+            expect(src, `${path} no longer heads a column "Source"`).not.toMatch(/<span>Source<\/span>/);
+        }
+    });
+
+    it("reads the responsible party at the grain the model actually has", () => {
+        /*
+         * `financial_responsibility_allocations` is keyed by charge_id, so responsibility IS
+         * charge-grain and a row can state its own. Nothing is fabricated per child: a charge whose
+         * allocations name two people reports "Split" rather than picking one, and a charge with no
+         * allocation at all is distinguished from one that names nobody.
+         */
+        const vm = read("lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM.ts");
+        expect(vm).toContain("responsiblePartyName");
+        expect(vm, "the index is built from the allocations already read, not a second query")
+            .toContain("responsibilityByCharge");
+        expect(vm, "two parties on one charge is reported, never resolved to one").toContain('"Split"');
+        expect(vm, "an unassigned allocation is its own state").toContain("responsibilityUnassigned");
+
+        for (const path of LEDGERS) {
+            expect(code(path), `${path} distinguishes unassigned from absent`).toMatch(/Unassigned/);
+        }
+    });
+});
+
+describe("F16 · GL is truthful", () => {
+    it("states an unmapped row as a state, never as a dash", () => {
+        for (const path of [WORKSPACE_DETAIL, "components/operationalCards/FinancialsDetailCard.tsx"]) {
+            const src = code(path);
+            expect(src, `${path} says Unmapped`).toContain('"Unmapped"');
+            expect(src, `${path} no longer renders the em-dash form`).not.toContain("— unmapped");
+            expect(src, `${path} marks the state for the eye and for a test`).toContain("data-financials-gl-state");
+        }
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        expect(css, "and it is toned as attention rather than as a successful value").toMatch(
+            /gl-state="unmapped"\]\s*\{[^}]*color:/,
+        );
+    });
+
+    it("gives the missing mapping an operator surface, gated like every other Financials write", () => {
+        /*
+         * ROOT CAUSE, from the census: `gl_accounts` held ten active accounts and
+         * `gl_account_mappings` held ZERO. The projection was correct and was reporting the truth;
+         * what did not exist was any way for an operator to create the missing half. GL Codes were
+         * authorable; the category → account mapping was not, anywhere.
+         */
+        const route = read("app/api/admin/financials/gl-mappings/route.ts");
+        expect(route).toContain("assertFinancialsReadAllowed");
+        expect(route).toContain("assertFinancialsWriteAllowed");
+        expect(route, "the keys are code-owned, so an unknown one is refused rather than created")
+            .toContain("Unknown mapping key.");
+        expect(route, "and it writes configuration only").not.toMatch(/financial_journal_entries|charges/);
+
+        const panel = read("components/adminV2/settings/financials/accounting/AccountingPostingPanels.tsx");
+        expect(panel).toContain("gl-mapping-panel");
+        expect(panel, "an operator picks an account, never a mapping key").toContain("AlloySelect");
+
+        const declared = read("scripts/routeCapabilities.declared.json");
+        expect(declared, "the route declares its capability").toContain(
+            "app/api/admin/financials/gl-mappings/route.ts",
+        );
+    });
+});
+
+describe("F17 · the accounting period has a surface", () => {
+    it("shows the calendar, its periods and their open/closed status", () => {
+        const panel = read("components/adminV2/settings/financials/accounting/AccountingPostingPanels.tsx");
+        expect(panel).toContain("accounting-calendar-panel");
+        expect(panel).toContain("accounting-period-table");
+        expect(panel, "the period covering today is marked").toContain("accounting-period-current");
+        expect(panel, "a tenant with no calendar is told so, not shown an empty table")
+            .toContain("accounting-calendar-absent");
+        /*
+         * NO CLOSE BUTTON, and the panel says why. Closing a period is what makes a month final,
+         * it has no governed action, and a control here would either bypass the journal enforcement
+         * or pretend. The limit is stated rather than quietly absent.
+         */
+        expect(panel).toContain("accounting-period-lifecycle-note");
+        /*
+         * Scoped to the CALENDAR panel: the GL mapping panel in the same file legitimately writes,
+         * and an assertion over the whole file would have been read as "this file never writes",
+         * which is neither true nor the claim being made.
+         */
+        const calendarPanel = panel.slice(panel.indexOf("function AccountingCalendarPanel"));
+        expect(calendarPanel, "nothing in the calendar panel writes a period").not.toMatch(
+            /method:\s*"(POST|PATCH|PUT|DELETE)"/,
+        );
+
+        const route = read("app/api/admin/financials/accounting-calendar/route.ts");
+        expect(route, "read-only, and gated like every Financials read").toContain("assertFinancialsReadAllowed");
+        expect(route).not.toMatch(/export async function (POST|PUT|PATCH|DELETE)/);
+    });
+
+    it("puts both periods and the GL account on the transaction's own detail", () => {
+        const detail = code("app/adminV2/financials/FinancialsChargeDetail.tsx");
+        expect(detail).toContain('label="Billing period"');
+        expect(detail).toContain('label="Accounting period"');
+        expect(detail).toContain('label="GL account"');
+        expect(detail, "a charge that has not posted has no accounting period, and says so")
+            .toContain("Not posted to a period yet");
+
+        const resolver = read("lib/financials/workspace/resolveChargeDetail.ts");
+        expect(resolver, "the accounting period is READ from the journal entry").toContain(
+            "financial_journal_entries",
+        );
+        expect(resolver, "and never recomputed here").toContain("accounting_period_id");
+        expect(resolver, "while the billing period stays derived by its one authority").toContain(
+            "placeInBillingPeriod",
+        );
+    });
+});
+
+describe("F18 · the queue filters like the rest of the product", () => {
+    const ACCOUNTS = "app/adminV2/financials/sections/FinancialsAccounts.tsx";
+
+    it("keeps Search visible and hides Filters behind the house button", () => {
+        const src = code(ACCOUNTS);
+        expect(src, "search is always there").toContain("data-financials-account-search");
+        expect(src, "filters are asked for").toContain("data-financials-account-filters-toggle");
+        expect(src, "and the panel is conditional").toContain("data-financials-account-filters-panel");
+        expect(src, "using the shared toolbar chrome, not a Financials-only drawer")
+            .toContain("WS_QUEUE_TOOLBAR_CHROME");
+        expect(src, "and the shared search chrome").toContain("WS_FIELD_SEARCH_CHROME");
+        /* The count on the button excludes search, which has its own visible field. */
+        expect(src).toContain("advancedFilterCount");
+    });
+
+    it("filters by the same state vocabulary the rows wear", () => {
+        const queue = read("lib/financials/workspace/accountQueue.ts");
+        expect(queue, "the filter IS accountState, not a second classification").toContain("accountState(row)");
+        expect(queue).toContain("ACCOUNT_STATE_FILTERS");
+        expect(queue, "and a state that would empty the queue says so first").toContain("stateCounts");
+    });
+});
+
+describe("F19 · the operator surface carries no engineering copy", () => {
+    it("does not print the running-balance doctrine at an operator", () => {
+        for (const path of [WORKSPACE_DETAIL, "components/operationalCards/FinancialsDetailCard.tsx"]) {
+            const src = code(path);
+            expect(src, `${path} must not name a database table at an operator`).not.toMatch(
+                /ledger_transactions/,
+            );
+            expect(src, `${path} must not print the running-balance paragraph`).not.toMatch(
+                /No running balance column/,
+            );
+        }
+        /* The INVARIANT is unchanged: no surface computes a running balance. */
+        for (const path of [WORKSPACE_DETAIL, "components/operationalCards/FinancialsDetailCard.tsx"]) {
+            expect(code(path), `${path} still computes no running total`).not.toMatch(/runningBalance/);
+        }
+    });
+
+    it("no longer leaves a responsibility and funding footer under every ledger", () => {
+        const src = code(WORKSPACE_DETAIL);
+        expect(src, "the permanent footer heading is gone").not.toContain("Who owes it");
+        expect(src, "and its empty state with it").not.toContain("No responsibility assigned");
+        expect(src, "and the unclaimed-facts line, which described our implementation")
+            .not.toContain("Not claimed here");
+        /*
+         * Neither concept left the product. Responsibility is on every row; funding keeps its own
+         * lens, where an operator asks for it deliberately.
+         */
+        expect(src, "funding is shown under its lens").toMatch(/lens === "funding"/);
+        expect(src).toContain("Expected funding");
     });
 });

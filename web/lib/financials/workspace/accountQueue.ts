@@ -21,7 +21,7 @@
  * when the choice falls out of it, and never fabricate a selection over an empty cohort.
  */
 
-import type { AccountRow } from "@/lib/financials/workspace/accountsRail";
+import { accountState, type AccountRow } from "@/lib/financials/workspace/accountsRail";
 import type { FinancialSubjectFacet } from "@/lib/financials/workspace/resolveFinancialSubjects";
 
 export type AccountQueueFilter = {
@@ -31,16 +31,46 @@ export type AccountQueueFilter = {
     programId: string | null;
     /** `locations.id` of the room, or null for every room. */
     roomId: string | null;
+    /**
+     * THE ACCOUNT'S FINANCIAL STATE, in the rail's own canonical vocabulary.
+     *
+     * Not a new classification: it is exactly `accountState`, the precedence the rows already wear
+     * as chips. Filtering and labelling therefore cannot disagree, which is the failure mode of a
+     * queue whose filter computes one answer and whose badge computes another.
+     */
+    state: AccountStateFilter | null;
 };
+
+/** The states `accountState` can return. A filter value outside them would match nothing. */
+export type AccountStateFilter = "outstanding" | "with_agency" | "variance" | "settled" | "no_activity";
+
+export const ACCOUNT_STATE_FILTERS: ReadonlyArray<{ value: AccountStateFilter; label: string }> = Object.freeze([
+    { value: "outstanding", label: "Outstanding" },
+    { value: "with_agency", label: "Funding expected" },
+    { value: "variance", label: "Variance open" },
+    { value: "settled", label: "Settled" },
+    { value: "no_activity", label: "No financial activity" },
+]);
 
 export const NO_ACCOUNT_FILTER: AccountQueueFilter = Object.freeze({
     search: "",
     programId: null,
     roomId: null,
+    state: null,
 });
 
 export function isAccountFilterActive(filter: AccountQueueFilter): boolean {
-    return Boolean(filter.search.trim() || filter.programId || filter.roomId);
+    return Boolean(filter.search.trim() || filter.programId || filter.roomId || filter.state);
+}
+
+/**
+ * How many of the ADVANCED filters are on — the number on the Filters button.
+ *
+ * Search is excluded deliberately: it has its own always-visible field, and counting it would make
+ * the button claim a narrowing the operator can already see in the box beside it.
+ */
+export function advancedFilterCount(filter: AccountQueueFilter): number {
+    return [filter.state, filter.programId, filter.roomId].filter(Boolean).length;
 }
 
 /**
@@ -64,10 +94,24 @@ export function filterAccounts(rows: readonly AccountRow[], filter: AccountQueue
     const needle = filter.search.trim().toLowerCase();
     return rows.filter((row) => {
         if (!matchesSearch(row, needle)) return false;
+        if (filter.state && accountState(row) !== filter.state) return false;
         if (filter.programId && !row.programs.some((p) => p.id === filter.programId)) return false;
         if (filter.roomId && !row.rooms.some((r) => r.id === filter.roomId)) return false;
         return true;
     });
+}
+
+/** How many accounts each state holds, so a state that would empty the queue says so first. */
+export function stateCounts(rows: readonly AccountRow[]): Record<AccountStateFilter, number> {
+    const counts: Record<AccountStateFilter, number> = {
+        outstanding: 0,
+        with_agency: 0,
+        variance: 0,
+        settled: 0,
+        no_activity: 0,
+    };
+    for (const row of rows) counts[accountState(row)] += 1;
+    return counts;
 }
 
 /**

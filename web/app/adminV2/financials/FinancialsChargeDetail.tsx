@@ -41,6 +41,12 @@ type Application = {
 
 type ChargeDetail = {
     chargeId: string;
+    /* Derived from the charge's dates. See `resolveChargeDetail`. */
+    billingPeriodKey?: string | null;
+    billingPeriodLabel?: string | null;
+    /* Decided by the attribution trigger at INSERT, read here — never recomputed. */
+    accountingPeriod?: { key: string; label: string | null; status: string; startsOn: string; endsOn: string } | null;
+    glAccount?: { code: string; name: string | null } | null;
     label: string | null;
     description: string | null;
     currencyCode: string;
@@ -240,6 +246,47 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                 {/* THE CHARGE'S OWN TIME, never the operating month. */}
                 {dates.length ? ` · ${dates.join(" · ")}` : ""}
             </p>
+
+            {/*
+             * ── WHEN WAS THIS BILLED, AND WHERE DID IT POST ────────────────────────────────────
+             *
+             * Three facts the ledger deliberately does not carry as permanent columns, because a
+             * ledger is scanned and these are asked about one row at a time. Billing period and
+             * accounting period are DIFFERENT PERIODS with different owners — one derived from the
+             * charge's own dates, one decided by the database when the journal entry was written —
+             * and they are stated side by side so an operator can see that they are two answers.
+             *
+             * A charge that has not posted has no accounting period, and that is said rather than
+             * left blank. An unmapped GL is a configuration fact and is toned as attention.
+             */}
+            <Group>Posting</Group>
+            <Row
+                label="Billing period"
+                value={detail.billingPeriodLabel ?? "Unplaced"}
+                testId="billing-period"
+            />
+            <Row
+                label="Accounting period"
+                value={
+                    detail.accountingPeriod
+                        ? `${detail.accountingPeriod.label ?? detail.accountingPeriod.key} · ${
+                              detail.accountingPeriod.status === "closed" ? "Closed" : "Open"
+                          }`
+                        : "Not posted to a period yet"
+                }
+                muted={!detail.accountingPeriod}
+                testId="accounting-period"
+            />
+            <Row
+                label="GL account"
+                value={
+                    detail.glAccount
+                        ? `${detail.glAccount.code}${detail.glAccount.name ? ` · ${detail.glAccount.name}` : ""}`
+                        : "Unmapped"
+                }
+                muted={!detail.glAccount}
+                testId="gl-account"
+            />
 
             {e ? (
                 <>

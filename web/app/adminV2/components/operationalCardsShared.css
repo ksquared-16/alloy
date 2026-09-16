@@ -1356,22 +1356,21 @@
 .alloy-os-billingdetail__row {
   display: grid;
   /*
-   * ── THE GRID IS PRIORITISED, NOT EQUALISED ────────────────────────────────────────────────
+   * ── THE GRID IS PRIORITISED, AND DESCRIPTION IS A PREVIEW ─────────────────────────────────
    *
-   * Date, Type, Subject, Description, GL code, Amount, Status, Source.
+   * Date, Type, Child, Description, GL account, Amount, Status, Responsible party.
    *
-   * Two failures, one in each direction. Description originally held `1fr` and took every spare
-   * pixel while TYPE — a configured label like "One-time charge" — truncated to "One-time char…" on
-   * a full desktop; a truncated classification is unreadable in a way truncated free text is not.
-   * The first correction then over-corrected: the fixed tracks summed to more than the ledger had,
-   * and Description was measured at 55px. Both are the same mistake — allocating without measuring.
+   * Description held the flex track and kept taking every spare pixel while the columns that
+   * IDENTIFY the row — which child, which GL account, who owes it — truncated around it. That is
+   * backwards for a surface whose job is scanning: an operator reads a ledger to find a row, and
+   * free text is the least identifying thing on it. Description is now a bounded preview that
+   * ellipses, and the full text lives where the row's detail does.
    *
-   * These tracks are sized to the content they actually carry, and the total is checked against the
-   * ledger's real width so Description keeps a usable column: at the workspace's ~850px it lands
-   * near 200px, and it is the track that absorbs every extra pixel beyond that. The gap tightens
-   * from 10px to 8px for the same reason — seven gaps is a column's worth of space.
+   * Everything else is sized to what it carries: a year-bearing date, a configured Type label, a
+   * child's name, `4000 · Tuition Revenue`, a right-aligned amount, a lifecycle word, and a
+   * person's name. Responsible party is last and gives way first.
    */
-  grid-template-columns: 80px 116px 84px minmax(0, 1fr) 92px 82px 72px 80px;
+  grid-template-columns: 78px 112px 104px minmax(96px, 1fr) 134px 80px 66px 108px;
   gap: 8px;
   align-items: baseline;
   min-height: 21px;
@@ -1398,6 +1397,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/*
+ * A ROW WITH NO GL ACCOUNT IS A CONFIGURATION FACT SOMEBODY MUST ACT ON.
+ *
+ * It read "— unmapped" in the same grey as a mapped account, which is the visual grammar of a
+ * successful value. Posting cannot be trusted while categories have no account behind them, so the
+ * state is toned as the attention it is — the same amber the Past due figure uses.
+ */
+.alloy-os-billingdetail__gl[data-financials-gl-state="unmapped"] {
+  color: #b45309;
+  font-weight: 600;
+  font-variant-numeric: normal;
 }
 .alloy-os-billingdetail__row--head {
   border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, transparent);
