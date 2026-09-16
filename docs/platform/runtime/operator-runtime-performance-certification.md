@@ -1662,3 +1662,64 @@ depend on anyone maintaining a list.
 
 §21.7 remains **TARGET, NOT YET MET**.
 
+## 28. Attendance identity, certified on the rendered product
+
+Measured against deployed staging `686509e9c`, on the real multi-child family `d097e1a8` (Kurzman),
+using the child-grain Work View `waitlist` — not the family-grain queue.
+
+### 28.1 The identity chain holds
+
+| Frame | Input | Producer's customer member |
+| --- | --- | --- |
+| Settled | `attention_subject_id=8132b6e1` (Lennon) | `b247b8a3` — Lennon Kurzman |
+| Settled | `attention_subject_id=8f3b9ac3` (Wrigley) | `bf7bb266` — Wrigley Kurzman |
+| Commit | `subject_id=9ab36f48` (Wrigley, child grain) | `bf7bb266` — Wrigley Kurzman |
+
+**One family record, two children, two different correct producers.** This is the original defect —
+the producer answering for `dce12254` while the card was scoped to `46105cd4` — shown fixed on the
+deployed product rather than argued.
+
+`commit → settled does not change child identity`: Wrigley resolves to `bf7bb266` in BOTH frames,
+reached by different inputs (a child subject in one, an attention participation on the family record
+in the other).
+
+At the commit frame, three different child subjects returned three distinct members and a
+`recordOfAttention` equal to the requested subject every time. No substitution.
+
+### 28.2 The authorization boundary holds
+
+All against record `d097e1a8`:
+
+| Attention named | Result |
+| --- | --- |
+| a real id belonging to another record | `unavailable`, no data, no member |
+| an unknown UUID | `unavailable`, no data, no member |
+| nothing, with two children present | `unavailable` — ambiguous is not a guess |
+
+Naming a participation that is not on the record yields no scope and no child-scoped projection. The
+route never validates the parameter; the canonical resolver refuses it.
+
+### 28.3 What is NOT certified, and why
+
+The six-state data parity matrix is **incomplete**. Every waitlisted child on staging returns
+`recentDays: 0, history: 0` — they have no attendance records. That certifies state 2 (*no attendance
+record* → `ready` with an empty day, not an error) and state 3 (*no scoped child*), but states 1, 4, 5
+and 6 need a child who has actually been checked in.
+
+Recording attendance to manufacture that data would be a real business mutation on a live tenant.
+It was not done. Those four states remain **NOT CERTIFIED**.
+
+Also uncertified: the A → B → C rapid-switch settle, which is client behaviour and needs the rendered
+panel rather than the API. Zero initial `/api/admin/attendance/card` requests IS locked, by
+`tests/surfaces/attendanceDepthWindow.test.tsx`.
+
+§21.7 remains **TARGET, NOT YET MET** — Health and Financials have not joined the root lifecycle.
+
+### 28.4 A constraint Health will hit that Attendance did not
+
+`/api/admin/health/card` resolves the CALLER's grants and refuses without `health.view`; route
+admission is deliberately not the boundary, and a failed grant read DENIES rather than reading as
+"holds no grants". The producer contract is `{supabase, orgId, context}` and carries no caller
+identity, so moving Health into the root lifecycle requires threading the caller's permission keys
+into the producers. Without that the producer is either a permission bypass or denies everyone.
+
