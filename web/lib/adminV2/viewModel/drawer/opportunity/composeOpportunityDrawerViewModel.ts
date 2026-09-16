@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjection";
 import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
-import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
 
 /** A title the projection can name the subject by; never a fabricated one. */
@@ -293,24 +292,22 @@ export async function composeOpportunityDrawerViewModel(
     });
 
     /*
-     * THE SETTLED FRAME'S CARD PRODUCERS — the half that could not exist until now.
+     * THE PRODUCERS DO NOT RUN HERE, AND THIS MODULE MUST NOT IMPORT THEM.
      *
-     * The commit frame has run these since the boundary repair. The settled frame could not: it had
-     * no way to be told which child the surface was scoped to, so a producer run here would have
-     * resolved the sole participant and attributed one child's attendance to another. With the
-     * subject of attention on the request that objection is gone, and running them in BOTH frames is
-     * what makes settlement a change of transport rather than a change of authority — a card whose
-     * truth survives the commit frame only would go blank the moment the drawer VM took over.
+     * They need `buildAttendanceCardVM`, which is `server-only` because it queries the database. A
+     * client component reaches this composer — `ChildDrawerRuntimeProofClient` imports the
+     * `lib/layout/runtime` barrel, which re-exports `evaluateOpportunityLayoutRuntimeBody`, which
+     * imports this file — so an edge from here to the producers puts a `server-only` module in the
+     * browser graph and the production build fails outright. It did: the staging deployment for the
+     * first attempt failed while all thirteen required checks were green, because no required check
+     * runs a real `next build`.
      *
-     * Producer failure is bounded inside `projectFocusPanelCardProducers` (`Promise.allSettled`), so
-     * an Attendance outage costs the operator Attendance and not the drawer.
+     * So the context travels OUT instead, and the App Route above — which cannot be imported by a
+     * client component — runs the producers with it. That is the same rule the commit frame follows
+     * in `composeProvisioningAnswerForRoute`: CONTRACTS may cross to the browser, SERVER
+     * IMPLEMENTATIONS may not. Handing the context out costs no second derivation, so both frames
+     * still produce from ONE context.
      */
-    const settledCards = await projectFocusPanelCardProducers({
-        supabase,
-        orgId,
-        context: settledOperationalContext,
-    });
-
     const projectedViewModel: OpportunityDrawerViewModel = {
         ...viewModel,
         workspace: {
@@ -320,10 +317,7 @@ export async function composeOpportunityDrawerViewModel(
              * change of transport would restore the architecture this migration removed.
              */
             published_stage_inputs: null,
-            operational_projection: {
-                ...projectFocusPanelOperational({ context: settledOperationalContext }),
-                cards: settledCards,
-            },
+            operational_projection: projectFocusPanelOperational({ context: settledOperationalContext }),
         },
     };
     phases.operational_projection_ms = Date.now() - tProjection;
@@ -331,5 +325,10 @@ export async function composeOpportunityDrawerViewModel(
     // `phases` is referenced by viewModel.timing.phases_ms — these post-literal writes still surface.
     phases.serialization_ms = Date.now() - tSerialize0;
     phases.total_ms = Date.now() - composeStart;
-    return finishCompose({ ok: true, viewModel: projectedViewModel });
+    return finishCompose({
+        ok: true,
+        viewModel: projectedViewModel,
+        // The context the projection was built from, for the route's producers. A VALUE, not an edge.
+        operationalContext: settledOperationalContext,
+    });
 }

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { composeOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel";
+import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 import { logDrawerVmRuntimeServer } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 import { logOpportunityDrawerViewModelComposeFailureShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
 import { logDrawerViewModelRuntimeFlagsServerSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelRuntimeFlagsServer";
@@ -94,7 +95,48 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             generation: result.viewModel.generation,
             compose_ms: result.viewModel.timing.compose_ms,
         });
-        return NextResponse.json(result.viewModel, {
+
+        /*
+         * THE SETTLED FRAME'S CARD PRODUCERS RUN HERE, ABOVE THE CONTRACT BOUNDARY.
+         *
+         * The commit frame has run them since the module-boundary repair; the settled frame could
+         * not, because until the subject of attention travelled with the request there was no way to
+         * know which child the surface was scoped to — a producer run then would have resolved the
+         * sole participant and attributed one child's attendance to another. Running them in BOTH
+         * frames is what makes settlement a change of TRANSPORT rather than of AUTHORITY: a card
+         * whose truth exists only in the commit frame goes blank when the drawer VM takes over.
+         *
+         * They run in the ROUTE, not in the composer. `buildAttendanceCardVM` is `server-only`, and a
+         * client component reaches the composer through the `lib/layout/runtime` barrel — so an edge
+         * there puts a `server-only` module in the browser graph and the production build fails. It
+         * did, with all thirteen required checks green, because none of them runs a real `next build`.
+         * An App Route cannot be imported by a client component, so this is the correct owner.
+         *
+         * The context is the composer's own, not a second derivation, so the two frames cannot
+         * disagree about the subject. Producer failure is bounded by `Promise.allSettled` inside the
+         * producer module: an Attendance outage costs the operator Attendance, not the drawer.
+         */
+        const settledContext = result.operationalContext ?? null;
+        const projection = result.viewModel.workspace.operational_projection ?? null;
+        const viewModel =
+            settledContext && projection
+                ? {
+                      ...result.viewModel,
+                      workspace: {
+                          ...result.viewModel.workspace,
+                          operational_projection: {
+                              ...projection,
+                              cards: await projectFocusPanelCardProducers({
+                                  supabase,
+                                  orgId: gate.orgId,
+                                  context: settledContext,
+                              }),
+                          },
+                      },
+                  }
+                : result.viewModel;
+
+        return NextResponse.json(viewModel, {
             headers: {
                 "X-Alloy-Drawer-VM-Structure-Settled": "true",
                 "X-Alloy-Drawer-VM-Generation": result.viewModel.generation,
