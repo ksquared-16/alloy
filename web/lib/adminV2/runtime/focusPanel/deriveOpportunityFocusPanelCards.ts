@@ -437,6 +437,32 @@ function healthInsight(displayVm: OpportunityDrawerViewModel): {
  * Built through the same `card()` construction as the enriched shape, so a shell built here and the
  * card Settlement builds are the same object — it does not change shape when the data lands.
  */
+/**
+ * THE BUSINESS PROCESS CARD'S FRAME — one builder, both producers.
+ *
+ * The card takes only `title` from its model (`fallbackTitle`); the stage rail, participant markers,
+ * current work and actions are all composed by `buildBusinessProcessCardEvidence` from the
+ * `OperationalContext`. So the frame carries no content and needs no context to build — which is
+ * exactly why the commit-critical producer can emit the identical one.
+ *
+ * It is shared rather than duplicated because the registry's law is that a card must be
+ * byte-identical pending → enriched. Two literals would be two chances to drift, and this card has
+ * already been bitten once by exactly that: it used to be `{ ...currentWorkModel }`, so the canonical
+ * successor inherited its PREDECESSOR's title and insight and QA correctly failed the result.
+ */
+export function buildBusinessProcessCardModel(): FocusPanelCardModel {
+    return card({
+        key: FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
+        // The process's own identity. The card overrides this with the tenant's configured
+        // process label when the runtime carries one; see the note in BusinessProcessCard.
+        title: "Business Process",
+        insight: "",
+        tier: "work",
+        span: 1,
+        density: "compact",
+    });
+}
+
 export function buildSelfFetchingCardShell(
     key: FocusPanelCardKey,
     title: string,
@@ -712,19 +738,7 @@ function buildCardModels(input: {
      * `buildBusinessProcessCardEvidence` from canonical truth, which is why the insight is empty
      * here rather than duplicated: two sources for one line is how they drift.
      */
-    map.set(
-        FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
-        card({
-            key: FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
-            // The process's own identity. The card overrides this with the tenant's configured
-            // process label when the runtime carries one; see the note in BusinessProcessCard.
-            title: "Business Process",
-            insight: "",
-            tier: "work",
-            span: 1,
-            density: "compact",
-        }),
-    );
+    map.set(FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY, buildBusinessProcessCardModel());
 
     const health = healthInsight(displayVm);
     const documentsOutstanding =
