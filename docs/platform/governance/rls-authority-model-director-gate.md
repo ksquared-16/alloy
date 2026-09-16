@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-16
+supersedes: []
+---
+
 # RLS_AUTHORITY_MODEL_DIRECTOR_GATE
 
 **Status:** OPEN — Director decision required. No implementation.
