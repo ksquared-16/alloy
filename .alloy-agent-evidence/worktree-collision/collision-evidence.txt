@@ -1,0 +1,35 @@
+WORKTREE WRITER COLLISION — evidence captured 2026-09-03T10:52:43Z
+
+worktree_path: /Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a
+branch:        fix/vacilando-permission-prompt-bridge
+HEAD:          48696347900ac9d67dbe48068197bee8e7eaae87
+staging:       bb4bdfa442ee10cc2f83bf9215a4c7fad9744a94
+my_fix:        73288fa1c (intact ancestor: yes)
+
+== lane binding ==
+ lane lane_73a897409906 Runtime Performance status ACTIVE pane %16 session alloy-runtime-performance branch fix/vacilando-permission-prompt-bridge slot 1
+
+== panes whose cwd is this worktree ==
+ %16 session=alloy-runtime-performance cmd=claude.exe pid=87043
+
+== unrelated commits added after 73288fa1c ==
+48696347900ac9d67dbe48068197bee8e7eaae87 2026-09-03 03:51:32 -0700 Kelly <kelly@kurzmancapital.com> docs(access): Wave 1 sixth issuance — W-8 closed the two paths three records called blocking
+74fff8ed39feccb68bceb173ad82f5101fc26d51 2026-09-03 03:50:27 -0700 Kelly <kelly@kurzmancapital.com> test(access): W-1 RL-1 — a floor eleven below its count is not a lock
+bb1fd8ddfe6a2ac73126388ac61c69dced16324a 2026-09-03 03:48:50 -0700 Kelly <kelly@kurzmancapital.com> docs(access): Wave 1 seventh issuance — a second derivation, and W-8 closed what three records called blocking
+4402c9d94c394fcd9c90f822691996ac94eab99c 2026-09-03 03:40:32 -0700 Kelly <kelly@kurzmancapital.com> docs(access): W-0 run 4 cannot evidence its own justification — probe authored, not promoted
+655b58b71fc2bbdfd8ae51cc40d50418b049986a 2026-09-03 03:38:26 -0700 Kelly <kelly@kurzmancapital.com> docs(access): W-0 run 4 filed — a worker can ask now, and the write channel already exists
+b4cbc2a75cac8022316506fc97b9b52ed7d735ea 2026-09-03 03:36:15 -0700 Kelly <kelly@kurzmancapital.com> docs(access): W-0 sixth issuance — the request already existed, so file nothing
+e03bde8f63783ca6538727651414bb29d71a3f94 2026-09-03 03:32:17 -0700 Kelly <kelly@kurzmancapital.com> docs(access): W-0 run 4 prepared — M9 landed, so Q3 no longer measures what it measured
+
+== uncommitted / untracked ==
+ M docs/platform/planning/access-identity-v2/01-existing-state-inventory.md
+ M docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md
+ M web/tests/access/analyticsRouteGates.test.ts
+?? .alloy-agent-evidence/waitlist-rank-adjustment/
+?? .alloy-agent-evidence/work-view-presentation/
+?? .alloy-agent-evidence/worktree-collision/
+?? a.md
+
+== file timestamps of known unrelated material ==
+ 2026-09-03T03:28:43 a.md
+ 2026-09-03T03:34:16 docs/platform/planning/access-identity-v2/01-existing-state-inventory.md
