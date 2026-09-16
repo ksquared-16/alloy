@@ -1,0 +1,257 @@
+{
+  "trusted_host_action_id": "tha_e762c02c0ebd99",
+  "query_hash": "802c183066cbda135be99fd4a62523892118b2560cbb32b8a95ff43ae5f5a373",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-02T20:57:32.576Z",
+    "question_ids": [
+      "work_unit",
+      "work_view",
+      "department"
+    ],
+    "questions": {
+      "work_unit": {
+        "question_id": "work_unit",
+        "row_count": null,
+        "rows": [
+          {
+            "key": "lifecycle_wu_decision",
+            "name": "Decision",
+            "is_active": true,
+            "work_unit_id": "b4f6ca18-b0b6-4874-8a05-f4dfb260a6b9",
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "has_placement_key": false,
+            "placement_enabled": null,
+            "queue_keys_enabled": null,
+            "placement_profile_id": null
+          },
+          {
+            "key": "lifecycle_wu_enrolling",
+            "name": "Enrolling",
+            "is_active": true,
+            "work_unit_id": "fa95ffe7-f9a6-4753-810d-be623980ed22",
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "has_placement_key": false,
+            "placement_enabled": null,
+            "queue_keys_enabled": null,
+            "placement_profile_id": null
+          },
+          {
+            "key": "lifecycle_wu_enrolled",
+            "name": "Enrolled",
+            "is_active": true,
+            "work_unit_id": "dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "has_placement_key": false,
+            "placement_enabled": null,
+            "queue_keys_enabled": null,
+            "placement_profile_id": null
+          },
+          {
+            "key": "lifecycle_wu_waitlist",
+            "name": "Waitlist",
+            "is_active": true,
+            "work_unit_id": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "has_placement_key": true,
+            "placement_enabled": "true",
+            "queue_keys_enabled": [
+              "waitlisted"
+            ],
+            "placement_profile_id": "childcare_enrollment_waitlist_v1"
+          },
+          {
+            "key": "lifecycle_wu_tour",
+            "name": "Tours",
+            "is_active": true,
+            "work_unit_id": "5c0d15fc-6545-411c-9a73-8df3df772f62",
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "has_placement_key": false,
+            "placement_enabled": null,
+            "queue_keys_enabled": null,
+            "placement_profile_id": null
+          },
+          {
+            "key": "lifecycle_wu_qualification",
+            "name": "Follow Up",
+            "is_active": true,
+            "work_unit_id": "a428520f-b6a1-4913-8209-2d45a9affcd9",
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "has_placement_key": false,
+            "placement_enabled": null,
+            "queue_keys_enabled": null,
+            "placement_profile_id": null
+          },
+          {
+            "key": "lifecycle_wu_lead",
+            "name": "New Leads",
+            "is_active": true,
+            "work_unit_id": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "has_placement_key": false,
+            "placement_enabled": null,
+            "queue_keys_enabled": null,
+            "placement_profile_id": null
+          },
+          {
+            "key": "finance_inbox",
+            "name": "Finance inbox",
+            "is_active": true,
+            "work_unit_id": "a882da58-d7d1-4f71-b99d-65a22889e329",
+            "department_id": "5f6bba4c-9d69-4b61-940f-c32fb165ba2e",
+            "has_placement_key": false,
+            "placement_enabled": null,
+            "queue_keys_enabled": null,
+            "placement_profile_id": null
+          },
+          {
+            "key": "ops_board",
+            "name": "Operations board",
+            "is_active": true,
+            "work_unit_id": "a3dc890e-6226-4678-b3b0-586e5903c15e",
+            "department_id": "f73bb50f-01cd-4789-a199-9e7b2866862b",
+            "has_placement_key": false,
+            "placement_enabled": null,
+            "queue_keys_enabled": null,
+            "placement_profile_id": null
+          }
+        ]
+      },
+      "work_view": {
+        "question_id": "work_view",
+        "row_count": null,
+        "rows": [
+          {
+            "label": "Enrolled children",
+            "view_id": "new_work_view_7",
+            "process_key": "enrollment",
+            "row_grain_v1": "child",
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "queue_layout_id": null,
+            "compat_queue_key": "lifecycle_enrolled",
+            "visible_in_runtime": "true",
+            "focus_panel_layout_id": "9dedbfad-589f-480f-949c-2c5852d07e7d"
+          },
+          {
+            "label": "New",
+            "view_id": "new_leads",
+            "process_key": "enrollment",
+            "row_grain_v1": "family",
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "queue_layout_id": null,
+            "compat_queue_key": "lifecycle_lead",
+            "visible_in_runtime": "true",
+            "focus_panel_layout_id": "9db0cc6f-cf57-4eb6-b61a-5a877657ec9c"
+          },
+          {
+            "label": "Active Pipeline",
+            "view_id": "new_work_view_2",
+            "process_key": "enrollment",
+            "row_grain_v1": "family",
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "queue_layout_id": null,
+            "compat_queue_key": "communications_followup",
+            "visible_in_runtime": "true",
+            "focus_panel_layout_id": null
+          },
+          {
+            "label": "Registration",
+            "view_id": "new_work_view_3",
+            "process_key": "enrollment",
+            "row_grain_v1": null,
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "queue_layout_id": null,
+            "compat_queue_key": "tours",
+            "visible_in_runtime": "true",
+            "focus_panel_layout_id": null
+          },
+          {
+            "label": "Waitlist",
+            "view_id": "new_work_view_4",
+            "process_key": "enrollment",
+            "row_grain_v1": null,
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "queue_layout_id": null,
+            "compat_queue_key": "waitlist",
+            "visible_in_runtime": "true",
+            "focus_panel_layout_id": null
+          },
+          {
+            "label": "Tours",
+            "view_id": "new_work_view_5",
+            "process_key": "enrollment",
+            "row_grain_v1": "family",
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "queue_layout_id": null,
+            "compat_queue_key": "lifecycle_enrolled",
+            "visible_in_runtime": "true",
+            "focus_panel_layout_id": null
+          },
+          {
+            "label": "All",
+            "view_id": "new_work_view_6",
+            "process_key": "enrollment",
+            "row_grain_v1": "family",
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "queue_layout_id": null,
+            "compat_queue_key": null,
+            "visible_in_runtime": "true",
+            "focus_panel_layout_id": null
+          }
+        ]
+      },
+      "department": {
+        "question_id": "department",
+        "row_count": null,
+        "rows": [
+          {
+            "key": "lead_management",
+            "name": "Enrollment",
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "has_placement_key": false,
+            "placement_enabled": null,
+            "queue_keys_enabled": null,
+            "placement_profile_id": null
+          },
+          {
+            "key": "system",
+            "name": "System",
+            "department_id": "17820bbd-50c6-40b7-8c99-9613023292fd",
+            "has_placement_key": false,
+            "placement_enabled": null,
+            "queue_keys_enabled": null,
+            "placement_profile_id": null
+          },
+          {
+            "key": "finance",
+            "name": "Finance",
+            "department_id": "5f6bba4c-9d69-4b61-940f-c32fb165ba2e",
+            "has_placement_key": false,
+            "placement_enabled": null,
+            "queue_keys_enabled": null,
+            "placement_profile_id": null
+          },
+          {
+            "key": "operations",
+            "name": "Operations",
+            "department_id": "f73bb50f-01cd-4789-a199-9e7b2866862b",
+            "has_placement_key": false,
+            "placement_enabled": null,
+            "queue_keys_enabled": null,
+            "placement_profile_id": null
+          },
+          {
+            "key": "enrollment",
+            "name": "Enrollment (legacy)",
+            "department_id": "04958a78-32ca-4091-bcd3-4bbaef3fee4b",
+            "has_placement_key": false,
+            "placement_enabled": null,
+            "queue_keys_enabled": null,
+            "placement_profile_id": null
+          }
+        ]
+      }
+    },
+    "row_count": 21
+  }
+}

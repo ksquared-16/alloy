@@ -18,6 +18,7 @@
  */
 
 import {
+    buildBusinessProcessCardModel,
     buildChildrenCardModel,
     buildCurrentWorkCardModel,
     buildHouseholdCardModel,
@@ -38,6 +39,20 @@ function hasSubjectIdentityTruth(context: OperationalContext): boolean {
         context.truth["person.primary_contact_name"] != null ||
         context.truth._inquiry_children != null
     );
+}
+
+/**
+ * The stage the answer committed to, or null.
+ *
+ * Reads `stageKey` and falls back to `key` because `buildCommitCriticalOperationalContext` sets both
+ * from the same `situation.stageKey` while the settled context fills them from the lifecycle rail —
+ * and a blank string is an absent stage, not an empty one, exactly as the mountable registry treats
+ * blank identity truth.
+ */
+function normalizedStageKey(context: OperationalContext): string | null {
+    const raw = context.businessProcess.stageKey ?? context.businessProcess.key ?? null;
+    const trimmed = typeof raw === "string" ? raw.trim() : "";
+    return trimmed === "" ? null : trimmed;
 }
 
 export const COMMIT_CRITICAL_CARD_SPECS: readonly CommitCriticalCardSpec[] = [
@@ -64,6 +79,56 @@ export const COMMIT_CRITICAL_CARD_SPECS: readonly CommitCriticalCardSpec[] = [
                 stageWorkRuntime: context.stageWorkRuntime ?? null,
                 nextActionLabel: context.signals.work.nextActionLabel,
             }),
+    },
+    {
+        /*
+         * BUSINESS PROCESS — admitted at commit because the answer already decided the stage.
+         *
+         * ── WHY THIS ENTRY EXISTS ──
+         *
+         * Repair Slice 2 made the card's fallback meaningful: it runs the canonical evidence builder
+         * over the committed context instead of over `{}`. Measured on deployed staging afterwards,
+         * nothing moved — the card was still absent until 20,113 ms with first cards at 13,551 ms.
+         * The fallback was correct and unreachable: `business_process` was in NEITHER registry, so
+         * `cardReadiness` had no entry, the grid defaulted the cell to `reserved`, and a reserved cell
+         * renders `ReservedFocusPanelCell` and never mounts the card. The fallback cannot run inside a
+         * component that was never mounted. That is an ADMISSION defect, and this is the admission
+         * owner — so it is repaired here rather than with a mounting branch inside the card.
+         *
+         * ── WHY COMMIT-CRITICAL AND NOT MOUNTABLE ──
+         *
+         * The two registries split on one question: is the card's first-operational CONTENT derivable
+         * from commit truth, or only its IDENTITY? This card fetches nothing — every fact it shows is
+         * composed by `buildBusinessProcessCardEvidence` from the context it is handed. Its content is
+         * therefore commit-knowable whenever the stage is, which is the commit-critical contract, not
+         * the mountable one.
+         *
+         * ── PARTICIPATION, THE LAW `scheduling` WAS REVERTED FOR ──
+         *
+         * Commit work may only be spent on a card the resolved composition actually places. This one
+         * is placed: it is the FIRST entry in `ENROLLMENT_DEFAULT_VISIBLE_CARD_KEYS`, it is the
+         * declared global successor to `current_work` (`supersededBy`, no grain scope), and the
+         * deployed panel was measured rendering it. It is not a dormant capability.
+         */
+        key: "business_process",
+        /*
+         * THE STAGE, AND NOTHING ELSE.
+         *
+         * `buildCommitCriticalOperationalContext` sets `businessProcess.stageKey` from the answer's
+         * `currentBusinessState`, and sets `stages: []` because the configured rail is a settlement
+         * fact. So the stage key is the whole precondition: with it, the evidence builder yields the
+         * process label, the case stage and its label, and Current Work — which is the meaning the
+         * card exists to carry. The rail, the process name, the participant markers and the final
+         * evidence all arrive at settlement and enrich this same mounted cell in place.
+         *
+         * Requiring any of those here would put the commit frame behind the drawer VM, which is the
+         * defect. Requiring LESS would be worse: with no stage key the builder has no case stage to
+         * report, and admitting the card would render a frame that states nothing. Then the honest
+         * answer is the reserve the grid already gives — so this returns false and behaviour is
+         * exactly what it is today.
+         */
+        isKnowable: (context) => normalizedStageKey(context) != null,
+        build: () => buildBusinessProcessCardModel(),
     },
     {
         key: "household",

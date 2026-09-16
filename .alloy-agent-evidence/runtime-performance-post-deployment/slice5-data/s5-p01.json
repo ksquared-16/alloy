@@ -1,0 +1,47 @@
+[
+ {
+  "run": 0,
+  "frames": 388,
+  "preparing_frames": 0,
+  "pendingSurface_frames": 0,
+  "boot_frames": 110,
+  "first_nonblank_dt": 1542,
+  "first_nonblank_has_boot": true,
+  "t_boot_first": 1166,
+  "t_header": 7168,
+  "t_sections": 1166,
+  "t_settled": 1542,
+  "gap_frames": 0,
+  "requests": 26
+ },
+ {
+  "run": 1,
+  "frames": 375,
+  "preparing_frames": 0,
+  "pendingSurface_frames": 0,
+  "boot_frames": 123,
+  "first_nonblank_dt": 1546,
+  "first_nonblank_has_boot": true,
+  "t_boot_first": 630,
+  "t_header": 7263,
+  "t_sections": 630,
+  "t_settled": 1546,
+  "gap_frames": 0,
+  "requests": 26
+ },
+ {
+  "run": 2,
+  "frames": 371,
+  "preparing_frames": 0,
+  "pendingSurface_frames": 0,
+  "boot_frames": 163,
+  "first_nonblank_dt": 1510,
+  "first_nonblank_has_boot": true,
+  "t_boot_first": 1180,
+  "t_header": 10466,
+  "t_sections": 1180,
+  "t_settled": 1510,
+  "gap_frames": 0,
+  "requests": 26
+ }
+]
