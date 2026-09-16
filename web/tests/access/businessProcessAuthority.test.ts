@@ -201,18 +201,27 @@ describe("lifecycle builder authority — every mutation is classified", () => {
         expect(entry?.capability).toBe("business_process.configure");
     });
 
-    it.each(WORK_DEBT)("%s is recorded as Work debt, not given a false Business Process owner", (name) => {
+    it.each(WORK_DEBT)("%s is owned by work.operate now, and still not by Business Process", (name) => {
+        /*
+         * THE DEBT THIS ONCE RECORDED IS RESOLVED, AND THE CLAIM IT PROTECTED IS NOT.
+         *
+         * Lifecycle Builder V1 left these three as WORK_AUTHORITY_MODEL_DEBT because no truthful
+         * owner existed: they operate on a record inside a RUNNING process, which is neither
+         * `business_process.configure` (what a process would do) nor `.activate` (which
+         * configuration is live). Work Authority V1 created that owner, so the assertion moves from
+         * "recorded as debt" to "owned by work.operate" — while the original claim, that Business
+         * Process must never absorb them, is asserted exactly as before.
+         */
         const src = codeOnly(readFileSync(join(BUILDER, name, "route.ts"), "utf8"));
-        // It must NOT have been quietly handed either half of the split.
         expect(src).not.toContain("BUSINESS_PROCESS_CONFIGURE");
         expect(src).not.toContain("BUSINESS_PROCESS_ACTIVATE");
+        // The keys the Director ruled out by name must still not exist.
         expect(src).not.toContain("work.manage");
-        expect(src).not.toContain("work.execute");
+        expect(src).not.toContain("work.assign");
 
-        // ...and the debt must be stated where the burndown can see it.
         const entry = INVENTORY.routes[`app/api/admin/lifecycle-builder/${name}/route.ts`]?.POST;
-        expect(entry?.status).toBe("pending");
-        expect(entry?.note ?? "").toContain("WORK_AUTHORITY_MODEL_DEBT");
+        expect(entry?.status).toBe("declared");
+        expect(entry?.capability).toBe("work.operate");
     });
 
     it("keeps the two families disjoint, so a rename cannot merge them", () => {

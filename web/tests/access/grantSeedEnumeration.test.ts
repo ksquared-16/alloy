@@ -62,7 +62,7 @@ const M6 = "20260807170000_w12_seed_default_rbac_enumerated_grants.sql";
  * capability a NEW organization never receives — the cliff `20260910183000` was written to end.
  * Forms moved it here; Organization Vocabulary, then Tours, moved it since.
  */
-const LIVE_SEED = "20260916020000_tours_booking_authority.sql";
+const LIVE_SEED = "20260916030000_work_authority.sql";
 
 /**
  * The migration that owns the COMPLETENESS contract — the admin-is-the-whole-catalog rule, the nine
@@ -133,6 +133,19 @@ const OPS_WITHHELD = [
      * reachable by any portal-admitted principal, which is accidental reach rather than a package
      * decision. Nothing in the product ever said ops defines the words the organization uses.
      */
+    /*
+     * Defining what operational WORK exists. Withheld from ops because the split Work Authority V1
+     * created is itself the statement: `work.operate` is the front desk's day — clearing tasks,
+     * closing a family, recording a decision, all of which ops already does in shape
+     * (`processing.operate`, `attendance.record`, `forms.submissions.confirm`) — while
+     * `work.configure` decides which queues the organization works at all. That is administration.
+     *
+     * Not a narrowing. Both keys came into existence with `20260916030000`, and ops is not given a
+     * capability merely because one was created. What changed for ops is that four of these five
+     * routes previously asked for NO functional authority, so every portal principal reached them;
+     * withholding the configure half is the first time that answer is a decision.
+     */
+    "work.configure",
     "configuration.vocabulary.manage",
     /*
      * The three Communications authorities, withheld for the reason the model was split.

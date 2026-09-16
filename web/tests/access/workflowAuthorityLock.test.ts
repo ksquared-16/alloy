@@ -113,10 +113,16 @@ describe("RL-18 — execution is excluded, and stays excluded", () => {
         expect(src).not.toContain("work.manage");
     });
 
-    it("its debt is recorded where the burndown can see it", () => {
+    it("is owned by work.operate now — the debt this recorded is resolved", () => {
+        /*
+         * Workflows Authority Convergence V1 left the run route as WORK_AUTHORITY_MODEL_DEBT: it
+         * executes rather than configures, and no runtime owner existed. Work Authority V1 created
+         * one. What this lock still protects is the original claim — that AUTHORING automation is
+         * not FIRING it — so the run route must hold `work.operate` and never `ops.workflows.write`.
+         */
         const entry = INVENTORY.routes[`app/api/admin/${EXECUTION}`]?.POST;
-        expect(entry?.status).toBe("pending");
-        expect(entry?.note ?? "").toContain("WORK_AUTHORITY_MODEL_DEBT");
+        expect(entry?.status).toBe("declared");
+        expect(entry?.capability).toBe("work.operate");
     });
 
     it("the engine really is cross-domain, which is why the exclusion is not pedantry", () => {
