@@ -5190,6 +5190,22 @@
                 "fork": "requiredOcmPatchCapability (web/lib/access/enrollmentAuthority.ts)",
                 "condition": "body carries outcome_status_key",
                 "locked_by": "web/tests/access/enrollmentAuthorityLock.test.ts (RL-25)"
+            },
+            {
+                "route": "app/api/admin/actions/execute/route.ts",
+                "method": "POST",
+                "declared": null,
+                "model": "MODEL D - CONDITIONAL DOMAIN OWNERSHIP",
+                "why_not_declared": "This route dispatches ~97 registered actions across Enrollment, Attendance, Health, Financials, Tours, CRM and Work. Each is authorized by its OWNING DOMAIN SERVICE, not by the route. Declaring one capability here would be false for ~96 of them: `enrollment.decide` would over-claim, and `work.operate` would invent a generic runtime gate the product does not have. The route's own gate is portal admission, which is ADMISSION, and the action supplies the authority downstream.",
+                "examples": {
+                    "update_status": "enrollment.decide (Action Status Authority Repair V1)",
+                    "enrollment.pricing.override": "enrollment.pricing.override (service layer)",
+                    "attendance capture": "attendance.record (assertAttendanceCaptureAllowed)",
+                    "health facts": "health.manage (service layer)"
+                },
+                "inert_column": "action_definitions.required_permissions exists and is NEVER read by the action runtime. It is not the authority and must not become a second permission interpreter. Schema debt.",
+                "locked_by": "web/tests/access/actionsConditionalAuthorityLock.test.ts (RL-28)",
+                "resolution": "Raise the schema to a capability SET per method, or keep this entry. Not attempted in this slice."
             }
         ]
     }
