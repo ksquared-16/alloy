@@ -238,3 +238,59 @@ original one-anchor predicate back fails four of them.
 **Not yet browser-proven:** the S5 broker refused every production build for this change (deficit
 2.6 GB → 0.75 GB as the host drained, never admitted). The change is typechecked and unit-proven;
 the panel rendering and Begin Enrolling remain to be seen on a built server.
+
+---
+
+# The anchor repair works — and it exposes a second, deeper seam
+
+Built and served: `cfe7274f8` → `BUILD_ID DgT5CYJycDWr4TtSFilB-`, rc=0, peak 8.95 GB. 3014 cut to it.
+
+## The repair is proven on the built artifact
+
+Asking the participant-decision surface with the **opportunity id** — the id the Current Work card
+actually holds, which returned **0 rows** before:
+
+```
+Certopp / ebe6cb44… → configured: true, total 1, rows 1
+   child: Pathb Certopp | decisions: Waitlist / Begin Enrolling / Not Enrolling
+```
+
+The anchor convergence does exactly what it was meant to. Nothing here contradicts it.
+
+## But the panel still cannot be browser-proven, for a different reason
+
+| case | Business Process stage | decision rows |
+|---|---|---|
+| Certopp | **lead** (`lifecycle_wu_lead`) | **1** — has a child journey |
+| Tourb0913 | **decision** | **0** |
+| Disposable0913 | **decision** | **0** |
+
+**No case is simultaneously at Decision and has child journeys.** The one case with journeys is not
+at Decision; the cases at Decision have no journeys. So there is no subject on which the panel can
+render.
+
+## The second seam, stated precisely
+
+`projectParticipantDecisionRows` derives its participants from `listEnrollmentInstancesForLead` —
+**existing Enrollment journeys**. At the Decision stage, "Begin Enrolling" is the decision that
+*creates* the journey (`update_child_enrollment_status: enrolling` + `move_to_stage: enrolling`).
+
+So a child who has never been enrolled has no journey, therefore no decision row, therefore can
+never be offered Begin Enrolling — **the children the decision exists for are exactly the children it
+cannot see.** Pathb is the only child with rows precisely because something already ran Start
+enrollment on him, which is the stale state this lane classified at the outset.
+
+The participants of a pre-enrolment decision are the **lead's children** (the OCM rows the Focus
+Panel already lists as "1 child · Touree Disposable0913"). An existing journey is *state about* a
+participant, not the definition of one.
+
+## Not changed in this run
+
+This is a product change to the participant source, not a configuration gap, and it is a different
+decision from the anchor repair — so it is reported rather than made. **Revision 35 is still not
+required:** revision 34's `participant_decisions` are correct and complete.
+
+**NEXT BLOCKER:** `projectParticipantDecisionRows` should enumerate the lead's children and attach
+each child's journey as optional state, instead of enumerating journeys and deriving children from
+them. The anchor convergence stays either way — it is what makes an existing journey attach to the
+right child.
