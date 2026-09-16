@@ -66,25 +66,49 @@ async function signIn(browser: Browser, email: string): Promise<Session> {
 
 const no = { data: {}, failOnStatusCode: false } as const;
 
+/**
+ * A REAL row in the certification organization. The tenant case needs one: an empty payload dies in
+ * validation before the handler ever reaches data, so it can prove nothing about isolation.
+ */
+const REAL_WORK_UNIT = "00000000-0000-4000-8000-000000000030";
+
+/**
+ * 403 IS NOT ONE ANSWER. `agent/v0/queue-definition` gates authority FIRST and then asks
+ * `agentV0Enabled()`, which also answers 403 — as FEATURE_DISABLED. Treating every 403 as an
+ * authority refusal made an admitted caller look refused, and worse, it would let a REMOVED gate
+ * hide behind a disabled feature. So refusal is identified by its SHAPE, not its status.
+ */
+type Probe = { status: number; refusedByAuthority: boolean };
+
+async function probe(call: Promise<{ status: () => number; text: () => Promise<string> }>): Promise<Probe> {
+    const res = await call;
+    const status = res.status();
+    if (status !== 403) return { status, refusedByAuthority: false };
+    let body = "";
+    try { body = await res.text(); } catch { /* an unreadable body is not an authority refusal */ }
+    const feature = /FEATURE_DISABLED/.test(body);
+    return { status, refusedByAuthority: !feature };
+}
+
 /** The four doors that DEFINE work. */
-async function configureDoor(r: APIRequestContext, door: string): Promise<number> {
-    const U = `/api/admin/work-units/${ABSENT_WORK_UNIT}`;
+async function configureDoor(r: APIRequestContext, door: string, id = ABSENT_WORK_UNIT): Promise<Probe> {
+    const U = `/api/admin/work-units/${id}`;
     switch (door) {
-        case "queue-definition": return (await r.post("/api/admin/agent/v0/queue-definition", no)).status();
-        case "work-unit-create": return (await r.post("/api/admin/work-units", no)).status();
-        case "work-unit-edit":   return (await r.patch(U, no)).status();
-        case "work-unit-remove": return (await r.delete(U, { failOnStatusCode: false })).status();
+        case "queue-definition": return probe(r.post("/api/admin/agent/v0/queue-definition", no));
+        case "work-unit-create": return probe(r.post("/api/admin/work-units", no));
+        case "work-unit-edit":   return probe(r.patch(U, no));
+        case "work-unit-remove": return probe(r.delete(U, { failOnStatusCode: false }));
     }
     throw new Error(`unknown configure door ${door}`);
 }
 
 /** The four doors that PERFORM work. */
-async function operateDoor(r: APIRequestContext, door: string): Promise<number> {
+async function operateDoor(r: APIRequestContext, door: string): Promise<Probe> {
     switch (door) {
-        case "complete-stage-work":  return (await r.post("/api/admin/lifecycle-builder/complete-stage-work", no)).status();
-        case "family-close":         return (await r.post("/api/admin/lifecycle-builder/family-close", no)).status();
-        case "participant-decisions":return (await r.post("/api/admin/lifecycle-builder/participant-decisions", no)).status();
-        case "workflow-run":         return (await r.post(`/api/admin/workflows/${ABSENT_WORKFLOW}/run`, no)).status();
+        case "complete-stage-work":  return probe(r.post("/api/admin/lifecycle-builder/complete-stage-work", no));
+        case "family-close":         return probe(r.post("/api/admin/lifecycle-builder/family-close", no));
+        case "participant-decisions":return probe(r.post("/api/admin/lifecycle-builder/participant-decisions", no));
+        case "workflow-run":         return probe(r.post(`/api/admin/workflows/${ABSENT_WORKFLOW}/run`, no));
     }
     throw new Error(`unknown operate door ${door}`);
 }
@@ -104,24 +128,24 @@ test.describe("Work Authority V1 — mounted", () => {
                 const observed: Record<string, number> = {};
 
                 for (const door of CONFIGURE_DOORS) {
-                    const status = await configureDoor(s.request, door);
-                    observed[`configure:${door}`] = status;
+                    const r = await configureDoor(s.request, door);
+                    observed[`configure:${door}`] = r.status;
                     if (p.configure) {
-                        expect(status, `${name} holds work.configure and must pass ${door}`).not.toBe(403);
-                        expect(status, `${name} must be authenticated at ${door}`).not.toBe(401);
+                        expect(r.refusedByAuthority, `${name} holds work.configure and must not be refused at ${door} (got ${r.status})`).toBe(false);
+                        expect(r.status, `${name} must be authenticated at ${door}`).not.toBe(401);
                     } else {
-                        expect(status, `${name} lacks work.configure and must be refused at ${door}`).toBe(403);
+                        expect(r.refusedByAuthority, `${name} lacks work.configure and must be refused at ${door} (got ${r.status})`).toBe(true);
                     }
                 }
 
                 for (const door of OPERATE_DOORS) {
-                    const status = await operateDoor(s.request, door);
-                    observed[`operate:${door}`] = status;
+                    const r = await operateDoor(s.request, door);
+                    observed[`operate:${door}`] = r.status;
                     if (p.operate) {
-                        expect(status, `${name} holds work.operate and must pass ${door}`).not.toBe(403);
-                        expect(status, `${name} must be authenticated at ${door}`).not.toBe(401);
+                        expect(r.refusedByAuthority, `${name} holds work.operate and must not be refused at ${door} (got ${r.status})`).toBe(false);
+                        expect(r.status, `${name} must be authenticated at ${door}`).not.toBe(401);
                     } else {
-                        expect(status, `${name} lacks work.operate and must be refused at ${door}`).toBe(403);
+                        expect(r.refusedByAuthority, `${name} lacks work.operate and must be refused at ${door} (got ${r.status})`).toBe(true);
                     }
                 }
 
@@ -160,10 +184,10 @@ test.describe("Work Authority V1 — mounted", () => {
         const cfg = await signIn(browser, PERSONAS.configurer.email);
         const opr = await signIn(browser, PERSONAS.operator.email);
         try {
-            expect(await configureDoor(cfg.request, "work-unit-create"), "configurer defines work").not.toBe(403);
-            expect(await operateDoor(cfg.request, "family-close"), "configurer must NOT operate").toBe(403);
-            expect(await operateDoor(opr.request, "family-close"), "operator operates").not.toBe(403);
-            expect(await configureDoor(opr.request, "work-unit-create"), "operator must NOT define").toBe(403);
+            expect((await configureDoor(cfg.request, "work-unit-create")).refusedByAuthority, "configurer defines work").toBe(false);
+            expect((await operateDoor(cfg.request, "family-close")).refusedByAuthority, "configurer must NOT operate").toBe(true);
+            expect((await operateDoor(opr.request, "family-close")).refusedByAuthority, "operator operates").toBe(false);
+            expect((await configureDoor(opr.request, "work-unit-create")).refusedByAuthority, "operator must NOT define").toBe(true);
         } finally {
             await cfg.close();
             await opr.close();
@@ -175,16 +199,37 @@ test.describe("Work Authority V1 — mounted", () => {
      * `work.*` there must not reach this organization's work, and the workflow-run door is the
      * one that matters most: it drives `executeWorkflowRun`, which writes across six domains.
      */
-    test("a cross-org admin cannot reach this organization's work", async ({ browser }) => {
+    test("a cross-org admin is admitted by the gate and still cannot touch this org's row", async ({ browser }) => {
+        /*
+         * THIS IS THE POINT OF THE CASE, AND IT IS NOT WHAT I FIRST WROTE.
+         *
+         * A cross-org administrator HOLDS work.configure and work.operate — in their OWN
+         * organization. So the capability gate admits them, correctly: the gate answers "may this
+         * principal do this KIND of thing", not "does this row belong to them". Isolation is a
+         * row-level fact enforced after admission, by ctx.orgId and assertRowOrg.
+         *
+         * An empty payload therefore proves nothing here: it dies in validation (400) before the
+         * handler reaches any data. The proof needs a REAL row owned by the certification
+         * organization, and the foreign admin must not be able to read or change it.
+         */
         const foreign = await signIn(browser, "cert.otherorg@adapter.invalid");
         try {
-            for (const door of OPERATE_DOORS) {
-                const status = await operateDoor(foreign.request, door);
-                expect([403, 404], `cross-org admin at ${door} must be refused or not-found, got ${status}`).toContain(status);
-            }
-            for (const door of CONFIGURE_DOORS) {
-                const status = await configureDoor(foreign.request, door);
-                expect([403, 404], `cross-org admin at ${door} must be refused or not-found, got ${status}`).toContain(status);
+            const edit = await configureDoor(foreign.request, "work-unit-edit", REAL_WORK_UNIT);
+            expect([403, 404], `foreign admin editing this org's work unit must be refused or not-found, got ${edit.status}`).toContain(edit.status);
+
+            const remove = await configureDoor(foreign.request, "work-unit-remove", REAL_WORK_UNIT);
+            expect([403, 404], `foreign admin deleting this org's work unit must be refused or not-found, got ${remove.status}`).toContain(remove.status);
+
+            const read = await foreign.request.get(`/api/admin/work-units/${REAL_WORK_UNIT}`, { failOnStatusCode: false });
+            expect([403, 404], `foreign admin reading this org's work unit must be refused or not-found, got ${read.status()}`).toContain(read.status());
+
+            /* And the row must still be there afterwards — refusal, not a silent delete. */
+            const owner = await signIn(browser, PERSONAS.defaultAdmin.email);
+            try {
+                const still = await owner.request.get(`/api/admin/work-units/${REAL_WORK_UNIT}`, { failOnStatusCode: false });
+                expect(still.status(), "the owning org's row must survive the foreign attempt").toBe(200);
+            } finally {
+                await owner.close();
             }
         } finally {
             await foreign.close();
