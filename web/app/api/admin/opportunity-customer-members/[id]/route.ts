@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { requireEnrollmentCapability, requiredOcmPatchCapability } from "@/lib/access/enrollmentAuthority";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import {
@@ -19,8 +20,18 @@ export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    /*
+     * ADMISSION FIRST, AUTHORITY AFTER THE BODY — because WHICH authority this handler needs is
+     * decided by the body.
+     *
+     * Resolving the access context here keeps a principal who cannot enter the portal out before
+     * anything is parsed; the capability check below cannot run yet, because a body carrying
+     * `outcome_status_key` is a DECISION and a body carrying only candidacy fields is record
+     * management. Ordering admission before the parse and authority after it is what lets one
+     * route hold two powers without either leaking into the other.
+     */
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
@@ -33,6 +44,17 @@ export async function PATCH(
     } catch {
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
+
+    /*
+     * THE FORK. `outcome_status_key` diverts below into
+     * `updateOpportunityCustomerMemberLifecycleStatus` and returns early when it is the only
+     * field — it is the enrollment OUTCOME, not a record field. A body that carries it requires
+     * `enrollment.decide` whatever else it carries alongside; everything else is
+     * `enrollment.record.manage`. Flattening the handler onto one key would let the authority to
+     * fix a typo decide an admission, or force a record editor to hold decision authority.
+     */
+    const capDenied = requireEnrollmentCapability(access, requiredOcmPatchCapability(body));
+    if (capDenied) return capDenied;
 
     const profileGuard = assertNoChildProfileKeysOnOcmPatch(body);
     if (profileGuard) {

@@ -37,7 +37,15 @@ vi.mock("@/lib/admin/getAdminAccessContext", () => ({
             userId: USER,
             orgId: ORG,
             roleKeys: ["admin"],
-            permissionKeys: [],
+            /*
+             * ENROLLMENT RECORD AUTHORITY V1 — pinning and releasing a placement override are
+             * `enrollment.decide`: overriding the computed waitlist order decides who is offered
+             * the next spot. These routes were gated by `requireAdminOrOps()`, which resolves
+             * PORTAL ADMISSION and no role, so the empty key set used to be sufficient and the
+             * `roleKeys: ["admin"]` above decided nothing. It still decides nothing — the grant
+             * below is what admits these requests.
+             */
+            permissionKeys: ["enrollment.decide"],
             departmentScope: "all",
             allowedDepartmentIds: null,
             siteScope: "all",

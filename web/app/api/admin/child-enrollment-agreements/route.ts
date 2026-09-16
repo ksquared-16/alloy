@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireAdminOrOps } from "@/lib/adminAuth";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { ENROLLMENT_DECIDE, requireEnrollmentCapability } from "@/lib/access/enrollmentAuthority";
 import {
     createChildEnrollmentAgreement,
     listChildEnrollmentAgreements,
@@ -43,8 +44,17 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    /*
+     * ENROLLMENT DECISION AUTHORITY - creates the agreement that binds an enrollment. Not forms.*:
+     * the service touches one table and emits three events.
+     *
+     * Authority here was PORTAL ADMISSION - `requireAdminOrOps()` resolves admission and no
+     * role. It is a grant now, and nothing else.
+     */
+    const capDenied = requireEnrollmentCapability(access, ENROLLMENT_DECIDE);
+    if (capDenied) return capDenied;
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
