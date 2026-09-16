@@ -1,0 +1,384 @@
+{
+ "milestones": {
+  "t_rows": 13551,
+  "t_first_cards": 13551,
+  "t_bp_present": 20113,
+  "t_bp_meaningful": 20113,
+  "t_settled_cards": 6,
+  "final_cards": 6,
+  "final_rows": 16
+ },
+ "perCard": {
+  "bp": {
+   "t_first_present": 20113,
+   "t_first_meaningful": 20113,
+   "final": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolling Lennon Enrolled Sep 12 LEAD",
+   "transitions": [
+    {
+     "dt": 20113,
+     "v": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolling Lennon Enrolled Sep 12 LEAD"
+    }
+   ]
+  },
+  "fin": {
+   "t_first_present": 13551,
+   "t_first_meaningful": 13551,
+   "final": "FINANCIALS CURRENT PERIOD September 2026 CHARGES NET OBLIGATION $43.00 Payments received $43.00 CURRENT BALANC",
+   "transitions": [
+    {
+     "dt": 13551,
+     "v": "FINANCIALS CURRENT PERIOD September 2026 CHARGES NET OBLIGATION $43.00 Payments received $43.00 CURRENT BALANC"
+    }
+   ]
+  },
+  "att": {
+   "t_first_present": 13551,
+   "t_first_meaningful": 13551,
+   "final": "ATTENDANCE Attendance is not available for this child.",
+   "transitions": [
+    {
+     "dt": 13551,
+     "v": "ATTENDANCE \u2014 TODAY No record No attendance recorded today This child has no active enrolment, so attendance ca"
+    },
+    {
+     "dt": 20113,
+     "v": "ATTENDANCE Attendance is not available for this child."
+    }
+   ]
+  },
+  "hs": {
+   "t_first_present": 13551,
+   "t_first_meaningful": 13551,
+   "final": "HEALTH & SAFETY Health information is not available for this child.",
+   "transitions": [
+    {
+     "dt": 13551,
+     "v": "HEALTH & SAFETY REQUIRED INFORMATION Physical / health assessment Missing Immunization record Missing Health c"
+    },
+    {
+     "dt": 20113,
+     "v": "HEALTH & SAFETY Health information is not available for this child."
+    }
+   ]
+  },
+  "hh": {
+   "t_first_present": 20113,
+   "t_first_meaningful": 20113,
+   "final": "HOUSEHOLD Needs contact Kurzman household Updated Sep 12, 2026 KK Kelly Kurzman Primary kelly.kurzman@gmail.co",
+   "transitions": [
+    {
+     "dt": 20113,
+     "v": "HOUSEHOLD Needs contact Kurzman household Updated Sep 12, 2026 KK Kelly Kurzman Primary kelly.kurzman@gmail.co"
+    }
+   ]
+  },
+  "kids": {
+   "t_first_present": 20113,
+   "t_first_meaningful": 20113,
+   "final": "CHILDREN Needs info 17 children \u00b7 1 enrolled, 1 waitlisted 17 children need program & schedule Lennon Kurzman ",
+   "transitions": [
+    {
+     "dt": 20113,
+     "v": "CHILDREN Needs info 17 children \u00b7 1 enrolled, 1 waitlisted 17 children need program & schedule Lennon Kurzman "
+    }
+   ]
+  },
+  "cw": {
+   "t_first_present": null,
+   "t_first_meaningful": null,
+   "final": null,
+   "transitions": []
+  }
+ },
+ "attendance_sequence": [
+  {
+   "dt": 20113,
+   "token": "unavailable",
+   "text": "ATTENDANCE Attendance is not available for this child."
+  }
+ ],
+ "health_sequence": [
+  {
+   "dt": 20113,
+   "token": "unavailable",
+   "text": "HEALTH & SAFETY Health information is not available for this child."
+  }
+ ],
+ "requests": [
+  {
+   "u": "/api/admin/workspace/site-filter",
+   "q": "",
+   "dt": 3656,
+   "dur": 864,
+   "kb": 0
+  },
+  {
+   "u": "/api/admin/communications/unread-count",
+   "q": "",
+   "dt": 3656,
+   "dur": 2121,
+   "kb": 0
+  },
+  {
+   "u": "/api/admin/operational-tasks",
+   "q": "scope=workspace&summary=true",
+   "dt": 3656,
+   "dur": 1764,
+   "kb": 0
+  },
+  {
+   "u": "/api/admin/lifecycle-catalog",
+   "q": "",
+   "dt": 3656,
+   "dur": 2895,
+   "kb": 1
+  },
+  {
+   "u": "/api/admin/work-units",
+   "q": "",
+   "dt": 3656,
+   "dur": 1869,
+   "kb": 19
+  },
+  {
+   "u": "/api/admin/departments",
+   "q": "",
+   "dt": 3656,
+   "dur": 2084,
+   "kb": 31
+  },
+  {
+   "u": "/api/admin/entity-labels",
+   "q": "",
+   "dt": 3656,
+   "dur": 1957,
+   "kb": 2
+  },
+  {
+   "u": "/api/admin/ai/workflow-assist/capabilities",
+   "q": "",
+   "dt": 3656,
+   "dur": 1893,
+   "kb": 0
+  },
+  {
+   "u": "/api/admin/ai/config-layout-assist/capabilities",
+   "q": "",
+   "dt": 3656,
+   "dur": 1275,
+   "kb": 0
+  },
+  {
+   "u": "/api/admin/status-options",
+   "q": "entity_type=opportunities",
+   "dt": 6557,
+   "dur": 369,
+   "kb": 1
+  },
+  {
+   "u": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/work-unit-queue-summaries",
+   "q": "include_previews=false&count_mode=exact&summary_mode=priorit",
+   "dt": 7253,
+   "dur": 2881,
+   "kb": 2
+  },
+  {
+   "u": "/api/admin/work-units/waitlist/provisioning-answer",
+   "q": "dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-",
+   "dt": 7726,
+   "dur": 5765,
+   "kb": 236
+  },
+  {
+   "u": "/api/admin/verticals",
+   "q": "",
+   "dt": 7726,
+   "dur": 454,
+   "kb": 0
+  },
+  {
+   "u": "/api/admin/queue-view-totals",
+   "q": "",
+   "dt": 10140,
+   "dur": 1956,
+   "kb": 1
+  },
+  {
+   "u": "/api/admin/queues/stage-membership-ack",
+   "q": "keys=93667019-bd28-49b5-a688-acc9bb1e0a19%3Aa92a0f18-6efb-40",
+   "dt": 13527,
+   "dur": 740,
+   "kb": 0
+  },
+  {
+   "u": "/api/admin/entity-layouts/focus-panel-summary",
+   "q": "workViewId=new_work_view_4&stageKey=waitlist",
+   "dt": 13527,
+   "dur": 865,
+   "kb": 27
+  },
+  {
+   "u": "/api/admin/view-models/drawer/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+   "q": "",
+   "dt": 13530,
+   "dur": 6327,
+   "kb": 163
+  },
+  {
+   "u": "/api/admin/metrics/resolve",
+   "q": "keys=enrollment.lead_count%2Cops.needs_attention_count%2Cops",
+   "dt": 13530,
+   "dur": 2589,
+   "kb": 2
+  },
+  {
+   "u": "/api/admin/actions/right-rail-bundle",
+   "q": "department_id=3933ac47-077a-4de8-aaac-8aed48d80413&work_unit",
+   "dt": 13531,
+   "dur": 1222,
+   "kb": 1
+  },
+  {
+   "u": "/api/admin/queue-row-layout/queue-row-3933ac47-077a-4de8-aaac-8aed48d80413-42be9074-443f-4047-bece-d68cd1d22788",
+   "q": "processKey=enrollment",
+   "dt": 13531,
+   "dur": 2524,
+   "kb": 13
+  },
+  {
+   "u": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/lifecycle-builder",
+   "q": "",
+   "dt": 13541,
+   "dur": 1792,
+   "kb": 74
+  },
+  {
+   "u": "/api/admin/communications/family-workspace",
+   "q": "entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113-",
+   "dt": 13552,
+   "dur": 1782,
+   "kb": 39
+  },
+  {
+   "u": "/api/admin/communications/threads",
+   "q": "entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113-",
+   "dt": 13687,
+   "dur": 1586,
+   "kb": 2
+  },
+  {
+   "u": "/api/admin/communications/bindings",
+   "q": "",
+   "dt": 13687,
+   "dur": 1479,
+   "kb": 7
+  },
+  {
+   "u": "/api/admin/communications/threads/b98d8f65-023e-41e6-b8fc-296bab311df3/messages",
+   "q": "limit=36&include_viewer_read=1",
+   "dt": 15276,
+   "dur": 687,
+   "kb": 21
+  },
+  {
+   "u": "/api/admin/communications/threads/7bd232bf-35fe-4fcd-8223-a34b08a46a11/messages",
+   "q": "limit=36&include_viewer_read=1",
+   "dt": 15276,
+   "dur": 992,
+   "kb": 8
+  },
+  {
+   "u": "/api/admin/communications/threads/addb497f-10c1-4d92-ad03-268fd9ce19e4/messages",
+   "q": "limit=36&include_viewer_read=1",
+   "dt": 15276,
+   "dur": 1036,
+   "kb": 16
+  },
+  {
+   "u": "/api/admin/communications/drawer-recipients",
+   "q": "entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113-",
+   "dt": 15276,
+   "dur": 1092,
+   "kb": 1
+  },
+  {
+   "u": "/api/admin/communications/family-workspace",
+   "q": "entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113-",
+   "dt": 15339,
+   "dur": 1904,
+   "kb": 39
+  },
+  {
+   "u": "/api/admin/layout-runtime/opportunity-drawer-body",
+   "q": "opportunityId=d097e1a8-c3c0-4c51-a113-2275b009b9a9&departmen",
+   "dt": 19972,
+   "dur": 4758,
+   "kb": 173
+  },
+  {
+   "u": "/api/admin/operational-tasks",
+   "q": "entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113-",
+   "dt": 20110,
+   "dur": 801,
+   "kb": 10
+  },
+  {
+   "u": "/api/admin/communications/conversations",
+   "q": "",
+   "dt": 20110,
+   "dur": 1177,
+   "kb": 12
+  },
+  {
+   "u": "/api/admin/locations",
+   "q": "hierarchy=1",
+   "dt": 20110,
+   "dur": 1136,
+   "kb": 15
+  },
+  {
+   "u": "/api/admin/option-sets/childcare_program_type",
+   "q": "",
+   "dt": 20111,
+   "dur": 727,
+   "kb": 2
+  },
+  {
+   "u": "/api/admin/location-program-categories",
+   "q": "include_inactive=true",
+   "dt": 20111,
+   "dur": 304,
+   "kb": 12
+  },
+  {
+   "u": "/api/admin/option-sets/person_gender",
+   "q": "",
+   "dt": 20111,
+   "dur": 661,
+   "kb": 1
+  },
+  {
+   "u": "/api/admin/related/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+   "q": "",
+   "dt": 20336,
+   "dur": null,
+   "kb": null
+  },
+  {
+   "u": "/api/admin/activity",
+   "q": "entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113-",
+   "dt": 20336,
+   "dur": 1044,
+   "kb": 66
+  },
+  {
+   "u": "/api/admin/communications/family-workspace",
+   "q": "customer_id=7796a568-3b5f-4606-80f9-fee2dae2a419&composer_ch",
+   "dt": 21288,
+   "dur": 1867,
+   "kb": 7
+  }
+ ],
+ "total_requests": 39,
+ "total_kb": 1006
+}
