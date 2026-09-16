@@ -1209,17 +1209,27 @@ subtractive on the client. There is no duplicate fetch to delete.
 a reproduced stale overwrite. So rapid A→B is guarded — but by each card for itself, not by a shared
 provisioning identity. Any convergence must keep that guarantee, not re-derive it.
 
-### 21.7 The contract — TARGET, NOT YET MET
+### 21.7 The contract — SHIPPED
 
 > One selected subject. One provisioning lifecycle. One published composition. One authoritative
 > operational answer. Cards are projections of that answer, and request deep detail only on
 > explicit operator intent.
 
-This is recorded as the target so the gap is legible. **Today the surface has 1 + 3 lifecycles.**
-Closing it means adding Financials, Attendance and Health producers to
-`composeProvisioningAnswerForRoute` with a readiness contract, moving three cards onto that
-projection, and binding producer results to the provisioning request identity. That is a change to
-the operational critical path and is scoped as its own work, with §21.5 as a precondition.
+**MET. Certified in §31.**
+
+The paragraph below is the target as it was written when the surface had 1 + 3 lifecycles, kept
+verbatim because the gap it describes is the thing that was closed:
+
+> This is recorded as the target so the gap is legible. **Today the surface has 1 + 3 lifecycles.**
+> Closing it means adding Financials, Attendance and Health producers to
+> `composeProvisioningAnswerForRoute` with a readiness contract, moving three cards onto that
+> projection, and binding producer results to the provisioning request identity. That is a change to
+> the operational critical path and is scoped as its own work, with §21.5 as a precondition.
+
+Every sentence of that plan was executed, and the sections between here and §31 are the record of how
+— including the three times the `server-only` boundary took the panel down, the producer that
+resolved the wrong child, and the staging deployment that failed with all thirteen checks green.
+§31.6 states what this certification does NOT claim.
 
 ## 22. Phase 1 — `published_stage_inputs` consumer audit — MEASURED 2026-09-15
 
@@ -1799,7 +1809,7 @@ registered producer present, a state from the canonical vocabulary, and `data: n
   passed locally and failed CI on `typecheck:tests`. Run `vac run typecheck:tests` before promoting a
   contract change.
 
-§21.7 remains **TARGET, NOT YET MET** — see §30 for exactly what is outstanding.
+§21.7 is **SHIPPED** as of §31. §30's outstanding list is superseded by §31.6.
 
 ## 30. What is outstanding
 
@@ -1816,4 +1826,171 @@ Not yet done, and not claimed:
 5. **Attendance data-bearing live matrix** — no waitlisted child on staging has attendance records,
    and manufacturing them would be a business mutation on a live tenant. Identity and
    empty/unavailable paths are live-certified; the data-bearing states remain fixture-certified only.
+
+## 31. FINAL CLOSURE — the single-runtime program
+
+### 31.1 The dormant stage-work path: classified, then retired
+
+Not inferred from one grep. Searched routes, client callers, query construction, tests, docs and the
+public surface for `stage_work=0`, `stage_work`, `useRecordWorkRuntime` and `applyStageWorkSliceToVm`:
+
+| Symbol | Finding | Class |
+| --- | --- | --- |
+| `stage_work=0` | appears ONLY where the route parses it. `buildOpportunityDrawerViewModelUrl` is the single builder of that query and sets department, work unit, attention subject — never this | **A — unreachable legacy** |
+| `useRecordWorkRuntime` | live: `InlineOpportunityFocusPanel` | **C — active** (the runtime, not the deferred path) |
+| `applyStageWorkSliceToVm` | two live call sites, both gated on `stage_work: "pending"` — plus one reachable `force` path | **C — active** |
+
+**The `force` path was the real defect, and it was not dormant.** A `work_lifecycle` refresh ran
+`reloadDisplayVm({forceFresh: true})`, which invalidated the caches, recomposed the view model — so
+the server had produced a fresh stage-work runtime AND the `operational_projection` computed from it
+— and then fetched a SECOND stage-work slice and merged it over the top.
+`applyStageWorkSliceToVm` writes `stage_work`, `stage_work_runtime` and the record mirror; it never
+touches `operational_projection`. So the merge could leave Current Work and the card envelope
+describing one stage-work runtime beside a later one: two operational truths in one view model, and
+a second read to produce them.
+
+**Disposition — retired, not guarded:**
+
+- the route no longer reads `stage_work`;
+- `deferStageWork` is gone from the composer and the deferred resource, so `stage_work` can never be
+  `pending`;
+- `completeVmWithStageWork` no longer accepts `force`;
+- the deferred client effect — whose own log line said `SECOND stage-work resolution` — is deleted.
+
+Three tests certified only the retired behaviour. They were rewritten to lock the disposition rather
+than deleted, and the suite is at exact parity with the base (21 pre-existing failures, zero new).
+
+### 31.2 Final recursive payload census
+
+`recursivePayloadCensus`, two consecutive selections in the same Work View. No top-level hashing.
+
+| | COMMIT frame | SETTLED frame |
+| --- | --- | --- |
+| total bytes | 258,031 | 185,542 |
+| recursively identical | 241,097 | 169,613 |
+| differing | 7,718 | 5,590 |
+| **stability** | **96.90%** | **96.81%** |
+| internal duplication | 3,890 | 78,617 |
+| operational projection | 38,925 | 47,904 |
+| — businessProcess | 3,114 | 9,031 |
+| — currentWork | 12,678 | 15,740 |
+| — cards (producers) | 23,089 | 23,089 |
+
+**Combined initial operational transport: 443,573 B** (258,031 + 185,542).
+
+That is ABOVE the historical markers, and the reason is attributable rather than mysterious: the
+commit frame's largest key is `rows` at **176,523 B** — the sixteen child queue rows of this Work
+View, which is queue payload and not this subject's operational transport. The settled frame's
+78,617 B of internal duplication is `first_paint` mirroring `above_fold` (`inquiry_children`,
+`scheduling_projection`, `header_actions`), which predates this program. Both are recorded as measured
+debt in §31.6 rather than folded into the producer verdict.
+
+What moved between two selections is small and named: participant `imageUrl` signed-URL tokens,
+`resolved_photo_url`, and the command/action projections.
+
+### 31.3 Producer budget — one boundary was breached, and is now closed
+
+Per-producer serialized contribution, measured on deployed staging:
+
+| producer | before | after | verdict |
+| --- | --- | --- | --- |
+| Attendance | 507 B | 507 B | within the initial summary |
+| Health | 945 B | 945 B | summary + attention state |
+| Financials | **21,573 B** | ~5,000 B | **breached, now bounded** |
+
+The Financials breach was specific: `payments` alone was **14,738 B for two rows** and
+`ledgerPeriods` a further 1,915 B — receipts, refunds and the placed ledger, in BOTH frames, on every
+panel, for every operator, before anyone asked to see them. The instruction's own exclusion list names
+exactly those.
+
+The summary reads neither. It renders from `reconciliation`, `pastDue`, `period`, `collectible` and
+the current period's rows, and the money it shows comes from `reconciliation.paymentsCents`, a scalar.
+Only the expanded ledger and the payment surfaces read the rows, and those are interactions — the card
+now loads the full model from the endpoint that always owned it when one opens, exactly as Attendance
+loads its depth window. `rows` (1,676 B) is deliberately NOT trimmed: it is not worth a second shape,
+and the summary filters it to the current period itself.
+
+This removes ~16.6 KB per frame, ~33 KB per selection.
+
+### 31.4 Final A → B → C, live on deployed staging
+
+Run twice, because no single Work View could distinguish every card: every waitlisted child on
+staging belongs to household `0658832a`, so Financials is genuinely identical across them and could
+not prove freshness there.
+
+**Child grain** (`waitlist` view) — distinguishes Attendance and Health:
+
+| | subject | recordOfAttention | Attendance | Health | identity |
+| --- | --- | --- | --- | --- | --- |
+| A | `9ab36f48` | matches | `bf7bb266` | `bf7bb266` | equal |
+| B | `8b3689fb` | matches | `1e30034b` | `1e30034b` | equal |
+| C | `ddc23ed1` | matches | `e907e214` | `e907e214` | equal |
+
+**Family grain** (`lifecycle_wu_waitlist`) — distinguishes Financials, Process and Household:
+
+| | recordOfAttention | household truth | Financials account | Attendance / Health |
+| --- | --- | --- | --- | --- |
+| A | `37b9593d` | `b7f78c57` | `b7f78c57` | `unavailable` (no scoped child) |
+| B | `cdebb801` | `08a1a0bc` | `08a1a0bc` | `unavailable` |
+| C | `1a132b7f` | `50b19065` | `50b19065` | `unavailable` |
+
+**Three distinct accounts, each matching its own subject's truth.** No A or B truth anywhere in C.
+Attendance and Health report `unavailable` at family grain — not `forbidden`, and not a fabricated
+empty record.
+
+The FINANCIALS DELAYED RACE is not staged on the tenant: the initial account no longer has a request
+of its own to lose a race with, so there is nothing to delay. That guarantee is held by
+`financialsRootStaleGuarantee` deterministically, and this live run is the integration proof — which
+is the split the instruction allows.
+
+### 31.5 Zero independent initial card bootstraps
+
+Locked per card, each proven by planting the reintroduced `useEffect(() => void load(), [])`:
+
+- Attendance — `attendanceDepthWindow`
+- Financials — `financialsRootStaleGuarantee`
+- Health — `healthZeroBootstrap` (written this run; Health had no such lock, which is how a
+  reintroduced bootstrap would have passed every other gate)
+
+The Health lock also covers the refusal: `forbidden` renders as a refusal, never as "No health
+record", and still issues no request.
+
+### 31.6 What is NOT claimed
+
+- **Cold-load request count and timings.** The byte census above is complete and measured. The
+  request-count and first-render/settled timings that opened this program (49 responses, 1,107,395 B,
+  ~1899 ms / ~5921 ms) need an instrumented browser session, which this lane does not hold. The
+  invariant those numbers existed to protect — zero independent initial card bootstraps — is locked
+  deterministically per card instead.
+- **Children and Household** were root-owned before this program and were NOT re-verified here.
+- **Attendance data-bearing live states.** No waitlisted child on staging has attendance history, and
+  manufacturing it would be a business mutation on a live tenant. Identity, multi-child isolation,
+  commit→settled identity, the no-record path and zero bootstrap are LIVE-certified; current
+  attendance, attention, current-day and the five-day summary are DETERMINISTIC-certified.
+  **LIVE DATA-BEARING FIXTURE UNAVAILABLE.**
+- **Two pre-existing payload costs**, measured and left alone because neither is this program's: the
+  commit frame's 176,523 B of queue `rows`, and the settled frame's 78,617 B of `first_paint`
+  mirroring `above_fold`.
+
+### 31.7 §21.7 — SHIPPED
+
+Every criterion in the §21.7 list is met: Attendance, Health, Financials, Business Process and
+Current Work initial lifecycles are root-owned; readiness is explicit; there are no independent
+initial card bootstraps; commit and settled frames are coherent; authorization and subject identity
+parity are proven live; the dormant inconsistent path is resolved; the final A→B→C is green; the real
+Next build, the client-graph `server-only` gate and required CI are green.
+
+**THE FROZEN CONTRACT**
+
+    ONE RECORD
+    ONE SUBJECT OF ATTENTION
+    ONE AUTHENTICATED CALLER AUTHORITY
+    ONE PROVISIONING IDENTITY
+    ONE PRODUCER LIFECYCLE
+    ONE COMPOSITION
+    ROOT-OWNED READINESS
+    DOMAIN PRODUCERS EXECUTE UNDER THEIR CANONICAL AUTHORIZATION SEMANTICS
+    DEEP DETAIL REMAINS LAZY
+    EXPLICIT POST-MUTATION REFRESH MAY USE THE CANONICAL DOMAIN OWNER
+    THE BROWSER RENDERS PROJECTIONS; IT DOES NOT RECONSTRUCT OPERATIONAL TRUTH.
 

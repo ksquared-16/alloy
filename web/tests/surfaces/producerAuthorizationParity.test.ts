@@ -443,3 +443,53 @@ describe("the root Financials producer cannot broaden its endpoint's authorizati
         expect(results.financials.data).toBeNull();
     });
 });
+
+/**
+ * DEEP DETAIL REMAINS LAZY.
+ *
+ * Measured on deployed staging before this bound: the Financials initial projection was 21,573 B, of
+ * which `payments` alone was 14,738 B FOR TWO ROWS and `ledgerPeriods` a further 1,915 B — receipts,
+ * refunds and the placed ledger, in BOTH frames, on every panel, for every operator, before anyone
+ * asked to see them.
+ *
+ * The summary reads neither. Only the expanded ledger and the payment surfaces do, and those are
+ * interactions that load the full model from the endpoint that always owned it.
+ */
+describe("the initial producer projections carry summaries, not ledgers", () => {
+    const HOUSEHOLD = "0658832a-48d6-4b80-beae-0b12d573fdf2";
+
+    it("Financials omits payments and ledger periods from the INITIAL answer", async () => {
+        /*
+         * The bound is a pure function, so it is tested as one.
+         *
+         * Driving it through the producer would need a caller the Financials gate ALLOWS, and that
+         * gate reads actor grants through its own resolver with a row shape this suite does not
+         * model — the authorization cases above are all refusals, which is what they were for. A
+         * stub tuned until the gate said yes would be testing the stub.
+         */
+        const { boundInitialFinancials } = await import(
+            "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers"
+        );
+
+        const full = {
+            account: { customerId: HOUSEHOLD, label: "Kurzman" },
+            period: { key: "2026-09", start: "2026-09-01", end: "2026-09-30", label: "September 2026" },
+            reconciliation: { grossCents: 100, paymentsCents: 100, balanceCents: 0 },
+            collectible: { outstandingCents: 0 },
+            rows: [{ periodKey: "2026-09" }],
+            payments: [{ id: "pay-1", amountCents: 100 }, { id: "pay-2", amountCents: 50 }],
+            ledgerPeriods: [{ period: { key: "2026-08" }, rows: [{ id: "r1" }] }],
+        } as never;
+
+        const bounded = boundInitialFinancials(full) as unknown as Record<string, unknown>;
+
+        expect(bounded.payments, "receipts and refunds rode the initial projection").toEqual([]);
+        expect(bounded.ledgerPeriods, "the placed ledger rode the initial projection").toEqual([]);
+        // The summary's own figures must survive the bound — trimming the answer is not the goal.
+        expect(bounded.reconciliation).toEqual((full as unknown as Record<string, unknown>).reconciliation);
+        expect(bounded.collectible).toEqual((full as unknown as Record<string, unknown>).collectible);
+        expect(bounded.period).toEqual((full as unknown as Record<string, unknown>).period);
+        // `rows` is deliberately kept: 1,676 B, and the summary filters it to the current period.
+        expect(bounded.rows).toHaveLength(1);
+    });
+});

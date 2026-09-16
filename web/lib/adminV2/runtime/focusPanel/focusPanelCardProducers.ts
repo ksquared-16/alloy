@@ -45,6 +45,27 @@ import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContex
 const unavailable = <T,>(): ProducerResult<T> => ({ state: "unavailable", data: null });
 
 /**
+ * THE INITIAL FINANCIAL ANSWER — the account summary, not the ledger.
+ *
+ * Measured on deployed staging: the full card view model was 21,573 B in the initial projection, of
+ * which `payments` alone was **14,738 B for two rows** and `ledgerPeriods` a further 1,915 B. That is
+ * receipts, refunds and the placed ledger — the deep detail this convergence is required to keep
+ * lazy — travelling in BOTH frames, on every panel, for every operator, before anyone asks to see it.
+ *
+ * The summary reads neither: it renders from `reconciliation`, `pastDue`, `period`, `collectible`
+ * and the CURRENT period's rows, and the money it shows comes from `reconciliation.paymentsCents`, a
+ * scalar. Only the expanded ledger and the payment surfaces read the rows themselves, and those are
+ * interactions — the card loads the full model from the endpoint that always owned it when one opens,
+ * exactly as Attendance loads its depth window.
+ *
+ * `rows` is deliberately NOT trimmed: at 1,676 B it is not worth a second shape, and the summary
+ * filters it to the current period itself.
+ */
+export function boundInitialFinancials(vm: FinancialsCardVM): FinancialsCardVM {
+    return { ...vm, payments: [], ledgerPeriods: [] };
+}
+
+/**
  * How many days of history the COMPACT STRIP shows.
  *
  * The card's own request asked for 31, which is the depth layer's window — the summary renders five,
@@ -219,7 +240,7 @@ export async function projectFocusPanelCardProducers(input: {
                   : !financialsGate?.ok
                     ? { state: "forbidden", data: null }
                     : financials.value
-                      ? { state: "ready", data: financials.value }
+                      ? { state: "ready", data: boundInitialFinancials(financials.value) }
                       : unavailable<FinancialsCardVM>(),
     };
 }
