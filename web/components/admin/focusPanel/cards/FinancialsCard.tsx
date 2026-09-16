@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FOCUS_PANEL_RESERVED_MIN_HEIGHT } from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import {
@@ -240,8 +241,33 @@ export default function FinancialsCard({ model, context, receded = false, coordi
      * a superseded response is simply dropped rather than cancelled, so nothing else changes.
      */
     const requestSeq = useRef(0);
+    /*
+     * ── THE REQUEST'S OWN IDENTITY, WHICH IS NOT THE SAME AS ITS INPUTS ──────────────────────────
+     *
+     * Measured on Firefly: this card issued `financials/card?customer_id=50b19065…` TWICE per Work
+     * Unit entry, and they were the two slowest requests in the sample. One mounted instance, no
+     * remount — proven with a mount counter and a per-request correlation header, because the DOM
+     * card-role counts that suggested a second instance were three roles across six cards.
+     *
+     * The cause is that `load` depended on `[customerId, scopedMemberId]` while the request it
+     * builds depends on the FIRST of them that is present. The participant resolves after the
+     * household, so `scopedMemberId` went `null → a227e460…`, `load`'s identity changed, the mount
+     * effect re-ran — and produced a byte-identical request, because `customerId` had won the
+     * ternary both times.
+     *
+     * Keying on the composed query is therefore not a cache and not a dedupe layer: it is this
+     * effect depending on what it actually sends. An input change that cannot change the request no
+     * longer re-issues it, and a change that CAN (the member-scoped branch, when no household is
+     * present) still does.
+     */
+    const requestQuery = useMemo(() => {
+        if (customerId) return `customer_id=${encodeURIComponent(customerId)}`;
+        if (scopedMemberId) return `customer_member_id=${encodeURIComponent(scopedMemberId)}`;
+        return null;
+    }, [customerId, scopedMemberId]);
+
     const load = useCallback(async () => {
-        if (!customerId && !scopedMemberId) {
+        if (!requestQuery) {
             requestSeq.current += 1;
             setVm(null);
             return;
@@ -250,10 +276,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         const current = () => seq === requestSeq.current;
         setLoading(true);
         try {
-            const query = customerId
-                ? `customer_id=${encodeURIComponent(customerId)}`
-                : `customer_member_id=${encodeURIComponent(scopedMemberId as string)}`;
-            const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
+            const query = requestQuery;
+                const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
             const json = (await res.json()) as { ok?: boolean; vm?: FinancialsCardVM };
             if (!current()) return;
             const fresh = json?.ok && json.vm ? json.vm : null;
@@ -267,7 +291,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
             // A superseded request must not clear the spinner belonging to the one that replaced it.
             if (current()) setLoading(false);
         }
-    }, [customerId, scopedMemberId]);
+    }, [requestQuery]);
 
     /*
      * ── MOVING MONEY BETWEEN OBLIGATIONS ─────────────────────────────────────────────────────────
@@ -760,6 +784,48 @@ export default function FinancialsCard({ model, context, receded = false, coordi
 
     /* Missing projection is PROVISIONING. It is not "No financial record." */
     const provisioningAccount = (customerId != null || scopedMemberId != null) && provisioned == null;
+
+    /*
+     * ── S3-2: CLEAR THE DATA, KEEP THE FOOTPRINT ────────────────────────────────────────────────
+     *
+     * Clearing below is correct and stays: a previous household's balance must never linger under
+     * the next subject's name. What was wrong was the GEOMETRY of that clear. Frame-sampled on
+     * Firefly across one subject switch, this card went 409px → 69px → 409px — it was the only
+     * audited card that collapsed, and the ~340px round trip shoved every card beneath it down and
+     * back while the account loaded.
+     *
+     * The Focus Panel already has a reserved-geometry contract for exactly this transition
+     * (`FOCUS_PANEL_RESERVED_MIN_HEIGHT`, the floor `ReservedSettlementRegion` reserves). This card
+     * adopts it, and reserves its OWN last loaded footprint when it has one — geometry is not data,
+     * so remembering how much room the card occupied leaks nothing about the previous account, and
+     * it adapts per subject instead of freezing one height for every account. The shared token is
+     * the floor for the first load, where there is nothing to remember yet.
+     *
+     * A genuinely different next subject still resizes the card once, on arrival. That is honest;
+     * the artificial collapse to a one-line loader in between is what this removes.
+     */
+    const shellRef = useRef<HTMLDivElement | null>(null);
+    const loadedHeightRef = useRef<number | null>(null);
+    useEffect(() => {
+        if (!vm || !shellRef.current) return;
+        const h = Math.round(shellRef.current.getBoundingClientRect().height);
+        if (h > 0) loadedHeightRef.current = h;
+    }, [vm]);
+
+    /*
+     * ── RECONCILIATION: WHAT THE RESERVE IS FOR ─────────────────────────────────────────────────
+     *
+     * The reserve was written as `!vm`, when the only way to have no vm was to be loading one. The
+     * root lifecycle gave this card three further answers that also carry no vm — a permission
+     * refusal, no resolvable subject, and no account — and each of those is a SETTLED sentence the
+     * card is entitled to render at its own size. Reserving through them would pad a card that has
+     * finished, which is the failure the sibling cards were corrected for in the same programme.
+     *
+     * So the reserve tracks exactly the condition under which this card says "Loading the account…",
+     * and nothing else. Both intents survive: the collapse is still removed while the account
+     * resolves, and staging's new answers are still allowed to be answers.
+     */
+    const reservingAccount = !vm && !deniedRead && (loading || subjectStillResolving || provisioningAccount);
 
     useEffect(() => {
         // Clear FIRST: the previous household's balance must not linger while the next resolves.
@@ -2586,6 +2652,10 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         );
         return (
             <div
+                // SAME SHELL REF as the fallback return below. The loaded card renders through THIS
+                // branch, so without the ref the footprint it is reserving on the next subject switch
+                // could never be measured — the reserved height silently fell back to the shared floor.
+                ref={shellRef}
                 className="alloy-os-financials"
                 data-financials-card="true"
                 data-financials-subject={subjectFilter}
@@ -2631,6 +2701,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
 
     return (
         <div
+            ref={shellRef}
             className="alloy-os-financials"
             data-financials-card="true"
             data-financials-subject={subjectFilter}
@@ -2643,6 +2714,12 @@ export default function FinancialsCard({ model, context, receded = false, coordi
              * the rendered card rather than off the props it was handed.
              */
             data-financials-account={vm?.account?.customerId ?? undefined}
+            data-financials-reserved={reservingAccount ? "true" : undefined}
+            style={
+                reservingAccount
+                    ? { minHeight: loadedHeightRef.current ?? FOCUS_PANEL_RESERVED_MIN_HEIGHT }
+                    : undefined
+            }
         >
             <UniversalCard
                 title={model.title}

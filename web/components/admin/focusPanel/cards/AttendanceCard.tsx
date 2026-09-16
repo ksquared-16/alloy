@@ -1,5 +1,6 @@
 "use client";
 
+import { useReservedCardGeometry } from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
@@ -164,6 +165,30 @@ export default function AttendanceCard({ model, context, receded = false, coordi
      * not been told about. `loading` still covers the post-command re-read, which is the card's own.
      */
     const provisioning = memberId != null && provisioned == null;
+
+    /*
+     * S4-1 × ROOT LIFECYCLE — reserved geometry, keyed to the readiness this card now actually has.
+     *
+     * Attendance clears its day when the subject changes and renders a one-line body while the next
+     * child resolves, so its footprint collapsed exactly as Financials' did. The contract is that
+     * SETTLED means the card has an answer — a loaded day, "no attendance record.", "select a child"
+     * — and only a card still resolving is worth holding a footprint for.
+     *
+     * The reconciliation is in the predicate. Runtime Performance V2 keyed this to `!loading`, the
+     * card's own fetch. Since then the attendance producer moved into the root provisioning
+     * lifecycle, so the card can also be waiting on a projection that has not arrived — which is
+     * exactly why staging renders "Loading the day…" on `loading || provisioning` rather than
+     * asserting an absence. Reserving on anything narrower would leave the collapse this repair
+     * exists to remove, in the one window that is now the common one on a cold panel.
+     *
+     * So the reserve tracks the same union the copy does. Measured note kept from the original: an
+     * earlier `vm != null` predicate held this card reserved in 79 of 80 sampled frames at 124px
+     * against a natural 69px, because these subjects carry no scoped participant at all — reserving
+     * against "has data" rather than "is resolving" is the mistake this predicate avoids.
+     *
+     * Geometry only: the day still clears first, and no child's attendance survives the switch.
+     */
+    const reservedGeometry = useReservedCardGeometry(!(loading || provisioning));
     useEffect(() => {
         // Clear FIRST: the previous child's day must not linger while the next one resolves.
         setVm(provisioned?.state === "ready" ? provisioned.data : null);
@@ -220,6 +245,7 @@ export default function AttendanceCard({ model, context, receded = false, coordi
     if (vm) {
         return (
             <div
+                ref={reservedGeometry.ref}
                 className="alloy-os-attendance"
                 data-attendance-card="true"
                 data-attendance-subject={memberId ?? undefined}
@@ -256,7 +282,14 @@ export default function AttendanceCard({ model, context, receded = false, coordi
     }
 
     return (
-        <div className="alloy-os-attendance" data-attendance-card="true" data-attendance-subject={memberId ?? undefined}>
+        <div
+            ref={reservedGeometry.ref}
+            className="alloy-os-attendance"
+            data-attendance-card="true"
+            data-attendance-subject={memberId ?? undefined}
+            data-attendance-reserved={reservedGeometry.reserved ? "true" : undefined}
+            style={reservedGeometry.style}
+        >
             <UniversalCard
                 title={model.title}
                 insight={insightFor(vm, name, Boolean(memberId), loading || provisioning)}

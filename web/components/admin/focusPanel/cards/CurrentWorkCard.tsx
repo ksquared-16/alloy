@@ -1,5 +1,6 @@
 "use client";
 
+import { useReservedCardGeometry } from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
@@ -164,6 +165,14 @@ export default function CurrentWorkCard({
     // Tier-2 stage work still resolving — hold a neutral loading treatment in the region's final
     // geometry. A pending projection must NEVER render as "No active work" (false-empty).
     const stageWorkPending = context.stageWorkPending === true;
+    /*
+     * S4-1. Current Work has ONE root for every perspective, so unlike Attendance and Health the ref
+     * has a single home. The pending perspective replaces a settled body with one line of text, which
+     * is the same collapse Financials was repaired for; Slice 3 measured `showed_loading: false` here,
+     * so this closes a rare window rather than a routinely visible one. Geometry only — the pending
+     * body still renders, and no prior subject's work is retained.
+     */
+    const reservedGeometry = useReservedCardGeometry(!stageWorkPending);
 
     const [completionPhase, setCompletionPhase] = useState<CompletionPhase>("working");
     const [pendingOutcomeKey, setPendingOutcomeKey] = useState<string | null>(null);
@@ -757,8 +766,11 @@ export default function CurrentWorkCard({
 
     return (
         <div
+            ref={reservedGeometry.ref}
             className="alloy-os-household alloy-os-currentwork"
             data-work-card="true"
+            data-work-reserved={reservedGeometry.reserved ? "true" : undefined}
+            style={reservedGeometry.style}
             data-work-card-perspective={stageWorkPending ? "pending" : evidence.isEmpty ? "empty" : isWorkspace ? "focused" : "summary"}
             data-capability-active={capabilityActive ? "true" : undefined}
             data-current-work-surface="true"

@@ -53,13 +53,43 @@ function FocusPanelPlaceholder() {
     );
 }
 
+/**
+ * A SUBJECT THAT CANNOT COMPOSE, SAID WHERE IT BELONGS.
+ *
+ * This is the narrow owner the containment repair hands the refusal to. It renders in the Focus
+ * Panel region — beside a queue that is still mounted, still scrolled where the operator left it,
+ * and still selectable — instead of the whole Work View being replaced by a configuration banner.
+ */
+function FocusPanelSubjectRefusal({ kind, message }: { kind: string; message: string }) {
+    return (
+        <section
+            data-inline-focus-panel="subject-refusal"
+            data-subject-refusal-kind={kind}
+            role="alert"
+            aria-label="Focus Panel"
+            className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 px-6 py-10 text-center"
+        >
+            <p className="text-sm font-medium text-alloy-ember">
+                {kind === "configuration"
+                    ? "This record can’t be opened until its configuration is fixed."
+                    : "This record can’t be opened."}
+            </p>
+            <p className="max-w-md text-xs text-alloy-midnight/55">{message}</p>
+            <p className="mt-1 text-xs text-alloy-midnight/40">Other records in this view are unaffected.</p>
+        </section>
+    );
+}
+
 export function FocusPanelSurface({
     openRecord,
     prefetchRecord,
+    subjectRefusal,
     children,
 }: {
     openRecord: (row: QueueRowModel) => void;
     prefetchRecord: (row: QueueRowModel) => void;
+    /** Set only when the answer refused the SELECTED SUBJECT but kept its cohort. */
+    subjectRefusal?: { kind: string; message: string } | null;
     children: ReactNode;
 }) {
     const { subjectId } = useOperationalSubject();
@@ -150,6 +180,11 @@ export function FocusPanelSurface({
                     >
                         {inlineRecordSelected ? (
                             <InlineOpportunityFocusPanel />
+                        ) : subjectRefusal ? (
+                            <FocusPanelSubjectRefusal
+                                kind={subjectRefusal.kind}
+                                message={subjectRefusal.message}
+                            />
                         ) : (
                             <FocusPanelPlaceholder />
                         )}

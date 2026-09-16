@@ -13,6 +13,8 @@
  * K2 fetch normally.
  */
 import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import { retainedDepartmentConfigIds } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
+import { heldFocusPanelSummaryIdentities } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
 
 /**
@@ -34,6 +36,19 @@ export function provisioningAnswerUrl(
     subject?: string | null,
     cohort?: "none" | null,
     aspect?: string | null,
+    /**
+     * S6-1. The client asserting that it already holds usable published department configuration for
+     * this Work Unit's department, so the answer need not re-send ~30 KB of it.
+     *
+     * It rides the URL ON PURPOSE. This string is the coalescing key, the intent-warm key and the
+     * consume-once key, and the answer's CONTENT depends on this flag — so it has to be part of the
+     * identity, or a "client holds it" answer could later be served to a client that does not. The
+     * assertion is only ever a claim about the CLIENT; whether omitting is actually safe is decided
+     * server-side, because only the server knows if a pinned revision makes this subject's copy
+     * differ from the live department configuration.
+     */
+    departmentConfigHeldIds?: readonly string[],
+    summaryConfigHeldIds?: readonly string[],
 ): string {
     const q = new URLSearchParams();
     if (lens) q.set("work_view_id", lens);
@@ -44,6 +59,8 @@ export function provisioningAnswerUrl(
     // aspect rides along for the same reason: it is what the contextual answer composes its card from.
     if (cohort === "none") q.set("cohort", "none");
     if (cohort === "none" && aspect) q.set("aspect", aspect);
+    if (departmentConfigHeldIds && departmentConfigHeldIds.length) q.set("dept_config", [...departmentConfigHeldIds].sort().join(","));
+    if (summaryConfigHeldIds && summaryConfigHeldIds.length) q.set("summary_cfg", [...summaryConfigHeldIds].sort().join(","));
     const qs = q.toString();
     return `/api/admin/work-units/${encodeURIComponent(target)}/provisioning-answer${qs ? `?${qs}` : ""}`;
 }
@@ -68,7 +85,11 @@ export function prefetchWorkUnitProvisioning(
 ): Promise<ProvisioningAnswer> | null {
     const slug = target.trim();
     if (!slug || typeof window === "undefined") return null;
-    const url = provisioningAnswerUrl(slug, opts.lens, opts.subject, opts.cohort, opts.aspect);
+    const url = provisioningAnswerUrl(
+        slug, opts.lens, opts.subject, opts.cohort, opts.aspect,
+        retainedDepartmentConfigIds(),
+        heldFocusPanelSummaryIdentities(),
+    );
     const now = opts.now ?? Date.now();
     const existing = cache.get(url);
     if (existing && isFresh(existing, now)) {
@@ -77,10 +98,28 @@ export function prefetchWorkUnitProvisioning(
     }
 
     logCurrentWorkInit("provisioning.prefetch.fetch", { cacheKey: url, cache: "miss", preloadSource: "prefetch", note: "intent-warm network fetch" });
-    const promise = fetch(url, { headers: { accept: "application/json" }, credentials: "include" })
-        .then(async (res) => {
-            if (!res.ok) throw new Error(`prefetch failed HTTP ${res.status}`);
-            return (await res.json()) as ProvisioningAnswer;
+    /*
+     * ── ONE IN-FLIGHT OPERATION PER ANSWER, ACROSS BOTH PATHS ────────────────────────────────────
+     *
+     * This used to call `fetch` directly, which is what made the two paths independent: a warm here
+     * registered only in `cache` (TTL), while K2's entry fetch registers only in `inflightEntry`.
+     * Neither could see the other's request, so a prewarm and a selection for the SAME answer raced.
+     *
+     * Measured on Firefly under rapid subject alternation: ten provisioning requests, six distinct
+     * URLs, four of them CONCURRENT overlaps of a byte-identical URL — one pair issued 351ms into a
+     * request that ran 854ms. Routing the prewarm through the same coalescer closes it in both
+     * directions: a selection now joins a prewarm already in flight, and vice versa.
+     *
+     * SCOPE SAFETY. The URL is the complete request identity, not an approximation of it: the route
+     * derives its answer from the slug plus `work_view_id`, `subject_id`, `cohort` and `aspect`, and
+     * `provisioningAnswerUrl` encodes exactly those. Tenant and access scope come from the session
+     * gate, which is constant for a browser session. And the entry is dropped the instant it settles,
+     * so this coalesces only genuinely concurrent work and can never serve a stale answer.
+     */
+    const promise = fetchProvisioningEntryDeduped(url)
+        .then((result) => {
+            if (!result.ok) throw new Error(`prefetch failed HTTP ${result.status}`);
+            return result.answer;
         })
         .catch((err) => {
             // Never cache a failure: drop the entry so K2 fetches fresh.

@@ -89,6 +89,7 @@ export function WorkUnitSurfaceBodyFromModel({
                 <FocusPanelSurface
                     openRecord={intents.openRecord}
                     prefetchRecord={intents.prefetchRecord}
+                    subjectRefusal={model.subjectRefusal ?? null}
                 >
                     <QueueRegion
                         queue={model.queue}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useReservedCardGeometry } from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
 import { useCallback, useEffect, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
@@ -61,6 +62,20 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
     const [denied, setDenied] = useState(false);
     const [expanded, setExpanded] = useState(false);
     const [factCommand, setFactCommand] = useState<HealthFactKindOption | null>(null);
+    /*
+     * S4-1. Same shape as Attendance and Financials: health truth clears on subject change and the
+     * card falls to a one-line body while the next child resolves.
+     *
+     * SETTLED IS `!loading`. A permission refusal and an unavailable reason are ANSWERS — the card is
+     * not waiting for anything — and they render through the fallback root, which therefore carries
+     * the ref too. `vm != null` would have called those states pending and reserved a footprint for a
+     * card that had already finished; measured, it held this card reserved in 79 of 80 sampled frames
+     * at 142px against a natural 69px.
+     *
+     * Geometry only: nothing about what clears changes, and no prior child's health information is
+     * retained for even one frame.
+     */
+    const reservedGeometry = useReservedCardGeometry(!loading);
     const [factRunning, setFactRunning] = useState(false);
     const [factError, setFactError] = useState<string | null>(null);
 
@@ -267,6 +282,7 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
     if (vm && !denied && !vm.unavailableReason) {
         return (
             <div
+                ref={reservedGeometry.ref}
                 className="alloy-os-health"
                 data-health-card="true"
                 data-health-subject={memberId ?? undefined}
@@ -280,7 +296,14 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
     }
 
     return (
-        <div className="alloy-os-health" data-health-card="true" data-health-subject={memberId ?? undefined}>
+        <div
+            ref={reservedGeometry.ref}
+            className="alloy-os-health"
+            data-health-card="true"
+            data-health-subject={memberId ?? undefined}
+            data-health-reserved={reservedGeometry.reserved ? "true" : undefined}
+            style={reservedGeometry.style}
+        >
             <UniversalCard
                 title={model.title}
                 insight={insightFor(vm, denied, name, Boolean(memberId), loading || provisioning)}

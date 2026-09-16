@@ -44,6 +44,10 @@ export async function composeProvisioningAnswerForRoute(input: {
     cohort?: "none" | null;
     /** The kernel's ASPECT (`card:…|item:…`), for a contextual answer's card + row. */
     aspect?: string | null;
+    /** S6-1 — the client states it already holds this department's published configuration. */
+    departmentConfigHeldIds?: readonly string[];
+    /** S5-3 — published Summary records the client states it holds (`id:version`). */
+    summaryConfigHeldIds?: readonly string[];
 }): Promise<RouteProvisioningResult> {
     // U-P1 — one authorization + one scope resolve for the entire answer. The slug→identity resolution
     // is request-memoized (Phase 3 dedup): the work-unit layout's route-meta seed and this provisioning
@@ -98,6 +102,8 @@ export async function composeProvisioningAnswerForRoute(input: {
         requestedSubjectId: input.requestedSubjectId,
         mode: contextual ? "contextual_focus" : "operational",
         requestedAspect: aspect ? { cardKey: aspect.card_key, itemId: aspect.item_id } : null,
+        departmentConfigHeldIds: input.departmentConfigHeldIds ?? [],
+        summaryConfigHeldIds: input.summaryConfigHeldIds ?? [],
     });
 
     /*
