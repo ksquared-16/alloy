@@ -381,8 +381,8 @@ export function PacketBuilderWorkspaceLayout({
             <PacketExperiencePreview
                 open={previewOpen}
                 onClose={() => setPreviewOpen(false)}
+                packetDefId={packetDefId}
                 packetName={defName}
-                steps={previewSteps}
             />
         </>
     );

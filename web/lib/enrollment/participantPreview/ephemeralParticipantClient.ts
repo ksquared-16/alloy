@@ -125,22 +125,42 @@ function sessionUpdateBuilder(holder: EphemeralSessionHolder, patch: Record<stri
  */
 function ephemeralRowsBuilder(holder: EphemeralSessionHolder, table: string) {
     const all = (): Record<string, unknown>[] => (holder.tables[table] ??= []);
-    const make = (filters: readonly (readonly [string, unknown])[], pending: Record<string, unknown> | null) => {
-        const matching = () => all().filter((r) => filters.every(([col, val]) => r[col] === val));
+    const make = (
+        filters: readonly (readonly [string, unknown])[],
+        pending: Record<string, unknown> | null,
+        sort: { column: string; ascending: boolean } | null = null,
+    ) => {
+        const matching = () => {
+            const hit = all().filter((r) => filters.every(([col, val]) => r[col] === val));
+            /*
+             * Ordering is emulated, not ignored. Session items are read `.order("sequence_index")`
+             * and the runtime takes the first as the active step — a no-op order would make the
+             * step a family meets depend on insertion order, which is the kind of divergence a
+             * preview exists to rule out.
+             */
+            if (!sort) return hit;
+            const dir = sort.ascending ? 1 : -1;
+            return [...hit].sort((a, b) => {
+                const x = a[sort.column] as number | string;
+                const y = b[sort.column] as number | string;
+                return x === y ? 0 : x < y ? -dir : dir;
+            });
+        };
         const apply = () => {
             const hit = matching();
             if (pending) for (const r of hit) Object.assign(r, pending);
             return hit;
         };
         const builder: Record<string, unknown> = {
-            eq: (col: string, val: unknown) => make([...filters, [col, val] as const], pending),
+            eq: (col: string, val: unknown) => make([...filters, [col, val] as const], pending, sort),
             neq: () => builder,
             is: () => builder,
             in: () => builder,
             not: () => builder,
-            order: () => builder,
+            order: (column: string, opts?: { ascending?: boolean }) =>
+                make(filters, pending, { column, ascending: opts?.ascending !== false }),
             limit: () => builder,
-            select: () => make(filters, pending),
+            select: () => make(filters, pending, sort),
             maybeSingle: async () => ({ data: apply()[0] ?? null, error: null }),
             single: async () => ({ data: apply()[0] ?? null, error: null }),
             then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: apply(), error: null }).then(resolve),

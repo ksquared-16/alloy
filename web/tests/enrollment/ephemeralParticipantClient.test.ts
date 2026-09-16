@@ -110,6 +110,14 @@ describe("every operational write is refused, by construction", () => {
         ["customer_members", "update"],
         ["process_instances", "update"],
         ["communications", "insert"],
+        // Named explicitly because the signature path is where an operational write would be most
+        // tempting to wave through: a preview signature must not become a stored attestation.
+        ["form_submission_signatures", "insert"],
+        ["form_packet_session_signatures", "insert"],
+        ["customer_households", "update"],
+        ["children", "update"],
+        ["process_stage_instances", "update"],
+        ["work_units", "insert"],
     ] as const)("refuses %s.%s", (table, verb) => {
         const h = holder();
         const { client, calls } = realClientThatMustNotBeUsedForWrites();

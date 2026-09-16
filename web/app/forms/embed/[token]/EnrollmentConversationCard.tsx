@@ -67,8 +67,42 @@ import {
     type SuggestedReply,
 } from "./ParticipantComposer";
 
+/**
+ * WHERE THIS CONVERSATION SENDS ITS TURNS.
+ *
+ * The component had three hard-coded public URLs, which was the ONLY thing preventing the admin
+ * preview from using it — the conversation logic, the thread, the composer and every interaction
+ * were already right. Rather than fork a preview copy that would drift the moment either changed,
+ * the three calls became one small adapter.
+ *
+ * OMITTED MEANS UNCHANGED. The default below is the exact request each call site made before, so a
+ * participant's runtime behaviour does not depend on this existing.
+ */
+export type ParticipantConversationApi = {
+    objective: () => Promise<Response>;
+    turn: (body: Record<string, unknown>) => Promise<Response>;
+    upload: (body: Record<string, unknown>) => Promise<Response>;
+};
+
+export function publicParticipantApi(token: string): ParticipantConversationApi {
+    const base = `/api/public/forms/${encodeURIComponent(token)}`;
+    const post = (path: string, body: Record<string, unknown>) =>
+        fetch(`${base}/${path}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body),
+        });
+    return {
+        objective: () => fetch(`${base}/enrollment-objective`),
+        turn: (body) => post("enrollment-turn", body),
+        upload: (body) => post("enrollment-upload", body),
+    };
+}
+
 export type EnrollmentConversationCardProps = {
     readonly token: string;
+    /** Omit for the participant runtime. Preview supplies its own admin-authenticated endpoints. */
+    readonly api?: ParticipantConversationApi;
     readonly initialObjective: ParticipantObjectiveWire;
     /** Called when the turn becomes artifact work, so the host hands off to the packet flow. */
     readonly onArtifactHandoff?: () => void;
@@ -730,6 +764,7 @@ function isoDraft(shown: string): string {
 
 export function EnrollmentConversationCard({
     token,
+    api,
     initialObjective,
     onArtifactHandoff,
     onPhaseChange,
@@ -738,6 +773,8 @@ export function EnrollmentConversationCard({
     onValueSettled,
 }: EnrollmentConversationCardProps) {
     const [objective, setObjective] = useState(initialObjective);
+    // Resolved once: the default is the participant's own endpoints, unchanged.
+    const conversationApi = useMemo(() => api ?? publicParticipantApi(token), [api, token]);
     /**
      * What the parent has already settled, newest last.
      *
@@ -780,7 +817,7 @@ export function EnrollmentConversationCard({
      */
     const refreshObjective = useCallback(async () => {
         try {
-            const res = await fetch(`/api/public/forms/${encodeURIComponent(token)}/enrollment-objective`);
+            const res = await conversationApi.objective();
             const json = (await res.json()) as { ok: boolean; data?: ParticipantObjectiveWire };
             if (json.ok && json.data) {
                 setObjective(json.data);
@@ -804,10 +841,10 @@ export function EnrollmentConversationCard({
                 for (let i = 0; i < buffer.length; i += 8192) {
                     binary += String.fromCharCode(...buffer.subarray(i, i + 8192));
                 }
-                const res = await fetch(`/api/public/forms/${encodeURIComponent(token)}/enrollment-upload`, {
-                    method: "POST",
-                    headers: { "content-type": "application/json" },
-                    body: JSON.stringify({ field_id: fieldId, filename: file.name, file_base64: btoa(binary) }),
+                const res = await conversationApi.upload({
+                    field_id: fieldId,
+                    filename: file.name,
+                    file_base64: btoa(binary),
                 });
                 const json = (await res.json()) as {
                     ok?: boolean;
@@ -924,28 +961,21 @@ export function EnrollmentConversationCard({
             setEditingRef(null);
             setText("");
             try {
-                const res = await fetch(
-                    `/api/public/forms/${encodeURIComponent(token)}/enrollment-turn`,
-                    {
-                        method: "POST",
-                        headers: { "content-type": "application/json" },
-                        /*
-                         * WORDS ONLY. No identifier of any kind — the server owns every one of
-                         * those and reads them from the session's current turn.
-                         *
-                         * `settledAs` stays behind deliberately: it is the thread's own echo of what
-                         * the parent chose, and a shortcut's label must never travel as an answer.
-                         */
-                        body: JSON.stringify({
-                            ...(payload.text !== undefined ? { text: payload.text } : {}),
-                            ...(payload.value !== undefined ? { value: payload.value } : {}),
-                            ...(payload.decline ? { decline: true } : {}),
-                            ...(payload.confirmGroup ? { confirm_group: true } : {}),
-                            ...(payload.editFact ? { edit_fact: payload.editFact } : {}),
-                            ...(payload.party ? { party: payload.party } : {}),
-                        }),
-                    },
-                );
+                /*
+                 * WORDS ONLY. No identifier of any kind — the server owns every one of those and
+                 * reads them from the session's current turn.
+                 *
+                 * `settledAs` stays behind deliberately: it is the thread's own echo of what the
+                 * parent chose, and a shortcut's label must never travel as an answer.
+                 */
+                const res = await conversationApi.turn({
+                    ...(payload.text !== undefined ? { text: payload.text } : {}),
+                    ...(payload.value !== undefined ? { value: payload.value } : {}),
+                    ...(payload.decline ? { decline: true } : {}),
+                    ...(payload.confirmGroup ? { confirm_group: true } : {}),
+                    ...(payload.editFact ? { edit_fact: payload.editFact } : {}),
+                    ...(payload.party ? { party: payload.party } : {}),
+                });
                 const json = (await res.json()) as TurnResponse;
                 if (!json.ok || !json.data) {
                     if (optimistic) setSettled((prev) => prev.slice(0, -1));

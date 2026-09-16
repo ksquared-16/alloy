@@ -14,6 +14,7 @@ import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
+import { handleParticipantObjective } from "@/lib/public/forms/handleParticipantObjective";
 import {
     recomputeParticipantObjectiveFromContext,
     resolveParticipantEnrollmentObjectiveWithContext,
@@ -49,58 +50,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             code: access.error.code,
         });
     }
-
-
-    // What the organization already holds about this child. Without it every known fact arrives as
-    // `missing`, and the participant is asked for information that is on file — which is exactly
-    // what live QA hit.
-    // Canonical record and objective context are independent reads — one wave. The needs
-    // projection DOES depend on canonical values, so the objective is re-assembled purely (zero
-    // queries) once both are in hand.
-    const parallelStart = timing.now();
-    const [canonical, resolved] = await Promise.all([
-        // Canonical prefill is resolved from the journey's subject. A packet-anchored session
-        // carries its child in the session's CRM snapshot instead, and the participant runtime
-        // already applies that at the form layer — so there is nothing to look up here.
-        resolveParticipantCanonicalContext(supabase, {
-            orgId: access.value.orgId,
-            processInstanceId: access.value.processInstanceId,
-            // A packet launched at a family names its child here; the journey names it on the
-            // instance. Either way the parent is greeted by their child's name.
-            customerMemberId: participantSubjectFromSession(access.value.session),
-        }),
-        resolveParticipantEnrollmentObjectiveWithContext(supabase, {
-            orgId: access.value.orgId,
-            processInstanceId: access.value.processInstanceId,
-            // The session row the access check already read — one fewer serial round trip.
-            preloadedSession: access.value.session,
-        }),
-    ]);
-    timing.mark("objective", parallelStart);
-    if (!resolved.ok) return publicErr(resolved.refusal.detail, 409, { code: resolved.refusal.code });
-    const objective = {
-        ok: true as const,
-        value: recomputeParticipantObjectiveFromContext(
-            { ...resolved.context, canonicalValues: canonical.values },
-            resolved.context.needsContext.session,
-        ),
-    };
-
-    // Narrowed for the wire: a participant surface never receives org ids, revision internals or
-    // requirement plumbing it has no use for.
-    // A question raised on a previous turn survives a reload — the parent sees the same ask.
-    const pending = readPendingClarification(
-        resolved.context.needsContext.session?.metadata,
-        objective.value.next_turn.need?.identity.key ?? null,
-    );
-    const response = publicOk(
-        participantObjectiveWireModel(objective.value, {
-            subjectDisplayName: canonical.subjectDisplayName,
-            pendingClarificationQuestion: pending?.question ?? null,
-        }),
-    );
-    response.headers.set("Server-Timing", timing.header());
-    return response;
+    return handleParticipantObjective(supabase, access.value, timing);
     } catch (e) {
         /*
          * An unhandled throw here used to reach the participant as a 500 with an EMPTY body, which
