@@ -105,6 +105,29 @@ function ReservedFocusPanelCell({ typeKey, settled }: { typeKey: FocusPanelCardK
               * identity above is the honest statement (this cell belongs to this card, its detail is
               * settling) and the receded surface carries "not yet" without inventing content.
               */}
+            {/*
+              * ONE QUIET LINE THAT SAYS WHAT IS HAPPENING (P0-7.4).
+              *
+              * The identity-only cell was measured holding for 8.5 s on deployed staging with nothing
+              * under the title, and the operator read it as broken rather than arriving — "reserved
+              * cards are truthful but appear as large empty bordered regions". The title alone states
+              * WHICH card this is; it never states that anything is coming.
+              *
+              * So: the card's own name, resolving. No values, no counts, no statuses, no stand-in bars,
+              * no shimmer — every objection in the comment above still holds, and none of them is
+              * answered by a second grey rectangle. A sentence is not a guess at the card's shape.
+              *
+              * Only for the SETTLING reserve. A `settled` cell resolved as not-applicable is not
+              * arriving, and telling the operator it is resolving would be a lie that never resolves.
+              */}
+            {!settled && title ? (
+                <span
+                    className="mt-1.5 block text-[12px] leading-snug text-alloy-muted/70"
+                    data-focus-panel-cell-resolving={typeKey}
+                >
+                    {`Resolving ${title.toLowerCase()}…`}
+                </span>
+            ) : null}
         </div>
     );
 }

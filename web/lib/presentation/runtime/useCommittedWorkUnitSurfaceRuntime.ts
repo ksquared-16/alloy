@@ -90,7 +90,7 @@ import { subscribeWorkUnitConvergence } from "./workUnitConvergencePlan";
 import { provisioningKey } from "@/lib/runtime/kernel/provisioning";
 import { selectedWorkViewId } from "@/lib/runtime/provisioning/contextualFocusAnswer";
 import type { WorkUnitSurfaceModel, WorkUnitSurfaceIntents, QueueRowModel } from "./types";
-import { useAttentionSubject } from "@/lib/runtime/kernel/useAttentionCardFocus";
+import { useAttentionLens, useAttentionSubject } from "@/lib/runtime/kernel/useAttentionCardFocus";
 
 /** The surface has nothing to render until K3 commits. There is no third state. */
 export type CommittedWorkUnitSurfaceRuntime = {
@@ -108,9 +108,43 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     // The OPERATIONAL world, as a value — built PURELY from the committed snapshot, consulting no
     // fetch. This is the first visible frame: reserved geometry, no Settlement. Null before the first
     // commit — and a null model is never rendered as a Work Unit: K3's phase decides what is shown.
-    const operationalModel = useMemo(
+    const operationalModelFromSnapshot = useMemo(
         () => (focus.current ? workUnitSurfaceModelFromSnapshot(focus.current.snapshot) : null),
         [focus.current],
+    );
+
+    /*
+     * ── HELD ROWS MUST NOT CLAIM TO BE THE DESTINATION (P0-7.3) ──
+     *
+     * A lens switch retains the prior surface deliberately — that is sanctioned continuity, and this
+     * does not change it. What was untruthful is how the retained rows PRESENTED: the model reports
+     * `loading: false` ("this model exists only because a terminal already arrived"), which is true of
+     * the SNAPSHOT and false of the SCREEN once the operator has asked for a different lens. With that
+     * flag false, `QueueRegion`'s existing hold treatment and `aria-busy` never engage, so for ~3.3 s
+     * the previous lens's rows sat there fully interactive and indistinguishable from the destination.
+     *
+     * The hold state already exists and is already rendered; nothing new is invented here. This only
+     * says WHEN it applies: attention has moved to another lens and the committed snapshot has not
+     * caught up. When they agree — the ordinary case, and every case before a switch — this is false
+     * and the model is untouched.
+     */
+    const desiredLens = useAttentionLens();
+    const committedLens =
+        focus.current?.snapshot.terminal === "operational"
+            ? focus.current.snapshot.activeWorkView?.id ?? null
+            : null;
+    const queueIsHoldingPriorLens =
+        desiredLens != null && committedLens != null && desiredLens !== committedLens;
+
+    const operationalModel = useMemo(
+        () =>
+            operationalModelFromSnapshot && queueIsHoldingPriorLens
+                ? {
+                      ...operationalModelFromSnapshot,
+                      queue: { ...operationalModelFromSnapshot.queue, loading: true },
+                  }
+                : operationalModelFromSnapshot,
+        [operationalModelFromSnapshot, queueIsHoldingPriorLens],
     );
 
     // CP-2 — reuse, don't re-fetch. The committed answer already carries the selected subject's stage-work
