@@ -181,43 +181,37 @@ nothing. Operator actions required: pause the other lanes' dev servers, approve 
 and produce a production build with `ALLOY_ROUTE_TIMING=1`. The methodology in §5 and the standing
 evidence in §7 mean the next attempt should be measurement only.
 
-## 11. Addendum — governed QA restore executed, and what it actually delivered
+## 11. Addendum — the QA-session blocker was MY harness, not the governed action
 
-After this document was first written, the Director executed `environment.restore_qa_session`
-(`gar_3e1c928da6e10e` → `tha_4a93d7fa9f2fe7`) against target **`alloy_deployed_primary`**. Its result:
+**Correction. §11 as first written was wrong and is replaced by this.** It claimed the Director's
+`environment.restore_qa_session` returned `ok/verified` without writing the slot-1 session. It wrote
+it correctly, both times. The harness was reading the wrong file.
 
-```json
-{ "ok": true, "status": "restored", "lane_id": "lane_73a897409906", "slot": 1,
-  "registered_identity": "qa-slot1-product@example.com",
-  "storage_written": true, "verified": true, "failure_code": null }
-```
+A slot's session lives at `slotAuthStoragePath()` = `<stateRoot>/auth/slotN/storage-state.json`,
+where `stateRoot()` resolves to `~/.local/state/alloy-dev/`**`gateway`**. There is a second copy at
+`~/.local/state/alloy-dev/auth/slot1/storage-state.json`, which `browser-auth.mjs` names
+`legacySlotAuthStoragePath` and its own comment calls **stranded**. The measurement harness
+(`frames.mjs`) has been pinned to the stranded path since Phase 0.
 
-**It does not unblock local measurement, and the result should not be read as saying it does.**
-Verified three ways rather than from the result:
+So every signal lined up to tell a false story: the stranded file kept its 13:11 mint (cookies dead
+at 14:11:51), Playwright loaded those cookies and landed on `/login`, and `vac browser-auth status`
+said `authentication_valid` — because status reads the canonical path. The two were never describing
+different stores; one of them was describing the file nothing writes.
 
-| Check | Finding |
-|---|---|
-| `vac browser-auth status --slot 1` | `authentication_valid`, `storage_captured_at 21:08:27Z`, expiry `22:08:27Z` |
-| slot-1 storage file | `~/.local/state/alloy-dev/auth/slot1/storage-state.json`, mtime **13:11:51** — the previous mint |
-| its cookies | all four `sb-…-auth-token` entries expire **14:11:51**, i.e. already expired |
-| headless load of `127.0.0.1:3011/workspace/work-unit/all` | redirects to **`/login`**, 0 rows |
+The second restore (`gar_809b850ab3d4b7` → `tha_95769275b025f0`, filed under this run) wrote
+`~/.local/state/alloy-dev/gateway/auth/slot1/storage-state.json` at **18:30:45** with cookies valid
+to **19:30:45** — a full hour, which covers the measurement window. Harness repointed to the
+canonical path with a legacy fallback.
 
-So the status command and the file Playwright loads are describing different stores: the deployed
-primary was restored, the loopback slot was not. The trusted-host record also carries
-`started_at == completed_at == created_at` (21:08:26.358Z) — the near-instant signature of work that
-did not happen for this target.
+Two things worth keeping from the mistake:
 
-The action was **not retried** from this lane, per the notification. The local slot still needs a
-loopback restore, which is a Director target choice, not this lane's to make.
+* `environment.restore_qa_session` resolves slot, port, worktree, storage path and identity from the
+  registries out of `laneId` alone — by design there is no target a caller could get wrong. The
+  "Target: alloy_deployed_primary" label on the governed envelope is not the action's effective
+  target, and reading it as one is what made the wrong explanation plausible.
+* `created_at == started_at == completed_at` is **not** proof of a no-op. A real slot restore stamps
+  all three identically. That inference was wrong and is withdrawn.
 
-**Host, re-gated after the restore (14:14):** load 1-min **4.65** (limit 4) FAIL · trend PASS ·
-CPU idle 83.91% PASS · spotlight PASS · **competing node 10 others** FAIL → still
-*HOST NOT QUALIFIED*. Improving but not admissible; the persistent half is other lanes' dev servers.
+**Net effect on the blocker list:** the QA session is **CLEARED**, and it was never blocked by anyone
+but this lane.
 
-The gateway store shows why the host stays loud: `wt6-surfaces-faacca`, `access-identity` and the
-`vacilando` seed lane were all pushing/merging during this window. Worth noting for collision risk,
-not for this slice's decisions: **`wt6-surfaces-faacca` is committing to
-`workUnitProvisioningAnswer.ts` and `InlineOpportunityFocusPanel.tsx`** — two files this programme
-owns repairs in.
-
-**Blocker status unchanged: all three still stand.**
