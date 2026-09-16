@@ -2,7 +2,6 @@
 
 import clsx from "clsx";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import PrimaryButton from "@/components/PrimaryButton";
 import SecondaryButton from "@/components/SecondaryButton";
 import { FormsOperationalLink } from "@/components/forms/workspace/FormsOperationalLink";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
@@ -18,7 +17,8 @@ import {
 import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import { MEDICATION_AUTHORIZATION_DEMO_FORM_KEY } from "@/lib/forms/seeds/medicationAuthorizationDemo";
 import {
-    opActionLink,
+    opActionLinkAccent,
+    opPrimaryActionButton,
     opGroupedRowInner,
     opGroupedSurface,
     opMetadata,
@@ -83,7 +83,7 @@ function OneTimeLinkPanel({
                     {onCopy ?
                         <button
                             type="button"
-                            className={opActionLink}
+                            className={opActionLinkAccent}
                             onClick={() => onCopy("url", intakeUrl)}
                             data-testid="distribution-copy-intake-url"
                         >
@@ -91,7 +91,7 @@ function OneTimeLinkPanel({
                         </button>
                     :   null}
                     <a
-                        className="text-xs font-semibold text-alloy-blue hover:underline"
+                        className={opActionLinkAccent}
                         href={intakeUrl}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -103,7 +103,7 @@ function OneTimeLinkPanel({
             </div>
             {createdLink.plaintext_token ?
                 <details className="mt-3 rounded-md border border-dashed border-alloy-midnight/15 bg-white/60 px-3 py-2">
-                    <summary className={clsx("cursor-pointer", opActionLink)}>
+                    <summary className={clsx("cursor-pointer", opActionLinkAccent)}>
                         {DISTRIBUTION_COPY.advancedCredential}
                     </summary>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -113,7 +113,7 @@ function OneTimeLinkPanel({
                         {onCopy ?
                             <button
                                 type="button"
-                                className={opActionLink}
+                                className={opActionLinkAccent}
                                 onClick={() => onCopy("credential", createdLink.plaintext_token!)}
                             >
                                 {copied === "credential" ? "Copied" : "Copy"}
@@ -177,7 +177,7 @@ function LinkRow({
                 <div className="mt-2">
                     <button
                         type="button"
-                        className={opActionLink}
+                        className={opActionLinkAccent}
                         disabled={busy}
                         onClick={() => onToggleLink(link, !link.is_active)}
                         data-testid={`distribution-toggle-${link.id}`}
@@ -223,7 +223,7 @@ export function DistributionLinksPanel(props: DistributionLinksPanelProps) {
             {mode === "packet" ?
                 <p className={clsx("mt-2", opMetadata)}>
                     Completed runs appear in the{" "}
-                    <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetSessions}>session inbox</FormsOperationalLink>{" "}
+                    <FormsOperationalLink accent href={FORMS_MODULE_ROUTES.packetSessions}>session inbox</FormsOperationalLink>{" "}
                     for review.
                 </p>
             :   null}
@@ -237,9 +237,9 @@ export function DistributionLinksPanel(props: DistributionLinksPanelProps) {
             <div className="mt-3">
                 {!canMutate ?
                     <p className={opMetadata}>{DISTRIBUTION_COPY.adminRequired}</p>
-                :   <PrimaryButton
+                :   <button
                         type="button"
-                        className="!px-3.5 !py-2 text-sm"
+                        className={opPrimaryActionButton}
                         disabled={busy || (mode === "form" && shareIntakeBlocked)}
                         onClick={mode === "form" ? props.onShareIntake : props.onLaunchPacket}
                         data-testid={mode === "form" ? "distribution-share-intake" : "distribution-launch-packet"}
@@ -249,7 +249,7 @@ export function DistributionLinksPanel(props: DistributionLinksPanelProps) {
                         : mode === "form" && shareIntakeBlocked ?
                             shareIntakeBlockedLabel
                         :   primaryLabel}
-                    </PrimaryButton>
+                    </button>
                 }
             </div>
 

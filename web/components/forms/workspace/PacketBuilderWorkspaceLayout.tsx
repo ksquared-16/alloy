@@ -359,8 +359,8 @@ export function PacketBuilderWorkspaceLayout({
                                 </button>
                             ) : (
                                 <>
-                                    <FormsOperationalLink href={FORMS_MODULE_ROUTES.packetSessions}>Open session inbox</FormsOperationalLink>
-                                    <FormsOperationalLink href={FORMS_MODULE_ROUTES.workspace}>Intake workspace</FormsOperationalLink>
+                                    <FormsOperationalLink accent href={FORMS_MODULE_ROUTES.packetSessions}>Open session inbox</FormsOperationalLink>
+                                    <FormsOperationalLink accent href={FORMS_MODULE_ROUTES.workspace}>Intake workspace</FormsOperationalLink>
                                 </>
                             )}
                         </div>
