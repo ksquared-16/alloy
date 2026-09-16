@@ -121,6 +121,8 @@ export async function composeProvisioningAnswerForRoute(input: {
             cards: await projectFocusPanelCardProducers({
                 supabase,
                 orgId: gate.orgId,
+                // The route's OWN resolved authority — same canonical bundle as the endpoint.
+                access: gate.access,
                 context: buildCommitCriticalOperationalContext({
                     mode: "work",
                     subjectId: answer.recordOfAttention?.id ?? "",

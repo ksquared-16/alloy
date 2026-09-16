@@ -28,6 +28,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { buildAttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
 import type { AttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
+import { buildHealthSafetyCardVM } from "@/lib/adminV2/runtime/focusPanel/healthSafety/buildHealthSafetyCardVM";
+import type { HealthSafetyCardVM } from "@/lib/adminV2/runtime/focusPanel/healthSafety/buildHealthSafetyCardVM";
+import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
 import type {
     FocusPanelCardProducerResults,
     ProducerResult,
@@ -56,8 +59,28 @@ export async function projectFocusPanelCardProducers(input: {
     supabase: SupabaseClient;
     orgId: string;
     context: OperationalContext;
+    /**
+     * THE AUTHENTICATED CALLER'S RESOLVED AUTHORITY — the route's own, never the browser's.
+     *
+     * MOVING A READ FROM A CARD ENDPOINT INTO ROOT PROVISIONING MUST NOT CHANGE WHO IS AUTHORIZED
+     * TO RECEIVE IT. Producer convergence changes where a read RUNS; it does not change who may see
+     * the answer. Health is the first producer where that distinction has teeth: its endpoint
+     * resolves the caller's grants and refuses without `health.view`, and route admission is
+     * deliberately not the boundary — an operator who works Attendance holds that admission and must
+     * not receive allergies, conditions and medications.
+     *
+     * This is `AdminAccessContextSuccess`, the SAME canonical resolution the endpoint performs,
+     * from the same per-request cached bundle — not a second permission model and not a
+     * Health-shaped one. The root route already holds it as `gate.access`, so nothing is resolved
+     * twice and nothing new is trusted.
+     *
+     * It is deliberately the whole resolved authority rather than a plucked permission list:
+     * Financials will need org/site scope from the same object, and a producer that received only
+     * the fact it asked for would invite the next producer to invent its own channel.
+     */
+    access: AdminAccessContextSuccess;
 }): Promise<FocusPanelCardProducerResults> {
-    const { supabase, orgId, context } = input;
+    const { supabase, orgId, context, access } = input;
 
     /*
      * The scoped participant, resolved by the context rather than by the card.
@@ -68,13 +91,32 @@ export async function projectFocusPanelCardProducers(input: {
      */
     const customerMemberId = context.participantScope?.customerMemberId ?? null;
 
-    const [attendance] = await Promise.allSettled([
+    const displayName = context.participantScope?.displayName ?? null;
+
+    const [attendance, health] = await Promise.allSettled([
         customerMemberId
             ? buildAttendanceCardVM(supabase, {
                   orgId,
                   customerMemberId,
-                  displayName: context.participantScope?.displayName ?? null,
+                  displayName,
                   recentDays: INITIAL_RECENT_DAYS,
+              })
+            : Promise.resolve(null),
+        /*
+         * The SAME domain owner the endpoint calls, with the SAME resolved authority.
+         *
+         * The refusal is not restated here: `buildHealthSafetyCardVM` evaluates `health.view` itself
+         * and returns `permissionDenied`, exactly as it does for the endpoint. Re-deciding it in the
+         * producer would be a second authorization model — the thing this convergence must not
+         * create. A failed grant read reaches the resolver as a non-array and denies, so the
+         * fail-closed behaviour is the endpoint's, inherited rather than reimplemented.
+         */
+        customerMemberId
+            ? buildHealthSafetyCardVM(supabase, {
+                  orgId,
+                  customerMemberId,
+                  displayName,
+                  access: { permissionKeys: access.permissionKeys },
               })
             : Promise.resolve(null),
     ]);
@@ -86,5 +128,19 @@ export async function projectFocusPanelCardProducers(input: {
                 : attendance.value
                   ? { state: "ready", data: attendance.value }
                   : unavailable<AttendanceCardVM>(),
+        health:
+            health.status === "rejected"
+                ? { state: "error", data: null }
+                : !health.value
+                  ? unavailable<HealthSafetyCardVM>()
+                  : health.value.permissionDenied
+                    ? /*
+                       * DENIED CARRIES NO DATA. The endpoint answers 403 with no `vm`, and the
+                       * producer must not be the softer door: returning the VM and trusting the card
+                       * to hide it would put health facts in the payload of a caller who may not see
+                       * them, where a devtools network tab is enough to read them.
+                       */
+                      { state: "forbidden", data: null }
+                    : { state: "ready", data: health.value },
     };
 }

@@ -95,12 +95,33 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
         }
     }, [memberId]);
 
+    /*
+     * THE ROOT PROVISIONED THIS RECORD. The card renders it.
+     *
+     * This used to `fetch(/api/admin/health/card)` on mount — its own bootstrap, its own loading
+     * state, its own stale guard. The health producer now runs inside the root provisioning
+     * lifecycle, bound to the same subject and executed under the SAME authenticated caller
+     * authority the endpoint resolves, so the projection arrives already keyed to this child and
+     * already refused if this operator may not see it.
+     *
+     * `load()` remains for the RELOAD after a health fact is recorded: that is an interaction, not a
+     * bootstrap, and the endpoint is unchanged.
+     */
+    const provisioned = context.operationalProjection?.cards?.health ?? null;
+
+    /*
+     * READINESS IS THE ROOT'S, and a missing projection is PROVISIONING — never "no health record".
+     * A card that asserted an absence it had not been told about is exactly the ambiguity that left
+     * Attendance spinning.
+     */
+    const provisioning = memberId != null && provisioned == null;
+
     useEffect(() => {
         // Clear FIRST. Health data from the previous child must not linger for even one frame.
-        setVm(null);
-        setDenied(false);
-        void load();
-    }, [load]);
+        setVm(provisioned?.state === "ready" ? provisioned.data : null);
+        // A refusal is a FACT the root resolved, not an empty record.
+        setDenied(provisioned?.state === "forbidden");
+    }, [provisioned]);
 
     /*
      * THE ONLY WAY HEALTH TRUTH CHANGES HERE.
@@ -262,7 +283,7 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
         <div className="alloy-os-health" data-health-card="true" data-health-subject={memberId ?? undefined}>
             <UniversalCard
                 title={model.title}
-                insight={insightFor(vm, denied, name, Boolean(memberId), loading)}
+                insight={insightFor(vm, denied, name, Boolean(memberId), loading || provisioning)}
                 iconName={model.iconName}
                 tier={model.tier}
                 archetype={model.archetype}
@@ -287,7 +308,7 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
                     </p>
                 ) : !vm ? (
                     <p className="alloy-os-health__empty" data-health-empty="loading">
-                        {loading ? "Loading health information…" : "No health record."}
+                        {loading || provisioning ? "Loading health information…" : "No health record."}
                     </p>
                 ) : (
                     <>

@@ -16,6 +16,7 @@ import type { BusinessProcessCardEvidence } from "@/lib/adminV2/runtime/focusPan
 import type { ProcessCardCommandProjection } from "@/lib/adminV2/runtime/focusPanel/businessProcess/projectProcessCardCommands";
 import type { CurrentWorkViewModel } from "@/lib/adminV2/runtime/focusPanel/currentWork/projectCurrentWork";
 import type { AttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
+import type { HealthSafetyCardVM } from "@/lib/adminV2/runtime/focusPanel/healthSafety/buildHealthSafetyCardVM";
 
 export type FocusPanelOperationalProjection = {
     businessProcess: {
@@ -39,8 +40,13 @@ export type FocusPanelOperationalProjection = {
  *
  * `unavailable` and `error` are different facts: no subject to read for is ordinary, a failed read
  * is not, and collapsing them would make an outage indistinguishable from an empty one.
+ *
+ * `forbidden` is the third: the caller may not see this data. It is NOT `unavailable`, because the
+ * card must say "you do not have permission" rather than render an empty surface that reads as "no
+ * allergies" — the health endpoint's own reasoning, and the card already renders that refusal. A
+ * `forbidden` result carries `data: null`, so nothing the caller may not see crosses the wire.
  */
-export type ProducerState = "ready" | "unavailable" | "error";
+export type ProducerState = "ready" | "unavailable" | "error" | "forbidden";
 
 export type ProducerResult<T> = { state: ProducerState; data: T | null };
 
@@ -56,4 +62,5 @@ export type ProducerResult<T> = { state: ProducerState; data: T | null };
  */
 export type FocusPanelCardProducerResults = {
     attendance: ProducerResult<AttendanceCardVM>;
+    health: ProducerResult<HealthSafetyCardVM>;
 };
