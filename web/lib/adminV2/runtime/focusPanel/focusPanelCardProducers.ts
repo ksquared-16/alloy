@@ -30,6 +30,10 @@ import { buildAttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendan
 import type { AttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
 import { buildHealthSafetyCardVM } from "@/lib/adminV2/runtime/focusPanel/healthSafety/buildHealthSafetyCardVM";
 import type { HealthSafetyCardVM } from "@/lib/adminV2/runtime/focusPanel/healthSafety/buildHealthSafetyCardVM";
+import { buildFinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
+import type { FinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
+import { resolveFinancialSubjectId } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
+import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
 import type {
     FocusPanelCardProducerResults,
@@ -93,7 +97,58 @@ export async function projectFocusPanelCardProducers(input: {
 
     const displayName = context.participantScope?.displayName ?? null;
 
-    const [attendance, health] = await Promise.allSettled([
+    /*
+     * FINANCIALS IS THE HOUSEHOLD'S ACCOUNT, resolved by the shared rule rather than this module's
+     * opinion of it. `resolveFinancialSubjectId` is the same function the card and the card registry
+     * both call, which is what stops a card being admitted because an account "is available" and
+     * then failing to find one in the very context that admitted it.
+     */
+    const financialSubjectId = (() => {
+        /*
+         * THE ORCHESTRATOR'S PROMISE IS ABSOLUTE: this function never throws, so one card can never
+         * cost the operator the panel. That promise has to cover its own preamble too — a throw
+         * HERE, before `Promise.allSettled`, would reject every producer at once, which is precisely
+         * the blast radius the settled region exists to prevent.
+         *
+         * `OperationalContext.truth` is required by its type, so this should be unreachable. "Should
+         * be unreachable" is the reason to catch it rather than the reason not to: the cost is one
+         * card reporting no account, and the alternative cost is the whole Focus Panel.
+         */
+        try {
+            return resolveFinancialSubjectId(context);
+        } catch {
+            return null;
+        }
+    })();
+
+    /*
+     * FINANCIALS AUTHORIZATION IS NOT HEALTH'S, and assuming it was is the mistake this audit
+     * existed to prevent.
+     *
+     * Health's domain owner evaluates the grant itself, from the caller's resolved permission keys.
+     * Financials refuses OUTSIDE its VM builder, through `assertFinancialsReadAllowed`, which
+     * resolves the actor's grants against the org with the service client and checks `fin.read` —
+     * a different key, a different resolver, and a gate that runs BEFORE any figure is computed.
+     * `buildFinancialsCardVM` takes no access argument at all, so calling it without this gate would
+     * hand the household's balance to anyone the route admitted.
+     *
+     * So the producer calls the SAME canonical gate the endpoint calls, with the route-resolved org
+     * and caller. It does not restate `fin.read`, and it does not re-resolve WHO the caller is —
+     * `access.userId` is the identity the route already admitted.
+     */
+    const financialsGate =
+        financialSubjectId
+            ? await assertFinancialsReadAllowed({ supabase, orgId, userId: access.userId }).catch(() => ({
+                  /*
+                   * A FAILED GRANT READ IS A REFUSAL, not an empty grant set. The endpoint's gate
+                   * rejects and the route never reaches the VM; the producer must not be the softer
+                   * door by treating the failure as "no opinion" and reading the ledger anyway.
+                   */
+                  ok: false as const,
+              }))
+            : null;
+
+    const [attendance, health, financials] = await Promise.allSettled([
         customerMemberId
             ? buildAttendanceCardVM(supabase, {
                   orgId,
@@ -119,6 +174,19 @@ export async function projectFocusPanelCardProducers(input: {
                   access: { permissionKeys: access.permissionKeys },
               })
             : Promise.resolve(null),
+        /*
+         * Only reached when the gate ALLOWED. A denied caller never causes a ledger read at all,
+         * which is both the authorization property and the cheaper answer.
+         */
+        financialSubjectId && financialsGate?.ok
+            ? buildFinancialsCardVM(supabase, {
+                  orgId,
+                  customerId: financialSubjectId,
+                  // The child filter, when the surface is scoped to one. The ACCOUNT is still the
+                  // household's — this narrows the view, it does not change the subject.
+                  customerMemberId,
+              })
+            : Promise.resolve(null),
     ]);
 
     return {
@@ -142,5 +210,16 @@ export async function projectFocusPanelCardProducers(input: {
                        */
                       { state: "forbidden", data: null }
                     : { state: "ready", data: health.value },
+        financials:
+            financials.status === "rejected"
+                ? { state: "error", data: null }
+                : !financialSubjectId
+                  ? /* No household, no account. Ordinary, and not a refusal. */
+                    unavailable<FinancialsCardVM>()
+                  : !financialsGate?.ok
+                    ? { state: "forbidden", data: null }
+                    : financials.value
+                      ? { state: "ready", data: financials.value }
+                      : unavailable<FinancialsCardVM>(),
     };
 }

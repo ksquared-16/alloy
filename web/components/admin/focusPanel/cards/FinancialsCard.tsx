@@ -102,6 +102,15 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     const noFinancialSubject = !subjectStillResolving && !customerId && !scopedMemberId;
 
     const [vm, setVm] = useState<FinancialsCardVM | null>(null);
+    /*
+     * A REFUSAL IS NOT AN EMPTY ACCOUNT.
+     *
+     * The endpoint answers 403 with `required_permission` when the caller lacks `fin.read`, and this
+     * card used to discard that and fall through to its empty state — telling an operator who may not
+     * see the ledger that there is nothing to see. The root producer reports the refusal explicitly,
+     * so the card can say what is actually true.
+     */
+    const [deniedRead, setDeniedRead] = useState(false);
     const [loading, setLoading] = useState(false);
     /*
      * ONE overlay at a time, and the Focus Panel's OWN depth layer renders it.
@@ -718,11 +727,35 @@ export default function FinancialsCard({ model, context, receded = false, coordi
 
 
 
+    /*
+     * THE ROOT PROVISIONED THIS ACCOUNT. The card renders it.
+     *
+     * This used to `fetch(/api/admin/financials/card)` on mount. The financials producer now runs
+     * inside the root provisioning lifecycle, under the SAME `fin.read` gate the endpoint applies,
+     * so the projection arrives already refused if this operator may not see the ledger.
+     *
+     * ── THE STALE GUARANTEE IS STRONGER HERE, NOT WEAKER ──
+     *
+     * `requestSeq` exists because a slow earlier response could land on top of a newer one — A → B
+     * → C with A resolving last, reproduced in the browser. The initial read no longer has a request
+     * of its own to lose that race with: the projection arrives WITH the answer whose subject it
+     * belongs to, and the root lifecycle already drops superseded answers wholesale.
+     *
+     * `requestSeq` stays for `load()`, which is the RELOAD after a financial action — an interaction,
+     * not a bootstrap, and still capable of racing itself.
+     */
+    const provisioned = context.operationalProjection?.cards?.financials ?? null;
+
+    /* Missing projection is PROVISIONING. It is not "No financial record." */
+    const provisioningAccount = (customerId != null || scopedMemberId != null) && provisioned == null;
+
     useEffect(() => {
         // Clear FIRST: the previous household's balance must not linger while the next resolves.
-        setVm(null);
-        void load();
-    }, [load]);
+        // Any in-flight RELOAD is superseded too — its ordinal can no longer be current.
+        requestSeq.current += 1;
+        setVm(provisioned?.state === "ready" ? provisioned.data : null);
+        setDeniedRead(provisioned?.state === "forbidden");
+    }, [provisioned]);
 
     /*
      * A SCOPED CHILD PRESELECTS THE SUBJECT FILTER.
@@ -2531,6 +2564,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 className="alloy-os-financials"
                 data-financials-card="true"
                 data-financials-subject={subjectFilter}
+                /* WHICH ACCOUNT IS ON SCREEN — the household, not the child filter. */
+                data-financials-account={vm.account?.customerId ?? undefined}
             >
                 <ApprovedFinancialsCard
                     evidence={adaptFinancialsVmToFinancialsCard({
@@ -2570,7 +2605,20 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     }
 
     return (
-        <div className="alloy-os-financials" data-financials-card="true" data-financials-subject={subjectFilter}>
+        <div
+            className="alloy-os-financials"
+            data-financials-card="true"
+            data-financials-subject={subjectFilter}
+            /*
+             * WHICH ACCOUNT IS ON SCREEN — the household, not the child filter.
+             *
+             * `data-financials-subject` is the subject FILTER inside the account; it cannot answer
+             * "whose account is this". The sibling cards already name their subject this way
+             * (`data-attendance-subject`), and a stale-overwrite proof needs to read the answer off
+             * the rendered card rather than off the props it was handed.
+             */
+            data-financials-account={vm?.account?.customerId ?? undefined}
+        >
             <UniversalCard
                 title={model.title}
                 insight={insightFor(vm, reconciliation, loading, currency)}
@@ -2587,11 +2635,13 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     <p
                         className="alloy-os-financials__empty"
                         data-financials-empty={
-                            loading || subjectStillResolving
-                                ? "loading"
-                                : noFinancialSubject
-                                  ? "no-subject"
-                                  : "no-account"
+                            deniedRead
+                                ? "permission"
+                                : loading || subjectStillResolving || provisioningAccount
+                                  ? "loading"
+                                  : noFinancialSubject
+                                    ? "no-subject"
+                                    : "no-account"
                         }
                     >
                         {/*
@@ -2603,9 +2653,11 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                          * state that renders as $0.00 with Add charge available. What the card
                          * actually meant was that it could not resolve an account to ask about.
                          */}
-                        {loading || subjectStillResolving
-                            ? "Loading the account…"
-                            : "Financial account unavailable"}
+                        {deniedRead
+                            ? "You do not have permission to view financial information."
+                            : loading || subjectStillResolving || provisioningAccount
+                              ? "Loading the account…"
+                              : "Financial account unavailable"}
                     </p>
                 ) : (
                     <>

@@ -28,6 +28,7 @@ import { describe, expect, it } from "vitest";
 
 import { evaluateHealthAccess, HEALTH_VIEW_PERMISSION } from "@/lib/health/healthAccess";
 import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
+import { FINANCIALS_READ_PERMISSION_KEY } from "@/lib/financials/financialsPermissions";
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
 
 const MEMBER = "b247b8a3-7df7-4919-9309-698796b59c3b";
@@ -50,6 +51,8 @@ const access = (permissionKeys: string[] | null): AdminAccessContextSuccess =>
 const context = (memberId: string | null) =>
     ({
         participantScope: memberId ? { customerMemberId: memberId, displayName: "Child A" } : null,
+        // `truth` is required by OperationalContext; the financial subject rule reads it.
+        truth: {},
     }) as never;
 
 /**
@@ -204,6 +207,7 @@ describe("the root Health producer cannot broaden the endpoint's authorization",
          * via the attention subject — must never be able to carry a permission.
          */
         const withForgedContext = {
+            truth: {},
             participantScope: { customerMemberId: MEMBER, displayName: "Child A" },
             // A hostile client naming its own grants, in every shape it might try.
             permissionKeys: [HEALTH_VIEW_PERMISSION],
@@ -294,5 +298,148 @@ describe("the general law, not one producer's version of it", () => {
         expect(code).not.toContain("health.view");
         expect(code).not.toMatch(/permissionKeys\s*\.\s*includes/);
         expect(code).not.toContain("evaluateHealthAccess");
+    });
+});
+
+/**
+ * FINANCIALS AUTHORIZATION IS NOT HEALTH'S, and assuming it was is what the audit prevented.
+ *
+ * Health's domain owner evaluates the grant itself from the caller's resolved permission keys.
+ * Financials refuses OUTSIDE its VM builder: `assertFinancialsReadAllowed` resolves the actor's
+ * grants against the org with the service client and checks `fin.read` — a different key, a
+ * different resolver, and a gate that runs BEFORE any figure is computed. `buildFinancialsCardVM`
+ * takes no access argument at all, so calling it without that gate hands over the household balance
+ * to anyone the route admitted.
+ *
+ * These drive the producer against a database that answers the GRANT query and nothing else, so the
+ * verdict under test is the real one.
+ */
+describe("the root Financials producer cannot broaden its endpoint's authorization", () => {
+    const HOUSEHOLD = "0658832a-48d6-4b80-beae-0b12d573fdf2";
+
+    /** A client whose actor-grant read returns exactly these keys. */
+    function supabaseGranting(keys: string[]) {
+        const rows = keys.map((k) => ({ permission_key: k, key: k }));
+        const builder: Record<string, unknown> = {};
+        Object.assign(builder, {
+            select: () => builder,
+            eq: () => builder,
+            in: () => builder,
+            order: () => builder,
+            limit: () => builder,
+            maybeSingle: async () => ({ data: null, error: null }),
+            single: async () => ({ data: null, error: null }),
+            then: (res: (v: unknown) => void) => res({ data: rows, error: null }),
+        });
+        return { from: () => builder, rpc: async () => ({ data: rows, error: null }) };
+    }
+
+    const financialsContext = {
+        participantScope: { customerMemberId: MEMBER, displayName: "Child A" },
+        truth: { "customer.id": HOUSEHOLD },
+    } as never;
+
+    async function financialsFor(keys: string[]) {
+        const results = await projectFocusPanelCardProducers({
+            supabase: supabaseGranting(keys) as never,
+            orgId: ORG,
+            context: financialsContext,
+            access: access(keys),
+        });
+        return results.financials;
+    }
+
+    it("uses a DIFFERENT permission key than Health — the two were never interchangeable", () => {
+        expect(FINANCIALS_READ_PERMISSION_KEY).not.toBe(HEALTH_VIEW_PERMISSION);
+        expect(FINANCIALS_READ_PERMISSION_KEY).toBe("fin.read");
+    });
+
+    it("refuses a caller who holds HEALTH access but not financial access", async () => {
+        // The precise privilege-widening this migration could have caused: one producer lifecycle
+        // must not mean one privilege level.
+        const financials = await financialsFor([HEALTH_VIEW_PERMISSION]);
+        expect(financials.state).toBe("forbidden");
+        expect(financials.data).toBeNull();
+    });
+
+    it("refuses an empty grant set, and reveals no account", async () => {
+        const financials = await financialsFor([]);
+        expect(financials.state).toBe("forbidden");
+        expect(financials.data).toBeNull();
+    });
+
+    it("does not read the ledger at all for a refused caller", async () => {
+        /*
+         * THE STRONGER CLAIM. A denied caller should not cause the household's charges to be read
+         * and then thrown away: that is both a privacy surface and a cost. The gate runs first, and
+         * the VM builder is never entered.
+         */
+        let ledgerReads = 0;
+        const grantsOnly = supabaseGranting([]);
+        const watched = {
+            ...grantsOnly,
+            from: (table: string) => {
+                if (table !== "user_permission_grants" && table.includes("charge")) ledgerReads += 1;
+                return grantsOnly.from();
+            },
+        };
+        const results = await projectFocusPanelCardProducers({
+            supabase: watched as never,
+            orgId: ORG,
+            context: financialsContext,
+            access: access([]),
+        });
+        expect(results.financials.state).toBe("forbidden");
+        expect(ledgerReads).toBe(0);
+    });
+
+    it("reports `unavailable` — not a refusal — when there is no household to ask about", async () => {
+        const results = await projectFocusPanelCardProducers({
+            supabase: supabaseGranting([FINANCIALS_READ_PERMISSION_KEY]) as never,
+            orgId: ORG,
+            context: { participantScope: null, truth: {} } as never,
+            access: access([FINANCIALS_READ_PERMISSION_KEY]),
+        });
+        expect(results.financials.state).toBe("unavailable");
+        expect(results.financials.data).toBeNull();
+    });
+
+    it("a failed grant read REFUSES rather than falling through", async () => {
+        /*
+         * `assertFinancialsReadAllowed` rejects when the grant read fails, and the endpoint's route
+         * never reaches the VM. The producer must not be the softer door by treating the failure as
+         * "no opinion" and reading the ledger anyway.
+         */
+        const broken = {
+            from: () => {
+                const b: Record<string, unknown> = {};
+                Object.assign(b, {
+                    select: () => b,
+                    eq: () => b,
+                    in: () => b,
+                    order: () => b,
+                    limit: () => b,
+                    maybeSingle: async () => {
+                        throw new Error("grant_store_down");
+                    },
+                    single: async () => {
+                        throw new Error("grant_store_down");
+                    },
+                    then: (_r: unknown, rej: (e: unknown) => void) => rej(new Error("grant_store_down")),
+                });
+                return b;
+            },
+            rpc: async () => {
+                throw new Error("grant_store_down");
+            },
+        };
+        const results = await projectFocusPanelCardProducers({
+            supabase: broken as never,
+            orgId: ORG,
+            context: financialsContext,
+            access: access([FINANCIALS_READ_PERMISSION_KEY]),
+        });
+        expect(results.financials.state).not.toBe("ready");
+        expect(results.financials.data).toBeNull();
     });
 });
