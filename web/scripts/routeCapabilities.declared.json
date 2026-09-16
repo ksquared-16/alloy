@@ -251,7 +251,8 @@
         },
         "app/api/admin/addons/[id]/route.ts": {
             "DELETE": {
-                "status": "pending"
+                "status": "pending",
+                "note": "FINANCIAL_DESTRUCTIVE_AUTHORITY_DEBT. Hard `.delete()` of pricing_addons, gated on the admin role TITLE (ctx.role !== \"admin\"). Deliberately NOT converged to fin.write, and the reason is measured rather than cautious: fin.write is granted to admin in 3 of 3 organizations AND TO OPS IN 2 OF 3, so converging this handler would hand row DESTRUCTION to ops wherever the organization granted the key. Every other operation on this same table (POST, PATCH) is already declared fin.write, so ops can already create and edit these rows - the incremental authority a conversion would grant is specifically the power to DESTROY one. NO fin.* key means 'may destroy': the live set is fin.read, fin.write, fin.post, fin.adjust, fin.responsibility and fin.subsidy, and none of them carries a destructive contract. MITIGATION MEASURED: the handler returns 409 on Postgres 23503, so a row still referenced cannot be deleted - the blast radius is unused catalogue rows only, and the deployed catalogue is small (service_offerings 3, pricing_addons 6, service_plan_templates 4). RECOMMENDATION FOR THE DIRECTOR: fin.write is arguably already sufficient given the FK guard and ops's existing create/edit reach on these tables, but that is a policy call about whether ops may destroy commercial configuration, not something a convergence slice should decide for them. Classified rather than converged per the standing instruction that explained debt is preferable to false convergence."
             },
             "PATCH": {
                 "status": "declared",
@@ -3612,7 +3613,8 @@
         },
         "app/api/admin/pricing-dimension-values/[id]/route.ts": {
             "DELETE": {
-                "status": "pending"
+                "status": "pending",
+                "note": "FINANCIAL_DESTRUCTIVE_AUTHORITY_DEBT. Hard `.delete()` of pricing_dimension_values, gated on the admin role TITLE (ctx.role !== \"admin\"). Deliberately NOT converged to fin.write, and the reason is measured rather than cautious: fin.write is granted to admin in 3 of 3 organizations AND TO OPS IN 2 OF 3, so converging this handler would hand row DESTRUCTION to ops wherever the organization granted the key. Every other operation on this same table (POST, PATCH) is already declared fin.write, so ops can already create and edit these rows - the incremental authority a conversion would grant is specifically the power to DESTROY one. NO fin.* key means 'may destroy': the live set is fin.read, fin.write, fin.post, fin.adjust, fin.responsibility and fin.subsidy, and none of them carries a destructive contract. MITIGATION MEASURED: the handler returns 409 on Postgres 23503, so a row still referenced cannot be deleted - the blast radius is unused catalogue rows only, and the deployed catalogue is small (service_offerings 3, pricing_addons 6, service_plan_templates 4). RECOMMENDATION FOR THE DIRECTOR: fin.write is arguably already sufficient given the FK guard and ops's existing create/edit reach on these tables, but that is a policy call about whether ops may destroy commercial configuration, not something a convergence slice should decide for them. Classified rather than converged per the standing instruction that explained debt is preferable to false convergence."
             },
             "PATCH": {
                 "status": "declared",
@@ -3634,7 +3636,8 @@
         },
         "app/api/admin/pricing-dimensions/[id]/route.ts": {
             "DELETE": {
-                "status": "pending"
+                "status": "pending",
+                "note": "FINANCIAL_DESTRUCTIVE_AUTHORITY_DEBT. Hard `.delete()` of pricing_dimensions, gated on the admin role TITLE (ctx.role !== \"admin\"). Deliberately NOT converged to fin.write, and the reason is measured rather than cautious: fin.write is granted to admin in 3 of 3 organizations AND TO OPS IN 2 OF 3, so converging this handler would hand row DESTRUCTION to ops wherever the organization granted the key. Every other operation on this same table (POST, PATCH) is already declared fin.write, so ops can already create and edit these rows - the incremental authority a conversion would grant is specifically the power to DESTROY one. NO fin.* key means 'may destroy': the live set is fin.read, fin.write, fin.post, fin.adjust, fin.responsibility and fin.subsidy, and none of them carries a destructive contract. MITIGATION MEASURED: the handler returns 409 on Postgres 23503, so a row still referenced cannot be deleted - the blast radius is unused catalogue rows only, and the deployed catalogue is small (service_offerings 3, pricing_addons 6, service_plan_templates 4). RECOMMENDATION FOR THE DIRECTOR: fin.write is arguably already sufficient given the FK guard and ops's existing create/edit reach on these tables, but that is a policy call about whether ops may destroy commercial configuration, not something a convergence slice should decide for them. Classified rather than converged per the standing instruction that explained debt is preferable to false convergence."
             },
             "PATCH": {
                 "status": "declared",
@@ -3656,7 +3659,8 @@
         },
         "app/api/admin/pricing-modes/[id]/route.ts": {
             "DELETE": {
-                "status": "pending"
+                "status": "pending",
+                "note": "FINANCIAL_DESTRUCTIVE_AUTHORITY_DEBT. Hard `.delete()` of pricing_modes, gated on the admin role TITLE (ctx.role !== \"admin\"). Deliberately NOT converged to fin.write, and the reason is measured rather than cautious: fin.write is granted to admin in 3 of 3 organizations AND TO OPS IN 2 OF 3, so converging this handler would hand row DESTRUCTION to ops wherever the organization granted the key. Every other operation on this same table (POST, PATCH) is already declared fin.write, so ops can already create and edit these rows - the incremental authority a conversion would grant is specifically the power to DESTROY one. NO fin.* key means 'may destroy': the live set is fin.read, fin.write, fin.post, fin.adjust, fin.responsibility and fin.subsidy, and none of them carries a destructive contract. MITIGATION MEASURED: the handler returns 409 on Postgres 23503, so a row still referenced cannot be deleted - the blast radius is unused catalogue rows only, and the deployed catalogue is small (service_offerings 3, pricing_addons 6, service_plan_templates 4). RECOMMENDATION FOR THE DIRECTOR: fin.write is arguably already sufficient given the FK guard and ops's existing create/edit reach on these tables, but that is a policy call about whether ops may destroy commercial configuration, not something a convergence slice should decide for them. Classified rather than converged per the standing instruction that explained debt is preferable to false convergence."
             },
             "PATCH": {
                 "status": "declared",
@@ -4253,7 +4257,8 @@
         },
         "app/api/admin/service-offerings/[id]/route.ts": {
             "DELETE": {
-                "status": "pending"
+                "status": "pending",
+                "note": "FINANCIAL_DESTRUCTIVE_AUTHORITY_DEBT. Hard `.delete()` of service_offerings, gated on the admin role TITLE (ctx.role !== \"admin\"). Deliberately NOT converged to fin.write, and the reason is measured rather than cautious: fin.write is granted to admin in 3 of 3 organizations AND TO OPS IN 2 OF 3, so converging this handler would hand row DESTRUCTION to ops wherever the organization granted the key. Every other operation on this same table (POST, PATCH) is already declared fin.write, so ops can already create and edit these rows - the incremental authority a conversion would grant is specifically the power to DESTROY one. NO fin.* key means 'may destroy': the live set is fin.read, fin.write, fin.post, fin.adjust, fin.responsibility and fin.subsidy, and none of them carries a destructive contract. MITIGATION MEASURED: the handler returns 409 on Postgres 23503, so a row still referenced cannot be deleted - the blast radius is unused catalogue rows only, and the deployed catalogue is small (service_offerings 3, pricing_addons 6, service_plan_templates 4). RECOMMENDATION FOR THE DIRECTOR: fin.write is arguably already sufficient given the FK guard and ops's existing create/edit reach on these tables, but that is a policy call about whether ops may destroy commercial configuration, not something a convergence slice should decide for them. Classified rather than converged per the standing instruction that explained debt is preferable to false convergence."
             },
             "PATCH": {
                 "status": "declared",
@@ -4275,7 +4280,8 @@
         },
         "app/api/admin/service-plan-templates/[id]/route.ts": {
             "DELETE": {
-                "status": "pending"
+                "status": "pending",
+                "note": "FINANCIAL_DESTRUCTIVE_AUTHORITY_DEBT. Hard `.delete()` of service_plan_templates, gated on the admin role TITLE (ctx.role !== \"admin\"). Deliberately NOT converged to fin.write, and the reason is measured rather than cautious: fin.write is granted to admin in 3 of 3 organizations AND TO OPS IN 2 OF 3, so converging this handler would hand row DESTRUCTION to ops wherever the organization granted the key. Every other operation on this same table (POST, PATCH) is already declared fin.write, so ops can already create and edit these rows - the incremental authority a conversion would grant is specifically the power to DESTROY one. NO fin.* key means 'may destroy': the live set is fin.read, fin.write, fin.post, fin.adjust, fin.responsibility and fin.subsidy, and none of them carries a destructive contract. MITIGATION MEASURED: the handler returns 409 on Postgres 23503, so a row still referenced cannot be deleted - the blast radius is unused catalogue rows only, and the deployed catalogue is small (service_offerings 3, pricing_addons 6, service_plan_templates 4). RECOMMENDATION FOR THE DIRECTOR: fin.write is arguably already sufficient given the FK guard and ops's existing create/edit reach on these tables, but that is a policy call about whether ops may destroy commercial configuration, not something a convergence slice should decide for them. Classified rather than converged per the standing instruction that explained debt is preferable to false convergence."
             },
             "PATCH": {
                 "status": "declared",
