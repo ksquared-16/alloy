@@ -1,4 +1,10 @@
-import "server-only";
+/*
+ * No `server-only` marker, deliberately, and it matters: this directory is reachable from a client
+ * component's import graph, and the marker turned a correct module into a build failure —
+ * "'server-only' cannot be imported from a Client Component module". Its siblings carry none for the
+ * same reason. The module still only ever runs on the server; it takes a `SupabaseClient` from a
+ * caller that has one, which is the same discipline every other resolver here follows.
+ */
 
 /**
  * A packet requirement, read as the forms it contains.
