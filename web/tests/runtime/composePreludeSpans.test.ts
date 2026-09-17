@@ -151,3 +151,46 @@ describe("the compose's own semantics are untouched", () => {
         expect(ROUTE_CODE).not.toMatch(/setTimeout|await new Promise|sleep\(/);
     });
 });
+
+describe("the emission path preserves every span a deeper boundary stashed", () => {
+    /**
+     * THE DEFECT THIS EXISTS FOR, FOUND ON THE DEPLOYED BUILD AND NOT BY A TEST.
+     *
+     * `recordRouteTiming` replaces whole fields, so the outer compose has to rebuild
+     * `route_compose_spans` from whatever the producers already stashed there. It used to restate
+     * `producers` BY NAME. Slice 12E added `financials` one level deeper; the build recorded it
+     * correctly, nineteen local gates passed — and every deployed sample carried `financials: null`,
+     * because this one line dropped it on the way out.
+     *
+     * Nothing proved EMISSION. The gates proved the spans were RECORDED, which is the same class of
+     * mistake this programme has now made often enough to name: a test that asserts a mechanism
+     * EXISTS cannot certify that it TAKES EFFECT.
+     */
+    it("THE GATE: the outer write spreads the stashed object rather than naming its fields", () => {
+        const block = ROUTE_CODE.slice(
+            ROUTE_CODE.indexOf("const already = collectedRouteTiming()"),
+            ROUTE_CODE.indexOf("card_producers_ms:", ROUTE_CODE.indexOf("const already = collectedRouteTiming()")),
+        );
+        expect(block).toMatch(/\.\.\.\(already \?\? \{\}\)/);
+        // A by-name restatement is exactly the defect: it survives review, passes every recorder
+        // test, and silently drops the next field somebody adds.
+        expect(block, "a nested span is being restated by name and will drop the next one")
+            .not.toMatch(/already\?\.\w+ \? \{/);
+    });
+
+    it("the collector's merge cannot be exercised in-process — and that is recorded, not hidden", () => {
+        /*
+         * `routeTimingCollector` is a React `cache()`. Under vitest there is no request scope, so a
+         * write and a read return DIFFERENT objects and any behavioural assertion here would be
+         * testing the harness, not the seam. An earlier version of this test did exactly that and
+         * failed for that reason.
+         *
+         * So the binding assertion is the source gate above — it fails on the exact line that
+         * dropped `financials` — and the OUTCOME proof is the deployed payload, which is owed with
+         * the next promotion. Stating the limit is the point: a green test here would have been the
+         * same false comfort that let the defect reach staging.
+         */
+        expect(DIAG_CODE).toContain("export const routeTimingCollector = cache(");
+        expect(ROUTE_CODE).toContain("collectedRouteTiming()");
+    });
+});
