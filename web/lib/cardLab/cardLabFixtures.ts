@@ -591,11 +591,11 @@ export const FINANCIALS_LEDGER_PERIODS: FinancialsLedgerPeriod[] = [
  * `responsibility` decides who is billed. The card hardcodes none of it.
  */
 export const CHARGE_TEMPLATES: ChargeTemplateOption[] = [
-    { key: "field_trip", label: "Field trip", amountStrategy: "manual", amount: null, occursOn: "Event date", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: true, payerTargeting: "default_split", requiresSubject: true, requiresNote: true },
-    { key: "registration", label: "Registration fee", amountStrategy: "fixed", amount: "$75.00", occursOn: "When configured (now)", billableOn: "Immediately", responsibility: "Household", allowsDateOverride: false, payerTargeting: "default_split", requiresSubject: true, requiresNote: false },
-    { key: "late_pickup", label: "Late pickup", amountStrategy: "rate_derived", amount: "$1.00 / min", occursOn: "Event date", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: false, payerTargeting: "operator_selectable", requiresSubject: true, requiresNote: false },
-    { key: "supplies", label: "Supplies & materials", amountStrategy: "manual", amount: null, occursOn: "When configured (now)", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: true, payerTargeting: "default_split", requiresSubject: false, requiresNote: true },
-    { key: "agency_placement", label: "Agency placement fee", amountStrategy: "fixed", amount: "$250.00", occursOn: "Service period start", billableOn: "Next billing cycle", responsibility: "Agency", allowsDateOverride: false, payerTargeting: "third_party", requiresSubject: true, requiresNote: false },
+    { key: "field_trip", label: "Field trip", amountStrategy: "manual", amount: null, occursOn: "Event date", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: true, payerTargeting: "default_split", requiresSubject: true, requiresNote: true, reviewRequired: true },
+    { key: "registration", label: "Registration fee", amountStrategy: "fixed", amount: "$75.00", occursOn: "When configured (now)", billableOn: "Immediately", responsibility: "Household", allowsDateOverride: false, payerTargeting: "default_split", requiresSubject: true, requiresNote: false, reviewRequired: false },
+    { key: "late_pickup", label: "Late pickup", amountStrategy: "rate_derived", amount: "$1.00 / min", occursOn: "Event date", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: false, payerTargeting: "operator_selectable", requiresSubject: true, requiresNote: false, reviewRequired: false },
+    { key: "supplies", label: "Supplies & materials", amountStrategy: "manual", amount: null, occursOn: "When configured (now)", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: true, payerTargeting: "default_split", requiresSubject: false, requiresNote: true, reviewRequired: true },
+    { key: "agency_placement", label: "Agency placement fee", amountStrategy: "fixed", amount: "$250.00", occursOn: "Service period start", billableOn: "Next billing cycle", responsibility: "Agency", allowsDateOverride: false, payerTargeting: "third_party", requiresSubject: true, requiresNote: false, reviewRequired: false },
 ];
 
 /**

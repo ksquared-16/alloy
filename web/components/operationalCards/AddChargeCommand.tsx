@@ -241,10 +241,22 @@ export default function AddChargeCommand({
             <Field label="Due">
                 <Value>{specimen.due}</Value>
             </Field>
-            {/* A DRAFT IS NOT YET OWED. The card says what confirming actually does rather than
-                naming the mechanism that does it. */}
+            {/*
+                ── WHAT CONFIRMING ACTUALLY DOES, ON THIS TENANT ────────────────────────────────
+                This read "Creates a draft — not yet owed" unconditionally. That was true of every
+                tenant when it was written, and it stopped being true once manual entry began
+                honouring the configured review boundary: on an organization that has configured
+                none, the charge posts on confirm and the balance moves. A command may not describe
+                a mechanism it will not use.
+                `reviewRequired` is the server's answer — the posting_review policy for this
+                template's service, OR'd with the template's own flag — so this states the act.
+            */}
             <Field label="Posting">
-                <Value locked>Creates a draft — not yet owed</Value>
+                <Value locked>
+                    {t.reviewRequired
+                        ? "Creates a draft — not yet owed"
+                        : "Posts on confirm — owed immediately"}
+                </Value>
             </Field>
 
             <SectionHead ruled={false}>Charge to</SectionHead>
@@ -280,19 +292,38 @@ export default function AddChargeCommand({
                     </>
                 ) : null}
                 {/*
-                    A DRAFT IS NOT YET OWED, so the balance does not move here.
-                    Showing "$75.00 → $115.00" would claim a posted increase that confirming this
-                    command does not cause: it creates a draft, and the balance changes when the
-                    draft posts. The charge amount above is the implication; the balance below is
-                    the fact, and it is stated unchanged on purpose.
+                    THE BALANCE LINE MUST MATCH THE ACT.
+
+                    Under a review boundary a draft is not yet owed, so the balance genuinely does
+                    not move and stating it unchanged is the fact. Without one the charge posts on
+                    confirm — and showing the balance UNCHANGED there would be the same lie in the
+                    other direction, telling an operator nothing will happen a moment before it does.
                 */}
-                <p className="alloy-os-addcharge__draftnote">
-                    Creates a draft — the balance does not change until it posts.
-                </p>
-                <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
-                    <span className="alloy-os-billing__line-label">Current balance</span>
-                    <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
-                </p>
+                {t.reviewRequired ? (
+                    <>
+                        <p className="alloy-os-addcharge__draftnote">
+                            Creates a draft — the balance does not change until it posts.
+                        </p>
+                        <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
+                            <span className="alloy-os-billing__line-label">Current balance</span>
+                            <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
+                        </p>
+                    </>
+                ) : (
+                    <>
+                        <p className="alloy-os-addcharge__draftnote">
+                            Posts on confirm — this is what the family will owe.
+                        </p>
+                        <p className="alloy-os-billing__line">
+                            <span className="alloy-os-billing__line-label">Current balance</span>
+                            <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
+                        </p>
+                        <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
+                            <span className="alloy-os-billing__line-label">After posting</span>
+                            <span className="alloy-os-billing__line-value">{specimen.previewAfter}</span>
+                        </p>
+                    </>
+                )}
             </div>
 
             {controls?.error ? (

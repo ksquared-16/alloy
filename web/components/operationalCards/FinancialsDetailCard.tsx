@@ -474,8 +474,9 @@ export default function FinancialsDetailCard({
                                         <>
                                             {p.unappliedCents > 0 && onApplyPayment ? (
                                                 <RowAction
-                                                    label="Apply"
-                                                    title={`Apply ${p.unappliedLabel}`}
+                                                    kind="apply"
+                                                    command="payment.apply"
+                                                    title={`Apply ${p.unappliedLabel} to an obligation`}
                                                     onClick={() => onApplyPayment({ paymentId: p.paymentId })}
                                                 />
                                             ) : null}
@@ -486,7 +487,8 @@ export default function FinancialsDetailCard({
                                                       .map((a) => (
                                                           <RowAction
                                                               key={a.allocationId}
-                                                              label="Move"
+                                                              kind="move"
+                                                              command="payment.move"
                                                               title={`Move ${a.amountLabel} from ${a.chargeLabel}`}
                                                               onClick={() =>
                                                                   onMovePayment({
@@ -533,8 +535,9 @@ export default function FinancialsDetailCard({
                                     actions:
                                         !a.reversed && !a.isReversal && onReverseAdjustment ? (
                                             <RowAction
-                                                label="Reverse"
-                                                title={`Reverse ${a.categoryLabel} ${a.amountLabel}`}
+                                                kind="reverse"
+                                                command="billing.reverse_adjustment"
+                                                title={`Reverse ${a.categoryLabel} ${a.amountLabel} — the original stays on the record`}
                                                 onClick={() => onReverseAdjustment({ applicationId: a.applicationId })}
                                             />
                                         ) : undefined,
@@ -629,40 +632,38 @@ function ledgerRowFromEntry(
         actions:
             post || reverse || adjust ? (
                 <>
+                    {/*
+                     * POST IS OFFERED ONLY WHERE A LEGITIMATE DRAFT EXISTS. `offersPost` is the read
+                     * model's answer, not a guess from the status string — and under the 5H decision
+                     * a draft arises from a configured review boundary or a generated run, never from
+                     * an operator having used a manual command.
+                     */}
                     {post ? (
-                        <button
-                            type="button"
-                            className="alloy-os-fdetail__rowaction"
-                            data-charge-command="charge.post"
-                            data-charge-id={e.chargeId!}
+                        <RowAction
+                            kind="post"
+                            command="charge.post"
+                            chargeId={e.chargeId!}
+                            title={`Post ${e.label} — it becomes owed`}
                             onClick={() => actions.onPostCharge!({ chargeId: e.chargeId!, label: e.label })}
-                        >
-                            Post
-                        </button>
+                        />
                     ) : null}
                     {reverse ? (
-                        <button
-                            type="button"
-                            className="alloy-os-fdetail__rowaction"
-                            data-charge-command="charge.reverse"
-                            data-charge-id={e.chargeId!}
-                            title="Unwind this charge — it should never have stood"
+                        <RowAction
+                            kind="reverse"
+                            command="charge.reverse"
+                            chargeId={e.chargeId!}
+                            title={`Reverse ${e.label} — unwind a charge that should never have stood`}
                             onClick={() => actions.onReverseCharge!({ chargeId: e.chargeId!, label: e.label })}
-                        >
-                            Reverse
-                        </button>
+                        />
                     ) : null}
                     {adjust ? (
-                        <button
-                            type="button"
-                            className="alloy-os-fdetail__rowaction"
-                            data-charge-command="billing.adjust_account"
-                            data-charge-id={e.chargeId!}
-                            title="Adjust this charge — it stands, and something reduces it"
+                        <RowAction
+                            kind="adjust"
+                            command="billing.adjust_account"
+                            chargeId={e.chargeId!}
+                            title={`Adjust ${e.label} — it stands, and something reduces it`}
                             onClick={() => actions.onAdjustCharge!({ chargeId: e.chargeId! })}
-                        >
-                            Adjust
-                        </button>
+                        />
                     ) : null}
                 </>
             ) : undefined,
@@ -689,10 +690,18 @@ function ledgerRowFromAdjustment(a: FinancialsEvidence["adjustments"][number]): 
         child: a.subjectName ?? "Household",
         /* The reason is the description; the direction explains a row whose sign alone would not. */
         description: a.reason ?? direction,
+        /*
+         * The reduction read carries no resolved GL account. Core DOES map the credit and
+         * adjustment categories, so this is the row not knowing rather than the tenant not having
+         * configured one — and "Unmapped" would accuse them of the latter.
+         */
         glLabel: null,
+        glApplies: false,
         amount: a.amountLabel,
         status: state,
+        /* A reduction is not an obligation: responsibility belongs to the charge it reduces. */
         responsibleParty: null,
+        responsibilityApplies: false,
         tone: a.reversed ? "muted" : undefined,
         title: [direction, a.reason, a.applied ? null : "Recorded, not yet posted"].filter(Boolean).join(" · "),
     };
@@ -711,13 +720,29 @@ function ledgerRowFromPayment(p: FinancialsEvidence["payments"][number]): Financ
         key: p.paymentId,
         when: p.receivedOn ?? "—",
         type: "Payment",
-        child: "Household",
+        /*
+         * A RECEIPT IS NOT FOR A CHILD. This column is headed "Child", and it read "Household" on
+         * every payment row — writing an account-level word into a child-grain column, which is the
+         * kind of near-miss an operator stops trusting. A payment arrives against the account; the
+         * obligations it answers may belong to several children, and naming one would be a guess.
+         */
+        child: "—",
         description: p.method ? `${p.method}${p.payerLabel ? ` · ${p.payerLabel}` : ""}` : (p.payerLabel ?? "Payment"),
+        /* Core has no payment-GL authority: a receipt has no charge category to map. */
         glLabel: null,
+        glApplies: false,
         amount: p.receivedLabel,
         amountNote: p.unappliedCents > 0 ? `${p.unappliedLabel} unapplied` : `${p.appliedLabel} applied`,
-        status: p.unappliedCents > 0 ? "part applied" : "applied",
-        responsibleParty: p.payerLabel,
+        /* Received, and how much of it has answered an obligation — the authority's own figures. */
+        status: p.unappliedCents > 0 ? "Part applied" : "Applied",
+        /*
+         * THE PAYER IS NOT THE RESPONSIBLE PARTY. This column used to carry `payerLabel`, which
+         * asserted that whoever paid is whoever owed — they are frequently different people, and on
+         * a split household they are routinely different. The payer is stated in the description,
+         * beside the method, where it is a fact about the receipt rather than a claim about the debt.
+         */
+        responsibleParty: null,
+        responsibilityApplies: false,
         tone: p.unappliedCents > 0 ? "attention" : undefined,
     };
 }

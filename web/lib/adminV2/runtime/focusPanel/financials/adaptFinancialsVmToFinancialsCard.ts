@@ -312,7 +312,16 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 paymentId: p.paymentId,
                 receivedLabel: money(p.amountCents, p.currencyCode || currency),
                 payerLabel: p.payerLabel ?? null,
-                receivedOn: p.receivedAt,
+                /*
+                 * THROUGH THE CANONICAL FORMATTER, like every other date on the surface.
+                 *
+                 * This passed `receivedAt` RAW while every sibling field went through
+                 * `displayDate`. `receivedAt` is a timestamp, so the Payments lens rendered a full
+                 * ISO string into a 78px Date column — the garbled, overlapping date on an
+                 * otherwise ordinary ledger row, and the reason that lens looked like a different
+                 * renderer rather than the same one.
+                 */
+                receivedOn: displayDate(p.receivedAt),
                 method: p.method || null,
                 appliedLabel: money(p.appliedCents, p.currencyCode || currency),
                 unappliedLabel: money(p.unappliedCents, p.currencyCode || currency),
@@ -462,6 +471,8 @@ export function adaptChargeTemplateOption(
         payerTargeting: "default_split",
         requiresSubject: true,
         requiresNote: tpl.amountStrategy !== "fixed",
+        /* The server's answer, carried across unchanged. This adapter formats; it decides nothing. */
+        reviewRequired: tpl.reviewRequired,
     };
 }
 

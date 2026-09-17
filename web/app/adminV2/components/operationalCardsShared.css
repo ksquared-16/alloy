@@ -1429,7 +1429,12 @@
    * The order above IS the scan order — Date to Type to Child to GL to Amount to Status to
    * Responsibility — and every track is sized to what it carries rather than to what is left over.
    */
-  grid-template-columns: 78px 112px 104px 134px 84px 72px 110px minmax(80px, 0.85fr);
+  /*
+   * A NARROW LEADING ACTIONS TRACK, always present. The operations belong to the transaction, so
+   * they sit with it rather than on a line beneath it — and the track exists on every row, so a
+   * ledger's rhythm does not depend on which rows happen to be actionable.
+   */
+  grid-template-columns: 46px 78px 112px 104px 134px 84px 72px 110px minmax(80px, 0.85fr);
   gap: 8px;
   align-items: baseline;
   min-height: 21px;
@@ -1438,8 +1443,8 @@
   font-size: 0.72rem;
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
 }
-/* Amount is the fifth column now that Description moved to the end. */
-.alloy-os-billingdetail__row > :nth-child(5) {
+/* Amount is the sixth column: actions lead, then Date, Type, Child, GL, Amount. */
+.alloy-os-billingdetail__row > :nth-child(6) {
   text-align: right;
 }
 .alloy-os-billingdetail__subject {
@@ -2545,15 +2550,42 @@
 }
 
 /* A transition offered on a ledger row — Post a draft, Reverse a posted charge. */
+/*
+ * ── THE INLINE TRANSACTION ACTION ──────────────────────────────────────────────────────────────
+ *
+ * Small, square, quiet until wanted. It carries an icon and its accessible name lives in `title` /
+ * `aria-label`, so nothing about reaching it depends on hover: the control is a real button, keyboard
+ * focus shows, and the pointer target is the same box either way.
+ */
+.alloy-os-billingdetail__rowactions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 17px;
+}
+.alloy-os-billingdetail__rowactions-head { min-height: 1px; }
 .alloy-os-fdetail__rowaction {
-  margin-left: 8px;
-  padding: 2px 8px;
-  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 18%, transparent));
-  border-radius: 6px;
-  background: var(--alloy-os-surface, #fff);
-  color: inherit;
-  font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 17px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, transparent);
   cursor: pointer;
+}
+.alloy-os-fdetail__rowaction:hover {
+  border-color: var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 18%, transparent));
+  background: var(--alloy-os-surface, #fff);
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-fdetail__rowaction:focus-visible {
+  outline: 2px solid var(--alloy-os-bend-pine, #00a283);
+  outline-offset: 1px;
+  color: var(--alloy-os-midnight, #273f52);
 }
 
 .alloy-os-fdetail__rowaction:disabled {
@@ -2621,15 +2653,33 @@
  * chooses between are not a list to be searched, so this is the platform's segmented grammar and
  * not a dropdown. Selected takes Bend Pine, like every other active operational control.
  */
+/*
+ * ── TWO MODES, ONE GEOMETRY ────────────────────────────────────────────────────────────────────
+ *
+ * `inline-flex` with per-button padding sized each mode to its own text, so "Charge" and
+ * "Adjustment" were different widths and the shorter one read as a small tab floating inside a
+ * control belonging to the other. They are peers: one financial fact, two kinds. Equal grid tracks
+ * make them the same width whatever the words are, and a shared min-height makes them the same
+ * height whatever the host is — the two modes render in different hosts (the charge command's own
+ * card, and the adjustment card) and must not inherit different proportions from them.
+ */
 .alloy-os-financials__entrymodes {
-  display: inline-flex;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 2px;
   padding: 2px;
   margin-bottom: 0.6rem;
+  width: 100%;
+  max-width: 22rem;
   border-radius: 8px;
   background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
 }
 .alloy-os-financials__entrymodes button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
   border: 0;
   border-radius: 6px;
   padding: 0.28rem 0.85rem;
@@ -2644,3 +2694,34 @@
   color: #fff;
 }
 .alloy-os-financials__entrybody { min-width: 0; }
+
+/*
+ * ── THE COMPACT CARD'S POSITION ZONE ───────────────────────────────────────────────────────────
+ *
+ * The right column states the position and carries the commands, so the card spends no row on a
+ * command bar. Payment and Add sit together as primary and its quieter peer; Details is navigation
+ * and reads as a link rather than a third equal button.
+ */
+.alloy-os-billing__commands {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 0.55rem;
+}
+.alloy-os-billing__detailslink {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.alloy-os-billing__detailslink:hover,
+.alloy-os-billing__detailslink:focus-visible {
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-billing__zone--position .alloy-os-billing__amount { margin-bottom: 2px; }

@@ -627,10 +627,20 @@ describe("F13 · the ledger grid is prioritised", () => {
         const css = read("app/adminV2/components/operationalCardsShared.css");
         const grid = /\.alloy-os-billingdetail__row \{[\s\S]*?grid-template-columns:\s*([^;]+);/.exec(css);
         expect(grid, "the ledger declares its columns").toBeTruthy();
-        const tracks = grid![1]!.trim().split(/\s+(?![^(]*\))/);
-        expect(tracks.length, "eight columns: date, type, subject, description, gl, amount, status, source")
-            .toBe(8);
+        const all = grid![1]!.trim().split(/\s+(?![^(]*\))/);
+        /*
+         * NINE TRACKS NOW: a narrow leading ACTIONS track, then the eight column vocabulary.
+         *
+         * The operations belong to the transaction, so they sit inline with it rather than on a
+         * second line beneath it — which is what made a row with actions taller than a row without.
+         * The track is present on every row so the ledger's rhythm never depends on which rows
+         * happen to be actionable, and it is deliberately narrow: an icon rail, not a column.
+         */
+        expect(all.length, "an actions rail, then date, type, subject, gl, amount, status, source, description")
+            .toBe(9);
         const px = (t: string) => Number((/^(\d+)px$/.exec(t) ?? [])[1] ?? NaN);
+        expect(px(all[0]!), "the actions rail is narrow — a rail, not a column").toBeLessThanOrEqual(56);
+        const tracks = all.slice(1);
         expect(px(tracks[1]!), "Type is fixed and wide enough for a configured label")
             .toBeGreaterThanOrEqual(112);
         expect(px(tracks[0]!), "Date fits a year-bearing date").toBeGreaterThanOrEqual(78);
@@ -1135,9 +1145,17 @@ describe("F26 · the row carries its own actions", () => {
      * for each. An operator had to match a link to a row by reading both.
      */
     it("offers Reverse and Adjust on the transaction itself", () => {
+        /*
+         * THE FACT, NOT THE SPELLING. This asserted a literal `data-charge-command=...` attribute in
+         * one file, so moving the markup into the shared row-action primitive failed a lock that
+         * nothing had actually regressed. What must hold is that the detail surface raises the two
+         * canonical commands FROM a row — whichever component stamps the attribute.
+         */
         const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
-        expect(detail, "a posted charge can be unwound from its row").toContain('data-charge-command="charge.reverse"');
-        expect(detail, "and adjusted from the same row").toContain('data-charge-command="billing.adjust_account"');
+        expect(detail, "a posted charge can be unwound from its row").toMatch(/command="charge\.reverse"/);
+        expect(detail, "and adjusted from the same row").toMatch(/command="billing\.adjust_account"/);
+        /* Through the one primitive, so every surface offers the same operation the same way. */
+        expect(detail).toMatch(/<RowAction\b/);
     });
 
     it("has no footer link farm left to fall back to", () => {
@@ -1163,8 +1181,13 @@ describe("F26 · the row carries its own actions", () => {
          * Read WITH comments on purpose: the two verbs mean different things to a business and the
          * distinction has to survive in the titles an operator actually reads.
          */
-        expect(detail).toMatch(/title="Unwind this charge[^"]*"/);
-        expect(detail).toMatch(/title="Adjust this charge[^"]*"/);
+        /*
+         * Reverse unwinds a charge that should never have stood; Adjust leaves it standing and
+         * writes a reduction against it. An icon cannot carry that distinction, so the accessible
+         * name does — and the name is the tooltip, so pointer and keyboard learn the same thing.
+         */
+        expect(detail, "Reverse says what reversing means").toMatch(/unwind a charge that should never have stood/);
+        expect(detail, "Adjust says what adjusting means").toMatch(/it stands, and something reduces it/);
     });
 });
 
@@ -1495,5 +1518,132 @@ describe("F35 · an unanswered subject is not an absent account", () => {
         expect(card, "the terminal sentence is not deleted, only gated").toContain(
             "Financial account unavailable",
         );
+    });
+});
+
+describe("F36 · a focused surface commits, it does not arrive", () => {
+    /*
+     * ── WHAT WAS MEASURED ─────────────────────────────────────────────────────────────────────
+     *
+     * Financials → Details at 1680x1050, frame by frame, before the repair:
+     *
+     *   +17912ms  financials_detail  1086x711 @246,293  opacity 0.400   stats=5 lenses=5 rows=42
+     *   +17938ms                     1086x711 @348,297  opacity 0.620
+     *   +18006ms                     1086x711 @471,302  opacity 0.884
+     *   +18150ms                     1086x711 @525,304  opacity 1.000
+     *
+     * The FINAL anatomy was in the first frame — nothing was loading. What moved was the card
+     * itself: ~280px of horizontal travel under its own translucency, with the legitimate Enrollment
+     * card legible straight through it. Operators read that as one presentation replaced by another.
+     *
+     * A focused surface is a destination, not a journey.
+     */
+    it("gives the elevated card no entrance journey", () => {
+        /*
+         * ASSERTED ACROSS THE FILE, not inside a block found by selector.
+         *
+         * The first version sliced from the first occurrence of the elevated-cell selector, which is
+         * a DIFFERENT rule from the one that carried the animation — so planting the flight back in
+         * left this green. A lock that cannot see the defect it names is worse than no lock.
+         *
+         * The zoom-OUT on dismiss is untouched: a surface leaving may fly back to the cell it came
+         * from. It is the entrance that must commit.
+         */
+        const css = read("app/adminV2/components/alloyOsRuntime.css");
+        const entrances = css.match(/animation:\s*alloy-os-fp-card-zoom(?!-out)/g) ?? [];
+        expect(entrances.length, "nothing applies the fly-in to a focused card").toBe(0);
+        expect(css, "and the dismissal animation is left alone").toMatch(/alloy-os-fp-card-zoom-out/);
+    });
+
+    it("subordinates the background in the first frame", () => {
+        const css = read("app/adminV2/components/alloyOsRuntime.css");
+        const scrim = css.slice(css.indexOf("@keyframes alloy-os-fp-scrim-in"));
+        const from = /from\s*\{\s*opacity:\s*([\d.]+)/.exec(scrim.slice(0, 400));
+        expect(from, "the scrim declares where it starts").toBeTruthy();
+        expect(
+            Number(from![1]),
+            "a scrim that starts transparent leaves the canvas legible exactly while the focused surface arrives",
+        ).toBeGreaterThanOrEqual(0.8);
+    });
+});
+
+describe("F37 · the ledger states what it knows, and admits what it does not", () => {
+    it("distinguishes the three obligation states from a blank", () => {
+        const ledger = code("components/operationalCards/FinancialsLedger.tsx");
+        /* named → the name · allocation naming nobody → Unassigned · no allocation → Not allocated */
+        expect(ledger).toMatch(/"Unassigned"/);
+        expect(ledger).toMatch(/"Not allocated"/);
+        /* An em dash survives only where responsibility is not a question the row type answers. */
+        expect(ledger).toMatch(/responsibilityApplies === false \? "—"/);
+    });
+
+    it("does not let a payment claim a responsible party", () => {
+        const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
+        const payment = detail.slice(detail.indexOf("function ledgerRowFromPayment"));
+        const body = payment.slice(0, payment.indexOf("\n}"));
+        expect(body, "the payer is not the responsible party").not.toMatch(/responsibleParty:\s*p\.payerLabel/);
+        expect(body, "and the row says responsibility does not apply to it").toMatch(/responsibilityApplies:\s*false/);
+    });
+
+    it("does not call a receipt's missing GL a configuration deficiency", () => {
+        const ledger = code("components/operationalCards/FinancialsLedger.tsx");
+        expect(ledger, "Unmapped is reserved for a mapping a tenant could actually make").toMatch(
+            /glApplies === false \? "—" : "Unmapped"|glApplies === false \? "not-applicable" : "unmapped"/,
+        );
+        const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
+        const payment = detail.slice(detail.indexOf("function ledgerRowFromPayment"));
+        expect(payment.slice(0, payment.indexOf("\n}"))).toMatch(/glApplies:\s*false/);
+    });
+
+    it("puts every financial date through the canonical formatter", () => {
+        const adapter = code("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts");
+        /*
+         * `receivedOn` was the one field that passed a raw timestamp, so the Payments lens rendered
+         * an ISO string into a 78px Date column — the garbled date, and the reason that lens looked
+         * like a different renderer.
+         */
+        expect(adapter, "the payment date is formatted like every other date").toMatch(
+            /receivedOn:\s*displayDate\(/,
+        );
+        expect(adapter, "and never passed raw").not.toMatch(/receivedOn:\s*p\.receivedAt\b/);
+    });
+});
+
+describe("F38 · the entry command previews the act it will perform", () => {
+    it("carries the tenant's review boundary to the card", () => {
+        const vm = code("lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM.ts");
+        expect(vm, "the template query reads the boundary").toMatch(/review_required/);
+        expect(vm, "resolved against the same policy the writer consults").toMatch(/posting_review/);
+        const adapter = code("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts");
+        expect(adapter, "and carried across unchanged").toMatch(/reviewRequired:\s*tpl\.reviewRequired/);
+    });
+
+    it("says draft only when a draft is what happens", () => {
+        const cmd = code("components/operationalCards/AddChargeCommand.tsx");
+        expect(cmd, "the posting line is a decision, not a constant").toMatch(
+            /t\.reviewRequired[\s\S]{0,200}Creates a draft/,
+        );
+        expect(cmd, "and the other branch states the act").toMatch(/Posts on confirm/);
+        /*
+         * The draft sentence still exists — it is the truth under a configured boundary. What must
+         * not exist is a path to it that does not go through the boundary, so it is located INSIDE
+         * the conditional rather than merely present in the file.
+         */
+        const branch = cmd.indexOf("t.reviewRequired ? (");
+        const draftNote = cmd.indexOf("Creates a draft — the balance does not change until it posts.");
+        expect(branch, "the preview forks on the boundary").toBeGreaterThan(-1);
+        expect(draftNote, "and the draft sentence lives inside that fork").toBeGreaterThan(branch);
+    });
+});
+
+describe("F39 · two modes of one command share one geometry", () => {
+    it("sizes Charge and Adjustment as peers", () => {
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        const rule = css.slice(css.indexOf(".alloy-os-financials__entrymodes {"));
+        const block = rule.slice(0, rule.indexOf("\n}") + 2);
+        /* Equal tracks: the width of a mode cannot depend on the length of its word. */
+        expect(block).toMatch(/grid-auto-columns:\s*1fr/);
+        const button = rule.slice(rule.indexOf(".alloy-os-financials__entrymodes button {"));
+        expect(button.slice(0, 400), "and equal height whatever the host is").toMatch(/min-height:/);
     });
 });

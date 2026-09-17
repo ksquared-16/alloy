@@ -503,6 +503,16 @@ export type ChargeTemplateOption = {
     payerTargeting: "default_split" | "operator_selectable" | "single_payer" | "third_party";
     requiresSubject: boolean;
     requiresNote: boolean;
+    /**
+     * WHETHER CONFIRMING WILL WAIT FOR REVIEW, resolved by the server from the tenant's
+     * `posting_review` policy OR'd with the template's own flag.
+     *
+     * The command previews the act it will PERFORM. Before this existed the preview hardcoded
+     * "Creates a draft", which was true of every tenant when it was written and is not true of a
+     * tenant that has configured no review boundary — the operator was told the balance would not
+     * move, and it moved.
+     */
+    reviewRequired: boolean;
 };
 
 export type AddChargeSpecimen = {

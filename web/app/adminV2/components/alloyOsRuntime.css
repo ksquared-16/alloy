@@ -3414,7 +3414,12 @@ html[data-alloy-os-runtime-split="true"]
   animation: alloy-os-fp-scrim-in var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
 }
 @keyframes alloy-os-fp-scrim-in {
-  from { opacity: 0; }
+  /*
+   * NOT FROM ZERO. The scrim is what separates the focused surface from the canvas, so it has to
+   * be doing that in the first frame; starting transparent left the background fully legible for
+   * the whole depth duration, which is precisely when the focused card is arriving.
+   */
+  from { opacity: 0.88; }
   to { opacity: 1; }
 }
 
@@ -3426,9 +3431,11 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-focus-panel-grid__cell:not([data-fp-elevated="true"]) {
   opacity: 0.64;
   filter: saturate(0.78) brightness(1.01);
-  transition:
-    opacity var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease),
-    filter var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease);
+  /*
+   * Subordinated at once, for the same reason the scrim is: a base card that recedes over 240ms is
+   * at full strength while the focused surface is arriving on top of it.
+   */
+  transition: none;
   pointer-events: none;
 }
 
@@ -3487,7 +3494,23 @@ html[data-alloy-os-runtime-split="true"]
     0 56px 110px -44px rgba(15, 23, 42, 0.5),
     0 0 0 1px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 24%, transparent),
     0 0 0 5px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, transparent);
-  animation: alloy-os-fp-card-zoom var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
+  /*
+   * ── THE FOCUSED CARD COMMITS; THE SCRIM DOES THE TRANSITION ────────────────────────────────
+   *
+   * `alloy-os-fp-card-zoom` flew the card from its cell: `opacity: 0.4` and a translate of the
+   * measured offset, resolving over the depth duration. Measured on Financials → Details at
+   * 1680x1050: the card appeared at x=246 with opacity 0.400 and arrived at x=525 opacity 1.000
+   * some 240ms later, translating ~280px while half-transparent. Its final anatomy — five metrics,
+   * five lenses, the ledger head, 42 rows — was present in that very first frame, so nothing was
+   * still loading; it was legible content sliding under its own translucency, with the legitimate
+   * Enrollment card showing through it. Operators read that as one presentation being replaced by
+   * another, and reported it as a double render.
+   *
+   * A focused surface is a destination, not a journey. It commits at its final geometry and full
+   * opacity on the first frame; the SCRIM is what communicates the change of depth, and it now
+   * subordinates the background immediately rather than fading in alongside a translucent card.
+   */
+  animation: none;
 }
 
 /*

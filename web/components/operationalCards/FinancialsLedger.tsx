@@ -1,6 +1,14 @@
 "use client";
 
 import clsx from "clsx";
+import {
+    ArrowLeftRight,
+    CheckCircle2,
+    CircleDollarSign,
+    SlidersHorizontal,
+    Undo2,
+    type LucideIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 /**
@@ -51,6 +59,19 @@ export type FinancialsLedgerRowView = {
     description: string;
     /** `4000 · Tuition Revenue`, or null when the category has no mapping. */
     glLabel: string | null;
+    /**
+     * WHETHER "UNMAPPED" WOULD BE A TRUE STATEMENT ABOUT CONFIGURATION.
+     *
+     * GL mapping in Core is keyed by CHARGE CATEGORY, so an obligation without an account is a real
+     * configuration deficiency somebody must fix, and saying "Unmapped" is right. A PAYMENT has no
+     * charge category and Core has no payment-GL authority at all — calling that "Unmapped" blames
+     * a tenant for a mapping the product does not yet offer. Reductions are the same shape: the
+     * reduction read does not carry a resolved account, so the row does not know rather than the
+     * tenant not having configured one.
+     *
+     * Default true. `false` means the row may not make a claim about configuration either way.
+     */
+    glApplies?: boolean;
     /** Already formatted and signed by the authority that owns the figure. */
     amount: string;
     /** A second line beneath the amount — what a row still owes, what is unapplied. */
@@ -59,6 +80,19 @@ export type FinancialsLedgerRowView = {
     /** Who owes it. Null with `responsibilityUnassigned` false means no allocation exists at all. */
     responsibleParty: string | null;
     responsibilityUnassigned?: boolean;
+    /**
+     * WHETHER RESPONSIBILITY IS A QUESTION THIS ROW TYPE ANSWERS.
+     *
+     * An obligation has a responsible party — named, deliberately unassigned, or never allocated,
+     * and all three are business states an operator can act on. A PAYMENT does not: it has a payer,
+     * which is a different fact and is carried in the description; putting the payer here would
+     * assert that whoever paid is whoever owed. A reduction does not either: it reduces an
+     * obligation, and the responsibility belongs to that obligation rather than to the credit.
+     *
+     * Default true, because most rows are obligations. `false` is the only case that earns an em
+     * dash — everything else states which of the three obligation states is true.
+     */
+    responsibilityApplies?: boolean;
     /**
      * BUSINESS STATE, decided by the caller. Never derived from the amount's sign — see the note
      * above. `attention` is the canonical warning treatment; `muted` is history that no longer
@@ -83,25 +117,62 @@ export type FinancialsLedgerRowView = {
  * unreachable for the operators least able to work around it. It carries its own accessible name
  * through `title`, because "Reverse" alone does not say what it reverses.
  */
+/**
+ * ── ONE TRANSACTION ACTION, WHEREVER THE LEDGER RENDERS ────────────────────────────────────────
+ *
+ * Every surface that shows a financial transaction offers the same operations on it, so they are
+ * the same control: same icon, same accessible name, same command, same binding to the source row.
+ * The Focus Panel and Financials → Accounts differ in container width; they may not differ in what
+ * an operator can do to a charge.
+ *
+ * ICONS, INLINE, AND LEADING. These used to render as labelled buttons AFTER Description, which put
+ * them on a second line beneath the transaction and made a row with actions taller than a row
+ * without — so a ledger's row rhythm depended on which rows happened to be actionable. They now sit
+ * in a narrow leading cell that is ALWAYS present, so the grid is identical whether a row offers
+ * operations or not.
+ *
+ * An icon alone is not an affordance: each carries `title` and `aria-label`, is a real button in
+ * the markup, and is therefore reachable by keyboard as well as pointer. Nothing here depends on
+ * hover.
+ */
+export type FinancialsRowActionKind = "adjust" | "reverse" | "post" | "move" | "apply";
+
+const ROW_ACTION_ICON: Record<FinancialsRowActionKind, LucideIcon> = {
+    adjust: SlidersHorizontal,
+    reverse: Undo2,
+    post: CheckCircle2,
+    move: ArrowLeftRight,
+    apply: CircleDollarSign,
+};
+
 export function RowAction({
-    label,
+    kind,
     title,
     onClick,
+    command,
+    chargeId,
 }: {
-    label: string;
+    kind: FinancialsRowActionKind;
+    /** The accessible name AND the tooltip. Never decoration — it says what the operation does. */
     title: string;
     onClick: () => void;
+    /** The canonical action this control raises, carried for mounted instrumentation. */
+    command?: string;
+    chargeId?: string;
 }) {
+    const Icon = ROW_ACTION_ICON[kind];
     return (
         <button
             type="button"
             className="alloy-os-fdetail__rowaction"
-            data-financials-row-action={label.toLowerCase()}
+            data-financials-row-action={kind}
+            data-charge-command={command}
+            data-charge-id={chargeId}
             title={title}
             aria-label={title}
             onClick={onClick}
         >
-            {label}
+            <Icon aria-hidden size={13} strokeWidth={2} />
         </button>
     );
 }
@@ -110,6 +181,10 @@ export function RowAction({
 export function FinancialsLedgerHead() {
     return (
         <div className="alloy-os-billingdetail__row alloy-os-billingdetail__row--head">
+            {/* The actions track. Named for assistive technology, silent for the eye. */}
+            <span className="alloy-os-billingdetail__rowactions-head">
+                <span className="sr-only">Actions</span>
+            </span>
             <span>Date</span>
             <span>Type</span>
             <span>Child</span>
@@ -130,6 +205,11 @@ export function FinancialsLedgerRow({ row }: { row: FinancialsLedgerRowView }) {
             data-financials-ledger-tone={row.tone ?? undefined}
             title={row.title ?? undefined}
         >
+            {/*
+             * ALWAYS PRESENT, even when empty: the grid must not change shape because a particular
+             * transaction happens to be actionable.
+             */}
+            <span className="alloy-os-billingdetail__rowactions">{row.actions ?? null}</span>
             <span className="alloy-os-billingdetail__when">{row.when}</span>
             <span className="alloy-os-billingdetail__type">{row.type}</span>
             <span className="alloy-os-billingdetail__subject">{row.child}</span>
@@ -139,9 +219,11 @@ export function FinancialsLedgerRow({ row }: { row: FinancialsLedgerRowView }) {
              */}
             <span
                 className="alloy-os-billingdetail__gl"
-                data-financials-gl-state={row.glLabel ? "mapped" : "unmapped"}
+                data-financials-gl-state={
+                    row.glLabel ? "mapped" : row.glApplies === false ? "not-applicable" : "unmapped"
+                }
             >
-                {row.glLabel ?? "Unmapped"}
+                {row.glLabel ?? (row.glApplies === false ? "—" : "Unmapped")}
             </span>
             {/*
              * No colour from the sign. The minus sign is the arithmetic; the emphasis is the same
@@ -154,8 +236,31 @@ export function FinancialsLedgerRow({ row }: { row: FinancialsLedgerRowView }) {
                 ) : null}
             </span>
             <span className="alloy-os-billingdetail__status">{row.status}</span>
-            <span className="alloy-os-billingdetail__source" data-financials-responsible="true">
-                {row.responsibleParty ?? (row.responsibilityUnassigned ? "Unassigned" : "—")}
+            {/*
+             * THREE OBLIGATION STATES, NONE OF THEM A BLANK.
+             *
+             *   a named party            → the name
+             *   an allocation naming none → "Unassigned"
+             *   no allocation at all      → "Not allocated"
+             *
+             * The last two are different facts and both are actionable: somebody decided nobody is
+             * responsible, versus nobody has decided. A dash for either read as missing data, which
+             * is the one thing neither of them is.
+             */}
+            <span
+                className="alloy-os-billingdetail__source"
+                data-financials-responsible="true"
+                data-financials-responsibility={
+                    row.responsibilityApplies === false ? "not-applicable"
+                    : row.responsibleParty ? "named"
+                    : row.responsibilityUnassigned ? "unassigned"
+                    : "not-allocated"
+                }
+            >
+                {row.responsibilityApplies === false ? "—"
+                : row.responsibleParty ? row.responsibleParty
+                : row.responsibilityUnassigned ? "Unassigned"
+                : "Not allocated"}
             </span>
             {/*
              * DESCRIPTION LAST, AND SMALLEST. It is free text and the least identifying thing on the
@@ -163,8 +268,14 @@ export function FinancialsLedgerRow({ row }: { row: FinancialsLedgerRowView }) {
              * reads the description only once they have found the row. It sat in the visual centre
              * and pushed every identity column outward.
              */}
-            <span className="alloy-os-billingdetail__desc">{row.description}</span>
-            {row.actions ? <span className="alloy-os-billingdetail__rowactions">{row.actions}</span> : null}
+            {/*
+             * A PREVIEW, AND THE WHOLE VALUE IS STILL REACHABLE. It truncates to one line so it can
+             * never push Child, GL, Amount, Status or the actions out of shape; `title` carries the
+             * full text for anyone who needs it.
+             */}
+            <span className="alloy-os-billingdetail__desc" title={row.description || undefined}>
+                {row.description}
+            </span>
         </div>
     );
 }

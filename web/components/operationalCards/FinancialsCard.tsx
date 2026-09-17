@@ -132,6 +132,24 @@ export default function FinancialsCard({
                 data-universal-card-key="financials"
                 footerAction={null}
             >
+                {/*
+                 * ── POSITION AND NEXT ACTION, NOT AN EXPLANATION ────────────────────────────────
+                 *
+                 * This card carried the whole account: charges, discounts, funding, the net, the
+                 * responsibility split party by party, expected funding, payments received, the
+                 * balance, collectible-now, past due, autopay, the payer list with methods, and a
+                 * row of three equal command links. Nine line groups and a footer, in a card that
+                 * sits BESIDE another process as context.
+                 *
+                 * The compact card answers one question — what is the financial position, and what
+                 * can I do next — and Details owns the explanation. Nothing removed here is lost:
+                 * the split, expected funding, collectible-now, the payer list and the ledger are
+                 * all in Details, which is one click away and is where an operator goes to work.
+                 *
+                 * Left tells the obligation story (what is charged, what reduces it, what it nets
+                 * to). Right states the position and carries the commands, so no row of the card is
+                 * spent on a command bar.
+                 */}
                 <div className="alloy-os-billing__zones alloy-os-billing__zones--two">
                     <section className="alloy-os-billing__zone">
                         <p className="alloy-os-billing__zone-head">Current period</p>
@@ -149,167 +167,65 @@ export default function FinancialsCard({
                             {period.funding.map((l) => (
                                 <Line key={l.label} label={l.label} value={l.value} />
                             ))}
-                            {/* ── THE NET OBLIGATION, CALLED THAT ────────────────────────────
-                                Gross plus discounts, funding and adjustments. It was labelled
-                                "Responsibility", which is also the word for the split immediately
-                                beneath it, so one amount stood for two concepts: what the family
-                                owes after reductions, and who owes it. */}
+                            {/* The one intermediate figure that materially explains the position. */}
                             <Line label="Net obligation" value={period.familyResponsibility} emphasis />
-                            {/* ── WHO OWES IT ────────────────────────────────────────────────
-                                Thread 6's persisted allocations, named and in cents. Rendered only
-                                when an allocation exists — a split invented here would assign real
-                                money to real people on no record.
-
-                                UNASSIGNED IS SHOWN, not folded into the household. Money nobody has
-                                been made responsible for is the most actionable fact on this card,
-                                and quietly attributing it is the behaviour the platform decided
-                                against. */}
-                            {period.responsibility ? (
-                                <>
-                                    <Group>Responsibility</Group>
-                                    {period.responsibility.parties.map((party) => (
-                                        <Line key={party.name} label={party.name} value={party.amount} />
-                                    ))}
-                                    {period.responsibility.unassigned ? (
-                                        <Line label="Unassigned" value={period.responsibility.unassigned} />
-                                    ) : null}
-                                </>
-                            ) : null}
-                            {/* ── EXPECTED, AND SAID SO ──────────────────────────────────────
-                                Funding that has not arrived is not a payment and reduces nothing
-                                owed. Stating it beside the figures — never inside a total — is what
-                                keeps a subsidy from reading as a discount. */}
-                            {period.expectedFunding.length ? (
-                                <>
-                                    <Group>Expected funding</Group>
-                                    {period.expectedFunding.map((f) => (
-                                        <Line
-                                            key={f.label}
-                                            label={f.label}
-                                            value={f.amount ?? "Amount not yet known"}
-                                        />
-                                    ))}
-                                    <p className="alloy-os-billing__split">Not yet received</p>
-                                </>
-                            ) : null}
-                            <Line label="Payments received" value={period.paymentsReceived} />
-                            <Line label="Current balance" value={period.currentBalance} emphasis />
-                            {/* WHAT TO ACTUALLY ASK FOR. A submitted claim suppresses collection for
-                                the amount it attributed, so the balance and the amount to collect
-                                stop being the same number. Both are shown: the obligation has not
-                                shrunk. With nothing suppressed the line is absent rather than
-                                repeating the balance. */}
-                            {period.collectibleNow ? (
-                                <Line label="Collectible now" value={period.collectibleNow} />
-                            ) : null}
-                        </div>
-                        <p className="alloy-os-billing__due">{period.dueLabel}</p>
-                        {/* "Add something that should be billed" is a Current Period intent, not a
-                            payment one — and it stays quiet so it never competes with Pay now. */}
-                        {/*
-                            ONE COMMAND, ONE IDENTITY, WHICHEVER VARIANT RENDERS IT.
-                            These are the same two commands the account variant offers and the same
-                            handlers the same host supplies; only the presentation primitive differs.
-                            So they carry the same semantic marker, and `Details` carries a
-                            NAVIGATION marker instead — it goes somewhere rather than doing
-                            something, which is the distinction this card's footer was composed to
-                            make in the first place.
-                        */}
-                        <div className="alloy-os-billing__zone-actions">
-                            {onPayNow ? (
-                                <FooterAction onClick={onPayNow} data-financials-command="payment">
-                                    Payment →
-                                </FooterAction>
-                            ) : null}
-                            <FooterAction onClick={onAddCharge} data-financials-command="add">
-                                Add →
-                            </FooterAction>
-                            {/* Offered only where there is somewhere to drill to. In Financials →
-                                Accounts the account's own body is already open beneath this. */}
-                            {onDetails ? (
-                                <FooterAction onClick={onDetails} data-financials-nav="details">
-                                    Details →
-                                </FooterAction>
-                            ) : null}
                         </div>
                     </section>
 
                     <div className="alloy-os-billing__collect">
-                    <section className="alloy-os-billing__zone">
-                        <p className="alloy-os-billing__zone-head">Past due</p>
+                    <section className="alloy-os-billing__zone alloy-os-billing__zone--position">
+                        <p className="alloy-os-billing__zone-head">Position</p>
+                        <p className="alloy-os-billing__amount">{period.currentBalance}</p>
+                        {/*
+                         * DUE AND PAST DUE IN ONE PLACE. They were two stacked sections with two
+                         * headings; they are two readings of the same question — what should be
+                         * asked for, and what is late.
+                         */}
                         {pastDue ? (
-                            <>
-                                <p className="alloy-os-billing__amount">{pastDue.amount}</p>
-                                <p className="alloy-os-billing__age">
-                                    Oldest unpaid · {pastDue.oldest}
-                                    <br />
-                                    {pastDue.age}
-                                </p>
-                                {pastDue.note ? (
-                                    <p className="alloy-os-billing__decline">{pastDue.note}</p>
-                                ) : null}
-                                <ActionRow>
-                                    <Action primary onClick={onPayNow}>
-                                        Pay now
-                                    </Action>
-                                </ActionRow>
-                            </>
+                            <p className="alloy-os-billing__age" data-financials-pastdue="true">
+                                {pastDue.amount} past due · {pastDue.age}
+                            </p>
                         ) : (
-                            <>
-                                <p className="alloy-os-billing__clear">Nothing past due</p>
-                                <p className="alloy-os-billing__clear-note">{evidence.historyLine}</p>
-                            </>
+                            <p className="alloy-os-billing__clear">Nothing past due</p>
                         )}
-                    </section>
-
-                    <section className="alloy-os-billing__zone alloy-os-billing__zone--payment">
-                        <p className="alloy-os-billing__zone-head">Payment</p>
-                        <p
-                            className="alloy-os-billing__autopay"
-                            data-autopay-ok={evidence.payment.autopayHealthy ? "true" : undefined}
-                        >
+                        <div className="alloy-os-billing__lines">
+                            <Line label="Payments received" value={period.paymentsReceived} />
                             {/*
-                             * AUTOPAY DOES NOT EXIST IN THIS PLATFORM — no table, no column, no
-                             * writer. "Not recorded" implied somebody could have recorded it and
-                             * had not, which is a statement about this family; the truth is about
-                             * Alloy. See `resolvePaymentSetup`, which reports it `unsupported`.
+                             * UNASSIGNED SURVIVES THE TRIM. Money nobody has been made responsible
+                             * for is the most actionable fact this card can carry, and it is a
+                             * single line rather than the party-by-party split, which is the
+                             * explanation Details owns.
                              */}
-                            {evidence.payment.autopayLabel ?? "Autopay not available yet"}
-                        </p>
-                        {evidence.payment.nextChargeLabel ? (
-                            <p className="alloy-os-billing__next">Next · {evidence.payment.nextChargeLabel}</p>
-                        ) : null}
-                        <div className="alloy-os-billing__payer-list">
-                            {evidence.payers.map((p) => (
-                                <div
-                                    key={p.name}
-                                    className="alloy-os-billing__payer-row"
-                                    data-funding={p.funding ? "true" : undefined}
-                                >
-                                    <p className="alloy-os-billing__payer">
-                                        <span className="alloy-os-billing__payer-name">{p.name}</span>
-                                        <span className="alloy-os-billing__payer-share">{p.share}</span>
-                                    </p>
-                                    <p className="alloy-os-billing__payer-method">
-                                        {p.method}
-                                        {p.methodIssue ? (
-                                            <span className="alloy-os-billing__method-issue"> · {p.methodIssue}</span>
-                                        ) : null}
-                                    </p>
-                                </div>
-                            ))}
+                            {period.responsibility?.unassigned ? (
+                                <Line label="Unassigned" value={period.responsibility.unassigned} />
+                            ) : null}
                         </div>
                         {/*
-                         * MANAGE PAYMENT OWNS payers, split, methods, autopay and recovery — so it
-                         * sits under the payment facts rather than in a generic footer. It is
-                         * offered ONLY when a host actually passed a handler: every write it would
-                         * make needs provider tokenisation, which is not configured, and a control
-                         * that opens onto nothing tells an operator a capability exists. The same
-                         * gate the detail card already keeps.
+                         * THE COMMANDS LIVE HERE, in space the card already has, rather than in a
+                         * dedicated footer row. Payment is primary, Add is its quieter peer, and
+                         * Details is navigation — a text link, not a third equal button, and no
+                         * arrow glyphs on any of them.
                          */}
-                        {onManagePayment ? (
-                            <FooterAction onClick={onManagePayment}>Manage payment →</FooterAction>
-                        ) : null}
+                        <div className="alloy-os-billing__commands">
+                            {onPayNow ? (
+                                <Action primary onClick={onPayNow} data-financials-command="payment">
+                                    Payment
+                                </Action>
+                            ) : null}
+                            <Action onClick={onAddCharge} data-financials-command="add">
+                                Add
+                            </Action>
+                            {onDetails ? (
+                                <button
+                                    type="button"
+                                    className="alloy-os-billing__detailslink"
+                                    data-financials-nav="details"
+                                    onClick={onDetails}
+                                >
+                                    Details
+                                </button>
+                            ) : null}
+                        </div>
                     </section>
                     </div>
                 </div>
