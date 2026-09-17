@@ -1,0 +1,1345 @@
+{
+ "instrument_self_check": {
+  "playwright_doc": {
+   "startRel": 2,
+   "duration": 5108,
+   "ttfb": 955,
+   "wallEnd": 5111
+  },
+  "browser_doc": {
+   "start": 0,
+   "duration": 5352,
+   "ttfb": 183,
+   "respEnd": 5108
+  },
+  "playwright_prov": [
+   {
+    "startRel": 5128,
+    "duration": 4716,
+    "ttfb": 4662,
+    "wallEnd": 9845,
+    "search": "?dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47"
+   }
+  ],
+  "browser_prov": {
+   "start": 5127,
+   "duration": 4716
+  }
+ },
+ "provisioning_request_count": 1,
+ "serial_gap_ms": 17,
+ "seed_evidence": {
+  "route_timing_script": false,
+  "mentions_seed_producer": true,
+  "flight_has_provisioning": true,
+  "html_len": 486600
+ },
+ "runtime_logs": [],
+ "allRequests": [
+  {
+   "path": "/_next/static/chunks/96cd5f74ca115368.css",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "stylesheet",
+   "startRel": 965,
+   "duration": 52,
+   "ttfb": 50,
+   "wallEnd": 1017
+  },
+  {
+   "path": "/_next/static/chunks/ce38db1e2e463aca.css",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "stylesheet",
+   "startRel": 965,
+   "duration": 52,
+   "ttfb": 51,
+   "wallEnd": 1017
+  },
+  {
+   "path": "/_next/static/chunks/beb7c8a4a8365fe6.css",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "stylesheet",
+   "startRel": 965,
+   "duration": 52,
+   "ttfb": 51,
+   "wallEnd": 1017
+  },
+  {
+   "path": "/_next/static/chunks/4e883ae5a3829184.css",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "stylesheet",
+   "startRel": 965,
+   "duration": 71,
+   "ttfb": 51,
+   "wallEnd": 1036
+  },
+  {
+   "path": "/_next/static/chunks/9eb239d11bbf96e0.css",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "stylesheet",
+   "startRel": 965,
+   "duration": 87,
+   "ttfb": 69,
+   "wallEnd": 1053
+  },
+  {
+   "path": "/_next/static/chunks/1c9f7ae53fc64008.css",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "stylesheet",
+   "startRel": 966,
+   "duration": 95,
+   "ttfb": 93,
+   "wallEnd": 1060
+  },
+  {
+   "path": "/_next/static/chunks/d208eee840dab70c.css",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "stylesheet",
+   "startRel": 965,
+   "duration": 95,
+   "ttfb": 85,
+   "wallEnd": 1061
+  },
+  {
+   "path": "/_next/static/media/e2334d715941921e-s.p.d82a9aff.woff2",
+   "search": "",
+   "kind": "font",
+   "startRel": 964,
+   "duration": 95,
+   "ttfb": 95,
+   "wallEnd": 1060
+  },
+  {
+   "path": "/_next/static/media/c875c6f5d3e977ac-s.p.80fc2c9e.woff2",
+   "search": "",
+   "kind": "font",
+   "startRel": 964,
+   "duration": 95,
+   "ttfb": 95,
+   "wallEnd": 1060
+  },
+  {
+   "path": "/_next/static/media/47fe1b7cd6e6ed85-s.p.855a563b.woff2",
+   "search": "",
+   "kind": "font",
+   "startRel": 964,
+   "duration": 95,
+   "ttfb": 94,
+   "wallEnd": 1059
+  },
+  {
+   "path": "/_next/static/media/a218039a3287bcfd-s.p.4a23d71b.woff2",
+   "search": "",
+   "kind": "font",
+   "startRel": 964,
+   "duration": 96,
+   "ttfb": 95,
+   "wallEnd": 1060
+  },
+  {
+   "path": "/_next/static/media/8e6fa89aa22d24ec-s.p.3aec397d.woff2",
+   "search": "",
+   "kind": "font",
+   "startRel": 964,
+   "duration": 96,
+   "ttfb": 95,
+   "wallEnd": 1060
+  },
+  {
+   "path": "/_next/static/chunks/452c7522843fe760.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 981,
+   "duration": 81,
+   "ttfb": 78,
+   "wallEnd": 1062
+  },
+  {
+   "path": "/_next/static/chunks/66b98913970fdd2b.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 981,
+   "duration": 96,
+   "ttfb": 78,
+   "wallEnd": 1077
+  },
+  {
+   "path": "/brand/alloy-brandmark-gradient.svg",
+   "search": "",
+   "kind": "image",
+   "startRel": 981,
+   "duration": 110,
+   "ttfb": 107,
+   "wallEnd": 1091
+  },
+  {
+   "path": "/_next/static/chunks/f6d0cb94cbd8179d.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 981,
+   "duration": 110,
+   "ttfb": 94,
+   "wallEnd": 1091
+  },
+  {
+   "path": "/_next/static/chunks/aadd510b77728c12.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 981,
+   "duration": 114,
+   "ttfb": 107,
+   "wallEnd": 1095
+  },
+  {
+   "path": "/_next/static/chunks/085c0ce2454e6758.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 981,
+   "duration": 114,
+   "ttfb": 111,
+   "wallEnd": 1095
+  },
+  {
+   "path": "/_next/static/chunks/4706b056a166f842.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 981,
+   "duration": 114,
+   "ttfb": 111,
+   "wallEnd": 1095
+  },
+  {
+   "path": "/_next/static/chunks/turbopack-dafa8c92f0a9303c.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 981,
+   "duration": 114,
+   "ttfb": 111,
+   "wallEnd": 1095
+  },
+  {
+   "path": "/_next/static/chunks/c46bc9aee1f12d7d.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 981,
+   "duration": 114,
+   "ttfb": 111,
+   "wallEnd": 1096
+  },
+  {
+   "path": "/_next/static/chunks/cc8395f586616352.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 981,
+   "duration": 114,
+   "ttfb": 112,
+   "wallEnd": 1096
+  },
+  {
+   "path": "/_next/static/chunks/252b7dfb88bdbff0.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 981,
+   "duration": 114,
+   "ttfb": 111,
+   "wallEnd": 1096
+  },
+  {
+   "path": "/_next/static/chunks/a8dbca33a11e4ea9.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 115,
+   "ttfb": 112,
+   "wallEnd": 1096
+  },
+  {
+   "path": "/_next/static/chunks/6b7e1cf556aabead.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 115,
+   "ttfb": 112,
+   "wallEnd": 1096
+  },
+  {
+   "path": "/_next/static/chunks/e781d8bc038179fa.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 115,
+   "ttfb": 112,
+   "wallEnd": 1097
+  },
+  {
+   "path": "/_next/static/chunks/d6628f7c0bcc94b6.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 115,
+   "ttfb": 112,
+   "wallEnd": 1097
+  },
+  {
+   "path": "/_next/static/chunks/e0930dfab7210562.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 115,
+   "ttfb": 112,
+   "wallEnd": 1096
+  },
+  {
+   "path": "/_next/static/chunks/388f70332d8cd050.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 115,
+   "ttfb": 112,
+   "wallEnd": 1097
+  },
+  {
+   "path": "/_next/static/chunks/67a0e7512c178d3e.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 115,
+   "ttfb": 112,
+   "wallEnd": 1097
+  },
+  {
+   "path": "/_next/static/chunks/e920d3c384ab70cd.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 115,
+   "ttfb": 112,
+   "wallEnd": 1097
+  },
+  {
+   "path": "/_next/static/chunks/6564e583aa517857.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 116,
+   "ttfb": 112,
+   "wallEnd": 1098
+  },
+  {
+   "path": "/_next/static/chunks/b3a5416345cd2186.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 116,
+   "ttfb": 113,
+   "wallEnd": 1098
+  },
+  {
+   "path": "/_next/static/chunks/d3de333a4f929d34.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 116,
+   "ttfb": 113,
+   "wallEnd": 1098
+  },
+  {
+   "path": "/_next/static/chunks/dde79e53cfd25af6.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 116,
+   "ttfb": 113,
+   "wallEnd": 1098
+  },
+  {
+   "path": "/_next/static/chunks/116c30293fae9928.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 116,
+   "ttfb": 113,
+   "wallEnd": 1098
+  },
+  {
+   "path": "/_next/static/chunks/f5157f06f12594ac.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 117,
+   "ttfb": 113,
+   "wallEnd": 1100
+  },
+  {
+   "path": "/_next/static/chunks/eda4a9a85a7497a1.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 118,
+   "ttfb": 114,
+   "wallEnd": 1100
+  },
+  {
+   "path": "/_next/static/chunks/f4089e19e83e00b0.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 118,
+   "ttfb": 113,
+   "wallEnd": 1100
+  },
+  {
+   "path": "/_next/static/chunks/4a1f20b837412da7.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 140,
+   "ttfb": 114,
+   "wallEnd": 1123
+  },
+  {
+   "path": "/_next/static/chunks/ab5cea45179af10e.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 140,
+   "ttfb": 114,
+   "wallEnd": 1122
+  },
+  {
+   "path": "/_next/static/chunks/c87313bfacdb2b8e.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 140,
+   "ttfb": 137,
+   "wallEnd": 1123
+  },
+  {
+   "path": "/_next/static/chunks/8fe7260e811ffac7.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 983,
+   "duration": 141,
+   "ttfb": 137,
+   "wallEnd": 1124
+  },
+  {
+   "path": "/_next/static/chunks/8f9694a574a2cacc.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 983,
+   "duration": 143,
+   "ttfb": 138,
+   "wallEnd": 1126
+  },
+  {
+   "path": "/_next/static/chunks/b229c148acde3f61.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 982,
+   "duration": 143,
+   "ttfb": 140,
+   "wallEnd": 1125
+  },
+  {
+   "path": "/_next/static/chunks/fc624a958202934d.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 983,
+   "duration": 143,
+   "ttfb": 139,
+   "wallEnd": 1126
+  },
+  {
+   "path": "/_next/static/chunks/6b4b434cdb6d3a0a.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 983,
+   "duration": 144,
+   "ttfb": 140,
+   "wallEnd": 1126
+  },
+  {
+   "path": "/_next/static/chunks/e0d801e4f401de52.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 983,
+   "duration": 144,
+   "ttfb": 140,
+   "wallEnd": 1127
+  },
+  {
+   "path": "/_next/static/chunks/d2a1819ec004a187.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 983,
+   "duration": 145,
+   "ttfb": 140,
+   "wallEnd": 1128
+  },
+  {
+   "path": "/_next/static/chunks/011a1a45df5133ea.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 983,
+   "duration": 150,
+   "ttfb": 141,
+   "wallEnd": 1133
+  },
+  {
+   "path": "/_next/static/chunks/b8708e8d6abacb78.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 983,
+   "duration": 150,
+   "ttfb": 146,
+   "wallEnd": 1133
+  },
+  {
+   "path": "/_next/static/chunks/baa3b03a7130fcf1.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 984,
+   "duration": 151,
+   "ttfb": 146,
+   "wallEnd": 1135
+  },
+  {
+   "path": "/_next/static/chunks/fe0aba4d4d40f441.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 984,
+   "duration": 152,
+   "ttfb": 147,
+   "wallEnd": 1136
+  },
+  {
+   "path": "/_next/static/chunks/ecb81afe807dcc8e.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 984,
+   "duration": 152,
+   "ttfb": 147,
+   "wallEnd": 1136
+  },
+  {
+   "path": "/_next/static/chunks/0bc7d7b2cd022fda.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 983,
+   "duration": 153,
+   "ttfb": 148,
+   "wallEnd": 1136
+  },
+  {
+   "path": "/_next/static/chunks/ce6dac96ea9a236a.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 984,
+   "duration": 178,
+   "ttfb": 173,
+   "wallEnd": 1163
+  },
+  {
+   "path": "/_next/static/chunks/466e3428f37b1608.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 983,
+   "duration": 182,
+   "ttfb": 177,
+   "wallEnd": 1165
+  },
+  {
+   "path": "/_next/static/chunks/c101a1620d1efd55.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 984,
+   "duration": 181,
+   "ttfb": 147,
+   "wallEnd": 1165
+  },
+  {
+   "path": "/_next/static/chunks/f2afaa789640c327.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 984,
+   "duration": 182,
+   "ttfb": 146,
+   "wallEnd": 1166
+  },
+  {
+   "path": "/_next/static/chunks/c0c1ddd16a1e052d.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 984,
+   "duration": 188,
+   "ttfb": 177,
+   "wallEnd": 1173
+  },
+  {
+   "path": "/_next/static/chunks/298cd5f88ca30f68.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 985,
+   "duration": 189,
+   "ttfb": 183,
+   "wallEnd": 1174
+  },
+  {
+   "path": "/_next/static/chunks/4a606ddf03a4d791.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 985,
+   "duration": 190,
+   "ttfb": 183,
+   "wallEnd": 1174
+  },
+  {
+   "path": "/_next/static/chunks/311068ea95b2c8cc.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 984,
+   "duration": 190,
+   "ttfb": 184,
+   "wallEnd": 1174
+  },
+  {
+   "path": "/_next/static/chunks/d810b1e40e06e7e8.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 985,
+   "duration": 191,
+   "ttfb": 184,
+   "wallEnd": 1176
+  },
+  {
+   "path": "/_next/static/chunks/c6d374526fc89136.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 985,
+   "duration": 192,
+   "ttfb": 186,
+   "wallEnd": 1177
+  },
+  {
+   "path": "/_next/static/chunks/622d33a7c40140e0.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 984,
+   "duration": 193,
+   "ttfb": 183,
+   "wallEnd": 1177
+  },
+  {
+   "path": "/_next/static/chunks/6386dc008f42ea3f.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 985,
+   "duration": 193,
+   "ttfb": 186,
+   "wallEnd": 1178
+  },
+  {
+   "path": "/_next/static/chunks/ba272f69f9df52d3.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 985,
+   "duration": 192,
+   "ttfb": 184,
+   "wallEnd": 1177
+  },
+  {
+   "path": "/_next/static/chunks/83929380a49f7e9f.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 985,
+   "duration": 194,
+   "ttfb": 186,
+   "wallEnd": 1179
+  },
+  {
+   "path": "/_next/static/chunks/9095853454ac7435.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 985,
+   "duration": 194,
+   "ttfb": 187,
+   "wallEnd": 1180
+  },
+  {
+   "path": "/_next/static/chunks/7eb340cd9ad0e39c.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 985,
+   "duration": 203,
+   "ttfb": 187,
+   "wallEnd": 1188
+  },
+  {
+   "path": "/_next/static/chunks/cb3e97b66077c79c.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 985,
+   "duration": 203,
+   "ttfb": 188,
+   "wallEnd": 1188
+  },
+  {
+   "path": "/_next/static/chunks/98d8ec1794713864.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 986,
+   "duration": 204,
+   "ttfb": 197,
+   "wallEnd": 1189
+  },
+  {
+   "path": "/_next/static/chunks/59c03d67e765d1b4.css",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "stylesheet",
+   "startRel": 965,
+   "duration": 219,
+   "ttfb": 218,
+   "wallEnd": 1185
+  },
+  {
+   "path": "/_next/static/chunks/ee27420c9f40ca39.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 986,
+   "duration": 204,
+   "ttfb": 197,
+   "wallEnd": 1190
+  },
+  {
+   "path": "/_next/static/chunks/41a37d7790e21a3c.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 985,
+   "duration": 204,
+   "ttfb": 187,
+   "wallEnd": 1189
+  },
+  {
+   "path": "/_next/static/chunks/185d5eacae211a4d.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 986,
+   "duration": 204,
+   "ttfb": 198,
+   "wallEnd": 1190
+  },
+  {
+   "path": "/_next/static/chunks/22232b85f4c1e3a1.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 986,
+   "duration": 204,
+   "ttfb": 198,
+   "wallEnd": 1190
+  },
+  {
+   "path": "/_next/static/chunks/8fc0f4ed667d311c.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 986,
+   "duration": 205,
+   "ttfb": 198,
+   "wallEnd": 1191
+  },
+  {
+   "path": "/_next/static/chunks/ee59ddf75c5d8406.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 986,
+   "duration": 206,
+   "ttfb": 199,
+   "wallEnd": 1192
+  },
+  {
+   "path": "/_next/static/chunks/e1db69534ac08cce.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 986,
+   "duration": 206,
+   "ttfb": 198,
+   "wallEnd": 1192
+  },
+  {
+   "path": "/_next/static/chunks/8e914021f039820e.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 986,
+   "duration": 206,
+   "ttfb": 199,
+   "wallEnd": 1192
+  },
+  {
+   "path": "/_next/static/chunks/c6ed0d42eb949436.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 986,
+   "duration": 206,
+   "ttfb": 199,
+   "wallEnd": 1192
+  },
+  {
+   "path": "/_next/static/chunks/06b02be439485e82.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 986,
+   "duration": 206,
+   "ttfb": 199,
+   "wallEnd": 1192
+  },
+  {
+   "path": "/_next/static/chunks/20df031e39aaf654.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 986,
+   "duration": 207,
+   "ttfb": 200,
+   "wallEnd": 1193
+  },
+  {
+   "path": "/_next/static/chunks/663a6b7af4d5a586.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 986,
+   "duration": 207,
+   "ttfb": 198,
+   "wallEnd": 1193
+  },
+  {
+   "path": "/_next/static/chunks/f534f94ee3f11c10.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 987,
+   "duration": 210,
+   "ttfb": 200,
+   "wallEnd": 1196
+  },
+  {
+   "path": "/_next/static/chunks/5bdd705a480d3ad5.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 987,
+   "duration": 210,
+   "ttfb": 203,
+   "wallEnd": 1197
+  },
+  {
+   "path": "/_next/static/chunks/c8372086422c3f71.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 986,
+   "duration": 211,
+   "ttfb": 199,
+   "wallEnd": 1197
+  },
+  {
+   "path": "/_next/static/chunks/cc319e83c9636f08.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 987,
+   "duration": 219,
+   "ttfb": 203,
+   "wallEnd": 1205
+  },
+  {
+   "path": "/_next/static/chunks/53273c9889415995.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 1101,
+   "duration": 98,
+   "ttfb": 98,
+   "wallEnd": 1199
+  },
+  {
+   "path": "/_next/static/chunks/87f97b57496261a4.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 987,
+   "duration": 219,
+   "ttfb": 212,
+   "wallEnd": 1206
+  },
+  {
+   "path": "/_next/static/chunks/3b8ab141e9a2f1f8.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 986,
+   "duration": 219,
+   "ttfb": 212,
+   "wallEnd": 1206
+  },
+  {
+   "path": "/_next/static/chunks/3d15682a74cea168.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 987,
+   "duration": 220,
+   "ttfb": 212,
+   "wallEnd": 1206
+  },
+  {
+   "path": "/_next-live/feedback/feedback.js",
+   "search": "",
+   "kind": "script",
+   "startRel": 1095,
+   "duration": 171,
+   "ttfb": 171,
+   "wallEnd": 1267
+  },
+  {
+   "path": "/_next/static/chunks/8ea83f29c16b1a52.js",
+   "search": "?dpl=dpl_Ai9pHKWFV7qPVHbrkree6qv6sq36",
+   "kind": "script",
+   "startRel": 984,
+   "duration": 406,
+   "ttfb": 401,
+   "wallEnd": 1391
+  },
+  {
+   "path": "/v3",
+   "search": "",
+   "kind": "script",
+   "startRel": 1526,
+   "duration": 212,
+   "ttfb": 144,
+   "wallEnd": 1738
+  },
+  {
+   "path": "/auth/v1/user",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 1708,
+   "duration": 188,
+   "ttfb": 53,
+   "wallEnd": 1896
+  },
+  {
+   "path": "/api/admin/operational-tasks",
+   "search": "?scope=workspace&summary=true",
+   "kind": "fetch",
+   "startRel": 1539,
+   "duration": 622,
+   "ttfb": 621,
+   "wallEnd": 2161
+  },
+  {
+   "path": "/api/admin/ai/workflow-assist/capabilities",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 1564,
+   "duration": 600,
+   "ttfb": 599,
+   "wallEnd": 2164
+  },
+  {
+   "path": "/api/admin/work-units",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 1540,
+   "duration": 792,
+   "ttfb": 790,
+   "wallEnd": 2331
+  },
+  {
+   "path": "/api/admin/ai/config-layout-assist/capabilities",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 1564,
+   "duration": 769,
+   "ttfb": 768,
+   "wallEnd": 2333
+  },
+  {
+   "path": "/api/admin/workspace/site-filter",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 1536,
+   "duration": 835,
+   "ttfb": 835,
+   "wallEnd": 2371
+  },
+  {
+   "path": "/api/admin/departments",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 1540,
+   "duration": 891,
+   "ttfb": 888,
+   "wallEnd": 2431
+  },
+  {
+   "path": "/api/admin/entity-labels",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 1553,
+   "duration": 965,
+   "ttfb": 612,
+   "wallEnd": 2518
+  },
+  {
+   "path": "/api/admin/communications/unread-count",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 1539,
+   "duration": 1011,
+   "ttfb": 1011,
+   "wallEnd": 2550
+  },
+  {
+   "path": "/api/admin/lifecycle-catalog",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 1539,
+   "duration": 1140,
+   "ttfb": 1139,
+   "wallEnd": 2679
+  },
+  {
+   "path": "/api/admin/status-options",
+   "search": "?entity_type=opportunities",
+   "kind": "fetch",
+   "startRel": 2695,
+   "duration": 579,
+   "ttfb": 234,
+   "wallEnd": 3274
+  },
+  {
+   "path": "/workspace/work-unit/waitlist",
+   "search": "",
+   "kind": "document",
+   "startRel": 2,
+   "duration": 5108,
+   "ttfb": 955,
+   "wallEnd": 5111
+  },
+  {
+   "path": "/v3/m-outer-3437aaddcdf6922d623e172c2d6f9278.html",
+   "search": "",
+   "kind": "document",
+   "startRel": 5126,
+   "duration": 36,
+   "ttfb": 36,
+   "wallEnd": 5162
+  },
+  {
+   "path": "/v3/fingerprinted/js/m-outer-15a2b40a058ddff1cffdb63779fe3de1.js",
+   "search": "",
+   "kind": "script",
+   "startRel": 5165,
+   "duration": 24,
+   "ttfb": 23,
+   "wallEnd": 5188
+  },
+  {
+   "path": "/inner.html",
+   "search": "",
+   "kind": "document",
+   "startRel": 5190,
+   "duration": 55,
+   "ttfb": 53,
+   "wallEnd": 5245
+  },
+  {
+   "path": "/out-4.5.45.js",
+   "search": "",
+   "kind": "script",
+   "startRel": 5252,
+   "duration": 39,
+   "ttfb": 38,
+   "wallEnd": 5290
+  },
+  {
+   "path": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/work-unit-queue-summaries",
+   "search": "?include_previews=false&count_mode=exact&summary_mode=priori",
+   "kind": "fetch",
+   "startRel": 3277,
+   "duration": 2048,
+   "ttfb": 2048,
+   "wallEnd": 5326
+  },
+  {
+   "path": "/6",
+   "search": "",
+   "kind": "xhr",
+   "startRel": 5397,
+   "duration": 153,
+   "ttfb": 152,
+   "wallEnd": 5550
+  },
+  {
+   "path": "/api/admin/verticals",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 5129,
+   "duration": 561,
+   "ttfb": 560,
+   "wallEnd": 5690
+  },
+  {
+   "path": "/api/admin/queue-view-totals",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 5357,
+   "duration": 1706,
+   "ttfb": 1704,
+   "wallEnd": 7063
+  },
+  {
+   "path": "/api/admin/work-units/waitlist/provisioning-answer",
+   "search": "?dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47",
+   "kind": "fetch",
+   "startRel": 5128,
+   "duration": 4716,
+   "ttfb": 4662,
+   "wallEnd": 9845
+  },
+  {
+   "path": "/api/admin/queue-row-layout/queue-row-3933ac47-077a-4de8-aaac-8aed48d80413-42be9074-443f-4047-bece-d68cd1d22788",
+   "search": "?processKey=enrollment",
+   "kind": "fetch",
+   "startRel": 9889,
+   "duration": 607,
+   "ttfb": 606,
+   "wallEnd": 10495
+  },
+  {
+   "path": "/api/admin/actions/right-rail-bundle",
+   "search": "?department_id=3933ac47-077a-4de8-aaac-8aed48d80413&work_uni",
+   "kind": "fetch",
+   "startRel": 9888,
+   "duration": 702,
+   "ttfb": 702,
+   "wallEnd": 10590
+  },
+  {
+   "path": "/storage/v1/object/sign/org_documents/93667019-bd28-49b5-a688-acc9bb1e0a19/person/c256182e-2b25-4a30-b12e-d9da68dd3b44/bfaae251-d8db-4d8d-bc00-404bb8fd77c3-IMG_5380.jpeg",
+   "search": "?token=eyJraWQiOiI5OTU3YTAwOC1hZTBhLTQyMzMtOGRmNS0xZDU3NjM3M",
+   "kind": "image",
+   "startRel": 9898,
+   "duration": 693,
+   "ttfb": 462,
+   "wallEnd": 10591
+  },
+  {
+   "path": "/api/admin/queues/stage-membership-ack",
+   "search": "?keys=93667019-bd28-49b5-a688-acc9bb1e0a19%3Aa92a0f18-6efb-4",
+   "kind": "fetch",
+   "startRel": 9884,
+   "duration": 841,
+   "ttfb": 840,
+   "wallEnd": 10725
+  },
+  {
+   "path": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/lifecycle-builder",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 9897,
+   "duration": 859,
+   "ttfb": 852,
+   "wallEnd": 10756
+  },
+  {
+   "path": "/api/admin/entity-layouts/focus-panel-summary",
+   "search": "?workViewId=new_work_view_4&stageKey=waitlist",
+   "kind": "fetch",
+   "startRel": 9885,
+   "duration": 921,
+   "ttfb": 920,
+   "wallEnd": 10806
+  },
+  {
+   "path": "/api/admin/metrics/resolve",
+   "search": "?keys=enrollment.lead_count%2Cops.needs_attention_count%2Cop",
+   "kind": "fetch",
+   "startRel": 9888,
+   "duration": 1255,
+   "ttfb": 1255,
+   "wallEnd": 11143
+  },
+  {
+   "path": "/api/admin/communications/threads",
+   "search": "?entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113",
+   "kind": "fetch",
+   "startRel": 9972,
+   "duration": 1263,
+   "ttfb": 1263,
+   "wallEnd": 11236
+  },
+  {
+   "path": "/api/admin/communications/bindings",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 9972,
+   "duration": 1358,
+   "ttfb": 1356,
+   "wallEnd": 11330
+  },
+  {
+   "path": "/api/admin/communications/family-workspace",
+   "search": "?entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113",
+   "kind": "fetch",
+   "startRel": 9968,
+   "duration": 1862,
+   "ttfb": 1859,
+   "wallEnd": 11830
+  },
+  {
+   "path": "/api/admin/communications/threads/b98d8f65-023e-41e6-b8fc-296bab311df3/messages",
+   "search": "?limit=36&include_viewer_read=1",
+   "kind": "fetch",
+   "startRel": 11347,
+   "duration": 553,
+   "ttfb": 552,
+   "wallEnd": 11900
+  },
+  {
+   "path": "/api/admin/communications/threads/7bd232bf-35fe-4fcd-8223-a34b08a46a11/messages",
+   "search": "?limit=36&include_viewer_read=1",
+   "kind": "fetch",
+   "startRel": 11347,
+   "duration": 585,
+   "ttfb": 584,
+   "wallEnd": 11932
+  },
+  {
+   "path": "/api/admin/communications/threads/addb497f-10c1-4d92-ad03-268fd9ce19e4/messages",
+   "search": "?limit=36&include_viewer_read=1",
+   "kind": "fetch",
+   "startRel": 11347,
+   "duration": 634,
+   "ttfb": 633,
+   "wallEnd": 11981
+  },
+  {
+   "path": "/api/admin/communications/drawer-recipients",
+   "search": "?entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113",
+   "kind": "fetch",
+   "startRel": 11347,
+   "duration": 970,
+   "ttfb": 968,
+   "wallEnd": 12317
+  },
+  {
+   "path": "/api/admin/communications/family-workspace",
+   "search": "?entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113",
+   "kind": "fetch",
+   "startRel": 11832,
+   "duration": 1649,
+   "ttfb": 1648,
+   "wallEnd": 13481
+  },
+  {
+   "path": "/api/admin/view-models/drawer/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+   "search": "?attention_subject_id=9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "kind": "fetch",
+   "startRel": 9887,
+   "duration": 7017,
+   "ttfb": 6965,
+   "wallEnd": 16903
+  },
+  {
+   "path": "/api/admin/location-program-categories",
+   "search": "?include_inactive=true",
+   "kind": "fetch",
+   "startRel": 17009,
+   "duration": 351,
+   "ttfb": 351,
+   "wallEnd": 17360
+  },
+  {
+   "path": "/storage/v1/object/sign/org_documents/93667019-bd28-49b5-a688-acc9bb1e0a19/person/c256182e-2b25-4a30-b12e-d9da68dd3b44/bfaae251-d8db-4d8d-bc00-404bb8fd77c3-IMG_5380.jpeg",
+   "search": "?token=eyJraWQiOiI5OTU3YTAwOC1hZTBhLTQyMzMtOGRmNS0xZDU3NjM3M",
+   "kind": "image",
+   "startRel": 17057,
+   "duration": 517,
+   "ttfb": 166,
+   "wallEnd": 17574
+  },
+  {
+   "path": "/api/admin/option-sets/person_gender",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 17009,
+   "duration": 652,
+   "ttfb": 651,
+   "wallEnd": 17661
+  },
+  {
+   "path": "/api/admin/operational-tasks",
+   "search": "?entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113",
+   "kind": "fetch",
+   "startRel": 17007,
+   "duration": 775,
+   "ttfb": 775,
+   "wallEnd": 17783
+  },
+  {
+   "path": "/api/admin/locations",
+   "search": "?hierarchy=1",
+   "kind": "fetch",
+   "startRel": 17008,
+   "duration": 789,
+   "ttfb": 545,
+   "wallEnd": 17797
+  },
+  {
+   "path": "/api/admin/option-sets/childcare_program_type",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 17008,
+   "duration": 812,
+   "ttfb": 812,
+   "wallEnd": 17821
+  },
+  {
+   "path": "/api/admin/activity",
+   "search": "?entity_type=opportunities&entity_id=d097e1a8-c3c0-4c51-a113",
+   "kind": "fetch",
+   "startRel": 17064,
+   "duration": 831,
+   "ttfb": 830,
+   "wallEnd": 17895
+  },
+  {
+   "path": "/storage/v1/object/sign/org_documents/93667019-bd28-49b5-a688-acc9bb1e0a19/person/794b4bfe-7b69-4e16-bdf8-f9e842dced32/aaf273e2-0b0b-4614-a17d-ef95b78e2518-IMG_1438.jpeg",
+   "search": "?token=eyJraWQiOiI5OTU3YTAwOC1hZTBhLTQyMzMtOGRmNS0xZDU3NjM3M",
+   "kind": "image",
+   "startRel": 17057,
+   "duration": 1059,
+   "ttfb": 580,
+   "wallEnd": 18115
+  },
+  {
+   "path": "/api/admin/communications/conversations",
+   "search": "",
+   "kind": "fetch",
+   "startRel": 17008,
+   "duration": 1136,
+   "ttfb": 1135,
+   "wallEnd": 18144
+  },
+  {
+   "path": "/api/admin/communications/family-workspace",
+   "search": "?customer_id=84ad457f-d129-4b50-95d7-0efb194c1830&composer_c",
+   "kind": "fetch",
+   "startRel": 18145,
+   "duration": 1168,
+   "ttfb": 1161,
+   "wallEnd": 19313
+  },
+  {
+   "path": "/api/admin/layout-runtime/opportunity-drawer-body",
+   "search": "?opportunityId=d097e1a8-c3c0-4c51-a113-2275b009b9a9&departme",
+   "kind": "fetch",
+   "startRel": 16910,
+   "duration": 4428,
+   "ttfb": 4318,
+   "wallEnd": 21338
+  }
+ ]
+}
