@@ -181,7 +181,25 @@ export async function previewTemplateCharge(
 }
 
 export type DraftWriteResult =
-    | { status: "created" | "recalculated" | "unchanged" | "skipped_posted"; chargeId: string; resolutionKey: string }
+    | {
+          status: "created" | "recalculated" | "unchanged" | "skipped_posted";
+          chargeId: string;
+          resolutionKey: string;
+          /**
+           * WHETHER THIS CHARGE IS WAITING FOR A HUMAN, as CONFIGURATION already decided.
+           *
+           * The resolver has always computed this — the template's `review_required` OR'd with the
+           * org's `posting_review` policy ("Whether draft charges require review before they can be
+           * posted") — and this function has always thrown it away. Callers could not honour a
+           * decision the tenant had already made, so every charge got the same ceremony whatever
+           * the policy said.
+           *
+           * Reported, never acted on here: this service writes drafts and only drafts, and posting
+           * stays the separate authoritative act it has always been. What changes is that a caller
+           * can now ask whether a review boundary exists before deciding to cross it.
+           */
+          reviewRequired: boolean;
+      }
     | { status: "not_writable"; reason: string };
 
 /**
@@ -225,10 +243,20 @@ export async function writeTemplateDraftCharge(
         return { status: "not_writable", reason: intent.eligible ? "amount_not_resolvable" : intent.reason ?? "ineligible" };
     }
     if (wouldWrite === "skipped_posted") {
-        return { status: "skipped_posted", chargeId: existing!.id, resolutionKey: intent.resolutionKey };
+        return {
+            status: "skipped_posted",
+            chargeId: existing!.id,
+            resolutionKey: intent.resolutionKey,
+            reviewRequired: intent.reviewRequired,
+        };
     }
     if (wouldWrite === "unchanged") {
-        return { status: "unchanged", chargeId: existing!.id, resolutionKey: intent.resolutionKey };
+        return {
+            status: "unchanged",
+            chargeId: existing!.id,
+            resolutionKey: intent.resolutionKey,
+            reviewRequired: intent.reviewRequired,
+        };
     }
 
     const metadata = {
@@ -258,7 +286,12 @@ export async function writeTemplateDraftCharge(
             .select("id")
             .single();
         if (error || !data) fail("db_error", error?.message ?? "draft recalculate failed");
-        return { status: "recalculated", chargeId: (data as { id: string }).id, resolutionKey: intent.resolutionKey };
+        return {
+            status: "recalculated",
+            chargeId: (data as { id: string }).id,
+            resolutionKey: intent.resolutionKey,
+            reviewRequired: intent.reviewRequired,
+        };
     }
 
     // create
@@ -302,8 +335,20 @@ export async function writeTemplateDraftCharge(
      */
     if (error && (error as { code?: string }).code === "23505") {
         const winner = await findExistingByResolutionKey(supabase, orgId, source, intent.resolutionKey);
-        if (winner) return { status: "unchanged", chargeId: winner.id, resolutionKey: intent.resolutionKey };
+        if (winner) {
+            return {
+                status: "unchanged",
+                chargeId: winner.id,
+                resolutionKey: intent.resolutionKey,
+                reviewRequired: intent.reviewRequired,
+            };
+        }
     }
     if (error || !data) fail("db_error", error?.message ?? "draft create failed");
-    return { status: "created", chargeId: (data as { id: string }).id, resolutionKey: intent.resolutionKey };
+    return {
+        status: "created",
+        chargeId: (data as { id: string }).id,
+        resolutionKey: intent.resolutionKey,
+        reviewRequired: intent.reviewRequired,
+    };
 }

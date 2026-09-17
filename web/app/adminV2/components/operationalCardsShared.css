@@ -2010,7 +2010,28 @@
  */
 .alloy-os-fdetail__lensfilters > * {
   flex: 0 1 auto;
-  min-width: 0;
+}
+/*
+ * ── SHRINKING IS NOT COLLAPSING ────────────────────────────────────────────────────────────────
+ *
+ * The primitive's base rule is `width: 100%; min-width: 0`, which is right in a form column and
+ * wrong in a shrink-to-fit rail: `100%` resolves against a parent that has no width of its own, so
+ * the trigger collapses, `.alloy-select__value` ellipsises the payer or the period away to nothing,
+ * and what is left is a chevron with no label — or, one pixel further, a clipped chevron too. This
+ * is the same defect the workspace header rail was repaired for, in a second rail, so it takes the
+ * same shape of answer: a CONTENT floor wide enough for the ordinary labels ("Everyone", "All
+ * periods", a payer's name, "August 2026") to sit on one line, and a ceiling so one pathological
+ * label cannot eat the lens bar. Past the ceiling it still ellipsises — that is a long name being
+ * shortened, not a control disappearing.
+ *
+ * The floor lives HERE and not on the `> *` rule above, which is why that rule no longer declares
+ * `min-width` at all: two selectors setting one property on one element is how a cascade becomes
+ * something nobody can read.
+ */
+.alloy-os-fdetail__lensfilters .alloy-select {
+  width: auto;
+  min-width: 7.25rem;
+  max-width: 11rem;
 }
 .alloy-os-fdetail__filter {
   border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 18%, transparent);
@@ -2498,3 +2519,61 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/*
+ * ── THE COMPACT CARD'S COMMAND ROW ────────────────────────────────────────────────────────────
+ *
+ * It was three arrows of identical weight — "Payment → Add charge → Details →" — which gave one row
+ * of a compact card to a list rather than to a hierarchy, and wrapped to two rows at panel width.
+ * Payment and Add mutate money; Details navigates. The two commands sit together at the left, the
+ * way out sits quietly at the right, and the row fits on one line.
+ */
+.alloy-os-billing__footer--commands {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+.alloy-os-billing__footer-commands {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.alloy-os-billing__footer--commands .alloy-os-currentwork__primary-action,
+.alloy-os-billing__footer--commands .alloy-os-currentwork__helpful-action {
+  min-width: 0;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.78rem;
+}
+
+/*
+ * ── ONE ENTRY, TWO OPERATIONS ─────────────────────────────────────────────────────────────────
+ *
+ * The segmented control at the top of the financial entry command. Two primary modes an operator
+ * chooses between are not a list to be searched, so this is the platform's segmented grammar and
+ * not a dropdown. Selected takes Bend Pine, like every other active operational control.
+ */
+.alloy-os-financials__entrymodes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  margin-bottom: 0.6rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
+}
+.alloy-os-financials__entrymodes button {
+  border: 0;
+  border-radius: 6px;
+  padding: 0.28rem 0.85rem;
+  background: transparent;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 65%, transparent);
+  cursor: pointer;
+}
+.alloy-os-financials__entrymodes button.is-selected {
+  background: var(--alloy-os-bend-pine, #00a283);
+  color: #fff;
+}
+.alloy-os-financials__entrybody { min-width: 0; }

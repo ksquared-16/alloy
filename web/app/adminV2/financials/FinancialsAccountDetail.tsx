@@ -42,7 +42,7 @@ export default function FinancialsAccountDetail({
     displayName: string | null;
     /** False where the account's own activity is already on screen beneath this card. */
     showDetailsAction?: boolean;
-    /** "account" in Financials → Accounts: balance, due, past due, Payment, Add charge. */
+    /** "account" in Financials → Accounts: balance, due, past due, Payment, Add. */
     summaryVariant?: "period" | "account";
 }) {
     const model = useMemo<FocusPanelCardModel>(

@@ -7,6 +7,7 @@ import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import {
     FinancialsLedgerHead,
+    RowAction,
     FinancialsLedgerPeriod as LedgerPeriod,
     FinancialsLedgerRow,
     type FinancialsLedgerRowView,
@@ -50,7 +51,9 @@ export default function FinancialsDetailCard({
     onReverseAdjustment,
     onPostCharge,
     onReverseCharge,
+    onAdjustCharge,
     onApplyPayment,
+    hydrating = false,
 }: {
     evidence: FinancialsEvidence;
     periods: FinancialsLedgerPeriod[];
@@ -77,8 +80,33 @@ export default function FinancialsDetailCard({
     onPostCharge?: (args: { chargeId: string; label: string }) => void;
     /** A posted charge the operator may correct. Eligibility is the read model's answer. */
     onReverseCharge?: (args: { chargeId: string; label: string }) => void;
+    /**
+     * Adjust THIS transaction. Distinct from Reverse and deliberately so: a reversal says the
+     * charge should never have stood, an adjustment says it stands and something reduces it. The
+     * host opens its one entry command in Adjustment mode with this charge already bound — this
+     * card neither writes nor composes an adjustment of its own.
+     */
+    onAdjustCharge?: (args: { chargeId: string }) => void;
     /** Put already-received money against an obligation. */
     onApplyPayment?: (args: { paymentId: string }) => void;
+    /**
+     * ── THE ANATOMY IS KNOWN BEFORE THE FIGURES ARE ────────────────────────────────────────────
+     *
+     * True while the account is still being read. The card renders its FULL shape — the metric row,
+     * the two commands, the lenses, the ledger's eight columns — and states every figure as an em
+     * dash, because the shape is already decided the moment the operator asks for Details and only
+     * the values are outstanding.
+     *
+     * It exists so no caller has to answer the same question with a DIFFERENT surface. A host that
+     * renders something else while it waits makes the operator watch the Details shell be built
+     * twice; a host that renders this renders it once.
+     *
+     * Three things change, and only three: Past due says it does not know rather than "None", the
+     * lens counts state no number, and the ledger shows its columns over placeholder rows instead
+     * of the sentence "Nothing charged yet" — which is a claim about the family that a loading
+     * state has no standing to make.
+     */
+    hydrating?: boolean;
 }) {
     const { period, pastDue } = evidence;
 
@@ -214,7 +242,11 @@ export default function FinancialsDetailCard({
                       */}
                     <Stat label="Current balance" value={period.currentBalance} strong />
                     <Stat label="Due" value={period.dueNow} />
-                    <Stat label="Past due" value={pastDue ? pastDue.amount : "None"} tone={pastDue ? "due" : "ok"} />
+                    <Stat
+                        label="Past due"
+                        value={hydrating ? "—" : pastDue ? pastDue.amount : "None"}
+                        tone={hydrating ? undefined : pastDue ? "due" : "ok"}
+                    />
                     <Stat label="Responsibility" value={period.familyResponsibility} />
                     <Stat label="Paid" value={period.paymentsReceived.replace("−", "")} />
                     {/*
@@ -272,7 +304,8 @@ export default function FinancialsDetailCard({
                         <Action primary onClick={onPayment}>
                             Payment
                         </Action>
-                        <Action onClick={onAddCharge}>Add charge</Action>
+                        {/* One entry for charge and adjustment alike — the command carries the mode. */}
+                        <Action onClick={onAddCharge}>Add</Action>
                     </div>
                 </div>
 
@@ -296,7 +329,7 @@ export default function FinancialsDetailCard({
                             onClick={() => setLens(key)}
                         >
                             {ACCOUNT_LENS_LABELS[key]}
-                            <span className="alloy-os-fdetail__lenscount">{counts[key]}</span>
+                            <span className="alloy-os-fdetail__lenscount">{hydrating ? "" : counts[key]}</span>
                         </button>
                     ))}
                     <span className="alloy-os-fdetail__lensfilters">
@@ -356,7 +389,33 @@ export default function FinancialsDetailCard({
                       * Filtering belongs here, but it belongs here WIRED.
                       */}
 
-                    {visiblePeriods.length === 0 ? (
+                    {hydrating ? (
+                        /*
+                         * The columns, over placeholders. Same head component the hydrated ledger
+                         * uses, so the grid the operator is about to read is already the grid in
+                         * front of them and nothing shifts underneath when the rows arrive.
+                         */
+                        <div className="alloy-os-billingdetail__ledger" role="table" data-financials-ledger-hydrating="true">
+                            <FinancialsLedgerHead />
+                            {[0, 1, 2].map((i) => (
+                                <FinancialsLedgerRow
+                                    key={`hydrating-${i}`}
+                                    row={{
+                                        key: `hydrating-${i}`,
+                                        when: "—",
+                                        type: "—",
+                                        child: "—",
+                                        description: "",
+                                        glLabel: null,
+                                        amount: "—",
+                                        status: "—",
+                                        responsibleParty: null,
+                                        tone: "muted",
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    ) : visiblePeriods.length === 0 ? (
                         <p className="alloy-os-fdetail__collapsed" data-financials-ledger-empty="true">
                             {lens === "all"
                                 ? "Nothing charged yet"
@@ -374,7 +433,9 @@ export default function FinancialsDetailCard({
                             label={per.label}
                             summary={per.summary}
                             open={per.open}
-                            rows={per.entries.map((e, i) => ledgerRowFromEntry(e, i, { onPostCharge, onReverseCharge }))}
+                            rows={per.entries.map((e, i) =>
+                                ledgerRowFromEntry(e, i, { onPostCharge, onReverseCharge, onAdjustCharge }),
+                            )}
                         />
                     ))}
                 </div>
@@ -400,65 +461,86 @@ export default function FinancialsDetailCard({
                     <div className="alloy-os-billingdetail__ledger" role="table" data-financials-payments-ledger="true">
                         <FinancialsLedgerHead />
                         {visiblePayments.map((p) => (
-                            <FinancialsLedgerRow key={p.paymentId} row={ledgerRowFromPayment(p)} />
+                            <FinancialsLedgerRow
+                                key={p.paymentId}
+                                row={{
+                                    ...ledgerRowFromPayment(p),
+                                    /*
+                                     * The receipt's own operations, on the receipt. Move and Apply
+                                     * were a list of links beneath the rows; an operator reading
+                                     * them could not tell which payment each belonged to.
+                                     */
+                                    actions: (
+                                        <>
+                                            {p.unappliedCents > 0 && onApplyPayment ? (
+                                                <RowAction
+                                                    label="Apply"
+                                                    title={`Apply ${p.unappliedLabel}`}
+                                                    onClick={() => onApplyPayment({ paymentId: p.paymentId })}
+                                                />
+                                            ) : null}
+                                            {onMovePayment
+                                                ? p.applications
+                                                      .filter((a) => a.status === "active")
+                                                      .slice(0, 1)
+                                                      .map((a) => (
+                                                          <RowAction
+                                                              key={a.allocationId}
+                                                              label="Move"
+                                                              title={`Move ${a.amountLabel} from ${a.chargeLabel}`}
+                                                              onClick={() =>
+                                                                  onMovePayment({
+                                                                      paymentId: p.paymentId,
+                                                                      allocationId: a.allocationId,
+                                                                  })
+                                                              }
+                                                          />
+                                                      ))
+                                                : null}
+                                        </>
+                                    ),
+                                }}
+                            />
                         ))}
                         {visiblePayments.length === 0 ? (
                             <p className="alloy-os-fdetail__collapsed" data-financials-payments-empty="true">
                                 No money has been received.
                             </p>
                         ) : null}
-                        {/*
-                          * The receipt's own operations, beneath the rows they act on. Move and
-                          * Apply were the reason the separate block could not simply be deleted;
-                          * they are offered here, per payment, and nothing is stranded.
-                          */}
-                        {visiblePayments.map((p) => (
-                            <div key={`ops-${p.paymentId}`} className="alloy-os-fdetail__paymentops" data-payment-id={p.paymentId}>
-                                {p.applications
-                                    .filter((a) => a.status === "active" && onMovePayment)
-                                    .map((a) => (
-                                        <FooterAction
-                                            key={a.allocationId}
-                                            onClick={() =>
-                                                onMovePayment!({ paymentId: p.paymentId, allocationId: a.allocationId })
-                                            }
-                                        >
-                                            Move {a.amountLabel} from {a.chargeLabel} →
-                                        </FooterAction>
-                                    ))}
-                                {p.unappliedCents > 0 && onApplyPayment ? (
-                                    <FooterAction onClick={() => onApplyPayment({ paymentId: p.paymentId })}>
-                                        Apply {p.unappliedLabel} →
-                                    </FooterAction>
-                                ) : null}
-                            </div>
-                        ))}
                     </div>
                 ) : null}
 
-                {showAdjustments && (evidence.adjustments.length || onAddAdjustment) ? (
+                {showAdjustments && evidence.adjustments.length ? (
                     <div className="alloy-os-billingdetail__ledger" role="table" data-financials-adjustments-ledger="true">
-                        {/* Under the All lens these sit beneath the periods; under Credits &
-                            adjustments they ARE the cohort. Either way, the same rows. */}
-                        {evidence.adjustments.length ? <FinancialsLedgerHead /> : null}
+                        {/*
+                          * ── NO FOOTER LINK FARM ───────────────────────────────────────────────
+                          *
+                          * This block used to end in a row of links — "Reverse Credit →" once per
+                          * unreversed adjustment, then "Add adjustment →" — so an account with six
+                          * credits grew six identical-looking commands under the ledger, none of
+                          * which said WHICH credit it acted on except by repeating its amount.
+                          *
+                          * A transaction's commands belong to the transaction. Reverse is now a row
+                          * action on the row it reverses, and Add adjustment is gone from here
+                          * entirely: it is the Adjustment mode of the one financial entry command.
+                          */}
+                        <FinancialsLedgerHead />
                         {evidence.adjustments.map((a) => (
-                            <FinancialsLedgerRow key={a.applicationId} row={ledgerRowFromAdjustment(a)} />
+                            <FinancialsLedgerRow
+                                key={a.applicationId}
+                                row={{
+                                    ...ledgerRowFromAdjustment(a),
+                                    actions:
+                                        !a.reversed && !a.isReversal && onReverseAdjustment ? (
+                                            <RowAction
+                                                label="Reverse"
+                                                title={`Reverse ${a.categoryLabel} ${a.amountLabel}`}
+                                                onClick={() => onReverseAdjustment({ applicationId: a.applicationId })}
+                                            />
+                                        ) : undefined,
+                                }}
+                            />
                         ))}
-                        <div className="alloy-os-fdetail__paymentops">
-                            {evidence.adjustments
-                                .filter((a) => !a.reversed && !a.isReversal && onReverseAdjustment)
-                                .map((a) => (
-                                    <FooterAction
-                                        key={`rev-${a.applicationId}`}
-                                        onClick={() => onReverseAdjustment!({ applicationId: a.applicationId })}
-                                    >
-                                        Reverse {a.categoryLabel} {a.amountLabel} →
-                                    </FooterAction>
-                                ))}
-                            {onAddAdjustment ? (
-                                <FooterAction onClick={() => onAddAdjustment()}>Add adjustment →</FooterAction>
-                            ) : null}
-                        </div>
                     </div>
                 ) : null}
 
@@ -521,10 +603,18 @@ function ledgerRowFromEntry(
     actions: {
         onPostCharge?: (args: { chargeId: string; label: string }) => void;
         onReverseCharge?: (args: { chargeId: string; label: string }) => void;
+        onAdjustCharge?: (args: { chargeId: string }) => void;
     },
 ): FinancialsLedgerRowView {
     const post = e.chargeId && e.offersPost && actions.onPostCharge;
     const reverse = e.chargeId && e.offersReverse && actions.onReverseCharge;
+    /*
+     * A charge can be ADJUSTED exactly when it is a standing obligation: it has posted, so there is
+     * something to reduce, and it has not been reversed, because a charge that no longer stands has
+     * nothing left to adjust. `offersReverse` is the read model's answer to the same question, which
+     * is why it gates both — Reverse and Adjust are two readings of one eligibility, not two.
+     */
+    const adjust = e.chargeId && e.offersReverse && actions.onAdjustCharge;
     return {
         key: e.chargeId || `${e.when}-${index}`,
         when: e.when,
@@ -537,7 +627,7 @@ function ledgerRowFromEntry(
         responsibleParty: e.responsibleParty,
         responsibilityUnassigned: e.responsibilityUnassigned,
         actions:
-            post || reverse ? (
+            post || reverse || adjust ? (
                 <>
                     {post ? (
                         <button
@@ -556,9 +646,22 @@ function ledgerRowFromEntry(
                             className="alloy-os-fdetail__rowaction"
                             data-charge-command="charge.reverse"
                             data-charge-id={e.chargeId!}
+                            title="Unwind this charge — it should never have stood"
                             onClick={() => actions.onReverseCharge!({ chargeId: e.chargeId!, label: e.label })}
                         >
                             Reverse
+                        </button>
+                    ) : null}
+                    {adjust ? (
+                        <button
+                            type="button"
+                            className="alloy-os-fdetail__rowaction"
+                            data-charge-command="billing.adjust_account"
+                            data-charge-id={e.chargeId!}
+                            title="Adjust this charge — it stands, and something reduces it"
+                            onClick={() => actions.onAdjustCharge!({ chargeId: e.chargeId! })}
+                        >
+                            Adjust
                         </button>
                     ) : null}
                 </>

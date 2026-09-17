@@ -296,16 +296,28 @@ describe("W-49 · RL-36 — the surface capability declaration", () => {
      * `admin`. Whichever way that is reconciled is a W-15 decision, and this assertion is what
      * makes the reconciliation visible when it happens.
      */
-    it("records W49-F1 — send-password-reset still enforces a role, not the capability", () => {
+    it("W49-F1 is CLOSED — send-password-reset enforces the capability, and is no longer a divergence", () => {
+        /*
+         * The route half was the open half. Access Administration Residual V1 declared it
+         * `admin.users.write`, so the surface gate and the route gate are now true for the same
+         * reason and the exception is gone from both directions: the route joins `backingRoutes`,
+         * and nothing remains in `divergentRoutes` for this chapter.
+         */
         const route = "app/api/admin/send-password-reset/route.ts";
-        expect(ACCESS_SURFACE_DECLARATIONS.users.divergentRoutes?.map((d) => d.route)).toContain(route);
+        expect(ACCESS_SURFACE_DECLARATIONS.users.backingRoutes).toContain(route);
+        expect(
+            (ACCESS_SURFACE_DECLARATIONS.users.divergentRoutes ?? []).map((d) => d.route),
+            "a resolved divergence must not be left recorded — a stale exception is a hole",
+        ).not.toContain(route);
         expect(readWeb("components/adminV2/settings/access/AccessUsersConfigurationPage.tsx")).toContain(
             "/api/admin/send-password-reset"
         );
-        // The divergence itself is UNCHANGED and must stay recorded: reconciling it means deciding
-        // whether a grant-holder may trigger a reset email, which is W-15's call with an AD behind
-        // it. What W49-F1 closed is the *presentation* half.
-        expect(readWeb(route)).toContain('ctx.role !== "admin"');
+        // Comments are allowed to NAME the rule this slice removed — that is how the reason
+        // survives. The assertion is about executable source, so strip them first.
+        const src = readWeb(route);
+        const code = src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/.*$/gm, "$1 ");
+        expect(code, "the role title decided this until this slice").not.toContain('ctx.role !== "admin"');
+        expect(code).toContain("requireAccessAdministration(ADMIN_USERS_WRITE)");
     });
 
     /**
@@ -313,28 +325,28 @@ describe("W-49 · RL-36 — the surface capability declaration", () => {
      * every holder of `settings.users_roles` and let the route answer 403 on click.
      */
     it("offers the reset control only where the route's own predicate admits it", () => {
-        // Resolved from `hasPortalAdminMutateAccess`, which is what `compatibilityPortalRole` — and
-        // therefore the route's `ctx.role === "admin"` — reduces to. One predicate, read twice.
-        expect(availableAccessCommands({ roleKeys: ["admin"], permissionKeys: [] })).toEqual(["password-reset"]);
-        // The population W49-F1 is about: admitted to the surface, is not org admin.
+        /*
+         * Resolved from `permissionKeys.includes(ADMIN_USERS_WRITE)` — the body of
+         * `requireAccessAdministration`, which is the gate the route now applies. One predicate,
+         * read twice, as `05…§7.7` requires.
+         *
+         * A ROLE TITLE NO LONGER DRAWS THE CONTROL. An `admin` holding no grant used to be offered
+         * it and would now be refused on click, so the presentation must withdraw it too — this is
+         * the 403-on-click defect W49-F1 names, in its new direction.
+         */
+        expect(availableAccessCommands({ roleKeys: ["admin"], permissionKeys: [] })).toEqual([]);
         expect(availableAccessCommands({ roleKeys: ["ops"], permissionKeys: [ADMIN_USERS_READ] })).toEqual([]);
         expect(availableAccessCommands({ roleKeys: [], permissionKeys: [] })).toEqual([]);
-        // A multi-role membership still resolves by union — IA-7's subject, asserted here so the
-        // command gate cannot regress to reading a single "primary" role.
-        expect(availableAccessCommands({ roleKeys: ["ops", "admin"], permissionKeys: [] })).toEqual([
-            "password-reset",
-        ]);
+        expect(availableAccessCommands({ roleKeys: ["ops", "admin"], permissionKeys: [] })).toEqual([]);
 
         /*
-         * RESET STAYS THE ROLE LITERAL'S, and the split must not have quietly annexed it.
-         *
-         * `admin.users.write` is the closest thing the new model has to "may act on a person", so it
-         * is the key someone would reach for if they decided this control had found its capability.
-         * That would be the WIDENING W49-F1 declined to make on a presentation workstream's
-         * authority — the route still enforces `ctx.role !== "admin"`, and a control drawn for a
-         * grant-holder who is not org admin is the 403-on-click defect returning.
+         * THE CUSTOM USER ADMINISTRATOR IS THE POINT. A grant-holder who is not org `admin` is now
+         * offered both controls, because the route would accept both clicks. `manage-users` and
+         * `password-reset` stay separate command keys — two controls, one authority — so a later
+         * split can move one without the other.
          */
         expect(availableAccessCommands({ roleKeys: ["ops"], permissionKeys: [ADMIN_USERS_WRITE] })).toEqual([
+            "password-reset",
             "manage-users",
         ]);
 

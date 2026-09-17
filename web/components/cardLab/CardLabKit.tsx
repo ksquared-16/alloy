@@ -123,18 +123,45 @@ export const Action = forwardRef<HTMLButtonElement, ActionProps>(function Action
     );
 });
 
-/** Footer link — the platform's card action. */
-export function FooterAction({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
+/**
+ * Footer link — the platform's card action.
+ *
+ * ── OPEN AT THE DOM SEAM, FOR THE REASON `Action` ALREADY STATES ────────────────────────────────
+ *
+ * This took `children` and `onClick` and nothing else, so a command rendered through it was
+ * invisible from outside the React tree: mounted instrumentation could see a button, and could not
+ * see WHICH command it was. The sibling primitive above learned this from the Process card, whose
+ * projected commands became indistinguishable from any other button when `data-process-action` was
+ * dropped silently — and the same omission here made the Financials period-variant footer's
+ * `Payment` and `Add` unmeasurable while the account variant's identical commands were not.
+ *
+ * The divergence was never in the command. Both variants call the same handler the same host
+ * supplies; only the presentation primitive differed, and one of the two refused to carry the
+ * command's identity. So the seam opens here rather than the call sites growing a second way to
+ * say what they already say.
+ *
+ * `type` and `className` stay owned, exactly as they are for `Action`: a caller may name a command,
+ * never restyle one.
+ */
+type FooterActionProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "className"> & {
+    children: ReactNode;
+};
+
+export const FooterAction = forwardRef<HTMLButtonElement, FooterActionProps>(function FooterAction(
+    { children, ...rest },
+    ref,
+) {
     return (
         <button
+            {...rest}
+            ref={ref}
             type="button"
             className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-            onClick={onClick}
         >
             {children}
         </button>
     );
-}
+});
 
 /** Count chips — Household's `stats` / `stat` / `stat-count` / `stat-label`. */
 export function StatChips({ items }: { items: { count: string; label: string }[] }) {
