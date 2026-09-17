@@ -471,7 +471,7 @@ function FinancialsCompactCard({
                         {/* Navigation, not a mutation, and dressed as navigation. */}
                         {onDetails ? (
                             <FooterAction onClick={onDetails} data-financials-nav="details">
-                                Details →
+                                Details
                             </FooterAction>
                         ) : null}
                     </div>

@@ -1110,15 +1110,28 @@ describe("F25 · Details is one surface, committed when it is asked for", () => 
      * that fires when the data is NOT ready, and it must render the detail card rather than
      * anything else.
      */
-    it("renders the Details anatomy before its figures arrive", () => {
+    /*
+     * ── SUPERSEDED BY F44, DELIBERATELY ──────────────────────────────────────────────────────
+     *
+     * This locked the OPPOSITE behaviour: that a Details branch existed for the state where the
+     * read had not landed, and committed the anatomy over placeholders. The reasoning was that the
+     * shape of Details is known the instant it is asked for, so showing it early costs nothing.
+     *
+     * Mounted review disagreed, three passes running. A committed Details surface tells the
+     * operator they have arrived, and a ledger that then rewrites itself from placeholders to
+     * fifty-six rows is the double load reported since 5H. The honest wait is the compact card.
+     *
+     * The lock is kept rather than deleted so the reversal stays legible: what it asserts now is
+     * that the early-commit branch is GONE, and F44 holds the rule that replaced it.
+     */
+    it("does not commit the Details anatomy before its figures arrive", () => {
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
-        expect(card, "a Details branch exists for the state where the read has not landed").toMatch(
+        expect(card, "no Details branch for the unresolved read").not.toMatch(
             /overlay === "detail" && \(!vm \|\| !reconciliation\)/,
         );
-        /* And what it renders is the detail card, in its hydrating frame — not a second anatomy. */
-        expect(card).toMatch(/<FinancialsDetailCard hydrating/);
-        /* Same container and same overlay identity, so the surface is not replaced when data lands. */
-        expect(card).toMatch(/data-financials-hydrating="true"/);
+        expect(card, "and no hydrating Details frame to fall into").not.toMatch(
+            /<FinancialsDetailCard hydrating/,
+        );
     });
 
     it("states no figure it has not read", () => {
@@ -1265,8 +1278,14 @@ describe("F28 · one entry command, and a footer that ranks its commands", () =>
          */
         const opener = panel.slice(panel.indexOf("const openAdjustForCharge"));
         const body = opener.slice(0, opener.indexOf("\n    }, ["));
-        expect(body, "the opener sets Adjustment mode").toMatch(/setEntryMode\("adjustment"\)/);
-        expect(body, "and opens the unified command").toMatch(/setOverlay\("add_charge"\)/);
+        /*
+         * 5K CHANGED THE DESTINATION, NOT THE FACT. The opener used to raise the unified Add
+         * command in adjustment mode, handing the operator a Charge / Adjustment selector they had
+         * not asked for and making Cancel land on it. One function still does both things; what it
+         * opens is now a command about this charge.
+         */
+        expect(body, "and opens a command about that charge").toMatch(/kind: "adjust_charge"/);
+        expect(body, "not the Add selector").not.toMatch(/kind: "add_charge"/);
     });
 });
 
@@ -1756,8 +1775,14 @@ describe("F41 · a bounded summary is not a ledger", () => {
         expect(card, "completeness is decided from the deep read, not from having any rows").toMatch(
             /ledgerComplete\s*=\s*deepLoadedForRef\.current === \(customerId \?\? scopedMemberId\)/,
         );
-        expect(card, "and Details is told when its ledger is not yet authoritative").toMatch(
-            /ledgerPending=\{!ledgerComplete\}/,
+        /*
+         * 5K STRENGTHENED THIS. It used to be enough that Details was TOLD its ledger was not yet
+         * authoritative and reserved the region. The operator still arrived at a Details surface
+         * that then filled in, which is the defect. The fact locked now is that Details cannot be
+         * reached at all until the read has resolved — see F44.
+         */
+        expect(card, "and Details cannot be entered before that read has resolved").toMatch(
+            /overlay === "detail" &&[^\n]*ledgerComplete/,
         );
     });
 
@@ -1812,5 +1837,170 @@ describe("F43 · Due is the actionable figure, and the commands are peers", () =
             .toBeGreaterThanOrEqual(170);
         expect(tracks[8], "Description is still the flexible preview, and yields first")
             .toMatch(/^minmax\(\d+px, 0?\.\d+fr\)$/);
+    });
+});
+
+describe("F44 · no visible partial Details", () => {
+    /*
+     * THE DEFECT THIS EXISTS TO CATCH. Details opens, a ledger-shaped surface appears, and it is
+     * then replaced by the real ledger. Every previous pass attacked a symptom — the entrance
+     * animation, the skeleton's honesty, the reserved region — and the operator kept seeing two
+     * Details. The fact is structural: a Details destination may not be RENDERED until the deep
+     * read its ledger depends on has resolved.
+     */
+    it("guards the only Details branch on the resolved deep read", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        const branches = card.match(/if \(overlay === "detail"[^)]*\)/g) ?? [];
+        expect(branches, "there is exactly one Details branch").toHaveLength(1);
+        expect(branches[0], "and it cannot render without the completed read").toMatch(/ledgerComplete/);
+    });
+
+    it("has no skeleton Details surface left to fall into", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card, "no hydrating Details container").not.toMatch(/data-financials-hydrating/);
+        expect(card, "and no hydrating Details card is constructed").not.toMatch(
+            /<FinancialsDetailCard\s+hydrating/,
+        );
+    });
+
+    it("holds the request instead, and keeps the compact card on screen", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card, "the click records a request").toMatch(/setDetailPending\(true\)/);
+        expect(card, "which becomes the surface only once the read is ready").toMatch(
+            /if \(!detailPending \|\| !detailReady\) return;[\s\S]{0,160}kind: "detail"/,
+        );
+        expect(card, "and readiness includes the ledger's own authority").toMatch(
+            /detailReady = Boolean\(vm && reconciliation && ledgerComplete\)/,
+        );
+    });
+});
+
+describe("F45 · Financials navigation is a stack", () => {
+    /*
+     * The wrong-return defect had two halves and this locks both. Dismissal must pop ONE level
+     * rather than clear the surface, and a row-level Adjust must not borrow the Add command —
+     * borrowing it is what landed operators on the Add selector after cancelling.
+     */
+    it("dismisses one level rather than clearing to the compact card", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card, "the stack is written down").toMatch(/FinancialsSurface\[\]/);
+        expect(card, "dismissal pops").toMatch(
+            /useDismissSignal\(coordination, "financials", \(\) => \{[\s\S]{0,120}pop\(\)/,
+        );
+        expect(card, "the single-slot return memory is gone").not.toMatch(/returnOverlayRef/);
+    });
+
+    it("gives a row adjustment its own destination", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        const open = card.slice(card.indexOf("const openAdjustForCharge"));
+        const body = open.slice(0, open.indexOf("}, ["));
+        expect(body, "a row adjustment is not the Add command").not.toMatch(/kind: "add_charge"/);
+        expect(body, "it is a command about that charge").toMatch(/kind: "adjust_charge"/);
+    });
+
+    it("keeps the Details view outside the surface that displays it", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        for (const held of ["detailLens", "expandedPeriods", "detailScrollRef"]) {
+            expect(card, `${held} survives a command round trip`).toContain(held);
+        }
+        expect(card, "and the lens is handed down rather than rediscovered").toMatch(/onLensChange=/);
+    });
+});
+
+describe("F46 · Reverse and Adjust use the canonical command shell", () => {
+    it("draws Reverse in the command shell, not as a band in the ledger", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        const reverse = card.slice(card.indexOf('surface?.kind === "reverse_charge"'));
+        const branch = reverse.slice(0, reverse.indexOf('surface?.kind === "adjust_charge"'));
+        expect(branch, "the approved command shell").toMatch(/modalClass="command"/);
+        expect(branch, "not the Move-payment band it was copied from").not.toMatch(
+            /alloy-os-fdetail__movepanel/,
+        );
+        expect(branch, "and it states the money it is about").toMatch(/charge-reverse-amount/);
+    });
+
+    it("leaves no inline reverse surface behind in the ledger tree", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card).not.toMatch(/movepanel"\s+data-testid="charge-reverse-panel"/);
+    });
+
+    it("keeps one writer for the reversal", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        /*
+         * The component may NAME the action in a DOM marker — that is how certification finds the
+         * control. What it may not do is build the call itself: no action key assembled here, no
+         * second writer.
+         */
+        expect(card, "the component does not construct the reversal call").not.toMatch(
+            /action_key:\s*"charge\.reverse"/,
+        );
+        expect(
+            code("lib/financials/commands/financialTransactionCommands.ts"),
+            "the key lives in the shared command authority",
+        ).toMatch(/reverse:\s*"charge\.reverse"/);
+    });
+});
+
+describe("F47 · the compact commands stay inside the card", () => {
+    it("lets the cluster wrap rather than overflow", () => {
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        const block = css.slice(css.indexOf(".alloy-os-billing__commands {"));
+        const rule = block.slice(0, block.indexOf("\n}") + 2);
+        expect(rule, "nowrap is what pushed them outside the card").not.toMatch(/flex-wrap:\s*nowrap/);
+        expect(rule).toMatch(/flex-wrap:\s*wrap/);
+    });
+
+    it("lets the buttons shrink before the row breaks", () => {
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        const block = css.slice(css.indexOf(".alloy-os-billing__commands > button"));
+        const rule = block.slice(0, block.indexOf("\n}") + 2);
+        expect(rule, "a fixed basis cannot yield").not.toMatch(/flex:\s*0 0 auto/);
+        expect(rule).toMatch(/flex:\s*0 1 auto/);
+        expect(rule, "and the floor cannot exceed the space there is").toMatch(
+            /min-width:\s*min\(84px, 100%\)/,
+        );
+    });
+
+    it("keeps Due emphasised without making it a dashboard hero", () => {
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        const block = css.slice(css.indexOf(".alloy-os-billing__amount {"));
+        const rule = block.slice(0, block.indexOf("\n}") + 2);
+        const size = Number((/font-size:\s*([\d.]+)rem/.exec(rule) ?? [])[1] ?? NaN);
+        expect(size, "measured beside a 0.68rem zone head").toBeLessThanOrEqual(1.4);
+        expect(size, "still the largest figure in its zone").toBeGreaterThan(1);
+    });
+
+    it("names the commands without arrow glyphs", () => {
+        const compact = code("components/operationalCards/FinancialsCard.tsx");
+        expect(compact).not.toMatch(/Details\s*→|→\s*<\/|Payment\s*→|Add\s*→/);
+    });
+});
+
+describe("F48 · no empty command destination", () => {
+    /*
+     * Switching Add to Adjustment could commit a card containing the mode selector and nothing
+     * else, because the body is null whenever `adjustOpen` is false and `entryMode` could already
+     * say "adjustment". A destination whose body is absent is not a destination.
+     */
+    it("will not render the adjustment mode without its body", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card, "the body is what makes the destination").toMatch(
+            /adjustmentReady = adjustmentBand != null/,
+        );
+        expect(card, "and the mode cannot commit without it").toMatch(
+            /entryMode === "adjustment" && adjustmentReady \?/,
+        );
+    });
+
+    it("keeps the mode and its body in step", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card).toMatch(
+            /if \(entryMode !== "adjustment" \|\| adjustOpen\) return;[\s\S]{0,200}openAddAdjustment\(\)/,
+        );
+    });
+
+    it("keeps the two modes equal in width", () => {
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        expect(css).toMatch(/\.alloy-os-financials__entrymodes \{[\s\S]{0,300}grid-auto-columns:\s*1fr/);
     });
 });

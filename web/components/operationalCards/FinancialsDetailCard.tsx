@@ -55,9 +55,19 @@ export default function FinancialsDetailCard({
     onApplyPayment,
     hydrating = false,
     ledgerPending = false,
+    lens: lensProp,
+    onLensChange,
+    expandedPeriods,
+    onPeriodToggle,
 }: {
     evidence: FinancialsEvidence;
     periods: FinancialsLedgerPeriod[];
+    /** Controlled lens. Omit to let this card own it, which is what the workspace host does. */
+    lens?: AccountLens;
+    onLensChange?: (lens: AccountLens) => void;
+    /** Controlled period disclosure, keyed by period label. Omit for per-period local state. */
+    expandedPeriods?: Record<string, boolean>;
+    onPeriodToggle?: (label: string, expanded: boolean) => void;
     /**
      * TWO INDEPENDENT DIMENSIONS, deliberately not collapsed:
      *   subject — who or what the item is FOR   (Household · Avery · Riley)
@@ -135,7 +145,20 @@ export default function FinancialsDetailCard({
      * angle on the account's activity, not a second report underneath it. Every action that section
      * carried — Move payment, Apply payment — moved with it and none was stranded.
      */
-    const [lens, setLens] = useState<AccountLens>("all");
+    /*
+     * ── THE LENS MAY BELONG TO THE HOST ───────────────────────────────────────────────────────
+     *
+     * Held here, the lens died every time a command surface replaced this one, so an operator who
+     * filtered to Credits, opened Adjust and cancelled came back to an unfiltered ledger. A host
+     * that survives commands can own it instead and hand it down; the uncontrolled path below is
+     * unchanged, so the Financials workspace keeps working exactly as before.
+     */
+    const [lensOwn, setLensOwn] = useState<AccountLens>("all");
+    const lens = (lensProp as AccountLens | undefined) ?? lensOwn;
+    const setLens = (next: AccountLens) => {
+        setLensOwn(next);
+        onLensChange?.(next);
+    };
     const [subject, setSubject] = useState<string | null>(null);
     const [periodLabel, setPeriodLabel] = useState<string | null>(null);
     const [payer, setPayer] = useState<string | null>(null);
@@ -449,6 +472,8 @@ export default function FinancialsDetailCard({
                             label={per.label}
                             summary={per.summary}
                             open={per.open}
+                            expandedOverride={expandedPeriods?.[per.label]}
+                            onToggle={onPeriodToggle}
                             rows={per.entries.map((e, i) =>
                                 ledgerRowFromEntry(e, i, { onPostCharge, onReverseCharge, onAdjustCharge }),
                             )}

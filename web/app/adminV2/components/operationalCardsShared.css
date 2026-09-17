@@ -763,9 +763,21 @@
 
 .alloy-os-billing__amount {
   margin: 2px 0 0;
-  font-size: 1.9rem;
+  /*
+   * ── EMPHASIS, NOT A HERO ──────────────────────────────────────────────────────────────────
+   *
+   * At 1.9rem Due was 30px beside a 10.9px zone head and 11.5px lines — nearly three times the
+   * largest thing near it. It stopped reading as the most important figure on the card and
+   * started reading as a different kind of object entirely, a dashboard tile that had landed in
+   * an operational card, and it pushed the commands down and out of the composition.
+   *
+   * Due is still the figure an operator acts on, so it stays the largest thing in its zone and
+   * keeps the warning colour and the tabular figures. It is simply back inside the card's own
+   * type hierarchy: one clear step above `Nothing past due` (0.86rem), not a scale of its own.
+   */
+  font-size: 1.25rem;
   font-weight: 700;
-  line-height: 1.05;
+  line-height: 1.15;
   color: #b45309;
   font-variant-numeric: tabular-nums;
 }
@@ -2745,10 +2757,22 @@
    * buttons size to their content rather than to a floor that made Add wider than Payment.
    */
   display: flex;
-  flex-wrap: nowrap;
+  /*
+   * NOWRAP KEPT THE ROW SHORT AND LET IT LEAVE THE CARD. At the narrow Focus Panel column the
+   * three commands need more width than the position zone has, and `nowrap` resolved that by
+   * overflowing: Payment, Add and Details rendered past the card's right edge, which is how
+   * they came to look "pushed down and partially outside the composition".
+   *
+   * Wrapping is the lesser cost and only pays it when the width genuinely is not there — at
+   * every width where the row fits, this is still one line. The buttons may also shrink now
+   * (`flex: 0 1 auto`), so the wrap is the second resort rather than the first.
+   */
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  row-gap: 6px;
   margin-top: 0.5rem;
+  min-width: 0;
 }
 /*
  * ── PRIMARY IS A WEIGHT, NOT A SIZE ────────────────────────────────────────────────────────────
@@ -2762,7 +2786,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   min-height: 26px;
   height: 26px;
   /*
@@ -2772,7 +2796,9 @@
    * accident of text length.
    */
   width: auto;
-  min-width: 84px;
+  /* A floor, not a fixed width: the pair still reads as peers, and neither can push the cluster
+   * past the card when the column is narrow. */
+  min-width: min(84px, 100%);
   padding: 0 0.7rem;
   border-radius: 6px;
   font-size: 0.72rem;
@@ -2807,3 +2833,68 @@
   color: var(--alloy-os-midnight, #273f52);
 }
 .alloy-os-billing__zone--position .alloy-os-billing__amount { margin-bottom: 2px; }
+
+/* ── FINANCIALS COMMAND SHELL — THE BODY EVERY COMMAND SHARES ───────────────────────────────────
+ *
+ * Reverse used to borrow `.alloy-os-fdetail__movepanel`, the Move-payment band, and read as a raw
+ * horizontal strip laid across the ledger. These are the shell's own parts: a fact list stating
+ * what is about to happen, a sentence explaining the financial effect, and an action row whose
+ * primary is weighted rather than enlarged — the same hierarchy the compact card's commands use.
+ */
+.alloy-os-financials__commandbody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.alloy-os-financials__commandfacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem 1.25rem;
+  margin: 0;
+}
+.alloy-os-financials__commandfacts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.alloy-os-financials__commandfacts dt {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+.alloy-os-financials__commandfacts dd {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+  overflow-wrap: anywhere;
+}
+.alloy-os-financials__commandnote {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-financials__commandactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0.15rem;
+}
+.alloy-os-financials__commandactions .alloy-os-financials__quiet {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  padding: 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}

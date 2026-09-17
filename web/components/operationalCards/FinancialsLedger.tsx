@@ -302,16 +302,33 @@ export function FinancialsLedgerPeriod({
     summary,
     open,
     rows,
+    expandedOverride,
+    onToggle,
 }: {
     label: string;
     summary: string;
     /** The period's initial state — the caller decides which periods open, the operator decides after. */
     open: boolean;
     rows: FinancialsLedgerRowView[];
+    /*
+     * ── WHO REMEMBERS THE DISCLOSURE ──────────────────────────────────────────────────────────
+     *
+     * Local state is right for a surface that stays mounted, and wrong for one that a command can
+     * replace: the operator collapsed three periods, opened a row command, cancelled, and found
+     * every period open again. A host that outlives commands may hold the answer instead. Omit
+     * both props and this behaves exactly as it did.
+     */
+    expandedOverride?: boolean;
+    onToggle?: (label: string, expanded: boolean) => void;
 }) {
-    const [expanded, setExpanded] = useState(open);
+    const [expandedOwn, setExpandedOwn] = useState(open);
     /* A caller that changes which period is current re-seeds the disclosure. */
-    useEffect(() => setExpanded(open), [open]);
+    useEffect(() => setExpandedOwn(open), [open]);
+    const expanded = expandedOverride ?? expandedOwn;
+    const setExpanded = (next: boolean) => {
+        setExpandedOwn(next);
+        onToggle?.(label, next);
+    };
     return (
         <section
             className="alloy-os-fdetail__period"
@@ -323,7 +340,7 @@ export function FinancialsLedgerPeriod({
                 className="alloy-os-fdetail__periodhead"
                 aria-expanded={expanded}
                 data-financials-period-toggle={label}
-                onClick={() => setExpanded((v) => !v)}
+                onClick={() => setExpanded(!expanded)}
             >
                 <ChevronRight
                     aria-hidden
