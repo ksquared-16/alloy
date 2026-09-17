@@ -38,6 +38,8 @@ import {
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { isProcessEntryIntent, PROCESS_ENTRY_INTENTS } from "@/lib/lifecycle/processEntryPointsV1";
 import { parseParticipantDecision } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { isPlatformActionKey } from "@/lib/platform/actions/platformActionCatalog";
+import { setWorkTemplateExecutionMode } from "@/lib/lifecycle/resolveWorkTemplateExecutionMode";
 import {
     isAuthorableRequirementKind,
     parseStageRequirementsV1,
@@ -387,6 +389,104 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                                                         w.template_key !== templateKey
                                                             ? w
                                                             : { ...w, participant_decisions: decisions },
+                                                    ),
+                                                },
+                                            },
+                                  ),
+                              },
+                    ),
+                };
+                break;
+            }
+            case "set_work_template_action_binding": {
+                /*
+                 * BIND ONE WORK TEMPLATE TO THE OPERATOR ACTION THAT EXECUTES IT.
+                 *
+                 * A work template could declare what an operator must do and offer no way to do it.
+                 * `send_enrollment_packet` was required on Enrolling with no `primary_action`, so the
+                 * Process Card rendered the work and no control, and the only route to a family was
+                 * copying an Intake URL out of Processing Studio.
+                 *
+                 * There was no authoring operation for this key at all — the stage editors reach
+                 * requirements, outcomes and per-child paths, and stop short of the one field that
+                 * makes stage work executable. This is that operation, and it is deliberately shaped
+                 * like `set_work_template_participant_decisions`: one process, one stage, one
+                 * template, replaced whole.
+                 *
+                 * BOTH KEYS ARE WRITTEN, through `setWorkTemplateExecutionMode`, because that is the
+                 * canonical writer and because an undeclared `execution_mode` is exactly the defect
+                 * that made every Enrollment queue refuse before revision 34. The runtime would infer
+                 * `direct_action` from the action alone; inference is not a declaration, and the
+                 * operability rule has already been read once as saying otherwise.
+                 */
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const stageKey = typeof body.stage_key === "string" ? body.stage_key.trim() : "";
+                const templateKey = typeof body.template_key === "string" ? body.template_key.trim() : "";
+                const actionRef = typeof body.action_ref === "string" ? body.action_ref.trim() : "";
+                const actionLabel = typeof body.action_label === "string" ? body.action_label.trim() : "";
+                if (!processId) return NextResponse.json({ error: "process_id is required" }, { status: 400 });
+                if (!stageKey) return NextResponse.json({ error: "stage_key is required" }, { status: 400 });
+                if (!templateKey) return NextResponse.json({ error: "template_key is required" }, { status: 400 });
+
+                const targetProcess = config.processes.find((p) => p.id === processId);
+                if (!targetProcess) return NextResponse.json({ error: "Unknown process" }, { status: 404 });
+                const targetStage = targetProcess.stages.find((st) => st.key === stageKey);
+                if (!targetStage) {
+                    return NextResponse.json({ error: `Unknown stage "${stageKey}"` }, { status: 404 });
+                }
+                const bindPlan = targetStage.stage_operating_plan_v1;
+                const bindTemplate = bindPlan?.work_templates?.find((w) => w.template_key === templateKey);
+                if (!bindPlan || !bindTemplate) {
+                    return NextResponse.json(
+                        { error: `Unknown work template "${templateKey}" on "${stageKey}"` },
+                        { status: 404 },
+                    );
+                }
+
+                /*
+                 * A BINDING IS VOUCHED FOR BEFORE IT IS STORED.
+                 *
+                 * The same rule `update_process_command_set` applies to commands: an unregistered
+                 * reference stored here would render as an operator action and refuse at execution,
+                 * which is worse than no action at all — the operator would believe the work had a
+                 * route. An empty `action_ref` is a legitimate request to UNBIND.
+                 */
+                if (actionRef && !isPlatformActionKey(actionRef)) {
+                    return NextResponse.json(
+                        {
+                            error:
+                                `"${actionRef}" is not a registered platform action, so binding it would `
+                                + `render a control that cannot run.`,
+                            code: "action_unregistered",
+                        },
+                        { status: 409 },
+                    );
+                }
+
+                const boundTemplate = setWorkTemplateExecutionMode(
+                    // The label is the operator's word for this work's action; the rest of the
+                    // template is untouched.
+                    actionLabel ? { ...bindTemplate, label: actionLabel } : bindTemplate,
+                    actionRef ? "direct_action" : "outcome_led",
+                    actionRef || null,
+                );
+
+                config = {
+                    ...config,
+                    processes: config.processes.map((p) =>
+                        p.id !== processId
+                            ? p
+                            : {
+                                  ...p,
+                                  stages: p.stages.map((st) =>
+                                      st.key !== stageKey
+                                          ? st
+                                          : {
+                                                ...st,
+                                                stage_operating_plan_v1: {
+                                                    ...bindPlan,
+                                                    work_templates: bindPlan.work_templates.map((w) =>
+                                                        w.template_key !== templateKey ? w : boundTemplate,
                                                     ),
                                                 },
                                             },
