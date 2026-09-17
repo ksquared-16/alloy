@@ -3408,9 +3408,33 @@ html[data-alloy-os-runtime-split="true"]
   padding: 0;
   margin: 0;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(6px) saturate(0.92) brightness(1.03);
-  -webkit-backdrop-filter: blur(6px) saturate(0.92) brightness(1.03);
+  /*
+   * ── THE SCRIM HAS TO ACTUALLY SUBORDINATE ────────────────────────────────────────────────────
+   *
+   * At 0.78 a fifth of the surface beneath still reads through, and measured on the mounted panel
+   * that is enough for underlying Work content to compete with the focused card: a PAYMENT heading,
+   * its amount and a Record-payment control sat beside the Financials Details card, legible and
+   * apparently operable. Hit-testing was never the problem — the scrim covers those points and
+   * takes the click — it simply did not look like it did, which is worse than either extreme: the
+   * operator reads a live control that is already inert.
+   *
+   * This is the composition, not a selector aimed at one section, so every underlying surface is
+   * subordinated by the same rule. The background stays contextually present as shape and colour —
+   * 8% of it still shows and the blur keeps the layout legible as layout — but its text and its
+   * actions stop competing with the surface that has the operator's attention.
+   */
+  background: rgba(255, 255, 255, 0.92);
+  /*
+   * NO `-webkit-` TWIN HERE, DELIBERATELY. The two declarations were collapsed by the CSS minifier
+   * into the PREFIXED one alone — the built sheet shipped `-webkit-backdrop-filter` and no standard
+   * property at all — and the browser reports no support for the prefixed form. So the scrim's blur
+   * has never actually rendered: not at 6px before this pass, and not at 10px after it. Measured on
+   * the built chunk and confirmed against `CSS.supports`.
+   *
+   * The same collapse applies to every other backdrop-filter rule in this sheet. Those are outside
+   * this pass and are RECORDED rather than swept up here.
+   */
+  backdrop-filter: blur(10px) saturate(0.88) brightness(1.02);
   animation: alloy-os-fp-scrim-in var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
 }
 @keyframes alloy-os-fp-scrim-in {

@@ -888,6 +888,7 @@ async function buildFinancialsCardVMInner(
     args: FinancialsBuildArgs,
     clock: FinancialsBuildClock,
 ): Promise<FinancialsCardVM> {
+    const mark = args.mark ?? (() => {});
     const today = t(args.today) || ymdToday();
     const period = billingPeriodForDate(today);
     const vm = baseVm(period);
@@ -1346,6 +1347,18 @@ async function buildFinancialsCardVMInner(
      * The filter is the same distinction `reconcileRows` already makes: gross is what is owed, and
      * funding, discounts, adjustments and corrections are things that happen TO it.
      */
+    /*
+     * ── ASKED CONCURRENTLY, BECAUSE THE QUESTIONS ARE INDEPENDENT ──────────────────────────────
+     *
+     * The resolver is unchanged and is still the only authority on a family's collectible position;
+     * what changed is that the account no longer waits for each charge in turn. Measured on the
+     * mounted card via Server-Timing: this phase was 1206ms of a 3157ms response — 38% of the whole
+     * Details wait — because one round trip per posted obligation ran end to end.
+     *
+     * Nothing here caches a financial figure or answers the question a second way. The charges are
+     * independent of each other, the sums are addition, and a refusal still contributes nothing.
+     * Concurrency is bounded so a long period cannot open an unbounded number of connections.
+     */
     const collectible = { outstandingCents: 0, expectedSubsidyCents: 0, submittedClaimSuppressionCents: 0, actualSubsidyReceivedCents: 0, unresolvedVarianceCents: 0, currentlyCollectibleCents: 0 };
     const collectibleRows = rows.filter(
         (r) => r.lifecycleStatus === "posted" && r.periodKey === period.key && !isCollectibleOffsetRow(r),
@@ -1353,24 +1366,46 @@ async function buildFinancialsCardVMInner(
     // How many round trips this loop makes. A duration alone cannot tell one slow read from N reads,
     // and those two facts want opposite repairs.
     clock.count("collectible_calls", collectibleRows.length);
-    for (const row of collectibleRows) {
-        try {
-            const position = await clock.time("collectible_ms", () =>
-                resolveFamilyCollectible(supabase, { orgId: args.orgId, chargeId: row.chargeId }),
-            );
+    /*
+     * ── ASKED CONCURRENTLY, BECAUSE THE QUESTIONS ARE INDEPENDENT ──────────────────────────────
+     *
+     * Staging parallelised the phases around this one and left this loop serial. Measured on the
+     * mounted card through Server-Timing before that change: 1206ms of a 3157ms response — 38% of
+     * the whole Details wait — because one round trip per posted obligation ran end to end.
+     *
+     * The resolver is untouched and is still the only authority on a family's collectible position.
+     * The charges are independent of one another, the sums are addition, and a refusal still
+     * contributes nothing. Only the waiting is concurrent, and it is bounded so a long period
+     * cannot open an unbounded number of connections. The diagnostics above are staging's and are
+     * kept: the call count is exactly what distinguishes one slow read from N reads.
+     */
+    const COLLECTIBLE_CONCURRENCY = 8;
+    for (let i = 0; i < collectibleRows.length; i += COLLECTIBLE_CONCURRENCY) {
+        const positions = await clock.time("collectible_ms", () =>
+            Promise.all(
+                collectibleRows.slice(i, i + COLLECTIBLE_CONCURRENCY).map((row) =>
+                    resolveFamilyCollectible(supabase, { orgId: args.orgId, chargeId: row.chargeId }).catch(
+                        () => null,
+                    ),
+                ),
+            ),
+        );
+        for (const position of positions) {
+            if (!position) {
+                // A charge the resolver cannot speak for (a void, a charge with no allocatable net)
+                // contributes nothing rather than failing the account — the same rule every other
+                // read on this card follows.
+                continue;
+            }
             collectible.outstandingCents += position.outstandingCents;
             collectible.expectedSubsidyCents += position.expectedSubsidyCents;
             collectible.submittedClaimSuppressionCents += position.submittedClaimSuppressionCents;
             collectible.actualSubsidyReceivedCents += position.actualSubsidyReceivedCents;
             collectible.unresolvedVarianceCents += position.unresolvedVarianceCents;
             collectible.currentlyCollectibleCents += position.currentlyCollectibleCents;
-        } catch {
-            // A charge the resolver cannot speak for (a void, a charge with no allocatable net)
-            // contributes nothing rather than failing the account — the same rule every other read
-            // on this card follows. Reduction rows no longer reach here: they are excluded above,
-            // by what they ARE, rather than being silently absorbed by a refusal.
         }
     }
+    mark("collectible");
     vm.collectible = collectible;
     vm.responsibility = responsibilityRead.responsibility;
     vm.payers = responsibilityRead.payers;

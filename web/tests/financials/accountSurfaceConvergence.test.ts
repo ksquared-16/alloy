@@ -1815,17 +1815,38 @@ describe("F43 · Due is the actionable figure, and the commands are peers", () =
         const compact = code("components/operationalCards/FinancialsCard.tsx");
         expect(compact, "the ambiguous word is gone").not.toMatch(/zone-head">Position</);
         expect(compact).toMatch(/zone-head">Due<[\s\S]{0,200}\{period\.dueNow\}/);
-        /* The balance survives as its own distinct fact rather than being renamed. */
-        expect(compact).toMatch(/label="Current balance" value=\{period\.currentBalance\}/);
+        /*
+         * The balance survives as its own distinct fact rather than being folded into Due. The WORD
+         * is allowed to be short — `Current balance` wrapped onto two lines in a column measured for
+         * a figure — but the fact it states may not move.
+         */
+        expect(compact).toMatch(/label="Balance" value=\{period\.currentBalance\}/);
     });
 
-    it("gives Payment and Add one geometry", () => {
-        const css = read("app/adminV2/components/operationalCardsShared.css");
-        const rule = css.slice(css.indexOf(".alloy-os-billing__commands > button"));
-        const block = rule.slice(0, rule.indexOf("\n}") + 2);
-        for (const prop of ["min-height", "min-width", "border-radius", "font-size"]) {
-            expect(block, `the pair share ${prop}`).toContain(prop);
+    it("gives Payment and Add one grammar", () => {
+        const compact = code("components/operationalCards/FinancialsCard.tsx");
+        /*
+         * ── SUPERSEDED, DELIBERATELY ──────────────────────────────────────────────────────────
+         *
+         * This asserted that the two BUTTONS shared one geometry — matched height, min-width,
+         * radius and type size — which was the right fact while the compact card carried buttons.
+         * Mounted review replaced them: a compact card is context beside another process, so its
+         * actions are contextual links, and the operational buttons stay on the focused Details and
+         * workspace surfaces where the operator has come to work the account.
+         *
+         * Peerage is now structural rather than measured. One primitive renders all three, so they
+         * cannot drift into different treatments the way a filled button, a quiet button and an
+         * underlined link already had.
+         */
+        expect(compact, "one primitive renders every compact action").toMatch(/function CardLink\(props: \{/);
+        for (const control of ["onAddCharge", "onPayNow", "onDetails"]) {
+            expect(compact, `${control} is rendered through it`).toMatch(
+                new RegExp(`<CardLink onClick=\\{${control}`),
+            );
         }
+        expect(compact, "the compact card carries no button cluster").not.toMatch(
+            /alloy-os-billing__commands/,
+        );
     });
 
     it("gives GL the width Description does not need", () => {
@@ -1989,21 +2010,25 @@ describe("F46 · Reverse and Adjust use the canonical command shell", () => {
 });
 
 describe("F47 · the compact commands stay inside the card", () => {
-    it("gives the cluster the width it needs, on one line", () => {
-        const css = read("app/adminV2/components/operationalCardsShared.css");
-        const block = css.slice(css.indexOf(".alloy-os-billing__commands {"));
-        const rule = block.slice(0, block.indexOf("\n}") + 2);
+    it("puts each action with the story it belongs to", () => {
+        const compact = code("components/operationalCards/FinancialsCard.tsx");
         /*
-         * MEASURED, NOT ARGUED. The cluster needs 184px on one line; the position column it used to
-         * live in is 121px at the Focus Panel's normal width and 48px at its narrowest. Inside that
-         * column the only outcomes are overflow or a three-row wrap, and both shipped. It spans the
-         * card instead — still one line, still anchored to the payment side.
+         * The cluster is gone, so the width it needed is no longer a question anyone has to answer.
+         * Add creates obligation activity and sits at the foot of that column; Payment belongs to
+         * the payment position and sits at the foot of that one; Details is navigation for the whole
+         * card and sits at its lower-right edge.
          */
-        expect(rule, "it spans the card rather than a column sized for one figure").toMatch(
-            /grid-column:\s*1 \/ -1/,
+        const left = compact.slice(compact.indexOf('zone-head">Current period'), compact.indexOf("alloy-os-billing__collect"));
+        expect(left, "Add sits with the obligation story").toMatch(/<CardLink onClick=\{onAddCharge/);
+        const right = compact.slice(compact.indexOf("alloy-os-billing__collect"), compact.indexOf("alloy-os-billing__nav"));
+        expect(right, "Payment sits with the payment position").toMatch(/<CardLink onClick=\{onPayNow/);
+        expect(compact, "and navigation has its own edge").toMatch(
+            /alloy-os-billing__nav[\s\S]{0,220}<CardLink onClick=\{onDetails[^>]*nav/,
         );
-        expect(rule, "one line").toMatch(/flex-wrap:\s*nowrap/);
-        expect(rule, "anchored to the payment side").toMatch(/justify-content:\s*flex-end/);
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        expect(css, "the links are Bend Pine and undecorated").toMatch(
+            /\.alloy-os-billing__cardlink \{[\s\S]{0,420}text-decoration:\s*none/,
+        );
     });
 
     it("keeps the column gap from eating the figure", () => {
@@ -2024,9 +2049,24 @@ describe("F47 · the compact commands stay inside the card", () => {
         expect(size, "still the largest figure in its zone").toBeGreaterThan(1);
     });
 
-    it("names the commands without arrow glyphs", () => {
+    it("gives every compact action the same arrow, and keeps it out of the name", () => {
         const compact = code("components/operationalCards/FinancialsCard.tsx");
-        expect(compact).not.toMatch(/Details\s*→|→\s*<\/|Payment\s*→|Add\s*→/);
+        /*
+         * ── REVERSED ON PURPOSE ───────────────────────────────────────────────────────────────
+         *
+         * This used to forbid arrow glyphs, which was right when the card mixed two buttons with an
+         * arrowed link and the arrow was one of the three competing signals. The decision now is the
+         * opposite and for the same reason: ONE grammar, and that grammar has an arrow.
+         *
+         * What survives from the old rule is the part that was always true — the glyph is decoration
+         * and must never become part of an accessible name. The control is "Add", not "Add →".
+         */
+        expect(compact, "the arrow is rendered once, by the shared primitive").toMatch(
+            /aria-hidden className="alloy-os-billing__cardlink-arrow">→<\/span>/,
+        );
+        const labels = compact.match(/<CardLink[^>]*>\s*\{?\s*([A-Za-z]+)/g) ?? [];
+        expect(labels.length, "all three actions go through it").toBeGreaterThanOrEqual(3);
+        expect(compact, "and no label carries its own glyph").not.toMatch(/>\s*(Add|Payment|Details)\s*→/);
     });
 });
 

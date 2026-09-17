@@ -2767,90 +2767,95 @@
  * command bar. Payment and Add sit together as primary and its quieter peer; Details is navigation
  * and reads as a link rather than a third equal button.
  */
-.alloy-os-billing__commands {
-  /*
-   * ONE ROW. Wrapping put Payment, Add and Details on three lines of a card whose whole point is to
-   * be short — measured at 335px, past the 303px this card is allowed. They sit on one line and the
-   * buttons size to their content rather than to a floor that made Add wider than Payment.
-   */
-  display: flex;
-  /*
-   * ── ONE LINE, AND THE WIDTH TO HOLD IT ──────────────────────────────────────────────────────
-   *
-   * Measured on the mounted card: the cluster needs 184px on one line, and the position column it
-   * used to sit in is 121px at the Focus Panel's normal width and 48px at its narrowest. Inside
-   * that column there were only two outcomes and both were shipped at different times — overflow
-   * the card (Add and Details rendered past the right edge at 1680, 1440, 1280 and 1040), or wrap
-   * onto three rows and spend 40px of card height.
-   *
-   * So the cluster spans the card's full content width and is anchored right, under Due. It is
-   * one line again, it is inside the card, and it costs the height of a single 26px row.
-   */
-  grid-column: 1 / -1;
-  justify-content: flex-end;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 0.35rem;
-  min-width: 0;
-}
 /*
- * ── PRIMARY IS A WEIGHT, NOT A SIZE ────────────────────────────────────────────────────────────
+ * ── ONE ACTION GRAMMAR ON THE COMPACT CARD ─────────────────────────────────────────────────────
  *
- * Payment and Add inherited two different button treatments, so the pair read as a mistake rather
- * than a hierarchy: different heights, different padding, different radii, baselines that did not
- * line up. They are peers in geometry and unequal only in emphasis — Payment carries the filled
- * treatment, Add the quiet one, and both occupy the same box.
+ * The card had three at once: a filled Payment, a quiet Add, and a black underlined Details. Three
+ * treatments on one small card read as three unrelated systems bolted to a corner, and the widths
+ * they needed were what pushed them outside the card in the first place.
+ *
+ * They are contextual links now, all three identical — Bend Pine, an arrow, no underline, one type
+ * size, one hover and focus behaviour — and each sits with the story it belongs to: Add under the
+ * obligation column, Payment under the position column, Details at the card's lower-right edge.
+ * The operational BUTTONS are unchanged and stay where they belong, on the focused Details and
+ * workspace surfaces.
  */
-.alloy-os-billing__commands > button {
+.alloy-os-billing__cardlink {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  min-height: 26px;
-  height: 26px;
-  /*
-   * The secondary command inherits `width: 100%` from the shared action class and stretched to fill
-   * the row, so Add measured 121px against Payment's 76px. Here they are peers: one width, sized to
-   * the longer of the two labels, so the pair reads as a hierarchy of EMPHASIS rather than an
-   * accident of text length.
-   */
-  width: auto;
-  /* Peers in geometry, and sized to the longer label rather than to a floor that made Add wider
-   * than Payment. 76px holds `Payment` at this size with the padding below. */
-  min-width: 76px;
-  padding: 0 0.65rem;
-  border-radius: 6px;
-  font-size: 0.72rem;
-  font-weight: 650;
-  line-height: 1;
-  white-space: nowrap;
-}
-/* The navigation is not a button box at all, so it is exempt and stays a link. */
-.alloy-os-billing__commands > .alloy-os-billing__detailslink {
-  min-height: 0;
-  height: auto;
-  min-width: 0;
+  gap: 4px;
+  align-self: flex-start;
+  margin-top: 7px;
   padding: 0;
-  margin-left: 2px;
-  border-radius: 0;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.alloy-os-billing__detailslink {
   border: 0;
-  padding: 0;
   background: transparent;
-  color: var(--alloy-os-text-secondary, #4b5563);
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  color: var(--alloy-os-bend-pine, #00a283);
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-decoration: none;
   cursor: pointer;
 }
-.alloy-os-billing__detailslink:hover,
-.alloy-os-billing__detailslink:focus-visible {
-  color: var(--alloy-os-midnight, #273f52);
+.alloy-os-billing__cardlink:disabled {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  cursor: default;
+}
+.alloy-os-billing__cardlink-arrow {
+  font-size: 0.8em;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+.alloy-os-billing__cardlink:hover:not(:disabled) .alloy-os-billing__cardlink-arrow,
+.alloy-os-billing__cardlink:focus-visible .alloy-os-billing__cardlink-arrow {
+  transform: translateX(2px);
+}
+.alloy-os-billing__cardlink:hover:not(:disabled),
+.alloy-os-billing__cardlink:focus-visible {
+  color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 78%, #04303f);
+}
+/* Navigation ranks below the two commands: same grammar, lighter weight. */
+.alloy-os-billing__cardlink--nav {
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 82%, var(--alloy-os-text-secondary, #4b5563));
+}
+/* Details is navigation for the whole card, so it sits at the card's own lower-right edge. */
+.alloy-os-billing__nav {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+.alloy-os-billing__nav .alloy-os-billing__cardlink {
+  margin-top: 0;
+}
+/*
+ * ── THE POSITION LINES STATE THEMSELVES ON ONE LINE ────────────────────────────────────────────
+ *
+ * `Payments received` and `Current balance` wrapped in a column measured for a figure, which made
+ * the right side ragged and grew the card. The label yields its own width before the row breaks,
+ * the figure never does, and neither wraps.
+ */
+.alloy-os-billing__zone--position .alloy-os-billing__line {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.alloy-os-billing__zone--position .alloy-os-billing__line-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.alloy-os-billing__zone--position .alloy-os-billing__line-value {
+  white-space: nowrap;
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-billing__clear,
+.alloy-os-billing__age {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .alloy-os-billing__zone--position .alloy-os-billing__amount { margin-bottom: 2px; }
 

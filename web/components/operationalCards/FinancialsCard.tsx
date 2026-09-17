@@ -46,6 +46,7 @@ export default function FinancialsCard({
     evidence,
     span = "row",
     onDetails,
+    detailsPending = false,
     onAddCharge,
     onPayNow,
     onManagePayment,
@@ -66,6 +67,8 @@ export default function FinancialsCard({
      */
     span?: 1 | "row";
     onDetails?: () => void;
+    /** The deep read Details waits on is in flight; the control says so rather than a skeleton. */
+    detailsPending?: boolean;
     onAddCharge?: () => void;
     /** Wired by the Focus Panel; the lab leaves them undefined and the buttons are inert. */
     onPayNow?: () => void;
@@ -170,6 +173,17 @@ export default function FinancialsCard({
                             {/* The one intermediate figure that materially explains the position. */}
                             <Line label="Net obligation" value={period.familyResponsibility} emphasis />
                         </div>
+                        {/*
+                         * ── THE COMMAND SITS WITH THE STORY IT BELONGS TO ─────────────────────
+                         *
+                         * Add creates charge and adjustment activity, which is what this column is
+                         * an account of, so it lives at the foot of this column rather than in a
+                         * button bar. A compact card is context beside another process, so its
+                         * actions are contextual links; the operational buttons stay on the focused
+                         * Details and workspace surfaces, where there is room and the operator has
+                         * come specifically to work the account.
+                         */}
+                        <CardLink onClick={onAddCharge} testId="add">Add</CardLink>
                     </section>
 
                     <div className="alloy-os-billing__collect">
@@ -196,9 +210,16 @@ export default function FinancialsCard({
                             <p className="alloy-os-billing__clear">Nothing past due</p>
                         )}
                         <div className="alloy-os-billing__lines">
-                            {/* The balance stays, as its own distinct fact, beneath the actionable one. */}
-                            <Line label="Current balance" value={period.currentBalance} />
-                            <Line label="Payments received" value={period.paymentsReceived} />
+                            {/*
+                             * The balance stays, as its own distinct fact, beneath the actionable
+                             * one — under a shorter name. `Current balance` and `Payments received`
+                             * wrapped onto two lines each in a column measured for a figure, which
+                             * is what made the right side ragged and the card taller. `Balance` and
+                             * `Paid` are the same facts, and both are existing product words; no
+                             * abbreviation was invented to win the space.
+                             */}
+                            <Line label="Balance" value={period.currentBalance} />
+                            <Line label="Paid" value={period.paymentsReceived} />
                             {/*
                              * UNASSIGNED SURVIVES THE TRIM. Money nobody has been made responsible
                              * for is the most actionable fact this card can carry, and it is a
@@ -209,41 +230,29 @@ export default function FinancialsCard({
                                 <Line label="Unassigned" value={period.responsibility.unassigned} />
                             ) : null}
                         </div>
+                        {/* Payment belongs to the payment position, so it sits at the foot of it. */}
+                        {onPayNow ? <CardLink onClick={onPayNow} testId="payment">Payment</CardLink> : null}
                     </section>
                     </div>
                     {/*
-                     * ── THE COMMANDS TAKE THE WIDTH THEY NEED ─────────────────────────────────
+                     * ── NAVIGATION IS NOT A COMMAND ───────────────────────────────────────────
                      *
-                     * They lived inside the position column, which is 121px wide at the Focus
-                     * Panel's normal width and 48px at its narrowest. Measured, the cluster needs
-                     * 184px on one line — so inside that column it could only overflow the card
-                     * (which is what it did, at every supported width) or wrap onto three rows
-                     * (which costs the card 40px of height). Neither is a composition.
+                     * Payment and Add mutate money and now sit with the stories they belong to.
+                     * Details does neither: it is the way through to the account. It keeps the same
+                     * link grammar as the other two — Bend Pine, arrow, no underline — because three
+                     * different treatments on one small card read as three unrelated systems, which
+                     * is what an underlined black link beside two filled buttons had become.
                      *
-                     * It spans the card instead and is anchored right, so it still reads as the
-                     * payment column's action area and sits directly beneath Due, but it is no
-                     * longer trying to fit three controls into a column sized for one figure.
+                     * It is placed at the card's lower-right edge rather than appended after the
+                     * other two, so its rank is legible from its position.
                      */}
-                    <div className="alloy-os-billing__commands">
-                            {onPayNow ? (
-                                <Action primary onClick={onPayNow} data-financials-command="payment">
-                                    Payment
-                                </Action>
-                            ) : null}
-                            <Action onClick={onAddCharge} data-financials-command="add">
-                                Add
-                            </Action>
-                            {onDetails ? (
-                                <button
-                                    type="button"
-                                    className="alloy-os-billing__detailslink"
-                                    data-financials-nav="details"
-                                    onClick={onDetails}
-                                >
-                                    Details
-                                </button>
-                            ) : null}
+                    {onDetails ? (
+                        <div className="alloy-os-billing__nav">
+                            <CardLink onClick={onDetails} testId="details" nav pending={detailsPending}>
+                                Details
+                            </CardLink>
                         </div>
+                    ) : null}
                 </div>
 
                 {pastDue ? <p className="alloy-os-billing__history">{evidence.historyLine}</p> : null}
@@ -401,6 +410,50 @@ export function AccountSummaryPending() {
                 </Action>
             </div>
         </div>
+    );
+}
+
+/**
+ * THE COMPACT CARD'S ONE ACTION GRAMMAR.
+ *
+ * The card carried three at once — a filled button, a quiet button and a black underlined link —
+ * which read as three unrelated systems bolted to one corner. There is one treatment now: Bend
+ * Pine, an arrow, no underline, one type size, one hover and focus behaviour. `nav` marks the
+ * navigation rank; it changes weight, not grammar.
+ *
+ * The arrow is a glyph rather than text so it never becomes part of an accessible name, and it is
+ * hidden from assistive technology: the control is "Add", not "Add right-arrow".
+ */
+function CardLink(props: {
+    onClick?: () => void;
+    children: React.ReactNode;
+    testId: string;
+    nav?: boolean;
+    /**
+     * The click is acknowledged here rather than by showing a destination that does not exist yet.
+     * Details waits on a deep read, and the honest wait is this card with its control marked busy —
+     * not a skeleton of the surface the operator has not arrived at.
+     */
+    pending?: boolean;
+}) {
+    return (
+        <button
+            type="button"
+            className={[
+                "alloy-os-billing__cardlink",
+                props.nav ? "alloy-os-billing__cardlink--nav" : "",
+                props.pending ? "is-pending" : "",
+            ].filter(Boolean).join(" ")}
+            data-financials-command={props.nav ? undefined : props.testId}
+            data-financials-nav={props.nav ? props.testId : undefined}
+            data-financials-pending={props.pending ? "true" : undefined}
+            aria-busy={props.pending || undefined}
+            onClick={props.onClick}
+            disabled={!props.onClick || props.pending}
+        >
+            <span>{props.children}</span>
+            <span aria-hidden className="alloy-os-billing__cardlink-arrow">→</span>
+        </button>
     );
 }
 
