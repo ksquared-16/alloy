@@ -2583,7 +2583,22 @@
 }
 .alloy-os-billing__footer--commands .alloy-os-currentwork__primary-action,
 .alloy-os-billing__footer--commands .alloy-os-currentwork__helpful-action {
-  min-width: 0;
+  /*
+   * SIZE TO THE LABEL, AND NEVER SHRINK.
+   *
+   * `min-width: 0` let these flex items be compressed below their own text, and the compact card's
+   * footer holds the command group against `Details →` with `justify-content: space-between`. The
+   * result was a truncated "Payment" — measured on CI at EVERY authored width, 252 through 340, so
+   * it was never a narrow-card problem but a flex item giving up its label. It went unseen locally
+   * only because the design fonts are narrower than CI's fallback stack.
+   *
+   * A truncated money control is the worst thing this footer can render, and the row already
+   * declares `flex-wrap: wrap` — so the designed fallback is for the group to take its own line,
+   * not for the primary action to lose letters. Same rule the Process rail and the Attendance
+   * commands use.
+   */
+  flex: 0 0 auto;
+  white-space: nowrap;
   padding: 0.3rem 0.8rem;
   font-size: 0.78rem;
 }
