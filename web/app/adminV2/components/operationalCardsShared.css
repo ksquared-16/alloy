@@ -245,6 +245,47 @@
   cursor: not-allowed;
 }
 
+/*
+ * ATTENDANCE COMMANDS SIZE TO THEIR LABELS — the same correction the Process rail above makes.
+ *
+ * `ActionRow` renders What's Next's `helpful-row`, whose base rule is
+ * `grid-template-columns: repeat(auto-fit, minmax(0, 1fr))` with `width: 100%` on each command.
+ * With two commands that is two equal half-card tracks, so "Check in" and "Mark absent" stretched
+ * the full width of the card and read as a split bar rather than as two controls.
+ *
+ * Scoped to this card's OWN identity, not to a wrapper that happens to enclose it: the row class
+ * belongs to Current Work and is shared with the Process rail, and `data-universal-card-key` is
+ * emitted by the approved card itself — so this reaches the Focus Panel and the design lab and
+ * cannot reach any other card's commands.
+ *
+ * Nothing else about the commands changes: same height variable, same states, same order.
+ */
+[data-universal-card-key="attendance"] .alloy-os-currentwork__helpful-row {
+  /* Flex, so the track stops being divided equally and each command asks for its own label. */
+  display: flex;
+  flex-wrap: wrap;
+  grid-template-columns: none;
+  justify-content: flex-start;
+}
+
+[data-universal-card-key="attendance"] .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__helpful-action,
+[data-universal-card-key="attendance"] .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__primary-action {
+  /*
+   * Size to the label and never shrink, exactly as the Process rail does. The filled primary is
+   * listed beside the outline command deliberately — it used to stretch with the grid, and if only
+   * one of the pair sized itself the two would stand at different widths for no stated reason.
+   */
+  flex: 0 0 auto;
+  width: auto;
+  /* Room around the label, since the track no longer supplies it. */
+  padding-inline: 14px;
+  white-space: nowrap;
+  /* A label wider than the card still may not paint outside it. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .alloy-os-process__work {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
