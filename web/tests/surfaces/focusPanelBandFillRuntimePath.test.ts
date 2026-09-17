@@ -32,13 +32,58 @@ function ruleFor(selector: string): string {
     return CSS.slice(i, CSS.indexOf("}", i));
 }
 
+/**
+ * Which `align-items` actually WINS for the solved-grid cell.
+ *
+ * Both competing selectors are two classes — specificity (0,2,0) — so the cascade is decided by
+ * SOURCE ORDER. The previous version of this suite asserted only that the stretch declaration
+ * EXISTED, and it did exist, matched the element, and lost: deployed acceptance measured computed
+ * `align-items: flex-start` with the Business Process card at 232px inside its solved 325px wrapper.
+ * A declaration is not an outcome. This resolves the order the browser would.
+ */
+function winningAlignItemsForSolvedGridCell(): { value: string | null; winner: string | null } {
+    const competitors = [
+        ".alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell",
+        ".alloy-os-focus-panel-grid--composed .alloy-os-focus-panel-grid__cell",
+    ];
+    // Both match the solved-grid cell and both are (0,2,0); last one in the file wins.
+    let winner: string | null = null;
+    let value: string | null = null;
+    for (const sel of competitors) {
+        const rule = ruleFor(sel);
+        const m = /align-items:\s*([a-z-]+)/.exec(rule);
+        if (!m) continue;
+        if (CSS.indexOf(`\n${sel} {`) >= (winner ? CSS.indexOf(`\n${winner} {`) : -1)) {
+            winner = sel;
+            value = m[1];
+        }
+    }
+    return { value, winner };
+}
+
 describe("the solved height reaches the visible card", () => {
-    it("THE GATE: the cell inside the intrinsic node stretches its card", () => {
-        // Without this the card sits at its natural height inside a stretched cell — the deployed
-        // defect exactly: wrapper 325, card 232.
-        expect(ruleFor(".alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell")).toMatch(
-            /align-items:\s*stretch/,
-        );
+    it("THE GATE: stretch WINS the cascade for the solved-grid cell", () => {
+        // Not "is the declaration present" — which was true while the product was broken — but
+        // "which declaration does the browser apply".
+        const { value, winner } = winningAlignItemsForSolvedGridCell();
+        expect(winner).toBe(".alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell");
+        expect(value).toBe("stretch");
+    });
+
+    it("the solved-grid rule is ordered AFTER the composed rule it must override", () => {
+        const solved = CSS.indexOf("\n.alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell {");
+        const composed = CSS.indexOf("\n.alloy-os-focus-panel-grid--composed .alloy-os-focus-panel-grid__cell {");
+        expect(solved).toBeGreaterThan(-1);
+        expect(composed).toBeGreaterThan(-1);
+        expect(solved).toBeGreaterThan(composed);
+    });
+
+    it("both selectors carry the same specificity, which is WHY order decides", () => {
+        // Two class selectors each. Recorded so a future reader does not "fix" this by reordering
+        // back and assuming specificity will save them.
+        const classCount = (sel: string) => (sel.match(/\.[a-z-]+/g) ?? []).length;
+        expect(classCount(".alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell")).toBe(2);
+        expect(classCount(".alloy-os-focus-panel-grid--composed .alloy-os-focus-panel-grid__cell")).toBe(2);
     });
 
     it("the wrapper still carries the solved height, and the intrinsic node still resolves against it", () => {
