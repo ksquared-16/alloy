@@ -40,6 +40,10 @@ import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focus
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { resolveFinancialSubjectId } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
+import {
+    financialsRowsInSubjectScope,
+    rowInFinancialsSubjectScope,
+} from "@/lib/adminV2/runtime/focusPanel/financials/financialsRowScope";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -1026,9 +1030,9 @@ export default function FinancialsCard({
 
     const visibleRows = useMemo(() => {
         if (!vm) return [];
-        return subjectFilter === "all"
-            ? vm.rows
-            : vm.rows.filter((r) => r.subjectMemberId === subjectFilter);
+        // ONE rule for what a subject scope includes — household-grain rows stay visible. See
+        // `financialsRowScope`: a child-scoped panel does not make the account's charges disappear.
+        return financialsRowsInSubjectScope(vm.rows, subjectFilter);
     }, [vm, subjectFilter]);
 
     /*
@@ -2916,7 +2920,7 @@ export default function FinancialsCard({
                         rows: vm.rows.filter(
                             (r) =>
                                 r.periodKey === vm.period.key
-                                && (subjectFilter === "all" || r.subjectMemberId === subjectFilter),
+                                && rowInFinancialsSubjectScope(r, subjectFilter),
                         ),
                         currency,
                     })}
@@ -2957,9 +2961,7 @@ export default function FinancialsCard({
 
     if (!expanded && vm && reconciliation && !vm.unavailableReason) {
         const periodRows = vm.rows.filter(
-            (r) =>
-                r.periodKey === vm.period.key
-                && (subjectFilter === "all" || r.subjectMemberId === subjectFilter),
+            (r) => r.periodKey === vm.period.key && rowInFinancialsSubjectScope(r, subjectFilter),
         );
         return (
             <div
@@ -3438,9 +3440,7 @@ export default function FinancialsCard({
 
                                 <div className="alloy-os-financials__ledger" data-financials-ledger="true">
                                     {vm.ledgerPeriods.map((group) => {
-                                        const groupRows = group.rows.filter(
-                                            (r) => subjectFilter === "all" || r.subjectMemberId === subjectFilter,
-                                        );
+                                        const groupRows = financialsRowsInSubjectScope(group.rows, subjectFilter);
                                         if (groupRows.length === 0) return null;
                                         return (
                                             <section

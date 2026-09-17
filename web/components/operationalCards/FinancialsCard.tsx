@@ -508,7 +508,8 @@ function FinancialsCompactCard({
         <div className="alloy-os-billing" data-financials-card="compact">
             <UniversalCard
                 title="Financials"
-                insight={c.dueLine}
+                /* Absent when the lines already carry the figure — UniversalCard hides a falsy insight. */
+                insight={c.dueLine ?? ""}
                 iconName="Receipt"
                 tier="context"
                 archetype="status"

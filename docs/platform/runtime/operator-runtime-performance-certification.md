@@ -1994,3 +1994,85 @@ Next build, the client-graph `server-only` gate and required CI are green.
     EXPLICIT POST-MUTATION REFRESH MAY USE THE CANONICAL DOMAIN OWNER
     THE BROWSER RENDERS PROJECTIONS; IT DOES NOT RECONSTRUCT OPERATIONAL TRUTH.
 
+## 32. Financials compact — configuration authority, headline, and financial grain
+
+Three corrections. None of them touched the compact design, which had not regressed.
+
+### 32.1 Compact had not regressed — it is the 4-column variant
+
+Financials declares two AUTHORED placement variants: **Summary** (`standard`, 8 columns, the Current
+period / Net obligation hierarchy) and **Compact** (`compact`, 4 columns, the bounded lines). The live
+panel places it at `colStart 9 / colSpan 4`, so Compact is what the composition selects, and the
+compact block has only ever had this shape.
+
+> **FINANCIALS COMPACT IS A SUMMARY PROJECTION, NOT A MINI LEDGER.** It preserves financial hierarchy
+> from bounded current-period summary truth. Deep ledger, payment and history data stays behind
+> explicit Details navigation.
+
+### 32.2 One authority for density
+
+A published section carries two density signals:
+
+| signal | role |
+| --- | --- |
+| `metadata.focusPanelCard.density` | the BASE placement default |
+| `metadata.focusPanelCardConfig.appearance.density` | the AUTHORED appearance — **wins** |
+
+Measured live: Financials carried `focusPanelCard.density: "standard"` beside
+`appearance.density: "compact"` at `colSpan: 4`. The card rendered Compact, correctly — the appearance
+is what the operator authored, and 4 columns is Compact's width. The stale base default is not a
+competing claim.
+
+**Density is authored independently. There is no width-to-density derivation anywhere in the runtime**
+— the alternative rule is explicitly ruled out by test. The precedence no longer lives only in runtime
+behaviour: `tests/surfaces/focusPanelDensityAuthority.test.ts` states it, and reversing it fails.
+
+### 32.3 The headline had to earn its slot
+
+`dueLine` was the balance whenever nothing was past due, while `lines` already carried
+"Current balance" with that same figure — so the card printed the number twice, once unlabelled:
+`$0.00` sitting directly over `Current balance $0.00`.
+
+Past due keeps the prominent line, because it states a CONDITION rather than repeating a figure. An
+ordinary balance now renders no headline. Arithmetic is untouched; this decides only what is shown.
+
+### 32.4 Household financial truth survives child attention
+
+**The defect that hid money.** `buildFinancialsCardVM` states the grain where rows are built:
+
+> "Every id this account can be charged against: its enrolment agreements, and the household. A charge
+> whose source is the household has no child subject, which the ledger renders as the account rather
+> than inventing an attribution."
+
+A row's subject is `memberByAgreement.get(billable_source_id)`. A household charge has no agreement, so
+it resolves to `null` deliberately. **`null` means household-grain — it belongs to the account.** It is
+not "unknown" and not "not applicable".
+
+The Focus Panel sets its subject filter to the child attention is on, and five separate row filters
+each read `r.subjectMemberId === subjectFilter`. That is false for every household row, so entering the
+panel through a child made the account's own charges vanish from the summary, from the ledger, and from
+payment eligibility — `payableRows` derives from the filtered rows, so the Payment control disappeared.
+
+> **A child-scoped Focus Panel says which child the operator is working on. It does not turn a
+> household financial account into a child's account.**
+
+`financialsRowScope` is now the single rule: `all` takes everything; a named child takes that child's
+rows AND the household's; a sibling's rows stay out. The four display/eligibility filters consume it,
+so summary, ledger, payment eligibility and the detail transition cannot drift apart. The fix is at the
+scope owner, not at the Payment control.
+
+Per-subject arithmetic is unchanged: `reconciliationBySubject` is computed on the server and narrows to
+genuinely child-attributed rows. This governs only which rows a scope DISPLAYS and can act on.
+
+The child-charge adjustment path deliberately still requires `subjectMemberId != null` — a household
+charge has no child agreement to adjust against.
+
+### 32.5 What was deliberately left alone
+
+- **The Wrigley control.** September is settled in full, so no Payment is the right answer — and now
+  for the right reason rather than because the rows were filtered out from under it.
+- **The prior-period $75.** A payable August Registration fee the server does not classify past due.
+  Compact is current-period by contract, so it stays out; Details reaches it. A cross-period signal
+  would be a separate product decision and was not invented here.
+- **The bounded producer.** No deep collections restored.
+
