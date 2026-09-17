@@ -28,8 +28,8 @@ If EXPECT does not match, stop at that step number and report it.
 > render, or anything below says STOP.
 
 The QA child for the live run (Parts D–E) is **Toureeb Tourb0913** (household *Tourb0913 Family*),
-already Enrolling through the real Decision path. Earlier parts still reference **Pathb Certopp**,
-which remains a valid specimen for configuration reading.
+already Enrolling through the real Decision path. Earlier configuration-reading parts reference a
+different specimen child, which is fine — those parts only read configuration.
 
 ## PART 0 — Admin acceptance (short)
 
@@ -297,8 +297,8 @@ knows carry a blue **Alloy** mark.
 
 > **This whole part was re-certified end to end on a real send.** Every step below was executed and
 > observed, except D9 — checking the inbox — which only you can do. The old Part D told you to open
-> Processing Studio, pick a packet, launch it and copy an Intake URL. **None of that is the product
-> any more.** There is no Studio step, no packet picker, no URL to copy: the Process decides which
+> Processing Studio, pick a packet, launch it and copy a participant link by hand. **None of that is
+> the product any more.** There is no Studio step, no packet picker, no URL to copy: the Process decides which
 > packet a child needs, and Communications carries the link to the family.
 
 **The QA specimen.** Child **Toureeb Tourb0913** (Tourb0913 Family) is already Enrolling, put there
@@ -386,9 +386,8 @@ QA cycle.**
 > ## STOP HERE FOR NOW
 >
 > **Parts E and F are being rewritten and must not be followed.** Everything that used to be in this
-> section scripted a packet that is no longer the one the product launches. It told you to expect
-> *Northwind Enrollment Application v4*, *Health and Medical Authorization* and *Immunization
-> Record*, as three signed documents, reviewed in Processing as *Enrollment Packet — Firefly V1*.
+> section scripted a packet that is no longer the one the product launches: three signed documents
+> from an older fixture package, reviewed in Processing under that package's name.
 >
 > The live package is **Enrollment Paperwork 2026–2027**, and its obligations are different in kind,
 > not just in name:
