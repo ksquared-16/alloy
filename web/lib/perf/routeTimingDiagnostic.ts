@@ -81,6 +81,33 @@ export type RouteTimingMarks = {
     } | null;
 
     /**
+     * THE OUTER COMPOSE'S OWN AWAITS (P0-7.6 / Slice 12C).
+     *
+     * Slice 12B measured `compose_wall_ms` − the inner composer's `total_ms` at ~3,869 ms median and
+     * called it a PRELUDE. Source tracing for this slice shows that name was wrong: the gap is work
+     * on BOTH sides of the inner composer. `composeProvisioningAnswerForRoute` has exactly three
+     * awaits —
+     *
+     *   route_identity_ms   BEFORE  — `resolveWorkUnitRouteIdentity` (the route gate + the slug→unit read)
+     *   inner_compose_ms            — the outer view of `composeWorkUnitProvisioningAnswer`
+     *   card_producers_ms   AFTER   — `projectFocusPanelCardProducers`, which performs its own DB reads
+     *
+     * — and the other two steps (`createAdminClient`, `documentActorFromAdminGate`) are synchronous
+     * local derivation, timed here only so that "it is not those" is measured rather than assumed.
+     *
+     * Reported alongside, never instead of, `compose_wall_ms` and the inner `total_ms`, which remain
+     * the authoritative outer boundaries. Whatever these spans do not explain stays unattributed.
+     */
+    route_compose_spans: {
+        route_identity_ms: number;
+        admin_client_ms: number;
+        document_actor_ms: number;
+        inner_compose_ms: number;
+        /** Null when the answer was not operational, so the producers step genuinely did not run. */
+        card_producers_ms: number | null;
+    } | null;
+
+    /**
      * When `focusPanelSummaryDoc` became available, measured from compose start (P0-7.6 item 13).
      *
      * DIAGNOSTIC ONLY. This slice does not decouple, flush or stream the published composition; it

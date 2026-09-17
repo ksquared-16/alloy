@@ -182,7 +182,13 @@ describe("data safety — durations and booleans only", () => {
         const fields = [...schema.matchAll(/^\s{4}(\w+)\??:/gm)].map((m) => m[1]);
         expect(fields.length).toBeGreaterThan(5);
         for (const f of fields) {
-            expect(f, `unexpected timing field ${f}`).toMatch(/_ms$|_epoch_ms$|^seeded$|^compose_sections$/);
+            // `compose_sections` and `route_compose_spans` are the two named span MAPS the contract
+            // allows; every other field must be a duration, an epoch or a boolean. Slice 12C's new
+            // field failed this gate on first run, which is the gate doing its job — it is admitted
+            // by name here rather than by loosening the pattern.
+            expect(f, `unexpected timing field ${f}`).toMatch(
+                /_ms$|_epoch_ms$|^seeded$|^compose_sections$|^route_compose_spans$/,
+            );
         }
     });
 
