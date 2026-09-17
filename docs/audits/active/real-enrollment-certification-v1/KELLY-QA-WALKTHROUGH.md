@@ -383,51 +383,173 @@ QA cycle.**
 
 # PART E — The parent experience
 
-> ## STOP HERE FOR NOW
->
-> **Parts E and F are being rewritten and must not be followed.** Everything that used to be in this
-> section scripted a packet that is no longer the one the product launches: three signed documents
-> from an older fixture package, reviewed in Processing under that package's name.
->
-> The live package is **Enrollment Paperwork 2026–2027**, and its obligations are different in kind,
-> not just in name:
->
-> | | |
-> |---|---|
-> | **Admissions Information** | collect information — a conversation, ~80 questions |
-> | **Family Handbook** | read & acknowledge |
-> | **Immunization record** | upload a document |
->
-> Following the old script would have had you hunting for documents that are not there and reporting
-> their absence as defects. That is why it is removed rather than left with a warning on top.
+> **E1 to E6 were executed and observed on the real runtime.** Each one below is a thing that was
+> driven, not a thing that ought to work. **E7 to E10 are not certified and must not be QA'd yet** —
+> they are listed at the end so you can see where this stops.
 
-## What IS certified about the parent experience
+## Before you start: which conversation you are opening
 
-These were re-run against the real delivered link and hold today:
+A participant link **resumes**. That is the product behaving correctly — Part D proved a resend
+reuses the same session rather than starting a second one — but it means **you only get one first
+impression per child**, and E1 is about the first impression.
 
-- the conversation opens naming the child, and reuses what Alloy already holds rather than asking
-  for it (**16 of the 80 Admissions questions** were already settled from known truth at open);
-- it asks **one need at a time** — no wall of fields, no 80-question form;
-- it **resumes**: reopening the same link continues where it left off, with earlier answers still
-  settled and editable, rather than restarting;
-- a required question that has no home in Alloy's own records is still asked and still retained —
-  "Form-only" describes where the answer lives, not whether it matters;
-- typing a QUESTION instead of an answer is answered as a question, and does not get stored as the
-  value of the field you were asked about;
-- the order follows people rather than the source PDF's field order: the child's own details first,
-  then the primary parent/guardian, then other people. It does not bounce between them.
+| If you open… | You will land at… |
+|---|---|
+| a link for a child whose conversation has not started | the opening — do **E1** |
+| the link from your Part D email for **Toureeb** | partway in, where the certification run left it — **skip E1**, start at E2 |
 
-## What is NOT yet certified, and is being worked on now
+The certification run answered about half of Toureeb's Admissions conversation, so the values in it
+read *"QA probe answer"*. Those are mine, not a defect. If you want E1 on a real first impression,
+use a child who has not been sent paperwork yet.
 
-- whether the opening gives you a **useful summary of what Alloy already knows**, grouped by person,
-  rather than only the sentence "I already have most of Toureeb's information";
-- the section-by-section transitions through the whole of Admissions;
-- the **Family Handbook** read-and-acknowledge step;
-- the **Immunization record** upload step;
-- completion, and what Processing shows afterwards (the old Part F).
+**One thing to know before E1**, because it will otherwise look like a bug: *Enrollment Paperwork
+2026–2027* has **eighty questions and four of them are connected to anything Alloy stores** — the
+child's date of birth, their first day, and the guardian's phone and email. Everything else is
+Form-only. So "what I already have" can never be more than those four, and for a family whose record
+is missing them it is **empty, and the opening says so instead of claiming otherwise**. That is a
+configuration fact about this packet, not a fault in the conversation.
 
-**Please do not QA these yet.** A rewritten Part E will state each step as DO / EXPECT / STOP once
-the behaviour behind it has been proven, the same way Part D now does.
+---
+
+**E1. OPENING — what Alloy already has.**
+
+**DO** — Open a participant link for a child whose conversation has not started.
+
+**EXPECT — when Alloy holds something** — An opening line naming the child, and underneath it one
+small block per person, with a heading and their facts:
+
+```
+Let's finish Lennon's enrollment paperwork. Here's what I already have —
+I'll ask you for anything that's missing.
+
+    LENNON'S DETAILS
+      Birthday        ·  Apr 2, 2024
+
+    YOUR DETAILS
+      Phone number    ·  (602) 290-4816
+      Email address   ·  kelly.kurzman@gmail.com
+```
+
+**EXPECT — when Alloy holds nothing** — The same opening WITHOUT the claim:
+*"Let's finish Toureeb's enrollment paperwork. I'll ask you one thing at a time and fill the forms
+in as we go."*
+
+> **STOP** if you are told *"I already have most of …'s information"* and are then shown nothing.
+> That sentence is now only spoken when there is a list under it. Seeing it bare is the exact defect
+> this part was written to close.
+
+> These rows carry **no Edit link**, on purpose. Nothing here has been confirmed by you yet — every
+> one of them is still going to be put to you as a question. Showing a value is not the same as you
+> agreeing to it, and the platform must not be able to pretend otherwise.
+
+---
+
+**E2. THE CHILD — their questions come first, and they arrive together.**
+
+**DO** — Answer whatever the conversation asks, one turn at a time, until the subject changes.
+
+**EXPECT** — A quiet label above the question reading **`<CHILD'S NAME>'S DETAILS`**, and the child's
+questions in one run: their date of birth, name, age, first day, gender and home address — **the
+ones Alloy stores and the ones it does not, side by side**.
+
+> **STOP** if the child's own name is asked *after* a parent's phone number or email.
+> That was the defect. The child's name has no home in Alloy's records and their date of birth does,
+> and until this slice that difference decided who the question was about — so the name was asked
+> third, after a different person's contact details. **Whether Alloy happens to store a fact must
+> never decide whose question it is.**
+
+---
+
+**E3. PARENT / GUARDIAN #1 — one person, finished before the next.**
+
+**EXPECT** — The label changes to **`GUARDIAN #1`**, and you are asked that person's phone, email,
+name, employer and employer address in one run — including the **Parent Name** box that sits on the
+last page of the packet, under the Tuition agreement. It is the same person, so it is asked here.
+
+> **STOP** if the label still says **Contact Information** or another page heading from the form.
+> The label names *whose* questions these are, not which page of the PDF they came from.
+
+---
+
+**E4. PARENT / GUARDIAN #2, AND THE EMERGENCY CONTACTS.**
+
+**EXPECT** — the label moves on, in this order, and each group is finished before the next begins:
+
+```
+GUARDIAN #2            name, phone, email, employer, employer address
+EMERGENCY CONTACT #1   the authorized-adult line, relationship, phone, address
+EMERGENCY CONTACT #2   the same four
+EMERGENCY CONTACT #3   the same four
+PHYSICIAN              name, phone
+DENTIST                name, phone
+```
+
+> The **authorized adult** question is not a separate group on this packet — the school wrote it as
+> the emergency contact's own line ("*LOCAL Emergency Contact #1 Authorized adult allowed to pick my
+> student up…*"), so it is asked with that person. That is the form's own structure, not a merge.
+
+> **STOP** if a number is missing where there is more than one of a role — *Emergency contact* with
+> no *#2* when there are three of them tells you nothing about which one you are describing. A role
+> the packet names only once is deliberately **not** numbered: *Physician*, not *Physician #1*.
+
+> **STOP** if an answer you give for **Guardian #2** appears against **Guardian #1** anywhere.
+> This was checked directly: every one of those answers is stored against its own box, and the three
+> emergency contacts' twelve answers stayed in their own twelve boxes.
+
+---
+
+**E5. QUESTION SAFETY — a question is not an answer.**
+
+**DO** — When you are asked something, type **`What do I still need to do?`** and send it.
+
+**EXPECT** — A reply telling you where you are, for example *"You have 3 of 3 forms left to
+complete. Right now I need Parent/Guardian #2 Phone Number."* — and **the same question still
+waiting**.
+
+> **STOP** if your question is stored as the answer. Check the **What you told us** list: the words
+> *"What do I still need to do?"* must not appear in it.
+
+---
+
+**E6. CORRECTION — change something you already said.**
+
+**DO** — In **What you told us**, click **Edit** beside an answer you gave earlier, type a different
+value, and click **Save**.
+
+**EXPECT** — The row shows the new value with **UPDATED** beside it, and every other row is
+untouched.
+
+> Verified at the storage level, not just on screen: correcting the child's name changed that one
+> destination and left both guardians' name boxes exactly as they were.
+
+> **KNOWN WART, not a defect to report.** The transcript echoes your correction underneath whichever
+> question happens to be open, so it can look as though you answered *that* question with the
+> corrected value. The stored data is correct; only the echo is misplaced. It is on the list.
+
+---
+
+## E7 to E10 — NOT CERTIFIED. Please do not QA these yet.
+
+| | |
+|---|---|
+| **E7** | Finishing the whole of Admissions |
+| **E8** | The **Family Handbook** read-and-acknowledge step |
+| **E9** | The **Immunization record** upload step |
+| **E10** | Completion, and what Processing shows afterwards |
+
+Nothing above E7 depends on them, and none of them has been driven end to end yet. They will be
+written the same way — DO / EXPECT / STOP, from behaviour that was actually observed — once they
+have been.
+
+## What else this part certified
+
+- the conversation **resumes**: reopening the same link continues where it left off, with earlier
+  answers still settled and editable, rather than restarting;
+- a required question with no home in Alloy's records is still asked and still retained — **Form-only**
+  describes where an answer lives, not whether it matters. Those answers are kept against the exact
+  Form box they came from, and never given a canonical home they do not have;
+- the order follows **people**, not the source PDF's field order, and the conversation says whose
+  questions it is asking.
 
 # PART G — Paperwork complete ≠ enrolled
 
@@ -437,8 +559,8 @@ the behaviour behind it has been proven, the same way Part D now does.
 **G2. EXPECT** — Completing the paperwork does **not** move the child into **Enrolled children**,
 and the child record still shows **Program —**.
 
-> You cannot finish this check until Part E is rewritten and you have completed a packet. The rule it
-> states holds regardless: paperwork is not enrolment.
+> You cannot finish this check until a packet has actually been completed, and Part E deliberately
+> stops before that (**E7–E10**). The rule it states holds regardless: paperwork is not enrolment.
 
 > **STOP AND REPORT** if finishing paperwork marked the child enrolled. Enrolment stays a staff
 > decision.
