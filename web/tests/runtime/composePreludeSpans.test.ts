@@ -1,0 +1,153 @@
+/**
+ * OUTER-COMPOSE SPAN DECOMPOSITION (P0-7.6 / Slice 12C).
+ *
+ * ── WHAT SLICE 12B GOT WRONG, AND WHY THIS SUITE EXISTS ──
+ *
+ * 12B measured `compose_wall_ms` minus the inner composer's `total_ms` at ~3,869 ms median — half
+ * the entire document — and named it a PRELUDE. Source tracing for this slice shows that name was
+ * wrong in a way that matters: the gap straddles the inner composer.
+ * `composeProvisioningAnswerForRoute` has exactly three awaits, and one of them,
+ * `projectFocusPanelCardProducers`, runs AFTER the inner composer returns and performs its own
+ * database reads. Half the measured block was being attributed to "work before the compose" when
+ * some of it is work after it.
+ *
+ * Had the repair been chosen from that label, it would have targeted route resolution — possibly
+ * the wrong term entirely. These gates pin the decomposition so the dominant wait is chosen from
+ * measurement, and so the two synchronous steps are proven cheap rather than assumed cheap.
+ */
+
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const ROUTE = readFileSync(
+    join(process.cwd(), "lib/runtime/provisioning/composeProvisioningAnswerForRoute.ts"),
+    "utf8",
+);
+const DIAG = readFileSync(join(process.cwd(), "lib/perf/routeTimingDiagnostic.ts"), "utf8");
+
+/** Comments explain what was removed; only code may satisfy a "must not appear" assertion. */
+const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+const ROUTE_CODE = strip(ROUTE);
+const DIAG_CODE = strip(DIAG);
+
+describe("the outer compose names every await it performs", () => {
+    it("THE GATE: all three awaits are measured, plus the two synchronous steps", () => {
+        for (const span of [
+            "route_identity_ms",   // await resolveWorkUnitRouteIdentity — BEFORE
+            "inner_compose_ms",    // await composeWorkUnitProvisioningAnswer
+            "card_producers_ms",   // await projectFocusPanelCardProducers — AFTER
+            "admin_client_ms",     // sync — measured so "not this" is evidence, not assumption
+            "document_actor_ms",   // sync — same
+        ]) {
+            expect(ROUTE_CODE, `outer compose must measure ${span}`).toContain(span);
+            expect(DIAG_CODE, `payload must carry ${span}`).toContain(span);
+        }
+    });
+
+    it("THE GATE: route identity is timed around the await, not around the call site", () => {
+        const block = ROUTE_CODE.slice(
+            ROUTE_CODE.indexOf("const tIdentity"),
+            ROUTE_CODE.indexOf("if (!gate.ok)"),
+        );
+        expect(block).toContain("await resolveWorkUnitRouteIdentity");
+        expect(block).toMatch(/routeIdentityMs\s*=\s*timing\s*\?\s*performance\.now\(\)\s*-\s*tIdentity/);
+    });
+
+    it("THE GATE: the card-producers span is the POSTLUDE — measured after the inner composer", () => {
+        // The correction this slice exists to make. If this span were placed before the inner
+        // compose, the decomposition would reproduce 12B's mislabelling.
+        const innerAt = ROUTE_CODE.indexOf("await composeWorkUnitProvisioningAnswer");
+        const producersAt = ROUTE_CODE.indexOf("await projectFocusPanelCardProducers");
+        expect(innerAt).toBeGreaterThan(-1);
+        expect(producersAt).toBeGreaterThan(innerAt);
+        expect(ROUTE_CODE).toMatch(/cardProducersMs\s*=\s*timing\s*\?\s*performance\.now\(\)\s*-\s*tProducers/);
+
+        /*
+         * THE POSITION, NOT MERELY THE PRESENCE.
+         *
+         * An earlier version of this gate asserted only that the two awaits appear in order and
+         * that the span is computed. Both stay true if `tProducers` is started BEFORE the inner
+         * compose — which makes `card_producers_ms` silently include the entire inner composer and
+         * reproduces exactly the mislabelling this slice exists to correct. The planted-defect run
+         * proved that version green against that defect. The clock must START after the inner
+         * compose has been measured.
+         */
+        const innerMeasuredAt = ROUTE_CODE.indexOf("const innerComposeMs");
+        const producersClockAt = ROUTE_CODE.indexOf("const tProducers = mark()");
+        expect(innerMeasuredAt).toBeGreaterThan(-1);
+        expect(producersClockAt).toBeGreaterThan(-1);
+        expect(
+            producersClockAt,
+            "the card-producers clock must start AFTER the inner compose is measured",
+        ).toBeGreaterThan(innerMeasuredAt);
+    });
+
+    it("card_producers_ms is NULL when the producers step genuinely did not run", () => {
+        // A non-operational answer skips it. Reporting 0 there would claim a measurement of work
+        // that never happened — the same class of error as the stale literals 12A removed.
+        expect(ROUTE_CODE).toMatch(/let cardProducersMs: number \| null = null/);
+        expect(ROUTE_CODE).toMatch(/card_producers_ms: cardProducersMs == null \? null :/);
+        expect(DIAG_CODE).toMatch(/card_producers_ms: number \| null/);
+    });
+
+    it("the outer boundaries remain authoritative — these spans are reported alongside, not instead", () => {
+        expect(DIAG_CODE).toContain("compose_wall_ms");
+        expect(DIAG_CODE).toContain("compose_total_ms");
+        expect(DIAG_CODE).toContain("route_compose_spans");
+    });
+});
+
+describe("one instrumentation authority", () => {
+    it("THE GATE: the spans go through the EXISTING collector, not a new mechanism", () => {
+        expect(ROUTE_CODE).toContain("recordRouteTiming({");
+        expect(ROUTE_CODE).toContain("route_compose_spans:");
+        // A second emitter or a private store would recreate the two-authority defect 12A removed.
+        expect(ROUTE_CODE).not.toMatch(/new Map\(|globalThis\.__|RouteTimingSeed/);
+    });
+
+    it("every clock is behind the flag, and the flag is read once", () => {
+        expect(ROUTE_CODE).toMatch(/const timing = routeTimingEnabled\(\)/);
+        expect(ROUTE_CODE).toMatch(/const mark = \(\) => \(timing \? performance\.now\(\) : 0\)/);
+        expect(ROUTE_CODE).toMatch(/if \(timing\) \{/);
+    });
+
+    it("THE GATE: diagnostics can never break the product path", () => {
+        // This function also serves the HTTP seam, whose route handler may not provide the React
+        // request scope the collector is built on. A diagnostic must not be load-bearing.
+        const rec = ROUTE_CODE.slice(ROUTE_CODE.indexOf("if (timing) {"), ROUTE_CODE.length);
+        expect(rec).toContain("try {");
+        expect(rec).toMatch(/\} catch \{/);
+    });
+
+    it("no business or identifying value reaches the payload", () => {
+        const block = ROUTE_CODE.slice(
+            ROUTE_CODE.indexOf("route_compose_spans: {"),
+            ROUTE_CODE.indexOf("return { ok: true, answer }"),
+        );
+        for (const forbidden of ["gate.orgId", "rawSlug", "recordOfAttention", "subjectId", "roleKeys"]) {
+            expect(block, `payload must not carry ${forbidden}`).not.toContain(forbidden);
+        }
+    });
+});
+
+describe("the compose's own semantics are untouched", () => {
+    it("THE GATE: no await was added, removed or reordered", () => {
+        // Timing must observe the route, never change it. Exactly three awaits, in this order.
+        const awaits = [...ROUTE_CODE.matchAll(/await (\w+)/g)].map((m) => m[1]);
+        expect(awaits).toEqual([
+            "resolveWorkUnitRouteIdentity",
+            "composeWorkUnitProvisioningAnswer",
+            "projectFocusPanelCardProducers",
+        ]);
+    });
+
+    it("the document actor is still derived from the same gate, just measured", () => {
+        expect(ROUTE_CODE).toContain("const documentActor = documentActorFromAdminGate(gate)");
+        expect(ROUTE_CODE).toContain("documentActor: documentActor");
+    });
+
+    it("no sleep, delay or artificial serialization was introduced", () => {
+        expect(ROUTE_CODE).not.toMatch(/setTimeout|await new Promise|sleep\(/);
+    });
+});

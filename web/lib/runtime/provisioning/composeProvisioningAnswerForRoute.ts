@@ -24,6 +24,7 @@ import { parseCardFocusAspect } from "@/lib/runtime/kernel/attentionCardFocus";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
 import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
+import { recordRouteTiming, routeTimingEnabled } from "@/lib/perf/routeTimingDiagnostic";
 
 export type RouteProvisioningResult =
     | { ok: true; answer: ProvisioningAnswer }
@@ -52,10 +53,28 @@ export async function composeProvisioningAnswerForRoute(input: {
     // U-P1 — one authorization + one scope resolve for the entire answer. The slug→identity resolution
     // is request-memoized (Phase 3 dedup): the work-unit layout's route-meta seed and this provisioning
     // seed share ONE resolution instead of each running the same DB reads.
+    /*
+     * SLICE 12C — THE OUTER COMPOSE'S OWN AWAITS, MEASURED.
+     *
+     * Slice 12B could see only `compose_wall_ms` minus the inner composer's `total_ms`: ~3,869 ms of
+     * one opaque block, which it named a "prelude". Source tracing showed that name was wrong — the
+     * gap straddles the inner composer, because `projectFocusPanelCardProducers` runs AFTER it and
+     * does its own reads. These spans name the three real awaits so the dominant one can be chosen
+     * from measurement rather than from the suspect list.
+     *
+     * Every clock is behind the flag, and the spans are reported through the EXISTING route-timing
+     * collector — no second instrumentation authority.
+     */
+    const timing = routeTimingEnabled();
+    const mark = () => (timing ? performance.now() : 0);
+    const tIdentity = mark();
     const { gate, resolution } = await resolveWorkUnitRouteIdentity(input.rawSlug);
+    const routeIdentityMs = timing ? performance.now() - tIdentity : 0;
     if (!gate.ok) return { ok: false, gate };
 
+    const tClient = mark();
     const supabase = createAdminClient();
+    const adminClientMs = timing ? performance.now() - tClient : 0;
 
     // ── CANONICAL ROUTE RESOLUTION — the operator route names a WORK VIEW, hosted on a work unit. ──
     // Same precedence (work_unit_key → work_view → queue_lane_key) the API route and seed route use.
@@ -76,6 +95,12 @@ export async function composeProvisioningAnswerForRoute(input: {
     }
 
     const aspect = contextual ? parseCardFocusAspect(input.aspect ?? null) : null;
+    // Timed only to MEASURE that it is local derivation rather than I/O, instead of assuming it.
+    const tActor = mark();
+    const documentActor = documentActorFromAdminGate(gate);
+    const documentActorMs = timing ? performance.now() - tActor : 0;
+
+    const tInner = mark();
     const answer = await composeWorkUnitProvisioningAnswer({
         supabase,
         orgId: gate.orgId,
@@ -83,7 +108,7 @@ export async function composeProvisioningAnswerForRoute(input: {
         // Child-grain queue rows carry a Person-owned avatar, minted per actor per request and never
         // persisted. Without the actor the rows reach the queue with no image and fall back to
         // initials for children who do have a photo (R-019).
-        documentActor: documentActorFromAdminGate(gate),
+        documentActor: documentActor,
         /*
          * THE SAME VERDICT THE BROWSER WOULD HAVE REACHED.
          *
@@ -105,6 +130,8 @@ export async function composeProvisioningAnswerForRoute(input: {
         departmentConfigHeldIds: input.departmentConfigHeldIds ?? [],
         summaryConfigHeldIds: input.summaryConfigHeldIds ?? [],
     });
+    const innerComposeMs = timing ? performance.now() - tInner : 0;
+    let cardProducersMs: number | null = null;
 
     /*
      * SERVER-ONLY PRODUCER EXECUTION LIVES HERE, ABOVE THE CONTRACT BOUNDARY.
@@ -121,6 +148,7 @@ export async function composeProvisioningAnswerForRoute(input: {
      * The context is rebuilt from the ANSWER — the same fields, through the same builder the browser
      * used — rather than threaded out of the assembler, so the assembler keeps no producer edge.
      */
+    const tProducers = mark();
     if (answer.terminal === "operational" && answer.focusPanelOperationalProjection) {
         answer.focusPanelOperationalProjection = {
             ...answer.focusPanelOperationalProjection,
@@ -153,6 +181,25 @@ export async function composeProvisioningAnswerForRoute(input: {
                 }),
             }),
         };
+        cardProducersMs = timing ? performance.now() - tProducers : 0;
+    }
+
+    if (timing) {
+        // Never let a diagnostic break the product path. The collector is request-scoped through
+        // React `cache()`, which the HTTP seam's route handler does not necessarily provide.
+        try {
+            recordRouteTiming({
+                route_compose_spans: {
+                    route_identity_ms: Math.round(routeIdentityMs),
+                    admin_client_ms: Math.round(adminClientMs),
+                    document_actor_ms: Math.round(documentActorMs),
+                    inner_compose_ms: Math.round(innerComposeMs),
+                    card_producers_ms: cardProducersMs == null ? null : Math.round(cardProducersMs),
+                },
+            });
+        } catch {
+            /* diagnostics are never load-bearing */
+        }
     }
 
     return { ok: true, answer };
