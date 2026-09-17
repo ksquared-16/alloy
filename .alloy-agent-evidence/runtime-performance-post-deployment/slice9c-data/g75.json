@@ -1,0 +1,26 @@
+{
+ "solved_wrapper_H": 299,
+ "bp_intrinsic_wrapper_H": 299,
+ "bp_cell_H": 299,
+ "bp_cell_computed_alignItems": "stretch",
+ "bp_visible_root_H": 299,
+ "fin_wrapper_H": 299,
+ "fin_cell_H": 299,
+ "fin_visible_root_H": 299,
+ "fin_found": true,
+ "matching_align_items_rules_in_source_order": [
+  {
+   "selector": ".alloy-os-focus-panel-grid--composed .alloy-os-focus-panel-grid__cell",
+   "alignItems": "flex-start"
+  },
+  {
+   "selector": ".alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell",
+   "alignItems": "stretch"
+  }
+ ],
+ "winner": {
+  "selector": ".alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell",
+  "alignItems": "stretch"
+ },
+ "whitespace_beneath_bp_px": 0
+}

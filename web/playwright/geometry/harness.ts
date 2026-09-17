@@ -34,7 +34,10 @@ export async function bundleFixture(entryFile: string): Promise<string> {
         absWorkingDir: webRoot,
         // `@/…` resolves to the web root exactly as Next and vitest resolve it, so the module graph
         // under test is the shipped one.
-        alias: { "@": webRoot },
+        // `crypto` is a node builtin a browser bundle cannot resolve. It reaches these graphs only
+        // through an authoring helper no fixture calls — see `nodeCryptoShim.ts`. Aliasing it keeps
+        // the real component graph importable; it is inert for any fixture that never touches it.
+        alias: { "@": webRoot, crypto: resolve(__dirname, "nodeCryptoShim.ts") },
         nodePaths: [resolve(webRoot, "node_modules")],
         define: { "process.env.NODE_ENV": '"development"' },
         loader: { ".css": "empty" },
