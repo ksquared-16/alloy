@@ -35,6 +35,11 @@ import {
     voiceForSubject,
 } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
 import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
+import { enrollmentConfirmationPolicy } from "@/lib/enrollment/participantRuntime/enrollmentConfirmationPolicy";
+import {
+    participantConversationGroup,
+    type ParticipantConversationGroup,
+} from "@/lib/enrollment/participantRuntime/participantConversationGroup";
 import {
     projectParticipantWorkProgress,
     type ParticipantWorkProgress,
@@ -98,6 +103,16 @@ export type ParticipantObjectiveWire = {
          * relationship the packet did not evidence. Exactly one member is `active`: the turn the
          * runtime selected, and the only one the composer is answering.
          */
+        /**
+         * The block of the conversation this question belongs to — one person, or one of the
+         * child's topics.
+         *
+         * Named from the traversal's own block, never invented here, and the surface speaks it only
+         * when the `key` CHANGES. Without it the traversal finished one person before starting the
+         * next and the parent could not tell: the second guardian's name arrived directly after the
+         * first guardian's employer address, with no seam of any kind.
+         */
+        readonly group?: ParticipantConversationGroup | null;
         readonly cluster?: {
             readonly title: string | null;
             readonly questions: readonly {
@@ -636,6 +651,12 @@ export function participantObjectiveWireModel(
             input_type: firstOccurrence ? inputTypeForNeed(objective, firstOccurrence.form_field_id) : null,
             label: firstOccurrence?.label ?? null,
             cluster: activeCluster(objective, subjectName),
+            group: participantConversationGroup({
+                need: turn.need ?? null,
+                allNeeds: objective.needs.needs,
+                requiresConfirmation: enrollmentConfirmationPolicy(),
+                childName: (subjectName ?? "").trim().split(/\s+/)[0] ?? null,
+            }),
             party: turn.party
                 ? {
                       role_label: turn.party.role_label,

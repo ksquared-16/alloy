@@ -40,7 +40,9 @@ describe("packaging groups on evidence the packet already carries", () => {
         const pkgs = packageOutstandingNeeds([need({ entity: "customer_member" }), need({ entity: "guardian" })]);
         expect(pkgs).toHaveLength(2);
         expect(pkgs[0]!.voice_key).toMatch(/^child:/);
-        expect(pkgs[1]!.voice_key).toBe("responding_adult");
+        // The subject owner keys a person by role AND ordinal. Before packaging asked it, two
+        // guardians' questions shared one voice key and packaged as one topic.
+        expect(pkgs[1]!.voice_key).toBe("person:guardian#1");
     });
 
     it("keeps a tapped answer out of a typed one", () => {

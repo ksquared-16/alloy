@@ -169,14 +169,24 @@ type Exchange = { said: string; answered: string };
  */
 function ConversationTopic({
     cluster,
+    showTitle,
 }: {
     cluster: NonNullable<ParticipantObjectiveWire["next_turn"]["cluster"]>;
+    /**
+     * False once the conversation names the block itself.
+     *
+     * The transition above says "Guardian #2"; this heading said "Contact Information", which is
+     * the school's page the box happens to sit on. Stacked, they read as two section headers over
+     * one question — a form wearing a conversation's clothes. The turn's own group is the more
+     * specific of the two and already carries the school's heading where that IS the subject.
+     */
+    showTitle: boolean;
 }) {
     const settled = cluster.questions.filter((q) => q.state === "settled");
     const upcoming = cluster.questions.filter((q) => q.state === "upcoming");
     return (
         <div className="mb-3" data-participant-topic={cluster.title ?? "topic"}>
-            {cluster.title ? (
+            {showTitle && cluster.title ? (
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/40">
                     {cluster.title}
                 </p>
@@ -726,6 +736,39 @@ function KnownGroup({ group }: { group: ParticipantObjectiveWire["known"][number
                 </button>
             ) : null}
         </section>
+    );
+}
+
+/**
+ * Whose questions these are — one quiet line above the current turn.
+ *
+ * ## What was missing
+ *
+ * The traversal already finishes one person before starting the next, and a parent could not tell.
+ * Eighty questions arrived as eighty questions: the guardian's employer, then their employer
+ * address, then — with no seam of any kind — the SECOND guardian's name, then an emergency
+ * contact's phone number. The conversation had context and never said so.
+ *
+ * ## Why it stands for the whole block rather than announcing the change
+ *
+ * A line shown only at the seam is gone by the second question, and this surface keeps no
+ * transcript of past turns to leave it in — history here is the semantic record of what was
+ * settled, not a scroll of what was said. A label that disappears is worse than no label: the
+ * parent who looks up mid-block to check who they are answering about finds nothing.
+ *
+ * So it stays while the block does, and it REPLACES the eyebrow that was already here. That one
+ * printed the school's page heading — "Contact Information" over a question about a second
+ * guardian — which is the box's location, not its subject. Same one line of chrome, now true.
+ */
+function ConversationTransition({ group }: { group: ParticipantObjectiveWire["next_turn"]["group"] }) {
+    if (!group) return null;
+    return (
+        <p
+            className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/40"
+            data-participant-group-transition={group.key}
+        >
+            {group.title}
+        </p>
     );
 }
 
@@ -1584,8 +1627,12 @@ export function EnrollmentConversationCard({
                         while its own answer is still in flight above it. */}
                     {awaitingTurn ? null : (
                         <ThreadTurn who="alloy" depth="current">
+                            <ConversationTransition group={objective.next_turn.group ?? null} />
                             {objective.next_turn.cluster ? (
-                                <ConversationTopic cluster={objective.next_turn.cluster} />
+                                <ConversationTopic
+                                    cluster={objective.next_turn.cluster}
+                                    showTitle={!objective.next_turn.group}
+                                />
                             ) : null}
                             {group ? (
                                 /* THE GROUPED CONFIRMATION. Alloy says one sentence about the

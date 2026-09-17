@@ -617,7 +617,15 @@ export function participantSignaturePrompt(signatureExpected = true): string {
 export function participantIntro(objective: ParticipantObjectiveWire): string | null {
     if (objective.phase !== "shared_collection") return null;
     const subject = familiarName(objective);
-    if (objective.known.length === 0) {
+    /*
+     * STABLE FOR THE WHOLE SITTING.
+     *
+     * `known` empties as the parent confirms each fact, so branching on it alone made the opening
+     * line — which stays in the transcript above them — change its words after the first answer.
+     * `settled` is the other half of the same truth: every row in it is a confirmation of PRIOR
+     * truth, so "we had something" is `known` or `settled`, and the sentence stops moving.
+     */
+    if (objective.known.length === 0 && objective.settled.length === 0) {
         /*
          * Nothing on file. Say what IS true — there is paperwork to finish and it will be a
          * conversation — rather than a claim about records the parent would find empty.
@@ -674,7 +682,15 @@ export function participantProgressDisplay(
      * hiding place. A parent working through a topic wants to know which topic; the percentage
      * beside it already says how far along they are.
      */
-    const topic = objective.next_turn.cluster?.title;
+    /*
+     * The block the conversation is IN, not the page the box sits on.
+     *
+     * The cluster's title is the school's own section heading, so the rail read "Contact
+     * Information" while the question underneath it asked about the second guardian — two names for
+     * where the parent is, disagreeing. The turn's group is the same block the conversation is
+     * labelled with; the cluster heading stays as the fallback for a turn with no nameable subject.
+     */
+    const topic = objective.next_turn.group?.title ?? objective.next_turn.cluster?.title;
     if (topic) return { label: topic, percent: work.percent };
     if (work.percent >= 70) return { label: "Almost there", percent: work.percent };
     return { label: "In progress", percent: work.percent };

@@ -79,6 +79,19 @@ function sectionKey(formDefinitionId: string, sectionTitle: string | null): stri
     return `${formDefinitionId}::${sectionTitle ?? ""}`;
 }
 
+/**
+ * The placement context for ONE artifact's needs.
+ *
+ * Exported so a presentation layer can ask where a need sits without recomputing "which section is
+ * the child's basics" differently from the traversal that ordered them.
+ */
+export function traversalContext(
+    allNeeds: readonly EnrollmentInformationNeed[],
+    requiresConfirmation: ReadonlySet<string>,
+): { readonly basicSections: ReadonlySet<string> } {
+    return { basicSections: basicChildSections(allNeeds, requiresConfirmation) };
+}
+
 export type TraversalPlacement = {
     readonly rank: number;
     /** Needs sharing this stay adjacent — one person, or one of the child's topics. */

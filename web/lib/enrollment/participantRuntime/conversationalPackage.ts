@@ -19,6 +19,7 @@
  */
 
 import type { EnrollmentInformationNeed } from "@/lib/enrollment/informationNeeds/enrollmentInformationNeedsTypes";
+import { confirmationSubjectFor } from "@/lib/enrollment/participantRuntime/confirmationGroup";
 
 /** Bigger than this stops being a question and becomes a form read aloud. */
 export const MAX_PACKAGE_SIZE = 4;
@@ -79,14 +80,15 @@ function interactionFor(need: EnrollmentInformationNeed, providerEligible: (n: E
  * Whose fact this is, at the grain the conversation speaks in.
  *
  * A package that mixed "your phone number" with "Marisol's allergies" would read as one question
- * about two people. Keyed on the same identity the subject grammar uses, so the two can never drift.
+ * about two people. It claimed to be "keyed on the same identity the subject grammar uses" and was
+ * not — it re-derived the subject from the declared entity, so on a real imported packet, where
+ * almost nothing declares one, every unbound destination in a section collapsed to one voice key
+ * and Parent/Guardian #2's name packaged with Emergency Contact #1's phone under one heading.
+ *
+ * It now ASKS the owner. There is one subject rule, and this is a reading of it.
  */
 function voiceKeyFor(need: EnrollmentInformationNeed): string {
-    const entity = (need.identity.entity_type ?? "").toLowerCase();
-    if (entity === "person" || entity === "guardian" || entity === "contact") return "responding_adult";
-    if (entity === "customer") return "household";
-    if (entity === "child" || entity === "customer_member" || entity === "enrollment") return `child:${need.subject_id ?? "-"}`;
-    return need.scope === "recipient" ? "responding_adult" : `scope:${need.scope}:${need.subject_id ?? "-"}`;
+    return confirmationSubjectFor(need).key;
 }
 
 /**

@@ -148,9 +148,15 @@ export function confirmationSubjectFor(need: EnrollmentInformationNeed): Confirm
     const entity = declared ?? inferred;
     const party = need.identity.subject_party;
 
-    // 1. The child. `scope === "child"` is only ever produced BY a declared child entity, so this
-    // reads a declaration rather than a storage default.
-    if (need.scope === "child" || (entity && CHILD_ENTITIES.has(entity))) {
+    /*
+     * 1. A DECLARED child entity.
+     *
+     * The declaration is read before the scope, deliberately. `scope` says where a value may be
+     * kept — "household" means "collected once, shared across all children" — and a field declaring
+     * `guardian` is the guardian's question however its value is stored. Reading scope first made
+     * storage outrank a declaration, which is the same confusion in the other direction.
+     */
+    if (entity && CHILD_ENTITIES.has(entity)) {
         return {
             key: `child:${need.subject_id ?? need.identity.journey_subject_id ?? "-"}`,
             kind: "child",
@@ -185,6 +191,21 @@ export function confirmationSubjectFor(need: EnrollmentInformationNeed): Confirm
     }
     if (entity && HOUSEHOLD_ENTITIES.has(entity)) {
         return { key: `household:${entity}`, kind: "household", entity_type: entity, subject_id: null, ordinal: null };
+    }
+
+    /*
+     * Child GRAIN with nothing declared: `classifyFieldScope` only returns it for a child entity,
+     * so in practice rule 1 has already answered. Kept as the defensive reading of a caller who
+     * chose `defaultScope: "child"`.
+     */
+    if (need.scope === "child") {
+        return {
+            key: `child:${need.subject_id ?? need.identity.journey_subject_id ?? "-"}`,
+            kind: "child",
+            entity_type: entity,
+            subject_id: need.subject_id ?? need.identity.journey_subject_id ?? null,
+            ordinal: null,
+        };
     }
 
     /*
