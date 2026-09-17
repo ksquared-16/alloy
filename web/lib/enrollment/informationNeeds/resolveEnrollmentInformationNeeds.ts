@@ -41,6 +41,7 @@ import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participant
 import { readEnrollmentNeedDeclines } from "@/lib/enrollment/informationNeeds/enrollmentSessionDeclines";
 import { readEnrollmentValueProvenance } from "@/lib/enrollment/informationNeeds/enrollmentValueProvenance";
 import { readEnrollmentNeedConfirmations } from "@/lib/enrollment/informationNeeds/enrollmentSessionConfirmations";
+import { expandPacketRequirementsToForms } from "@/lib/enrollment/informationNeeds/expandPacketRequirementsToForms";
 import {
     projectEnrollmentInformationNeeds,
     type PinnedRequirementForm,
@@ -240,12 +241,58 @@ export async function resolveEnrollmentInformationNeeds(
             String((instanceData as { subject_id?: string | null } | null)?.subject_id ?? "").trim() || null;
     }
 
+    /*
+     * A STAGE THAT REQUIRES A PACKET REQUIRES THE FORMS INSIDE IT.
+     *
+     * This filtered to `kind === "form"` and dropped everything else, which is correct for a rule or
+     * a work requirement — neither can produce a field need. A PACKET requirement is different: it is
+     * a container for exactly the forms that do.
+     *
+     * Enrollment's Enrolling stage declares one requirement,
+     * `{requirement_id: "enrollment_packet", ref: {kind: "packet", …}}`, so a journey-anchored
+     * participant had ZERO actionable requirements, enumerated no forms, and was told "Everything we
+     * need is complete." on a fresh session against an 80-field form with 65 required answers.
+     * Measured on the live wire model: `work {total: 0}` and `complete: true` sitting beside
+     * `progress {total: 1, remaining: 1}` — the objective knew a step was outstanding and had no
+     * questions to ask for it.
+     *
+     * The same packet launched BY HAND was always fine, because `resolvePacketParticipantProgress`
+     * expands the packet's steps into one form requirement each. That asymmetry is the whole defect:
+     * the same packet described the same obligation two different ways depending on how it was
+     * reached. The expansion is the existing shared one — `compilePacketToStageRequirements`, which
+     * the Studio compiler and the hand-launched path already use — so a packet chosen for a stage and
+     * the same packet launched by hand now produce the SAME requirement ids.
+     *
+     * The packet requirement's own status carries to its forms: a packet the governing revision still
+     * wants is a packet whose forms are still worth asking about, and per-form satisfaction is
+     * decided downstream from what the session actually realized.
+     */
+    const packetRequirements = prog.requirements.filter(
+        (r: EnrollmentParticipantProgress["requirements"][number]) =>
+            r.kind === "packet" && (r.status === "outstanding" || r.status === "satisfied"),
+    );
+    const expandedFromPackets = packetRequirements.length
+        ? await expandPacketRequirementsToForms(supabase, {
+              orgId: input.orgId,
+              requirements: packetRequirements,
+          })
+        : [];
+
     // Only requirements the participant can actually act on. `unrealized` has no pinned version and
     // no schema; `unsupported` is a non-form kind. Neither can produce a field need.
-    const actionable = prog.requirements.filter(
+    const declaredForms = prog.requirements.filter(
         (r: EnrollmentParticipantProgress["requirements"][number]) =>
             r.kind === "form" && (r.status === "outstanding" || r.status === "satisfied"),
     );
+    /*
+     * A form declared directly WINS over the same form reached through a packet: the stage named it
+     * explicitly, and its requirement id is the one the rest of the projection already carries.
+     */
+    const declaredFormIds = new Set(declaredForms.map((r) => r.artifact.id));
+    const actionable = [
+        ...declaredForms,
+        ...expandedFromPackets.filter((r) => !declaredFormIds.has(r.artifact.id)),
+    ];
     if (actionable.length === 0 || !session) {
         const context: EnrollmentNeedsContext = { prog, session, subjectId, forms: [] };
         input.captureContext?.(context);
