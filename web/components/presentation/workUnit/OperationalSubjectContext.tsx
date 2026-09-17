@@ -244,6 +244,53 @@ export function isOperationallyResolved(s: OperationalSubject): boolean {
     return s.subjectGrain?.grain === "child";
 }
 
+/**
+ * STRUCTURAL resolution — the P0-7.1 meaning. True when the committed snapshot has given the panel
+ * enough AUTHORITATIVE DESTINATION information to present the real configured surface structure.
+ *
+ * ── WHY THIS IS A SEPARATE QUESTION FROM {@link isOperationallyResolved} ──
+ *
+ * One predicate was answering two questions, and the narrower of the two was winning. Structure and
+ * meaning are different facts with different owners:
+ *
+ *   "what cells does this surface have"   ← the PUBLISHED COMPOSITION (`summaryDocSeed`)
+ *   "what do those cells SAY"             ← situation / action / stage work
+ *
+ * The published composition is what the grid consumes, and it is carried on the provisioning answer
+ * record-independently. Knowing it is sufficient to commit the real configured structure; the cards
+ * then say what they truthfully can, using the reserved/resolving presentation P0-7.4 already
+ * deployed. Nothing here invents business meaning to fill a cell.
+ *
+ * ── THE BRANCH THIS ACTUALLY OPENS ──
+ *
+ * `isOperationallyResolved` returns false for a FAMILY-grain subject that has a situation but no
+ * configured action and no `actionAbsence` — a real, ordinary state. In that window the published
+ * composition is already in hand and the panel still rendered its cold "Thinking…" owner, because
+ * the only gate available asked a semantic question about a structural decision. Structure was
+ * withheld by predicate, not by geometry: the audit established the grid itself needs no card data.
+ *
+ * On the common child-grain path both predicates flip together, because `situation` and
+ * `summaryDocSeed` arrive on the SAME provisioning answer (`op`). That is measured, not assumed —
+ * so this split is a correctness and contract change, not a claimed speed-up on that path. What it
+ * guarantees is that structure can never again be gated on a fact structure does not need.
+ */
+export function isStructurallyResolved(s: OperationalSubject): boolean {
+    if (s.subjectId == null) return false;
+    // The published composition IS the structure. Without it there is no authoritative configured
+    // card set to present, and fabricating one is exactly the false construction the doctrine bans.
+    return s.summaryDocSeed != null;
+}
+
+/**
+ * SEMANTIC resolution — the same question {@link isOperationallyResolved} has always asked, under
+ * the name the doctrine now uses for it. Deliberately an alias rather than a replacement: the
+ * original name is referenced by deployed certification and by the D4 contract, and renaming it
+ * would be a doctrine edit this slice has no authority to make.
+ */
+export function isSemanticallyResolved(s: OperationalSubject): boolean {
+    return isOperationallyResolved(s);
+}
+
 /** The one read for "who is the operator working on". */
 export function useOperationalSubject(): OperationalSubject {
     return useContext(Ctx);

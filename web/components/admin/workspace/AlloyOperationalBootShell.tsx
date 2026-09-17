@@ -114,6 +114,7 @@ export function AlloyOperationalBootShell({
     showRibbon = true,
     showContentReserve = true,
     chrome = "full",
+    destination,
 }: {
     variant?: AdminV2RouteLoadingVariant;
     showRibbon?: boolean;
@@ -128,17 +129,48 @@ export function AlloyOperationalBootShell({
      * Alloy loading visual instead of a small top-left inline loader + skeleton (Kelly A5).
      */
     chrome?: "full" | "content";
+    /**
+     * PHASE 0 — THE DESTINATION SHELL (P0-7.1).
+     *
+     * What is TRUTHFULLY known about where the operator is going, before anything is committed.
+     * Supplied only by the surface host, which reads it from the route and from desired attention —
+     * both authoritative the instant the gesture happens, neither requiring any fetch.
+     *
+     * Everything here is a destination primitive the operator themselves chose. Nothing in it is a
+     * business fact, a count, a status or a configured label, because none of those are known yet
+     * and inventing one is the false construction `unstable_or_false_construction_ms = 0` bans.
+     *
+     * Omitted entirely (`undefined`) the shell renders exactly as it always has.
+     */
+    destination?: {
+        /** The work-unit slug from the operator's own route, e.g. `waitlist`. */
+        workUnitSlug?: string | null;
+        /** The Work View the gesture named, when it named one. An id, shown only if human-legible. */
+        workViewId?: string | null;
+        /** Subject identity already known from the queue-preview seed (Presentation Truth). */
+        subjectLabel?: string | null;
+    };
 }) {
     const copy = ADMIN_V2_ROUTE_LOADING_VOCABULARY[variant];
 
     // CONTENT MODE — no chrome, just a centered Alloy loader filling the shell's content slot.
     if (chrome === "content") {
+        const slug = destination?.workUnitSlug?.trim() || null;
+        const subject = destination?.subjectLabel?.trim() || null;
+        const view = destination?.workViewId?.trim() || null;
+        // A slug is a machine key the operator can still read; humanise it without claiming it is the
+        // configured label. `waitlist` → `Waitlist`, `new-leads` → `New leads`.
+        const destinationName = slug
+            ? slug.replace(/[-_]+/g, " ").replace(/^\w/, (c) => c.toUpperCase())
+            : null;
+        const hasDestination = destinationName != null || subject != null;
         return (
             <div
                 className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-hidden bg-white"
                 data-alloy-operational-boot-shell="true"
                 data-alloy-operational-boot-variant={variant}
                 data-alloy-operational-boot-chrome="content"
+                data-destination-shell={hasDestination ? "true" : undefined}
                 aria-busy="true"
             >
                 {/* Single "Thinking…" owner (Kelly): the Alloy mark with the word stacked BELOW it —
@@ -154,6 +186,38 @@ export function AlloyOperationalBootShell({
                         <AlloyIdentityLoader markSize="lg" showMessage={false} className="scale-[2]" />
                     </div>
                     <AlloyThinkingLabel size="lg" />
+                    {/*
+                      * The destination, named. This is the whole of Phase 0: the operator waiting here
+                      * used to be told only "Thinking…", with no evidence that the surface they asked
+                      * for was the surface being prepared. Naming it costs no request and states only
+                      * what the gesture already decided.
+                      */}
+                    {hasDestination ? (
+                        <div
+                            className="flex flex-col items-center gap-1"
+                            data-destination-shell-detail="true"
+                        >
+                            {destinationName ? (
+                                <span
+                                    className="text-[13px] font-semibold text-alloy-midnight/70"
+                                    data-destination-work-unit={slug ?? undefined}
+                                >
+                                    {destinationName}
+                                </span>
+                            ) : null}
+                            {subject ? (
+                                <span
+                                    className="text-[12px] text-alloy-muted/80"
+                                    data-destination-subject="true"
+                                >
+                                    {subject}
+                                </span>
+                            ) : null}
+                            {/* The Work View id is carried for certification, never printed: an id is
+                                not operator vocabulary, and its configured label is not known yet. */}
+                            {view ? <span hidden data-destination-work-view={view} /> : null}
+                        </div>
+                    ) : null}
                 </div>
             </div>
         );

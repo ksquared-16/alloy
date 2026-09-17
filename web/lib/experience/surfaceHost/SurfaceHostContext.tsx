@@ -290,7 +290,10 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
     // a work unit but nothing is committed yet (and we're not on our way back to the Workspace), show
     // the centered Alloy loader as the single owner instead of blank. On a gesture entry FROM the
     // Workspace the route stays `/workspace`, so the retained Workspace recedes and this never fires.
-    const routeIsWorkUnit = surfaceHostShouldRenderWorkUnit(surfaceRefFromPath(pathname));
+    // Parsed once: the loader decision needs it, and Phase 0's destination shell names the work unit
+    // from it. Both read the same authoritative route — there is no second source.
+    const routeRef = surfaceRefFromPath(pathname);
+    const routeIsWorkUnit = surfaceHostShouldRenderWorkUnit(routeRef);
     // A WORK-UNIT → WORK-UNIT surface exchange (e.g. a Work View pill switch, or re-entering a Work
     // View whose Work Unit still holds a DIFFERENT committed surface). Here the committed surface is a
     // Work Unit that does not match the desired destination, so it must not render (mixed), and the
@@ -342,7 +345,33 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
             {showWorkUnit ? (
                 <ProvisionedWorkUnitSurface />
             ) : showWorkUnitLoader ? (
-                <AlloyOperationalBootShell variant="work_unit" chrome="content" />
+                /*
+                 * PHASE 0 — THE DESTINATION SHELL (P0-7.1).
+                 *
+                 * This is the window the P0-7 audit measured at 0 → ~10,604 ms on cold Work Unit
+                 * entry: no grid areas, no cards, no queue rows, no Work View pills, no Focus Panel
+                 * — a centered "Thinking…" and nothing else, then the whole surface at once.
+                 *
+                 * Structure genuinely cannot commit here: the published composition arrives on the
+                 * provisioning answer and does not exist yet, and fabricating a card grid would be
+                 * precisely the false construction the invariant bans. So no cards are shown.
+                 *
+                 * But the DESTINATION is authoritative from the first frame. The route names the
+                 * work unit and the gesture names the Work View; neither needs a fetch, and both are
+                 * what the operator themselves just chose. Saying so costs nothing and replaces
+                 * "something is happening" with "the surface you asked for is being prepared".
+                 */
+                <AlloyOperationalBootShell
+                    variant="work_unit"
+                    chrome="content"
+                    destination={{
+                        // The operator's own route. `surfaceRefFromPath` already parsed it above for
+                        // the loader decision, so this adds no work and no new source of truth.
+                        workUnitSlug:
+                            routeRef.kind === "work-unit" ? routeRef.workUnitSlug : desired?.target ?? null,
+                        workViewId: desired?.lens ?? null,
+                    }}
+                />
             ) : null}
         </>
     );

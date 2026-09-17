@@ -60,6 +60,11 @@ body{margin:0;font:14px system-ui,sans-serif}
 ${stylesheets.map(css).join("\n")}
 </style></head><body>
 <script>
+// process is a node global a browser bundle does not have. esbuild's define replaces only the exact
+// member expressions it is told about, so a component graph that reads process.env any other way
+// throws "process is not defined" at mount. Shimming it here keeps the graph under certification the
+// SHIPPED one, rather than trimming the fixture until it stops reaching for it.
+window.process = window.process || { env: { NODE_ENV: "development" } };
 // Instrumented before the bundle runs, so every observation the engine reacts to is counted.
 window.__obs = { resize: 0, mutation: 0 };
 (function () {
