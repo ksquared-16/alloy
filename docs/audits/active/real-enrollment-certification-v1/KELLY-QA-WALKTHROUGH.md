@@ -27,7 +27,9 @@ If EXPECT does not match, stop at that step number and report it.
 > **STOP AND REPORT IF** a named button is missing, clicking does nothing, a document does not
 > render, or anything below says STOP.
 
-The QA child is **Pathb Certopp** (household *Certopp Family*).
+The QA child for the live run (Parts D–E) is **Toureeb Tourb0913** (household *Tourb0913 Family*),
+already Enrolling through the real Decision path. Earlier parts still reference **Pathb Certopp**,
+which remains a valid specimen for configuration reading.
 
 ## PART 0 — Admin acceptance (short)
 
@@ -291,59 +293,110 @@ knows carry a blue **Alloy** mark.
 ---
 
 
-# PART D — Open the QA child, then launch the parent experience
+# PART D — Open the child, send the paperwork, receive the email
 
-**D1. DO** — Click the **Workspace** icon (second from top in the left rail).
-**EXPECT** — The Operational Workspace home.
+> **This whole part was re-certified end to end on a real send.** Every step below was executed and
+> observed, except D9 — checking the inbox — which only you can do. The old Part D told you to open
+> Processing Studio, pick a packet, launch it and copy an Intake URL. **None of that is the product
+> any more.** There is no Studio step, no packet picker, no URL to copy: the Process decides which
+> packet a child needs, and Communications carries the link to the family.
 
-**D2. DO** — Click the **Search…** box at the top. Type `Pathb`.
-**EXPECT** — A result **Pathb Certopp — Child · Certopp Family**, with a **Household** chip.
+**The QA specimen.** Child **Toureeb Tourb0913** (Tourb0913 Family) is already Enrolling, put there
+through the real Decision path. Their guardian's email is deliberately set to **Kurz16@gmail.com**
+so this run delivers to you — see the note at the end of this part.
 
-**D3. DO** — Click the words **Pathb Certopp**.
-**EXPECT** — The search closes and **Pathb Certopp's record opens**, showing *First name Pathb*,
-*Last name Certopp*, *Date of birth Nov 2, 2021*.
+**D1. DO** — Click the **Workspace** icon in the left rail, then the **Search…** box at the top.
+Type `Toureeb`.
+**EXPECT** — A result **Toureeb Tourb0913 — Child · Tourb0913 Family**.
+
+**D2. DO** — Click the words **Toureeb Tourb0913**.
+**EXPECT** — The child's own record opens, showing *First name Toureeb*, *Last name Tourb0913*.
 
 > **STOP** if clicking does nothing.
 
-**Now launch the paperwork.** There is no send-paperwork button on the child record; the launch
-lives in Processing.
+**D3. EXPECT** — Along the top of the record, three context chips: **Enrollment · Registration**,
+**Child**, **Household**. **Enrollment · Registration** is already selected.
 
-**D4. DO** — Left rail → **Processing** → **Studio** tab. If a Form is still open, click
-**← Forms** first, then click the **Packets** tab.
-**EXPECT** — The Studio tab row reads **Forms · Packets · Fields · Branding**, and the packets list
-includes **Enrollment Packet — Firefly V1**.
+**D4. EXPECT** — Below the child's details, a **BUSINESS PROCESS** card reading
+**CASE · Enrolling · Complete enrollment paperwork and confirm start.**, with two controls:
+**Send enrollment paperwork** and **Move to Enrolled**.
 
-> The **Packets** tab is only reachable from the Studio list. If you are inside a Form editor you
-> must click **← Forms** first.
+> This is the child's own position in the process. The FAMILY case is still at Decision — that is
+> correct, not a bug. A child can be further along than the case they came in on.
 
-**D5. DO** — Click **Enrollment Packet — Firefly V1**.
-**EXPECT** — The packet opens and lists its three steps, in order:
-1. **Northwind Enrollment Application v4**
-2. **Health and Medical Authorization**
-3. **Immunization Record**
+**D5. DO** — Click **Send enrollment paperwork**.
+**EXPECT** — A **New Message** composer opens, already filled in:
+- **TO** — the family contact (for this QA child, that is your address);
+- **SUBJECT** — *Enrollment paperwork for Toureeb*;
+- **MESSAGE** — a short note ending in a link that starts
+  `https://vacilandos-mac-mini.tail2aa1af.ts.net:3014/forms/embed/…`
 
-> **STOP** if the three steps are not exactly those.
+> **STOP** if you are asked to choose a packet, or if the link says `localhost`. Neither should
+> ever appear. You are never expected to copy the link yourself.
 
-**D6. DO** — Scroll to **Send to (optional — prefills what Alloy already knows)**. Type `Pathb`.
-**EXPECT** — A result **Pathb Certopp — Customer: Certopp Family · DOB 2021-11-02**.
+**D6. DO** — Click **Send**.
+**EXPECT** — A confirmation step: **Ready to send**, naming the recipient, with **Back to edit** and
+**Confirm send**. Nothing has been sent yet.
 
-**D7. DO** — Click that result.
-**EXPECT** — The target shows **Pathb Certopp** with a **Change** link. *(You should never type an ID.)*
+**D7. DO** — Click **Confirm send**.
+**EXPECT** — **Message sent · Email sent to …** and a **Done** button.
 
-**D8. DO** — Click **Launch packet**.
-**EXPECT** — A panel **Copy this link now** with an **Intake URL**.
+> If the send fails you will see **Could not send** with the reason and **Back to edit**, and your
+> draft is kept. That message is the truth: if it says it could not send, nothing went out.
 
-**D9. DO** — Copy the Intake URL and open it in a **new browser tab**.
-**EXPECT** — The parent experience opens and greets you about **Pathb**.
+**D8. EXPECT** — Back on the Process card, the work is **still outstanding**. Sending the paperwork
+is not the family completing it. Nothing should say the packet is done.
+
+**D9. DO — THIS ONE IS YOURS** — Open **Kurz16@gmail.com**.
+**EXPECT** — An email *Enrollment paperwork for Toureeb*, containing the participant link.
+
+> Two or three QA messages may already be waiting; the certification run sent a first message and a
+> resend. That is expected.
+
+**D10. DO** — Click the link **in the email**.
+**EXPECT** — The parent experience opens — continue into **Part E**.
 
 ---
+
+## What this part certified, and what it did not
+
+**Certified on a real send:**
+- the child opens from search and shows its own **Enrolling** Business Process card;
+- **Send enrollment paperwork** resolves the packet (**Enrollment Paperwork 2026–2027**) and the
+  guardian with no operator input;
+- the participant link uses the externally reachable origin, never `localhost`;
+- Communications reported **sent 1 / failed 0** and the delivery audit recorded it;
+- **resend** reuses the SAME participant session, journey and packet — no duplicate enrollment;
+- the link taken **from the delivered message** opens the real conversation and **resumes** it
+  rather than restarting.
+
+**Not certified here:** actually completing Admissions. Part D stops at the opening of the parent
+conversation; Part E is where the answering begins.
+
+## A note on the QA email address
+
+The guardian on **Tourb0913 Family** currently carries **Kurz16@gmail.com** rather than its fixture
+address (`tourb.tourb0913@example.invalid`). That is deliberate and is left in place for your run —
+the fixture addresses are on a reserved domain that can never receive mail, so no QA family could
+otherwise show you the parent side. **Restore or retire that contact once you have finished the full
+QA cycle.**
 
 # PART E — The parent experience
 
 Work in the parent tab.
 
-**E1. EXPECT** — An opening message naming **Pathb**, saying Alloy already has most of the
-information and will only ask for what is missing.
+> **HOW MUCH OF PART E IS CERTIFIED.** The OPENING of this conversation was re-certified on the
+> real delivered link: it names the child, reuses what Alloy already holds, asks one need at a time,
+> and RESUMES rather than restarting. The steps further down still describe the previous packet's
+> obligations — *Northwind Enrollment Application v4*, *Health and Medical Authorization*,
+> *Immunization Record* — and were **not** re-run against the current
+> **Enrollment Paperwork 2026–2027**. Treat everything after E2 as a guide, not as verified script;
+> where it disagrees with what you see, what you see is the product.
+
+**E1. EXPECT** — An opening message naming **Toureeb**, saying Alloy already has most of the
+information and will only ask for what is missing. For this specimen it opens partway through —
+*In progress*, with the child's birthday already settled — because the certification run answered
+one question. That is a resumed session, which is correct.
 
 ### Prove a question is not stored as an answer
 
