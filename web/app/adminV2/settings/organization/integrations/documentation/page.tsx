@@ -1,86 +1,187 @@
 /**
- * Developer Documentation.
+ * Developer Documentation — the first screen.
  *
- * Reads the governed sources in the repository and renders them as plain text —
- * there is deliberately no second specification and no second copy of the guides.
- * The API reference is the governed OpenAPI document itself, linked rather than
- * restated, because a hand-maintained mirror is how a reference starts lying.
+ * Written for a developer who has never seen Alloy and has about ninety seconds. It answers the
+ * questions that decide whether they can start, and then gets out of the way and sends them into
+ * the governed documents.
  *
- * Read-only. There is no interactive "Try it": that would need a credential or a
- * session in the browser, and its security has not been independently proven.
+ * WHAT IS CALLABLE IS NOT WRITTEN HERE. The operation list is read from the governed OpenAPI
+ * document — the same file the drift guard enforces against the running routes — so this page
+ * cannot advertise an endpoint that does not exist, and cannot fall behind one that does. That
+ * matters more than it sounds: a documented endpoint that is not real is the most expensive error
+ * an API programme can ship, and the scope vocabulary deliberately contains names (attendance.write)
+ * that have no public endpoint behind them.
  */
 
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { ArrowRight, Building2, KeyRound, ListChecks, Map, Rocket, ScrollText } from "lucide-react";
+import Link from "next/link";
+
+import {
+    AnswerCard,
+    DocumentationShell,
+} from "@/app/adminV2/settings/organization/integrations/documentation/DocumentationShell";
+import {
+    API_REFERENCE_PATH,
+    DOCUMENTATION_BASE_PATH,
+    DOCUMENTATION_SECTIONS,
+    publicOperations,
+} from "@/lib/developerDocs/documentationSources";
 
 export const dynamic = "force-dynamic";
 
-const REPO_ROOT = path.resolve(process.cwd(), "..");
-
-/** The entries Gate 2 requires, each pointing at a governed source. */
-const SECTIONS = [
-    { id: "getting-started", title: "Getting Started", file: "docs/api/developer-platform/guide/README.md" },
-    { id: "authentication", title: "Authentication", file: "docs/api/developer-platform/02-identity-installation-credential.md" },
-    { id: "applications", title: "Applications and Installations", file: "docs/api/developer-platform/02-identity-installation-credential.md" },
-    { id: "scopes", title: "Scopes", file: "docs/api/developer-platform/03-authorization-scopes-boundaries.md" },
-    { id: "locations", title: "Locations", file: "docs/api/developer-platform/guide/locations.md" },
-    { id: "conventions", title: "Conventions", file: "docs/api/developer-platform/guide/conventions.md" },
-] as const;
-
-function readDoc(relative: string): string | null {
-    try {
-        return readFileSync(path.join(REPO_ROOT, relative), "utf8");
-    } catch {
-        // A missing governed source is reported, never silently blank: a section
-        // that renders empty reads as "there is nothing to say".
-        return null;
-    }
-}
-
-export default function DeveloperDocumentationPage() {
-    const docs = SECTIONS.map((s) => ({ ...s, body: readDoc(s.file) }));
+export default function DeveloperDocumentationLandingPage() {
+    const operations = publicOperations();
 
     return (
-        <div className="w-full min-w-0 p-6" data-testid="developer-documentation">
-            <header>
-                <h1 className="text-lg font-medium">Developer documentation</h1>
-                <p className="mt-1 text-sm opacity-75">
-                    How external software authenticates with Alloy and what it may read.
+        <DocumentationShell activeSlug={null}>
+            <section data-testid="documentation-landing">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#007d68]">
+                    Developer platform
                 </p>
-            </header>
+                <h1 className="mt-1 text-[24px] font-semibold tracking-tight text-alloy-midnight">
+                    Build against Alloy
+                </h1>
+                <p className="mt-2 max-w-2xl text-[14px] leading-[1.7] text-alloy-midnight/75">
+                    Alloy&rsquo;s Developer Platform lets approved external software read an
+                    organization&rsquo;s data through a public HTTP API. An administrator installs your
+                    application, grants it explicit capabilities and a location boundary, and issues it a
+                    credential. Your code exchanges that credential for a token and calls the API — and
+                    Alloy enforces the granted access on every request.
+                </p>
 
-            <nav className="mt-4 text-sm" data-testid="developer-documentation-index">
-                <ul className="flex flex-wrap gap-3">
-                    {docs.map((d) => (
-                        <li key={d.id}><a className="underline" href={`#${d.id}`}>{d.title}</a></li>
-                    ))}
-                    <li>
-                        <a className="underline" href="/api/admin/integrations/openapi" data-testid="developer-documentation-api-reference">
-                            API Reference
-                        </a>
-                    </li>
-                </ul>
-            </nav>
+                <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
+                    <AnswerCard icon={ListChecks} question="What can I use today?" testId="landing-current-surface">
+                        {operations.length === 0 ?
+                            <p>The governed API reference is not available in this build.</p>
+                        :   <>
+                                <ul className="space-y-1.5" data-testid="landing-operations">
+                                    {operations.map((operation) => (
+                                        <li key={`${operation.method} ${operation.path}`}>
+                                            <code className="rounded border border-alloy-forge/10 bg-alloy-stone/70 px-1 py-px font-mono text-[11.5px] text-alloy-midnight">
+                                                {operation.method} {operation.path}
+                                            </code>
+                                            <span className="mt-0.5 block text-[11.5px] text-alloy-midnight/60">
+                                                {operation.summary}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                                <p className="mt-2 text-[11.5px] text-alloy-midnight/55">
+                                    {operations.length === 1 ?
+                                        "This is the entire public surface today."
+                                    :   `These ${operations.length} operations are the entire public surface today.`}{" "}
+                                    Capability names you may see in the installation UI — attendance among
+                                    them — describe access Alloy has defined, not endpoints it publishes.
+                                    If an operation is not listed here, no credential can reach it.
+                                </p>
+                            </>
+                        }
+                    </AnswerCard>
 
-            <p className="mt-3 text-xs opacity-70">
-                The API reference is the governed OpenAPI document for the public API. It is the one
-                specification; nothing here restates it.
-            </p>
-
-            {docs.map((d) => (
-                <section key={d.id} id={d.id} className="mt-6" data-testid={`doc-section-${d.id}`}>
-                    <h2 className="text-sm font-medium">{d.title}</h2>
-                    {d.body === null ? (
-                        <p className="mt-1 text-sm opacity-70">
-                            This document is not available in this build ({d.file}).
+                    <AnswerCard icon={KeyRound} question="How do I authenticate?" testId="landing-authentication">
+                        <p>
+                            The administrator issues you a client id and a client secret — the secret is
+                            shown once, at issue. Exchange them at the token endpoint for a short-lived
+                            bearer token and send it on every call.
                         </p>
-                    ) : (
-                        <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap rounded border p-3 text-xs">
-                            {d.body}
-                        </pre>
-                    )}
+                        <Link
+                            href={`${DOCUMENTATION_BASE_PATH}/authentication`}
+                            className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-[#007d68] hover:underline"
+                        >
+                            Applications, installations and credentials <ArrowRight className="h-3 w-3" aria-hidden />
+                        </Link>
+                    </AnswerCard>
+
+                    <AnswerCard icon={Building2} question="Which organization am I accessing?" testId="landing-context">
+                        <p>
+                            The one your installation belongs to. There is no organization parameter to
+                            choose and no way to ask for another: the credential determines it, and the
+                            context endpoint tells you which organization, which capabilities and which
+                            locations you actually hold.
+                        </p>
+                    </AnswerCard>
+
+                    <AnswerCard icon={Map} question="What can I read right now?" testId="landing-resources">
+                        <p>
+                            Locations — the first canonical resource — plus your own calling context.
+                            Everything else in the documentation states a contract Alloy has ratified but
+                            does not yet publish, and says so where it is described.
+                        </p>
+                        <Link
+                            href={`${DOCUMENTATION_BASE_PATH}/locations`}
+                            className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-[#007d68] hover:underline"
+                        >
+                            Locations <ArrowRight className="h-3 w-3" aria-hidden />
+                        </Link>
+                    </AnswerCard>
+                </div>
+
+                <div className="mt-5 rounded-xl border border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.05] p-4" data-testid="landing-build-first">
+                    <div className="flex items-center gap-2">
+                        <Rocket className="h-4 w-4 text-[#007d68]" aria-hidden />
+                        <h2 className="text-[13px] font-semibold tracking-tight text-alloy-midnight">
+                            What to build first
+                        </h2>
+                    </div>
+                    <ol className="mt-2 list-decimal space-y-1 pl-5 text-[12.5px] leading-[1.7] text-alloy-midnight/80">
+                        <li>Exchange your client id and secret for a token.</li>
+                        <li>Call the context endpoint and log what it returns — that is your granted access, stated by Alloy rather than assumed by you.</li>
+                        <li>Page through locations, and store the identifiers you get back.</li>
+                        <li>Handle token expiry and the error envelope before you write anything else.</li>
+                    </ol>
+                    <Link
+                        href={`${DOCUMENTATION_BASE_PATH}/getting-started`}
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#007d68] px-3 py-1.5 text-[12.5px] font-semibold text-white transition hover:bg-[#00694f]"
+                        data-testid="landing-start-reading"
+                    >
+                        Start with Getting started <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                    </Link>
+                </div>
+
+                <section className="mt-7" data-testid="landing-sections">
+                    <h2 className="text-[13px] font-semibold tracking-tight text-alloy-midnight">
+                        All documentation
+                    </h2>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        {DOCUMENTATION_SECTIONS.map((section) => (
+                            <Link
+                                key={section.slug}
+                                href={`${DOCUMENTATION_BASE_PATH}/${section.slug}`}
+                                data-testid={`landing-section-${section.slug}`}
+                                className="group rounded-xl border border-alloy-forge/10 bg-white p-3 transition hover:border-alloy-bend-pine/35"
+                            >
+                                <span className="flex items-center justify-between gap-2">
+                                    <span className="text-[12.5px] font-semibold text-alloy-midnight group-hover:text-[#007d68]">
+                                        {section.title}
+                                    </span>
+                                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-alloy-midnight/25 group-hover:text-[#007d68]" aria-hidden />
+                                </span>
+                                <span className="mt-1 block text-[11.5px] leading-[1.6] text-alloy-midnight/60">
+                                    {section.blurb}
+                                </span>
+                            </Link>
+                        ))}
+                        <a
+                            href={API_REFERENCE_PATH}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            data-testid="landing-section-api-reference"
+                            className="group rounded-xl border border-alloy-forge/10 bg-white p-3 transition hover:border-alloy-bend-pine/35"
+                        >
+                            <span className="flex items-center justify-between gap-2">
+                                <span className="text-[12.5px] font-semibold text-alloy-midnight group-hover:text-[#007d68]">
+                                    API Reference
+                                </span>
+                                <ScrollText className="h-3.5 w-3.5 shrink-0 text-alloy-midnight/25 group-hover:text-[#007d68]" aria-hidden />
+                            </span>
+                            <span className="mt-1 block text-[11.5px] leading-[1.6] text-alloy-midnight/60">
+                                The governed OpenAPI document for the public API. One specification —
+                                nothing in these guides restates it.
+                            </span>
+                        </a>
+                    </div>
                 </section>
-            ))}
-        </div>
+            </section>
+        </DocumentationShell>
     );
 }

@@ -83,6 +83,15 @@ export type InstallationSummary = {
     producerKey: string;
     boundaryMode: "org_wide" | "locations";
     locationCount: number;
+    /**
+     * The Locations this installation is bound to, when the boundary is restricted.
+     *
+     * Reported alongside the count because the editor has to PREFILL from it. Returning only a
+     * count meant "Edit locations" opened with nothing selected on an installation that had two —
+     * and saving from that screen silently narrowed the boundary to nothing. The boundary itself
+     * was always enforced correctly in SQL; the surface simply could not show what it was.
+     */
+    locationIds: string[];
     grantedScopes: string[];
     credential: CredentialSummary | null;
     health: HealthVerdict;
@@ -182,6 +191,7 @@ export async function listInstallations(
             producerKey: String(row.producer_key ?? ""),
             boundaryMode: String(row.boundary_mode) === "org_wide" ? "org_wide" as const : "locations" as const,
             locationCount: Array.isArray(row.location_boundary) ? (row.location_boundary as string[]).length : 0,
+            locationIds: Array.isArray(row.location_boundary) ? (row.location_boundary as string[]).map(String) : [],
             grantedScopes: Array.isArray(row.granted_scopes) ? (row.granted_scopes as string[]) : [],
             credential,
             health: evaluateInstallationHealth({

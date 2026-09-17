@@ -47,6 +47,10 @@ describe("Organization Configuration Runtime", () => {
             "staff",
             "access",
             "communications",
+            // Integrations joined the landing in the Developer Platform productization pass. The
+            // left rail had listed it as an Organization domain for a release while this model did
+            // not contain it, so `/organization` could not draw a card for it.
+            "integrations",
             "data-model",
             "automation",
             "business-processes",
