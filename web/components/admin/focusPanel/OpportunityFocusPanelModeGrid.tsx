@@ -58,6 +58,7 @@ import type { FocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/f
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { resolveCommunicationsComposerAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCommunicationsComposerAction";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
+import { useCurrentWorkWorkspaceCoordination } from "@/lib/adminV2/runtime/focusPanel/useCurrentWorkWorkspaceCoordination";
 
 /** Reverse-zoom dismiss window — matches CSS `--alloy-os-fp-depth-ms` (240ms). */
 const FOCUS_PANEL_DEPTH_MS = 240;
@@ -256,42 +257,18 @@ export default function OpportunityFocusPanelModeGrid({
      * Current Work operational workspace — replaces the summary card grid for the
      * active record (not a centered modal / elevated card). Closed restores cards.
      */
-    const [currentWorkWorkspace, setCurrentWorkWorkspace] = useState<FocusPanelCurrentWorkWorkspaceState>({
-        open: false,
-        intent: null,
-    });
-    const openCurrentWorkWorkspace = useCallback(
-        (intent: FocusPanelCurrentWorkWorkspaceIntent | null = { kind: "drill_in" }) => {
-            setCurrentWorkWorkspace({ open: true, intent: intent ?? { kind: "drill_in" } });
-        },
-        [],
-    );
-    const closeCurrentWorkWorkspace = useCallback(() => {
-        setCurrentWorkWorkspace({ open: false, intent: null });
-    }, []);
-    const clearCurrentWorkWorkspaceIntent = useCallback(() => {
-        setCurrentWorkWorkspace((prev) => (prev.intent ? { ...prev, intent: null } : prev));
-    }, []);
-    useEffect(() => {
-        // Leaving Work/summary for Activity must restore identity-card composition later.
-        if (mode !== "summary" && mode !== "work") {
-            setCurrentWorkWorkspace({ open: false, intent: null });
-        }
-    }, [mode]);
-    // Attention identity (queue row / subject), not resolved family opportunity id.
-    // Child Waitlist truth enrichment often flips drawerId process-instance → family
-    // opportunity without changing Attention — resetting on drawerId was closing
-    // Current Work mid-open (Message / Tour Invitation composer vanishing).
-    // Skip the initial mount: ModeGrid remounts on context enrich, and a mount-time
-    // reset was collapsing a just-opened workspace before the composer could paint.
-    const attentionSubjectId = model.subject.id;
-    const prevAttentionSubjectIdRef = useRef<string | null>(null);
-    useEffect(() => {
-        const prev = prevAttentionSubjectIdRef.current;
-        prevAttentionSubjectIdRef.current = attentionSubjectId;
-        if (prev == null || prev === attentionSubjectId) return;
-        setCurrentWorkWorkspace({ open: false, intent: null });
-    }, [attentionSubjectId]);
+    /*
+     * The workspace state this component used to own inline. Lifted to a shared hook so any host of
+     * `BusinessProcessCard` can execute its commands — the durable child record rendered the card
+     * with an enabled action and could not run it, because only this component had the opener.
+     * Behaviour is unchanged: the same callbacks and the same two resets, now in one place.
+     */
+    const {
+        currentWorkWorkspace,
+        openCurrentWorkWorkspace,
+        closeCurrentWorkWorkspace,
+        clearCurrentWorkWorkspaceIntent,
+    } = useCurrentWorkWorkspaceCoordination({ mode, subjectId: model.subject.id });
 
     // In-panel depth layer: a card reports when it opens deep (focused / edit). The
     // host raises that card and recedes the rest — no route, no drawer, no modal.

@@ -58,6 +58,8 @@ import type { DurablePersonSubject } from "@/lib/adminV2/runtime/focusPanel/dura
 import { buildDurablePersonOperationalContext } from "@/lib/adminV2/runtime/focusPanel/durableSubject/focusPanelWorkModeModelFromDurableSubject";
 import DurableHouseholdContextCard from "@/components/presentation/durableRecord/DurableHouseholdContextCard";
 import { cardAppliesToGrain, resolveCardIdentity } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
+import { useCurrentWorkWorkspaceCoordination } from "@/lib/adminV2/runtime/focusPanel/useCurrentWorkWorkspaceCoordination";
+import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import { DURABLE_STAFF_SUBJECT_KEY } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableStaffSchedulingSubject";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { deriveSchedulingCardModel } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveSchedulingCardModel";
@@ -241,6 +243,34 @@ export default function DurableRecordContextualCard({
         [childSubject, onSaved],
     );
 
+    /*
+     * ── THE ACTION EXECUTION HOST, WHICH THIS CARD DID NOT HAVE ──
+     *
+     * `BusinessProcessCard` runs every configured command by asking its host to open the Current
+     * Work workspace, which mounts the shared action panel and, for a communication action, the
+     * canonical composer. This host passed no coordination at all, so the call landed on `undefined`
+     * and the click did nothing: no request, no panel, no composer, no error. Measured on the
+     * durable child record with `Send enrollment paperwork` rendered and enabled.
+     *
+     * It is the SAME state the operational grid owns, from the same hook — not a durable-record
+     * executor. Nothing about execution happens here; this only gives the card the opener it has
+     * always required, so the card's own chrome can do what it already does everywhere else.
+     */
+    const workspaceCoordination = useCurrentWorkWorkspaceCoordination({
+        mode: "summary",
+        subjectId: subject.kind === "child" ? subject.child.memberId : subject.person.personId,
+    });
+    const coordination = useMemo<FocusPanelCoordination>(
+        () => ({
+            ...workspaceCoordination,
+            request: null,
+            // A record host has no card-to-card handoff: there is one card on this surface, so a
+            // focus request has nowhere to go and must not pretend otherwise.
+            requestFocus: () => {},
+        }),
+        [workspaceCoordination],
+    );
+
     /** The canonical Children card model, composed from the same truth the card will read. */
     const childCardModel = useMemo(
         () => (childSubject ? buildChildrenCardModel(operationalContext.truth) : null),
@@ -395,6 +425,8 @@ export default function DurableRecordContextualCard({
                         context={operationalContext}
                         focusPanelMode="summary"
                         mutation={childMutation}
+                        // The opener the card needs to run any of its configured commands.
+                        coordination={coordination}
                         compat={{ onSelectTab: () => {} }}
                     />
                 </FocusPanelSummaryDocProvider>

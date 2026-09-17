@@ -321,16 +321,46 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
         [context],
     );
 
+    /*
+     * ── AN ENABLED ACTION WITH NO HOST IS WORSE THAN NO ACTION ──
+     *
+     * Almost every branch of `invoke` runs its command by asking the host to open the Current Work
+     * workspace, and it asks through `coordination?.openCurrentWorkWorkspace?.(…)`. On a host that
+     * provides neither, that is not an error — it is silence. Measured on the durable child record:
+     * `Send enrollment paperwork` rendered enabled, the operator clicked it, and there was no
+     * request, no panel, no composer and no message.
+     *
+     * So the host's own capability is part of whether a command is executable HERE. The verdict uses
+     * `planCurrentWorkActionExecution` — the same owner `invoke` switches on — rather than a second
+     * list of which kinds need a workspace, because two lists would disagree and the disagreement
+     * would be another dead button. `command_surface` executes directly and needs no workspace;
+     * `blocked` and `unsupported` already render with their own reason.
+     *
+     * The treatment is the EXISTING unavailable one: disabled, with a reason the operator can read.
+     * Nothing new is invented, and nothing is hidden — a command configuration named still appears,
+     * and now says why it cannot run from this surface.
+     */
+    const canOpenWorkspace = typeof coordination?.openCurrentWorkWorkspace === "function";
+    const needsWorkspaceHost = useCallback((command: ProcessCardCommand) => {
+        const kind = planCurrentWorkActionExecution(command.action).kind;
+        return kind !== "command_surface" && kind !== "blocked" && kind !== "unsupported";
+    }, []);
+
     const actions = useMemo<ProcessCardActionInput[]>(() => {
-        const toInput = (command: ProcessCardCommand): ProcessCardActionInput => ({
-            key: command.key,
-            label: command.label,
-            primary: command.prominence === "primary",
-            disabled: command.status !== "executable",
-            disabledReason: command.unavailableReason,
-            onInvoke: () => invoke(command),
-            onIntent: () => warmCommand(command),
-        });
+        const toInput = (command: ProcessCardCommand): ProcessCardActionInput => {
+            const hostless = !canOpenWorkspace && needsWorkspaceHost(command);
+            return {
+                key: command.key,
+                label: command.label,
+                primary: command.prominence === "primary",
+                disabled: hostless || command.status !== "executable",
+                disabledReason: hostless
+                    ? "This action cannot be started from this surface."
+                    : command.unavailableReason,
+                onInvoke: () => invoke(command),
+                onIntent: () => warmCommand(command),
+            };
+        };
 
         if (!tourPresentation.grouped) return projection.commands.map(toInput);
 
@@ -360,7 +390,7 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
             out.push(toInput(command));
         });
         return out;
-    }, [projection.commands, invoke, tourPresentation, warmCommand]);
+    }, [projection.commands, invoke, tourPresentation, warmCommand, canOpenWorkspace, needsWorkspaceHost]);
 
     /*
      * DRIFT IS REPORTED, NEVER RENDERED. A configured command whose action is no longer registered

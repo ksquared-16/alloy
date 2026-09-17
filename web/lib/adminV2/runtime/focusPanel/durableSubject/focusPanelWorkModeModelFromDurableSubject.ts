@@ -180,7 +180,20 @@ export function buildDurableChildOperationalContext(
               }
             : { key: null, label: null, stageKey: null },
         perspective: null,
-        truth: subject.truth,
+        /*
+         * THE FAMILY THIS CHILD'S CONVERSATION BELONGS TO, under the key the platform already reads.
+         *
+         * `resolveFocusPanelMutationOpportunityId` resolves the record communications and registry
+         * mutations key on, and it checks `child.family_opportunity_id` FIRST precisely because a
+         * child-grain panel's subject is the child. Supplying it here is what lets the shared Current
+         * Work host thread a message on the right family without anyone re-selecting one — and
+         * without the action's subject moving off the child, which stays `customer_members.id`.
+         *
+         * Server-resolved from the participation. The browser never supplies it.
+         */
+        truth: stageWork?.familyOpportunityId?.trim()
+            ? { ...subject.truth, "child.family_opportunity_id": stageWork.familyOpportunityId.trim() }
+            : subject.truth,
         signals: NOT_APPLICABLE_CASE_SIGNALS,
         operationalHost,
         capabilities: { canMutate, maskedChannels: false },

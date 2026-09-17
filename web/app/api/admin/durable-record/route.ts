@@ -287,6 +287,8 @@ export async function GET(request: NextRequest) {
                       // title-cased key.
                       stageLabel: stageWork.slice.stage_work_runtime?.stage_label ?? null,
                       opportunityCustomerMemberId: stageWork.opportunityCustomerMemberId,
+                      // Resolved by the composer from the participation, never from the browser.
+                      familyOpportunityId: stageWork.opportunityId,
                       stageWorkRuntime: stageWork.slice.stage_work_runtime,
                       publishedStageInputs: stageWork.slice.published_stage_inputs,
                   }

@@ -18,6 +18,12 @@ export type DurableChildStageWorkContextInput = {
     /** Operator-facing stage name from the published plan, when one is resolved. */
     stageLabel?: string | null;
     opportunityCustomerMemberId?: string | null;
+    /**
+     * The acquisition episode this child's journey belongs to — the FAMILY record communications are
+     * threaded on. It is not the action's subject and never becomes one: the child is the thing being
+     * enrolled, and this only says which family conversation a message to them belongs in.
+     */
+    familyOpportunityId?: string | null;
     stageWorkRuntime?: StageWorkRuntimeProjection | null;
     publishedStageInputs?: PublishedStageInputsForCurrentWork | null;
 };
