@@ -10,6 +10,7 @@ import {
     MapPin,
     MessagesSquare,
     PanelsTopLeft,
+    Plug,
     ShieldCheck,
     Workflow,
     type LucideIcon,
@@ -45,6 +46,7 @@ const DOMAIN_ICONS: Record<OrganizationConfigurationDomainIcon, LucideIcon> = {
     "business-processes": Workflow,
     surfaces: PanelsTopLeft,
     automation: GitBranch,
+    integrations: Plug,
     intelligence: BarChart3,
 };
 

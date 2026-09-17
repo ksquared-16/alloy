@@ -36,6 +36,7 @@ export type OrganizationConfigurationDomainIcon =
     | "business-processes"
     | "surfaces"
     | "automation"
+    | "integrations"
     | "intelligence";
 
 export type OrganizationConfigurationDomain = {
@@ -274,6 +275,40 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
         },
         distributionMode: "inherit",
         ownedConfiguration: ["Channels and sender identity", "Templates", "Send rules"],
+    },
+    {
+        key: "integrations",
+        label: "Integrations",
+        description: "Connections to approved external software, and exactly what each one may access.",
+        href: "/organization/integrations",
+        icon: "integrations",
+        publisherLabel: "Organization",
+        configurationOwner: "Integrations",
+        runtimeOwner: "Developer Platform Runtime",
+        consumers: ["Public API", "External software", "Locations"],
+        inheritance: {
+            kind: "availability",
+            path: ["organization", "location"],
+            label: "The organization approves the software; each connection chooses which Locations it may reach",
+        },
+        publication: { mode: "immediate", status: "live_on_save", label: "Enforced on the next request" },
+        override: { state: "available", label: "Capabilities and location boundary are per connection" },
+        health: {
+            // Integrations health is real and per-connection — a credential can be missing, a
+            // boundary can be empty, a connection can be suspended. It is assessed where it can be
+            // answered truthfully, which is inside the domain against live request activity, not
+            // from a static declaration on a landing card.
+            state: "not_assessed",
+            label: "Not assessed",
+            detail: "Connection health is reported per integration inside Integrations.",
+        },
+        distributionMode: "assignment",
+        ownedConfiguration: [
+            "Connected applications",
+            "Granted capabilities",
+            "Location boundary",
+            "Credentials and their lifecycle",
+        ],
     },
     {
         key: "data-model",
