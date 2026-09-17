@@ -391,56 +391,99 @@ QA cycle.**
 
 A participant link **resumes**. That is the product behaving correctly — Part D proved a resend
 reuses the same session rather than starting a second one — but it means **you only get one first
-impression per child**, and E1 is about the first impression.
+impression per child**, and E1 is about the first impression. So E1 has its own specimen, below, and
+E2–E6 can be done on any conversation including the one in your Part D email.
 
-| If you open… | You will land at… |
-|---|---|
-| a link for a child whose conversation has not started | the opening — do **E1** |
-| the link from your Part D email for **Toureeb** | partway in, where the certification run left it — **skip E1**, start at E2 |
+**What changed since you last read this.** Admissions was republished as **version 8**. It connects
+**13 of its 80 questions** to Alloy instead of 4 — the child's full name and date of birth, the
+parent's name, phone and email, the desired start date, and five durable child-profile facts (eating
+habits, special diet, favourite foods, foods refused, temperament). Everything else stays Form-only
+**on purpose**: emergency contacts and a second guardian belong to the relationship model and this
+form numbers its people as flat boxes; allergies, medications and health history belong to Health;
+and an agreement's own questions belong to the agreement. The reasoning for all eighty is in
+`ADMISSIONS-CANONICAL-OWNERSHIP.md` beside this file.
 
-The certification run answered about half of Toureeb's Admissions conversation, so the values in it
-read *"QA probe answer"*. Those are mine, not a defect. If you want E1 on a real first impression,
-use a child who has not been sent paperwork yet.
+Two visible consequences:
 
-**One thing to know before E1**, because it will otherwise look like a bug: *Enrollment Paperwork
-2026–2027* has **eighty questions and four of them are connected to anything Alloy stores** — the
-child's date of birth, their first day, and the guardian's phone and email. Everything else is
-Form-only. So "what I already have" can never be more than those four, and for a family whose record
-is missing them it is **empty, and the opening says so instead of claiming otherwise**. That is a
-configuration fact about this packet, not a fault in the conversation.
+- the packet asks **78** questions rather than 80. "Student Name" appears on page 1 and again under
+  the Tuition agreement, and "Parent Name" is the same person as "Parent/Guardian #1" — so each pair
+  is now **one** question that fills both boxes.
+- a family the school already has records for starts with something on the screen instead of a
+  claim. A family it has nothing for still starts honestly — see the second EXPECT in E1.
 
 ---
 
 **E1. OPENING — what Alloy already has.**
 
-**DO** — Open a participant link for a child whose conversation has not started.
+**DO** — Open the E1 specimen link:
 
-**EXPECT — when Alloy holds something** — An opening line naming the child, and underneath it one
-small block per person, with a heading and their facts:
+```
+https://vacilandos-mac-mini.tail2aa1af.ts.net:3014/forms/embed/azIybfVzU3ug0wg8VfUkAPfpEuVWjph9aGkys0BFW_I
+```
+
+That is a fresh, unused conversation for **Lennon Kurzman**, whose record genuinely holds a name, a
+date of birth, and a parent with a name, a phone number and an email address. Nothing about it was
+hand-fed for the demo; it is the household data that was already there.
+
+**EXPECT — the opening** — a line naming the child, and underneath it one block per person, each
+headed by that person's own name:
 
 ```
 Let's finish Lennon's enrollment paperwork. Here's what I already have —
 I'll ask you for anything that's missing.
 
-    LENNON'S DETAILS
+    LENNON'S DETAILS      Lennon Kurzman
+      Full name       ·  Lennon Kurzman
       Birthday        ·  Apr 2, 2024
 
-    YOUR DETAILS
+    YOUR DETAILS         Kelly Kurzman
+      Name            ·  Kelly Kurzman
       Phone number    ·  (602) 290-4816
       Email address   ·  kelly.kurzman@gmail.com
 ```
 
-**EXPECT — when Alloy holds nothing** — The same opening WITHOUT the claim:
-*"Let's finish Toureeb's enrollment paperwork. I'll ask you one thing at a time and fill the forms
-in as we go."*
+**EXPECT — the first turn** — not a blank box. Alloy asks you to **check what it already holds**:
 
-> **STOP** if you are told *"I already have most of …'s information"* and are then shown nothing.
-> That sentence is now only spoken when there is a list under it. Seeing it bare is the exact defect
-> this part was written to close.
+```
+    LENNON'S DETAILS
+    Let's make sure I have Lennon's details right.
+    Lennon Kurzman
+    BIRTHDAY   Apr 2, 2024
+    I'll use these everywhere they're needed, so you only tell me once.
+                                          [ Yes, that's right ]  [ Make a change ]
+```
 
-> These rows carry **no Edit link**, on purpose. Nothing here has been confirmed by you yet — every
-> one of them is still going to be put to you as a question. Showing a value is not the same as you
-> agreeing to it, and the platform must not be able to pretend otherwise.
+> **STOP** if the first thing you are asked is a question Alloy can already answer — the child's name
+> or birthday as an empty box. A fact on file is confirmed, never collected.
+
+> **STOP** if you are told *"I already have most of …'s information"* and are shown nothing. That
+> sentence is only spoken when there is a list under it.
+
+> These summary rows carry **no Edit link** before you confirm, on purpose. Nothing there has been
+> verified by you yet, and showing a value is not the same as you agreeing to it.
+
+**DO** — Press **Yes, that's right**.
+
+**EXPECT** — Lennon's two facts move into a **Confirmed** block, each with an **Edit** beside it, and
+the progress figure moves. Your own details stay in the un-confirmed summary above, because you have
+not been asked about them yet.
+
+**DO** — Press **Edit** beside **Full name**, change it, and **Save**.
+
+**EXPECT** — the row shows the new value with **UPDATED**, and the block's heading follows it.
+
+> **This is the important one.** Correcting it here does **not** rewrite the child's record. The
+> answer belongs to this paperwork until an administrator returns it, which is a separate, governed
+> step. Verified directly: after a correction in the conversation, the child record still read
+> *Wrigley Kurzman* while the paperwork read *Wrigley Jean Kurzman*.
+
+**EXPECT — the first genuinely missing question** — only now, and it is something Alloy has no way to
+know: *Student Age Upon Enrolling?*
+
+> **EXPECT — the honest opposite.** Open the Part D link for **Toureeb** and the same opening says:
+> *"Let's finish Toureeb's enrollment paperwork. I'll ask you one thing at a time and fill the forms
+> in as we go."* — with **no** list. His record holds none of the facts this packet can know. That is
+> the correct behaviour, not a failure.
 
 ---
 
