@@ -218,7 +218,16 @@ export default function DurableRecordContextualCard({
                  * child's identity: a record with no Schedule context selected has no business
                  * carrying assignment facts in its truth.
                  */
-                ...childSubject.truth,
+                /*
+                 * `base.truth`, NOT `childSubject.truth`.
+                 *
+                 * The context builder merges the child's family episode in as
+                 * `child.family_opportunity_id` — the key every communications and mutation path
+                 * resolves the record on. Re-spreading the raw subject truth here dropped it again,
+                 * so the composer opened with no family to thread the message on and rendered
+                 * "Failed to load" beside a prepare that had succeeded.
+                 */
+                ...base.truth,
                 _scheduling_projection: schedulingProjection ?? null,
             },
         };

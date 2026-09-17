@@ -100,6 +100,13 @@ describe("the durable record hosts the canonical coordination, not its own execu
         expect(grid).not.toContain("setCurrentWorkWorkspace({ open: true");
     });
 
+    it("does not discard the family key the context builder merged in", () => {
+        // Re-spreading the raw subject truth dropped `child.family_opportunity_id`, and the composer
+        // opened with no family to thread the message on.
+        expect(card).toContain("...base.truth,");
+        expect(card).not.toContain("...childSubject.truth,\n                _scheduling_projection");
+    });
+
     it("hands that coordination to the card renderer", () => {
         expect(card).toContain("coordination={coordination}");
     });
