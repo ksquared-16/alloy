@@ -383,171 +383,63 @@ QA cycle.**
 
 # PART E — The parent experience
 
-Work in the parent tab.
+> ## STOP HERE FOR NOW
+>
+> **Parts E and F are being rewritten and must not be followed.** Everything that used to be in this
+> section scripted a packet that is no longer the one the product launches. It told you to expect
+> *Northwind Enrollment Application v4*, *Health and Medical Authorization* and *Immunization
+> Record*, as three signed documents, reviewed in Processing as *Enrollment Packet — Firefly V1*.
+>
+> The live package is **Enrollment Paperwork 2026–2027**, and its obligations are different in kind,
+> not just in name:
+>
+> | | |
+> |---|---|
+> | **Admissions Information** | collect information — a conversation, ~80 questions |
+> | **Family Handbook** | read & acknowledge |
+> | **Immunization record** | upload a document |
+>
+> Following the old script would have had you hunting for documents that are not there and reporting
+> their absence as defects. That is why it is removed rather than left with a warning on top.
 
-> **HOW MUCH OF PART E IS CERTIFIED.** The OPENING of this conversation was re-certified on the
-> real delivered link: it names the child, reuses what Alloy already holds, asks one need at a time,
-> and RESUMES rather than restarting. The steps further down still describe the previous packet's
-> obligations — *Northwind Enrollment Application v4*, *Health and Medical Authorization*,
-> *Immunization Record* — and were **not** re-run against the current
-> **Enrollment Paperwork 2026–2027**. Treat everything after E2 as a guide, not as verified script;
-> where it disagrees with what you see, what you see is the product.
+## What IS certified about the parent experience
 
-**E1. EXPECT** — An opening message naming **Toureeb**, saying Alloy already has most of the
-information and will only ask for what is missing. For this specimen it opens partway through —
-*In progress*, with the child's birthday already settled — because the certification run answered
-one question. That is a resumed session, which is correct.
+These were re-run against the real delivered link and hold today:
 
-### Prove a question is not stored as an answer
+- the conversation opens naming the child, and reuses what Alloy already holds rather than asking
+  for it (**16 of the 80 Admissions questions** were already settled from known truth at open);
+- it asks **one need at a time** — no wall of fields, no 80-question form;
+- it **resumes**: reopening the same link continues where it left off, with earlier answers still
+  settled and editable, rather than restarting;
+- a required question that has no home in Alloy's own records is still asked and still retained —
+  "Form-only" describes where the answer lives, not whether it matters;
+- typing a QUESTION instead of an answer is answered as a question, and does not get stored as the
+  value of the field you were asked about;
+- the order follows people rather than the source PDF's field order: the child's own details first,
+  then the primary parent/guardian, then other people. It does not bounce between them.
 
-**E2. DO** — When Alloy asks for a value (for example *Emergency contact first name*), click
-**Yes — I'll tell you**, then type exactly:
-`What do I still need to do?`
-and press Enter.
-**EXPECT** — A text box appears when you click **Yes — I'll tell you**, and your sentence sends.
+## What is NOT yet certified, and is being worked on now
 
-**E3. EXPECT** — Three things:
-1. Alloy **answers** the question.
-2. The same question is still being asked.
-3. Under **What you told us**, the words *"What do I still need to do?"* do **NOT** appear.
+- whether the opening gives you a **useful summary of what Alloy already knows**, grouped by person,
+  rather than only the sentence "I already have most of Toureeb's information";
+- the section-by-section transitions through the whole of Admissions;
+- the **Family Handbook** read-and-acknowledge step;
+- the **Immunization record** upload step;
+- completion, and what Processing shows afterwards (the old Part F).
 
-> **STOP** if your question was saved as the answer.
-
-**E4. DO** — Now answer it properly. Type `Dana`, press Enter. If asked for a last name, type
-`Reyes`, press Enter.
-**EXPECT** — The answers appear under **What you told us**.
-
-**E5. DO** — For each *"Would you like to add…"* prompt (parent/guardian, emergency contact,
-authorised pickup, physician), click **No, continue**.
-**EXPECT** — Each prompt is dismissed and the next one appears, until Alloy moves on to the
-immunization attachment.
-
-**E6. DO** — When asked to attach the immunization record, click **Attach** and choose any small
-**PDF or photo** from your computer (any file will do — it is QA).
-**EXPECT** — The upload is accepted and Alloy says it is preparing the paperwork.
-
-### Document 1 — Northwind
-
-**E7. DO** — Click **Review paperwork**.
-**EXPECT** — **Document 1 of 3 — Northwind Enrollment Application**, shown as the real document.
-
-**E8. DO** — Click **View larger**, then close it.
-**EXPECT** — A readable full view.
-
-### Correct a fact
-
-**E9. DO** — Click **Make a change**.
-**EXPECT** — A list of editable facts, each with **Edit**:
-*first name — Pathb*, *last name — Certopp*, *date of birth — Nov 2, 2021*.
-
-> **STOP** if this list is empty.
-
-**E10. DO** — Click **Edit** on **date of birth**. Set it to `2021-11-05`. Click **Update**.
-**EXPECT** — You return to the document, it regenerates, and it now shows **Nov 5, 2021**.
-
-**E11. DO** — Click **Make a change** again, **Edit** on **date of birth**, set it back to
-`2021-11-02`, click **Update**.
-**EXPECT** — The document shows **Nov 2, 2021** again.
-
-> This proves corrections flow to the paperwork. You have changed nothing in Alloy's records yet.
-
-### Sign
-
-**E12. DO** — Click **Everything looks good**.
-**EXPECT** — A signing screen.
-
-**E13. DO** — Click **Tap to sign** → **Type instead** → type `Bo Certopp` → tick the
-acknowledgement → click **Done** → click **Sign and finish**.
-**EXPECT** — The signature appears on the document and the step completes.
-
-> **STOP** if the signature disappears after signing.
-
-### Documents 2 and 3
-
-**E14. DO** — Click **Review paperwork**.
-**EXPECT** — **Document 2 of 3 — Health and Medical Authorization**.
-
-**E15. DO** — Click **Everything looks good**, then sign as in E13.
-**EXPECT** — Document 2 is signed and completed, exactly as Document 1 was.
-
-**E16. DO** — Click **Review paperwork**.
-**EXPECT** — **Document 3 of 3 — Immunization Record**, with an **Attach** button.
-
-**E17. DO** — Click **Attach**, choose a PDF or photo.
-**EXPECT** — Buttons **View** and **Replace** appear.
-
-**E18. DO** — Click **View**.
-**EXPECT** — The file you just uploaded opens.
-
-**E19. DO** — Click **Replace** and choose a **different** file.
-**EXPECT** — The newer file becomes the current one.
-
-> **STOP** if the old file is still shown as current.
-
-**E20. DO** — Click **Everything looks good**, then sign as in E13.
-**EXPECT** — **"You're all set. Pathb Certopp's enrollment paperwork has been submitted."**
-
----
-
-# PART F — Operator return
-
-Go back to the admin tab.
-
-**F1. DO** — Left rail → **Processing** → **Work** tab → **Queue** tab → click **Incoming**.
-**EXPECT** — A list with a new **Enrollment Packet — Firefly V1**, marked *Needs review*, at the top.
-
-**F2. DO** — Click it.
-**EXPECT** — Under **What came in**, three headed groups:
-- **Northwind Enrollment Application v4 — Step 1 — Completed**
-- **Health and Medical Authorization — Step 2 — Completed**
-- **Immunization Record — Step 3 — Completed**
-
-> **STOP** if the three Forms are merged into one list, or a step is not **Completed**.
-
-**F3. DO** — Click **View Northwind Enrollment Application v4 (signed)**.
-**EXPECT** — The signed PDF opens in a new tab, with the signature on it.
-
-**F4. DO** — Do the same for **View Health and Medical Authorization (signed)** and
-**View Immunization Record (signed)**.
-**EXPECT** — Both open.
-
-**F5. DO** — In the Immunization group, under **On the form only**, click **View attached document**.
-**EXPECT** — The **replacement** file from E19 opens — not the first one.
-
-> **STOP** if you cannot open any returned document.
-
-**F6. EXPECT** — Inside each group you should see headed sections:
-- **Confirmed — already on file** (e.g. *Child First Name — Pathb*)
-- **On the form only** (e.g. the emergency contact names)
-- and, where something differs, **Changes to review** or **New information**.
-
-**F7. DO** — Look at the **Review & decide** rail on the right.
-**EXPECT** — It says **Update Pathb Certopp**.
-
-> **STOP** if it offers to *create* Pathb Certopp as a new child. That would be a duplicate.
-
-### Approve one change
-
-**F8. DO** — In the decision rail, approve the change offered for **Child Date Of Birth**.
-*(If no change is offered because nothing differs, skip to F10 and note it.)*
-**EXPECT** — The approval is accepted.
-
-**F9. DO** — Top search box → type `Pathb` → click **Pathb Certopp**.
-**EXPECT** — The record shows **Date of birth Nov 2, 2021**.
-
-**F10. EXPECT** — Nothing else on the record changed on its own.
-
-> **STOP** if any record value changed that you did not approve.
-
----
+**Please do not QA these yet.** A rewritten Part E will state each step as DO / EXPECT / STOP once
+the behaviour behind it has been proven, the same way Part D now does.
 
 # PART G — Paperwork complete ≠ enrolled
 
 **G1. DO** — Click the **Workspace** icon in the left rail.
 **EXPECT** — On the work list: **Enrolled children** and **Registration**.
 
-**G2. EXPECT** — Completing the paperwork in Part E did **not** move Pathb into **Enrolled children**,
+**G2. EXPECT** — Completing the paperwork does **not** move the child into **Enrolled children**,
 and the child record still shows **Program —**.
+
+> You cannot finish this check until Part E is rewritten and you have completed a packet. The rule it
+> states holds regardless: paperwork is not enrolment.
 
 > **STOP AND REPORT** if finishing paperwork marked the child enrolled. Enrolment stays a staff
 > decision.
