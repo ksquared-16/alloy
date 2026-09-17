@@ -52,6 +52,17 @@ import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawe
 import { LAUNCH_ENTITY_TYPES, parseLaunchFromEntityInput } from "@/lib/pos/packet/launchFromEntity";
 import { type RecordPickerOption } from "@/lib/pos/packet/recordPickerOptions";
 
+/**
+ * Keyboard focus, in the surface's own colour.
+ *
+ * Every control in this picker had NO focus style, so a keyboard user got Chrome's default ring —
+ * `rgb(0, 95, 204)`, measured — which was the only blue interactive treatment left anywhere in the
+ * packet's distribution section. The visible-colour audit missed it entirely because an unfocused
+ * element has nothing to report; it only appears once something is focused.
+ */
+const FOCUS_RING =
+    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-bend-pine/40";
+
 const LAUNCH_TYPE_LABELS: Record<(typeof LAUNCH_ENTITY_TYPES)[number], string> = {
     opportunity: "Lead / opportunity",
     customer: "Household / customer",
@@ -215,7 +226,7 @@ export default function RecordLaunchPicker({
                         clear();
                         setManual((m) => !m);
                     }}
-                    className="text-[10px] font-medium text-stone-500 underline decoration-dotted hover:text-stone-700"
+                    className={`rounded-sm text-[10px] font-medium text-stone-500 underline decoration-dotted hover:text-stone-700 ${FOCUS_RING}`}
                 >
                     {manual ? "Search instead" : "Enter ID manually"}
                 </button>
@@ -227,7 +238,11 @@ export default function RecordLaunchPicker({
                         <span className="truncate font-medium">{value.label}</span>
                         <span className="shrink-0 text-alloy-bend-pine">· {value.sublabel ?? value.entity_type}</span>
                     </span>
-                    <button type="button" onClick={clear} className="text-[10.5px] font-medium text-stone-500 hover:text-stone-700">
+                    <button
+                        type="button"
+                        onClick={clear}
+                        className={`rounded-sm text-[10.5px] font-medium text-stone-500 hover:text-stone-700 ${FOCUS_RING}`}
+                    >
                         Change
                     </button>
                 </div>
@@ -237,7 +252,7 @@ export default function RecordLaunchPicker({
                         <select
                             value={manualType}
                             onChange={(e) => applyManual(e.target.value, manualId)}
-                            className="rounded border border-stone-200 bg-white px-1.5 py-0.5 text-[11px] text-stone-700"
+                            className={`rounded border border-stone-200 bg-white px-1.5 py-0.5 text-[11px] text-stone-700 ${FOCUS_RING}`}
                         >
                             <option value="">None</option>
                             {LAUNCH_ENTITY_TYPES.map((t) => (
@@ -252,7 +267,7 @@ export default function RecordLaunchPicker({
                             onChange={(e) => applyManual(manualType, e.target.value)}
                             placeholder="record id (UUID)"
                             disabled={!manualType}
-                            className="min-w-0 flex-1 rounded border border-stone-200 bg-white px-2 py-0.5 font-mono text-[10.5px] text-stone-700 disabled:bg-stone-100"
+                            className={`min-w-0 flex-1 rounded border border-stone-200 bg-white px-2 py-0.5 font-mono text-[10.5px] text-stone-700 disabled:bg-stone-100 ${FOCUS_RING}`}
                         />
                     </div>
                     {manualErr ? <p className="mt-1 text-[10px] text-amber-700">{manualErr}</p> : null}
@@ -264,7 +279,7 @@ export default function RecordLaunchPicker({
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="Search a lead, parent, child, or household by name…"
-                        className="w-full rounded border border-stone-200 bg-white px-2 py-1 text-[11.5px] text-stone-700"
+                        className={`w-full rounded border border-stone-200 bg-white px-2 py-1 text-[11.5px] text-stone-700 ${FOCUS_RING}`}
                     />
                     {menuOpen && menuRect && typeof document !== "undefined"
                         ? createPortal(
@@ -302,7 +317,7 @@ export default function RecordLaunchPicker({
                                                   setQuery("");
                                                   setResults(null);
                                               }}
-                                              className="flex w-full flex-col items-start border-b border-stone-100 px-3 py-1.5 text-left last:border-b-0 hover:bg-alloy-bend-pine/[0.07]"
+                                              className={`flex w-full flex-col items-start border-b border-stone-100 px-3 py-1.5 text-left last:border-b-0 hover:bg-alloy-bend-pine/[0.07] ${FOCUS_RING}`}
                                           >
                                               <span className="truncate text-[12px] font-medium text-alloy-midnight">{opt.label}</span>
                                               {opt.sublabel ? <span className="truncate text-[10px] text-stone-400">{opt.sublabel}</span> : null}

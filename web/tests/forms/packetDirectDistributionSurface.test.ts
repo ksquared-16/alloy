@@ -61,6 +61,19 @@ describe("the recipient picker renders where it can be seen", () => {
         expect(src).toContain('role="option"');
     });
 
+    it("gives every control a focus ring in the surface's own colour", () => {
+        /*
+         * The colour audit that cleared this section could not see this: an unfocused element has
+         * no focus colour to report. Every control here had none, so a keyboard user got Chrome's
+         * default ring — measured at rgb(0, 95, 204) — which was the only blue interactive
+         * treatment left in the packet's distribution section.
+         */
+        expect(body).toContain("FOCUS_RING");
+        expect(body).toContain("focus-visible:outline-alloy-bend-pine/40");
+        // The input, the two text buttons, the manual-entry pair and the option rows.
+        expect((body.match(/\$\{FOCUS_RING\}/g) ?? []).length).toBeGreaterThanOrEqual(6);
+    });
+
     it("still asks the canonical CRM typeahead, and only that", () => {
         // The search owner was never the problem; a second implementation would have been one.
         expect(body).toContain("/api/admin/forms/crm-entity-search");
