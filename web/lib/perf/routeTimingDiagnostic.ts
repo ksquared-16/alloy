@@ -120,6 +120,34 @@ export type RouteTimingMarks = {
             health_ms: number | null;
             financials_build_ms: number | null;
         };
+        /**
+         * INSIDE `financials_build_ms`, which Slice 12D measured deployed as the producer long pole
+         * (median 2,423 ms — 89 % of `card_producers_ms`).
+         *
+         * Unlike `producers`, most of these are SERIAL, so they largely do sum. `collectible_ms`
+         * covers a loop, and `collectible_calls` reports how many round trips that loop made, which
+         * is the difference between "one slow read" and "N reads" — two facts that need entirely
+         * different repairs and that a single duration cannot tell apart.
+         *
+         * Whatever these do not explain stays in `unattributed_ms`: the internals are not forced to
+         * sum to the outer span, because a residual is the instrument's own self-check.
+         */
+        financials?: {
+            agreements_ms: number | null;
+            members_ms: number | null;
+            reductions_ms: number | null;
+            charges_ms: number | null;
+            config_ms: number | null;
+            responsibility_ms: number | null;
+            collectible_ms: number | null;
+            collectible_calls: number | null;
+            payments_ms: number | null;
+            payment_views_ms: number | null;
+            merchant_ms: number | null;
+            payment_setup_ms: number | null;
+            payer_candidates_ms: number | null;
+            open_collections_ms: number | null;
+        };
     } | null;
 
     /**
@@ -224,6 +252,99 @@ export function recordProducerSpans(spans: Partial<Record<ProducerSpanName, numb
         marks.route_compose_spans = existing
             ? { ...existing, producers }
             : ({ producers } as never);
+    } catch {
+        /* diagnostics are never load-bearing */
+    }
+}
+
+/** The Financials build spans, by the names the payload carries. */
+export type FinancialsSpanName =
+    | "agreements_ms"
+    | "members_ms"
+    | "reductions_ms"
+    | "charges_ms"
+    | "config_ms"
+    | "responsibility_ms"
+    | "collectible_ms"
+    | "payments_ms"
+    | "payment_views_ms"
+    | "merchant_ms"
+    | "payment_setup_ms"
+    | "payer_candidates_ms"
+    | "open_collections_ms";
+
+/**
+ * A CLOCK FOR THE FINANCIALS BUILD'S INTERNAL BOUNDARIES.
+ *
+ * Slice 12D named `financials_build_ms` the producer long pole but could not say what is inside it:
+ * one 2,423 ms span over roughly fifteen table reads. Choosing a repair from that label is exactly
+ * what Slice 12B did when it called a straddling gap a *prelude*, so this names every awaited
+ * boundary first.
+ *
+ * `count()` exists because one of those boundaries is a LOOP. A duration alone cannot distinguish
+ * a single slow query from N round trips, and those want opposite repairs.
+ *
+ * Inert when the flag is off: `time()` returns the caller's promise untouched.
+ */
+export function financialsClock(): {
+    time: <T>(name: FinancialsSpanName, run: () => PromiseLike<T>) => Promise<T>;
+    count: (name: "collectible_calls", n: number) => void;
+    spans: () => Partial<Record<FinancialsSpanName | "collectible_calls", number>>;
+} {
+    const enabled = routeTimingEnabled();
+    const out: Partial<Record<FinancialsSpanName | "collectible_calls", number>> = {};
+    return {
+        /*
+         * `PromiseLike`, because several of these boundaries await a Supabase query BUILDER rather
+         * than a promise. `Promise.resolve(run())` subscribes to it exactly as `await` would — the
+         * query is issued at the same moment, in the same order — and adds only a microtask hop.
+         */
+        time: <T>(name: FinancialsSpanName, run: () => PromiseLike<T>): Promise<T> => {
+            if (!enabled) return Promise.resolve(run());
+            const started = performance.now();
+            // `finally`, not `then`: a boundary that rejects still consumed the time, and the
+            // caller's own catch must still see the rejection.
+            return Promise.resolve(run()).finally(() => {
+                out[name] = Math.round((out[name] ?? 0) + performance.now() - started);
+            });
+        },
+        count: (name: "collectible_calls", n: number): void => {
+            if (!enabled) return;
+            out[name] = n;
+        },
+        spans: () => out,
+    };
+}
+
+/** Merge the Financials spans into the request's `route_compose_spans`, never replacing it. */
+export function recordFinancialsSpans(
+    spans: Partial<Record<FinancialsSpanName | "collectible_calls", number>>,
+): void {
+    if (!routeTimingEnabled() || Object.keys(spans).length === 0) return;
+    try {
+        const { marks } = routeTimingCollector();
+        const existing = marks.route_compose_spans;
+        const financials = {
+            agreements_ms: spans.agreements_ms ?? null,
+            members_ms: spans.members_ms ?? null,
+            reductions_ms: spans.reductions_ms ?? null,
+            charges_ms: spans.charges_ms ?? null,
+            config_ms: spans.config_ms ?? null,
+            responsibility_ms: spans.responsibility_ms ?? null,
+            collectible_ms: spans.collectible_ms ?? null,
+            collectible_calls: spans.collectible_calls ?? null,
+            payments_ms: spans.payments_ms ?? null,
+            payment_views_ms: spans.payment_views_ms ?? null,
+            merchant_ms: spans.merchant_ms ?? null,
+            payment_setup_ms: spans.payment_setup_ms ?? null,
+            payer_candidates_ms: spans.payer_candidates_ms ?? null,
+            open_collections_ms: spans.open_collections_ms ?? null,
+        };
+        // Same merge discipline as `recordProducerSpans`: the outer compose writes
+        // `route_compose_spans` after this runs, and merges into whatever is already here.
+        marks.route_compose_spans = existing
+            ? { ...existing, financials }
+            : ({ financials } as never);
     } catch {
         /* diagnostics are never load-bearing */
     }

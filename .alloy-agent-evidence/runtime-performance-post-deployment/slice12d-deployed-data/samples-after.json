@@ -1,0 +1,652 @@
+[
+ {
+  "i": 0,
+  "mw": {
+   "t0": "1789675888365",
+   "auth_ms": "5",
+   "admin": "next"
+  },
+  "rt": {
+   "layout_entry_epoch_ms": 1789675888537,
+   "route_meta_ms": 207,
+   "layout_total_ms": 208,
+   "route_compose_spans": {
+    "producers": {
+     "financials_gate_ms": 399,
+     "attendance_ms": 120,
+     "health_ms": 331,
+     "financials_build_ms": 2423
+    },
+    "route_identity_ms": 207,
+    "admin_client_ms": 0,
+    "document_actor_ms": 0,
+    "inner_compose_ms": 2063,
+    "card_producers_ms": 2822
+   },
+   "page_entry_epoch_ms": 1789675888538,
+   "compose_wall_ms": 5092,
+   "seeded": true,
+   "compose_total_ms": 2063,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 0,
+    "configuration_ms": 1,
+    "presentation_ms": 1628,
+    "records_ms": 114,
+    "projection_ms": 825,
+    "composition_ms": 1119,
+    "total_ms": 2063,
+    "spans": {
+     "child_grain_members": 825,
+     "child_grain_waitlist": 431,
+     "child_grain_inquiry": 258,
+     "child_grain_avatar": 688,
+     "composition_ready": 2060,
+     "focus_panel_operational_projection": 3
+    }
+   },
+   "composition_ready_ms": 2060,
+   "page_total_ms": 5092
+  },
+  "spans": {
+   "producers": {
+    "financials_gate_ms": 399,
+    "attendance_ms": 120,
+    "health_ms": 331,
+    "financials_build_ms": 2423
+   },
+   "route_identity_ms": 207,
+   "admin_client_ms": 0,
+   "document_actor_ms": 0,
+   "inner_compose_ms": 2063,
+   "card_producers_ms": 2822
+  },
+  "producers": {
+   "financials_gate_ms": 399,
+   "attendance_ms": 120,
+   "health_ms": 331,
+   "financials_build_ms": 2423
+  },
+  "document": {
+   "ttfb": 855,
+   "duration": 5834,
+   "startRel": 49
+  },
+  "browser_nav": {
+   "start": 0,
+   "duration": 7168,
+   "ttfb": 204,
+   "respEnd": 5835
+  },
+  "outer_unattributed": 0,
+  "phases": {
+   "destination_shell": 1128,
+   "published_structure": 5905,
+   "first_critical": 5905,
+   "last_critical": 5905,
+   "track_a_meaningful": 12898,
+   "final": 12898
+  },
+  "critical_first_meaningful": {
+   "business_process": 5905,
+   "financials": 5905,
+   "attendance": 5905,
+   "health_safety": 5905
+  },
+  "coherence": 0,
+  "cell_timeline": [
+   [
+    1128,
+    0
+   ],
+   [
+    5905,
+    6
+   ]
+  ],
+  "cells_max": 6,
+  "painted_keys": [
+   "attendance",
+   "business_process",
+   "children",
+   "financials",
+   "health_safety",
+   "household"
+  ],
+  "provisioning_reqs": 0,
+  "self_check": {
+   "warmups_excluded": 0,
+   "negative_durations": 0,
+   "doc_playwright": {
+    "duration": 5834,
+    "ttfb": 855
+   },
+   "doc_browser": {
+    "duration": 7168,
+    "ttfb": 204
+   },
+   "doc_agreement_ms": 1334,
+   "route_timing_present": true
+  }
+ },
+ {
+  "i": 1,
+  "mw": {
+   "t0": "1789675923069",
+   "auth_ms": "6",
+   "admin": "next"
+  },
+  "rt": {
+   "layout_entry_epoch_ms": 1789675923231,
+   "route_meta_ms": 205,
+   "layout_total_ms": 205,
+   "route_compose_spans": {
+    "producers": {
+     "financials_gate_ms": 242,
+     "attendance_ms": 130,
+     "health_ms": 513,
+     "financials_build_ms": 2094
+    },
+    "route_identity_ms": 205,
+    "admin_client_ms": 0,
+    "document_actor_ms": 0,
+    "inner_compose_ms": 1550,
+    "card_producers_ms": 2336
+   },
+   "page_entry_epoch_ms": 1789675923231,
+   "compose_wall_ms": 4092,
+   "seeded": true,
+   "compose_total_ms": 1550,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 0,
+    "configuration_ms": 2,
+    "presentation_ms": 1286,
+    "records_ms": 134,
+    "projection_ms": 509,
+    "composition_ms": 893,
+    "total_ms": 1550,
+    "spans": {
+     "child_grain_members": 509,
+     "child_grain_waitlist": 410,
+     "child_grain_inquiry": 225,
+     "child_grain_avatar": 635,
+     "composition_ready": 1546,
+     "focus_panel_operational_projection": 3
+    }
+   },
+   "composition_ready_ms": 1546,
+   "page_total_ms": 4092
+  },
+  "spans": {
+   "producers": {
+    "financials_gate_ms": 242,
+    "attendance_ms": 130,
+    "health_ms": 513,
+    "financials_build_ms": 2094
+   },
+   "route_identity_ms": 205,
+   "admin_client_ms": 0,
+   "document_actor_ms": 0,
+   "inner_compose_ms": 1550,
+   "card_producers_ms": 2336
+  },
+  "producers": {
+   "financials_gate_ms": 242,
+   "attendance_ms": 130,
+   "health_ms": 513,
+   "financials_build_ms": 2094
+  },
+  "document": {
+   "ttfb": 593,
+   "duration": 4567,
+   "startRel": 1
+  },
+  "browser_nav": {
+   "start": 0,
+   "duration": 5148,
+   "ttfb": 124,
+   "respEnd": 4567
+  },
+  "outer_unattributed": 1,
+  "phases": {
+   "destination_shell": 838,
+   "published_structure": 4619,
+   "first_critical": 4619,
+   "last_critical": 4619,
+   "track_a_meaningful": 13540,
+   "final": 13540
+  },
+  "critical_first_meaningful": {
+   "business_process": 4619,
+   "financials": 4619,
+   "attendance": 4619,
+   "health_safety": 4619
+  },
+  "coherence": 0,
+  "cell_timeline": [
+   [
+    838,
+    0
+   ],
+   [
+    4619,
+    6
+   ]
+  ],
+  "cells_max": 6,
+  "painted_keys": [
+   "attendance",
+   "business_process",
+   "children",
+   "financials",
+   "health_safety",
+   "household"
+  ],
+  "provisioning_reqs": 0,
+  "self_check": {
+   "warmups_excluded": 0,
+   "negative_durations": 0,
+   "doc_playwright": {
+    "duration": 4567,
+    "ttfb": 593
+   },
+   "doc_browser": {
+    "duration": 5148,
+    "ttfb": 124
+   },
+   "doc_agreement_ms": 581,
+   "route_timing_present": true
+  }
+ },
+ {
+  "i": 2,
+  "mw": {
+   "t0": "1789675957774",
+   "auth_ms": "6",
+   "admin": "next"
+  },
+  "rt": {
+   "layout_entry_epoch_ms": 1789675957954,
+   "route_meta_ms": 574,
+   "layout_total_ms": 574,
+   "route_compose_spans": {
+    "producers": {
+     "financials_gate_ms": 101,
+     "attendance_ms": 104,
+     "health_ms": 345,
+     "financials_build_ms": 2343
+    },
+    "route_identity_ms": 573,
+    "admin_client_ms": 0,
+    "document_actor_ms": 0,
+    "inner_compose_ms": 1714,
+    "card_producers_ms": 2445
+   },
+   "page_entry_epoch_ms": 1789675957954,
+   "compose_wall_ms": 4732,
+   "seeded": true,
+   "compose_total_ms": 1714,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 0,
+    "configuration_ms": 1,
+    "presentation_ms": 1460,
+    "records_ms": 124,
+    "projection_ms": 536,
+    "composition_ms": 1046,
+    "total_ms": 1714,
+    "spans": {
+     "child_grain_members": 536,
+     "child_grain_waitlist": 582,
+     "child_grain_inquiry": 216,
+     "child_grain_avatar": 798,
+     "composition_ready": 1709,
+     "focus_panel_operational_projection": 5
+    }
+   },
+   "composition_ready_ms": 1709,
+   "page_total_ms": 4733
+  },
+  "spans": {
+   "producers": {
+    "financials_gate_ms": 101,
+    "attendance_ms": 104,
+    "health_ms": 345,
+    "financials_build_ms": 2343
+   },
+   "route_identity_ms": 573,
+   "admin_client_ms": 0,
+   "document_actor_ms": 0,
+   "inner_compose_ms": 1714,
+   "card_producers_ms": 2445
+  },
+  "producers": {
+   "financials_gate_ms": 101,
+   "attendance_ms": 104,
+   "health_ms": 345,
+   "financials_build_ms": 2343
+  },
+  "document": {
+   "ttfb": 953,
+   "duration": 5237,
+   "startRel": 2
+  },
+  "browser_nav": {
+   "start": 0,
+   "duration": 6011,
+   "ttfb": 122,
+   "respEnd": 5237
+  },
+  "outer_unattributed": 0,
+  "phases": {
+   "destination_shell": 1297,
+   "published_structure": 5342,
+   "first_critical": 5342,
+   "last_critical": 5342,
+   "track_a_meaningful": 12743,
+   "final": 12743
+  },
+  "critical_first_meaningful": {
+   "business_process": 5342,
+   "financials": 5342,
+   "attendance": 5342,
+   "health_safety": 5342
+  },
+  "coherence": 0,
+  "cell_timeline": [
+   [
+    1297,
+    0
+   ],
+   [
+    5342,
+    6
+   ]
+  ],
+  "cells_max": 6,
+  "painted_keys": [
+   "attendance",
+   "business_process",
+   "children",
+   "financials",
+   "health_safety",
+   "household"
+  ],
+  "provisioning_reqs": 0,
+  "self_check": {
+   "warmups_excluded": 0,
+   "negative_durations": 0,
+   "doc_playwright": {
+    "duration": 5237,
+    "ttfb": 953
+   },
+   "doc_browser": {
+    "duration": 6011,
+    "ttfb": 122
+   },
+   "doc_agreement_ms": 774,
+   "route_timing_present": true
+  }
+ },
+ {
+  "i": 3,
+  "mw": {
+   "t0": "1789675992877",
+   "auth_ms": "5",
+   "admin": "next"
+  },
+  "rt": {
+   "layout_entry_epoch_ms": 1789675992975,
+   "route_meta_ms": 140,
+   "layout_total_ms": 140,
+   "route_compose_spans": {
+    "producers": {
+     "financials_gate_ms": 234,
+     "attendance_ms": 141,
+     "health_ms": 341,
+     "financials_build_ms": 2807
+    },
+    "route_identity_ms": 140,
+    "admin_client_ms": 0,
+    "document_actor_ms": 0,
+    "inner_compose_ms": 1833,
+    "card_producers_ms": 3042
+   },
+   "page_entry_epoch_ms": 1789675992975,
+   "compose_wall_ms": 5015,
+   "seeded": true,
+   "compose_total_ms": 1833,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 0,
+    "configuration_ms": 3,
+    "presentation_ms": 1585,
+    "records_ms": 107,
+    "projection_ms": 536,
+    "composition_ms": 1182,
+    "total_ms": 1833,
+    "spans": {
+     "child_grain_members": 536,
+     "child_grain_waitlist": 529,
+     "child_grain_inquiry": 411,
+     "child_grain_avatar": 940,
+     "composition_ready": 1829,
+     "focus_panel_operational_projection": 4
+    }
+   },
+   "composition_ready_ms": 1829,
+   "page_total_ms": 5015
+  },
+  "spans": {
+   "producers": {
+    "financials_gate_ms": 234,
+    "attendance_ms": 141,
+    "health_ms": 341,
+    "financials_build_ms": 2807
+   },
+   "route_identity_ms": 140,
+   "admin_client_ms": 0,
+   "document_actor_ms": 0,
+   "inner_compose_ms": 1833,
+   "card_producers_ms": 3042
+  },
+  "producers": {
+   "financials_gate_ms": 234,
+   "attendance_ms": 141,
+   "health_ms": 341,
+   "financials_build_ms": 2807
+  },
+  "document": {
+   "ttfb": 485,
+   "duration": 5416,
+   "startRel": 3
+  },
+  "browser_nav": {
+   "start": 0,
+   "duration": 6483,
+   "ttfb": 132,
+   "respEnd": 5416
+  },
+  "outer_unattributed": 0,
+  "phases": {
+   "destination_shell": 1486,
+   "published_structure": 5521,
+   "first_critical": 5521,
+   "last_critical": 5521,
+   "track_a_meaningful": 12360,
+   "final": 12360
+  },
+  "critical_first_meaningful": {
+   "business_process": 5521,
+   "financials": 5521,
+   "attendance": 5521,
+   "health_safety": 5521
+  },
+  "coherence": 0,
+  "cell_timeline": [
+   [
+    605,
+    0
+   ],
+   [
+    5521,
+    6
+   ]
+  ],
+  "cells_max": 6,
+  "painted_keys": [
+   "attendance",
+   "business_process",
+   "children",
+   "financials",
+   "health_safety",
+   "household"
+  ],
+  "provisioning_reqs": 0,
+  "self_check": {
+   "warmups_excluded": 0,
+   "negative_durations": 0,
+   "doc_playwright": {
+    "duration": 5416,
+    "ttfb": 485
+   },
+   "doc_browser": {
+    "duration": 6483,
+    "ttfb": 132
+   },
+   "doc_agreement_ms": 1067,
+   "route_timing_present": true
+  }
+ },
+ {
+  "i": 4,
+  "mw": {
+   "t0": "1789676027482",
+   "auth_ms": "4",
+   "admin": "next"
+  },
+  "rt": {
+   "layout_entry_epoch_ms": 1789676027641,
+   "route_meta_ms": 160,
+   "layout_total_ms": 160,
+   "route_compose_spans": {
+    "producers": {
+     "financials_gate_ms": 196,
+     "attendance_ms": 111,
+     "health_ms": 349,
+     "financials_build_ms": 2521
+    },
+    "route_identity_ms": 159,
+    "admin_client_ms": 0,
+    "document_actor_ms": 0,
+    "inner_compose_ms": 2021,
+    "card_producers_ms": 2718
+   },
+   "page_entry_epoch_ms": 1789676027641,
+   "compose_wall_ms": 4898,
+   "seeded": true,
+   "compose_total_ms": 2021,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 0,
+    "configuration_ms": 1,
+    "presentation_ms": 1779,
+    "records_ms": 98,
+    "projection_ms": 669,
+    "composition_ms": 1249,
+    "total_ms": 2021,
+    "spans": {
+     "child_grain_members": 669,
+     "child_grain_waitlist": 516,
+     "child_grain_inquiry": 494,
+     "child_grain_avatar": 1011,
+     "composition_ready": 2019,
+     "focus_panel_operational_projection": 2
+    }
+   },
+   "composition_ready_ms": 2019,
+   "page_total_ms": 4898
+  },
+  "spans": {
+   "producers": {
+    "financials_gate_ms": 196,
+    "attendance_ms": 111,
+    "health_ms": 349,
+    "financials_build_ms": 2521
+   },
+   "route_identity_ms": 159,
+   "admin_client_ms": 0,
+   "document_actor_ms": 0,
+   "inner_compose_ms": 2021,
+   "card_producers_ms": 2718
+  },
+  "producers": {
+   "financials_gate_ms": 196,
+   "attendance_ms": 111,
+   "health_ms": 349,
+   "financials_build_ms": 2521
+  },
+  "document": {
+   "ttfb": 644,
+   "duration": 5422,
+   "startRel": 1
+  },
+  "browser_nav": {
+   "start": 0,
+   "duration": 6576,
+   "ttfb": 155,
+   "respEnd": 5422
+  },
+  "outer_unattributed": 0,
+  "phases": {
+   "destination_shell": 862,
+   "published_structure": 5470,
+   "first_critical": 5470,
+   "last_critical": 5470,
+   "track_a_meaningful": 11856,
+   "final": 11856
+  },
+  "critical_first_meaningful": {
+   "business_process": 5470,
+   "financials": 5470,
+   "attendance": 5470,
+   "health_safety": 5470
+  },
+  "coherence": 0,
+  "cell_timeline": [
+   [
+    862,
+    0
+   ],
+   [
+    5470,
+    6
+   ]
+  ],
+  "cells_max": 6,
+  "painted_keys": [
+   "attendance",
+   "business_process",
+   "children",
+   "financials",
+   "health_safety",
+   "household"
+  ],
+  "provisioning_reqs": 0,
+  "self_check": {
+   "warmups_excluded": 0,
+   "negative_durations": 0,
+   "doc_playwright": {
+    "duration": 5422,
+    "ttfb": 644
+   },
+   "doc_browser": {
+    "duration": 6576,
+    "ttfb": 155
+   },
+   "doc_agreement_ms": 1154,
+   "route_timing_present": true
+  }
+ }
+]
