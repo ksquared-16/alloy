@@ -1770,19 +1770,24 @@ describe("F41 · a bounded summary is not a ledger", () => {
      * the same whatever the rows say — and the ledger region waits for its own authority rather than
      * showing a partial cohort. `deepLoadedForRef` already knew which account had been read in full.
      */
-    it("waits for the full read before showing rows as the ledger", () => {
+    it("never presents rows it has not read as the ledger", () => {
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
-        expect(card, "completeness is decided from the deep read, not from having any rows").toMatch(
-            /ledgerComplete\s*=\s*deepLoadedForRef\.current === \(customerId \?\? scopedMemberId\)/,
-        );
         /*
-         * 5K STRENGTHENED THIS. It used to be enough that Details was TOLD its ledger was not yet
-         * authoritative and reserved the region. The operator still arrived at a Details surface
-         * that then filled in, which is the defect. The fact locked now is that Details cannot be
-         * reached at all until the read has resolved — see F44.
+         * ── THE GUARANTEE MOVED, THE FACT DID NOT ────────────────────────────────────────────
+         *
+         * This used to require that Details WAIT for the full read. Mounted review rejected the
+         * wait: every other Focus Panel card establishes its depth immediately, and Financials sat
+         * on the compact card instead. Details now opens at once.
+         *
+         * What may never happen is unchanged and is the only thing that ever mattered: the bounded
+         * projection must not be shown AS the ledger. The surface commits its known shell and the
+         * ledger region alone reports that it is still reading.
          */
-        expect(card, "and Details cannot be entered before that read has resolved").toMatch(
-            /overlay === "detail" &&[^\n]*ledgerComplete/,
+        expect(card, "the ledger region knows when it is not authoritative").toMatch(
+            /ledgerPending=\{!ledgerComplete\}/,
+        );
+        expect(card, "and authority is still the completed deep read").toMatch(
+            /ledgerComplete = deepLoadedForRef\.current === \(customerId \?\? scopedMemberId\)/,
         );
     });
 
@@ -1823,29 +1828,18 @@ describe("F43 · Due is the actionable figure, and the commands are peers", () =
         expect(compact).toMatch(/label="Balance" value=\{period\.currentBalance\}/);
     });
 
-    it("gives Payment and Add one grammar", () => {
+    it("gives Payment and Add the canonical command primitive", () => {
         const compact = code("components/operationalCards/FinancialsCard.tsx");
         /*
-         * ── SUPERSEDED, DELIBERATELY ──────────────────────────────────────────────────────────
-         *
-         * This asserted that the two BUTTONS shared one geometry — matched height, min-width,
-         * radius and type size — which was the right fact while the compact card carried buttons.
-         * Mounted review replaced them: a compact card is context beside another process, so its
-         * actions are contextual links, and the operational buttons stay on the focused Details and
-         * workspace surfaces where the operator has come to work the account.
-         *
-         * Peerage is now structural rather than measured. One primitive renders all three, so they
-         * cannot drift into different treatments the way a filled button, a quiet button and an
-         * underlined link already had.
+         * Commands mutate money and navigation does not, so they do not share a treatment: Payment
+         * and Add are buttons through the SAME closed `Action` primitive the focused Details surface
+         * uses — which is what keeps the two surfaces from growing two button vocabularies — and
+         * Details stays a quiet link.
          */
-        expect(compact, "one primitive renders every compact action").toMatch(/function CardLink\(props: \{/);
-        for (const control of ["onAddCharge", "onPayNow", "onDetails"]) {
-            expect(compact, `${control} is rendered through it`).toMatch(
-                new RegExp(`<CardLink onClick=\\{${control}`),
-            );
-        }
-        expect(compact, "the compact card carries no button cluster").not.toMatch(
-            /alloy-os-billing__commands/,
+        expect(compact, "Payment is the primary").toMatch(/<Action primary onClick=\{onPayNow\}/);
+        expect(compact, "Add is its secondary peer").toMatch(/<Action onClick=\{onAddCharge\}/);
+        expect(compact, "and navigation is not a button").toMatch(
+            /<CardLink onClick=\{onDetails\}[^>]*nav/,
         );
     });
 
@@ -1869,11 +1863,10 @@ describe("F44 · no visible partial Details", () => {
      * Details. The fact is structural: a Details destination may not be RENDERED until the deep
      * read its ledger depends on has resolved.
      */
-    it("guards the only Details branch on the resolved deep read", () => {
+    it("has exactly one Details branch, and it is the final anatomy", () => {
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
         const branches = card.match(/if \(overlay === "detail"[^)]*\)/g) ?? [];
-        expect(branches, "there is exactly one Details branch").toHaveLength(1);
-        expect(branches[0], "and it cannot render without the completed read").toMatch(/ledgerComplete/);
+        expect(branches, "one Details branch, not a pending one and a real one").toHaveLength(1);
     });
 
     it("has no skeleton Details surface left to fall into", () => {
@@ -1884,15 +1877,17 @@ describe("F44 · no visible partial Details", () => {
         );
     });
 
-    it("holds the request instead, and keeps the compact card on screen", () => {
+    it("establishes the depth immediately, and reads ahead so it is usually ready", () => {
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
-        expect(card, "the click records a request").toMatch(/setDetailPending\(true\)/);
-        expect(card, "which becomes the surface only once the read is ready").toMatch(
-            /if \(!detailPending \|\| !detailReady\) return;[\s\S]{0,160}kind: "detail"/,
+        /*
+         * The click no longer waits on the read: the shell is known the moment it is asked for. And
+         * the read starts while the compact card is still on screen, so by the time anyone clicks it
+         * has usually landed — the sanctioned idle prefetch, never a reveal gate.
+         */
+        expect(card, "the click commits the surface").toMatch(
+            /const requestDetails = useCallback\(\(\) => \{[\s\S]{0,900}setStack\(\[\{ kind: "detail" \}\]\)/,
         );
-        expect(card, "and readiness includes the ledger's own authority").toMatch(
-            /detailReady = Boolean\(vm && reconciliation && ledgerComplete\)/,
-        );
+        expect(card, "and the deep read is already running by then").toMatch(/requestIdleCallback/);
     });
 });
 
@@ -2012,23 +2007,16 @@ describe("F46 · Reverse and Adjust use the canonical command shell", () => {
 describe("F47 · the compact commands stay inside the card", () => {
     it("puts each action with the story it belongs to", () => {
         const compact = code("components/operationalCards/FinancialsCard.tsx");
-        /*
-         * The cluster is gone, so the width it needed is no longer a question anyone has to answer.
-         * Add creates obligation activity and sits at the foot of that column; Payment belongs to
-         * the payment position and sits at the foot of that one; Details is navigation for the whole
-         * card and sits at its lower-right edge.
-         */
         const left = compact.slice(compact.indexOf('zone-head">Current period'), compact.indexOf("alloy-os-billing__collect"));
-        expect(left, "Add sits with the obligation story").toMatch(/<CardLink onClick=\{onAddCharge/);
+        expect(left, "Add sits with the obligation story").toMatch(/<Action onClick=\{onAddCharge\}/);
         const right = compact.slice(compact.indexOf("alloy-os-billing__collect"), compact.indexOf("alloy-os-billing__nav"));
-        expect(right, "Payment sits with the payment position").toMatch(/<CardLink onClick=\{onPayNow/);
-        expect(compact, "and navigation has its own edge").toMatch(
-            /alloy-os-billing__nav[\s\S]{0,220}<CardLink onClick=\{onDetails[^>]*nav/,
+        expect(right, "Payment sits with the payment position").toMatch(/<Action primary onClick=\{onPayNow\}/);
+        expect(compact, "and navigation has the card's own edge").toMatch(
+            /alloy-os-billing__nav[\s\S]{0,260}<CardLink onClick=\{onDetails/,
         );
         const css = read("app/adminV2/components/operationalCardsShared.css");
-        expect(css, "the links are Bend Pine and undecorated").toMatch(
-            /\.alloy-os-billing__cardlink \{[\s\S]{0,420}text-decoration:\s*none/,
-        );
+        /* Each command is anchored to its column by a rule of that column's width — not a footer. */
+        expect(css).toMatch(/\.alloy-os-billing__zone-action \{[\s\S]{0,700}border-top:/);
     });
 
     it("keeps the column gap from eating the figure", () => {
@@ -2049,24 +2037,14 @@ describe("F47 · the compact commands stay inside the card", () => {
         expect(size, "still the largest figure in its zone").toBeGreaterThan(1);
     });
 
-    it("gives every compact action the same arrow, and keeps it out of the name", () => {
+    it("keeps the navigation arrow out of the accessible name", () => {
         const compact = code("components/operationalCards/FinancialsCard.tsx");
         /*
-         * ── REVERSED ON PURPOSE ───────────────────────────────────────────────────────────────
-         *
-         * This used to forbid arrow glyphs, which was right when the card mixed two buttons with an
-         * arrowed link and the arrow was one of the three competing signals. The decision now is the
-         * opposite and for the same reason: ONE grammar, and that grammar has an arrow.
-         *
-         * What survives from the old rule is the part that was always true — the glyph is decoration
-         * and must never become part of an accessible name. The control is "Add", not "Add →".
+         * The arrow belongs to navigation only, and it is decoration wherever it appears: the
+         * control is "Details", never "Details right-arrow".
          */
-        expect(compact, "the arrow is rendered once, by the shared primitive").toMatch(
-            /aria-hidden className="alloy-os-billing__cardlink-arrow">→<\/span>/,
-        );
-        const labels = compact.match(/<CardLink[^>]*>\s*\{?\s*([A-Za-z]+)/g) ?? [];
-        expect(labels.length, "all three actions go through it").toBeGreaterThanOrEqual(3);
-        expect(compact, "and no label carries its own glyph").not.toMatch(/>\s*(Add|Payment|Details)\s*→/);
+        expect(compact).toMatch(/aria-hidden className="alloy-os-billing__cardlink-arrow">→<\/span>/);
+        expect(compact, "no label carries its own glyph").not.toMatch(/>\s*(Add|Payment|Details)\s*→/);
     });
 });
 

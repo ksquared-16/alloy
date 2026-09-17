@@ -5430,6 +5430,32 @@ html[data-alloy-os-runtime-split="true"]
   flex: 1 1 auto;
   min-height: 0;
 }
+/*
+ * ── AND THE SAME, FOR EVERY CARD, AT ANY WRAPPER DEPTH ──
+ *
+ * The rule above is correct and names ONE card. Measured on the mounted work-unit lane, the cards
+ * it does not name were short by exactly the room their own bands had already reserved: Attendance
+ * cell 171 / card 162, Health & Safety cell 205 / card 196 — together the 18px by which the stacked
+ * column failed to reach Children.
+ *
+ * The cause is that cards render different numbers of placement wrappers (Process one, these two)
+ * and every version of this repair so far enumerated levels. So depth is not counted here: whatever
+ * directly wraps a card takes the room, and the card takes it too. No card is named, no height is
+ * invented — 100% of a box the solver sized — internal content stays intrinsic, and elevated cells
+ * are excluded because a focused card is sized by the depth layer rather than by its resting band.
+ *
+ * Measured after: 1680 attendance 171 + gap 10 + health 205 = 386 = Children 386; 1280 162 + 10 +
+ * 255 = 427 = 427; Enrollment = Financials at 304/304 and 337/337.
+ */
+.alloy-os-fp-card-intrinsic
+  > .alloy-os-focus-panel-grid__cell:not([data-fp-elevated="true"])
+  :has(> .alloy-os-ucard),
+.alloy-os-fp-card-intrinsic
+  > .alloy-os-focus-panel-grid__cell:not([data-fp-elevated="true"])
+  .alloy-os-ucard {
+  height: 100%;
+}
+
 
 /* ── Row-based Experience Builder ── */
 .alloy-os-rlb {

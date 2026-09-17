@@ -11,8 +11,13 @@ test("ancestor walk", async ({ page }) => {
     await page.locator('[data-financials-card="true"]').first().waitFor({ state: "visible", timeout: 180_000 });
     await page.waitForTimeout(9_000);
     /* Real nesting, bottom-up, so no assumption about which wrapper sits where survives. */
-    log("WALK " + JSON.stringify(await page.evaluate(() => {
-        const card = document.querySelector('[data-universal-card-key="business_process"]') as HTMLElement | null;
+  for (const w of [1680, 1280]) {
+    await page.setViewportSize({ width: w, height: 1050 });
+    await page.waitForTimeout(2_500);
+    for (const key of ["children", "attendance", "health_safety"]) {
+    await page.evaluate((k) => { (window as unknown as { __k: string }).__k = k; }, key);
+    log(`WALK_${w}_${key} ` + JSON.stringify(await page.evaluate(() => {
+        const card = document.querySelector(`[data-universal-card-key="${(window as unknown as { __k: string }).__k}"]`) as HTMLElement | null;
         const out: string[] = [];
         let n: HTMLElement | null = card;
         for (let i = 0; n && i < 8; i += 1) {
@@ -31,4 +36,6 @@ test("ancestor walk", async ({ page }) => {
         }
         return out;
     }), null, 1));
+    }
+  }
 }); 
