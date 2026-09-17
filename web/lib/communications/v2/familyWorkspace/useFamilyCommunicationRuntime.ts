@@ -46,6 +46,12 @@ import {
 import { provisionTourInvitationPrepare } from "@/lib/tours/tourInvitationPrepareWarmCache";
 import { resolveFamilyComposeIntent } from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
 import { invalidateTourInvitationPrepare } from "@/lib/tours/tourInvitationPrepareWarmCache";
+import {
+    classifyFamilySendOutcome,
+    familySendDelivered,
+    familySendFailureMessage,
+    familySendPartialMessage,
+} from "@/lib/communications/v2/familyWorkspace/familySendOutcome";
 
 export type FamilyRuntimeTimelineMessage = {
     id?: string | null;
@@ -562,27 +568,74 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                 if (confirm) {
                     const scope = resolveFamilyRuntimeInvalidateScope(input);
                     if (scope) invalidateDrawerFamilyWorkspaceCache(scope);
+
+                    /*
+                     * ── HTTP SUCCESS IS NOT DELIVERY ──
+                     *
+                     * The only failure branch here was `!res.ok`, so a 200 carrying
+                     * `sent: 0, failed: 1` walked into the success path: the operator was told
+                     * "Email sent to Tourb Tourb0913" for a message that never left, and the
+                     * post-send `mark_sent` below recorded an audit event for a delivery that did
+                     * not happen. Measured live, with the public-origin guard correctly refusing a
+                     * participant link pointing at localhost.
+                     *
+                     * The verdict comes from the summary the canonical send owner returns, read
+                     * through the one classifier that owns it — never from the status code.
+                     */
+                    const outcome = classifyFamilySendOutcome(data.summary);
+                    if (outcome === "total_failure" || outcome === "nothing_requested") {
+                        /*
+                         * The draft SURVIVES. The operator has a reachability or consent problem to
+                         * correct and then a message to retry; throwing away what they wrote would
+                         * make a delivery failure cost them their words as well.
+                         */
+                        setSendError(familySendFailureMessage(data.results));
+                        return;
+                    }
+
                     const sentRows = data.results.filter((r) => r.status === "sent");
                     const rosterName =
                         vm?.recipientGroups
                             .flatMap((g) => g.recipients)
                             .find((r) => selectedRecipientIds.includes(r.id))?.displayName
                         ?? null;
-                    const recipientLabel =
-                        sentRows[0]?.display_name
-                        ?? rosterName
-                        ?? null;
-                    const successMessage = buildContactFamilySendSuccessMessage({
-                        channel: liveChannel,
-                        recipientLabel,
-                    });
+                    /*
+                     * Named from a row that ACTUALLY SENT. The roster fallback is why the false
+                     * success could name a recipient at all — with nothing delivered, `sentRows` was
+                     * empty and the label came from whoever was selected. It stays as a fallback for
+                     * a delivered row whose display name is missing, and cannot be reached when
+                     * nothing was delivered because that case has already returned.
+                     */
+                    const recipientLabel = sentRows[0]?.display_name ?? rosterName ?? null;
+                    const successMessage =
+                        outcome === "partial_delivery"
+                            ? familySendPartialMessage({ channel: liveChannel, summary: data.summary })
+                            : buildContactFamilySendSuccessMessage({
+                                  channel: liveChannel,
+                                  recipientLabel,
+                              });
                     const tourInvitationId = tourInvitationIdRef.current;
                     const wasTourInvitation = Boolean(tourInvitationId);
                     if (wasTourInvitation) setTourInvitationAck(true);
 
                     if (fromCurrentWork) {
-                        // Keep success result for centered acknowledgement; close workspace on Done.
-                        if (tourInvitationId && opportunityId) {
+                        /*
+                         * ── AN AUDIT OF DELIVERY MUST FOLLOW DELIVERY ──
+                         *
+                         * `mark_sent` records that a family WAS contacted. It ran as soon as the send
+                         * request completed, so a refused delivery still produced an audit event
+                         * saying the message went out — the operator-intent trail and the delivery
+                         * trail disagreed, and the trail was the one that was wrong.
+                         *
+                         * The rule is the canonical send route's own: `sent > 0`. Partial delivery
+                         * qualifies, because contact genuinely occurred for at least one recipient,
+                         * which is exactly what the route already applies to its contact-attempt
+                         * association. Total failure returned above and never reaches here; the
+                         * guard is stated anyway, because an invariant that depends on an early
+                         * return several lines away is one refactor from being lost.
+                         */
+                        const delivered = familySendDelivered(data.summary);
+                        if (tourInvitationId && opportunityId && delivered) {
                             try {
                                 await fetch("/api/admin/actions/execute", {
                                     method: "POST",
@@ -611,7 +664,9 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
 
                         const paperworkSessionId = paperworkSessionIdRef.current;
                         const paperworkChildId = paperworkChildIdRef.current;
-                        if (paperworkSessionId && paperworkChildId) {
+                        // Same rule, same reason: the paperwork audit records a delivery, so it may
+                        // only be written when one occurred.
+                        if (paperworkSessionId && paperworkChildId && delivered) {
                             try {
                                 await fetch("/api/admin/actions/execute", {
                                     method: "POST",
