@@ -70,8 +70,10 @@ import {
 } from "@/lib/admin/permissionGrid";
 import { OPERATOR_LEVEL_LABEL } from "@/lib/access/roleAuthoritySummary";
 import {
+    AREA_PRESET_LEVEL_LABEL,
     applyAreaPreset,
     areaLevelLabel,
+    fullAccessExplanation,
     buildCapabilityMatrix,
     normalModeMatrix,
     heldMatrixAreas,
@@ -666,7 +668,14 @@ export default function AccessRolesConfigurationPage({
                                                             <th className="px-3 py-2 font-semibold">Area</th>
                                                             <th className="w-24 px-3 py-2 text-center font-semibold">No access</th>
                                                             <th className="w-20 px-3 py-2 text-center font-semibold">View</th>
-                                                            <th className="w-24 px-3 py-2 text-center font-semibold">Manage</th>
+                                                            {/*
+                                                              * The AREA column, so it carries the
+                                                              * area's word. A capability row's own
+                                                              * `Manage` is still `Manage` — renaming
+                                                              * that would make the narrow control
+                                                              * read as the wide one.
+                                                              */}
+                                                            <th className="w-24 px-3 py-2 text-center font-semibold">Full access</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -721,7 +730,11 @@ export default function AccessRolesConfigurationPage({
                                                                                             onChange={() => setAreaLevel(area, opt)}
                                                                                             data-testid={`access-role-area-${area.areaKey}-${opt}`}
                                                                                         />
-                                                                                        <span className="sr-only">{OPERATOR_LEVEL_LABEL[opt]}</span>
+                                                                                        <span className="sr-only">
+                                                                                            {opt === "write" ?
+                                                                                                fullAccessExplanation(area)
+                                                                                            :   `${AREA_PRESET_LEVEL_LABEL[opt]} — ${area.label}`}
+                                                                                        </span>
                                                                                     </label>
                                                                                 :   <span className="text-alloy-midnight/25" aria-label="Not available for this area">—</span>
                                                                                 }
@@ -736,6 +749,28 @@ export default function AccessRolesConfigurationPage({
                                                                       * operator sees — and sets —
                                                                       * the capabilities it summarises.
                                                                       */}
+                                                                    {/*
+                                                                      * WHAT `Full access` COSTS, said
+                                                                      * before it is chosen. The count
+                                                                      * is the part an administrator
+                                                                      * can check against what they
+                                                                      * meant; the sentence names the
+                                                                      * sharp consequence where the
+                                                                      * area's own name does not
+                                                                      * predict it.
+                                                                      */}
+                                                                    {expanded ?
+                                                                        <tr className="border-t border-alloy-stone/10 bg-alloy-stone/5">
+                                                                            <td
+                                                                                colSpan={4}
+                                                                                className="py-1.5 pl-9 pr-3 text-[11px] text-alloy-midnight/55"
+                                                                                data-testid={`access-role-area-${area.areaKey}-full-access-note`}
+                                                                            >
+                                                                                {fullAccessExplanation(area)}
+                                                                            </td>
+                                                                        </tr>
+                                                                    :   null}
+
                                                                     {expanded ?
                                                                         area.rows.map((row) => {
                                                                             const level = levelFromGrantedKeys(row, grantKeys);

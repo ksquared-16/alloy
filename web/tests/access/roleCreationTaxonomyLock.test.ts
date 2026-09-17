@@ -59,7 +59,6 @@ const CATALOG: PermissionCatalogEntry[] = DISCOVERED.filter((e) => !!e.group_key
     key: e.key,
     label: e.label ?? e.key,
     group_key: e.group_key as string,
-    description: null,
 }));
 const ROWS = buildPermissionGridRows(CATALOG);
 const NORMAL = normalModeMatrix(buildCapabilityMatrix(ROWS, new Set()));
@@ -198,5 +197,58 @@ describe("RL-32 — presentation only, and Advanced adds no control", () => {
     it("normal mode is built from the same matrix, narrowed — never a separate source", () => {
         const page = codeOnly(read("components/adminV2/settings/access/AccessRolesConfigurationPage.tsx"));
         expect(page).toMatch(/normalModeMatrix\(\s*buildCapabilityMatrix\(/);
+    });
+});
+
+/**
+ * RL-32b — `Full access` is a NAME CHANGE, and the name has to keep being true.
+ *
+ * The Director approved Option B: the area preset keeps its grant semantics exactly and stops being
+ * called `Manage`, because on an area that word hid how much it did. An administrator choosing
+ * Manage on Enrollment believing they had staffed enrollment also granted the decision, the tuition
+ * override and the requirement exception; on Financials it granted the authority to post money.
+ *
+ * So two things must hold together, and each is worthless without the other: the LABEL must say
+ * Full access at area level and still say Manage on a capability row, and the SET behind it must be
+ * unchanged. A rename that quietly narrowed the preset would be the more dangerous outcome of the
+ * two — the word would be honest and the behaviour would have moved under it.
+ */
+describe("RL-32b — the area preset is renamed, not redefined", () => {
+    const page = read("components/adminV2/settings/access/AccessRolesConfigurationPage.tsx");
+    const matrixSrc = read("lib/access/capabilityMatrix.ts");
+
+    it("the area column says Full access", () => {
+        expect(page).toMatch(/<th[^>]*>Full access<\/th>/);
+    });
+
+    it("row-level Manage is untouched — the narrow control keeps the narrow word", () => {
+        const labels = read("lib/access/roleAuthoritySummary.ts");
+        expect(labels).toMatch(/write:\s*"Manage"/);
+        expect(matrixSrc).toMatch(/AREA_PRESET_LEVEL_LABEL[\s\S]{0,160}write:\s*"Full access"/);
+    });
+
+    it("the explanation is rendered before the choice, and carries the count", () => {
+        expect(page).toContain("full-access-note");
+        expect(page).toMatch(/fullAccessExplanation\(area\)/);
+        expect(matrixSrc).toMatch(/grants all \$\{n\} permission/);
+    });
+
+    it("the sharp areas name their consequence rather than only their size", () => {
+        for (const area of ["enrollment", "financials", "business_process", "users_roles"]) {
+            expect(matrixSrc, `${area} needs its consequence stated`).toMatch(
+                new RegExp(`${area}:\\s*"[^"]{20,}"`),
+            );
+        }
+    });
+
+    it("the rename changed no grant semantics", () => {
+        // `applyAreaPreset` is the function that decides what a preset grants. If the rename had
+        // touched it, the word would be honest and the behaviour would have moved under it.
+        // A fixed window, because the signature's own `}): Set<string> {` line starts at column 0
+        // and a brace-hunt ends before the body — which is how this assertion first passed itself.
+        const start = matrixSrc.indexOf("export function applyAreaPreset");
+        const fn = matrixSrc.slice(start, start + 1200);
+        expect(fn).toContain("applyGridRowSelection");
+        expect(fn).not.toContain("Full access");
     });
 });

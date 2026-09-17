@@ -169,6 +169,53 @@ export function applyAreaPreset(params: {
     return next;
 }
 
+/**
+ * AREA-LEVEL LEVEL NAMES — deliberately not the row-level ones.
+ *
+ * On a capability ROW, `Manage` means one capability's write level and the word is exact. On an
+ * AREA it means something much larger: set every grantable row in the area to its strongest offered
+ * level. The Director's audit found that an administrator choosing `Manage` on Enrollment believing
+ * they had staffed enrollment had also granted the decision, the tuition override and the
+ * requirement exception — and on Financials, the authority to post money.
+ *
+ * The GRANT SEMANTICS ARE UNCHANGED. `applyAreaPreset` does exactly what it did; this renames the
+ * gesture so its size is legible before it is used, which was Option B of the packet. Row labels are
+ * untouched — {@link OPERATOR_LEVEL_LABEL} still names them — because a global rename would make the
+ * narrow control read as the wide one.
+ */
+export const AREA_PRESET_LEVEL_LABEL: Readonly<Record<PermissionGridLevel, string>> = Object.freeze({
+    none: "No access",
+    read: "View",
+    write: "Full access",
+});
+
+/**
+ * Consequences an administrator would not predict from the area's name.
+ *
+ * Only for areas where `Full access` reaches past what the heading suggests. An area whose rows are
+ * all the same kind of thing needs no warning, and writing one anyway would train operators to skip
+ * the line that matters.
+ */
+const AREA_FULL_ACCESS_CONSEQUENCE: Readonly<Record<string, string>> = Object.freeze({
+    enrollment: "including enrollment decisions, tuition overrides and requirement exceptions — not only record management",
+    financials: "including posting financial transactions, account adjustments, responsibility and subsidy",
+    business_process: "including both designing a process and activating it for the organization",
+    users_roles: "including user administration, role and permission administration, and access scope",
+});
+
+/**
+ * The sentence shown beside the `Full access` control, before it is chosen.
+ *
+ * It states the count because the count is the part an administrator can check against what they
+ * meant, and it names the sharp consequence where there is one.
+ */
+export function fullAccessExplanation(area: Pick<MatrixArea, "areaKey" | "enforcedTotal">): string {
+    const n = area.enforcedTotal;
+    const base = `Full access grants all ${n} permission${n === 1 ? "" : "s"} in this area`;
+    const sharp = AREA_FULL_ACCESS_CONSEQUENCE[area.areaKey];
+    return sharp ? `${base}, ${sharp}.` : `${base}.`;
+}
+
 /** The chip an operator reads. `limited` carries its arithmetic; the others are already exact. */
 export function areaLevelLabel(area: Pick<MatrixArea, "level" | "granted" | "enforcedTotal">): string {
     switch (area.level) {
