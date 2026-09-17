@@ -34,6 +34,7 @@ import { buildFinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financia
 import type { FinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 import { resolveFinancialSubjectId } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
+import { recordProducerSpans, producerClock } from "@/lib/perf/routeTimingDiagnostic";
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
 import type {
     FocusPanelCardProducerResults,
@@ -80,6 +81,15 @@ const INITIAL_RECENT_DAYS = 5;
  * Returns a bounded result per card. Never throws: a producer that fails reports `error` and the
  * rest of the panel is unaffected.
  */
+/**
+ * What the Financials branch carries back out of the parallel region.
+ *
+ * The gate's verdict has to travel with the VM because `forbidden` (the gate refused) and
+ * `unavailable` (this household has no account) are different answers to the operator, and
+ * collapsing them would make a refusal look like an absence.
+ */
+type FinancialsProducerOutcome = { gateOk: boolean; vm: FinancialsCardVM | null };
+
 export async function projectFocusPanelCardProducers(input: {
     supabase: SupabaseClient;
     orgId: string;
@@ -157,26 +167,37 @@ export async function projectFocusPanelCardProducers(input: {
      * and caller. It does not restate `fin.read`, and it does not re-resolve WHO the caller is —
      * `access.userId` is the identity the route already admitted.
      */
-    const financialsGate =
-        financialSubjectId
-            ? await assertFinancialsReadAllowed({ supabase, orgId, userId: access.userId }).catch(() => ({
-                  /*
-                   * A FAILED GRANT READ IS A REFUSAL, not an empty grant set. The endpoint's gate
-                   * rejects and the route never reaches the VM; the producer must not be the softer
-                   * door by treating the failure as "no opinion" and reading the ledger anyway.
-                   */
-                  ok: false as const,
-              }))
-            : null;
-
+    /*
+     * P0-7.6 SLICE 12D — THE FINANCIALS GATE NO LONGER SERIALIZES THE OTHER TWO PRODUCERS.
+     *
+     * `assertFinancialsReadAllowed` used to be AWAITED HERE, above `Promise.allSettled`, so a
+     * permission round trip that only Financials needs ran to completion before Attendance and
+     * Health were allowed to start. Measured on deployed `7e0d399ef`, this whole function is the
+     * dominant wait on the document's critical path — median 2,791 ms of a 5,005 ms compose — and a
+     * serial preamble in front of three parallel reads is the one part of it that no data dependency
+     * requires.
+     *
+     * The gate now runs INSIDE the Financials branch. Nothing about the authorization changes: the
+     * same canonical gate, with the same route-resolved org and caller, still runs BEFORE
+     * `buildFinancialsCardVM`, a failed grant read is still a refusal rather than "no opinion", and
+     * a denied caller still causes no ledger read at all. Only the scheduling changed — it now
+     * overlaps Attendance and Health instead of preceding them.
+     *
+     * The verdict is carried out of the branch because the result mapping needs it to tell
+     * `forbidden` (the gate said no) from `unavailable` (there is no account), which are different
+     * answers and must not collapse into one.
+     */
+    const clock = producerClock();
     const [attendance, health, financials] = await Promise.allSettled([
         customerMemberId
-            ? buildAttendanceCardVM(supabase, {
-                  orgId,
-                  customerMemberId,
-                  displayName,
-                  recentDays: INITIAL_RECENT_DAYS,
-              })
+            ? clock.time("attendance_ms", () =>
+                  buildAttendanceCardVM(supabase, {
+                      orgId,
+                      customerMemberId,
+                      displayName,
+                      recentDays: INITIAL_RECENT_DAYS,
+                  }),
+              )
             : Promise.resolve(null),
         /*
          * The SAME domain owner the endpoint calls, with the SAME resolved authority.
@@ -188,27 +209,54 @@ export async function projectFocusPanelCardProducers(input: {
          * fail-closed behaviour is the endpoint's, inherited rather than reimplemented.
          */
         customerMemberId
-            ? buildHealthSafetyCardVM(supabase, {
-                  orgId,
-                  customerMemberId,
-                  displayName,
-                  access: { permissionKeys: access.permissionKeys },
-              })
+            ? clock.time("health_ms", () =>
+                  buildHealthSafetyCardVM(supabase, {
+                      orgId,
+                      customerMemberId,
+                      displayName,
+                      access: { permissionKeys: access.permissionKeys },
+                  }),
+              )
             : Promise.resolve(null),
         /*
          * Only reached when the gate ALLOWED. A denied caller never causes a ledger read at all,
          * which is both the authorization property and the cheaper answer.
          */
-        financialSubjectId && financialsGate?.ok
-            ? buildFinancialsCardVM(supabase, {
-                  orgId,
-                  customerId: financialSubjectId,
-                  // The child filter, when the surface is scoped to one. The ACCOUNT is still the
-                  // household's — this narrows the view, it does not change the subject.
-                  customerMemberId,
-              })
+        financialSubjectId
+            ? (async (): Promise<FinancialsProducerOutcome> => {
+                  const gate = await clock.time("financials_gate_ms", () =>
+                      assertFinancialsReadAllowed({
+                          supabase,
+                          orgId,
+                          userId: access.userId,
+                      }),
+                  ).catch(() => ({
+                      /*
+                       * A FAILED GRANT READ IS A REFUSAL, not an empty grant set. The endpoint's
+                       * gate rejects and the route never reaches the VM; the producer must not be
+                       * the softer door by treating the failure as "no opinion" and reading the
+                       * ledger anyway.
+                       */
+                      ok: false as const,
+                  }));
+                  // Only reached when the gate ALLOWED. A denied caller never causes a ledger read
+                  // at all, which is both the authorization property and the cheaper answer.
+                  if (!gate.ok) return { gateOk: false, vm: null };
+                  const vm = await clock.time("financials_build_ms", () =>
+                      buildFinancialsCardVM(supabase, {
+                          orgId,
+                          customerId: financialSubjectId,
+                          // The child filter, when the surface is scoped to one. The ACCOUNT is
+                          // still the household's — this narrows the view, not the subject.
+                          customerMemberId,
+                      }),
+                  );
+                  return { gateOk: true, vm: vm ?? null };
+              })()
             : Promise.resolve(null),
     ]);
+
+    recordProducerSpans(clock.spans());
 
     return {
         attendance:
@@ -237,10 +285,10 @@ export async function projectFocusPanelCardProducers(input: {
                 : !financialSubjectId
                   ? /* No household, no account. Ordinary, and not a refusal. */
                     unavailable<FinancialsCardVM>()
-                  : !financialsGate?.ok
+                  : !financials.value?.gateOk
                     ? { state: "forbidden", data: null }
-                    : financials.value
-                      ? { state: "ready", data: boundInitialFinancials(financials.value) }
+                    : financials.value.vm
+                      ? { state: "ready", data: boundInitialFinancials(financials.value.vm) }
                       : unavailable<FinancialsCardVM>(),
     };
 }

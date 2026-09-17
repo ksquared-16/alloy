@@ -24,7 +24,7 @@ import { parseCardFocusAspect } from "@/lib/runtime/kernel/attentionCardFocus";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
 import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
-import { recordRouteTiming, routeTimingEnabled } from "@/lib/perf/routeTimingDiagnostic";
+import { collectedRouteTiming, recordRouteTiming, routeTimingEnabled } from "@/lib/perf/routeTimingDiagnostic";
 
 export type RouteProvisioningResult =
     | { ok: true; answer: ProvisioningAnswer }
@@ -188,8 +188,13 @@ export async function composeProvisioningAnswerForRoute(input: {
         // Never let a diagnostic break the product path. The collector is request-scoped through
         // React `cache()`, which the HTTP seam's route handler does not necessarily provide.
         try {
+            // The producers stashed their concurrent spans on this same field while they ran, so the
+            // outer record must PRESERVE them rather than assign over the top — `recordRouteTiming`
+            // replaces whole fields.
+            const already = collectedRouteTiming()?.route_compose_spans;
             recordRouteTiming({
                 route_compose_spans: {
+                    ...(already?.producers ? { producers: already.producers } : {}),
                     route_identity_ms: Math.round(routeIdentityMs),
                     admin_client_ms: Math.round(adminClientMs),
                     document_actor_ms: Math.round(documentActorMs),
