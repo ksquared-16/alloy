@@ -637,9 +637,26 @@
 /* Current Period is the primary financial explanation and needs width for the arithmetic.
  * Past Due and Payment answer one related question — what needs collecting, and how — so they
  * stack in a narrower right column instead of holding equal authority. */
+/*
+ * ── THE CARD IS ITS OWN YARDSTICK ──────────────────────────────────────────────────────────────
+ *
+ * This card is 366px wide at the Focus Panel's normal width and 185px at its narrowest, and that
+ * has nothing to do with the viewport — it is the column it was placed in. Sizing its internals
+ * off the viewport would be measuring the wrong thing, so the card is a query container and the
+ * one rule below asks about the card.
+ */
+.alloy-os-billing {
+  container-type: inline-size;
+  container-name: alloy-billing;
+}
 .alloy-os-billing__zones--two {
-  grid-template-columns: minmax(0, 60fr) minmax(0, 40fr);
-  gap: 10px 36px;
+  /*
+   * The 36px column gap was 23% of the whole zones width at the narrowest Focus Panel column, and
+   * it is what left Due a 48px box for a 65px figure — the clipped value in Kelly's screenshot.
+   * The zones still read as two columns at 20px; the figure now fits.
+   */
+  grid-template-columns: minmax(0, 58fr) minmax(0, 42fr);
+  gap: 10px 20px;
 }
 .alloy-os-billing__collect {
   display: flex;
@@ -2758,20 +2775,23 @@
    */
   display: flex;
   /*
-   * NOWRAP KEPT THE ROW SHORT AND LET IT LEAVE THE CARD. At the narrow Focus Panel column the
-   * three commands need more width than the position zone has, and `nowrap` resolved that by
-   * overflowing: Payment, Add and Details rendered past the card's right edge, which is how
-   * they came to look "pushed down and partially outside the composition".
+   * ── ONE LINE, AND THE WIDTH TO HOLD IT ──────────────────────────────────────────────────────
    *
-   * Wrapping is the lesser cost and only pays it when the width genuinely is not there — at
-   * every width where the row fits, this is still one line. The buttons may also shrink now
-   * (`flex: 0 1 auto`), so the wrap is the second resort rather than the first.
+   * Measured on the mounted card: the cluster needs 184px on one line, and the position column it
+   * used to sit in is 121px at the Focus Panel's normal width and 48px at its narrowest. Inside
+   * that column there were only two outcomes and both were shipped at different times — overflow
+   * the card (Add and Details rendered past the right edge at 1680, 1440, 1280 and 1040), or wrap
+   * onto three rows and spend 40px of card height.
+   *
+   * So the cluster spans the card's full content width and is anchored right, under Due. It is
+   * one line again, it is inside the card, and it costs the height of a single 26px row.
    */
-  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
-  row-gap: 6px;
-  margin-top: 0.5rem;
+  margin-top: 0.35rem;
   min-width: 0;
 }
 /*
@@ -2786,7 +2806,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-height: 26px;
   height: 26px;
   /*
@@ -2796,10 +2816,10 @@
    * accident of text length.
    */
   width: auto;
-  /* A floor, not a fixed width: the pair still reads as peers, and neither can push the cluster
-   * past the card when the column is narrow. */
-  min-width: min(84px, 100%);
-  padding: 0 0.7rem;
+  /* Peers in geometry, and sized to the longer label rather than to a floor that made Add wider
+   * than Payment. 76px holds `Payment` at this size with the padding below. */
+  min-width: 76px;
+  padding: 0 0.65rem;
   border-radius: 6px;
   font-size: 0.72rem;
   font-weight: 650;
@@ -2897,4 +2917,26 @@
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+}
+
+/*
+ * ── TWO COLUMNS NEED THE WIDTH FOR TWO COLUMNS ─────────────────────────────────────────────────
+ *
+ * At the narrowest Focus Panel column the position zone is 57px and Due is a 65px figure, so the
+ * card's most actionable number rendered clipped — measured, not supposed. No split fixes that:
+ * 42% of 157px is 66px before the gap, and the gap has to exist for the two columns to read as
+ * two columns at all.
+ *
+ * So below the width where a second column can still state a figure, there is one column. The
+ * obligation story keeps its measure, Due states itself in full, and the command cluster — which
+ * already spans the card — is unaffected.
+ */
+@container alloy-billing (max-width: 230px) {
+  .alloy-os-billing__zones--two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .alloy-os-billing__collect {
+    padding-top: 8px;
+    border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  }
 }

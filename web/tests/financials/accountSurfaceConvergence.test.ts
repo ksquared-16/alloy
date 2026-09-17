@@ -1884,10 +1884,57 @@ describe("F45 · Financials navigation is a stack", () => {
     it("dismisses one level rather than clearing to the compact card", () => {
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
         expect(card, "the stack is written down").toMatch(/FinancialsSurface\[\]/);
-        expect(card, "dismissal pops").toMatch(
-            /useDismissSignal\(coordination, "financials", \(\) => \{[\s\S]{0,120}pop\(\)/,
+        /* One dismissal path, shared by the backdrop signal, Escape and every Cancel. */
+        expect(card, "the backdrop signal goes through the one-level pop").toMatch(
+            /useDismissSignal\(coordination, "financials", dismissOneLevel\)/,
+        );
+        expect(card, "and that path pops rather than clears").toMatch(
+            /const dismissOneLevel = useCallback\([\s\S]{0,420}pop\(\)/,
         );
         expect(card, "the single-slot return memory is gone").not.toMatch(/returnOverlayRef/);
+    });
+
+    it("makes the three dismissal gestures agree", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        /*
+         * Measured mounted: Cancel and the backdrop returned to Details and Escape did nothing,
+         * because the grid on this route publishes no dismissal and the card was waiting for one.
+         * The card owns Escape for its own stack now, and yields to an inner layer through the
+         * SHARED predicate rather than a second opinion about it.
+         */
+        expect(card, "the card owns Escape over its own surfaces").toMatch(
+            /event\.key !== "Escape"[\s\S]{0,240}dismissOneLevel\(\)/,
+        );
+        expect(card, "and yields to an open menu or inline editor").toMatch(/hasInnerDismissibleLayer/);
+        /*
+         * It must not swallow the key either. Measured: with propagation stopped, the grid stopped
+         * tracking the dismissal and a re-opened command rendered with no backdrop at all.
+         */
+        const esc = card.slice(card.indexOf('event.key !== "Escape"'));
+        expect(esc.slice(0, 900), "the key reaches every listener that keeps books on it").not.toMatch(
+            /event\.stopPropagation\(\)/,
+        );
+        /*
+         * And more than one announcer must not mean more than one level: two pops for one Escape
+         * would carry the operator past Details to the compact card.
+         */
+        expect(card, "one gesture moves the stack one level").toMatch(
+            /lastDismissRef[\s\S]{0,200}return;[\s\S]{0,120}pop\(\)/,
+        );
+    });
+
+    it("re-asserts depth when a dismissal leaves a surface standing", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        /*
+         * The host collapses its own depth layer on a backdrop dismissal, which is right for a card
+         * with nothing beneath. This card has a stack, and `useReportPerspective` reports only on a
+         * CHANGE of level — "focused" for the command, "focused" for the Details underneath — so
+         * nothing re-reported and the surface beneath rendered with no backdrop at all. Measured:
+         * a Reverse command open over a live page with scrim=false.
+         */
+        expect(card, "a dismissal that leaves a surface standing re-asserts the depth layer").toMatch(
+            /dismissNonce === 0 \|\| !overlay\) return;[\s\S]{0,160}reportPerspective\?\.\("financials", "focused"\)/,
+        );
     });
 
     it("gives a row adjustment its own destination", () => {
@@ -1942,23 +1989,30 @@ describe("F46 · Reverse and Adjust use the canonical command shell", () => {
 });
 
 describe("F47 · the compact commands stay inside the card", () => {
-    it("lets the cluster wrap rather than overflow", () => {
+    it("gives the cluster the width it needs, on one line", () => {
         const css = read("app/adminV2/components/operationalCardsShared.css");
         const block = css.slice(css.indexOf(".alloy-os-billing__commands {"));
         const rule = block.slice(0, block.indexOf("\n}") + 2);
-        expect(rule, "nowrap is what pushed them outside the card").not.toMatch(/flex-wrap:\s*nowrap/);
-        expect(rule).toMatch(/flex-wrap:\s*wrap/);
+        /*
+         * MEASURED, NOT ARGUED. The cluster needs 184px on one line; the position column it used to
+         * live in is 121px at the Focus Panel's normal width and 48px at its narrowest. Inside that
+         * column the only outcomes are overflow or a three-row wrap, and both shipped. It spans the
+         * card instead — still one line, still anchored to the payment side.
+         */
+        expect(rule, "it spans the card rather than a column sized for one figure").toMatch(
+            /grid-column:\s*1 \/ -1/,
+        );
+        expect(rule, "one line").toMatch(/flex-wrap:\s*nowrap/);
+        expect(rule, "anchored to the payment side").toMatch(/justify-content:\s*flex-end/);
     });
 
-    it("lets the buttons shrink before the row breaks", () => {
+    it("keeps the column gap from eating the figure", () => {
         const css = read("app/adminV2/components/operationalCardsShared.css");
-        const block = css.slice(css.indexOf(".alloy-os-billing__commands > button"));
+        const block = css.slice(css.indexOf(".alloy-os-billing__zones--two {"));
         const rule = block.slice(0, block.indexOf("\n}") + 2);
-        expect(rule, "a fixed basis cannot yield").not.toMatch(/flex:\s*0 0 auto/);
-        expect(rule).toMatch(/flex:\s*0 1 auto/);
-        expect(rule, "and the floor cannot exceed the space there is").toMatch(
-            /min-width:\s*min\(84px, 100%\)/,
-        );
+        const gap = Number((/gap:\s*\d+px\s+(\d+)px/.exec(rule) ?? [])[1] ?? NaN);
+        /* At 36px the gap was 23% of the zones width at the narrowest column, and Due clipped. */
+        expect(gap, "the column gap leaves the position column room for its figure").toBeLessThanOrEqual(24);
     });
 
     it("keeps Due emphasised without making it a dashboard hero", () => {

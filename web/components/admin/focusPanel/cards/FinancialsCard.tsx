@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
 import type { AccountLens } from "@/lib/financials/workspace/accountLenses";
 import { FOCUS_PANEL_RESERVED_MIN_HEIGHT } from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
 
@@ -1759,7 +1760,65 @@ export default function FinancialsCard({
         setReverseCharge(null);
         setReverseChargePreview(null);
         setReverseChargeError(null);
-    });
+    }, [closeAdjustPanels, closeMovePanels, pop]);
+
+    useDismissSignal(coordination, "financials", dismissOneLevel);
+
+    /*
+     * ── ESCAPE BELONGS TO THIS CARD'S OWN STACK ───────────────────────────────────────────────
+     *
+     * Measured on the mounted work-unit lane: Escape over an open Financials command did nothing
+     * at all — the grid that owns the backdrop on this route publishes no dismissal, so the card
+     * waited for a signal that never came while Cancel and the backdrop both worked. A stack whose
+     * three dismissal gestures do not agree is not a stack.
+     *
+     * The yield condition is the shared one rather than a second opinion about it: an open select
+     * menu or inline editor closes itself first, exactly as it does for the grid.
+     */
+    /*
+     * ── A DISMISSAL THAT LEAVES A SURFACE STANDING MUST RE-ASSERT DEPTH ───────────────────────
+     *
+     * The host clears its OWN depth layer when the backdrop is clicked — reasonably, since for
+     * every other card a dismissal means there is nothing left to elevate. This card has a stack,
+     * so dismissing a command leaves Details standing and still owed the depth layer.
+     *
+     * `useReportPerspective` reports only when the LEVEL changes, and the level does not change
+     * here: it was "focused" for the command and is "focused" for Details. So nothing re-reported,
+     * the host stayed collapsed, and everything from then on rendered un-elevated — measured as a
+     * Reverse command with no backdrop at all in the DOM, which is how an operator ends up with a
+     * money-destroying command open over a live, clickable page.
+     *
+     * Re-asserting is the whole fix: same value, said again, because the host has forgotten it.
+     */
+    useEffect(() => {
+        if (dismissNonce === 0 || !overlay) return;
+        coordination?.reportPerspective?.("financials", "focused");
+    }, [dismissNonce, overlay, coordination]);
+
+    useEffect(() => {
+        if (!overlay) return;
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key !== "Escape") return;
+            if (hasInnerDismissibleLayer(document)) return;
+            event.preventDefault();
+            /*
+             * DELIBERATELY NOT stopPropagation.
+             *
+             * Swallowing the key kept the grid from seeing a dismissal it also tracks, and the two
+             * drifted apart: measured after one Escape-dismissed command, re-opening a command
+             * rendered the surface with NO backdrop in the DOM — the card thought it was elevated
+             * and the grid no longer did. An operator then has a money-destroying command open
+             * over an un-scrimmed page.
+             *
+             * The key is allowed to continue, so every listener keeps its own books straight, and
+             * `dismissOneLevel` makes the extra announcements harmless: one gesture still moves the
+             * stack exactly one level.
+             */
+            dismissOneLevel();
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [overlay, dismissOneLevel]);
 
     /*
      * ── ADD CHARGE — the approved command card, over the domain's own preview ──

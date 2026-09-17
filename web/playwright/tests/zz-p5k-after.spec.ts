@@ -139,6 +139,7 @@ test("B · Details commits once, and commits complete", async ({ page }) => {
 });
 
 test("C · the stack returns to Details, exactly as it was", async ({ page }) => {
+    test.setTimeout(600_000);
     await openCard(page);
     await page.locator('[data-financials-nav="details"]').first().click({ timeout: 20_000 });
     await page.locator('[data-financials-overlay="detail"]').waitFor({ state: "visible", timeout: 120_000 });
@@ -157,28 +158,126 @@ test("C · the stack returns to Details, exactly as it was", async ({ page }) =>
 
     const dismissals = [
         ["cancel", async () => { await page.locator('[data-testid$="-cancel"]:visible').first().click({ timeout: 12_000 }); }],
-        ["outside", async () => { await page.mouse.click(10, 10); }],
+        /*
+         * OUTSIDE MEANS THE SCRIM, NOT THE SCREEN. The Focus Panel's depth layer owns dismissal and
+         * publishes it through an armed backdrop; a click at the top-left of the viewport lands on
+         * the app chrome, outside the panel, and correctly dismisses nothing. Clicking the scrim is
+         * the gesture an operator actually makes, and its armed state is recorded so a backdrop
+         * that is present but inert cannot pass as a dismissal.
+         */
+        /*
+         * OUTSIDE MEANS A POINT ON THE SCRIM, NOT THE SCREEN AND NOT THE SCRIM'S CENTRE. A click at
+         * the top-left of the viewport lands on the app chrome, outside the Focus Panel, and
+         * correctly dismisses nothing. A forced click on the scrim ELEMENT is worse: Playwright
+         * dispatches at its centre, which the elevated card covers, so the card receives it. The
+         * gesture an operator makes is a click on visible backdrop beside the card, so that is what
+         * this computes — and the scrim's armed state is recorded, because a backdrop that is
+         * present but inert must not pass as a dismissal.
+         */
+        /*
+         * OUTSIDE MEANS A POINT THAT ACTUALLY HITS THE BACKDROP.
+         *
+         * Three gestures were tried and two were wrong in instructive ways. A click at the viewport
+         * corner lands on the app chrome, outside the Focus Panel, and correctly dismisses nothing.
+         * A forced click on the scrim ELEMENT is dispatched at its centre, which the elevated card
+         * covers, so the card receives it. And a computed offset works for one command's geometry
+         * and lands on the next one's card.
+         *
+         * So the point is not computed and hoped for: candidates are tested with elementFromPoint
+         * and the first that genuinely resolves to the scrim is clicked. A test that cannot say it
+         * hit the backdrop cannot say the backdrop does not work.
+         */
+        /*
+         * OUTSIDE MEANS A POINT THAT PROVABLY HITS THE BACKDROP.
+         *
+         * Four gestures were tried before this one held, and the failures were all the probe's:
+         * a viewport-corner click lands on app chrome outside the panel; a forced click on the
+         * scrim element is dispatched at its centre, which the elevated card covers; a computed
+         * offset fits one command's geometry and lands on the next one's card; and reading the
+         * scrim through a Playwright locator stalled indefinitely on one surface while a direct
+         * DOM read showed the scrim present, armed and hit-testable the whole time.
+         *
+         * So the whole enquiry happens in one evaluate — no locator retry semantics — and it
+         * returns what it found. The click is dispatched only at a point whose elementFromPoint IS
+         * the scrim, and the target it resolved to is reported either way, because a test that
+         * cannot say what it hit cannot say the backdrop is broken.
+         */
+        ["outside", async () => {
+            const probe = await page.evaluate(() => {
+                const el = document.querySelector('[data-fp-depth-scrim="true"]') as HTMLElement | null;
+                if (!el) return { scrim: false as const };
+                const b = el.getBoundingClientRect();
+                const tried: string[] = [];
+                for (const fx of [0.03, 0.5, 0.97]) {
+                    for (const fy of [0.03, 0.3, 0.7, 0.97]) {
+                        const x = Math.round(b.x + b.width * fx);
+                        const y = Math.round(b.y + b.height * fy);
+                        const hit = document.elementFromPoint(x, y);
+                        if (hit === el) return { scrim: true as const, armed: el.getAttribute("data-fp-scrim-armed"), x, y, tried };
+                        tried.push(`${x},${y}->${(hit as HTMLElement | null)?.className?.toString().slice(0, 28) ?? "null"}`);
+                    }
+                }
+                return { scrim: true as const, armed: el.getAttribute("data-fp-scrim-armed"), x: null, y: null, tried };
+            });
+            log("SCRIM " + JSON.stringify(probe));
+            if (!("x" in probe) || probe.x == null || probe.y == null) return;
+            await page.mouse.click(probe.x, probe.y);
+        }],
         ["escape", async () => { await page.keyboard.press("Escape"); }],
     ] as const;
 
+    const results: Array<Record<string, unknown>> = [];
     for (const action of ["adjust", "reverse"] as const) {
         for (const [kind, dismiss] of dismissals) {
             const btn = page.locator(`[data-financials-row-action="${action}"]`).first();
             if (!(await btn.count())) { log(`STACK ${action}/${kind} NO_CONTROL`); continue; }
-            await btn.click({ timeout: 15_000 }).catch(async () => { await btn.evaluate((e) => (e as HTMLElement).click()); });
+            await btn.click({ timeout: 15_000 }).catch(async () => {
+                /* Bounded: a detached locator makes an unbounded evaluate wait for the whole test. */
+                await btn.evaluate((e) => (e as HTMLElement).click(), undefined, { timeout: 8_000 }).catch(() => {});
+            });
             await page.waitForTimeout(2_500);
             const opened = await viewState(page);
             if (kind === "cancel" && action === "reverse") await shot(page, "p5k-after-reverse-command");
             if (kind === "cancel" && action === "adjust") await shot(page, "p5k-after-adjust-command");
-            await dismiss().catch(() => {});
+            await Promise.race([
+                dismiss().catch(() => {}),
+                page.waitForTimeout(20_000),
+            ]);
             await page.waitForTimeout(2_500);
             const landed = await viewState(page);
             log(`STACK ${action}/${kind} opened=${opened.surface} landed=${JSON.stringify(landed)}`);
-            expect(landed.surface, `${action} → ${kind} returns to Details`).toBe("detail");
-            expect(landed.lens, `${action} → ${kind} keeps the lens`).toBe(anchor.lens);
-            expect(landed.periods, `${action} → ${kind} keeps the disclosures`).toBe(anchor.periods);
-            expect(landed.filters, `${action} → ${kind} keeps the filters`).toBe(anchor.filters);
+            results.push({
+                path: `${action}/${kind}`,
+                opened: opened.surface,
+                returned: landed.surface === "detail",
+                lensKept: landed.lens === anchor.lens,
+                periodsKept: landed.periods === anchor.periods,
+                filtersKept: landed.filters === anchor.filters,
+                scroll: landed.scroll,
+            });
+            /*
+             * Re-establish Details so one bad path cannot strand the rest of the matrix — the first
+             * run of this proved the hazard: a stuck command surface made all three reverse paths
+             * report NO_CONTROL, which reads like an absent feature rather than a stuck surface.
+             */
+            for (let attempt = 0; attempt < 3 && (await viewState(page)).surface !== "detail"; attempt += 1) {
+                const anyCancel = page.locator('[data-testid$="-cancel"]:visible, button:has-text("Cancel"):visible').first();
+                if (await anyCancel.count()) await anyCancel.click({ timeout: 8_000 }).catch(() => {});
+                else await page.keyboard.press("Escape").catch(() => {});
+                await page.waitForTimeout(1_500);
+                if ((await viewState(page)).surface === "compact") {
+                    const again = page.locator('[data-financials-nav="details"]').first();
+                    if (await again.count()) { await again.click({ timeout: 10_000 }).catch(() => {}); await page.waitForTimeout(8_000); }
+                }
+            }
         }
+    }
+    log("STACK_MATRIX\n" + results.map((r) => JSON.stringify(r)).join("\n"));
+    for (const r of results) {
+        expect(r.returned, `${r.path} returns to Details`).toBe(true);
+        expect(r.lensKept, `${r.path} keeps the lens`).toBe(true);
+        expect(r.periodsKept, `${r.path} keeps the disclosures`).toBe(true);
+        expect(r.filtersKept, `${r.path} keeps the filters`).toBe(true);
     }
 });
 
@@ -219,6 +318,16 @@ test("D+E · the Reverse shell, and the Add modes", async ({ page }) => {
         const cancel = page.locator('[data-testid="adjustment-cancel"]').first();
         if (await cancel.count()) { await cancel.click({ timeout: 12_000 }); await page.waitForTimeout(2_500); }
     }
+    /*
+     * Add is the COMPACT card's control, so the operator has to be back on the compact card to
+     * reach it — the previous run looked for it while Details was still open and measured nothing.
+     * This is also the exact journey §5 names: a row adjustment, cancelled, then Add.
+     */
+    for (let i = 0; i < 3 && (await page.locator("[data-financials-overlay]").count()) > 0; i += 1) {
+        await page.keyboard.press("Escape");
+        await page.waitForTimeout(1_800);
+    }
+    log("BACK_ON_COMPACT " + JSON.stringify(await viewState(page)));
     const add = page.locator('[data-financials-command="add"]').first();
     if (await add.count()) {
         await add.click({ timeout: 15_000 }).catch(async () => { await add.evaluate((e) => (e as HTMLElement).click()); });

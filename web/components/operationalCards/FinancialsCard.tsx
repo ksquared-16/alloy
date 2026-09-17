@@ -209,13 +209,22 @@ export default function FinancialsCard({
                                 <Line label="Unassigned" value={period.responsibility.unassigned} />
                             ) : null}
                         </div>
-                        {/*
-                         * THE COMMANDS LIVE HERE, in space the card already has, rather than in a
-                         * dedicated footer row. Payment is primary, Add is its quieter peer, and
-                         * Details is navigation — a text link, not a third equal button, and no
-                         * arrow glyphs on any of them.
-                         */}
-                        <div className="alloy-os-billing__commands">
+                    </section>
+                    </div>
+                    {/*
+                     * ── THE COMMANDS TAKE THE WIDTH THEY NEED ─────────────────────────────────
+                     *
+                     * They lived inside the position column, which is 121px wide at the Focus
+                     * Panel's normal width and 48px at its narrowest. Measured, the cluster needs
+                     * 184px on one line — so inside that column it could only overflow the card
+                     * (which is what it did, at every supported width) or wrap onto three rows
+                     * (which costs the card 40px of height). Neither is a composition.
+                     *
+                     * It spans the card instead and is anchored right, so it still reads as the
+                     * payment column's action area and sits directly beneath Due, but it is no
+                     * longer trying to fit three controls into a column sized for one figure.
+                     */}
+                    <div className="alloy-os-billing__commands">
                             {onPayNow ? (
                                 <Action primary onClick={onPayNow} data-financials-command="payment">
                                     Payment
@@ -235,8 +244,6 @@ export default function FinancialsCard({
                                 </button>
                             ) : null}
                         </div>
-                    </section>
-                    </div>
                 </div>
 
                 {pastDue ? <p className="alloy-os-billing__history">{evidence.historyLine}</p> : null}
