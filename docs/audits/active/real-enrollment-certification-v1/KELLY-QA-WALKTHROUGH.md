@@ -623,3 +623,20 @@ and the child record still shows **Program —**.
 3. **Search chips.** A search result only offers a context chip (e.g. *Household*) when that context
    can actually be opened. A child who is not in an Enrollment queue shows no Enrollment chip; click
    the child's name to open the record.
+4. **A new child cannot currently be walked into Enrolling.** Every route is blocked, and all four
+   were measured rather than inferred:
+   - the family-case stage move (*Move to Tour*, *Move to Waitlist* at case grain) is refused with
+     *"status_key is not defined for this entity in status_definitions"*. This org's opportunity
+     status vocabulary was deliberately collapsed to four keys — Open, Closed, Inactive, Archived —
+     while the stage-transition writer still asserts a per-stage key. The reconciliation preflight
+     itself reports `new → tour`, and **neither** is in the vocabulary;
+   - *Move to Enrolling* on a child record returns **404** — it sends the child's id to a route that
+     takes the family case's id;
+   - the `enroll_child` command reports `registered: false` — it is in the lifecycle vocabulary with
+     no executable handler behind it.
+
+   What DOES work is the per-child decision path: *Move to Waitlist* committed normally and really
+   moved a child from Lead to Waitlist. So this is not "lifecycle is broken" — it is the **entry to
+   Enrolling specifically** that has no working route today. Parts D and E use children who are
+   already Enrolling, so nothing in this walkthrough depends on it. **Do not report this one; it is
+   known, and the repair is a decision about where a case's stage is allowed to live.**
