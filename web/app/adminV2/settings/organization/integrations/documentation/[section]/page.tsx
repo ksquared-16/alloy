@@ -18,7 +18,20 @@ import {
     loadDocument,
 } from "@/lib/developerDocs/documentationSources";
 
-export const dynamic = "force-dynamic";
+/**
+ * The published slugs are known at build time, and nothing else resolves.
+ *
+ * `dynamicParams = false` is what makes an unknown slug a real 404 rather than a 200 carrying an
+ * apology. Deciding at render time could not: the layout has already streamed by then, the status
+ * line is long gone, and Next can only swap the body. Enumerating the slugs moves the decision to
+ * routing, where a status code can still be chosen — and it is possible at all because the governed
+ * documents are embedded in the bundle rather than read from disk.
+ */
+export const dynamicParams = false;
+
+export function generateStaticParams() {
+    return DOCUMENTATION_SECTIONS.map((section) => ({ section: section.slug }));
+}
 
 export default async function DeveloperDocumentationSectionPage({
     params,

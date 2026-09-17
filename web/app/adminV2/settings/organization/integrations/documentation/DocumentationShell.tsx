@@ -1,11 +1,12 @@
-import { BookOpen, FileJson, type LucideIcon } from "lucide-react";
+import { ArrowLeft, BookOpen, FileJson, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 import {
     API_REFERENCE_PATH,
     DOCUMENTATION_BASE_PATH,
-    DOCUMENTATION_SECTIONS,
+    DOCUMENTATION_NAV,
+    INTEGRATIONS_PATH,
 } from "@/lib/developerDocs/documentationSources";
 
 /**
@@ -42,16 +43,33 @@ export function DocumentationShell({
                             </span>
                         </span>
                     </Link>
-                    <Link
-                        href={API_REFERENCE_PATH}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        data-testid="developer-documentation-api-reference"
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-alloy-forge/12 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-alloy-midnight transition hover:border-alloy-bend-pine/40 hover:text-[#007d68]"
-                    >
-                        <FileJson className="h-3.5 w-3.5" aria-hidden />
-                        API Reference
-                    </Link>
+                    <span className="flex flex-wrap items-center gap-2">
+                        {/*
+                          * THE WAY BACK.
+                          *
+                          * This opens in its own tab from an Installation, so the browser's Back
+                          * button leads nowhere useful — a new tab has no history. Without this an
+                          * operator who followed the link had to close the tab to find the product
+                          * again. It stays in THIS tab: the Installation tab is still open where
+                          * they left it.
+                          */}
+                        <Link
+                            href={INTEGRATIONS_PATH}
+                            data-testid="documentation-back-to-integrations"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-alloy-forge/12 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-alloy-midnight transition hover:border-alloy-bend-pine/40 hover:text-[#007d68]"
+                        >
+                            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+                            Back to Integrations
+                        </Link>
+                        <Link
+                            href={API_REFERENCE_PATH}
+                            data-testid="developer-documentation-api-reference"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-alloy-forge/12 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-alloy-midnight transition hover:border-alloy-bend-pine/40 hover:text-[#007d68]"
+                        >
+                            <FileJson className="h-3.5 w-3.5" aria-hidden />
+                            API Reference
+                        </Link>
+                    </span>
                 </div>
             </header>
 
@@ -65,12 +83,12 @@ export function DocumentationShell({
                         Documentation
                     </p>
                     <ul className="mt-1.5 space-y-0.5">
-                        {DOCUMENTATION_SECTIONS.map((section) => {
+                        {DOCUMENTATION_NAV.map((section) => {
                             const active = section.slug === activeSlug;
                             return (
                                 <li key={section.slug}>
                                     <Link
-                                        href={`${DOCUMENTATION_BASE_PATH}/${section.slug}`}
+                                        href={section.href}
                                         data-testid={`doc-nav-${section.slug}`}
                                         aria-current={active ? "page" : undefined}
                                         className={`block rounded-md px-2 py-1.5 text-[12.5px] leading-snug transition ${

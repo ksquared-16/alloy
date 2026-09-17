@@ -24,8 +24,9 @@ supersedes: []
 > do not describe a live endpoint, and no credential can reach one.
 >
 > **Not yet safe to issue production credentials.** Three security prerequisites
-> remain open; see
-> [`../product/08-slice-b2-external-boundary.md`](../product/08-slice-b2-external-boundary.md).
+> remain open. Alloy tracks them internally and will tell you when sandbox
+> credentials can be promoted to production; ask your Alloy contact for the
+> current status.
 
 ## The model, in four words
 
