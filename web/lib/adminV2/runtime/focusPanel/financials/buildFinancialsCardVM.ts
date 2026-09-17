@@ -38,6 +38,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
+import { financialsClock, recordFinancialsSpans } from "@/lib/perf/routeTimingDiagnostic";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import { readAccountReductions, type AccountReduction } from "@/lib/financials/reductions/readAccountReductions";
 import {
@@ -846,17 +847,46 @@ async function readAccountPayments(
     return { payments, appliedByChargeId };
 }
 
+type FinancialsBuildArgs = {
+    orgId: string;
+    /** The household whose children's agreements make up the account. */
+    customerId?: string | null;
+    /** Narrow the whole model to ONE child. The card's subject filter uses this. */
+    customerMemberId?: string | null;
+    /** Operating day; defaults to today. Certification pins it. */
+    today?: string | null;
+};
+
+type FinancialsBuildClock = ReturnType<typeof financialsClock>;
+
+/**
+ * SLICE 12E — the build reports its own internal boundaries.
+ *
+ * Slice 12D measured this function deployed as the card-producer LONG POLE: `financials_build_ms`
+ * 2,423 ms median, 89 % of `card_producers_ms`. It could not say what inside it costs that, because
+ * the whole build was one span over roughly fifteen table reads.
+ *
+ * The wrapper exists so the spans are filed on EVERY exit — the four early returns for "no household
+ * in scope", a failed agreements read and a failed charges read, and a throw. Recording at each
+ * `return` instead would have left the interesting failure paths unmeasured, which is how a boundary
+ * gets called cheap because nobody ever saw its number.
+ */
 export async function buildFinancialsCardVM(
     supabase: SupabaseClient,
-    args: {
-        orgId: string;
-        /** The household whose children's agreements make up the account. */
-        customerId?: string | null;
-        /** Narrow the whole model to ONE child. The card's subject filter uses this. */
-        customerMemberId?: string | null;
-        /** Operating day; defaults to today. Certification pins it. */
-        today?: string | null;
-    },
+    args: FinancialsBuildArgs,
+): Promise<FinancialsCardVM> {
+    const clock = financialsClock();
+    try {
+        return await buildFinancialsCardVMInner(supabase, args, clock);
+    } finally {
+        recordFinancialsSpans(clock.spans());
+    }
+}
+
+async function buildFinancialsCardVMInner(
+    supabase: SupabaseClient,
+    args: FinancialsBuildArgs,
+    clock: FinancialsBuildClock,
 ): Promise<FinancialsCardVM> {
     const today = t(args.today) || ymdToday();
     const period = billingPeriodForDate(today);
@@ -869,6 +899,49 @@ export async function buildFinancialsCardVM(
         return { ...vm, unavailableReason: "No household or child in scope." };
     }
 
+    /*
+     * ── SLICE 12E · THE ORG-GRAIN READS START NOW, NOT FOUR AND NINE ROUND TRIPS LATER ───────────
+     *
+     * These depend on `orgId` and on nothing else. They were issued deep inside the build — the GL
+     * configuration behind four serial reads, the merchant behind nine — purely because that is
+     * where their results are first USED. Source order was standing in for a dependency that does
+     * not exist.
+     *
+     * Same queries, same predicates, same rows. `processor = stripe` is kept: `resolvePaymentSetup`
+     * also reads this table, but it takes ANY active merchant, so the two are not the same question
+     * and collapsing them would quietly change which merchant answers for ACH. Hoisted, not deduped.
+     *
+     * `.catch` is attached at creation because the early-return paths below never await these, and
+     * an unawaited rejection must not surface as an unhandled one.
+     */
+    const configRead = clock.time("config_ms", () =>
+        Promise.all([
+            supabase.from("gl_account_mappings").select("key, gl_account_id, is_active").eq("org_id", args.orgId),
+            supabase.from("gl_accounts").select("id, code, name, is_active").eq("org_id", args.orgId),
+            supabase
+                .from("financial_charge_templates")
+                .select(
+                    "id, label, charge_category, amount_strategy, amount_cents, currency_code, "
+                    + "occurs_on_strategy, billable_on_strategy, trigger_type, is_active, effective_start, effective_end",
+                )
+                .eq("org_id", args.orgId)
+                .eq("is_active", true)
+                .order("label", { ascending: true }),
+        ]),
+    ).catch(() => [{ data: [] }, { data: [] }, { data: [] }] as Array<{ data: unknown }>);
+
+    const merchantRead = clock
+        .time("merchant_ms", () =>
+            supabase
+                .from("payment_provider_merchants")
+                .select("ach_readiness")
+                .eq("org_id", args.orgId)
+                .eq("processor", "stripe")
+                .eq("is_active", true)
+                .maybeSingle(),
+        )
+        .catch(() => ({ data: null }));
+
     // ── SUBJECTS: the agreements that ARE the billable sources ────────────────────────────────────
     let agreementQuery = supabase
         .from("child_enrollment_agreements")
@@ -877,7 +950,7 @@ export async function buildFinancialsCardVM(
     agreementQuery = memberId
         ? agreementQuery.eq("customer_member_id", memberId)
         : agreementQuery.eq("customer_id", customerId as string);
-    const { data: agreementRows, error: agreementError } = await agreementQuery;
+    const { data: agreementRows, error: agreementError } = await clock.time("agreements_ms", () => agreementQuery);
     if (agreementError) {
         return { ...vm, unavailableReason: `Financial records unavailable: ${agreementError.message}` };
     }
@@ -902,11 +975,67 @@ export async function buildFinancialsCardVM(
      */
     const resolvedCustomerId = customerId ?? (t(agreements[0]?.customer_id) || null);
     const memberIds = [...new Set(agreements.map((a) => a.customer_member_id))];
-    const { data: memberRows } = await supabase
-        .from("customer_members")
-        .select("id, first_name, last_name, display_name")
-        .eq("org_id", args.orgId)
-        .in("id", memberIds);
+    const memberByAgreement = new Map(agreements.map((a) => [a.id, a.customer_member_id]));
+    /*
+     * Every id this account can be charged against: its enrolment agreements, and the household.
+     * A charge whose source is the household has no child subject, which the ledger renders as the
+     * account rather than inventing an attribution.
+     */
+    const billableSourceIds = [
+        ...agreements.map((a) => a.id),
+        ...(resolvedCustomerId ? [resolvedCustomerId] : []),
+    ];
+
+    /*
+     * ── SLICE 12E · EVERYTHING THE AGREEMENTS UNLOCK, IN ONE PASS ────────────────────────────────
+     *
+     * Members, reductions and charges each need the agreements and nothing else — yet they ran one
+     * after another, so a card waited three round trips deep for reads that could have gone out
+     * together. None of them consumes another's result: `nameByMember` decorates rows the charges
+     * read produces, and `vm.reductions` is its own history.
+     *
+     * Each keeps its OWN failure behaviour. Reductions still degrade to an empty history rather
+     * than taking the account down; a members read that fails still leaves rows named "Child"; and
+     * a charges failure is still the one that makes the card unavailable, below.
+     */
+    const [memberResult, reductions, chargeResult, configResult] = await Promise.all([
+        clock.time("members_ms", () =>
+            supabase
+                .from("customer_members")
+                .select("id, first_name, last_name, display_name")
+                .eq("org_id", args.orgId)
+                .in("id", memberIds),
+        ).catch(() => ({ data: [] as unknown })),
+        clock
+            .time("reductions_ms", () =>
+                readAccountReductions(supabase, {
+                    orgId: args.orgId,
+                    agreementIds: agreements.map((a) => a.id),
+                }),
+            )
+            // A reduction read that fails must not take the whole account down with it: the balance
+            // is still true, and an empty history is the honest presentation of "not loaded".
+            .catch(() => [] as AccountReduction[]),
+        /*
+         * BOTH SOURCES, in one read. A household's account is the union of what its enrolments owe
+         * and what the household itself owes — the pre-enrolment fees that have no agreement to hang
+         * off. `billable_source_type` already carries the distinction; nothing new is invented here.
+         */
+        clock.time("charges_ms", () =>
+            supabase
+                .from("charges")
+                .select(
+                    "id, billable_source_type, billable_source_id, source_charge_id, charge_category, charge_type, status, amount_cents, currency_code, charge_template_id, "
+                    + "service_date, occurs_on, billable_on, due_date, posted_at, voided_at, description, metadata, created_at",
+                )
+                .eq("org_id", args.orgId)
+                .in("billable_source_id", billableSourceIds.length ? billableSourceIds : [NO_SOURCE_SENTINEL]),
+        ).catch((e: unknown) => ({ data: null, error: { message: e instanceof Error ? e.message : String(e) } })),
+        configRead,
+    ]);
+    const memberRows = (memberResult as { data: unknown }).data;
+    const [glMappingResult, glAccountResult, templateResult] = configResult as Array<{ data: unknown }>;
+    vm.reductions = reductions;
     const nameByMember = new Map(
         ((memberRows ?? []) as unknown as Array<Record<string, unknown>>).map((m) => [
             t(m.id),
@@ -925,60 +1054,6 @@ export async function buildFinancialsCardVM(
         displayName: nameByMember.get(a.customer_member_id) ?? "Child",
         agreementStatus: a.status,
     }));
-
-    /*
-     * Scoped by the agreements resolved just above rather than by customer id, which is nullable on
-     * these rows — so there is one answer to whose account this is, not two.
-     */
-    try {
-        vm.reductions = await readAccountReductions(supabase, {
-            orgId: args.orgId,
-            agreementIds: agreements.map((a) => a.id),
-        });
-    } catch {
-        // A reduction read that fails must not take the whole account down with it: the balance
-        // above is still true, and an empty history is the honest presentation of "not loaded".
-        vm.reductions = [];
-    }
-
-    const memberByAgreement = new Map(agreements.map((a) => [a.id, a.customer_member_id]));
-    /*
-     * Every id this account can be charged against: its enrolment agreements, and the household.
-     * A charge whose source is the household has no child subject, which the ledger renders as the
-     * account rather than inventing an attribution.
-     */
-    const billableSourceIds = [
-        ...agreements.map((a) => a.id),
-        ...(resolvedCustomerId ? [resolvedCustomerId] : []),
-    ];
-
-    // ── CHARGES, GL CONFIGURATION AND TEMPLATES, in one pass ─────────────────────────────────────
-    const [chargeResult, glMappingResult, glAccountResult, templateResult] = await Promise.all([
-        /*
-         * BOTH SOURCES, in one read. A household's account is the union of what its enrolments owe
-         * and what the household itself owes — the pre-enrolment fees that have no agreement to hang
-         * off. `billable_source_type` already carries the distinction; nothing new is invented here.
-         */
-        supabase
-            .from("charges")
-            .select(
-                "id, billable_source_type, billable_source_id, source_charge_id, charge_category, charge_type, status, amount_cents, currency_code, charge_template_id, "
-                + "service_date, occurs_on, billable_on, due_date, posted_at, voided_at, description, metadata, created_at",
-            )
-            .eq("org_id", args.orgId)
-            .in("billable_source_id", billableSourceIds.length ? billableSourceIds : [NO_SOURCE_SENTINEL]),
-        supabase.from("gl_account_mappings").select("key, gl_account_id, is_active").eq("org_id", args.orgId),
-        supabase.from("gl_accounts").select("id, code, name, is_active").eq("org_id", args.orgId),
-        supabase
-            .from("financial_charge_templates")
-            .select(
-                "id, label, charge_category, amount_strategy, amount_cents, currency_code, "
-                + "occurs_on_strategy, billable_on_strategy, trigger_type, is_active, effective_start, effective_end",
-            )
-            .eq("org_id", args.orgId)
-            .eq("is_active", true)
-            .order("label", { ascending: true }),
-    ]);
 
     if (chargeResult.error) {
         return { ...vm, unavailableReason: `Financial records unavailable: ${chargeResult.error.message}` };
@@ -1114,6 +1189,86 @@ export async function buildFinancialsCardVM(
     });
     // Newest first inside a period; the ledger reads downward through time.
     rows.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "") || a.chargeId.localeCompare(b.chargeId));
+
+    /*
+     * ── SLICE 12E · EVERY REMAINING READ IS ISSUED HERE, WHERE ITS INPUTS EXIST ──────────────────
+     *
+     * From this point the build made five more trips through the database strictly one after
+     * another — responsibility, the collectibility loop, payments, payment setup, open collections —
+     * and NONE of them consumes another's result. Each needs only the charge ids and the account,
+     * both of which are known now. They were serial because each was awaited where its answer is
+     * first read, which is a statement about the code's layout, not about the data.
+     *
+     * The promises are created here and awaited below in exactly the order they always were, so the
+     * assembly sequence — responsibility onto the rows, then collectibility, then applied money — is
+     * unchanged and every failure still degrades exactly where it did. What changes is only that the
+     * waiting overlaps.
+     *
+     * The collectibility LOOP is deliberately left serial: parallelising a per-obligation subsidy
+     * resolver multiplies concurrent database pressure by the number of obligations, and that is a
+     * money-facing change that deserves its own slice and its own regression rather than a ride on
+     * this one.
+     */
+    const chargeIdsForReads = rows.map((r) => r.chargeId);
+    const accountCustomerId = vm.account.customerId;
+
+    const responsibilityP = clock.time("responsibility_ms", () =>
+        readResponsibility(supabase, args.orgId, chargeIdsForReads),
+    );
+    /*
+     * The payment VIEWS genuinely need the payments, so they stay chained — but chained to the
+     * payments read itself rather than to everything that happens to be written between them. Both
+     * still fail as ONE outcome, because the existing contract is that either failing means the card
+     * cannot say what has been paid.
+     */
+    const household = t(args.customerId) || null;
+    const paymentsP = clock
+        .time("payments_ms", () =>
+            readAccountPayments(supabase, args.orgId, billableSourceIds, chargeIdsForReads),
+        )
+        .then(async (received) => ({
+            ok: true as const,
+            received,
+            views: household
+                ? await clock.time("payment_views_ms", () =>
+                      resolveHouseholdPaymentViews(supabase, { orgId: args.orgId, customerId: household }),
+                  )
+                : null,
+        }))
+        .catch((e: unknown) => ({ ok: false as const, error: e }));
+    const setupP = clock
+        .time("payment_setup_ms", () =>
+            resolvePaymentSetup(supabase, { orgId: args.orgId, customerId: accountCustomerId }),
+        )
+        .catch(() => null);
+    /* Chained, not concurrent: the candidates read genuinely needs the responsible parties. */
+    const payersP = responsibilityP
+        .then((read) =>
+            clock.time("payer_candidates_ms", () =>
+                resolvePayerCandidates(supabase, {
+                    orgId: args.orgId,
+                    customerId: accountCustomerId ?? "",
+                    /* Reported as an overlap on each candidate. Never used to order or default the choice. */
+                    responsiblePersonIds: (read.responsibility?.parties ?? []).map((party) => String(party.personId)),
+                }),
+            ),
+        )
+        .catch(() => ({ candidates: [] as PayerCandidate[] }));
+    const openCollectionsP = chargeIdsForReads.filter(Boolean).length
+        ? clock
+              .time("open_collections_ms", () =>
+                  supabase
+                      .from("payment_collection_attempts")
+                      .select("id, rail, processor_state, provider_action_type, charge_id, requested_amount_cents, currency, updated_at, canonical_payment_id")
+                      .eq("org_id", args.orgId)
+                      .in("charge_id", chargeIdsForReads.filter(Boolean).slice(0, 200))
+                      .is("canonical_payment_id", null)
+                      .in("processor_state", ["initiated", "requires_payment_method", "requires_action", "processing", "succeeded"])
+                      .order("updated_at", { ascending: false }),
+              )
+              .catch(() => ({ data: null }))
+        : Promise.resolve({ data: null });
+
     /*
      * WHO OWES IT — read once, from what Thread 6 persisted, and shared by every density.
      *
@@ -1122,7 +1277,7 @@ export async function buildFinancialsCardVM(
      * when Processing gained an allocation. This is that read. Nothing is computed here — the cents
      * come from the allocations, and what a party still owes is assigned less attributed.
      */
-    const responsibilityRead = await readResponsibility(supabase, args.orgId, rows.map((r) => r.chargeId));
+    const responsibilityRead = await responsibilityP;
     /*
      * The responsible party lands on the ROW, from the allocations already read. A second query
      * here would be a second answer to the same question; this is the same answer, indexed.
@@ -1161,11 +1316,17 @@ export async function buildFinancialsCardVM(
      * funding, discounts, adjustments and corrections are things that happen TO it.
      */
     const collectible = { outstandingCents: 0, expectedSubsidyCents: 0, submittedClaimSuppressionCents: 0, actualSubsidyReceivedCents: 0, unresolvedVarianceCents: 0, currentlyCollectibleCents: 0 };
-    for (const row of rows.filter(
+    const collectibleRows = rows.filter(
         (r) => r.lifecycleStatus === "posted" && r.periodKey === period.key && !isCollectibleOffsetRow(r),
-    )) {
+    );
+    // How many round trips this loop makes. A duration alone cannot tell one slow read from N reads,
+    // and those two facts want opposite repairs.
+    clock.count("collectible_calls", collectibleRows.length);
+    for (const row of collectibleRows) {
         try {
-            const position = await resolveFamilyCollectible(supabase, { orgId: args.orgId, chargeId: row.chargeId });
+            const position = await clock.time("collectible_ms", () =>
+                resolveFamilyCollectible(supabase, { orgId: args.orgId, chargeId: row.chargeId }),
+            );
             collectible.outstandingCents += position.outstandingCents;
             collectible.expectedSubsidyCents += position.expectedSubsidyCents;
             collectible.submittedClaimSuppressionCents += position.submittedClaimSuppressionCents;
@@ -1196,13 +1357,10 @@ export async function buildFinancialsCardVM(
      * re-fetching keeps the filter free of a network round trip.
      */
     let appliedByChargeId = new Map<string, number>();
+    const paymentsOutcome = await paymentsP;
     try {
-        const received = await readAccountPayments(
-            supabase,
-            args.orgId,
-            billableSourceIds,
-            rows.map((r) => r.chargeId),
-        );
+        if (!paymentsOutcome.ok) throw paymentsOutcome.error;
+        const received = paymentsOutcome.received;
         vm.payments = received.payments;
         appliedByChargeId = received.appliedByChargeId;
 
@@ -1215,12 +1373,8 @@ export async function buildFinancialsCardVM(
          * place where applied money is decided, the canonical composition is asked and merged in by
          * payment id. It is the same authority the service uses, so the two cannot disagree.
          */
-        const household = t(args.customerId) || null;
-        if (household) {
-            const views = await resolveHouseholdPaymentViews(supabase, {
-                orgId: args.orgId,
-                customerId: household,
-            });
+        const views = paymentsOutcome.views;
+        if (views) {
             const byPaymentId = new Map(views.map((v) => [v.paymentId, v]));
             vm.payments = vm.payments.map((row) => {
                 const view = byPaymentId.get(row.paymentId);
@@ -1338,13 +1492,7 @@ export async function buildFinancialsCardVM(
      * Absent or non-ready is `false`, which is the honest reading of "nobody has asked the provider
      * about this merchant".
      */
-    const { data: merchantRow } = await supabase
-        .from("payment_provider_merchants")
-        .select("ach_readiness")
-        .eq("org_id", args.orgId)
-        .eq("processor", "stripe")
-        .eq("is_active", true)
-        .maybeSingle();
+    const { data: merchantRow } = await merchantRead;
     vm.achAvailable = (merchantRow as { ach_readiness: string | null } | null)?.ach_readiness === "ready";
 
     /*
@@ -1359,44 +1507,19 @@ export async function buildFinancialsCardVM(
      * could not load must not make the account look like it has nobody who can pay — the surfaces
      * below distinguish "could not be read" from "there are none".
      */
-    try {
-        vm.paymentCapabilities = await resolvePaymentSetup(supabase, {
-            orgId: args.orgId,
-            customerId: vm.account.customerId,
-        });
-        vm.paymentSetup = vm.paymentCapabilities.summaryLine;
-    } catch {
-        vm.paymentCapabilities = null;
-        vm.paymentSetup = null;
-    }
+    const setup = await setupP;
+    vm.paymentCapabilities = setup;
+    vm.paymentSetup = setup?.summaryLine ?? null;
 
-    try {
-        const payers = await resolvePayerCandidates(supabase, {
-            orgId: args.orgId,
-            customerId: vm.account.customerId ?? "",
-            /* Reported as an overlap on each candidate. Never used to order or default the choice. */
-            responsiblePersonIds: (vm.responsibility?.parties ?? []).map((party) => String(party.personId)),
-        });
-        vm.payerCandidates = payers.candidates;
-    } catch {
-        vm.payerCandidates = [];
-    }
+    vm.payerCandidates = (await payersP).candidates;
 
     /*
      * The collections still in flight for the charges this card is about. Scoped to those charges so
      * a household's card never reports another household's attempt, and limited to states the
      * provider has not finished — a recognised attempt has become a payment and is read there.
      */
-    const chargeIds = vm.rows.map((r) => r.chargeId).filter(Boolean);
-    if (chargeIds.length) {
-        const { data: attemptRows } = await supabase
-            .from("payment_collection_attempts")
-            .select("id, rail, processor_state, provider_action_type, charge_id, requested_amount_cents, currency, updated_at, canonical_payment_id")
-            .eq("org_id", args.orgId)
-            .in("charge_id", chargeIds.slice(0, 200))
-            .is("canonical_payment_id", null)
-            .in("processor_state", ["initiated", "requires_payment_method", "requires_action", "processing", "succeeded"])
-            .order("updated_at", { ascending: false });
+    const { data: attemptRows } = await openCollectionsP;
+    {
         vm.openCollections = ((attemptRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
             attemptId: t(r.id),
             rail: t(r.rail) || "card",
