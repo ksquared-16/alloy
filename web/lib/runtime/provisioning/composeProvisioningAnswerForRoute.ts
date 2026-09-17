@@ -188,13 +188,21 @@ export async function composeProvisioningAnswerForRoute(input: {
         // Never let a diagnostic break the product path. The collector is request-scoped through
         // React `cache()`, which the HTTP seam's route handler does not necessarily provide.
         try {
-            // The producers stashed their concurrent spans on this same field while they ran, so the
-            // outer record must PRESERVE them rather than assign over the top — `recordRouteTiming`
-            // replaces whole fields.
+            /*
+             * DEEPER BOUNDARIES STASH THEIR SPANS ON THIS SAME FIELD WHILE THEY RUN, AND
+             * `recordRouteTiming` REPLACES WHOLE FIELDS — so this must preserve EVERYTHING it
+             * finds, not the fields it happens to know about.
+             *
+             * It used to restate `producers` by name. Slice 12E added `financials` one level
+             * deeper, the build recorded it correctly, and this line silently dropped it: the
+             * deployed payload carried `financials: null` for every sample. Nineteen local gates
+             * passed, because they proved the spans were RECORDED and nothing proved they were
+             * EMITTED. A spread keeps the next one too, whatever it is called.
+             */
             const already = collectedRouteTiming()?.route_compose_spans;
             recordRouteTiming({
                 route_compose_spans: {
-                    ...(already?.producers ? { producers: already.producers } : {}),
+                    ...(already ?? {}),
                     route_identity_ms: Math.round(routeIdentityMs),
                     admin_client_ms: Math.round(adminClientMs),
                     document_actor_ms: Math.round(documentActorMs),
