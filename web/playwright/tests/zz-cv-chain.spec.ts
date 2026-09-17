@@ -15,7 +15,7 @@ const SUBJECT = "b5b62172-8b27-44ff-a852-b11b8888a6cd";
 const OUT = "../certification/financials";
 const log = (s: string) => console.log(s); // eslint-disable-line no-console
 
-test.use({ storageState: STORAGE, baseURL: "http://127.0.0.1:3012", viewport: { width: 1680, height: 1050 } });
+test.use({ storageState: STORAGE, baseURL: process.env.QA_BASE_URL || "http://127.0.0.1:3112", viewport: { width: 1680, height: 1050 } });
 test.setTimeout(600_000);
 
 const chain = (p: Page) => p.evaluate(() => {
