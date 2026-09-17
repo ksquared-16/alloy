@@ -10,7 +10,7 @@ The instrument is promoted. The **diagnosis cannot run**, because enabling it re
 | Candidate | **`1a89f41b2`** (staging reconciled; instrument byte-identical to `ae3795d59`) |
 | PR | [**#1055**](https://github.com/ksquared-16/alloy/pull/1055) — **12/12** checks |
 | **Merge SHA** | **`236578d88`** — merged to staging; candidate and instrument `ae3795d59` both contained by ancestry |
-| Deployed at time of report | `29cf29abd` (the merge had not yet deployed; immaterial, since the flag is off either way) |
+| **Deployed SHA** | **`236578d88`** — the instrument is now LIVE on staging (confirmed 2026-09-17, continuation run) |
 | Governed dependency | **`gdep_4101c86bc29562`** — `DECLARED`, run `WAITING_RESOURCE` |
 
 ---
@@ -85,6 +85,23 @@ Committing the flag (env block in `next.config`, a checked-in `.env`) would enab
 §5 requires middleware headers **and** the `__alloy_route_timing` payload before any measurement, and defines the headers-absent case as **`HALF_INSTRUMENTED_BUILD` → do not measure**. With the flag off there is no payload at all. §6–§18 therefore cannot execute. **No timing diagnostics are reported, as instructed.**
 
 ---
+
+## CONTINUATION RE-CHECK — the instrument is deployed, the flag is not
+
+Re-verified on the continuation run, after PR #1055 merged and deployed:
+
+| | |
+|---|---|
+| staging head | `236578d88` |
+| deployed SHA | `236578d88` — **instrument live** |
+| `ae3795d59` contained | **YES** |
+| `x-alloy-mw-t0` | **absent** |
+| `x-alloy-mw-auth-ms` | **absent** |
+| `x-alloy-admin-mw` | **present** (`redirect:/login`) |
+
+Checked on two matched routes (`/workspace` and `/workspace/work-unit/waitlist`) to rule out a per-route quirk. The middleware executes and emits its own header on both; neither timing header appears on either.
+
+**So the promotion half of Slice 12B is now COMPLETE and the blocker is unchanged and isolated:** the deployed build contains the instrument, and the build was not made with `ALLOY_ROUTE_TIMING=1`. This is the cleanest possible statement of the remaining dependency — nothing else stands between here and the diagnosis.
 
 ## THE EXACT ACTION REQUIRED
 
