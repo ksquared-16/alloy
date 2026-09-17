@@ -1,0 +1,687 @@
+[
+ {
+  "i": 0,
+  "mwHeaders": {
+   "t0": "1789665552373",
+   "auth_ms": "7",
+   "auth_source": "claims",
+   "admin_mw": "next"
+  },
+  "routeTiming": {
+   "layout_entry_epoch_ms": 1789665552737,
+   "route_meta_ms": 493,
+   "layout_total_ms": 494,
+   "page_entry_epoch_ms": 1789665552737,
+   "compose_wall_ms": 7199,
+   "seeded": true,
+   "compose_total_ms": 3029,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 280,
+    "configuration_ms": 282,
+    "presentation_ms": 2191,
+    "records_ms": 0,
+    "projection_ms": 767,
+    "composition_ms": 1689,
+    "total_ms": 3029,
+    "spans": {
+     "child_grain_members": 767,
+     "child_grain_waitlist": 1060,
+     "child_grain_inquiry": 357,
+     "child_grain_avatar": 1418,
+     "composition_ready": 3016,
+     "focus_panel_operational_projection": 13
+    }
+   },
+   "composition_ready_ms": 3016,
+   "page_total_ms": 7199
+  },
+  "document": {
+   "start": 4,
+   "ttfb": 1052,
+   "duration": 7926,
+   "end": 7930
+  },
+  "phases": {
+   "first_non_blank": 1169,
+   "destination_shell": 1302,
+   "published_structure": 8158,
+   "first_critical_meaning": 8158,
+   "last_critical_meaning": 8158,
+   "trackA_resolving": 8158,
+   "trackA_meaningful": 15510,
+   "final_settlement": 33969
+  },
+  "coherence_window": 0,
+  "structure_at_commit": [
+   "business_process",
+   "financials",
+   "attendance",
+   "health_safety",
+   "children",
+   "household"
+  ],
+  "structure_at_settle": [
+   "business_process",
+   "financials",
+   "children",
+   "attendance",
+   "household",
+   "health_safety"
+  ],
+  "per_critical": {
+   "business_process": 8158,
+   "financials": 8158,
+   "attendance": 8158,
+   "health_safety": 8158
+  },
+  "trackA": {
+   "children": 15510,
+   "household": 15510
+  },
+  "network": {
+   "total": 146,
+   "api": 39,
+   "top": [
+    {
+     "path": "/api/admin/related/opportunity/d097e1a8-c3c0-4c51-a113-2275b00",
+     "startRel": 15776,
+     "duration": 17979
+    },
+    {
+     "path": "/workspace/work-unit/waitlist",
+     "startRel": 4,
+     "duration": 7926
+    },
+    {
+     "path": "/api/admin/view-models/drawer/opportunity/d097e1a8-c3c0-4c51-a",
+     "startRel": 8240,
+     "duration": 7188
+    },
+    {
+     "path": "/api/admin/layout-runtime/opportunity-drawer-body",
+     "startRel": 15443,
+     "duration": 4643
+    },
+    {
+     "path": "/api/admin/queue-view-totals",
+     "startRel": 7370,
+     "duration": 3086
+    },
+    {
+     "path": "/api/admin/metrics/resolve",
+     "startRel": 8248,
+     "duration": 3008
+    },
+    {
+     "path": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/wo",
+     "startRel": 4732,
+     "duration": 2628
+    },
+    {
+     "path": "/api/admin/communications/family-workspace",
+     "startRel": 9165,
+     "duration": 2581
+    },
+    {
+     "path": "/api/admin/lifecycle-catalog",
+     "startRel": 1451,
+     "duration": 2424
+    },
+    {
+     "path": "/api/admin/workspace/site-filter",
+     "startRel": 1447,
+     "duration": 2316
+    }
+   ]
+  }
+ },
+ {
+  "i": 1,
+  "mwHeaders": {
+   "t0": "1789665586556",
+   "auth_ms": "7",
+   "auth_source": "claims",
+   "admin_mw": "next"
+  },
+  "routeTiming": {
+   "layout_entry_epoch_ms": 1789665586687,
+   "route_meta_ms": 570,
+   "layout_total_ms": 570,
+   "page_entry_epoch_ms": 1789665586687,
+   "compose_wall_ms": 8300,
+   "seeded": true,
+   "compose_total_ms": 4431,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 0,
+    "configuration_ms": 1,
+    "presentation_ms": 4198,
+    "records_ms": 301,
+    "projection_ms": 741,
+    "composition_ms": 3381,
+    "total_ms": 4431,
+    "spans": {
+     "child_grain_members": 741,
+     "child_grain_waitlist": 2872,
+     "child_grain_inquiry": 283,
+     "child_grain_avatar": 3155,
+     "composition_ready": 4426,
+     "focus_panel_operational_projection": 5
+    }
+   },
+   "composition_ready_ms": 4426,
+   "page_total_ms": 8300
+  },
+  "document": {
+   "start": 1,
+   "ttfb": 676,
+   "duration": 8780,
+   "end": 8781
+  },
+  "phases": {
+   "first_non_blank": 789,
+   "destination_shell": 911,
+   "published_structure": 8883,
+   "first_critical_meaning": 8883,
+   "last_critical_meaning": 8883,
+   "trackA_resolving": 8883,
+   "trackA_meaningful": 21069,
+   "final_settlement": 33938
+  },
+  "coherence_window": 0,
+  "structure_at_commit": [
+   "business_process",
+   "financials",
+   "attendance",
+   "health_safety",
+   "children",
+   "household"
+  ],
+  "structure_at_settle": [
+   "business_process",
+   "financials",
+   "children",
+   "attendance",
+   "household",
+   "health_safety"
+  ],
+  "per_critical": {
+   "business_process": 8883,
+   "financials": 8883,
+   "attendance": 8883,
+   "health_safety": 8883
+  },
+  "trackA": {
+   "children": 21069,
+   "household": 21069
+  },
+  "network": {
+   "total": 144,
+   "api": 37,
+   "top": [
+    {
+     "path": "/api/admin/view-models/drawer/opportunity/d097e1a8-c3c0-4c51-a",
+     "startRel": 8815,
+     "duration": 12185
+    },
+    {
+     "path": "/workspace/work-unit/waitlist",
+     "startRel": 1,
+     "duration": 8780
+    },
+    {
+     "path": "/api/admin/layout-runtime/opportunity-drawer-body",
+     "startRel": 21005,
+     "duration": 7328
+    },
+    {
+     "path": "/api/admin/communications/conversations",
+     "startRel": 21228,
+     "duration": 4925
+    },
+    {
+     "path": "/api/admin/communications/family-workspace",
+     "startRel": 26143,
+     "duration": 2610
+    },
+    {
+     "path": "/api/admin/operational-tasks",
+     "startRel": 1132,
+     "duration": 2451
+    },
+    {
+     "path": "/api/admin/communications/family-workspace",
+     "startRel": 8834,
+     "duration": 2242
+    },
+    {
+     "path": "/api/admin/queue-view-totals",
+     "startRel": 4634,
+     "duration": 2163
+    },
+    {
+     "path": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/wo",
+     "startRel": 2487,
+     "duration": 2145
+    },
+    {
+     "path": "/storage/v1/object/sign/org_documents/93667019-bd28-49b5-a688-",
+     "startRel": 21576,
+     "duration": 1839
+    }
+   ]
+  }
+ },
+ {
+  "i": 2,
+  "mwHeaders": {
+   "t0": "1789665620912",
+   "auth_ms": "5",
+   "auth_source": "claims",
+   "admin_mw": "next"
+  },
+  "routeTiming": {
+   "layout_entry_epoch_ms": 1789665621172,
+   "route_meta_ms": 164,
+   "layout_total_ms": 164,
+   "page_entry_epoch_ms": 1789665621172,
+   "compose_wall_ms": 7183,
+   "seeded": true,
+   "compose_total_ms": 2739,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 0,
+    "configuration_ms": 2,
+    "presentation_ms": 2479,
+    "records_ms": 149,
+    "projection_ms": 921,
+    "composition_ms": 1660,
+    "total_ms": 2739,
+    "spans": {
+     "child_grain_members": 921,
+     "child_grain_waitlist": 753,
+     "child_grain_inquiry": 265,
+     "child_grain_avatar": 1408,
+     "composition_ready": 2735,
+     "focus_panel_operational_projection": 3
+    }
+   },
+   "composition_ready_ms": 2735,
+   "page_total_ms": 7183
+  },
+  "document": {
+   "start": 4,
+   "ttfb": 1053,
+   "duration": 7786,
+   "end": 7790
+  },
+  "phases": {
+   "first_non_blank": 1177,
+   "destination_shell": 1408,
+   "published_structure": 7879,
+   "first_critical_meaning": 7879,
+   "last_critical_meaning": 7879,
+   "trackA_resolving": 7879,
+   "trackA_meaningful": 20756,
+   "final_settlement": 33843
+  },
+  "coherence_window": 0,
+  "structure_at_commit": [
+   "business_process",
+   "financials",
+   "attendance",
+   "health_safety",
+   "children",
+   "household"
+  ],
+  "structure_at_settle": [
+   "business_process",
+   "financials",
+   "children",
+   "attendance",
+   "household",
+   "health_safety"
+  ],
+  "per_critical": {
+   "business_process": 7879,
+   "financials": 7879,
+   "attendance": 7879,
+   "health_safety": 7879
+  },
+  "trackA": {
+   "children": 20756,
+   "household": 20756
+  },
+  "network": {
+   "total": 144,
+   "api": 37,
+   "top": [
+    {
+     "path": "/api/admin/view-models/drawer/opportunity/d097e1a8-c3c0-4c51-a",
+     "startRel": 7896,
+     "duration": 12811
+    },
+    {
+     "path": "/workspace/work-unit/waitlist",
+     "startRel": 4,
+     "duration": 7786
+    },
+    {
+     "path": "/api/admin/layout-runtime/opportunity-drawer-body",
+     "startRel": 20710,
+     "duration": 5812
+    },
+    {
+     "path": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/wo",
+     "startRel": 3586,
+     "duration": 3555
+    },
+    {
+     "path": "/api/admin/communications/family-workspace",
+     "startRel": 22462,
+     "duration": 2787
+    },
+    {
+     "path": "/api/admin/communications/family-workspace",
+     "startRel": 7947,
+     "duration": 2726
+    },
+    {
+     "path": "/api/admin/activity",
+     "startRel": 19334,
+     "duration": 2670
+    },
+    {
+     "path": "/api/admin/metrics/resolve",
+     "startRel": 7896,
+     "duration": 2599
+    },
+    {
+     "path": "/api/admin/communications/threads",
+     "startRel": 8002,
+     "duration": 2462
+    },
+    {
+     "path": "/api/admin/queue-view-totals",
+     "startRel": 7150,
+     "duration": 2416
+    }
+   ]
+  }
+ },
+ {
+  "i": 3,
+  "mwHeaders": {
+   "t0": "1789665655615",
+   "auth_ms": "4",
+   "auth_source": "claims",
+   "admin_mw": "next"
+  },
+  "routeTiming": {
+   "layout_entry_epoch_ms": 1789665655721,
+   "route_meta_ms": 498,
+   "layout_total_ms": 498,
+   "page_entry_epoch_ms": 1789665655722,
+   "compose_wall_ms": 5345,
+   "seeded": true,
+   "compose_total_ms": 2298,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 0,
+    "configuration_ms": 1,
+    "presentation_ms": 2046,
+    "records_ms": 131,
+    "projection_ms": 711,
+    "composition_ms": 1445,
+    "total_ms": 2298,
+    "spans": {
+     "child_grain_members": 711,
+     "child_grain_waitlist": 793,
+     "child_grain_inquiry": 405,
+     "child_grain_avatar": 1198,
+     "composition_ready": 2295,
+     "focus_panel_operational_projection": 3
+    }
+   },
+   "composition_ready_ms": 2295,
+   "page_total_ms": 5345
+  },
+  "document": {
+   "start": 4,
+   "ttfb": 1133,
+   "duration": 5850,
+   "end": 5854
+  },
+  "phases": {
+   "first_non_blank": 1266,
+   "destination_shell": 1266,
+   "published_structure": 5983,
+   "first_critical_meaning": 5983,
+   "last_critical_meaning": 5983,
+   "trackA_resolving": 5983,
+   "trackA_meaningful": 12716,
+   "final_settlement": 33969
+  },
+  "coherence_window": 0,
+  "structure_at_commit": [
+   "business_process",
+   "financials",
+   "attendance",
+   "health_safety",
+   "children",
+   "household"
+  ],
+  "structure_at_settle": [
+   "business_process",
+   "financials",
+   "children",
+   "attendance",
+   "household",
+   "health_safety"
+  ],
+  "per_critical": {
+   "business_process": 5983,
+   "financials": 5983,
+   "attendance": 5983,
+   "health_safety": 5983
+  },
+  "trackA": {
+   "children": 12716,
+   "household": 12716
+  },
+  "network": {
+   "total": 145,
+   "api": 38,
+   "top": [
+    {
+     "path": "/api/admin/related/opportunity/d097e1a8-c3c0-4c51-a113-2275b00",
+     "startRel": 13075,
+     "duration": 15412
+    },
+    {
+     "path": "/api/admin/view-models/drawer/opportunity/d097e1a8-c3c0-4c51-a",
+     "startRel": 5980,
+     "duration": 6711
+    },
+    {
+     "path": "/workspace/work-unit/waitlist",
+     "startRel": 4,
+     "duration": 5850
+    },
+    {
+     "path": "/api/admin/layout-runtime/opportunity-drawer-body",
+     "startRel": 12676,
+     "duration": 5241
+    },
+    {
+     "path": "/api/admin/queue-view-totals",
+     "startRel": 5390,
+     "duration": 2214
+    },
+    {
+     "path": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/wo",
+     "startRel": 3389,
+     "duration": 2002
+    },
+    {
+     "path": "/api/admin/metrics/resolve",
+     "startRel": 5999,
+     "duration": 1987
+    },
+    {
+     "path": "/api/admin/communications/family-workspace",
+     "startRel": 6328,
+     "duration": 1975
+    },
+    {
+     "path": "/storage/v1/object/sign/org_documents/93667019-bd28-49b5-a688-",
+     "startRel": 6033,
+     "duration": 1939
+    },
+    {
+     "path": "/api/admin/communications/family-workspace",
+     "startRel": 8303,
+     "duration": 1891
+    }
+   ]
+  }
+ },
+ {
+  "i": 4,
+  "mwHeaders": {
+   "t0": "1789665689763",
+   "auth_ms": "6",
+   "auth_source": "claims",
+   "admin_mw": "next"
+  },
+  "routeTiming": {
+   "layout_entry_epoch_ms": 1789665689927,
+   "route_meta_ms": 185,
+   "layout_total_ms": 185,
+   "page_entry_epoch_ms": 1789665689927,
+   "compose_wall_ms": 4855,
+   "seeded": true,
+   "compose_total_ms": 1890,
+   "compose_sections": {
+    "authorization_ms": 0,
+    "work_unit_ms": 0,
+    "configuration_ms": 1,
+    "presentation_ms": 1635,
+    "records_ms": 132,
+    "projection_ms": 527,
+    "composition_ms": 1223,
+    "total_ms": 1890,
+    "spans": {
+     "child_grain_members": 527,
+     "child_grain_waitlist": 617,
+     "child_grain_inquiry": 356,
+     "child_grain_avatar": 974,
+     "composition_ready": 1888,
+     "focus_panel_operational_projection": 2
+    }
+   },
+   "composition_ready_ms": 1888,
+   "page_total_ms": 4855
+  },
+  "document": {
+   "start": 2,
+   "ttfb": 575,
+   "duration": 5337,
+   "end": 5339
+  },
+  "phases": {
+   "first_non_blank": 690,
+   "destination_shell": 813,
+   "published_structure": 5411,
+   "first_critical_meaning": 5411,
+   "last_critical_meaning": 5411,
+   "trackA_resolving": 5411,
+   "trackA_meaningful": 11108,
+   "final_settlement": 33935
+  },
+  "coherence_window": 0,
+  "structure_at_commit": [
+   "business_process",
+   "financials",
+   "attendance",
+   "health_safety",
+   "children",
+   "household"
+  ],
+  "structure_at_settle": [
+   "business_process",
+   "financials",
+   "children",
+   "attendance",
+   "household",
+   "health_safety"
+  ],
+  "per_critical": {
+   "business_process": 5411,
+   "financials": 5411,
+   "attendance": 5411,
+   "health_safety": 5411
+  },
+  "trackA": {
+   "children": 11108,
+   "household": 11108
+  },
+  "network": {
+   "total": 145,
+   "api": 38,
+   "top": [
+    {
+     "path": "/api/admin/related/opportunity/d097e1a8-c3c0-4c51-a113-2275b00",
+     "startRel": 11176,
+     "duration": 14614
+    },
+    {
+     "path": "/api/admin/view-models/drawer/opportunity/d097e1a8-c3c0-4c51-a",
+     "startRel": 5373,
+     "duration": 5642
+    },
+    {
+     "path": "/workspace/work-unit/waitlist",
+     "startRel": 2,
+     "duration": 5337
+    },
+    {
+     "path": "/api/admin/layout-runtime/opportunity-drawer-body",
+     "startRel": 11017,
+     "duration": 5039
+    },
+    {
+     "path": "/api/admin/queue-view-totals",
+     "startRel": 5374,
+     "duration": 3241
+    },
+    {
+     "path": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/wo",
+     "startRel": 2613,
+     "duration": 2906
+    },
+    {
+     "path": "/api/admin/metrics/resolve",
+     "startRel": 5374,
+     "duration": 2531
+    },
+    {
+     "path": "/api/admin/queue-row-layout/queue-row-3933ac47-077a-4de8-aaac-",
+     "startRel": 5375,
+     "duration": 2080
+    },
+    {
+     "path": "/api/admin/communications/family-workspace",
+     "startRel": 5392,
+     "duration": 1902
+    },
+    {
+     "path": "/api/admin/communications/family-workspace",
+     "startRel": 7294,
+     "duration": 1666
+    }
+   ]
+  }
+ }
+]
