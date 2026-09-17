@@ -1,5 +1,22 @@
+/**
+ * CONFIGURE AN OPERATIONAL QUESTION — the second door to an OI measurement.
+ *
+ * Each branch here builds a measurement with a healthy-range goal and binds it to a published
+ * calculation version: Room Utilization, Room Utilization (FTE), Equivalent Child Count and Future
+ * Room Capacity. Every one of them ends in `writeOiOrgCalcMeasurements` and `saveOrgMetadata` — the
+ * SAME collection `POST /api/admin/metrics/oi-org-calc-measurements` writes, and that route has
+ * required `reports.write` through `requireAnalyticsManageAccess` since Operational Intelligence
+ * Authority Convergence V1.
+ *
+ * So one object had two doors with different locks: the canonical one asked for the capability and
+ * this one asked whether the caller's role was spelled "admin". Nothing about what it configures is
+ * Business Process or operational execution — no lifecycle, no stage, no work, no record status.
+ * The guided builders at Operational Intelligence are its callers, and they are the same surface
+ * the measurement route serves.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requireAnalyticsManageAccess } from "@/lib/admin/canReadAnalytics";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
     EQUIVALENT_CHILD_COUNT_QUESTION_KEY,
@@ -27,9 +44,8 @@ export async function POST(req: NextRequest) {
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Admin role required" }, { status: 403 });
-    }
+    const analyticsAuth = await requireAnalyticsManageAccess();
+    if (!analyticsAuth.ok) return analyticsAuth.response;
 
     let body: unknown;
     try {
