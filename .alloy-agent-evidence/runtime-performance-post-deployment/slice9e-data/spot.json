@@ -1,0 +1,37 @@
+{
+ "p0_7_4": {
+  "caught": true,
+  "at_ms": 10680,
+  "reserved": 2,
+  "keys": [
+   "children",
+   "household"
+  ],
+  "text": [
+   "Resolving children…",
+   "Resolving household…"
+  ]
+ },
+ "p0_7_2": {
+  "rowA": "9ab36f48",
+  "rowB": "8b3689fb",
+  "A_imgs": [
+   "D7uXQXkNud-aIzSZ_C1gRBHaf4FId0MP35C1ZjWw"
+  ],
+  "t_row_selection_ms": 126,
+  "t_text_ms": 126,
+  "t_avatar_ms": 126,
+  "STALE_PRIOR_AVATAR_FRAMES": 0,
+  "frames": 427,
+  "final_text": "PK PassA Kid Waitlist · Enrolling · Tour Scheduled Nor"
+ },
+ "p0_7_3": {
+  "target": "new_leads",
+  "rows_before": 16,
+  "target_rows": 3,
+  "t_busy_ms": 78,
+  "t_rows_changed_ms": 3046,
+  "held_frames_with_busy": 103,
+  "held_frames_without_busy": 1
+ }
+}

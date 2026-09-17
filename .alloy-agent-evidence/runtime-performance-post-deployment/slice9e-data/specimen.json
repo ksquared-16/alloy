@@ -1,0 +1,20 @@
+{
+ "bp": {
+  "top": 292.5,
+  "bottom": 591.5,
+  "height": 299,
+  "left": 509,
+  "right": 1198
+ },
+ "fin": {
+  "top": 292.5,
+  "bottom": 591.69,
+  "height": 299.19,
+  "left": 1208,
+  "right": 1547
+ },
+ "tops_align": true,
+ "bottoms_align": true,
+ "heights_equal": true,
+ "overlay_present": false
+}

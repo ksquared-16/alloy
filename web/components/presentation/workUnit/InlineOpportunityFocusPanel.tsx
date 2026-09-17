@@ -59,7 +59,11 @@ import VmDrawerActionModalsPortal from "@/components/admin/vmDrawer/VmDrawerActi
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useRecordWorkRuntime } from "@/lib/presentation/runtime/useRecordWorkRuntime";
 import { useAttentionSubject } from "@/lib/runtime/kernel/useAttentionCardFocus";
-import { useOperationalSubject, isOperationallyResolved } from "./OperationalSubjectContext";
+import {
+    useOperationalSubject,
+    isOperationallyResolved,
+    isStructurallyResolved,
+} from "./OperationalSubjectContext";
 import { FocusPanelOutOfViewAffordance } from "./FocusPanelOutOfViewAffordance";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useRetainedScroll } from "@/lib/presentation/runtime/useRetainedScroll";
@@ -121,6 +125,16 @@ export function InlineOpportunityFocusPanel() {
     // committed subject, a current business state, and a truthful action? That is what the marker
     // now reports. The Settlement fetch gets its own marker and gates nothing.
     const operationallyResolved = isOperationallyResolved(operational);
+    /*
+     * P0-7.1 — STRUCTURE IS A DIFFERENT QUESTION FROM MEANING.
+     *
+     * `operationallyResolved` asks whether the business meaning has been answered. The grid does not
+     * need that answer to exist; it needs the PUBLISHED COMPOSITION, which the provisioning answer
+     * carries record-independently. Gating the surface on the semantic predicate withheld the real
+     * configured structure in a state that is perfectly ordinary — a family-grain subject whose stage
+     * configures no action — and painted the cold "Thinking…" owner over a composition already in hand.
+     */
+    const structurallyResolved = isStructurallyResolved(operational);
     // Local subject view — id/type from committed Focus. The queue-preview seed is the INSTANT-IDENTITY
     // seed carried on the committed Operational Subject (derived from the same committed queue row the
     // subject was selected from — never the drawer store). It gives the pending header the family name +
@@ -644,6 +658,10 @@ export function InlineOpportunityFocusPanel() {
         : resolved ? "enriched:resolved"
         : heldPrior ? "enriched:held-prior"
         : operationallyResolved ? "commit-critical-seed"
+        // PHASE 1 — the published composition is authoritative but its meaning is not answered yet.
+        // The real configured cells commit here and say what they truthfully can (P0-7.4 resolving),
+        // instead of the whole surface waiting behind a semantic fact it does not need.
+        : structurallyResolved ? "published-structure"
         :   "cold-loader";
     useEffect(() => {
         logCurrentWorkInit("focusPanel.mount", {
@@ -696,7 +714,7 @@ export function InlineOpportunityFocusPanel() {
             // Always keep commit-critical while operationally resolved — including after
             // Settlement — so child Attention can overlay the child's stage mission onto the
             // family Settlement VM (never replace with Lead work).
-            operationallyResolved
+            operationallyResolved || structurallyResolved
                 ? {
                       subjectId: operationalSubjectId ?? "",
                       statusKey: drawer.opportunityQueuePreviewSeed?.statusKey ?? null,
@@ -867,7 +885,7 @@ export function InlineOpportunityFocusPanel() {
                                 Retry
                             </button>
                         </div>
-                    : resolved || heldPrior || operationallyResolved ?
+                    : resolved || heldPrior || operationallyResolved || structurallyResolved ?
                         // THE ONE Focus Panel body (A — atomic commit). Commit-critical (from the answer)
                         // OR enriched (from the drawer VM), rendered by the SAME grid instance under a
                         // stable subject key (bodyRenderKey). The pending → enriched transition is a model
