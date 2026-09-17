@@ -1,0 +1,1444 @@
+[
+ {
+  "dt": 823,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 978,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 1210,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 1364,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 1517,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 1669,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 1823,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 1979,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 2136,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 2291,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 2444,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 2599,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 2752,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 2906,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 3058,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 3212,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 3368,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 3524,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 3678,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 3835,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 3991,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 4145,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 4299,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 4452,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 4605,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 4757,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 4911,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 5067,
+  "shellPresent": true,
+  "el": {
+   "w": 0,
+   "h": 0,
+   "top": 0,
+   "left": 0,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": false,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": "DIV",
+  "bootShells": 2
+ },
+ {
+  "dt": 5222,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 5385,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 5539,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 5715,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 5868,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 6022,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 6178,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 6336,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 6491,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 6648,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 6800,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 6952,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 7107,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 7263,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 7418,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 7571,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 7724,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 7878,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 8032,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 8185,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 8340,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 8494,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 8648,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 8802,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 8956,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 9111,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 9265,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 9419,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 9572,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 9726,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 9880,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 10035,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 10188,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 10344,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 10497,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 10651,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 10803,
+  "shellPresent": true,
+  "el": {
+   "w": 50,
+   "h": 20,
+   "top": 642,
+   "left": 803,
+   "display": "block",
+   "visibility": "visible",
+   "opacity": "1",
+   "color": "oklab(0.26907 -0.0107613 -0.0397071 / 0.7)",
+   "fontSize": "13px",
+   "onScreen": true,
+   "text": "Waitlist"
+  },
+  "hiddenAncestor": null,
+  "bootShells": 1
+ },
+ {
+  "dt": 10956,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 11109,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 11263,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 11417,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 11570,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 11721,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 11874,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 12027,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 12181,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 12334,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 12486,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 12640,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 12793,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 12947,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 13102,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 13255,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 13408,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 13561,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 13714,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 13869,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 14025,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 14178,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 14331,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 14485,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 14640,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 14794,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 14947,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 15103,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 15259,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 15413,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 15567,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 15721,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ },
+ {
+  "dt": 15876,
+  "shellPresent": false,
+  "el": null,
+  "hiddenAncestor": null,
+  "bootShells": 0
+ }
+]
