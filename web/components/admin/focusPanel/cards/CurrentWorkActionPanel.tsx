@@ -50,6 +50,8 @@ import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContex
 import type { FamilyComposeDraftSeed } from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
 import { submitTourScheduleLegacyFromPanel } from "@/lib/tours/actions/submitTourScheduleLegacyFromPanel";
 import { useTourInvitationComposeSeed } from "@/lib/tours/useTourInvitationComposeSeed";
+import { useEnrollmentPaperworkComposeSeed } from "@/lib/enrollment/paperwork/useEnrollmentPaperworkComposeSeed";
+import { SEND_ENROLLMENT_PAPERWORK_ACTION_KEY } from "@/lib/adminV2/actions/definitions/sendEnrollmentPaperworkAction";
 
 type Props = {
     action: CurrentWorkActionVM;
@@ -114,6 +116,58 @@ function CurrentWorkNewMessageComposerHost({
                 </div>
             </div>
         </div>
+    );
+}
+
+/**
+ * Enrollment paperwork, composed the way every other family message is composed.
+ *
+ * The child is taken from the participant scope the panel already carries — the SAME carrier every
+ * other child-grain command reads. Absent means absent: a wrong child would send one family's
+ * paperwork to another, and the operator could not see that it happened, so the host refuses rather
+ * than resolving a child of its own.
+ */
+function CurrentWorkEnrollmentPaperworkComposerHost({
+    action,
+    opportunityId,
+    customerMemberId,
+}: {
+    action: CurrentWorkActionVM;
+    opportunityId: string;
+    customerMemberId: string;
+}) {
+    const actionKey = (action.handlerKey ?? action.actionRef ?? action.key).trim();
+    const seedState = useEnrollmentPaperworkComposeSeed(customerMemberId, true);
+
+    if (seedState.phase !== "ready") {
+        return (
+            <div
+                className="alloy-os-currentwork__composer-host"
+                data-work-action-panel="true"
+                data-work-action-panel-key={actionKey}
+                data-work-action-surface="communications_composer"
+                data-enrollment-paperwork-prepare={seedState.phase === "error" ? "error" : "true"}
+                aria-label={`${action.label} composer`}
+            >
+                {seedState.phase === "error" ?
+                    <div className="flex min-h-[16rem] flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
+                        <p className="text-[13px] font-semibold text-alloy-ember">{seedState.message}</p>
+                    </div>
+                :   <div className="flex min-h-[16rem] flex-1 items-center justify-center px-4 text-[12px] text-alloy-midnight/55">
+                        Preparing enrollment paperwork…
+                    </div>
+                }
+            </div>
+        );
+    }
+
+    return (
+        <CurrentWorkNewMessageComposerHost
+            actionKey={actionKey}
+            actionLabel={action.label}
+            opportunityId={opportunityId}
+            draftSeed={seedState.seed}
+        />
     );
 }
 
@@ -252,6 +306,15 @@ export default function CurrentWorkActionPanel({
 
     if (surface === "communications_composer") {
         const isTourInvitation = actionKey === "send_tour_invitation";
+        if (actionKey === SEND_ENROLLMENT_PAPERWORK_ACTION_KEY) {
+            return (
+                <CurrentWorkEnrollmentPaperworkComposerHost
+                    action={action}
+                    opportunityId={opportunityId}
+                    customerMemberId={context.participantScope?.customerMemberId?.trim() ?? ""}
+                />
+            );
+        }
         // One canonical New Message host for Contact Family, Send Message, and Tour Invitation.
         // Tour prepares draft content (subject/body/link) then hands it to the shared composer.
         if (isTourInvitation) {

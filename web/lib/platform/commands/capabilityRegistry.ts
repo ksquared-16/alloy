@@ -34,6 +34,7 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "staff.add",
     "child.add",
     "enrollment.start",
+    "enrollment.send_paperwork",
     "enrollment.direct",
     "stage_work.start",
     "employment.update",
@@ -950,6 +951,25 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         implementationStatus: "production",
         reason:
             "Enrollment Context Convergence. Begins the governed journey for a child that already exists. Creates ONE process_instance and never an opportunity: context is joined only when the household has a live episode, and a completed one is never reopened.",
+    }),
+    def({
+        capabilityKey: "enrollment.send_paperwork",
+        canonicalCommandKey: "enrollment.send_paperwork",
+        operatorLabel: "Send enrollment paperwork",
+        family: "enrollment",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "enrollment.send_paperwork",
+        implementationStatus: "production",
+        reason:
+            "The Enrolling stage's only operator action. Composes the idempotent enrollment.start "
+            + "with the canonical Communications compose/confirm/send, so the Process chooses the "
+            + "packet and the family is reached through a thread with an audit — not a URL copied "
+            + "out of Processing Studio.",
     }),
     def({
         capabilityKey: "enrollment.requirement_exception.grant",

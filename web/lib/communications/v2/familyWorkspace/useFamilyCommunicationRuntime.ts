@@ -257,6 +257,15 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
     const hasUserThreadSelectionRef = useRef(forceNewMessage);
     // Insert may set this without a draftSeed; never wipe Insert-provisioned ids on re-render.
     const tourInvitationIdRef = useRef<string | null>(draftSeed?.tourInvitationId?.trim() || null);
+    /*
+     * The same acknowledgement contract as a tour invitation, for enrollment paperwork: the send
+     * itself is already recorded by Communications, and this records that the send WAS the operator
+     * pressing Send enrollment paperwork, for this child, on this episode.
+     */
+    const paperworkSessionIdRef = useRef<string | null>(
+        draftSeed?.enrollmentPaperworkSessionId?.trim() || null,
+    );
+    const paperworkChildIdRef = useRef<string | null>(draftSeed?.enrollmentPaperworkChildId?.trim() || null);
     /** Deferred Current Work completion — fired on Done after success ack, not on confirm. */
     const pendingContactFamilyCompleteRef = useRef<{
         opportunity_id: string;
@@ -408,6 +417,8 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
         draftSeedAppliedRef.current = false;
         const seed = draftSeed;
         tourInvitationIdRef.current = seed?.tourInvitationId?.trim() || null;
+        paperworkSessionIdRef.current = seed?.enrollmentPaperworkSessionId?.trim() || null;
+        paperworkChildIdRef.current = seed?.enrollmentPaperworkChildId?.trim() || null;
         setTourInvitationAck(Boolean(seed?.tourInvitationId?.trim()));
         pendingContactFamilyCompleteRef.current = null;
         if (seed) {
@@ -596,6 +607,36 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                             }
                             invalidateTourInvitationPrepare(opportunityId);
                             tourInvitationIdRef.current = null;
+                        }
+
+                        const paperworkSessionId = paperworkSessionIdRef.current;
+                        const paperworkChildId = paperworkChildIdRef.current;
+                        if (paperworkSessionId && paperworkChildId) {
+                            try {
+                                await fetch("/api/admin/actions/execute", {
+                                    method: "POST",
+                                    credentials: "include",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                        action_key: "enrollment.send_paperwork",
+                                        entity_type: "child",
+                                        entity_id: paperworkChildId,
+                                        context: { surface: "focus_panel", origin: "operator" },
+                                        payload: {
+                                            mode: "mark_sent",
+                                            session_id: paperworkSessionId,
+                                            channel: liveChannel,
+                                            recipient_display_name: recipientLabel,
+                                        },
+                                        confirmation: { confirmed: true },
+                                    }),
+                                });
+                            } catch {
+                                // The send already succeeded. The outbound message, its thread and
+                                // its delivery state are the delivery record; this mark is the
+                                // operator-intent audit on top of it, and best-effort by design.
+                            }
+                            paperworkSessionIdRef.current = null;
                         }
                         setBodyDraft("");
                         if (!selectedThreadId) setSubjectDraft("");

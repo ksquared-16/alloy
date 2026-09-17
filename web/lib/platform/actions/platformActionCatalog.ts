@@ -110,6 +110,21 @@ const CATALOG: readonly PlatformActionEntry[] = [
         supportsMultiSubject: false,
         confirmationPolicy: "required",
     },
+    {
+        /*
+         * The Enrolling stage's operator action, on the CHILD ENROLLMENT grain — the same grain as
+         * `waitlist_child` and `enroll_child`, because enrollment paperwork is about one child. A
+         * family-grain send would have to guess which child a two-child household's paperwork was
+         * for. `communication` is what routes it to the canonical composer surface.
+         */
+        key: "enrollment.send_paperwork",
+        defaultLabel: "Send enrollment paperwork",
+        grain: "opportunity_customer_member",
+        category: "communication",
+        runtimeCommandKey: null,
+        supportsMultiSubject: false,
+        confirmationPolicy: "required",
+    },
     // ─── Cross-grain utilities ────────────────────────────────────────────────
     {
         key: "send_message",
