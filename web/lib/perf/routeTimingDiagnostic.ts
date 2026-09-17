@@ -124,13 +124,15 @@ export type RouteTimingMarks = {
          * INSIDE `financials_build_ms`, which Slice 12D measured deployed as the producer long pole
          * (median 2,423 ms — 89 % of `card_producers_ms`).
          *
-         * Unlike `producers`, most of these are SERIAL, so they largely do sum. `collectible_ms`
-         * covers a loop, and `collectible_calls` reports how many round trips that loop made, which
-         * is the difference between "one slow read" and "N reads" — two facts that need entirely
-         * different repairs and that a single duration cannot tell apart.
+         * THEY DO NOT SUM, and the first version of this comment said they largely would. That was
+         * written before Slice 12E made the branches concurrent and was disproved by the first
+         * deployed payload that carried them: the spans total ~2,892 ms inside a
+         * `financials_build_ms` of ~1,629 ms. The overlap IS the repair, so a large negative
+         * residual here is the instrument agreeing with it, not a fault.
          *
-         * Whatever these do not explain stays in `unattributed_ms`: the internals are not forced to
-         * sum to the outer span, because a residual is the instrument's own self-check.
+         * `collectible_ms` covers a loop, and `collectible_calls` reports how many round trips that
+         * loop made, which is the difference between "one slow read" and "N reads" — two facts that
+         * need entirely different repairs and that a single duration cannot tell apart.
          */
         financials?: {
             agreements_ms: number | null;
