@@ -243,6 +243,38 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         icon: "Send",
     },
     {
+        /*
+         * THE REGISTRATION THAT MAKES THE CAPABILITY HOSTABLE.
+         *
+         * `enrollment.send_paperwork` was registered as a RegisteredAction, in the capability
+         * registry and in the platform action catalog, and still resolved to "unsupported" on the
+         * surface that renders it: `resolveCurrentWorkActionSurface` asks
+         * `canonicalActionDefinition`, which is derived from THIS library, and an action that is not
+         * here has no declared interaction host at all. Measured on the child's Enrolling card with
+         * revision 35 governing it: the primary action resolved with the right key, the right label
+         * and the right ref, and carried `status: "configuration_error"`,
+         * `unsupported_capability` — so the card correctly withheld a control it could not run and
+         * reported `configured_command_not_registered` drift.
+         *
+         * The host is declared, not inferred from the key — the same correction the tour entry above
+         * records. `communications_composer` is the whole point: the action PREPARES a draft and the
+         * operator confirms the send. `header_delegate` would fabricate a registry execute and send
+         * a family their paperwork with no confirmation, which is exactly what that comment warns
+         * against.
+         */
+        key: "enrollment.send_paperwork",
+        label: "Send enrollment paperwork",
+        category: "communication",
+        settingsConfigurable: true,
+        description:
+            "Open compose to review and send this child's enrollment paperwork to their family. "
+            + "Appears on What's Next only when configured on the work template.",
+        defaultSurface: "record_header",
+        defaultSlot: "secondary",
+        interactionHost: "communications_composer",
+        icon: "Send",
+    },
+    {
         key: "send_form",
         label: "Send form",
         category: "workflow",
