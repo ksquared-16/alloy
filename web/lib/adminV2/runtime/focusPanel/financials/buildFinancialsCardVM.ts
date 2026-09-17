@@ -37,6 +37,7 @@ import { resolveHouseholdPaymentViews, type PaymentView } from "@/lib/financials
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
+import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
 import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
 import { financialsClock, recordFinancialsSpans } from "@/lib/perf/routeTimingDiagnostic";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
@@ -288,6 +289,15 @@ export type FinancialsChargeTemplateOption = {
     /** Present only for `fixed` templates; anything else is priced by resolution. */
     amountCents: number | null;
     currencyCode: string;
+    /**
+     * WHETHER CONFIRMING THIS TEMPLATE WILL WAIT FOR REVIEW.
+     *
+     * The tenant's `posting_review` Financial Policy resolved for this template's service, OR'd with
+     * the template's own `review_required` — the same disjunction `resolveChargeFromTemplate` applies
+     * when it writes. It is carried here so the command can PREVIEW the act it will perform rather
+     * than describing a mechanism that may not apply.
+     */
+    reviewRequired: boolean;
     occursOnStrategy: string;
     billableOnStrategy: string;
 };
@@ -923,7 +933,14 @@ async function buildFinancialsCardVMInner(
                 .from("financial_charge_templates")
                 .select(
                     "id, label, charge_category, amount_strategy, amount_cents, currency_code, "
-                    + "occurs_on_strategy, billable_on_strategy, trigger_type, is_active, effective_start, effective_end",
+                    /*
+                 * `review_required` and `service_id` are read because the CARD has to be able to
+                 * say what confirming Add will actually do. Without them the command could only
+                 * assume, and it assumed the old universal-draft behaviour — telling an operator
+                 * a charge would wait for review on a tenant that posts it immediately.
+                 */
+                + "occurs_on_strategy, billable_on_strategy, trigger_type, is_active, effective_start, effective_end, "
+                + "review_required, service_id",
                 )
                 .eq("org_id", args.orgId)
                 .eq("is_active", true)
@@ -1530,6 +1547,21 @@ async function buildFinancialsCardVMInner(
     });
 
     // ── ADD CHARGE OPTIONS: the tenant's own templates, effective today ──────────────────────────
+    /*
+     * ── THE REVIEW BOUNDARY, RESOLVED ONCE FOR EVERY TEMPLATE ON OFFER ──────────────────────────
+     *
+     * One read of the tenant's financial policies, then a per-service resolution, because
+     * `posting_review` may be scoped to a service. This is the same authority the writer consults;
+     * consulting it here means the command can state what confirming will do instead of assuming.
+     */
+    mark("payments");
+    const financialPolicies = await listFinancialPolicies(supabase, args.orgId).catch(() => []);
+    mark("policies");
+    const reviewPolicyForService = (serviceId: string | null) => {
+        const r = resolveFinancialPolicy(financialPolicies, "posting_review", { serviceId: serviceId ?? undefined }, today);
+        return r.resolved ? r.policy.value.required === true : false;
+    };
+
     vm.chargeTemplates = ((templateResult.data ?? []) as unknown as Array<Record<string, unknown>>)
         .filter((row) => {
             const start = t(row.effective_start);
@@ -1547,6 +1579,8 @@ async function buildFinancialsCardVMInner(
             currencyCode: t(row.currency_code) || "USD",
             occursOnStrategy: t(row.occurs_on_strategy),
             billableOnStrategy: t(row.billable_on_strategy),
+            reviewRequired:
+                reviewPolicyForService(t(row.service_id) || null) || row.review_required === true,
         }));
 
     /*
