@@ -94,13 +94,23 @@ export function useEnrollmentPaperworkComposeSeed(
                         confirmation: { confirmed: true },
                     }),
                 });
+                /*
+                 * THE ENVELOPE IS THE ROUTE'S, NOT THE ACTION'S.
+                 *
+                 * `/api/admin/actions/execute` answers `{ok, data: {execution_result}, correlation_id}`,
+                 * where `execution_result` IS the action result's `detail`. This read the action's own
+                 * internal shape (`result.detail`) instead, so a prepare that succeeded — 200, the
+                 * right session, the right packet, the right recipient, the whole draft — was reported
+                 * to the operator as "could not be prepared". Measured: the execute call returned 200
+                 * and the composer rendered its error state beside it.
+                 */
                 const body = (await res.json().catch(() => ({}))) as {
                     ok?: boolean;
                     error?: string;
-                    result?: { detail?: PrepareDetail };
+                    data?: { execution_result?: PrepareDetail };
                 };
                 if (cancelled) return;
-                const detail = body.result?.detail;
+                const detail = body.data?.execution_result;
                 if (!res.ok || body.ok === false || !detail?.access_url) {
                     setState({
                         phase: "error",

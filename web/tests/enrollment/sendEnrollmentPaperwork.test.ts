@@ -278,6 +278,14 @@ describe("sending stays with Communications", () => {
         }
     });
 
+    it("reads the ROUTE's envelope, not the action's internal shape", () => {
+        // `/api/admin/actions/execute` answers {ok, data:{execution_result}}. Reading `result.detail`
+        // reported a prepare that had already succeeded as a failure.
+        const src = code("lib/enrollment/paperwork/useEnrollmentPaperworkComposeSeed.ts");
+        expect(src).toContain("body.data?.execution_result");
+        expect(src).not.toContain("body.result?.detail");
+    });
+
     it("the seed carries the link in the editable body and the episode for the audit", () => {
         const seed = seedFromEnrollmentPaperworkDetail(
             {
