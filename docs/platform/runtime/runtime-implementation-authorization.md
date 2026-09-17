@@ -254,12 +254,57 @@ by key.
 | `acknowledgment_ms` | attention movement → first visual response on the touched element |
 | `transition_legibility_ms` | attention movement → first visual evidence that movement is occurring (the outgoing's yield) |
 | `operational_commit_ms` | attention movement → the surface is Operational per its declared contract |
-| `visible_construction_ms` | cumulative time the operator can see a skeleton/placeholder/scaffold **in the visible surface** |
+| `unstable_or_false_construction_ms` | cumulative time the operator can see construction that is **false or unstable** — see §3.4.1. Supersedes `visible_construction_ms`, which counted ALL visible construction and therefore forbade a truthful destination shell |
 | `continuity_breaks` | blank frames + surface reconstructions + cleared valid truth |
 | **false-empty detection** | any "empty" rendered from a non-authoritative outcome |
 | **surface reconstruction count** | instance identity changes across an exchange or a return |
 | **focus/attention divergence** | duration where focus ≠ attention (the gap's lifetime) |
 | **superseded-result violations** | a superseded provisioning or settlement result reaching the operator |
+
+### 3.4.1 Structural readiness and semantic readiness
+
+`visible_construction_ms = 0` counted every visible skeleton, placeholder or scaffold, and read
+absolutely it forbade the surface from saying anything at all before the atomic semantic commit.
+Deployed measurement showed what that costs: on a cold Work Unit entry the operator saw a
+37-character document reading only "Thinking" from 813 ms to 12,862 ms — no destination, no
+evidence that the surface they asked for was the surface being prepared — and then the whole
+surface in a single frame. The metric was not describing a defect there; it was preventing the fix.
+
+The replacement separates two questions that were being answered by one:
+
+| | question | decided by |
+|---|---|---|
+| **STRUCTURAL READINESS** | do we know enough authoritative destination information to present the real surface structure? | the subject and the **published composition** |
+| **SEMANTIC READINESS** | do we know enough authoritative business meaning for the semantic commit? | situation, action, stage work |
+
+Structural readiness MUST NOT be made to depend on semantic facts that structure does not need.
+A predicate that answers "has the meaning been decided" may not also decide whether the real
+configured structure can be shown.
+
+**Authorized construction** — none of this counts against the budget:
+
+* an **authoritative destination shell**: what is already truthfully known from the route and from
+  desired attention, before anything has been fetched;
+* the **real published composition**, committed as one structure the moment it is authoritative;
+* **intentional resolving cells** — a configured card saying plainly that its truth has not arrived;
+* **stable geometry** held from the structure commit;
+* progressively richer **authoritative** content.
+
+**Forbidden construction** — each of these counts, and the budget is zero:
+
+* stale subject identity under a new selection;
+* held prior rows presented as live destination rows;
+* fabricated business values;
+* blank or broken reserved cells;
+* late structural card insertion driven by readiness rather than configuration;
+* major geometry jump or re-equalisation during ordinary settlement;
+* wrong configured structure;
+* a destination shell naming or presenting the PRIOR surface as the current one.
+
+**This does not relax the atomic semantic commit.** Business meaning still commits atomically and
+still commits only when authoritative. Partial, stale or inferred business truth remains forbidden,
+and no structure may be fabricated before an authoritative composition exists — showing a card grid
+that nobody published is false construction, not early construction.
 | **settlement reflow** | geometry moving after commit |
 | **failure/recovery outcomes** | terminal outcome distribution; deadline invocations; floor invocations |
 
@@ -390,7 +435,7 @@ independently promotable.*
 | **D1 — Entry Resources (server)** | One answer exists; the dependent chain is in-process | D0 (contract declared) | none yet | the answer = the contract exactly (**nothing more, nothing missing**); **composition time within the server budget** (Part 8) | internal |
 | **D2 — K1 Attention** | Intent exists independent of routing; scope + supersession | — (parallel to D1) | route-driven intent | `acknowledgment_ms ≤ 50 ms` at every scope; anti-fork: one mechanism | partly observable |
 | **D3 — K2 Provisioning** | Terminal outcomes; keyed/shared/superseded; the deadline (`error` only); reuse | D1 **and** D2 | warm-on-intent as a separate concept | every provisioning terminates; deadline never yields `operational`; supersession never wins | internal |
-| **D4 — K3 commits on truth + legibility + **deletion**** | The experience changes: atomic commit, held+receding outgoing, real retention, one URL authority | D3 | **DOM polling · settle timer · 6-term readiness · route-driven preparation · mount-fetch chain · dual URL authority · surface rebuild — all deleted in this change** | `visible_construction_ms = 0`; `continuity_breaks = 0`; `transition_legibility_ms ≤ 100 ms`; 0 reconstructions; URL⇄focus parity | **product-observable** |
+| **D4 — K3 commits on truth + legibility + **deletion**** | The experience changes: atomic commit, held+receding outgoing, real retention, one URL authority | D3 | **DOM polling · settle timer · 6-term readiness · route-driven preparation · mount-fetch chain · dual URL authority · surface rebuild — all deleted in this change** | `unstable_or_false_construction_ms = 0`; `continuity_breaks = 0`; `transition_legibility_ms ≤ 100 ms`; 0 reconstructions; URL⇄focus parity | **product-observable** |
 | **D5 — Settlement** | Everything else, explicitly, behind the commit, into reserved geometry | D4 | emergent leftovers; redundant post-reveal guards | no settlement gates a commit; settlement reflow = 0; no false-empty | product-observable |
 | **D6 — Performance** | The budgets: query correction + indexing, parallel/batched reads, redundant identity removed, presentation gates removed, metrics off the commit, in-flight reuse, intent-time preparation, bounded speculation | D4/D5 (R-18: correctness first) | the waterfall's residue; duplicate critical-path requests | Part 8 budgets met on a production build, co-located | product-observable |
 | **D7 — Certification + deletion audit** | Proof | D0–D6 | — | Part 9, in full | **the only acceptance point** |
@@ -442,7 +487,8 @@ independently promotable.*
 |---|---|
 | `acknowledgment_ms` | **≤ 50 ms** (p99), every scope, every path |
 | `transition_legibility_ms` | **≤ 100 ms** (p95) — visible response to attention movement |
-| `visible_construction_ms` | **= 0** (absolute) |
+| `unstable_or_false_construction_ms` | **= 0** (absolute) |
+| `CARD_COHERENCE_WINDOW` — critical / Mission-tier cards | **≤ 250 ms** — latest minus earliest `FIRST_MEANINGFUL`. A REGRESSION BUDGET, not a target: deployed evidence is 0 ms, and this is not permission to introduce delay. Cards legitimately resolving (Track A) are excluded while they resolve |
 | `continuity_breaks` | **= 0** (absolute) |
 | `operational_commit_ms` — **warm** (reusable preparation) | **≤ 100 ms** (p95) — effectively immediate |
 | `operational_commit_ms` — **cold** | **≤ 800 ms (p75), ≤ 1200 ms (p95)** — approximately one provisioning answer + render, measured co-located on a production build |
@@ -532,7 +578,7 @@ created during the mission · all **tests asserting superseded behaviour** (nota
 | Real retention (instances) destabilises long sessions | Retention boundary declared (U-R/W-R); tenant/scope flush; measured via reconstruction count and memory. |
 | Deleting the old chain reveals hidden consumers | Deletion is inside D4 with certification; hidden consumers surface as failures, not as a live second runtime. |
 | Co-located certification is unavailable | Part 8 Q6 — if it cannot be run, the cold budget is **unproven** and the mission is **not promotable** (stop condition). |
-| Legibility (`recede`) is read as construction | It is the **outgoing** surface, never the incoming. Certified by `visible_construction_ms = 0` alongside `transition_legibility_ms ≤ 100 ms`. |
+| Legibility (`recede`) is read as construction | It is the **outgoing** surface, never the incoming. Certified by `unstable_or_false_construction_ms = 0` alongside `transition_legibility_ms ≤ 100 ms`. |
 
 ## 14 — Explicit non-goals
 
