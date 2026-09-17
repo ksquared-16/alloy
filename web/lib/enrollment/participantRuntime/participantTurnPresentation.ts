@@ -173,6 +173,17 @@ export function optionalAffirmLabel(objective: ParticipantObjectiveWire): string
 const KNOWN_BY_CANONICAL_KEY: Record<string, string> = {
     child_first_name: "first name",
     child_last_name: "last name",
+    /*
+     * The WHOLE name, which a real packet asks for far more often than the halves.
+     *
+     * Missing here, a summary row printed the authored label verbatim — "Student Name: ·
+     * Wrigley Kurzman", trailing colon and all — beside a guardian row that correctly read "Name",
+     * because only the guardian's key was mapped. The map is the handful of facts Enrollment
+     * actually asks about, and since Admissions binds the child's full name this is one of them.
+     */
+    child_full_name: "full name",
+    display_name: "full name",
+    guardian_full_name: "name",
     child_date_of_birth: "date of birth",
     dob: "date of birth",
     date_of_birth: "date of birth",
