@@ -1,0 +1,25 @@
+{
+ "out": {
+  "rowA": "9ab36f48",
+  "rowB": "8b3689fb",
+  "A_imgs": [
+   "r7TlBrEcKHpjrsi7EI9U_FqPkUJM7tnNwhWytU1k"
+  ],
+  "A_text": "Wrigley Kurzman Waitlist · Enrolling · Tour Scheduled ",
+  "t_activeRow_B": 183,
+  "t_header_text_changed": 183,
+  "t_header_img_changed": 5785,
+  "stale_img_frames": 199,
+  "frames": 485,
+  "final_imgs": [],
+  "final_text": "PK PassA Kid Waitlist · Enrolling · Tour Scheduled Nor"
+ },
+ "A": {
+  "subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "activeRow": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "hdrImgs": [
+   "r7TlBrEcKHpjrsi7EI9U_FqPkUJM7tnNwhWytU1k"
+  ],
+  "hdrText": "Wrigley Kurzman Waitlist · Enrolling · Tour Scheduled "
+ }
+}

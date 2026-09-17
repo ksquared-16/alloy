@@ -86,8 +86,43 @@ describe("P0-7.2 — the header avatar is on the CLICK clock, never the held pay
     });
 
     it("the selection match is by identity, not by position or recency", () => {
-        expect(panel).toContain("subjectScope.participationId === operationalSubjectId");
-        expect(panel).toContain("subjectScope.customerMemberId === operationalSubjectId");
+        expect(panel).toContain("subjectScope.participationId === clickClockSubjectId");
+        expect(panel).toContain("subjectScope.customerMemberId === clickClockSubjectId");
+    });
+
+    /*
+     * ── THE GUARD'S CLOCK, NOT JUST ITS EXPRESSION (P0-7.2 deployed correction) ──
+     *
+     * The previous version of this suite asserted the fallback EXPRESSION, and the expression was
+     * right. What it could not see is which clock fed the value inside it: the guard compared against
+     * `operationalSubjectId`, which `OperationalSubjectContext` derives from `committed.snapshot`.
+     * Deployed, the header text switched at 183 ms while the avatar held the previous child for
+     * 5,785 ms — the guard was answering about the subject that had not changed yet.
+     *
+     * So this asserts the SOURCE of the compared value, which is the thing that was wrong.
+     */
+    it("THE GATE: the guard compares against the CLICK clock, never the commit clock", () => {
+        expect(panel).toContain("const clickClockSubjectId = useAttentionSubject()");
+        // operationalSubjectId is commit-clocked; it must not decide image eligibility.
+        const guard = panel.slice(panel.indexOf("const scopeIsThisSelection"), panel.indexOf("const identityImageUrl"));
+        expect(guard).not.toContain("operationalSubjectId");
+    });
+
+    it("the click clock is the value the row click actually writes", () => {
+        // `openRecord` moves ATTENTION_SCOPE.SUBJECT with `row.entityId` synchronously on the click,
+        // and `useAttentionSubject()` reads exactly that — the same id space a child scope's
+        // participationId is in.
+        const runtime = strip(read("lib/presentation/runtime/useCommittedWorkUnitSurfaceRuntime.ts"));
+        expect(runtime).toContain("scope: ATTENTION_SCOPE.SUBJECT");
+        expect(runtime).toContain("subject: row.entityId");
+        const hook = strip(read("lib/runtime/kernel/useAttentionCardFocus.ts"));
+        expect(hook).toContain("export function useAttentionSubject()");
+        expect(hook).toContain("ref?.subject ?? null");
+    });
+
+    it("commit-clocked identity is still used where it is CORRECT — for settlement, not identity", () => {
+        // The repair narrows one guard; operationalSubjectId remains the settlement subject owner.
+        expect(panel).toContain("const settlementSubjectId = isChildSubject ? familyOpportunityId : operationalSubjectId");
     });
 });
 

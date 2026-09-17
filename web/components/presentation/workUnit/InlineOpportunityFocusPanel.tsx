@@ -58,6 +58,7 @@ import OpportunityDrawerBodySaveBar from "@/components/admin/vmDrawer/Opportunit
 import VmDrawerActionModalsPortal from "@/components/admin/vmDrawer/VmDrawerActionModalsPortal";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useRecordWorkRuntime } from "@/lib/presentation/runtime/useRecordWorkRuntime";
+import { useAttentionSubject } from "@/lib/runtime/kernel/useAttentionCardFocus";
 import { useOperationalSubject, isOperationallyResolved } from "./OperationalSubjectContext";
 import { FocusPanelOutOfViewAffordance } from "./FocusPanelOutOfViewAffordance";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
@@ -501,11 +502,30 @@ export function InlineOpportunityFocusPanel() {
      * Case (3) is the whole point. An unknown image is an honest gap; the previous child's photo
      * labelled as this child is a false statement about who the operator is looking at.
      */
+    /*
+     * ── THE GUARD MUST BE ON THE CLICK CLOCK TOO (P0-7.2, deployed correction) ──
+     *
+     * This compared against `operationalSubjectId`, and `OperationalSubjectContext` feeds that from
+     * `committed.snapshot` — the COMMIT clock. So in the exact window this guard exists to protect it
+     * evaluated "the prior scope against the prior still-committed subject", answered TRUE, and kept
+     * the previous child's photo until the provisioning answer committed. Deployed measurement: the
+     * header TEXT switched at 183 ms (it reads the seed, which IS click-clocked) while the avatar
+     * stayed on the previous child for 5,785 ms across 199 of 485 frames.
+     *
+     * The seed carries no subject id to compare against, so the click-clocked identity is live
+     * ATTENTION — the value `openRecord` writes synchronously from `row.entityId` on the click, and
+     * the same id space a child-grain scope's `participationId` is in.
+     *
+     * Family grain is unaffected: the settled route resolves no participation for an opportunity id
+     * and the candidate scan finds no match for one either, so `subjectScope` is null there and this
+     * guard never decides anything.
+     */
+    const clickClockSubjectId = useAttentionSubject();
     const scopeIsThisSelection =
         subjectScope != null
-        && operationalSubjectId != null
-        && (subjectScope.participationId === operationalSubjectId
-            || subjectScope.customerMemberId === operationalSubjectId);
+        && clickClockSubjectId != null
+        && (subjectScope.participationId === clickClockSubjectId
+            || subjectScope.customerMemberId === clickClockSubjectId);
     const identityImageUrl = seedSubjectImageUrl ?? (scopeIsThisSelection ? subjectScope?.imageUrl ?? null : null);
     /*
      * The scope handed to the header carries the SELECTION's image. Everything else about the scope is
