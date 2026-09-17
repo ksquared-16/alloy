@@ -15,7 +15,7 @@ import type { EntryResource } from "./provisioning";
 import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import {
     provisioningAnswerUrl,
-    consumeFreshProvisioning,
+    consumeFreshProvisioningForRoute,
     fetchProvisioningEntryDeduped,
 } from "./workUnitProvisioningPrefetch";
 import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
@@ -25,22 +25,39 @@ export function workUnitEntryResourceClient(): EntryResource {
         // The whole cause, including whether a cohort was selected at all. Dropping `cohort` here was
         // enough on its own to defeat contextual focus end to end: attention stated it, the URL carried
         // it, and this seam quietly asked for the default-lens answer instead.
+        const heldDepartmentConfigIds = retainedDepartmentConfigIds();
+        const heldSummaryIds = heldFocusPanelSummaryIdentities();
         const url = provisioningAnswerUrl(
             ref.target, ref.lens, ref.subject, ref.cohort, ref.aspect,
             // S6-1. Both provisioning paths compute this the same way from the same owner, so a
             // prewarm and the click that consumes it produce the SAME key and still coalesce.
-            retainedDepartmentConfigIds(),
-            heldFocusPanelSummaryIdentities(),
+            heldDepartmentConfigIds,
+            heldSummaryIds,
         );
 
         // Blank-time removal: if operator intent (hover/focus) warmed this exact answer, K2's single
         // round-trip resolves from the warm cache — the click commits immediately. A warm miss or a
         // prefetch that errored falls through to the live fetch below; kernel semantics are unchanged.
-        const warm = consumeFreshProvisioning(url);
+        //
+        // P0-7.6: the lookup goes through the KERNEL, which owns the key scheme, because the exact
+        // key alone could never reach the SERVER SEED. The seed is composed where the browser's held
+        // configuration is unknowable, so it is registered under the base key; an asserting consume
+        // then missed it by construction, and the surface paid for a live fetch of an answer it
+        // already held. The kernel tries the exact key first and the seed's base key second.
+        const warm = consumeFreshProvisioningForRoute(
+            { target: ref.target, lens: ref.lens, subject: ref.subject, cohort: ref.cohort, aspect: ref.aspect },
+            heldDepartmentConfigIds,
+            heldSummaryIds,
+        );
         if (warm) {
-            logCurrentWorkInit("provisioning.client.warm-hit", { cacheKey: url, cache: "hit", preloadSource: "prefetch" });
+            logCurrentWorkInit("provisioning.client.warm-hit", {
+                cacheKey: warm.url,
+                cache: "hit",
+                preloadSource: warm.via === "seed-base" ? "seed" : "prefetch",
+                note: warm.via === "seed-base" ? "server-composed seed consumed under its base key" : undefined,
+            });
             try {
-                const answer = await warm;
+                const answer = await warm.promise;
                 if (answer.terminal !== "error") return answer;
             } catch {
                 /* fall through to a fresh fetch */
