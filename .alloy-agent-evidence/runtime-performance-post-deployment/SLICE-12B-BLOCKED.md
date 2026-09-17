@@ -9,6 +9,8 @@ The instrument is promoted. The **diagnosis cannot run**, because enabling it re
 | Starting SHA | `19eca7eab` · instrument `ae3795d59` · certification `b1a617fbc` |
 | Candidate | **`1a89f41b2`** (staging reconciled; instrument byte-identical to `ae3795d59`) |
 | PR | [**#1055**](https://github.com/ksquared-16/alloy/pull/1055) — **12/12** checks |
+| **Merge SHA** | **`236578d88`** — merged to staging; candidate and instrument `ae3795d59` both contained by ancestry |
+| Deployed at time of report | `29cf29abd` (the merge had not yet deployed; immaterial, since the flag is off either way) |
 | Governed dependency | **`gdep_4101c86bc29562`** — `DECLARED`, run `WAITING_RESOURCE` |
 
 ---
