@@ -2580,6 +2580,17 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  /*
+   * The commands may take a second line rather than push the row past the card.
+   *
+   * The outer footer already wraps, but this group did not, so Payment and Add were stuck side by
+   * side: once they stopped shrinking they overflowed the card by 7px at the narrowest authored
+   * width under CI's fallback fonts. Wrapping between the two commands is the last degree of
+   * freedom before either truncating a money control or painting outside the card, and both of
+   * those are worse.
+   */
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .alloy-os-billing__footer--commands .alloy-os-currentwork__primary-action,
 .alloy-os-billing__footer--commands .alloy-os-currentwork__helpful-action {
