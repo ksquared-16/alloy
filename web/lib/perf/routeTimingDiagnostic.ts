@@ -105,6 +105,21 @@ export type RouteTimingMarks = {
         inner_compose_ms: number;
         /** Null when the answer was not operational, so the producers step genuinely did not run. */
         card_producers_ms: number | null;
+        /**
+         * INSIDE the card producers, which Slice 12D measured as the dominant wait (median 2,791 ms).
+         *
+         * These run CONCURRENTLY under `Promise.allSettled`, so they DO NOT SUM — `card_producers_ms`
+         * is approximately the longest of them, not their total. They exist to name the long pole,
+         * which decides whether the Slice 12D gate repair is worth its full duration or nothing:
+         * the saving is `financials_gate_ms` when Attendance or Health dominates, and zero when the
+         * Financials chain does.
+         */
+        producers?: {
+            financials_gate_ms: number | null;
+            attendance_ms: number | null;
+            health_ms: number | null;
+            financials_build_ms: number | null;
+        };
     } | null;
 
     /**
@@ -153,4 +168,63 @@ export async function timedSpan<T>(promise: Promise<T>): Promise<[T, number]> {
     const started = performance.now();
     const value = await promise;
     return [value, performance.now() - started];
+}
+
+
+/** The four producer spans, by the names the payload carries. */
+type ProducerSpanName = "financials_gate_ms" | "attendance_ms" | "health_ms" | "financials_build_ms";
+
+/**
+ * A CLOCK FOR CONCURRENT PRODUCERS.
+ *
+ * The three card producers run under one `Promise.allSettled`, so their spans OVERLAP and must not
+ * be summed — `card_producers_ms` is approximately the longest of them, not their total. This timer
+ * records each independently so the LONG POLE can be named, which is the fact that decides whether
+ * Slice 12D's gate repair is worth its full duration or nothing at all.
+ *
+ * Inert when the flag is off: `time()` then returns the caller's promise untouched, adding no clock
+ * read and no allocation to the product path.
+ */
+export function producerClock(): {
+    time: <T>(name: ProducerSpanName, run: () => Promise<T>) => Promise<T>;
+    spans: () => Partial<Record<ProducerSpanName, number>>;
+} {
+    const enabled = routeTimingEnabled();
+    const out: Partial<Record<ProducerSpanName, number>> = {};
+    return {
+        time: <T>(name: ProducerSpanName, run: () => Promise<T>): Promise<T> => {
+            if (!enabled) return run();
+            const started = performance.now();
+            // `finally` rather than `then`: a producer that rejects still consumed the time, and
+            // `allSettled` will surface the rejection — swallowing it here would hide a real fault.
+            return run().finally(() => {
+                out[name] = Math.round(performance.now() - started);
+            });
+        },
+        spans: () => out,
+    };
+}
+
+/** Merge the producer spans into the request's existing `route_compose_spans`, never replacing it. */
+export function recordProducerSpans(spans: Partial<Record<ProducerSpanName, number>>): void {
+    if (!routeTimingEnabled() || Object.keys(spans).length === 0) return;
+    try {
+        const { marks } = routeTimingCollector();
+        const existing = marks.route_compose_spans;
+        const producers = {
+            financials_gate_ms: spans.financials_gate_ms ?? null,
+            attendance_ms: spans.attendance_ms ?? null,
+            health_ms: spans.health_ms ?? null,
+            financials_build_ms: spans.financials_build_ms ?? null,
+        };
+        // The outer compose records `route_compose_spans` AFTER the producers finish, so the object
+        // may not exist yet. Stashing the producers now and letting the outer record merge would be
+        // two writers for one field; instead the partial is created here and the outer call merges
+        // into it, because `recordRouteTiming` assigns whole fields.
+        marks.route_compose_spans = existing
+            ? { ...existing, producers }
+            : ({ producers } as never);
+    } catch {
+        /* diagnostics are never load-bearing */
+    }
 }
