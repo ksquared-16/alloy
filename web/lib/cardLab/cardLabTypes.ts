@@ -346,7 +346,15 @@ export type FinancialsPeriod = {
 
 /** The compact card's reduced content — the same read model, fewer questions answered. */
 export type FinancialsCompact = {
-    dueLine: string;
+    /**
+     * The headline, and ONLY when it says something the lines below do not.
+     *
+     * It used to be the balance whenever nothing was past due — while `lines` already carried
+     * "Current balance" with that same figure, so the card printed the number twice, once without a
+     * label. Null now means "the lines already say this"; the card renders no headline rather than a
+     * detached amount.
+     */
+    dueLine: string | null;
     lines: { label: string; value: string }[];
     /** Null when payment setup is unknown — the card then says nothing rather than claiming absence. */
     paymentLine: string | null;

@@ -167,9 +167,18 @@ export function adaptFinancialsVmToFinancialsCard(input: {
         // Lab-only specimen label; never rendered inside the card.
         caseLabel: "",
         compact: {
-            dueLine:
-                pastDue ? `${pastDue.amount} past due`
-                :   money(reconciliation.balanceCents, currency),
+            /*
+             * A HEADLINE MUST EARN ITS SLOT.
+             *
+             * Past due is a distinct CONDITION — a figure with a deadline attached — so it keeps the
+             * prominent line. An ordinary balance is not: `lines` states it immediately below as
+             * "Current balance", and printing it again above, unlabelled, said the same fact twice
+             * and made $0.00 sit over "Current balance $0.00".
+             *
+             * Null, not an empty string: the card asks whether there is a headline, rather than
+             * rendering a blank one. The arithmetic is untouched — this only decides what is shown.
+             */
+            dueLine: pastDue ? `${pastDue.amount} past due` : null,
             lines: [
                 { label: "Responsibility", value: money(reconciliation.responsibilityCents, currency) },
                 { label: "Current balance", value: money(reconciliation.balanceCents, currency) },
