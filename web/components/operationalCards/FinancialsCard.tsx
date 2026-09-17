@@ -183,7 +183,24 @@ export default function FinancialsCard({
                          * Details and workspace surfaces, where there is room and the operator has
                          * come specifically to work the account.
                          */}
-                        <CardLink onClick={onAddCharge} testId="add">Add</CardLink>
+                        {/*
+                          * ── COMMANDS ARE BUTTONS; NAVIGATION IS A LINK ───────────────────────
+                          *
+                          * The previous pass made all three contextual links, which cured the
+                          * overflow but flattened a real distinction: Payment and Add MUTATE money
+                          * and Details only moves. The /surfaces reference keeps that distinction
+                          * visible — filled primary, outlined secondary, quiet navigation — and
+                          * `Action` is the same closed primitive the focused Details surface uses,
+                          * so the two surfaces cannot drift into two button vocabularies.
+                          *
+                          * Placement is unchanged and still contextual: Add belongs to the column
+                          * that accounts for charge and adjustment activity.
+                          */}
+                        <div className="alloy-os-billing__zone-action">
+                            <Action onClick={onAddCharge} data-financials-command="add">
+                                Add
+                            </Action>
+                        </div>
                     </section>
 
                     <div className="alloy-os-billing__collect">
@@ -231,7 +248,13 @@ export default function FinancialsCard({
                             ) : null}
                         </div>
                         {/* Payment belongs to the payment position, so it sits at the foot of it. */}
-                        {onPayNow ? <CardLink onClick={onPayNow} testId="payment">Payment</CardLink> : null}
+                        {onPayNow ? (
+                            <div className="alloy-os-billing__zone-action">
+                                <Action primary onClick={onPayNow} data-financials-command="payment">
+                                    Payment
+                                </Action>
+                            </div>
+                        ) : null}
                     </section>
                     </div>
                     {/*

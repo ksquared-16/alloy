@@ -2768,30 +2768,99 @@
  * and reads as a link rather than a third equal button.
  */
 /*
- * ── ONE ACTION GRAMMAR ON THE COMPACT CARD ─────────────────────────────────────────────────────
+ * ── COMMANDS ARE BUTTONS, NAVIGATION IS A LINK ─────────────────────────────────────────────────
  *
- * The card had three at once: a filled Payment, a quiet Add, and a black underlined Details. Three
- * treatments on one small card read as three unrelated systems bolted to a corner, and the widths
- * they needed were what pushed them outside the card in the first place.
+ * Payment and Add mutate money; Details only moves. Making all three links cured an overflow and
+ * erased that distinction, so the buttons are back — the SAME `Action` primitive the focused
+ * Details surface uses, per the /surfaces reference — and only Details stays a quiet link.
  *
- * They are contextual links now, all three identical — Bend Pine, an arrow, no underline, one type
- * size, one hover and focus behaviour — and each sits with the story it belongs to: Add under the
- * obligation column, Payment under the position column, Details at the card's lower-right edge.
- * The operational BUTTONS are unchanged and stay where they belong, on the focused Details and
- * workspace surfaces.
+ * What does not come back is the cluster that put all three in one row inside a column sized for a
+ * figure. Each command sits at the foot of the column whose story it belongs to and takes that
+ * column's width, so it cannot leave the card at any supported width; below the width where a
+ * second column can state a figure the zones stack, and each command simply gets the card.
+ */
+/*
+ * ── ONE ROW FOR THE TWO COMMANDS, WITHOUT A COMMAND ROW ────────────────────────────────────────
+ *
+ * Each command sits at the foot of its own narrative column, which is right — and it made them
+ * stagger, because the columns say different amounts and therefore end at different heights. That
+ * reads as an accident rather than a composition.
+ *
+ * `margin-top: auto` inside a stretched column puts both at the SAME baseline: the bottom of the
+ * zones row. They share a y and a height because the row does, not because a new footer band was
+ * introduced to hold them, and each stays visually owned by the column it belongs to.
+ */
+.alloy-os-billing__zone-action {
+  /*
+   * ── ANCHORED TO ITS COLUMN, NOT FLOATING IN IT ─────────────────────────────────────────────
+   *
+   * Putting both commands on one baseline fixed the stagger and left them looking like controls
+   * adrift in whitespace, because nothing tied either one to the figures it acts on. The rule does
+   * that: it spans the column's own width — so it reads as the foot of THAT column's story — and
+   * sits immediately above its action, close enough that the two are one object.
+   *
+   * It is a divider, not a footer band: there are two of them, each inside its own column, and
+   * neither spans the card.
+   */
+  display: flex;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  min-width: 0;
+}
+/* Both columns must reach the row's full height, or "the bottom" means two different places. */
+.alloy-os-billing__zones--two > .alloy-os-billing__zone,
+.alloy-os-billing__zones--two > .alloy-os-billing__collect {
+  align-self: stretch;
+}
+.alloy-os-billing__collect > .alloy-os-billing__zone--position {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.alloy-os-billing__zone-action > button {
+  /*
+   * ── EQUAL, AND PROPORTIONAL TO THE CARD ────────────────────────────────────────────────────
+   *
+   * `flex: 1 1 auto` made each command fill its own column, so Payment and Add came out different
+   * widths — the columns are 60/40 — and each read as a banner across its half of the card rather
+   * than as a control.
+   *
+   * The width is taken from the CARD instead of from the column, so both commands resolve to the
+   * same number wherever they sit, and it scales with the card rather than being pinned to a pixel
+   * count that only suits one width. The clamp keeps it usable when the card is narrow and stops it
+   * growing into a banner when the card is wide; `max-width` is the last guard, so a control can
+   * still never exceed the column it is in.
+   */
+  flex: 0 0 auto;
+  width: clamp(76px, 24cqi, 110px);
+  min-width: 0;
+  max-width: 100%;
+  min-height: 28px;
+  height: 28px;
+  padding: 0 0.7rem;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+/*
+ * Navigation keeps the link grammar: quiet Bend Pine, an arrow, no underline, at the card's own
+ * lower-right edge rather than appended after the commands.
  */
 .alloy-os-billing__cardlink {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   align-self: flex-start;
-  margin-top: 7px;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--alloy-os-bend-pine, #00a283);
   font-size: 0.74rem;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
   text-decoration: none;
@@ -2800,6 +2869,9 @@
 .alloy-os-billing__cardlink:disabled {
   color: var(--alloy-os-text-tertiary, #9ca3af);
   cursor: default;
+}
+.alloy-os-billing__cardlink.is-pending {
+  opacity: 0.62;
 }
 .alloy-os-billing__cardlink-arrow {
   font-size: 0.8em;
@@ -2814,20 +2886,11 @@
 .alloy-os-billing__cardlink:focus-visible {
   color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 78%, #04303f);
 }
-/* Navigation ranks below the two commands: same grammar, lighter weight. */
-.alloy-os-billing__cardlink--nav {
-  font-weight: 600;
-  color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 82%, var(--alloy-os-text-secondary, #4b5563));
-}
-/* Details is navigation for the whole card, so it sits at the card's own lower-right edge. */
 .alloy-os-billing__nav {
   grid-column: 1 / -1;
   display: flex;
   justify-content: flex-end;
-  margin-top: 2px;
-}
-.alloy-os-billing__nav .alloy-os-billing__cardlink {
-  margin-top: 0;
+  margin-top: 6px;
 }
 /*
  * ── THE POSITION LINES STATE THEMSELVES ON ONE LINE ────────────────────────────────────────────
@@ -2944,4 +3007,21 @@
     padding-top: 8px;
     border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
   }
+}
+
+/*
+ * ── THE LEDGER REGION WHILE IT IS STILL READING ────────────────────────────────────────────────
+ *
+ * Reserved, quiet, and holding enough height that the surface does not resize under the operator
+ * when the real rows land. It reserves what several rows would occupy rather than drawing any: the
+ * region is the only part of Details allowed to say it is not finished, and it says it in words.
+ */
+.alloy-os-fdetail__ledgerpending {
+  display: flex;
+  align-items: flex-start;
+  min-height: 132px;
+  margin: 0;
+  padding: 14px 4px 0;
+  font-size: 0.78rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
 }

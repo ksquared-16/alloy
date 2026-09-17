@@ -425,9 +425,18 @@ export default function FinancialsDetailCard({
 
                     {hydrating || ledgerPending ? (
                         /*
-                         * The columns, over placeholders. Same head component the hydrated ledger
-                         * uses, so the grid the operator is about to read is already the grid in
-                         * front of them and nothing shifts underneath when the rows arrive.
+                         * ── A RESERVED REGION, NOT THREE ROWS ─────────────────────────────────
+                         *
+                         * This used to render three placeholder rows of em dashes, on the reasoning
+                         * that the grid the operator is about to read should already be in front of
+                         * them. The grid still is — the same head component, so nothing shifts when
+                         * the real rows arrive — but the ROWS are gone.
+                         *
+                         * Three row-shaped things in a ledger are three transactions, whatever
+                         * characters sit in them, and a surface that shows three where fifty-six are
+                         * coming has told the operator something false about an account. An em dash
+                         * is the absence of an answer; a ROW is a claim that something happened.
+                         * The region says it is reading and claims nothing else.
                          */
                         <div
                             className="alloy-os-billingdetail__ledger"
@@ -436,23 +445,9 @@ export default function FinancialsDetailCard({
                             aria-busy="true"
                         >
                             <FinancialsLedgerHead />
-                            {[0, 1, 2].map((i) => (
-                                <FinancialsLedgerRow
-                                    key={`hydrating-${i}`}
-                                    row={{
-                                        key: `hydrating-${i}`,
-                                        when: "—",
-                                        type: "—",
-                                        child: "—",
-                                        description: "",
-                                        glLabel: null,
-                                        amount: "—",
-                                        status: "—",
-                                        responsibleParty: null,
-                                        tone: "muted",
-                                    }}
-                                />
-                            ))}
+                            <p className="alloy-os-fdetail__ledgerpending" data-financials-ledger-reading="true">
+                                Reading this account&rsquo;s activity&hellip;
+                            </p>
                         </div>
                     ) : visiblePeriods.length === 0 ? (
                         <p className="alloy-os-fdetail__collapsed" data-financials-ledger-empty="true">

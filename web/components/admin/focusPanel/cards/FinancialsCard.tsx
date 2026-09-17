@@ -1079,12 +1079,6 @@ export default function FinancialsCard({
      * flow, add-charge — loads the full model once per account. The initial panel still issues no
      * request at all, which is the invariant; this is the operator asking.
      */
-    useEffect(() => {
-        // A pending Details request is an operator asking, exactly as an open surface is.
-        if (!overlay && !detailPending) return;
-        const key = customerId ?? scopedMemberId;
-        if (key && deepLoadedForRef.current !== key) void load();
-    }, [overlay, detailPending, customerId, scopedMemberId, load]);
 
     /*
      * ── A HOST THAT SUPPLIES NO PROJECTION IS NOT A HOST THAT IS STILL PROVISIONING ────────────
@@ -1113,6 +1107,47 @@ export default function FinancialsCard({
         if (!key || deepLoadedForRef.current === key) return;
         void load();
     }, [hostSuppliesProjection, customerId, scopedMemberId, load]);
+
+    /*
+     * ── THE LIKELY NEXT SURFACE IS RESOLVED BEFORE IT IS ASKED FOR ────────────────────────────
+     *
+     * Details opened instantly and then said "Reading this account's activity…" for two seconds,
+     * because the deep read only STARTED on the click. The account is known while the compact card
+     * is on screen, so the read can be in flight long before anyone asks — the same doctrine
+     * `focusPanelActivityPrewarm` already states for mode switching: sanctioned idle prefetch,
+     * never a reveal gate, so the operator never waits for what was predictable.
+     *
+     * No second authority and no new cache: this is the SAME `load()` filling the SAME `vm` and
+     * `deepLoadedForRef` that Details already consumes. Only its timing moved.
+     *
+     * Subject safety is not an extra mechanism either. `requestSeq` makes a superseded response
+     * unable to land, and a new projection clears both `vm` and `deepLoadedForRef` — so a prewarm
+     * for household A cannot become household B's ledger; it can only be discarded.
+     */
+    useEffect(() => {
+        const key = customerId ?? scopedMemberId;
+        if (!key || deepLoadedForRef.current === key) return;
+        // Asked for: now. The operator is waiting, so idle is the wrong queue.
+        if (overlay || detailPending) {
+            void load();
+            return;
+        }
+        if (!hostSuppliesProjection || provisioned?.state !== "ready") return;
+        /*
+         * Otherwise it is a prediction, so it yields: queued at idle and cancelled if the subject
+         * changes first, which keeps a panel of cards from racing the surface's own first paint.
+         */
+        const w = window as unknown as {
+            requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+            cancelIdleCallback?: (h: number) => void;
+        };
+        if (typeof w.requestIdleCallback === "function") {
+            const handle = w.requestIdleCallback(() => void load(), { timeout: 1_200 });
+            return () => w.cancelIdleCallback?.(handle);
+        }
+        const t = setTimeout(() => void load(), 0);
+        return () => clearTimeout(t);
+    }, [overlay, detailPending, customerId, scopedMemberId, load, hostSuppliesProjection, provisioned]);
 
     /*
      * A SCOPED CHILD PRESELECTS THE SUBJECT FILTER.
@@ -1594,17 +1629,27 @@ export default function FinancialsCard({
     const detailReady = Boolean(vm && reconciliation && ledgerComplete);
 
     const requestDetails = useCallback(() => {
-        if (detailReady) {
-            setStack([{ kind: "detail" }]);
-            return;
-        }
+        /*
+         * ── THE SHELL IS NOT DATA-DEPENDENT ───────────────────────────────────────────────────
+         *
+         * Holding the request until the deep read resolved removed the false intermediate, and it
+         * bought that with a wait on the compact card — which is not how any other Focus Panel card
+         * behaves. Invoking a focused surface establishes the depth immediately; Financials now does
+         * the same, at final geometry, because its structure is known the moment it is asked for.
+         *
+         * What must NOT arrive with it is ledger content nobody has read. The header, metrics,
+         * lenses and filters commit from the account values the compact card is already authoritative
+         * for; the ledger REGION alone says it is still reading, and it says so without inventing a
+         * single row. That distinction — an honest empty region versus fabricated rows — is the whole
+         * difference between this and the skeleton that was rejected three passes running.
+         */
         setDetailPending(true);
-    }, [detailReady]);
+        setStack([{ kind: "detail" }]);
+    }, []);
 
     useEffect(() => {
         if (!detailPending || !detailReady) return;
         setDetailPending(false);
-        setStack([{ kind: "detail" }]);
     }, [detailPending, detailReady]);
     /*
      * DENSITY IS A REAL DISTINCTION, not a label.
@@ -3059,7 +3104,7 @@ export default function FinancialsCard({
      * this path or any future one — while the read its ledger depends on is unresolved. The
      * request is held in `detailPending` until then and the compact card stays on screen.
      */
-    if (overlay === "detail" && vm && reconciliation && ledgerComplete) {
+    if (overlay === "detail" && vm && reconciliation) {
         return (
             <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="detail">
                 {/*
@@ -3254,11 +3299,12 @@ export default function FinancialsCard({
                      */
                     onAdjustCharge={adjustableSubjects.length > 0 ? openAdjustForCharge : undefined}
                     /*
-                     * Never pending here any more: this branch cannot be reached until the deep read
-                     * has resolved. The prop stays for the workspace host, which composes this card
-                     * directly and does wait.
+                     * The surface is mounted; the ledger may still be reading. This is the ONLY
+                     * region allowed to say so, and it says it by reserving itself — never by
+                     * rendering rows, and never by changing the surface's geometry when the real
+                     * rows arrive.
                      */
-                    ledgerPending={false}
+                    ledgerPending={!ledgerComplete}
                     /*
                      * THE VIEW OUTLIVES THE COMMANDS. Lens and disclosure are held by this card, so
                      * a row command and its dismissal cannot quietly reset the ledger the operator
