@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { Action, ActionRow, SectionHead } from "@/components/cardLab/CardLabKit";
 import type { AddChargeSpecimen, ChargeTemplateOption } from "@/lib/cardLab/cardLabTypes";
@@ -42,9 +44,24 @@ export default function AddChargeCommand({
     specimen,
     templates,
     controls,
+    modeSlot,
 }: {
     specimen: AddChargeSpecimen;
     templates: ChargeTemplateOption[];
+    /**
+     * ── WHY A SLOT AND NOT A SIBLING ────────────────────────────────────────────────────────────
+     *
+     * The host wants a mode control — Charge or Adjustment — above this command. Rendered BESIDE
+     * this component it is a bare div inside an elevated Focus Panel cell, and the depth layer
+     * makes every direct child of that cell inert: `…[data-fp-elevated="true"] > * { pointer-events:
+     * none }`, with `pointer-events: auto` granted to `.alloy-os-ucard` alone. Measured mounted, the
+     * control was visible, focusable from the keyboard, and would not take a pointer click, with
+     * `elementFromPoint` returning the depth scrim.
+     *
+     * This component's own comment records the same lesson ("It was rendering as a bare div inside
+     * the elevated cell"). So the control comes INSIDE the platform card rather than beside it.
+     */
+    modeSlot?: ReactNode;
     /**
      * The live command, when a host supplies one. Absent in the lab, where this is a specimen and
      * every control is inert — which is what a specimen should be.
@@ -84,7 +101,7 @@ export default function AddChargeCommand({
     return (
         <div className="alloy-os-addcharge-host">
             <UniversalCard
-                title="Add charge"
+                title="Add"
                 insight=""
                 iconName="Receipt"
                 tier="work"
@@ -102,6 +119,7 @@ export default function AddChargeCommand({
                 footerAction={null}
             >
             <div className="alloy-os-addcharge">
+            {modeSlot}
 
             {/* The platform select, not a permanent row of chips — the catalog is configured and
                 can be long, and the operator sees labels, never keys. */}

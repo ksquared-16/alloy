@@ -69,7 +69,7 @@ describe("the Director QA scenario catalog", () => {
     /** The capabilities the mission requires an explicit disposition for. None may be missing. */
     it("dispositions every capability the acceptance program names", () => {
         const required = [
-            "financial_subject", "add_charge_draft", "draft_moves_nothing", "post_charge",
+            "financial_subject", "add_charge_honours_review_boundary", "draft_moves_nothing", "post_charge",
             "charge_detail_attribution", "manage_responsibility", "responsibility_supersession",
             "expected_funding", "expected_funding_correction", "adjustment_draft", "adjustment_post",
             "reduction_zero_bound", "reverse_adjustment", "payment_receipt", "apply_payment",

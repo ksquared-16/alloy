@@ -43,6 +43,7 @@ import {
     postChildcareCharge,
     type CorrectionKind,
 } from "@/lib/financials/childcareChargeService";
+import { isPostedStatus } from "@/lib/financials/billableSource";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -389,6 +390,49 @@ const addCharge: RegisteredAction = {
                 // The domain refusing is an answer, not a failure to report.
                 return { ok: false, correlationId, status: 409, error: written.reason };
             }
+
+            /*
+             * ── THE REVIEW BOUNDARY IS CONFIGURED, AND THIS NOW HONOURS IT ────────────────────
+             *
+             * Manual Add Charge used to end here, at a draft, and the operator then had to find the
+             * row and click Post. Two confirmations of one intent — and the second was ceremony,
+             * because nothing happened in between: no batch, no reviewer, no queue anyone worked.
+             *
+             * The platform already decides whether a review boundary exists. `posting_review` is a
+             * Financial Policy — "Whether draft charges require review before they can be posted" —
+             * OR'd with the template's own `review_required` flag, and the resolver has always
+             * computed it. The lifecycle service discarded it, so no caller could honour a decision
+             * the tenant had already made and every charge got the same ceremony regardless.
+             *
+             * So: where review IS required, this stops at the draft exactly as before, and Post
+             * remains the operator's act. Where it is NOT, the charge becomes authoritative in the
+             * same gesture that created it.
+             *
+             * POSTING IS STILL THE CANONICAL ACT. This calls `postChildcareCharge` — the same
+             * writer `charge.post` calls — so the journal entry, the accounting-period attribution
+             * and the idempotency guard are all the ones that already existed. Nothing here writes
+             * a status, and the draft state is not removed from the model: generated and
+             * recommended charges still land as drafts for the review surface that exists for them.
+             *
+             * A post that fails does NOT fail the charge: it is written, it is a draft, and the
+             * operator can post it from the row. Reporting the charge as un-created because the
+             * second step failed would lose a real financial record.
+             */
+            let posted = false;
+            let postFailed: string | null = null;
+            if (!written.reviewRequired && (written.status === "created" || written.status === "recalculated")) {
+                try {
+                    const result = await postChildcareCharge(supabase as SupabaseClient, {
+                        orgId: ctx.orgId,
+                        chargeId: written.chargeId,
+                        actorUserId: ctx.userId ?? null,
+                    });
+                    posted = !result.alreadyPosted || isPostedStatus(result.charge.status);
+                } catch (err) {
+                    postFailed = err instanceof Error ? err.message : String(err);
+                }
+            }
+
             return {
                 ok: true,
                 correlationId,
@@ -399,7 +443,13 @@ const addCharge: RegisteredAction = {
                     // so a household charge reports the subject it was raised from rather than "".
                     entityId: childId || invocation.entityId,
                     affectedId: written.chargeId,
-                    detail: { write_status: written.status, resolution_key: written.resolutionKey },
+                    detail: {
+                        write_status: written.status,
+                        resolution_key: written.resolutionKey,
+                        review_required: written.reviewRequired,
+                        posted,
+                        ...(postFailed ? { post_failed: postFailed } : {}),
+                    },
                 },
             };
         } catch (err) {

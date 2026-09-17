@@ -108,7 +108,19 @@ export default function FinancialsCard({
     const { period, pastDue } = evidence;
 
     return (
-        <div className="alloy-os-billing" data-financials-card="true">
+        /*
+         * ── ONE CARD ROOT OWNS THE MARKER ──────────────────────────────────────────────────────
+         *
+         * This element used to carry `data-financials-card="true"` as well, and it renders INSIDE
+         * the placement shell that carries it — so mounted instrumentation counted two cards where
+         * one was on screen, both reporting the same box, and every selector that asked for "the
+         * card" got an ambiguous answer. It is a structural element of one card, not a second card.
+         *
+         * The root is the placement shell: it is what carries the account, the subject filter, the
+         * overlay and the reserved-geometry marker. This is its BODY, and says so. Nothing about
+         * the DOM's shape changed — only which element claims to be the thing.
+         */
+        <div className="alloy-os-billing" data-financials-card-body="true">
             <UniversalCard
                 title="Financials"
                 insight=""
@@ -194,14 +206,31 @@ export default function FinancialsCard({
                         <p className="alloy-os-billing__due">{period.dueLabel}</p>
                         {/* "Add something that should be billed" is a Current Period intent, not a
                             payment one — and it stays quiet so it never competes with Pay now. */}
+                        {/*
+                            ONE COMMAND, ONE IDENTITY, WHICHEVER VARIANT RENDERS IT.
+                            These are the same two commands the account variant offers and the same
+                            handlers the same host supplies; only the presentation primitive differs.
+                            So they carry the same semantic marker, and `Details` carries a
+                            NAVIGATION marker instead — it goes somewhere rather than doing
+                            something, which is the distinction this card's footer was composed to
+                            make in the first place.
+                        */}
                         <div className="alloy-os-billing__zone-actions">
                             {onPayNow ? (
-                                <FooterAction onClick={onPayNow}>Payment →</FooterAction>
+                                <FooterAction onClick={onPayNow} data-financials-command="payment">
+                                    Payment →
+                                </FooterAction>
                             ) : null}
-                            <FooterAction onClick={onAddCharge}>Add charge →</FooterAction>
+                            <FooterAction onClick={onAddCharge} data-financials-command="add">
+                                Add →
+                            </FooterAction>
                             {/* Offered only where there is somewhere to drill to. In Financials →
                                 Accounts the account's own body is already open beneath this. */}
-                            {onDetails ? <FooterAction onClick={onDetails}>Details →</FooterAction> : null}
+                            {onDetails ? (
+                                <FooterAction onClick={onDetails} data-financials-nav="details">
+                                    Details →
+                                </FooterAction>
+                            ) : null}
                         </div>
                     </section>
 
@@ -376,8 +405,13 @@ function FinancialsAccountSummaryCard({
                         <Action primary onClick={onPayNow} data-financials-command="payment">
                             Payment
                         </Action>
-                        <Action onClick={onAddCharge} data-financials-command="add_charge">
-                            Add charge
+                        {/*
+                         * ONE ENTRY, BOTH OBJECTS. A charge and an adjustment stay different
+                         * financial objects with different writers and different permissions; what
+                         * they stopped being is two unrelated PLACES. The command carries the mode.
+                         */}
+                        <Action onClick={onAddCharge} data-financials-command="add">
+                            Add
                         </Action>
                     </div>
                 </div>
@@ -430,8 +464,8 @@ export function AccountSummaryPending() {
                 <Action primary disabled title="Reading the account" data-financials-command="payment">
                     Payment
                 </Action>
-                <Action disabled title="Reading the account" data-financials-command="add_charge">
-                    Add charge
+                <Action disabled title="Reading the account" data-financials-command="add">
+                    Add
                 </Action>
             </div>
         </div>
@@ -484,20 +518,36 @@ function FinancialsCompactCard({
                 gridSpan={1}
                 data-universal-card-key="financials"
                 footerAction={
-                    <div className="alloy-os-billing__footer">
-                        {/*
-                            TAKING MONEY IS A FOOTER INTENT WHEN NOTHING IS OVERDUE.
-                            `Pay now` above answers past due and only past due, so an account that
-                            simply owes something current had no way into the settle operation at
-                            all — the rails existed, the panel existed, and no representation an
-                            operator could open offered a way in. Supplied by the host or absent.
-                        */}
-                        {onPayNow ? (
-                            <FooterAction onClick={onPayNow}>Payment →</FooterAction>
+                    /*
+                     * ── THREE EQUAL LINKS WERE NOT A HIERARCHY ───────────────────────────────
+                     *
+                     * "Payment → Add charge → Details →" gave one row of the card to three
+                     * arrows of identical weight, and two of them are not the same KIND of thing:
+                     * Payment and Add mutate money, Details navigates. An operator scanning a
+                     * compact card could not tell the primary act from the way out.
+                     *
+                     * Primary Payment, secondary Add, and Details as the quiet way out — which is
+                     * also what lets the row sit on ONE line instead of wrapping, and is most of
+                     * the height this card gives back.
+                     */
+                    <div className="alloy-os-billing__footer alloy-os-billing__footer--commands">
+                        <span className="alloy-os-billing__footer-commands">
+                            {onPayNow ? (
+                                <Action primary onClick={onPayNow} data-financials-command="payment">
+                                    Payment
+                                </Action>
+                            ) : null}
+                            {/* ONE entry for both financial objects — see the note on the command. */}
+                            <Action onClick={onAddCharge} data-financials-command="add">
+                                Add
+                            </Action>
+                        </span>
+                        {/* Navigation, not a mutation, and dressed as navigation. */}
+                        {onDetails ? (
+                            <FooterAction onClick={onDetails} data-financials-nav="details">
+                                Details →
+                            </FooterAction>
                         ) : null}
-                        <FooterAction onClick={onAddCharge}>Add charge →</FooterAction>
-                        {/* Offered only where there is somewhere to drill to. */}
-                        {onDetails ? <FooterAction onClick={onDetails}>Details →</FooterAction> : null}
                     </div>
                 }
             >

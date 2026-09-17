@@ -23,6 +23,7 @@ import {
     adaptChargeTemplateOption,
     adaptFinancialsVmToFinancialsCard,
     adaptFinancialsVmToLedgerPeriods,
+    hydratingFinancialsEvidence,
 } from "@/lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard";
 import {
     DropdownMenu,
@@ -153,6 +154,19 @@ export default function FinancialsCard({
      * ESC path comes back through `useDismissSignal` rather than a close button this card owns.
      */
     const [overlay, setOverlay] = useState<null | "detail" | "add_charge" | "payment">(null);
+    /*
+     * ── ONE ENTRY, TWO OPERATIONS ─────────────────────────────────────────────────────────────
+     *
+     * A charge and an adjustment are different financial objects and the operator's job is the
+     * same one: put a financial fact on this account. They had two unrelated entry points — one a
+     * command, one a link under the ledger — so raising a credit meant knowing which of the two
+     * Alloy files it under. The mode lives on the command, not on the surface.
+     *
+     * `adjustSource` binds a ledger row when the operator arrived from one, so a correction does
+     * not make them rediscover the transaction they were just looking at.
+     */
+    const [entryMode, setEntryMode] = useState<"charge" | "adjustment">("charge");
+
     const expanded = overlay === "detail";
     const [subjectFilter, setSubjectFilter] = useState<string>("all");
     const [running, setRunning] = useState(false);
@@ -644,6 +658,37 @@ export default function FinancialsCard({
         setAdjustOpen(true);
     }, [adjustableSubjects, closeAdjustPanels, closeMovePanels, subjectFilter]);
 
+    /**
+     * ── ADJUST, FROM THE ROW IT IS ABOUT ────────────────────────────────────────────────────────
+     *
+     * The operator is already looking at the transaction. Sending them to Add, then to the
+     * Adjustment mode, then to an enrolment select, then to a charge select to find the SAME row
+     * again is asking them to re-enter a context they never left — and every one of those steps is
+     * a chance to bind the reduction to the wrong obligation, which is the failure that makes a
+     * household read as owing less while the obligation stays fully collectible.
+     *
+     * So this is not a second adjustment surface and not a second writer. It opens the one unified
+     * command in Adjustment mode with the source transaction ALREADY BOUND; `billing.adjust_account`
+     * remains the only thing that writes. The enrolment is derived from the charge rather than
+     * defaulted, because a charge knows which child it belongs to and the operator should not have
+     * to tell us something the row already says.
+     */
+    const openAdjustForCharge = useCallback((args: { chargeId: string }) => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setAdjustNotice(null);
+        const row = (vm?.rows ?? []).find((r) => r.chargeId === args.chargeId);
+        const agreementId =
+            adjustableSubjects.find((sub) => sub.customerMemberId === row?.subjectMemberId)?.agreementId
+            ?? adjustableSubjects[0]?.agreementId
+            ?? "";
+        setAdjustAgreementId(agreementId);
+        setAdjustSourceChargeId(args.chargeId);
+        setAdjustOpen(true);
+        setEntryMode("adjustment");
+        setOverlay("add_charge");
+    }, [adjustableSubjects, closeAdjustPanels, closeMovePanels, vm]);
+
     const openReverseAdjustment = useCallback((args: { applicationId: string }) => {
         closeMovePanels();
         closeAdjustPanels();
@@ -855,6 +900,25 @@ export default function FinancialsCard({
      * resolves, and staging's new answers are still allowed to be answers.
      */
     const reservingAccount = !vm && !deniedRead && (loading || subjectStillResolving || provisioningAccount);
+
+    /*
+     * ── A FLOOR IS FOR A COLLAPSE, AND THE ACCOUNT VARIANT NO LONGER COLLAPSES ──────────────────
+     *
+     * Measured in Financials → Accounts → selected account: the pane committed at 120px and then
+     * SHRANK to 93px 1.4 seconds later, when the read landed. 120px is `FOCUS_PANEL_RESERVED_MIN_
+     * HEIGHT` exactly — 7.5rem — so the shift was not the data arriving. It was this floor, held
+     * under a frame that did not need one and was 27px shorter than the floor reserving for it.
+     *
+     * The floor was introduced for the Focus Panel's subject switch, where the card genuinely went
+     * 409px → 69px → 409px because its loading state was a one-line loader. The account variant's
+     * loading state is `AccountSummaryPending` — the SAME three metrics over the same two commands
+     * as the resolved summary — so its pending frame is already the right shape and already the
+     * right height. Reserving a different one is how a stable anatomy acquires a visible jump.
+     *
+     * So the floor now applies where a collapse is actually possible, and the variant that commits
+     * its anatomy up front is trusted to hold its own geometry. The Focus Panel path is untouched.
+     */
+    const reservesFootprint = reservingAccount && summaryVariant !== "account";
 
     useEffect(() => {
         // Clear FIRST: the previous household's balance must not linger while the next resolves.
@@ -1530,6 +1594,177 @@ export default function FinancialsCard({
      * The band's own heading is suppressed inside the Payment COMMAND, where the command's title
      * already says "Payment" one line above it. Two headings, one word, one surface.
      */
+    /*
+     * THE CANONICAL ADJUSTMENT ENTRY, hoisted so the unified Add command can host it.
+     *
+     * Same state, same `billing.adjust_account` preview and commit, same enrolment scoping. What
+     * changed is only WHERE it renders: it was a band beneath the ledger reached by a footer link,
+     * and it is now the Adjustment mode of the one financial entry command.
+     */
+    const adjustmentBand = adjustOpen ? (
+
+                    <div className="alloy-os-fdetail__movepanel" data-testid="adjustment-panel">
+                        <div className="alloy-os-fdetail__moveheader">Add adjustment</div>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Against enrolment</span>
+                            <select
+                                data-testid="adjustment-agreement"
+                                value={adjustAgreementId}
+                                onChange={(e) => {
+                                    setAdjustAgreementId(e.target.value);
+                                    // The charges on offer belong to the enrolment; changing it changes them.
+                                    setAdjustSourceChargeId("");
+                                    setAdjustPreview(null);
+                                }}
+                            >
+                                {adjustableSubjects.map((sub) => (
+                                    <option key={sub.agreementId} value={sub.agreementId}>
+                                        {sub.displayName}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Against charge</span>
+                            <select
+                                data-testid="adjustment-source-charge"
+                                value={adjustSourceChargeId}
+                                onChange={(e) => {
+                                    setAdjustSourceChargeId(e.target.value);
+                                    setAdjustPreview(null);
+                                }}
+                            >
+                                <option value="">Choose the charge this is about…</option>
+                                {adjustableCharges.map((r) => (
+                                    <option key={r.chargeId} value={r.chargeId}>
+                                        {(r.description ?? r.categoryLabel)}
+                                        {r.date ? ` · ${r.date}` : ""}
+                                        {` · ${(r.outstandingCents / 100).toLocaleString(undefined, {
+                                            style: "currency",
+                                            currency,
+                                        })} outstanding`}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Type</span>
+                            <select
+                                data-testid="adjustment-category"
+                                value={adjustCategory}
+                                onChange={(e) => {
+                                    setAdjustCategory(e.target.value as "credit" | "adjustment");
+                                    setAdjustPreview(null);
+                                }}
+                            >
+                                {/*
+                                  * Two categories, not three. `discount` exists in the vocabulary but
+                                  * is owned by authored policy — a manual one would land in the same
+                                  * bucket as a configured one and nothing on the card could tell an
+                                  * operator which was policy and which was somebody's decision.
+                                  */}
+                                <option value="credit">Credit — lowers what the family owes</option>
+                                <option value="adjustment">Adjustment — either direction</option>
+                            </select>
+                        </label>
+                        {adjustCategory === "adjustment" ? (
+                            <label className="alloy-os-fdetail__movefield">
+                                <span>Direction</span>
+                                <select
+                                    data-testid="adjustment-direction"
+                                    value={adjustDirection}
+                                    onChange={(e) => {
+                                        setAdjustDirection(e.target.value as "decrease" | "increase");
+                                        setAdjustPreview(null);
+                                    }}
+                                >
+                                    <option value="decrease">Lower what the family owes</option>
+                                    <option value="increase">Raise what the family owes</option>
+                                </select>
+                            </label>
+                        ) : null}
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Amount</span>
+                            <input
+                                data-testid="adjustment-amount"
+                                inputMode="decimal"
+                                value={adjustAmount}
+                                onChange={(e) => {
+                                    setAdjustAmount(e.target.value);
+                                    setAdjustPreview(null);
+                                }}
+                                placeholder="25.00"
+                            />
+                        </label>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Reason</span>
+                            <input
+                                data-testid="adjustment-reason"
+                                value={adjustReason}
+                                onChange={(e) => {
+                                    setAdjustReason(e.target.value);
+                                    setAdjustPreview(null);
+                                }}
+                                placeholder="Agreed goodwill credit"
+                            />
+                        </label>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Effective date</span>
+                            <input
+                                data-testid="adjustment-effective-date"
+                                type="date"
+                                value={adjustEffectiveDate}
+                                onChange={(e) => {
+                                    setAdjustEffectiveDate(e.target.value);
+                                    setAdjustPreview(null);
+                                }}
+                            />
+                        </label>
+                        {adjustPreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="adjustment-preview">
+                                <strong>{adjustPreview.summary}</strong>
+                                {adjustPreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                                {/*
+                                  * The action's own summary speaks in the present tense. It writes a
+                                  * draft, so the timing is stated here rather than left to be
+                                  * discovered when the balance does not move.
+                                  */}
+                                <span data-testid="adjustment-preview-timing">
+                                    Recorded as a draft — it changes what the family owes once posted.
+                                </span>
+                            </div>
+                        ) : null}
+                        {adjustError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="adjustment-error">
+                                {adjustError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-fdetail__moveactions">
+                            <button
+                                type="button"
+                                data-testid="adjustment-preview-button"
+                                disabled={running || !adjustReason.trim() || !adjustAgreementId || !adjustSourceChargeId}
+                                onClick={() => void previewAdjustment()}
+                            >
+                                Preview
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="adjustment-confirm"
+                                disabled={running || !adjustPreview}
+                                onClick={() => void confirmAdjustment()}
+                            >
+                                Confirm
+                            </button>
+                            <button type="button" data-testid="adjustment-cancel" onClick={closeAdjustPanels}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+    ) : null;
+
     const paymentBandFor = (labelled: boolean) => vm ? (
             <section className="alloy-os-financials__band" data-financials-band="payment">
                 {labelled ? <p className="alloy-os-financials__band-label">Payment</p> : null}
@@ -2152,6 +2387,31 @@ export default function FinancialsCard({
             </section>
     ) : null;
 
+    /*
+     * The mode control, declared once and rendered by whichever mode's host is on screen. Two
+     * inline copies would be two places for the modes to drift apart.
+     */
+    const entryModes = (
+        <div className="alloy-os-financials__entrymodes" role="tablist" aria-label="What to add">
+            {(["charge", "adjustment"] as const).map((mode) => (
+                <button
+                    key={mode}
+                    type="button"
+                    role="tab"
+                    aria-selected={entryMode === mode}
+                    data-financials-entry-mode-tab={mode}
+                    className={entryMode === mode ? "is-selected" : undefined}
+                    onClick={() => {
+                        setEntryMode(mode);
+                        if (mode === "adjustment" && !adjustOpen) openAddAdjustment();
+                    }}
+                >
+                    {mode === "charge" ? "Charge" : "Adjustment"}
+                </button>
+            ))}
+        </div>
+    );
+
     if (overlay === "add_charge" && vm && reconciliation) {
         const templates = vm.chargeTemplates.map((tpl) => adaptChargeTemplateOption(tpl, currency));
         const selected =
@@ -2163,9 +2423,50 @@ export default function FinancialsCard({
                 ?? "Household");
 
         return (
-            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="add_charge">
-                {selected ? (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="add_charge"
+                data-financials-entry-mode={entryMode}>
+                {/*
+                 * ── ONE ENTRY, TWO OPERATIONS — AND BOTH HOSTED BY THE PLATFORM CARD ──────────
+                 *
+                 * A charge and an adjustment stay different financial objects with different
+                 * writers, different permissions and different audit meaning. What they stopped
+                 * being is two unrelated PLACES: Add charge was a command and Add adjustment was a
+                 * link under the ledger, so raising a credit meant knowing which of the two Alloy
+                 * files it under. The operator's job is one job — put a financial fact on this
+                 * account — and the mode belongs on the command.
+                 *
+                 * The mode control renders INSIDE the command's own card, never beside it. An
+                 * elevated Focus Panel cell makes every direct child inert and grants interaction
+                 * to `.alloy-os-ucard` alone; measured mounted, the control was visible, keyboard-
+                 * focusable and would not take a pointer click, with `elementFromPoint` returning
+                 * the depth scrim. Add charge and Payment each learned this before it.
+                 */}
+                {entryMode === "adjustment" ? (
+                    /*
+                     * The SAME canonical adjustment entry, in the command's shell rather than in a
+                     * band under the ledger. `billing.adjust_account` is unchanged and is still the
+                     * only writer; `openAddAdjustment` still chooses the enrolment.
+                     */
+                    <UniversalCard
+                        title="Add"
+                        insight=""
+                        iconName="Receipt"
+                        tier="work"
+                        archetype="status"
+                        modalClass="command"
+                        density="expanded"
+                        gridSpan="row"
+                        data-universal-card-key="add_adjustment"
+                        footerAction={null}
+                    >
+                        <div className="alloy-os-financials__entrybody" data-financials-entry="adjustment">
+                            {entryModes}
+                            {adjustmentBand}
+                        </div>
+                    </UniversalCard>
+                ) : selected ? (
                     <AddChargeCommand
+                        modeSlot={entryModes}
                         templates={templates}
                         specimen={adaptAddChargeSpecimen({
                             template: selected,
@@ -2297,6 +2598,41 @@ export default function FinancialsCard({
         );
     }
 
+    /*
+     * ── ONE DETAILS SURFACE, COMMITTED THE MOMENT IT IS ASKED FOR ───────────────────────────────
+     *
+     * Measured sequence before this branch existed: compact card → a pending card → a SECOND card
+     * at a different span → the hydrated detail. Four surfaces for one interaction.
+     *
+     * The cause was structural. The Details tree below is guarded on `vm && reconciliation`, so
+     * while the deep read was in flight the component fell THROUGH it into the generic card at the
+     * bottom of this function — which renders its own anatomy, and renders it at `gridSpan="row"`
+     * precisely because `expanded` is true. That ternary is the proof the fall-through was reachable
+     * while expanded; it was written for this state.
+     *
+     * Falling through is the defect. Details has a KNOWN shape the instant the operator asks for it
+     * — a metric row, two commands, five lenses, eight ledger columns — and only its figures are
+     * outstanding. So this branch commits that shape, in the same container with the same
+     * `data-financials-overlay="detail"`, and the values hydrate inside it. Nothing below changes:
+     * once the read lands, the branch beneath takes over with identical markup around real data.
+     *
+     * `hydrating` is what keeps the placeholders honest. An em dash is the absence of an answer; a
+     * `$0.00` would be a financial claim about a family, made by a loading state.
+     */
+    if (overlay === "detail" && (!vm || !reconciliation)) {
+        return (
+            <div
+                className="alloy-os-financials"
+                data-financials-card="true"
+                data-financials-overlay="detail"
+                data-financials-hydrating="true"
+                aria-busy="true"
+            >
+                <FinancialsDetailCard hydrating evidence={hydratingFinancialsEvidence()} periods={[]} />
+            </div>
+        );
+    }
+
     if (overlay === "detail" && vm && reconciliation) {
         return (
             <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="detail">
@@ -2413,168 +2749,6 @@ export default function FinancialsCard({
                   * is scoped to — presenting it as account-wide would be a claim the backend cannot
                   * honour. Confirm stays disabled until the ACTION has said what this will do.
                   */}
-                {adjustOpen ? (
-                    <div className="alloy-os-fdetail__movepanel" data-testid="adjustment-panel">
-                        <div className="alloy-os-fdetail__moveheader">Add adjustment</div>
-                        <label className="alloy-os-fdetail__movefield">
-                            <span>Against enrolment</span>
-                            <select
-                                data-testid="adjustment-agreement"
-                                value={adjustAgreementId}
-                                onChange={(e) => {
-                                    setAdjustAgreementId(e.target.value);
-                                    // The charges on offer belong to the enrolment; changing it changes them.
-                                    setAdjustSourceChargeId("");
-                                    setAdjustPreview(null);
-                                }}
-                            >
-                                {adjustableSubjects.map((sub) => (
-                                    <option key={sub.agreementId} value={sub.agreementId}>
-                                        {sub.displayName}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                        <label className="alloy-os-fdetail__movefield">
-                            <span>Against charge</span>
-                            <select
-                                data-testid="adjustment-source-charge"
-                                value={adjustSourceChargeId}
-                                onChange={(e) => {
-                                    setAdjustSourceChargeId(e.target.value);
-                                    setAdjustPreview(null);
-                                }}
-                            >
-                                <option value="">Choose the charge this is about…</option>
-                                {adjustableCharges.map((r) => (
-                                    <option key={r.chargeId} value={r.chargeId}>
-                                        {(r.description ?? r.categoryLabel)}
-                                        {r.date ? ` · ${r.date}` : ""}
-                                        {` · ${(r.outstandingCents / 100).toLocaleString(undefined, {
-                                            style: "currency",
-                                            currency,
-                                        })} outstanding`}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                        <label className="alloy-os-fdetail__movefield">
-                            <span>Type</span>
-                            <select
-                                data-testid="adjustment-category"
-                                value={adjustCategory}
-                                onChange={(e) => {
-                                    setAdjustCategory(e.target.value as "credit" | "adjustment");
-                                    setAdjustPreview(null);
-                                }}
-                            >
-                                {/*
-                                  * Two categories, not three. `discount` exists in the vocabulary but
-                                  * is owned by authored policy — a manual one would land in the same
-                                  * bucket as a configured one and nothing on the card could tell an
-                                  * operator which was policy and which was somebody's decision.
-                                  */}
-                                <option value="credit">Credit — lowers what the family owes</option>
-                                <option value="adjustment">Adjustment — either direction</option>
-                            </select>
-                        </label>
-                        {adjustCategory === "adjustment" ? (
-                            <label className="alloy-os-fdetail__movefield">
-                                <span>Direction</span>
-                                <select
-                                    data-testid="adjustment-direction"
-                                    value={adjustDirection}
-                                    onChange={(e) => {
-                                        setAdjustDirection(e.target.value as "decrease" | "increase");
-                                        setAdjustPreview(null);
-                                    }}
-                                >
-                                    <option value="decrease">Lower what the family owes</option>
-                                    <option value="increase">Raise what the family owes</option>
-                                </select>
-                            </label>
-                        ) : null}
-                        <label className="alloy-os-fdetail__movefield">
-                            <span>Amount</span>
-                            <input
-                                data-testid="adjustment-amount"
-                                inputMode="decimal"
-                                value={adjustAmount}
-                                onChange={(e) => {
-                                    setAdjustAmount(e.target.value);
-                                    setAdjustPreview(null);
-                                }}
-                                placeholder="25.00"
-                            />
-                        </label>
-                        <label className="alloy-os-fdetail__movefield">
-                            <span>Reason</span>
-                            <input
-                                data-testid="adjustment-reason"
-                                value={adjustReason}
-                                onChange={(e) => {
-                                    setAdjustReason(e.target.value);
-                                    setAdjustPreview(null);
-                                }}
-                                placeholder="Agreed goodwill credit"
-                            />
-                        </label>
-                        <label className="alloy-os-fdetail__movefield">
-                            <span>Effective date</span>
-                            <input
-                                data-testid="adjustment-effective-date"
-                                type="date"
-                                value={adjustEffectiveDate}
-                                onChange={(e) => {
-                                    setAdjustEffectiveDate(e.target.value);
-                                    setAdjustPreview(null);
-                                }}
-                            />
-                        </label>
-                        {adjustPreview ? (
-                            <div className="alloy-os-fdetail__movepreview" data-testid="adjustment-preview">
-                                <strong>{adjustPreview.summary}</strong>
-                                {adjustPreview.changes.map((c) => (
-                                    <span key={c}>{c}</span>
-                                ))}
-                                {/*
-                                  * The action's own summary speaks in the present tense. It writes a
-                                  * draft, so the timing is stated here rather than left to be
-                                  * discovered when the balance does not move.
-                                  */}
-                                <span data-testid="adjustment-preview-timing">
-                                    Recorded as a draft — it changes what the family owes once posted.
-                                </span>
-                            </div>
-                        ) : null}
-                        {adjustError ? (
-                            <div className="alloy-os-fdetail__moveerror" data-testid="adjustment-error">
-                                {adjustError}
-                            </div>
-                        ) : null}
-                        <div className="alloy-os-fdetail__moveactions">
-                            <button
-                                type="button"
-                                data-testid="adjustment-preview-button"
-                                disabled={running || !adjustReason.trim() || !adjustAgreementId || !adjustSourceChargeId}
-                                onClick={() => void previewAdjustment()}
-                            >
-                                Preview
-                            </button>
-                            <button
-                                type="button"
-                                data-testid="adjustment-confirm"
-                                disabled={running || !adjustPreview}
-                                onClick={() => void confirmAdjustment()}
-                            >
-                                Confirm
-                            </button>
-                            <button type="button" data-testid="adjustment-cancel" onClick={closeAdjustPanels}>
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                ) : null}
 
                 {reverseCharge ? (
                     <div className="alloy-os-fdetail__movepanel" data-testid="charge-reverse-panel">
@@ -2684,6 +2858,13 @@ export default function FinancialsCard({
                     onReverseAdjustment={openReverseAdjustment}
                     onPostCharge={({ chargeId }) => void runRowAction("charge.post", rowForCharge(chargeId))}
                     onReverseCharge={openReverseCharge}
+                    /*
+                     * Reverse and Adjust are NOT two names for one operation and are not offered as
+                     * such: Reverse unwinds a charge that should never have stood, Adjust leaves it
+                     * standing and writes a separate, auditable reduction against it. Both sit on
+                     * the row because both are about that row; only their meaning differs.
+                     */
+                    onAdjustCharge={adjustableSubjects.length > 0 ? openAdjustForCharge : undefined}
                     evidence={adaptFinancialsVmToFinancialsCard({
                         vm,
                         reconciliation,
@@ -2802,9 +2983,9 @@ export default function FinancialsCard({
              * the rendered card rather than off the props it was handed.
              */
             data-financials-account={vm?.account?.customerId ?? undefined}
-            data-financials-reserved={reservingAccount ? "true" : undefined}
+            data-financials-reserved={reservesFootprint ? "true" : undefined}
             style={
-                reservingAccount
+                reservesFootprint
                     ? { minHeight: loadedHeightRef.current ?? FOCUS_PANEL_RESERVED_MIN_HEIGHT }
                     : undefined
             }
