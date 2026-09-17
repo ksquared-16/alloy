@@ -55,9 +55,17 @@ export type ConfirmationSubject = {
     /** Deterministic and stable. Two needs share a group exactly when they share this. */
     readonly key: string;
     readonly kind: "child" | "person" | "household" | "other";
-    /** The canonical entity, lower-cased. The discriminator that keeps two people apart. */
+    /** The canonical entity or party role, lower-cased. The discriminator that keeps two people apart. */
     readonly entity_type: string | null;
     readonly subject_id: string | null;
+    /**
+     * WHICH one of a repeated role — Parent/Guardian #2, Emergency Contact #3.
+     *
+     * Null for a subject that is not one of several: the child, the household, an unsubjected
+     * artifact control. Present on every person, so two guardians are two subjects rather than one
+     * bucket holding both their phone numbers.
+     */
+    readonly ordinal: number | null;
 };
 
 /** One known fact inside a group. It remains a whole need — this only says where it sits. */
@@ -90,38 +98,123 @@ const HOUSEHOLD_ENTITIES = new Set(["customer", "household", "address", "locatio
 /**
  * The semantic subject of one need.
  *
- * Child scope collapses every child entity spelling onto the child itself, because
- * `classifyFieldScope` has already ruled that they mean the same person and the journey's
- * `subject_id` says which one. Everything else is keyed by its own canonical entity, so no two
- * entities are ever spoken about as one.
+ * ## The order of evidence, strongest first
+ *
+ * ```
+ *   1  a declared child entity            the child            `child:<subject_id>`
+ *   2  a party the artifact names         that person          `person:guardian#2`
+ *   3  a declared person entity           that person          `person:guardian#1`
+ *   4  a declared household entity        the household        `household:customer`
+ *   5  the journey's own subject          the child            `child:<subject_id>`
+ *   6  nothing nameable                   unsubjected          `other:…`
+ * ```
+ *
+ * Rules 1, 3 and 4 are what this function always did. Rules 2 and 5 are the repair.
+ *
+ * ## Why a null destination stopped meaning "household"
+ *
+ * `classifyFieldScope` documents `household` as the FALLBACK for an unbound field — "collected once,
+ * shared across all children" is a statement about STORAGE. Reading that fallback as a subject is
+ * how the child's own name, age and gender came to be asked after a different person's phone
+ * number: those three have no canonical column, so they fell to the default and were placed with
+ * the household, while the date of birth — the same child, the same section of the same page — was
+ * placed with the child because Alloy happens to keep dates of birth.
+ *
+ * Whether a question has an Alloy binding must never decide who the question is about.
+ *
+ * ## Rule 5, and what it does NOT claim
+ *
+ * A packet session is anchored to exactly one Enrollment instance (D-95) whose subject is one child.
+ * A question on that packet that names no other party is a question about that child's enrolment —
+ * which is the same reading a parent gives it. So `enrollment:start_date`, "Student Age Upon
+ * Enrolling" and "Does your child have any allergies?" all reach the child, by three different
+ * routes, without a list of labels anywhere.
+ *
+ * It is a SUBJECT and nothing else. It creates no canonical destination, no `shared_values` entry
+ * and no confirmation evidence; it decides which block a question is asked in and which heading it
+ * is drawn under. Where it is imprecise — a household question that declares no entity is grouped
+ * with the child — the remedy is to declare the entity, and the failure is one block out of place
+ * rather than a conversation in PDF box order.
+ *
+ * ## Two people never merge
+ *
+ * Rule 2 keys on role AND ordinal, so Parent/Guardian #1 and Parent/Guardian #2 are two subjects
+ * however the form printed them. That is the whole point of reading the ordinal: without it the
+ * second guardian's answers would land on the first.
  */
 export function confirmationSubjectFor(need: EnrollmentInformationNeed): ConfirmationSubject {
-    const entity = (need.identity.entity_type ?? "").trim().toLowerCase() || null;
+    const declared = (need.identity.entity_type ?? "").trim().toLowerCase() || null;
+    const inferred = (need.identity.subject_entity_type ?? "").trim().toLowerCase() || null;
+    const entity = declared ?? inferred;
+    const party = need.identity.subject_party;
 
+    // 1. The child. `scope === "child"` is only ever produced BY a declared child entity, so this
+    // reads a declaration rather than a storage default.
     if (need.scope === "child" || (entity && CHILD_ENTITIES.has(entity))) {
         return {
-            key: `child:${need.subject_id ?? "-"}`,
+            key: `child:${need.subject_id ?? need.identity.journey_subject_id ?? "-"}`,
             kind: "child",
             entity_type: entity,
-            subject_id: need.subject_id,
+            subject_id: need.subject_id ?? need.identity.journey_subject_id ?? null,
+            ordinal: null,
         };
     }
+
+    /*
+     * 2. A person the artifact names.
+     *
+     * Preferred over a declared entity because it is STRICTLY more specific: "Parent/Guardian #2
+     * Phone Number" bound to `guardian:phone` is still the second guardian's, and the declaration
+     * cannot say so. The role falls back to the declared entity only when the slot's own phrase
+     * yielded no canonical role, so a declaration is never discarded in favour of a slug.
+     */
+    if (party) {
+        const role = !party.canonical_role && entity && PERSON_ENTITIES.has(entity) ? entity : party.role;
+        return {
+            key: `person:${role}#${party.ordinal}`,
+            kind: "person",
+            entity_type: role,
+            subject_id: null,
+            ordinal: party.ordinal,
+        };
+    }
+
+    // 3. A declared person entity with no ordinal: the first of that role.
     if (entity && PERSON_ENTITIES.has(entity)) {
-        return { key: `person:${entity}`, kind: "person", entity_type: entity, subject_id: null };
+        return { key: `person:${entity}#1`, kind: "person", entity_type: entity, subject_id: null, ordinal: 1 };
     }
     if (entity && HOUSEHOLD_ENTITIES.has(entity)) {
-        return { key: `household:${entity}`, kind: "household", entity_type: entity, subject_id: null };
+        return { key: `household:${entity}`, kind: "household", entity_type: entity, subject_id: null, ordinal: null };
     }
+
     /*
-     * No canonical entity to reason about. Keyed by the entity spelling itself (or the scope when
-     * there is none) so unrecognised subjects stay APART rather than piling into one bucket — the
-     * failure that would merge two strangers is the one worth failing away from.
+     * 5. The journey's own subject.
+     *
+     * Deliberately after every other rule: the anchor answers for what nothing else claimed, and
+     * claims nothing that named someone else. A recipient-scoped control — every signature — is
+     * excluded because it belongs to whoever signs the artifact, not to its subject.
+     */
+    if (need.scope !== "recipient" && need.identity.journey_subject_id) {
+        return {
+            key: `child:${need.identity.journey_subject_id}`,
+            kind: "child",
+            entity_type: entity,
+            subject_id: need.identity.journey_subject_id,
+            ordinal: null,
+        };
+    }
+
+    /*
+     * No canonical entity to reason about and no anchor. Keyed by the entity spelling itself (or the
+     * scope when there is none) so unrecognised subjects stay APART rather than piling into one
+     * bucket — the failure that would merge two strangers is the one worth failing away from.
      */
     return {
         key: `other:${entity ?? need.scope}:${need.subject_id ?? "-"}`,
         kind: "other",
         entity_type: entity,
         subject_id: need.subject_id,
+        ordinal: null,
     };
 }
 

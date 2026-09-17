@@ -35,14 +35,52 @@
  * grain needs no new plumbing and no new selector: Child A and Child B have different journeys,
  * therefore different sessions, therefore different needs. Nothing here infers a subject.
  *
+ * ## SUBJECT is not DESTINATION
+ *
+ * Everything above answers ONE question: where may Alloy canonically retain this answer, and which
+ * other destinations may claim the same datum. That is the DESTINATION.
+ *
+ * It is not who the question is about. On the certified Admissions Form those two answers agree on
+ * 4 destinations out of 80:
+ *
+ * ```
+ *   Student Name                 subject = the child      destination = Form-only
+ *   Parent/Guardian #1 Employer  subject = guardian #1    destination = Form-only
+ *   Child date of birth          subject = the child      destination = customer_member.dob
+ * ```
+ *
+ * A null canonical destination must never imply a household subject — but that is exactly what it
+ * meant, because `classifyFieldScope` documents `household` as the FALLBACK for an unbound field
+ * and the subject layer downstream read that fallback as a statement. So the child's own name, age
+ * and gender were asked after a different person's phone number, purely because Alloy happens to
+ * have a column for a date of birth and not for a gender.
+ *
+ * `subject_party` and `journey_subject_id` carry the subject alongside the destination, from owners
+ * that already existed, and neither can reach identity.
+ *
  * Pure. No I/O.
  *
  * @see lib/pos/packet/packetFieldPlan.ts — the ask-once planner whose identity this reuses
  * @see lib/forms/fieldScope.ts — the scope doctrine
+ * @see lib/enrollment/participantRuntime/artifactPartySlots.ts — who a destination is about
  */
 
 import { classifyFieldScope, type FieldScope } from "@/lib/forms/fieldScope";
 import type { FormField } from "@/lib/forms/schema";
+
+/**
+ * One person an artifact names, as the artifact numbers them.
+ *
+ * `role` is the canonical relationship key where Alloy's own vocabulary recognises the phrase
+ * (`guardian`, `emergency_contact`, `physician`), else the slug the form's own words yield. The
+ * ordinal is the form's `#n`; an unnumbered slot is the first of its role.
+ */
+export type NeedSubjectParty = {
+    readonly role: string;
+    readonly ordinal: number;
+    /** True when `role` came from Alloy's own relationship vocabulary rather than the form's words. */
+    readonly canonical_role: boolean;
+};
 import {
     collectionModeIsConversational,
     participantCollectionMode,
@@ -74,6 +112,41 @@ export type EnrollmentNeedIdentity = {
      * it. Grammar and ordering read it; nothing that decides what a value IS may.
      */
     readonly subject_entity_type: string | null;
+    /**
+     * The PARTY this destination is about — "Parent/Guardian #2", "Emergency Contact #1".
+     *
+     * ## Why a need needs this at all
+     *
+     * SUBJECT and DESTINATION are independent. `entity_type` says where Alloy may canonically
+     * retain the answer; it says nothing about who the question is about, and on a real imported
+     * packet it is usually absent. The certified Admissions Form declares an entity on 4 of its 80
+     * destinations — so 27 boxes belonging to seven different people (two guardians, three
+     * emergency contacts, a physician and a dentist) arrived at the conversation with no subject at
+     * all and were asked in PDF box order.
+     *
+     * `artifactPartySlots` already reads exactly this, generically, from role + ordinal + a person
+     * attribute, using the canonical relationship vocabulary rather than any packet's words. It was
+     * being used only to SUPPRESS destinations that would broadcast one answer across several
+     * people. The same reading answers "whose question is this", so it is carried here.
+     *
+     * NOT IDENTITY. It never reaches `key`, `canonical_key` or `shared_value_key`: two guardians'
+     * name boxes remain two unbound needs exactly as before, and nothing here decides what a value
+     * MEANS or where it is stored.
+     */
+    readonly subject_party: NeedSubjectParty | null;
+    /**
+     * The journey's own subject — `process_instances.subject_id`, always, whatever the scope.
+     *
+     * Distinct from `subject_id`, which is the CHILD GRAIN of a child-scoped datum and is null for
+     * everything else. This is the anchor: a packet session belongs to exactly one Enrollment
+     * instance (D-95) and that instance's subject is one child. A question on that packet that
+     * names no other party is a question about that child, whether or not Alloy happens to have a
+     * canonical column to keep the answer in.
+     *
+     * Carried rather than inferred so the subject layer can say so without a second lookup, and
+     * kept out of `key` so it can never change what a value IS.
+     */
+    readonly journey_subject_id: string | null;
     readonly field_key: string | null;
     readonly basis: EnrollmentNeedDedupeBasis;
     /**
@@ -110,6 +183,8 @@ export type NeedIdentityInput = {
     readonly insideCollectionBoundGroup: boolean;
     /** The entity this destination sits among, when it declares none. Grammar only. */
     readonly inferredEntityType?: string | null;
+    /** The party slot this destination belongs to, from `artifactPartySlots`. Subject only. */
+    readonly partySlot?: NeedSubjectParty | null;
     /** Provenance, used only to keep artifact-specific occurrences distinct. */
     readonly formDefinitionVersionId: string;
     readonly sessionItemId: string;
@@ -215,6 +290,8 @@ export function resolveEnrollmentNeedIdentity(input: NeedIdentityInput): Enrollm
             shared_value_key: null,
             entity_type: parts.entity_type,
             subject_entity_type: parts.entity_type ?? input.inferredEntityType ?? null,
+            subject_party: input.partySlot ?? null,
+            journey_subject_id: input.subjectId,
             field_key: parts.field_key,
             basis: parts.basis,
             artifact_specific: true,
@@ -238,6 +315,8 @@ export function resolveEnrollmentNeedIdentity(input: NeedIdentityInput): Enrollm
         shared_value_key: parts.shared_value_key,
         entity_type: parts.entity_type,
         subject_entity_type: parts.entity_type ?? input.inferredEntityType ?? null,
+        subject_party: input.partySlot ?? null,
+        journey_subject_id: input.subjectId,
         field_key: parts.field_key,
         basis: parts.basis,
         artifact_specific: false,

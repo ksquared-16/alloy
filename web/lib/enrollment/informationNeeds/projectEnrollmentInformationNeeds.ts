@@ -26,7 +26,7 @@ import {
     type EnrollmentNeedIdentity,
 } from "@/lib/enrollment/informationNeeds/enrollmentNeedIdentity";
 import { inferUnboundDestinationEntity } from "@/lib/enrollment/informationNeeds/unboundDestinationSubject";
-import { broadcastingPartyFieldIds } from "@/lib/enrollment/participantRuntime/artifactPartySlots";
+import { artifactPartySlots, broadcastingPartyFieldIds } from "@/lib/enrollment/participantRuntime/artifactPartySlots";
 import {
     confirmationSatisfiesCurrentValue,
     type EnrollmentNeedConfirmationMap,
@@ -129,6 +129,24 @@ export function projectEnrollmentInformationNeeds(
          * `customer_person_role_types` rows kept broadcasting one phone number across six people.
          */
         const partySlots = broadcastingPartyFieldIds(form.schema, input.partyRoles ?? []);
+        /*
+         * WHOSE question each destination is — read from the same artifact, by the same owner.
+         *
+         * `broadcastingPartyFieldIds` above answers "would asking this write one answer into
+         * several people's boxes". This answers "who is this box about", which is a different
+         * question with the same evidence: role, ordinal and a person attribute. A destination can
+         * be a party's without being a broadcast risk — "Parent/Guardian #2 Name" is nobody else's
+         * and is still asked — and those are precisely the ones that arrived with no subject.
+         *
+         * Subject only. It is handed to the identity resolver, which keeps it out of `key`,
+         * `canonical_key` and `shared_value_key`.
+         */
+        const partyByFieldId = new Map(
+            artifactPartySlots(form.schema, input.partyRoles ?? []).map((slot) => [
+                slot.field_id,
+                { role: slot.role, ordinal: slot.ordinal, canonical_role: slot.canonical_role },
+            ]),
+        );
         // The authored section each destination sits in — read once per Form, not per field.
         const sectionByFieldId = new Map<string, string>();
         for (const sec of ((form.schema as { sections?: { title?: string; field_ids?: string[] }[] }).sections ?? [])) {
@@ -195,6 +213,8 @@ export function projectEnrollmentInformationNeeds(
                 insideCollectionBoundGroup: fieldIsInsideCollectionBoundGroup(form.schema, field.id),
                 // The packet's own layout, for grammar and ordering only — never for identity.
                 inferredEntityType: inferUnboundDestinationEntity(form.schema, field.id),
+                // The person this box is about, when the artifact names one. Subject, not identity.
+                partySlot: partyByFieldId.get(field.id) ?? null,
                 formDefinitionVersionId: form.form_definition_version_id,
                 sessionItemId: form.session_item_id,
             });

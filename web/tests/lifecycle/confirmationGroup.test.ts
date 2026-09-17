@@ -122,8 +122,10 @@ describe("the group", () => {
         const groups = groupKnownConfirmations(all);
         expect(groups.map((g) => g.subject.key)).toEqual([
             `child:${CHILD}`,
-            "person:guardian",
-            "person:person",
+            // The ordinal is part of the subject now: an unnumbered person is the first of their
+            // role, and "Parent/Guardian #2" is somebody else rather than more of this one.
+            "person:guardian#1",
+            "person:person#1",
         ]);
         expect(groups[0]!.members).toHaveLength(4);
         expect(groups[1]!.members).toHaveLength(3);
@@ -174,7 +176,7 @@ describe("the active group", () => {
             [childFirst, childLast, guardianName, guardianPhone],
             guardianName.identity.key,
         );
-        expect(group?.subject.key).toBe("person:guardian");
+        expect(group?.subject.key).toBe("person:guardian#1");
         expect(group?.members.map((m) => m.need_key)).toEqual([
             guardianName.identity.key,
             guardianPhone.identity.key,

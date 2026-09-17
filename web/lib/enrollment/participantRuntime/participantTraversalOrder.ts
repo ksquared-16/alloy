@@ -52,11 +52,6 @@ export const TRAVERSAL_RANK = {
     unsubjected: 5,
 } as const;
 
-/** The effective subject entity — declared, else the one the packet's layout supplies. */
-function subjectEntity(need: EnrollmentInformationNeed): string | null {
-    return need.identity.entity_type ?? need.identity.subject_entity_type ?? null;
-}
-
 /**
  * Sections that contain a fact the confirmation policy names.
  *
@@ -95,7 +90,15 @@ export function traversalPlacement(
     context: { readonly basicSections: ReadonlySet<string>; },
 ): TraversalPlacement {
     const subject = confirmationSubjectFor(need);
-    const entity = (subjectEntity(need) ?? "").toLowerCase();
+    /*
+     * The ROLE, read off the subject rather than off the need.
+     *
+     * It used to be read straight from the need's declared entity, which meant a destination the
+     * artifact numbered — "Parent/Guardian #2 Phone Number" — was placed by its entity alone, and
+     * both guardians landed in one block called `guardian`. The subject layer now separates them,
+     * so this reads its answer instead of re-deriving a worse one.
+     */
+    const entity = (subject.entity_type ?? "").toLowerCase();
     const occurrence = need.occurrences[0] ?? null;
     const section = occurrence ? sectionKey(occurrence.form_definition_id, occurrence.section_title) : "";
 
@@ -113,11 +116,19 @@ export function traversalPlacement(
          */
         return { rank: TRAVERSAL_RANK.childTopics, blockKey: `child:${section}` };
     }
-    if (entity === "guardian" || entity === "parent") {
-        return { rank: TRAVERSAL_RANK.primaryGuardian, blockKey: "guardian" };
-    }
     if (subject.kind === "person") {
-        return { rank: TRAVERSAL_RANK.otherPeople, blockKey: `person:${entity || "other"}` };
+        const ordinal = subject.ordinal ?? 1;
+        const blockKey = `person:${entity || "other"}#${ordinal}`;
+        /*
+         * ONE primary parent, and only one.
+         *
+         * The rank exists for the person a parent expects to be asked about first — themselves.
+         * The SECOND guardian is another person and belongs with the others, which is what the
+         * artifact's own numbering says. Before the ordinal reached here, "#2" was placed at the
+         * primary rank alongside "#1" and the two people shared a block.
+         */
+        const primary = (entity === "guardian" || entity === "parent") && ordinal === 1;
+        return { rank: primary ? TRAVERSAL_RANK.primaryGuardian : TRAVERSAL_RANK.otherPeople, blockKey };
     }
     if (subject.kind === "household") {
         return { rank: TRAVERSAL_RANK.household, blockKey: "household" };
