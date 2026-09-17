@@ -321,10 +321,15 @@ export function PacketBuilderWorkspaceLayout({
                      * its own link and creates the session. A link minted here is a DIRECT send,
                      * outside any configured process.
                      */}
-                    <IntakeWorkspaceRegion
-                        title="Send this packet directly"
-                        lead="For sending this packet on its own. Configured processes such as Enrollment launch their participant work automatically — you do not need to send a link here for those."
-                    >
+                    {/*
+                      * The distinction lives in ONE line, beside the control it describes.
+                      *
+                      * This region carried a three-clause lead and the panel beneath it then said
+                      * the same thing again, so the operator read two paragraphs of explanation
+                      * before reaching a recipient field. `packetIntro` now carries it, next to the
+                      * Send button, where it is actually load-bearing.
+                      */}
+                    <IntakeWorkspaceRegion title="Send this packet directly">
                         <PacketDistributionLaunchPanel
                             packetName={defName}
                             busy={busy}

@@ -3,7 +3,6 @@
 import clsx from "clsx";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import SecondaryButton from "@/components/SecondaryButton";
-import { FormsOperationalLink } from "@/components/forms/workspace/FormsOperationalLink";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import {
     DISTRIBUTION_COPY,
@@ -14,7 +13,6 @@ import {
     type DistributionCreatedLinkPayload,
     type DistributionLinkRow,
 } from "@/lib/forms/distributionPresentation";
-import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import { MEDICATION_AUTHORIZATION_DEMO_FORM_KEY } from "@/lib/forms/seeds/medicationAuthorizationDemo";
 import {
     opActionLinkAccent,
@@ -219,14 +217,16 @@ export function DistributionLinksPanel(props: DistributionLinksPanelProps) {
 
     return (
         <div data-testid="distribution-links-panel" data-distribution-mode={mode}>
+            {/*
+              * ONE sentence, not two saying the same thing.
+              *
+              * `packetIntro` used to end with "Completed runs appear in the session inbox for
+              * review" and this paragraph then said it again with a link. Where completed runs go is
+              * the business of the Sessions region directly below, which already owns that link; a
+              * send control does not need to explain review twice before the operator has sent
+              * anything.
+              */}
             <p className={opMetadata}>{intro}</p>
-            {mode === "packet" ?
-                <p className={clsx("mt-2", opMetadata)}>
-                    Completed runs appear in the{" "}
-                    <FormsOperationalLink accent href={FORMS_MODULE_ROUTES.packetSessions}>session inbox</FormsOperationalLink>{" "}
-                    for review.
-                </p>
-            :   null}
 
             {mode === "form" && shareIntakeBlocked && shareIntakeBlockedMessage ?
                 <p className="mt-2 text-sm text-amber-900" data-testid="distribution-share-intake-blocked">
@@ -266,34 +266,63 @@ export function DistributionLinksPanel(props: DistributionLinksPanelProps) {
                 <OneTimeLinkPanel createdLink={createdLink} copied={copied} copyWarn={copyWarn} onCopy={onCopy} />
             :   null}
 
-            <p className={clsx("mt-4", opMetadata)}>{DISTRIBUTION_COPY.activeLinksLead}</p>
+            {/*
+              * WHAT IS LIVE, AND THEN THE REST — KEPT, NOT SHOWN.
+              *
+              * Every link ever minted rendered as a full-width row, so on the certified Enrollment
+              * packet this list was nine rows of mostly retired QA links and the whole section grew
+              * to 1283px inside a 1250px viewport: the secondary capability was taller than the
+              * screen and taller than the packet it belongs to. It also pushed the recipient input
+              * so low that its own results menu opened past the fold.
+              *
+              * A deactivated link is still a record — what was sent, to whom, and when — so nothing
+              * is dropped. It simply stops being first-class product content: active sends lead, the
+              * retired ones sit behind one disclosure that says how many there are.
+              */}
+            <p className={clsx("mt-4 font-medium", opMetadata)}>
+                {mode === "packet" ? DISTRIBUTION_COPY.packetLinksLead : DISTRIBUTION_COPY.activeLinksLead}
+            </p>
 
             {activeLinks.length === 0 && inactiveLinks.length === 0 ?
                 <p className={clsx("mt-3", opMetadata)}>{emptyCopy}</p>
-            :   <ul className={clsx(opGroupedSurface, "mt-3")} data-testid="distribution-link-list">
-                    {activeLinks.map((link) => (
-                        <LinkRow
-                            key={link.id}
-                            link={link}
-                            fallbackLabel={fallbackLabel}
-                            viewerTz={viewerTz}
-                            mode={mode}
-                            busy={busy}
-                            onToggleLink={mode === "packet" ? props.onToggleLink : undefined}
-                        />
-                    ))}
-                    {inactiveLinks.map((link) => (
-                        <LinkRow
-                            key={link.id}
-                            link={link}
-                            fallbackLabel={fallbackLabel}
-                            viewerTz={viewerTz}
-                            mode={mode}
-                            busy={busy}
-                            onToggleLink={mode === "packet" ? props.onToggleLink : undefined}
-                        />
-                    ))}
-                </ul>
+            :   <>
+                    {activeLinks.length > 0 ?
+                        <ul className={clsx(opGroupedSurface, "mt-3")} data-testid="distribution-link-list">
+                            {activeLinks.map((link) => (
+                                <LinkRow
+                                    key={link.id}
+                                    link={link}
+                                    fallbackLabel={fallbackLabel}
+                                    viewerTz={viewerTz}
+                                    mode={mode}
+                                    busy={busy}
+                                    onToggleLink={mode === "packet" ? props.onToggleLink : undefined}
+                                />
+                            ))}
+                        </ul>
+                    :   <p className={clsx("mt-3", opMetadata)}>{emptyCopy}</p>}
+
+                    {inactiveLinks.length > 0 ?
+                        <details className="mt-3" data-testid="distribution-link-history">
+                            <summary className={clsx("cursor-pointer", opActionLinkAccent)}>
+                                {`${DISTRIBUTION_COPY.historyToggle} (${inactiveLinks.length})`}
+                            </summary>
+                            <ul className={clsx(opGroupedSurface, "mt-2")} data-testid="distribution-link-history-list">
+                                {inactiveLinks.map((link) => (
+                                    <LinkRow
+                                        key={link.id}
+                                        link={link}
+                                        fallbackLabel={fallbackLabel}
+                                        viewerTz={viewerTz}
+                                        mode={mode}
+                                        busy={busy}
+                                        onToggleLink={mode === "packet" ? props.onToggleLink : undefined}
+                                    />
+                                ))}
+                            </ul>
+                        </details>
+                    :   null}
+                </>
             }
         </div>
     );

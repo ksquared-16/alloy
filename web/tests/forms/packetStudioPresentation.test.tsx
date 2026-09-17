@@ -11,6 +11,8 @@
  */
 
 import { describe, expect, it } from "vitest";
+
+import { DISTRIBUTION_COPY } from "@/lib/forms/distributionPresentation";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -31,8 +33,17 @@ const LAYOUT_CODE = LAYOUT.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$
 describe("the packet workspace says true things", () => {
     it("names the direct send so it cannot be read as Enrollment execution", () => {
         expect(LAYOUT).toContain('title="Send this packet directly"');
-        expect(LAYOUT).toMatch(/Configured processes such as Enrollment launch their participant work automatically/);
         expect(LAYOUT).not.toContain('title="Distribution"');
+        /*
+         * The sentence moved, and the claim did not.
+         *
+         * It used to sit on this region as a three-clause lead while the panel beneath it said the
+         * same thing again, so the operator read two paragraphs before reaching a recipient field.
+         * It now lives beside the Send button, which is where it is load-bearing — so the guard
+         * follows it to its owner rather than pinning it to the file it happened to start in.
+         */
+        expect(DISTRIBUTION_COPY.packetIntro).toMatch(/configured processes such as enrollment/i);
+        expect(LAYOUT_CODE).not.toMatch(/lead="For sending this packet on its own/);
     });
 
     it("describes obligations, not a list of forms", () => {

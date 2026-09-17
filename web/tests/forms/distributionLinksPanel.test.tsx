@@ -54,7 +54,8 @@ describe("DistributionLinksPanel OW-7", () => {
         );
 
         expect(html).toContain('data-distribution-mode="packet"');
-        expect(html).toContain("Launch packet");
+        // Renamed: the operator is SENDING a packet; "launch" named the machinery.
+        expect(html).toContain("Send packet");
         expect(html).toContain('data-testid="distribution-toggle-link-1"');
         expect(html).toContain("Activate");
     });

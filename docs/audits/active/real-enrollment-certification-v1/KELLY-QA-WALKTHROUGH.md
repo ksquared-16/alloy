@@ -292,6 +292,37 @@ knows carry a blue **Alloy** mark.
 
 ---
 
+## C7 — Direct distribution is NOT the Enrollment send path
+
+You will see **Direct distribution and session history** at the bottom of a packet in Studio. It is
+collapsed on purpose. Open it if you want, but know what it is before you QA it:
+
+| | |
+|---|---|
+| **Normal Enrollment send** | child record → **BUSINESS PROCESS** card → **Send enrollment paperwork** → Communications → email. That is Part D. |
+| **Direct distribution** | a one-off send of this packet to one family, outside any configured process. Exceptional admin tooling. |
+
+**C7. DO** *(optional)* — Expand it, and in **Send to** type **`Pathb`**.
+**EXPECT** — one result, naming the person clearly:
+
+```
+Pathb Certopp
+Customer: Certopp Family · DOB 2021-11-02
+```
+
+Click it and it becomes the selected recipient with a **Change** beside it. **You should never have
+to type a UUID.** *Enter ID manually* stays as a fallback for records search cannot reach; it is not
+the normal path.
+
+> **STOP** if typing a name produces nothing. That was a real defect — the results were being drawn
+> underneath the Studio window and below the bottom of the screen — and it is what stopped this QA
+> run. It is fixed.
+
+> **Recent direct sends** shows what is still active. Older links sit behind **View all history**;
+> nothing is deleted. Completed runs are reviewed in the **session inbox**, not here.
+
+---
+
 
 # PART D — Open the child, send the paperwork, receive the email
 

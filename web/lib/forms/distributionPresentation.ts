@@ -23,13 +23,35 @@ export type DistributionCreatedLinkPayload = {
 
 export const DISTRIBUTION_COPY = {
     formIntro: "Families complete this form from a secure link. Share intake when a published version is ready.",
+    /*
+     * ONE LINE, AND IT SAYS WHICH PATH THIS IS.
+     *
+     * It used to say "Launch this intake workflow — families complete each step in order. Completed
+     * runs appear in the session inbox for review." — which describes what a packet IS, to someone
+     * already looking at one, and then repeated the session-inbox sentence that the paragraph
+     * directly beneath it also prints. What an operator needs here is the distinction the surface
+     * exists to make: this send is the exception, because a configured process sends on its own.
+     */
     packetIntro:
-        "Launch this intake workflow — families complete each step in order. Completed runs appear in the session inbox for review.",
+        "Configured processes such as Enrollment send automatically — use this only for a one-off send.",
+    /*
+     * Two headings, because they are two different lists.
+     *
+     * A Form's links are intake links a family answers from; a Packet's are one-off sends made
+     * outside a process. Collapsing them onto one phrase gave the Forms surface packet vocabulary
+     * for something that is not a "direct send" at all.
+     */
     activeLinksLead: "Active intake links for this flow.",
+    packetLinksLead: "Recent direct sends",
     emptyForm: "No intake links yet. Share this form when you are ready for families to respond.",
-    emptyPacket: "No launch links yet. Launch when steps are saved and ready.",
+    emptyPacket: "Nothing sent directly yet.",
     shareIntake: "Share intake",
-    launchPacket: "Launch packet",
+    /*
+     * "Launch packet" named the machinery, not the act. The operator is SENDING a packet to a
+     * family; "launch" is what the runtime does about it, and it reads as a bigger, more
+     * process-shaped verb than the exceptional one-off this control performs.
+     */
+    launchPacket: "Send packet",
     previewRecipient: "Preview recipient experience",
     copyLinkNow: "Copy this link now",
     copySecurityNote: "For security, this exact URL will not be shown again.",
@@ -37,6 +59,8 @@ export const DISTRIBUTION_COPY = {
     advancedCredential: "Advanced — embed credential",
     adminRequired: "Admin role required to share intake links.",
     previewBadge: "Preview",
+    /** Disclosure for links that are no longer active — history, kept and not deleted. */
+    historyToggle: "View all history",
     activeBadge: "Active",
     inactiveBadge: "Inactive",
 } as const;

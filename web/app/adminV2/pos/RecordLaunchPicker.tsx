@@ -19,11 +19,36 @@
  * A raw-UUID fallback still sits behind "Enter ID manually" for the cases search cannot reach. The
  * component is controlled: it emits the selected option or null.
  *
+ * ## The menu was rendering, and nobody could see it
+ *
+ * Typing "path" in the Packet Studio distribution picker looked like a dead control. It was not: the
+ * request went to the canonical typeahead, came back with Patha Certfree and Pathb Certopp, and the
+ * menu rendered — `position: fixed`, `visibility: visible`, `opacity: 1`, holding both names. Two
+ * things hid it, and both were measured rather than guessed.
+ *
+ * FIRST, STACKING. The menu portals to `document.body` to escape the modal's `overflow-hidden`
+ * ancestors, and carried a hand-written `zIndex: 90`. The Processing shell it opens inside sits at
+ * panel 97 / backdrop 96, so the menu painted UNDERNEATH the very surface that owns it — a hit test
+ * at the menu's own centre returned the packet body behind it. That is the same defect this
+ * repository already fixed twice (`ProcessingAlloyDialog` z-[80] → z-[110], and the form-builder
+ * library panel), and it has a platform answer: `ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z`. A local
+ * number was always going to drift out of the layer it had to clear.
+ *
+ * SECOND, THE FOLD. The menu is anchored below the input unconditionally. In the section this
+ * control lives in the input sits near the bottom of a very tall panel — measured at y=1120 in a
+ * 1250px viewport — so even correctly stacked the results opened into the last 130 pixels of the
+ * screen or past it entirely. It now opens upward when there is not room below, which is what every
+ * other typeahead does and what makes the control usable at any scroll position.
+ *
+ * The rows are also a real listbox now. They were plain buttons with no roles, so a screen reader
+ * was told nothing had appeared either.
+ *
  * No packet-runtime, resolver, or duplicate-detection logic lives here.
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawer";
 import { LAUNCH_ENTITY_TYPES, parseLaunchFromEntityInput } from "@/lib/pos/packet/launchFromEntity";
 import { type RecordPickerOption } from "@/lib/pos/packet/recordPickerOptions";
 
@@ -56,14 +81,30 @@ export default function RecordLaunchPicker({
     const seq = useRef(0);
     // Portal positioning so the results menu escapes the POS modal's overflow-hidden ancestors.
     const inputWrapRef = useRef<HTMLDivElement | null>(null);
-    const [menuRect, setMenuRect] = useState<{ left: number; top: number; width: number } | null>(null);
+    const [menuRect, setMenuRect] = useState<
+        { left: number; width: number; top: number; bottom: null } | { left: number; width: number; top: null; bottom: number } | null
+    >(null);
     const menuOpen = !manual && !value && query.trim().length >= 2;
+
+    /** The menu's own height cap (`max-h-56`), used to decide which side it will fit on. */
+    const MENU_MAX_H = 224;
 
     const updateMenuRect = useCallback(() => {
         const el = inputWrapRef.current;
         if (!el) return;
         const r = el.getBoundingClientRect();
-        setMenuRect({ left: r.left, top: r.bottom + 4, width: r.width });
+        const below = window.innerHeight - r.bottom;
+        /*
+         * Open upward when the space below cannot hold the menu AND there is more room above. Both
+         * halves matter: on a short viewport neither side fits, and dropping upward into even less
+         * room would be a different way to be invisible.
+         */
+        const flipUp = below < MENU_MAX_H + 8 && r.top > below;
+        setMenuRect(
+            flipUp
+                ? { left: r.left, width: r.width, top: null, bottom: Math.max(8, window.innerHeight - r.top + 4) }
+                : { left: r.left, width: r.width, top: r.bottom + 4, bottom: null },
+        );
     }, []);
 
     useLayoutEffect(() => {
@@ -81,7 +122,7 @@ export default function RecordLaunchPicker({
         };
     }, [menuOpen, updateMenuRect, results]);
 
-    // Debounced search against the existing global-search API.
+    // Debounced search against the canonical CRM typeahead.
     useEffect(() => {
         if (manual || value) return;
         const q = query.trim();
@@ -228,8 +269,19 @@ export default function RecordLaunchPicker({
                     {menuOpen && menuRect && typeof document !== "undefined"
                         ? createPortal(
                               <div
-                                  style={{ position: "fixed", left: menuRect.left, top: menuRect.top, width: menuRect.width, zIndex: 90 }}
+                                  style={{
+                                      position: "fixed",
+                                      left: menuRect.left,
+                                      width: menuRect.width,
+                                      ...(menuRect.top !== null ? { top: menuRect.top } : { bottom: menuRect.bottom }),
+                                      // The platform's own answer for an overlay opened from inside
+                                      // the workspace shell. A local number cannot stay above it.
+                                      zIndex: ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z,
+                                  }}
                                   className="max-h-56 overflow-y-auto rounded-md border border-stone-200 bg-white shadow-xl"
+                                  role="listbox"
+                                  aria-label="Matching records"
+                                  data-testid="record-launch-picker-menu"
                               >
                                   {searching && !results ? (
                                       <div className="px-3 py-2 text-[11px] text-stone-400">Searching…</div>
@@ -240,6 +292,9 @@ export default function RecordLaunchPicker({
                                           <button
                                               key={`${opt.entity_type}:${opt.entity_id}`}
                                               type="button"
+                                              role="option"
+                                              aria-selected={false}
+                                              data-testid="record-launch-picker-option"
                                               onMouseDown={(e) => {
                                                   // mousedown (not click) so it fires before the input blurs/menu closes
                                                   e.preventDefault();
