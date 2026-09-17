@@ -155,12 +155,28 @@ describe("the dependency is not real — proven from current source", () => {
 });
 
 describe("the payment views no longer wait for the payments read", () => {
-    it("THE GATE: the views read starts in the FIRST round-trip window", async () => {
-        // Its inputs are known before the build's first await, so nothing may precede it.
+    it("THE GATE: the views read is in the FIRST wave of trips — nothing precedes it", async () => {
+        /*
+         * RELATIVE TO THE RUN'S OWN FIRST TRIP, not to a constant.
+         *
+         * The first cut asserted `startRel < LATENCY` — an absolute 20 ms bound on when the build
+         * issues its first query. That is an event-loop assertion wearing a structural one's
+         * clothes: on a loaded runner, module import and scheduling push the whole first wave past
+         * 20 ms and the gate fails on an unchanged tree. It did exactly that, once, in a run that
+         * had three suites in flight.
+         *
+         * The structural claim is that nothing is awaited before the views read. Measuring it
+         * against the earliest trip of the same run says that, and moves with the jitter instead of
+         * being caught by it.
+         */
         const { trips } = await measure();
         const views = firstViewsTrip(trips);
         expect(views, "the payment-views read was never issued").toBeDefined();
-        expect(views!.startRel, "the views read is still waiting behind something").toBeLessThan(LATENCY);
+        const earliest = Math.min(...trips.map((t) => t.startRel));
+        expect(
+            views!.startRel - earliest,
+            "the views read is waiting behind an earlier round trip",
+        ).toBeLessThan(LATENCY);
     }, 30_000);
 
     it("THE GATE: the views read starts BEFORE the account payments read, not after it", async () => {
