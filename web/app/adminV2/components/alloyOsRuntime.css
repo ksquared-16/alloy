@@ -5296,6 +5296,47 @@ html[data-alloy-os-runtime-split="true"]
   align-items: stretch;
 }
 
+/* ── AND THE HEIGHT REACHES THE PAINTED CARD (P0-7.5, the last layer) ──
+ *
+ * The rule above stretches the CELL's direct child. For every other card that child IS the painted
+ * `article.alloy-os-ucard`, so the band height lands on the surface the operator sees. Business
+ * Process is the one card that wraps: `ProcessCard` renders
+ * `<div class="alloy-os-process" data-process-card="true">` AROUND its `UniversalCard`, so the
+ * chain is cell → .alloy-os-process → article.
+ *
+ * `.alloy-os-process` has no base rule anywhere, so it is a plain block box. A block container does
+ * not pass its own height to its child, and the article — `display:flex; flex:0 1 auto` from the
+ * `.alloy-os-ucard` base — kept its CONTENT height. Measured on deployed f30e3bb0f: cell 299px,
+ * .alloy-os-process 299px, painted article 231.77px. 67.23px of the panel ground showed beneath a
+ * white, bordered card. Financials reads 299.19px on the same band because it has no wrapper.
+ *
+ * So the defect was never the solver, the wrapper, or the cascade — all three were already correct
+ * and stayed correct. It was the last hop, and it is the third distinct contract in this chain:
+ *
+ *     the solver produces H  →  the cell applies H  →  the painted card CONSUMES H
+ *
+ * Each is certified separately, because each has now been green while a later one was broken.
+ *
+ * Flex column rather than `height: 100%`: the wrapper's height here is a stretched flex cross-size,
+ * and resolving a percentage against it is the fragile spelling of the same intent. `flex: 1 1 auto`
+ * says what is meant — take the space the band already assigned. `min-height: 0` on both keeps a
+ * tall card scrollable inside the band instead of overflowing the solved row.
+ *
+ * NO HEIGHT IS NAMED. The card inherits whatever H the solver chose, 299 or otherwise.
+ *
+ * Scoped to `.alloy-os-fp-card-intrinsic` — rendered ONLY by the solved-grid branch — so the lanes,
+ * stack, standalone and design-lab paths keep ProcessCard's natural height untouched.
+ */
+.alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell > .alloy-os-process {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell > .alloy-os-process > .alloy-os-ucard {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* ── Row-based Experience Builder ── */
 .alloy-os-rlb {
   display: grid;

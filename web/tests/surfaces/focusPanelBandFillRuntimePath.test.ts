@@ -151,3 +151,93 @@ describe("the card's own content is unchanged", () => {
         expect(rule).not.toMatch(/justify-content|flex-direction/);
     });
 });
+
+/**
+ * ── THE THIRD CONTRACT: THE PAINTED CARD CONSUMES H (P0-7.5, Slice 9D) ──
+ *
+ * The suite above certifies that the CELL is told to stretch. That is a different claim from the
+ * band height reaching the surface the operator sees, and the difference was worth 67.23px on
+ * deployed `f30e3bb0f`: cell 299px, `.alloy-os-process` 299px, painted `article.alloy-os-ucard`
+ * 231.77px. Every assertion in this file was green throughout.
+ *
+ * The rectangle claim belongs to `playwright/geometry/paintedSurface.spec.ts`, which measures it in
+ * a real engine at arbitrary heights. What is certified HERE is what that fixture cannot certify
+ * about itself: that the wrapper it reproduces is real, that `UniversalCard` genuinely sits inside
+ * it, and that the propagation rule is scoped to the solved grid and names no pixel value.
+ */
+describe("the painted card consumes the band — the last hop", () => {
+    const BP = readFileSync(join(process.cwd(), "components/operationalCards/ProcessCard.tsx"), "utf8");
+    const PROC_WRAPPER = ".alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell > .alloy-os-process";
+    const PROC_CARD = `${PROC_WRAPPER} > .alloy-os-ucard`;
+
+    it("THE PREMISE: Business Process really does wrap its UniversalCard, and is the only card that does", () => {
+        // If this ever stops being true the defect is gone and so is the reason for the repair —
+        // the reader should learn that here rather than from a mystery rule that matches nothing.
+        const wrapperAt = BP.indexOf('className="alloy-os-process" data-process-card="true"');
+        expect(wrapperAt, "ProcessCard renders the alloy-os-process wrapper").toBeGreaterThan(-1);
+        expect(BP.indexOf("<UniversalCard"), "…and UniversalCard is rendered inside it").toBeGreaterThan(wrapperAt);
+    });
+
+    it("THE GATE: the wrapper is made to pass the height on, rather than left a block box", () => {
+        const rule = ruleFor(PROC_WRAPPER);
+        expect(rule, "the propagation rule must exist").not.toBe("");
+        // A block container does not hand its height to a child; that is the whole defect.
+        expect(rule).toMatch(/display:\s*flex/);
+        expect(rule).toMatch(/flex-direction:\s*column/);
+    });
+
+    it("THE GATE: the painted card is made to TAKE the height, not merely be allowed to", () => {
+        const rule = ruleFor(PROC_CARD);
+        expect(rule, "the consumption rule must exist").not.toBe("");
+        // In a column flex container height is the MAIN axis, so `align-items: stretch` would do
+        // nothing here — growth is what consumes the band.
+        expect(rule).toMatch(/flex:\s*1\s+1\s+auto/);
+    });
+
+    it("no pixel value is named, so any solved H propagates — 299, 325 or otherwise", () => {
+        for (const rule of [ruleFor(PROC_WRAPPER), ruleFor(PROC_CARD)]) {
+            expect(rule).not.toMatch(/\d+px/);
+            expect(rule).not.toMatch(/299|325/);
+        }
+    });
+
+    it("the repair is scoped to the solved grid — lanes, stack, standalone and the lab are untouched", () => {
+        // Both new selectors are rooted at the intrinsic node, which only the solved-grid branch
+        // renders. A bare `.alloy-os-process` rule would reach ProcessCard everywhere it mounts.
+        for (const sel of [PROC_WRAPPER, PROC_CARD]) {
+            expect(sel.startsWith(".alloy-os-fp-card-intrinsic >")).toBe(true);
+        }
+        const bare = CSS.indexOf("\n.alloy-os-process {");
+        expect(bare, "no unscoped .alloy-os-process rule may exist").toBe(-1);
+        const lab = readFileSync(join(process.cwd(), "app/dev/operational-card-lab/cardLab.css"), "utf8");
+        expect(lab).not.toContain("alloy-os-fp-card-intrinsic");
+    });
+
+    it("the card component was still not modified to obtain the fill", () => {
+        expect(BP).not.toMatch(/h-full|height:\s*["']100%|minHeight/);
+    });
+
+    it("the solver and the cell-stretch rule are untouched by this repair", () => {
+        // Contract one and contract two keep their own owners. This slice changed neither.
+        expect(winningAlignItemsForSolvedGridCell().value).toBe("stretch");
+        const solver = readFileSync(
+            join(process.cwd(), "lib/adminV2/runtime/focusPanel/composition/focusPanelRowHeights.ts"),
+            "utf8",
+        );
+        expect(solver).not.toContain("alloy-os-process");
+    });
+
+    it("a browser gate owns the rectangle, and it identifies the card by PAINT, not by selector", () => {
+        // The 9C false pass measured `[data-process-card='true']` — the transparent wrapper — and
+        // reported the band height. The rectangle gate must refuse to do that.
+        const spec = readFileSync(
+            join(process.cwd(), "playwright/geometry/paintedSurface.spec.ts"),
+            "utf8",
+        );
+        expect(spec).toContain("isPaintedSurface");
+        expect(spec).toMatch(/opaqueBackground/);
+        expect(spec).toMatch(/borderTopWidth/);
+        // …and it must assert the wrapper is NOT painted, which is what makes it trap the mistake.
+        expect(spec).toMatch(/processWrapper\.isPaintedSurface\)\.toBe\(false\)/);
+    });
+});
