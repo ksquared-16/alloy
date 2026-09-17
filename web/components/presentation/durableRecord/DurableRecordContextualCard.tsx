@@ -481,17 +481,6 @@ export default function DurableRecordContextualCard({
         if (option.kind === "identity" && childSubject) {
             return renderCanonicalChildCard();
         }
-        /*
-         * THE PROCESS CONTEXT — where this child is, in the process they are actually running.
-         *
-         * This fell through to `return null`, which is why an Enrolling child's own record showed
-         * their name and nothing about their enrollment: the context resolved, the chip was active,
-         * and no branch claimed it. A process context is the one context that has a stage, so it is
-         * the one that has a Business Process card to render.
-         */
-        if (option.kind === "process" && subject.kind === "child") {
-            return renderCanonicalProcessCard();
-        }
         return null;
     }
 
@@ -578,6 +567,24 @@ export default function DurableRecordContextualCard({
                 </p>
             </div>
         );
+    }
+
+    /*
+     * THE PROCESS CONTEXT — where this child is, in the process they are actually running.
+     *
+     * A process option's surface is `published_composition`, so it reaches the SAME fallback the
+     * Child context does, and both rendered the Children card. That was right while a child had no
+     * position of their own: the docblock's "Child and Enrollment are ONE branch" is about which
+     * CARD answers "who is this child", and it still is — the Child chip renders exactly that.
+     *
+     * It is not right for a child who is running a process. An Enrolling child's record showed their
+     * name, their allergies and nothing whatsoever about their enrollment, while the context strip
+     * said "Enrollment · Registration" above it. The stage is the discriminator, and it is explicit:
+     * with one, the process context answers with the process; without one, nothing has changed.
+     */
+    if (option.kind === "process" && subject.kind === "child") {
+        const processCard = renderCanonicalProcessCard();
+        if (processCard) return processCard;
     }
 
     return renderCanonicalChildCard();

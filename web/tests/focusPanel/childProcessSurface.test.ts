@@ -132,7 +132,10 @@ describe("the same card, because the subject is different", () => {
     it("a process context renders the process card, and no stage renders nothing", () => {
         const card = code("components/presentation/durableRecord/DurableRecordContextualCard.tsx");
         expect(card).toContain('option.kind === "process" && subject.kind === "child"');
-        expect(card).toContain("renderCanonicalProcessCard()");
+        expect(card).toContain("const processCard = renderCanonicalProcessCard();");
+        // A process context with no stage keeps the Children card it rendered before — the stage is
+        // the discriminator, so nothing changes for a child who is not running a process.
+        expect(card).toContain("if (processCard) return processCard;");
         // No stage, no card — a card that rendered anyway would assert a process position.
         expect(card).toContain("if (!operationalContext.businessProcess.stageKey) return null;");
     });
