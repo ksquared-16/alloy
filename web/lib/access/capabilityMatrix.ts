@@ -99,6 +99,39 @@ export function buildCapabilityMatrix(
     return areas.sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
 }
 
+/**
+ * The matrix as NORMAL role creation should present it: current product only.
+ *
+ * Two rules, both derived from enforcement rather than from a hand-maintained list, because a list
+ * of "things to hide" is a second source of truth that goes stale the moment a key is enforced.
+ *
+ * 1. **A row nothing enforces is not a control, so it is not shown.** It already rendered no radio —
+ *    `offerableLevelsForRow` saw to that — but it still occupied a line that read like a setting an
+ *    administrator had chosen to leave off. `IA-R8` removes the control; this removes the theatre.
+ * 2. **An area with no enforced row at all is not a product area.** `Inquiries` and `Billing
+ *    (legacy)` each hold exactly one row and the platform consults neither, so both rendered a
+ *    heading, a description and a `No access` radio that could never become anything else.
+ *
+ * NOTHING IS REVOKED, AND NOTHING IS HIDDEN THAT COULD BE GRANTED. `applyGridRowSelection` runs only
+ * when a control changes, and an absent control cannot change — a role that already holds one of
+ * these keys keeps it, and `H2`/`RL-48` still carries it through a save untouched. `unenforced`
+ * carries the count of what was dropped, so the page can say so rather than silently shrinking.
+ *
+ * ADVANCED MODE DOES NOT SEE MORE THAN THIS. Advanced reveals the raw keys behind the rows an
+ * administrator can already set; it is not a second editor with a wider surface. If it ever showed a
+ * control normal mode lacks, the two modes would disagree about what a role can be — which is the
+ * defect this whole taxonomy exists to remove.
+ */
+export function normalModeMatrix(areas: readonly MatrixArea[]): MatrixArea[] {
+    const out: MatrixArea[] = [];
+    for (const area of areas) {
+        if (area.enforcedTotal === 0) continue;
+        const rows = area.rows.filter((row) => rowIsEnforced(row));
+        out.push({ ...area, rows, unenforced: area.rows.length - rows.length });
+    }
+    return out;
+}
+
 /** The levels an area can offer as a preset — `Manage` is hidden when no row can be written. */
 export function offerableAreaLevels(area: MatrixArea): PermissionGridLevel[] {
     const offered = new Set<PermissionGridLevel>(["none"]);
@@ -134,6 +167,53 @@ export function applyAreaPreset(params: {
         next = applyGridRowSelection({ row, level: target, granted: next });
     }
     return next;
+}
+
+/**
+ * AREA-LEVEL LEVEL NAMES — deliberately not the row-level ones.
+ *
+ * On a capability ROW, `Manage` means one capability's write level and the word is exact. On an
+ * AREA it means something much larger: set every grantable row in the area to its strongest offered
+ * level. The Director's audit found that an administrator choosing `Manage` on Enrollment believing
+ * they had staffed enrollment had also granted the decision, the tuition override and the
+ * requirement exception — and on Financials, the authority to post money.
+ *
+ * The GRANT SEMANTICS ARE UNCHANGED. `applyAreaPreset` does exactly what it did; this renames the
+ * gesture so its size is legible before it is used, which was Option B of the packet. Row labels are
+ * untouched — {@link OPERATOR_LEVEL_LABEL} still names them — because a global rename would make the
+ * narrow control read as the wide one.
+ */
+export const AREA_PRESET_LEVEL_LABEL: Readonly<Record<PermissionGridLevel, string>> = Object.freeze({
+    none: "No access",
+    read: "View",
+    write: "Full access",
+});
+
+/**
+ * Consequences an administrator would not predict from the area's name.
+ *
+ * Only for areas where `Full access` reaches past what the heading suggests. An area whose rows are
+ * all the same kind of thing needs no warning, and writing one anyway would train operators to skip
+ * the line that matters.
+ */
+const AREA_FULL_ACCESS_CONSEQUENCE: Readonly<Record<string, string>> = Object.freeze({
+    enrollment: "including enrollment decisions, tuition overrides and requirement exceptions — not only record management",
+    financials: "including posting financial transactions, account adjustments, responsibility and subsidy",
+    business_process: "including both designing a process and activating it for the organization",
+    users_roles: "including user administration, role and permission administration, and access scope",
+});
+
+/**
+ * The sentence shown beside the `Full access` control, before it is chosen.
+ *
+ * It states the count because the count is the part an administrator can check against what they
+ * meant, and it names the sharp consequence where there is one.
+ */
+export function fullAccessExplanation(area: Pick<MatrixArea, "areaKey" | "enforcedTotal">): string {
+    const n = area.enforcedTotal;
+    const base = `Full access grants all ${n} permission${n === 1 ? "" : "s"} in this area`;
+    const sharp = AREA_FULL_ACCESS_CONSEQUENCE[area.areaKey];
+    return sharp ? `${base}, ${sharp}.` : `${base}.`;
 }
 
 /** The chip an operator reads. `limited` carries its arithmetic; the others are already exact. */
