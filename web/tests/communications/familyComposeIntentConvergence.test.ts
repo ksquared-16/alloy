@@ -84,11 +84,20 @@ describe("family compose intent — New Message vs browse", () => {
     });
 
     it("Current Work workspace reset keys off Attention subject, not resolved drawerId", () => {
-        const grid = read("components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx");
-        expect(grid).toContain("attentionSubjectId");
-        expect(grid).toContain("prevAttentionSubjectIdRef");
-        expect(grid).toMatch(/if \(prev == null \|\| prev === attentionSubjectId\) return/);
+        /*
+         * The rule moved, unchanged, into `useCurrentWorkWorkspaceCoordination` so hosts other than
+         * the grid can execute Business Process commands too. It is asserted where it now lives, and
+         * the grid is asserted to use that owner rather than keeping a second copy.
+         */
+        const hook = read("lib/adminV2/runtime/focusPanel/useCurrentWorkWorkspaceCoordination.ts");
+        expect(hook).toContain("prevSubjectIdRef");
+        expect(hook).toMatch(/if \(prev == null \|\| prev === subjectId\) return/);
         // Must not reset workspace when family opportunity id resolves after child Attention.
-        expect(grid).not.toMatch(/setCurrentWorkWorkspace\(\{ open: false, intent: null \}\);\s*\}, \[drawerId\]\)/);
+        expect(hook).not.toMatch(/setCurrentWorkWorkspace\(\{ open: false, intent: null \}\);\s*\}, \[drawerId\]\)/);
+
+        const grid = read("components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx");
+        expect(grid).toContain("useCurrentWorkWorkspaceCoordination({ mode, subjectId: model.subject.id })");
+        // Attention identity, not the resolved family opportunity id.
+        expect(grid).not.toContain("subjectId: drawerId");
     });
 });

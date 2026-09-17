@@ -56,7 +56,14 @@ describe("Shared family send confirmation lifecycle", () => {
         expect(runtime).toContain("pendingContactFamilyCompleteRef.current = {");
         // Confirm path must not clear sendResult inside the fromCurrentWork success block.
         const fromIdx = runtime.indexOf("if (fromCurrentWork) {");
-        const fromBlock = runtime.slice(fromIdx, fromIdx + 2200);
+        /*
+         * Bounded by the statement that follows the block rather than by a character count: the
+         * block grew when delivery-truth gating was added, and a fixed window silently stopped
+         * covering what this guard is about.
+         */
+        const afterIdx = runtime.indexOf("const priorThreadId = selectedThreadId;", fromIdx);
+        expect(afterIdx).toBeGreaterThan(fromIdx);
+        const fromBlock = runtime.slice(fromIdx, afterIdx);
         expect(fromBlock).toContain("pendingContactFamilyCompleteRef.current = {");
         expect(fromBlock).not.toContain("setSendResult(null)");
     });
