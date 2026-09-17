@@ -313,6 +313,71 @@ export function consumeFreshProvisioning(
 }
 
 /**
+ * CONSUME A ROUTE'S ANSWER, WITH THE SERVER SEED REACHABLE (P0-7.6 / Slice 11).
+ *
+ * ── THE DIVERGENCE THIS EXISTS TO CLOSE ──
+ *
+ * The seam above documents key parity with the server seed as "an in-kernel invariant (both go
+ * through `provisioningAnswerUrl`)". Both do — with DIFFERENT ARITY, and that is where parity was
+ * actually lost. The consume passes the S6-1 client assertions (`retainedDepartmentConfigIds`,
+ * `heldFocusPanelSummaryIdentities`), which ride the URL on purpose because they change the
+ * answer's CONTENT. `seedProvisioningForRoute` cannot pass them: it runs on the server, which does
+ * not know what this browser is holding. So the moment a returning operator holds any published
+ * department configuration, the two keys can never match.
+ *
+ * Measured on deployed `009beb369`, from the runtime's own seed trace:
+ *
+ *     register      t=5032  producer=page(...)       /…/provisioning-answer
+ *     consume-miss  t=5036  producer=kernel-consume  /…/provisioning-answer?dept_config=<4 ids>
+ *
+ * The server-composed operational answer was in the cache four milliseconds before the consume that
+ * missed it, and the surface then waited 4.7 s (6.6 s on the colder baseline) for a live fetch of an
+ * answer it already had. The better the client's cache, the more certainly the seed was unreachable.
+ *
+ * ── WHY THE BASE-KEY FALLBACK IS SAFE, AND NOT A WIDENING OF IDENTITY ──
+ *
+ * The base key — target, lens, subject, cohort, aspect — is the identity of WHICH answer this is.
+ * The assertion parameters are not part of that question; they only tell the server "you may omit
+ * configuration I already hold". An answer composed WITHOUT the assertion therefore carries the
+ * full configuration: consuming it is a SUPERSET of what the asserted key would have returned, never
+ * a subset, so it cannot be missing anything the caller was entitled to.
+ *
+ * Direction matters and only one direction is sound. A base-key seed may serve an asserting consume.
+ * An assertion-keyed entry must NEVER serve a consume that did not assert — that one could be
+ * genuinely short of configuration — so no fallback is offered the other way.
+ *
+ * Everything else is unchanged: one logical answer per navigation, consume-once (both lookups go
+ * through `consumeFreshProvisioning`, which deletes on read), the same freshness window, the same
+ * latest-destination generation guard downstream, and the same server authorization — the seeded
+ * answer was composed by `composeProvisioningAnswerForRoute`, the same tenant-authorized path the
+ * HTTP seam uses. This adds no request, no cache and no second owner; it removes a request.
+ */
+export function consumeFreshProvisioningForRoute(
+    route: ProvisioningRouteIdentity,
+    departmentConfigHeldIds: readonly string[] | undefined,
+    summaryConfigHeldIds: readonly string[] | undefined,
+    now: number = Date.now(),
+): { promise: Promise<ProvisioningAnswer>; via: "exact" | "seed-base"; url: string } | null {
+    const exactUrl = provisioningAnswerUrl(
+        route.target, route.lens ?? null, route.subject ?? null, route.cohort ?? null, route.aspect ?? null,
+        departmentConfigHeldIds, summaryConfigHeldIds,
+    );
+    const exact = consumeFreshProvisioning(exactUrl, now);
+    if (exact) return { promise: exact, via: "exact", url: exactUrl };
+
+    const baseUrl = provisioningAnswerUrl(
+        route.target, route.lens ?? null, route.subject ?? null, route.cohort ?? null, route.aspect ?? null,
+    );
+    // Nothing to fall back TO when the caller asserted nothing — the keys are already the same string,
+    // and re-reading would be a second consume of an entry the first lookup already deleted.
+    if (baseUrl === exactUrl) return null;
+
+    const base = consumeFreshProvisioning(baseUrl, now);
+    if (!base) return null;
+    return { promise: base, via: "seed-base", url: baseUrl };
+}
+
+/**
  * Warm the provisioning answer for an operator entry HREF — derives `target` + `lens` exactly as the K1
  * gesture (`attentionTargetFromEntryHref`) will (path `/work-unit/{target}`, lens from `?work_view_id=`),
  * so the prefetch key is identical to the click's fetch for both default tiles and work-view rows.

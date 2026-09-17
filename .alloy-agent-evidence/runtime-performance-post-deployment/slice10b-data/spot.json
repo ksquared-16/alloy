@@ -1,0 +1,91 @@
+{
+ "specimenA": {
+  "at_ms": 200,
+  "activeRow": null,
+  "hdrImgs": [],
+  "hdrText": "",
+  "rows": 0,
+  "busy": 4,
+  "reserved": 0,
+  "resolving": [],
+  "cells": 0,
+  "destShell": 1
+ },
+ "specimenB": {
+  "at_ms": 8800,
+  "activeRow": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "hdrImgs": [],
+  "hdrText": "Wrigley Kurzman Waitlist",
+  "rows": 16,
+  "busy": 3,
+  "reserved": 2,
+  "resolving": [
+   "children",
+   "household"
+  ],
+  "cells": 4,
+  "destShell": 0
+ },
+ "specimenC": {
+  "activeRow": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "hdrImgs": [],
+  "hdrText": "Wrigley Kurzman Waitlist",
+  "rows": 16,
+  "busy": 3,
+  "reserved": 2,
+  "resolving": [
+   "children",
+   "household"
+  ],
+  "cells": 4,
+  "destShell": 0
+ },
+ "specimenD": {
+  "activeRow": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "hdrImgs": [
+   "NoiloFdqus3_8cOw6iMXqLqqGzy4OEGiVWX4w4H0"
+  ],
+  "hdrText": "Wrigley Kurzman Waitlist · Enrolling · Tour Scheduled ",
+  "rows": 16,
+  "busy": 0,
+  "reserved": 0,
+  "resolving": [],
+  "cells": 6,
+  "destShell": 0
+ },
+ "p075": {
+  "bp_painted": 299,
+  "fin_painted": 299.19,
+  "bp_cell": 299,
+  "bp_bg": "rgb(255, 255, 255)",
+  "bp_border": "1px",
+  "residual": 0
+ },
+ "p072": {
+  "rowA": "9ab36f48",
+  "rowB": "8b3689fb",
+  "A_imgs": [
+   "CGXou7v_xLc4aJaFyC-SC6l47kCnTXp7-9rglqi4"
+  ],
+  "t_row": 115,
+  "t_text": 115,
+  "t_avatar": 115,
+  "STALE_PRIOR_AVATAR_FRAMES": 0,
+  "frames": 423
+ },
+ "p073": {
+  "target": "new_leads",
+  "rows_before": 16,
+  "t_busy": 187,
+  "t_rows_changed": 2687,
+  "held_with_busy": 87,
+  "held_without_busy": 5
+ },
+ "p074": {
+  "from_specimenB": [
+   "children",
+   "household"
+  ],
+  "reserved": 2
+ }
+}

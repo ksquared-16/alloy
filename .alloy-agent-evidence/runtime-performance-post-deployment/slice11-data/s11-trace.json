@@ -1,0 +1,22 @@
+[
+ {
+  "kind": "register",
+  "producer": "page(subject=null,cohort=null)",
+  "t": 5032,
+  "url": "/api/admin/work-units/waitlist/provisioning-answer",
+  "subjectInKey": null,
+  "lensInKey": null,
+  "composedSubject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "terminal": "operational"
+ },
+ {
+  "kind": "consume-miss",
+  "producer": "kernel-consume",
+  "t": 5036,
+  "url": "/api/admin/work-units/waitlist/provisioning-answer?dept_config=17820bbd-50c6-40b7-8c99-9613023292fd%2C3933ac47-077a-4de8-aaac-8aed48d80413%2C5f6bba4c-9d69-4b61-940f-c32fb165ba2e%2Cf73bb50f-01cd-4789-a199-9e7b2866862b",
+  "subjectInKey": null,
+  "lensInKey": null,
+  "composedSubject": null,
+  "terminal": null
+ }
+]
