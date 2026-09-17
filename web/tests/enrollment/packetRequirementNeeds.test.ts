@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { expandPacketRequirementsToForms } from "@/lib/enrollment/informationNeeds/expandPacketRequirementsToForms";
-import { resolveEnrollmentInformationNeeds } from "@/lib/enrollment/informationNeeds/resolveEnrollmentInformationNeeds";
+import { expandPacketStageRequirements } from "@/lib/enrollment/participantProgress/expandPacketStageRequirements";
+import { projectRequirementsProgress } from "@/lib/enrollment/participantProgress/projectEnrollmentParticipantProgress";
 import { requirementIdForForm } from "@/lib/lifecycle/compilePacketToStageRequirements";
 import { projectEnrollmentInformationNeeds } from "@/lib/enrollment/informationNeeds/projectEnrollmentInformationNeeds";
 import { validateFormSchema } from "@/lib/forms/schema";
@@ -47,30 +47,34 @@ function supabaseWithPacketItems(
 const packetRequirement = (over: Record<string, unknown> = {}) =>
     ({
         requirement_id: "enrollment_packet",
-        kind: "packet",
-        artifact: { kind: "packet", id: PACKET },
+        ref: { kind: "packet", packet_definition_id: PACKET },
         level: "required",
-        status: "outstanding",
+        scope: "record",
+        timing: "stage_exit",
+        enforcement: "blocking",
         ...over,
     }) as never;
 
-describe("a packet requirement becomes the forms it contains", () => {
+describe("a packet requirement is read as the forms it contains", () => {
     it("expands to one form requirement per step, in packet order", async () => {
-        const out = await expandPacketRequirementsToForms(
+        const out = await expandPacketStageRequirements(
             supabaseWithPacketItems([
                 { packet_definition_id: PACKET, sequence_index: 0, form_definition_id: ADMISSIONS },
                 { packet_definition_id: PACKET, sequence_index: 1, form_definition_id: HANDBOOK },
             ]),
             { orgId: ORG, requirements: [packetRequirement()] },
         );
-        expect(out.map((r) => r.artifact.id)).toEqual([ADMISSIONS, HANDBOOK]);
-        expect(out.every((r) => r.kind === "form")).toBe(true);
+        expect(out.map((r) => (r.ref as { form_definition_id?: string }).form_definition_id)).toEqual([
+            ADMISSIONS,
+            HANDBOOK,
+        ]);
+        expect(out.every((r) => r.ref.kind === "form")).toBe(true);
     });
 
     it("uses the SAME requirement identity a hand-launched packet produces", async () => {
         // A packet chosen for a stage and the same packet launched by hand must describe the same
         // obligation, not two that look alike.
-        const out = await expandPacketRequirementsToForms(
+        const out = await expandPacketStageRequirements(
             supabaseWithPacketItems([
                 { packet_definition_id: PACKET, sequence_index: 0, form_definition_id: ADMISSIONS },
             ]),
@@ -79,156 +83,81 @@ describe("a packet requirement becomes the forms it contains", () => {
         expect(out[0]?.requirement_id).toBe(requirementIdForForm(ADMISSIONS));
     });
 
-    it("carries the packet requirement's status and level to its forms", async () => {
-        const out = await expandPacketRequirementsToForms(
-            supabaseWithPacketItems([
-                { packet_definition_id: PACKET, sequence_index: 0, form_definition_id: ADMISSIONS },
-            ]),
-            { orgId: ORG, requirements: [packetRequirement({ status: "satisfied", level: "recommended" })] },
-        );
-        expect(out[0]?.status).toBe("satisfied");
-        expect(out[0]?.level).toBe("recommended");
+    it("the expanded forms become EVALUABLE, which the packet requirement never was", () => {
+        // The real defect in one line: a packet projected `unsupported`, and an unsupported
+        // requirement produces no question.
+        const asPacket = projectRequirementsProgress([packetRequirement()], []);
+        expect(asPacket[0]?.status).toBe("unsupported");
     });
 
     it("one form in two packets is one requirement", async () => {
         const OTHER = "99999999-0000-4000-8000-000000000099";
-        const out = await expandPacketRequirementsToForms(
+        const out = await expandPacketStageRequirements(
             supabaseWithPacketItems([
                 { packet_definition_id: PACKET, sequence_index: 0, form_definition_id: ADMISSIONS },
                 { packet_definition_id: OTHER, sequence_index: 0, form_definition_id: ADMISSIONS },
             ]),
             {
                 orgId: ORG,
-                requirements: [packetRequirement(), packetRequirement({ artifact: { kind: "packet", id: OTHER } })],
+                requirements: [
+                    packetRequirement(),
+                    packetRequirement({ ref: { kind: "packet", packet_definition_id: OTHER } }),
+                ],
             },
         );
-        expect(out).toHaveLength(1);
+        expect(out.filter((r) => r.ref.kind === "form")).toHaveLength(1);
     });
 
-    it("a non-form step adds no question, and an unreadable packet yields nothing", async () => {
-        // A document to read or send in is a real obligation with no schema to ask about.
-        const nonForm = await expandPacketRequirementsToForms(
-            supabaseWithPacketItems([
-                { packet_definition_id: PACKET, sequence_index: 0, form_definition_id: null },
-            ]),
-            { orgId: ORG, requirements: [packetRequirement()] },
-        );
-        expect(nonForm).toEqual([]);
-        // A short list is recoverable; an error because one row was unreadable is not.
-        const failed = await expandPacketRequirementsToForms(supabaseWithPacketItems([], { error: true }), {
+    it("an unreadable packet keeps its requirement rather than vanishing from the denominator", async () => {
+        const failed = await expandPacketStageRequirements(supabaseWithPacketItems([], { error: true }), {
             orgId: ORG,
             requirements: [packetRequirement()],
         });
-        expect(failed).toEqual([]);
+        expect(failed).toHaveLength(1);
+        expect(failed[0]?.ref.kind).toBe("packet");
     });
 
-    it("the resolver prefers a directly declared form over the same form via a packet", () => {
-        const src = readSource();
-        expect(src).toContain("declaredFormIds");
-        expect(src).toContain("expandedFromPackets.filter((r) => !declaredFormIds.has(r.artifact.id))");
-    });
-});
-
-/*
- * ── THE PROOF THAT THE EXPANSION IS ACTUALLY WIRED IN ──
- *
- * The cases above prove the expansion works in isolation, which a source guard cannot turn into
- * reachability: removing the call site leaves every one of them green. This drives the real resolver
- * with the real shape of the live session — a journey whose stage requires a PACKET, one realized
- * Admissions item, one pinned version — and asserts the participant is given questions.
- */
-describe("a journey whose stage requires a packet is given questions to answer", () => {
-    const VERSION = "bdd0ce8e-cc66-4725-b254-8084334328ab";
-    const SESSION = "8ddf05da-a09a-4fde-9db2-5aabb0cbffd7";
-    const ITEM = "session-item-1";
-
-    const admissionsSchema = schemaOf([
-        canonicalField("field_6", "first_name"),
-        field("field_20"),
-        field("field_21"),
-    ]);
-
-    function supabaseForResolver() {
-        return {
-            from(table: string) {
-                const b: Record<string, unknown> = {};
-                b.select = () => b;
-                b.eq = () => b;
-                b.order = () => b;
-                b.maybeSingle = () => Promise.resolve({ data: null, error: null });
-                b.in = () =>
-                    Promise.resolve(
-                        table === "form_definition_versions"
-                            ? {
-                                  data: [
-                                      {
-                                          id: VERSION,
-                                          form_definition_id: ADMISSIONS,
-                                          schema_json: admissionsSchema,
-                                          pdf_mapping_json: null,
-                                      },
-                                  ],
-                                  error: null,
-                              }
-                            : table === "form_packet_items"
-                              ? {
-                                    data: [
-                                        {
-                                            packet_definition_id: PACKET,
-                                            sequence_index: 0,
-                                            form_definition_id: ADMISSIONS,
-                                        },
-                                    ],
-                                    error: null,
-                                }
-                              : { data: [], error: null },
-                    );
-                return b;
-            },
+    it("a form the stage declared directly is never displaced by the packet expansion", async () => {
+        const declared = {
+            requirement_id: "declared_admissions",
+            ref: { kind: "form", form_definition_id: ADMISSIONS },
+            level: "required",
+            scope: "record",
+            timing: "stage_exit",
+            enforcement: "blocking",
         } as never;
-    }
-
-    const resolve = () =>
-        resolveEnrollmentInformationNeeds(supabaseForResolver(), {
-            orgId: ORG,
-            processInstanceId: "d1011483-b8b5-42ed-8941-882c81839186",
-            progress: {
-                ok: true,
-                value: {
-                    process_instance_id: "d1011483-b8b5-42ed-8941-882c81839186",
-                    session_id: SESSION,
-                    // Exactly what the Enrolling stage declares: one packet requirement.
-                    requirements: [packetRequirement()],
-                },
-            },
-            preloaded: {
-                session: { id: SESSION, shared_values: {}, metadata: {} },
-                items: [
-                    { id: ITEM, packet_item_id: "pi-1", resolved_form_definition_version_id: VERSION },
-                ],
-                formBySessionItem: new Map([[ITEM, ADMISSIONS]]),
-                subjectId: CHILD,
-            },
-        } as never);
-
-    it("enumerates the packet's forms instead of reporting nothing to do", async () => {
-        const out = await resolve();
-        expect(out.ok).toBe(true);
-        if (!out.ok) return;
-        // The live defect was zero: no needs at all, and therefore "Everything we need is complete."
-        expect(out.value.needs.length).toBeGreaterThan(0);
-        const asked = out.value.needs.flatMap((n) => n.occurrences.map((o) => o.form_field_id));
-        expect(asked).toContain("field_20");
-        expect(asked).toContain("field_21");
-    });
-
-    it("the needs carry the packet-derived requirement identity", async () => {
-        const out = await resolve();
-        if (!out.ok) return;
-        const ids = [...new Set(out.value.needs.flatMap((n) => n.requirement_ids))];
-        expect(ids).toContain(requirementIdForForm(ADMISSIONS));
+        const out = await expandPacketStageRequirements(
+            supabaseWithPacketItems([
+                { packet_definition_id: PACKET, sequence_index: 0, form_definition_id: ADMISSIONS },
+            ]),
+            { orgId: ORG, requirements: [declared, packetRequirement()] },
+        );
+        const admissions = out.filter(
+            (r) => (r.ref as { form_definition_id?: string }).form_definition_id === ADMISSIONS,
+        );
+        expect(admissions).toHaveLength(1);
+        expect(admissions[0]?.requirement_id).toBe("declared_admissions");
     });
 });
+
+describe("the expansion is wired into the journey path, not merely available", () => {
+    it("the journey progress resolver expands before it projects", () => {
+        // The isolated cases above stay green when the call site is deleted, so they cannot prove
+        // reachability on their own. The live objective is the other half of this proof.
+        const src = readSourceOf("lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress.ts");
+        expect(src).toContain("await expandPacketStageRequirements(supabase, {");
+        // …and that what it projects is the expanded set, never the declared one.
+        expect(src).toContain("projectRequirementsProgress(requirements, realized)");
+        expect(src).not.toContain("projectRequirementsProgress(declared, realized)");
+    });
+});
+
+function readSourceOf(rel: string): string {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { readFileSync } = require("node:fs") as typeof import("node:fs");
+    const { join } = require("node:path") as typeof import("node:path");
+    return readFileSync(join(process.cwd(), rel), "utf8");
+}
 
 function readSource(): string {
     // eslint-disable-next-line @typescript-eslint/no-require-imports

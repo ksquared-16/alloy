@@ -38,6 +38,7 @@ import { resolveProcessInstanceConfiguration } from "@/lib/process/resolveProces
 import { departmentForOpportunityContext } from "@/lib/process/resolveEnrollmentBusinessProcessRevision";
 import { PROCESS_INSTANCES_TABLE } from "@/lib/process/processInstances";
 import type { StageRequirementV1 } from "@/lib/lifecycle/stageRequirementsV1";
+import { expandPacketStageRequirements } from "@/lib/enrollment/participantProgress/expandPacketStageRequirements";
 import {
     summarizeEnrollmentRequirementProgress,
     type EnrollmentParticipantProgress,
@@ -246,10 +247,35 @@ export async function resolveEnrollmentParticipantProgress(
     // nothing and yields a total of 0. An ABSENT section means the governing artifact says nothing
     // about this stage, which after D-97 normalization only happens for a revision published before
     // it — also nothing to project, and honestly so.
-    const requirements: readonly StageRequirementV1[] = stageKey
+    const declared: readonly StageRequirementV1[] = stageKey
         ? (canonicalStageRequirements(configuration.builder, stageKey, instance.process_key)
               ?.requirements ?? [])
         : [];
+
+    /*
+     * A STAGE THAT REQUIRES A PACKET REQUIRES THE FORMS INSIDE IT.
+     *
+     * `projectRequirementProgress` reports any non-form requirement as `unsupported` — "No canonical
+     * evidence owner" — which is true of a rule or a work requirement and FALSE of a packet: a packet
+     * has evidence owners, namely the forms it contains. Enrollment's Enrolling stage declares
+     * exactly one requirement, `{kind: "packet"}`, so a journey-anchored participant projected one
+     * unsupported requirement, enumerated no forms, and a fresh session against an 80-field form with
+     * 65 required answers opened saying "Everything we need is complete."
+     *
+     * Measured on the live wire model: work {total 0, percent 100} and complete:true beside progress
+     * {total 1, remaining 1} — the objective knew a step was outstanding and had no question to ask.
+     *
+     * The same packet launched BY HAND was always fine, because `resolvePacketParticipantProgress`
+     * expands its steps into one form requirement each. That asymmetry IS the defect: one packet
+     * described one obligation two ways depending on how it was reached. Expanded here, above the
+     * projection, so progress and needs see the same forms — and through the same shared
+     * `compilePacketToStageRequirements` the hand-launched path and the Studio compiler use, so the
+     * requirement ids match rather than merely resembling each other.
+     */
+    const requirements = await expandPacketStageRequirements(supabase, {
+        orgId: input.orgId,
+        requirements: declared,
+    });
 
     const { session, items, error: sessionError } = sessionResolution;
     if (sessionError) {
