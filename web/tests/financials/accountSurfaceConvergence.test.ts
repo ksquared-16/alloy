@@ -969,7 +969,14 @@ describe("F21 · the lens changes the cohort, never the renderer", () => {
     it("draws a collapsed period with the same component as an expanded one", () => {
         const ledger = code(LEDGER);
         const period = ledger.slice(ledger.indexOf("export function FinancialsLedgerPeriod"));
-        expect(period, "collapse changes what is shown, not how").toContain("Collapsed · select to expand");
+        /*
+         * The collapsed state used to be a SENTENCE — "Collapsed · select to expand" — which spent a
+         * ledger row explaining an affordance, and explained one that did not exist: `open` was a
+         * static prop with no toggle. The fact this lock protects is unchanged: one component draws
+         * both states. It is now a disclosure rather than a caption.
+         */
+        expect(period, "collapse is a control, not a caption").toMatch(/aria-expanded=\{expanded\}/);
+        expect(period, "and the caption is gone").not.toContain("Collapsed · select to expand");
         expect(period, "and the open branch uses the shared head and row").toMatch(
             /FinancialsLedgerHead[\s\S]{0,400}FinancialsLedgerRow/,
         );
@@ -1131,7 +1138,12 @@ describe("F25 · Details is one surface, committed when it is asked for", () => 
     it("keeps the loading ledger's columns rather than claiming the family has none", () => {
         const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
         /* "Nothing charged yet" must not be reachable while the account is still being read. */
-        expect(detail).toMatch(/hydrating \?[\s\S]{0,400}data-financials-ledger-hydrating/);
+        /*
+         * Two conditions reach this frame now: nothing read at all (`hydrating`), and an account
+         * read whose ledger is still the bounded summary (`ledgerPending`). Both must reserve the
+         * region rather than show rows that are not the ledger.
+         */
+        expect(detail).toMatch(/hydrating \|\| ledgerPending \?[\s\S]{0,400}data-financials-ledger-hydrating/);
         /* The same head component as the hydrated ledger, so the grid does not shift underneath. */
         const hydratingBlock = detail.slice(detail.indexOf("data-financials-ledger-hydrating"));
         expect(hydratingBlock.slice(0, 400)).toContain("<FinancialsLedgerHead />");
@@ -1246,9 +1258,15 @@ describe("F28 · one entry command, and a footer that ranks its commands", () =>
         expect(panel, "the row's charge becomes the adjustment's source").toMatch(
             /setAdjustSourceChargeId\(args\.chargeId\)/,
         );
-        expect(panel, "and the unified command opens in Adjustment mode").toMatch(
-            /setEntryMode\("adjustment"\)[\s\S]{0,80}setOverlay\("add_charge"\)/,
-        );
+        /*
+         * The mode is set and the command is opened by the same opener. The window was 80 characters
+         * and the dismissal stack now records where to return to between them — an adjacency check,
+         * not the fact. The fact is that one function does both.
+         */
+        const opener = panel.slice(panel.indexOf("const openAdjustForCharge"));
+        const body = opener.slice(0, opener.indexOf("\n    }, ["));
+        expect(body, "the opener sets Adjustment mode").toMatch(/setEntryMode\("adjustment"\)/);
+        expect(body, "and opens the unified command").toMatch(/setOverlay\("add_charge"\)/);
     });
 });
 
@@ -1715,5 +1733,84 @@ describe("F40 · one command authority, two presentation hosts", () => {
         }
         const ws = code(WORKSPACE);
         expect(ws, "and the workspace names none of them as an action_key").not.toMatch(/action_key/);
+    });
+});
+
+describe("F41 · a bounded summary is not a ledger", () => {
+    /*
+     * ── WHAT KELLY SAW ────────────────────────────────────────────────────────────────────────
+     *
+     * Open Details; a Financials Details card appears carrying about two ledger rows; moments later
+     * the same surface is holding fifty-six. Not the entrance transition repaired in 5I — this is
+     * the DATA: the card is seeded from the operational projection, which the code itself calls
+     * "the BOUNDED summary by construction", and Details rendered those rows as though they were the
+     * account's history. Two real-looking rows presented as the whole truth, then a different whole
+     * truth.
+     *
+     * The contract: the shell, the metrics, the lenses and the filters commit immediately — they are
+     * the same whatever the rows say — and the ledger region waits for its own authority rather than
+     * showing a partial cohort. `deepLoadedForRef` already knew which account had been read in full.
+     */
+    it("waits for the full read before showing rows as the ledger", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card, "completeness is decided from the deep read, not from having any rows").toMatch(
+            /ledgerComplete\s*=\s*deepLoadedForRef\.current === \(customerId \?\? scopedMemberId\)/,
+        );
+        expect(card, "and Details is told when its ledger is not yet authoritative").toMatch(
+            /ledgerPending=\{!ledgerComplete\}/,
+        );
+    });
+
+    it("reserves the ledger region rather than rendering a partial cohort", () => {
+        const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
+        expect(detail).toMatch(/\{hydrating \|\| ledgerPending \?/);
+        /* And a count drawn from a partial cohort is a claim, so the lenses state none while pending. */
+        expect(detail).toMatch(/hydrating \|\| ledgerPending \? "" : counts\[key\]/);
+    });
+});
+
+describe("F42 · the period discloses itself", () => {
+    it("replaces the explanatory sentence with a real control", () => {
+        const ledger = code("components/operationalCards/FinancialsLedger.tsx");
+        expect(ledger, "the sentence is gone").not.toContain("Collapsed · select to expand");
+        expect(ledger, "the heading is the disclosure").toMatch(/aria-expanded=\{expanded\}/);
+        expect(ledger, "and it is a button, so the keyboard reaches it").toMatch(
+            /<button[\s\S]{0,260}alloy-os-fdetail__periodhead/,
+        );
+    });
+
+    it("shows the state in the icon, not only in the rows", () => {
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        expect(css).toMatch(/\[data-financials-period-expanded="true"\][\s\S]{0,200}rotate\(90deg\)/);
+    });
+});
+
+describe("F43 · Due is the actionable figure, and the commands are peers", () => {
+    it("names the collectible figure Due", () => {
+        const compact = code("components/operationalCards/FinancialsCard.tsx");
+        expect(compact, "the ambiguous word is gone").not.toMatch(/zone-head">Position</);
+        expect(compact).toMatch(/zone-head">Due<[\s\S]{0,200}\{period\.dueNow\}/);
+        /* The balance survives as its own distinct fact rather than being renamed. */
+        expect(compact).toMatch(/label="Current balance" value=\{period\.currentBalance\}/);
+    });
+
+    it("gives Payment and Add one geometry", () => {
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        const rule = css.slice(css.indexOf(".alloy-os-billing__commands > button"));
+        const block = rule.slice(0, rule.indexOf("\n}") + 2);
+        for (const prop of ["min-height", "min-width", "border-radius", "font-size"]) {
+            expect(block, `the pair share ${prop}`).toContain(prop);
+        }
+    });
+
+    it("gives GL the width Description does not need", () => {
+        const css = read("app/adminV2/components/operationalCardsShared.css");
+        const grid = /\.alloy-os-billingdetail__row \{[\s\S]*?grid-template-columns:\s*([^;]+);/.exec(css);
+        const tracks = grid![1]!.trim().split(/\s+(?![^(]*\))/);
+        const gl = Number((/^(\d+)px$/.exec(tracks[4]!) ?? [])[1] ?? NaN);
+        expect(gl, "GL fits a canonical account name like `4060 · Discounts & Credits`")
+            .toBeGreaterThanOrEqual(170);
+        expect(tracks[8], "Description is still the flexible preview, and yields first")
+            .toMatch(/^minmax\(\d+px, 0?\.\d+fr\)$/);
     });
 });

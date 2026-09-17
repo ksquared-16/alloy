@@ -54,6 +54,7 @@ export default function FinancialsDetailCard({
     onAdjustCharge,
     onApplyPayment,
     hydrating = false,
+    ledgerPending = false,
 }: {
     evidence: FinancialsEvidence;
     periods: FinancialsLedgerPeriod[];
@@ -107,6 +108,16 @@ export default function FinancialsDetailCard({
      * state has no standing to make.
      */
     hydrating?: boolean;
+    /**
+     * THE SHELL IS FINAL; THE LEDGER IS NOT YET AUTHORITATIVE.
+     *
+     * Distinct from `hydrating`, which means nothing has been read at all. This means the account
+     * HAS been read — enough for the metrics, the lenses and the filters, which are the same
+     * whatever the rows say — but the ledger on hand is the bounded summary rather than the
+     * account's history. Showing it would present a partial cohort as the complete one, and then
+     * replace it; the region waits instead, and the complete ledger commits once.
+     */
+    ledgerPending?: boolean;
 }) {
     const { period, pastDue } = evidence;
 
@@ -329,7 +340,7 @@ export default function FinancialsDetailCard({
                             onClick={() => setLens(key)}
                         >
                             {ACCOUNT_LENS_LABELS[key]}
-                            <span className="alloy-os-fdetail__lenscount">{hydrating ? "" : counts[key]}</span>
+                            <span className="alloy-os-fdetail__lenscount">{hydrating || ledgerPending ? "" : counts[key]}</span>
                         </button>
                     ))}
                     <span className="alloy-os-fdetail__lensfilters">
@@ -389,13 +400,18 @@ export default function FinancialsDetailCard({
                       * Filtering belongs here, but it belongs here WIRED.
                       */}
 
-                    {hydrating ? (
+                    {hydrating || ledgerPending ? (
                         /*
                          * The columns, over placeholders. Same head component the hydrated ledger
                          * uses, so the grid the operator is about to read is already the grid in
                          * front of them and nothing shifts underneath when the rows arrive.
                          */
-                        <div className="alloy-os-billingdetail__ledger" role="table" data-financials-ledger-hydrating="true">
+                        <div
+                            className="alloy-os-billingdetail__ledger"
+                            role="table"
+                            data-financials-ledger-hydrating="true"
+                            aria-busy="true"
+                        >
                             <FinancialsLedgerHead />
                             {[0, 1, 2].map((i) => (
                                 <FinancialsLedgerRow
@@ -457,7 +473,12 @@ export default function FinancialsDetailCard({
                   * Every figure is still the adapter's. Nothing here adds, differences or decides
                   * what "applied" means.
                   */}
-                {lens === "payments" ? (
+                {/*
+                  * The payment and adjustment bands are ledger activity too, and they are drawn from
+                  * the same bounded projection — so while the ledger waits for its own authority,
+                  * they wait with it. Showing them would be the same partial truth in a second place.
+                  */}
+                {ledgerPending ? null : lens === "payments" ? (
                     <div className="alloy-os-billingdetail__ledger" role="table" data-financials-payments-ledger="true">
                         <FinancialsLedgerHead />
                         {visiblePayments.map((p) => (
@@ -512,7 +533,7 @@ export default function FinancialsDetailCard({
                     </div>
                 ) : null}
 
-                {showAdjustments && evidence.adjustments.length ? (
+                {!ledgerPending && showAdjustments && evidence.adjustments.length ? (
                     <div className="alloy-os-billingdetail__ledger" role="table" data-financials-adjustments-ledger="true">
                         {/*
                           * ── NO FOOTER LINK FARM ───────────────────────────────────────────────

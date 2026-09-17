@@ -1,8 +1,10 @@
 "use client";
 
 import clsx from "clsx";
+import { useEffect, useState } from "react";
 import {
     ArrowLeftRight,
+    ChevronRight,
     CheckCircle2,
     CircleDollarSign,
     SlidersHorizontal,
@@ -281,12 +283,19 @@ export function FinancialsLedgerRow({ row }: { row: FinancialsLedgerRowView }) {
 }
 
 /**
- * One billing period's rows, headed and optionally collapsed.
+ * One billing period's rows, behind a real disclosure.
  *
- * COLLAPSE CHANGES WHAT IS SHOWN, NEVER HOW. A collapsed period is the same header with a line
- * saying so; expanding it reveals the same head row and the same row component. There is no second
- * renderer behind the collapsed state, which is how a period used to come back looking different
- * from the one above it.
+ * COLLAPSE CHANGES WHAT IS SHOWN, NEVER HOW. A collapsed period is the same header; expanding it
+ * reveals the same head row and the same row component. There is no second renderer behind the
+ * collapsed state, which is how a period used to come back looking different from the one above it.
+ *
+ * ── AND IT IS A CONTROL NOW, NOT A SENTENCE ────────────────────────────────────────────────────
+ *
+ * The collapsed state read "Collapsed · select to expand" — an explanatory line spending a ledger
+ * row to describe an affordance, and describing one that did not exist: `open` was a static prop
+ * with no toggle anywhere, so there was nothing to select. The period heading is now the disclosure
+ * itself: a button carrying `aria-expanded`, a chevron that rotates with the state, and the whole
+ * heading as its hit target, reachable by keyboard like any other button.
  */
 export function FinancialsLedgerPeriod({
     label,
@@ -296,25 +305,43 @@ export function FinancialsLedgerPeriod({
 }: {
     label: string;
     summary: string;
+    /** The period's initial state — the caller decides which periods open, the operator decides after. */
     open: boolean;
     rows: FinancialsLedgerRowView[];
 }) {
+    const [expanded, setExpanded] = useState(open);
+    /* A caller that changes which period is current re-seeds the disclosure. */
+    useEffect(() => setExpanded(open), [open]);
     return (
-        <section className="alloy-os-fdetail__period" data-financials-ledger-period={label}>
-            <p className="alloy-os-fdetail__periodhead">
+        <section
+            className="alloy-os-fdetail__period"
+            data-financials-ledger-period={label}
+            data-financials-period-expanded={expanded ? "true" : "false"}
+        >
+            <button
+                type="button"
+                className="alloy-os-fdetail__periodhead"
+                aria-expanded={expanded}
+                data-financials-period-toggle={label}
+                onClick={() => setExpanded((v) => !v)}
+            >
+                <ChevronRight
+                    aria-hidden
+                    size={13}
+                    strokeWidth={2.25}
+                    className="alloy-os-fdetail__perioddisclosure"
+                />
                 <span className="alloy-os-fdetail__periodname">{label}</span>
                 <span className="alloy-os-fdetail__periodsum">{summary}</span>
-            </p>
-            {open ? (
+            </button>
+            {expanded ? (
                 <div className="alloy-os-billingdetail__ledger" role="table" data-financials-ledger-open="true">
                     <FinancialsLedgerHead />
                     {rows.map((row) => (
                         <FinancialsLedgerRow key={row.key} row={row} />
                     ))}
                 </div>
-            ) : (
-                <p className="alloy-os-fdetail__collapsed">Collapsed · select to expand</p>
-            )}
+            ) : null}
         </section>
     );
 }

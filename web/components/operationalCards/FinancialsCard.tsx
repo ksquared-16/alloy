@@ -174,8 +174,15 @@ export default function FinancialsCard({
 
                     <div className="alloy-os-billing__collect">
                     <section className="alloy-os-billing__zone alloy-os-billing__zone--position">
-                        <p className="alloy-os-billing__zone-head">Position</p>
-                        <p className="alloy-os-billing__amount">{period.currentBalance}</p>
+                        {/*
+                          * DUE, NOT "POSITION". Three different questions live here and only one is
+                          * the thing an operator acts on: the balance is where the account stands,
+                          * past due is what is late, and DUE is what may actually be collected now —
+                          * Thread 9's governed collectible figure. "Position" named none of them and
+                          * implied a fourth.
+                          */}
+                        <p className="alloy-os-billing__zone-head">Due</p>
+                        <p className="alloy-os-billing__amount">{period.dueNow}</p>
                         {/*
                          * DUE AND PAST DUE IN ONE PLACE. They were two stacked sections with two
                          * headings; they are two readings of the same question — what should be
@@ -189,6 +196,8 @@ export default function FinancialsCard({
                             <p className="alloy-os-billing__clear">Nothing past due</p>
                         )}
                         <div className="alloy-os-billing__lines">
+                            {/* The balance stays, as its own distinct fact, beneath the actionable one. */}
+                            <Line label="Current balance" value={period.currentBalance} />
                             <Line label="Payments received" value={period.paymentsReceived} />
                             {/*
                              * UNASSIGNED SURVIVES THE TRIM. Money nobody has been made responsible

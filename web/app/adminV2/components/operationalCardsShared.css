@@ -1434,7 +1434,13 @@
    * they sit with it rather than on a line beneath it — and the track exists on every row, so a
    * ledger's rhythm does not depend on which rows happen to be actionable.
    */
-  grid-template-columns: 46px 78px 112px 104px 134px 84px 72px 110px minmax(80px, 0.85fr);
+  /*
+   * GL ACCOUNT BEFORE DESCRIPTION. `4060 · Discounts & Credits` is a canonical account identity and
+   * it was truncating to `4060 · Discounts & Cre...` while the free-text preview beside it held more
+   * width than it needed. Description is explicitly a preview and yields first: GL takes the room to
+   * render the account names this product actually configures, and Description truncates earlier.
+   */
+  grid-template-columns: 46px 78px 112px 104px 178px 84px 72px 110px minmax(64px, 0.55fr);
   gap: 8px;
   align-items: baseline;
   min-height: 21px;
@@ -2090,14 +2096,39 @@
 
 .alloy-os-fdetail__period { margin-top: 5px; }
 .alloy-os-fdetail__periodhead {
-  margin: 0 0 2px;
+  /*
+   * The heading IS the disclosure: a full-width button, so the hit target is the whole row rather
+   * than a chevron an operator has to aim at. Styled as the heading it replaced — a control that
+   * announces itself as a control by behaviour, not by looking like a form.
+   */
   display: flex;
+  width: 100%;
+  margin: 0 0 2px;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 3px;
+  gap: 8px;
+  padding: 0 0 3px;
+  border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
 }
+.alloy-os-fdetail__periodhead:focus-visible {
+  outline: 2px solid var(--alloy-os-bend-pine, #00a283);
+  outline-offset: 2px;
+}
+.alloy-os-fdetail__periodhead .alloy-os-fdetail__periodsum { margin-left: auto; }
+/* The one piece of state the icon carries: pointing right is closed, down is open. */
+.alloy-os-fdetail__perioddisclosure {
+  flex: 0 0 auto;
+  align-self: center;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, transparent);
+  transition: transform 120ms ease;
+}
+[data-financials-period-expanded="true"] > .alloy-os-fdetail__periodhead .alloy-os-fdetail__perioddisclosure {
+  transform: rotate(90deg);
+}
+
 .alloy-os-fdetail__periodname {
   font-size: 0.7rem;
   font-weight: 700;
@@ -2668,18 +2699,23 @@
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
   gap: 2px;
+  /*
+   * COMPACT, so the command shows the form rather than its own chrome. The control was 32px tall
+   * inside 2px of padding under a 0.6rem margin — nearly 50px of a focused command spent on a
+   * two-word choice the operator makes once. The hit target stays comfortably above the 24px floor.
+   */
   padding: 2px;
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.4rem;
   width: 100%;
   max-width: 22rem;
-  border-radius: 8px;
+  border-radius: 7px;
   background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
 }
 .alloy-os-financials__entrymodes button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 2rem;
+  min-height: 24px;
   border: 0;
   border-radius: 6px;
   padding: 0.28rem 0.85rem;
@@ -2703,11 +2739,57 @@
  * and reads as a link rather than a third equal button.
  */
 .alloy-os-billing__commands {
+  /*
+   * ONE ROW. Wrapping put Payment, Add and Details on three lines of a card whose whole point is to
+   * be short — measured at 335px, past the 303px this card is allowed. They sit on one line and the
+   * buttons size to their content rather than to a floor that made Add wider than Payment.
+   */
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 6px 10px;
-  margin-top: 0.55rem;
+  gap: 8px;
+  margin-top: 0.5rem;
+}
+/*
+ * ── PRIMARY IS A WEIGHT, NOT A SIZE ────────────────────────────────────────────────────────────
+ *
+ * Payment and Add inherited two different button treatments, so the pair read as a mistake rather
+ * than a hierarchy: different heights, different padding, different radii, baselines that did not
+ * line up. They are peers in geometry and unequal only in emphasis — Payment carries the filled
+ * treatment, Add the quiet one, and both occupy the same box.
+ */
+.alloy-os-billing__commands > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 26px;
+  height: 26px;
+  /*
+   * The secondary command inherits `width: 100%` from the shared action class and stretched to fill
+   * the row, so Add measured 121px against Payment's 76px. Here they are peers: one width, sized to
+   * the longer of the two labels, so the pair reads as a hierarchy of EMPHASIS rather than an
+   * accident of text length.
+   */
+  width: auto;
+  min-width: 84px;
+  padding: 0 0.7rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+/* The navigation is not a button box at all, so it is exempt and stays a link. */
+.alloy-os-billing__commands > .alloy-os-billing__detailslink {
+  min-height: 0;
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  margin-left: 2px;
+  border-radius: 0;
+  font-weight: 600;
+  white-space: nowrap;
 }
 .alloy-os-billing__detailslink {
   border: 0;

@@ -756,7 +756,7 @@
    */
   /* A narrow leading ACTIONS rail, then the eight column vocabulary — the lab shows the ledger
      the product ships, or it is not a review surface. */
-  grid-template-columns: 46px 78px 112px 104px 134px 84px 72px 110px minmax(80px, 0.85fr);
+  grid-template-columns: 46px 78px 112px 104px 178px 84px 72px 110px minmax(64px, 0.55fr);
   gap: 8px;
   align-items: baseline;
   min-height: 21px;
