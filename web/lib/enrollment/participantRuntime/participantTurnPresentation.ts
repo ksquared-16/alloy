@@ -601,13 +601,34 @@ export function participantSignaturePrompt(signatureExpected = true): string {
  *
  * States the bargain plainly: we already hold some of this, so we will check it rather than ask for
  * it again. That is the whole reason the experience is a conversation and not a form.
+ *
+ * ## It only says that when it is TRUE
+ *
+ * This line was unconditional, and on the certified Admissions packet it was false. That packet
+ * binds four canonical destinations out of eighty, and for a family whose record holds none of
+ * them the platform knows literally nothing — yet every parent was told "I already have most of
+ * Toureeb's information" and then asked all eighty questions. The eighty-item objective did report
+ * sixteen units already settled, which looked like corroboration and was not: fifteen of them are
+ * the packet's OPTIONAL questions, which settle by being optional rather than by being known.
+ *
+ * So the claim is now made only when there is something behind it — the same `known` projection the
+ * summary underneath it is drawn from, so the sentence and the list can never disagree.
  */
 export function participantIntro(objective: ParticipantObjectiveWire): string | null {
     if (objective.phase !== "shared_collection") return null;
     const subject = familiarName(objective);
+    if (objective.known.length === 0) {
+        /*
+         * Nothing on file. Say what IS true — there is paperwork to finish and it will be a
+         * conversation — rather than a claim about records the parent would find empty.
+         */
+        return subject
+            ? `Let's finish ${subject}'s enrollment paperwork. I'll ask you one thing at a time and fill the forms in as we go.`
+            : "Let's finish your child's enrollment paperwork. I'll ask you one thing at a time and fill the forms in as we go.";
+    }
     return subject
-        ? `I already have most of ${subject}'s information, so I'll just check it with you and ask for anything I'm missing.`
-        : "I already have most of your child's information, so I'll just check it with you and ask for anything I'm missing.";
+        ? `Let's finish ${subject}'s enrollment paperwork. Here's what I already have — I'll ask you for anything that's missing.`
+        : "Let's finish your child's enrollment paperwork. Here's what I already have — I'll ask you for anything that's missing.";
 }
 
 /**

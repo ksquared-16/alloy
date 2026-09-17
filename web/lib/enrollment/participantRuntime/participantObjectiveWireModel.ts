@@ -18,6 +18,7 @@ import {
     activeConfirmationGroup,
     collectedAnswers,
     confirmationRef,
+    groupKnownFacts,
     groupSettledConfirmations,
     identityFactRank,
     type ConfirmationGroup,
@@ -211,6 +212,27 @@ export type ParticipantObjectiveWire = {
         }[];
     }[];
     /**
+     * What Alloy ALREADY HOLDS about this family, before the parent has confirmed anything.
+     *
+     * Separate from `settled` on purpose, and weaker. `settled` is D-99 evidence — the parent
+     * confirmed or supplied that value. This is the organization's own records, shown so the
+     * opening line "I already have most of Toureeb's information" is something the parent can
+     * actually check rather than a claim with nothing behind it. At session open the certified
+     * packet had sixteen such facts and `settled` was, correctly, empty.
+     *
+     * No `ref` and no editor: these are not addressable as settled facts, because none of them has
+     * been settled. Every one is still an outstanding need and is still confirmed or collected
+     * through the ordinary turn.
+     */
+    readonly known: readonly {
+        readonly heading: string;
+        readonly headline: string | null;
+        readonly facts: readonly {
+            readonly label: string;
+            readonly value: string;
+        }[];
+    }[];
+    /**
      * Answers the participant gave DURING this session.
      *
      * Settled and evidenced exactly like a confirmation, and NOT one — a parent who has just told
@@ -390,6 +412,49 @@ function collectedRecord(objective: ParticipantEnrollmentObjective): Participant
         if (!need) return [];
         const { ref, label, value, editor } = factRow(need, member.ref);
         return [{ ref, label, value, editor }];
+    });
+}
+
+/**
+ * What Alloy already holds, as a parent reads it.
+ *
+ * The SAME subject rule, the SAME voice and the SAME fact rows as the settled record — so the
+ * opening summary and everything that follows it cannot describe one person two ways. The only
+ * differences are the projection it reads (`groupKnownFacts`, not evidence) and what it withholds:
+ * no `ref`, no editor, because nothing here is settled yet.
+ */
+function knownRecord(
+    objective: ParticipantEnrollmentObjective,
+    subjectName: string | null,
+): ParticipantObjectiveWire["known"] {
+    const byKey = new Map(objective.needs.needs.map((n) => [n.identity.key, n]));
+    return groupKnownFacts(objective.needs.needs).flatMap((group) => {
+        const voice = groupVoice(group, subjectName);
+        const facts = group.members.flatMap((member) => {
+            const need = byKey.get(member.need_key);
+            if (!need) return [];
+            const { label, value } = factRow(need, member.ref);
+            if (!value.trim()) return [];
+            return [{ label, value }];
+        });
+        if (facts.length === 0) return [];
+        /*
+         * The identity facts compose the headline, exactly as they do on the confirmation card: a
+         * heading reading "Chidinma Okonkwo" is better than two rows reading "First name" and
+         * "Last name".
+         */
+        const identityRows = group.members
+            .filter((m) => m.is_identity)
+            .map((m) => byKey.get(m.need_key))
+            .filter((n): n is NonNullable<typeof n> => Boolean(n))
+            .sort((a, b) => identityFactRank(a) - identityFactRank(b));
+        let headline = "";
+        for (const need of identityRows) {
+            const shown = displayValue(need.current_value).trim();
+            if (!shown || headline.toLowerCase().includes(shown.toLowerCase())) continue;
+            headline = headline ? `${headline} ${shown}` : shown;
+        }
+        return [{ heading: subjectHeading(voice.possessive), headline: headline || null, facts }];
     });
 }
 
@@ -611,6 +676,7 @@ export function participantObjectiveWireModel(
             optional: turn.need?.optional === true,
             field_ids: (turn.need?.occurrences ?? []).map((o) => o.form_field_id),
         },
+        known: knownRecord(objective, subjectName),
         settled: settledRecord(objective, subjectName),
         collected: collectedRecord(objective),
         pending_clarification: context?.pendingClarificationQuestion

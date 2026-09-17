@@ -382,6 +382,56 @@ export function groupSettledConfirmations(
 }
 
 /**
+ * What Alloy ALREADY HOLDS, grouped by the same semantic subject.
+ *
+ * ## Why this is not `settled`
+ *
+ * `groupSettledConfirmations` is evidence-gated, and correctly: a row there means the participant
+ * confirmed or supplied that value, with a D-99 record to prove it. At session open there is no such
+ * evidence, so `settled` ships EMPTY while the objective says sixteen of eighty facts are already
+ * settled from the organization's own records. The parent was told "I already have most of
+ * Toureeb's information" and shown nothing — a claim with no substance behind it.
+ *
+ * A fact Alloy knows is not a fact the participant has confirmed. Rather than weaken the evidence
+ * contract so the opening can say something, this is a SECOND, weaker projection with its own name:
+ * values the platform holds and the parent has not yet been asked about.
+ *
+ * ## Presentation only
+ *
+ * Showing a value here creates no confirmation evidence, moves nothing into `settled` and mutates
+ * nothing. Every one of these needs is still outstanding and will still be confirmed or collected
+ * through the ordinary turn; this only stops the opening being a claim the parent cannot check.
+ *
+ * Both known STATES are included. `known_requires_confirmation` is a fact the D-100 policy says the
+ * parent should verify; `known` is one it does not. Both are things Alloy holds, which is the only
+ * question this projection answers — and excluding the second would make the summary disagree with
+ * the `work.settled` count sitting beside it.
+ */
+export function groupKnownFacts(
+    needs: readonly EnrollmentInformationNeed[],
+): ConfirmationGroup[] {
+    const bySubject = new Map<string, { subject: ConfirmationSubject; members: ConfirmationGroupMember[] }>();
+
+    for (const need of needs) {
+        if (!need.has_value) continue;
+        if (need.state !== "known" && need.state !== "known_requires_confirmation") continue;
+        const subject = confirmationSubjectFor(need);
+        let bucket = bySubject.get(subject.key);
+        if (!bucket) {
+            bucket = { subject, members: [] };
+            bySubject.set(subject.key, bucket);
+        }
+        bucket.members.push({
+            need_key: need.identity.key,
+            ref: confirmationRef(need.identity.key),
+            is_identity: isIdentityFact(need),
+        });
+    }
+
+    return [...bySubject.values()].map((bucket) => ({ subject: bucket.subject, members: bucket.members }));
+}
+
+/**
  * The need a fact handle refers to — resolved ONLY against facts the platform is displaying.
  *
  * The bounded set is the whole security property. A handle is an opaque token the server issued for

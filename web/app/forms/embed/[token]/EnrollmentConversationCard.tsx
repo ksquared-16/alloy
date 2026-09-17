@@ -657,6 +657,78 @@ function CollectedAnswers({
     );
 }
 
+/**
+ * What Alloy already holds, shown once at the opening.
+ *
+ * ## Why this exists beside the settled record and is not it
+ *
+ * The opening said "I already have most of Toureeb's information" and showed nothing, because the
+ * settled record is D-99 evidence and at the opening there is none — correctly, since the parent has
+ * confirmed nothing yet. A claim a parent cannot check is worse than no claim.
+ *
+ * So these rows are the weaker projection, drawn deliberately weaker: no Edit, no "Confirmed", no
+ * ref. Nothing here has been settled, and every one of these facts is still going to be put in front
+ * of the parent as an ordinary question. This only lets them see that the conversation is not
+ * starting from zero, and whose information it is.
+ *
+ * It disappears the moment anything is settled — the settled record takes over, and two lists of
+ * the same facts under two headings would be the same information twice.
+ */
+const KNOWN_ROWS_VISIBLE = 3;
+
+function KnownSummary({ known }: { known: ParticipantObjectiveWire["known"] }) {
+    if (known.length === 0) return null;
+    return (
+        <div className="flex flex-col gap-2" data-participant-known-summary={known.length}>
+            {known.map((group) => (
+                <KnownGroup key={group.heading + (group.headline ?? "")} group={group} />
+            ))}
+        </div>
+    );
+}
+
+function KnownGroup({ group }: { group: ParticipantObjectiveWire["known"][number] }) {
+    // Same fold as the settled record, for the same reason: a summary that grows without bound is
+    // not a summary. Nothing is dropped — the count says how many are folded away.
+    const [open, setOpen] = useState(false);
+    const rows = open ? group.facts : group.facts.slice(0, KNOWN_ROWS_VISIBLE);
+    const hidden = group.facts.length - rows.length;
+    return (
+        <section
+            className="rounded-xl border border-alloy-midnight/8 bg-alloy-midnight/[0.015] px-3.5 py-2.5"
+            data-participant-known-group={group.heading}
+        >
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.13em] text-alloy-bend-pine/70">
+                {group.heading}
+            </p>
+            {group.headline ? (
+                <p className="mt-0.5 text-[13.5px] font-medium text-alloy-midnight/70" data-participant-known-headline="true">
+                    {group.headline}
+                </p>
+            ) : null}
+            <dl className="mt-1.5 space-y-1">
+                {rows.map((fact) => (
+                    <div key={fact.label + fact.value} className="flex flex-wrap items-baseline gap-x-2 gap-y-1" data-participant-known-fact={fact.label}>
+                        <dt className="text-[12px] text-alloy-midnight/35">{fact.label}</dt>
+                        <span aria-hidden className="text-alloy-midnight/20">·</span>
+                        <dd className="text-[13px] text-alloy-midnight/60">{fact.value}</dd>
+                    </div>
+                ))}
+            </dl>
+            {hidden > 0 ? (
+                <button
+                    type="button"
+                    onClick={() => setOpen(true)}
+                    className="mt-1.5 text-[12px] text-alloy-midnight/40 underline underline-offset-2 hover:text-alloy-bend-pine"
+                    data-participant-known-more={hidden}
+                >
+                    {`Show ${hidden} more`}
+                </button>
+            ) : null}
+        </section>
+    );
+}
+
 function SettledGroup({
     group,
     busy,
@@ -1463,6 +1535,13 @@ export function EnrollmentConversationCard({
                         // The opening line and the first question are both Alloy — one eyebrow.
                         <ThreadTurn who="alloy" depth={settled.length === 0 ? "recent" : "history"} showSpeaker={false}>
                             <ThreadSaid who="alloy" depth={settled.length === 0 ? "recent" : "history"}>{intro}</ThreadSaid>
+                            {/*
+                              * The substance behind the sentence — and only while it IS the opening.
+                              * Once the parent has settled anything, the settled record below says
+                              * the same things with an Edit beside each, and showing both would be
+                              * the same information twice under two different promises.
+                              */}
+                            {objective.settled.length === 0 ? <KnownSummary known={objective.known} /> : null}
                         </ThreadTurn>
                     ) : null}
 

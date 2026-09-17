@@ -129,12 +129,34 @@ describe("known facts are confirmed, not asked for", () => {
     });
 
     it("opens by telling the parent what the conversation will do", () => {
-        const wire = participantObjectiveWireModel(objective(), { subjectDisplayName: "Test Process" });
+        /*
+         * The claim is made only when there is something behind it.
+         *
+         * Unconditionally it was FALSE on the certified Admissions packet: that packet binds four
+         * canonical destinations out of eighty, and for a family holding none of them the platform
+         * knows nothing — yet the parent was told "I already have most of Toureeb's information"
+         * and then asked all eighty questions.
+         */
+        const wire = participantObjectiveWireModel(
+            objective({ needs: { needs_requiring_action: 2, total_needs: 6, needs: [need({ has_value: true })] } }),
+            { subjectDisplayName: "Test Process" },
+        );
         const intro = participantIntro(wire);
         // Specialist voice: what Alloy already has, and what it still needs. Not a welcome banner.
         // First name, same as every other line of the conversation.
-        expect(intro).toContain("I already have most of Test's information");
-        expect(intro).toContain("ask for anything I'm missing");
+        expect(wire.known.length).toBe(1);
+        expect(intro).toContain("Test's enrollment paperwork");
+        expect(intro).toContain("what I already have");
+    });
+
+    it("does not claim prior knowledge when there is none", () => {
+        // Same objective, nothing on file. It still says what is true — there is paperwork, and it
+        // will be a conversation — and makes no claim the parent would find empty.
+        const wire = participantObjectiveWireModel(objective(), { subjectDisplayName: "Test Process" });
+        expect(wire.known).toEqual([]);
+        const intro = participantIntro(wire);
+        expect(intro).toContain("Test's enrollment paperwork");
+        expect(intro).not.toContain("already have");
     });
 });
 
