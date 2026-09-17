@@ -463,13 +463,32 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                     );
                 }
 
-                const boundTemplate = setWorkTemplateExecutionMode(
-                    // The label is the operator's word for this work's action; the rest of the
-                    // template is untouched.
-                    actionLabel ? { ...bindTemplate, label: actionLabel } : bindTemplate,
+                /*
+                 * THE LABEL BELONGS TO THE ACTION, NOT TO THE WORK.
+                 *
+                 * "Send enrollment packet" is the work — what has to happen. "Send enrollment
+                 * paperwork" is the control — what the operator presses. Writing the action's label
+                 * onto the template renames the obligation to match its button, which loses the
+                 * distinction the Current Work row exists to show, so it goes to the ref's own
+                 * `override_label` and the template's `label` is never touched here.
+                 */
+                const modeApplied = setWorkTemplateExecutionMode(
+                    bindTemplate,
                     actionRef ? "direct_action" : "outcome_led",
                     actionRef || null,
                 );
+                const boundTemplate =
+                    actionRef && actionLabel && modeApplied.primary_action
+                        ? {
+                              ...modeApplied,
+                              primary_action: { ...modeApplied.primary_action, override_label: actionLabel },
+                          }
+                        : modeApplied;
+
+                // The work's own label is settable, but only when the caller asks for it by its own
+                // name — never as a side effect of binding an action.
+                const workLabel = typeof body.work_label === "string" ? body.work_label.trim() : "";
+                const finalTemplate = workLabel ? { ...boundTemplate, label: workLabel } : boundTemplate;
 
                 config = {
                     ...config,
@@ -486,7 +505,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                                                 stage_operating_plan_v1: {
                                                     ...bindPlan,
                                                     work_templates: bindPlan.work_templates.map((w) =>
-                                                        w.template_key !== templateKey ? w : boundTemplate,
+                                                        w.template_key !== templateKey ? w : finalTemplate,
                                                     ),
                                                 },
                                             },
