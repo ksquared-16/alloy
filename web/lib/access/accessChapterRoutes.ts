@@ -60,7 +60,7 @@ export const ACCESS_WORKSPACE_CHAPTER_META: Record<AccessWorkspaceChapter, { lab
  * control is drawn only when the route behind it would accept the click.
  */
 export type AccessCommandKey =
-    /** `app/api/admin/send-password-reset/route.ts` — the portal `admin` role (W49-F1, unchanged). */
+    /** Start a member's password reset — `admin.users.write` (W49-F1 closed by Access Admin Residual V1). */
     | "password-reset"
     /** Invite, remove, and change a person's roles — `admin.users.write`. */
     | "manage-users"

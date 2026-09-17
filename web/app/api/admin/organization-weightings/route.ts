@@ -1,5 +1,19 @@
+/**
+ * EQUIVALENCY DEFINITIONS — how a measurement counts, which is a reporting definition.
+ *
+ * An Equivalency Definition is the weighting an Operational Intelligence calculation applies when
+ * it counts a Population — unweighted, days-per-week, category, session-or-day, weekly-hours — and
+ * `equivalentCount` and the Calculation Library's `definitionCatalog` read it to produce a number.
+ * Defining one is analytics configuration, owned by `reports.write` exactly as the calculations
+ * that consume it already are.
+ *
+ * It asked `ctx.role !== "admin"`. Same shape as its Population sibling, same correction: the key
+ * replaces the title, the default package is unchanged, and the draft still lands in
+ * `org_settings.metadata` under this family's own key rather than anywhere the caller may name.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requireAnalyticsManageAccess } from "@/lib/admin/canReadAnalytics";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
     createOrganizationEquivalencyDraft,
@@ -58,9 +72,8 @@ export async function POST(req: NextRequest) {
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Admin role required" }, { status: 403 });
-    }
+    const analyticsAuth = await requireAnalyticsManageAccess();
+    if (!analyticsAuth.ok) return analyticsAuth.response;
     let body: unknown;
     try {
         body = await req.json();

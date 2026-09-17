@@ -635,7 +635,7 @@ export default function AccessUsersConfigurationPage({
     };
 
     const sendPasswordReset = async () => {
-        if (!selected?.email) return;
+        if (!selected?.user_id) return;
         setResetBusy(true);
         setMessage(null);
         setError(null);
@@ -643,7 +643,9 @@ export default function AccessUsersConfigurationPage({
             const res = await fetch("/api/admin/send-password-reset", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email: selected.email }),
+                // The member, not an address: the route resolves the email from the
+                // authenticated identity so a caller cannot name someone outside this organization.
+                body: JSON.stringify({ user_id: selected.user_id }),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Could not send reset email");
