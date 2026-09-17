@@ -1992,6 +1992,14 @@ export async function composeWorkUnitProvisioningAnswer(
         summaryRecord != null
         && typeof summaryRecord.version === "number"
         && (req.summaryConfigHeldIds ?? []).includes(`${summaryRecord.id}:${summaryRecord.version}`);
+    /*
+     * P0-7.6 item 13 — WHEN, inside the compose, does the published composition become available?
+     *
+     * Measured from the compose's own `t0`, so it is directly comparable with every section beside
+     * it. DIAGNOSTIC ONLY: nothing here decouples, flushes or streams the composition; the question
+     * is only how early a later slice *could* release it.
+     */
+    markSpan("composition_ready", t0);
     const focusPanelSummaryDoc: FocusPanelSummaryDocProjection | null = summaryLayoutRows
         ? {
               id: summaryRecord?.id ?? null,

@@ -1,5 +1,12 @@
 import ProvisioningAnswerSeed from "@/components/admin/workspace/ProvisioningAnswerSeed";
+import RouteTimingSeed from "@/components/admin/workspace/RouteTimingSeed";
+import {
+    collectedRouteTiming,
+    recordRouteTiming,
+    routeTimingEnabled,
+} from "@/lib/perf/routeTimingDiagnostic";
 import { composeProvisioningAnswerForRoute } from "@/lib/runtime/provisioning/composeProvisioningAnswerForRoute";
+import type { ProvisioningTimings } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import { toRscPlainJson } from "@/lib/runtime/toRscPlainJson";
 
 type PageProps = {
@@ -9,6 +16,17 @@ type PageProps = {
 
 const one = (v: string | string[] | undefined): string | null =>
     typeof v === "string" && v.trim() !== "" ? v : null;
+
+/**
+ * Does this answer's `timings` carry the full section breakdown?
+ *
+ * A written predicate rather than an `in` check, because `in` narrows to an intersection and would
+ * have needed a cast to read through — and a cast here would assert a shape the contextual composer
+ * genuinely does not have.
+ */
+function hasComposeSections(t: { total_ms: number } | null): t is ProvisioningTimings {
+    return t != null && typeof (t as ProvisioningTimings).authorization_ms === "number";
+}
 
 /**
  * ORDERING EXPERIMENT (Option B — docs/runtime/DEEPLINK-COMPOSE-OWNERSHIP.md).
@@ -47,17 +65,74 @@ export default async function OperatorWorkUnitSlugPage({ params, searchParams }:
     // Authority fix — returns an honest error rather than substituting. No new trust is created here:
     // a malformed, stale, or cross-tenant id cannot select anything, and an error terminal seeds
     // nothing (K2 then falls back to its own fetch, which fails the same honest way).
-    const answer = await composeProvisioningAnswerForRoute({
+    /*
+     * SLICE 12A — THE COMPOSE IS MEASURED WHERE IT HAPPENS.
+     *
+     * This await is the route's dominant cost and, until now, the one operation the canonical
+     * instrument could not see: the layout emitted `compose_wall_ms: 0` for it. The timing wraps the
+     * SAME promise the route already awaits, so enabling the flag cannot reorder or serialize
+     * anything, and every call below is skipped entirely when the flag is off.
+     */
+    const timing = routeTimingEnabled();
+    const pageEntryEpochMs = timing ? Date.now() : 0;
+    const pageStarted = timing ? performance.now() : 0;
+    const composeStarted = timing ? performance.now() : 0;
+
+    const composed = await composeProvisioningAnswerForRoute({
         rawSlug: workUnitSlug,
         requestedWorkViewId,
         requestedSubjectId,
         cohort,
         aspect,
     })
-        .then((r) => (r.ok && r.answer.terminal !== "error" ? r.answer : null))
+        .then((r) => (r.ok ? r.answer : null))
         .catch(() => null);
+    const composeWallMs = timing ? performance.now() - composeStarted : 0;
+
+    // Unchanged admission: an error terminal seeds nothing, exactly as before.
+    const answer = composed && composed.terminal !== "error" ? composed : null;
+
+    if (timing) {
+        // `composition_ready` is recorded by the compose itself as a span measured from ITS start, so
+        // it is directly comparable with the sections beside it. Absent when the compose did not reach
+        // the published-composition step — reported as null rather than as a zero that reads measured.
+        /*
+         * TWO COMPOSERS, TWO TIMING SHAPES — and the narrower one is not a missing measurement.
+         *
+         * `composeWorkUnitProvisioningAnswer` carries the full `ProvisioningTimings` breakdown. A
+         * CONTEXTUAL answer comes from `composeContextualFocusAnswer`, which measures only
+         * `total_ms` — it genuinely has no sections, rather than having sections worth zero.
+         * Reporting zeros for it would invent seven measurements nobody took, so the sections are
+         * surfaced only when they exist and the payload carries `null` otherwise.
+         */
+        const t = composed && "timings" in composed ? composed.timings : null;
+        const sections = hasComposeSections(t) ? t : null;
+        const readySpan = sections?.spans?.composition_ready;
+        recordRouteTiming({
+            page_entry_epoch_ms: pageEntryEpochMs,
+            compose_wall_ms: Math.round(composeWallMs),
+            seeded: answer != null,
+            compose_total_ms: t != null ? Math.round(t.total_ms) : null,
+            compose_sections: sections
+                ? {
+                      authorization_ms: Math.round(sections.authorization_ms),
+                      work_unit_ms: Math.round(sections.work_unit_ms),
+                      configuration_ms: Math.round(sections.configuration_ms),
+                      presentation_ms: Math.round(sections.presentation_ms),
+                      records_ms: Math.round(sections.records_ms),
+                      projection_ms: Math.round(sections.projection_ms),
+                      composition_ms: Math.round(sections.composition_ms),
+                      total_ms: Math.round(sections.total_ms),
+                      ...(sections.spans ? { spans: sections.spans } : {}),
+                  }
+                : null,
+            composition_ready_ms: typeof readySpan === "number" ? readySpan : null,
+            page_total_ms: Math.round(performance.now() - pageStarted),
+        });
+    }
 
     return (
+        <>
         <ProvisioningAnswerSeed
             target={workUnitSlug}
             lens={requestedWorkViewId}
@@ -67,5 +142,9 @@ export default async function OperatorWorkUnitSlugPage({ params, searchParams }:
             answer={answer ? toRscPlainJson(answer) : null}
             producer={`page(subject=${requestedSubjectId ?? "null"},cohort=${cohort ?? "null"})`}
         />
+        {/* ONE payload for the route: the layout's spans plus this segment's, emitted by the boundary
+            that finishes last. Renders nothing when the flag is off. */}
+        <RouteTimingSeed marks={collectedRouteTiming()} />
+        </>
     );
 }
