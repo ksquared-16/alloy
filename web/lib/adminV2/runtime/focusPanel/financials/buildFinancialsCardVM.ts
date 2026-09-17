@@ -33,7 +33,7 @@
  */
 
 import { readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
-import { resolveHouseholdPaymentViews } from "@/lib/financials/paymentApplicationView";
+import { resolveHouseholdPaymentViews, type PaymentView } from "@/lib/financials/paymentApplicationView";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
@@ -930,6 +930,38 @@ async function buildFinancialsCardVMInner(
         ]),
     ).catch(() => [{ data: [] }, { data: [] }, { data: [] }] as Array<{ data: unknown }>);
 
+    /*
+     * ── SLICE 12F · THE PAYMENT VIEWS NEVER NEEDED THE PAYMENTS READ ─────────────────────────────
+     *
+     * `resolveHouseholdPaymentViews(supabase, { orgId, customerId })` takes those two arguments and
+     * nothing else. It issues its OWN `payments` read and its own allocations, charges and customers
+     * reads, and never touches what `readAccountPayments` returned — the two answers are married
+     * afterwards, by payment id. Slice 12E chained it behind the payments read anyway, on my reading
+     * that the dependency was real. It is not, and the deployed spans put a number on the mistake:
+     * `payment_views_ms` 1,152 ms median, 75 % of `financials_build_ms`, waiting for a read it does
+     * not consume.
+     *
+     * Both inputs are known HERE, before the first await, so this is where it starts. The household
+     * is `args.customerId` — the account this card is about — and when the caller gave only a child
+     * there is no household to resolve views for, exactly as before.
+     *
+     * It resolves to a TAGGED OUTCOME rather than rejecting, because the early-return paths below
+     * never await it and an unawaited rejection must not surface as an unhandled one. The failure
+     * itself is not swallowed: §2's contract is re-imposed at the join, where a views failure still
+     * makes the whole payments answer unavailable.
+     */
+    const household = t(args.customerId) || null;
+    const paymentViewsP: Promise<
+        { ok: true; views: PaymentView[] | null } | { ok: false; error: unknown }
+    > = household
+        ? clock
+              .time("payment_views_ms", () =>
+                  resolveHouseholdPaymentViews(supabase, { orgId: args.orgId, customerId: household }),
+              )
+              .then((views) => ({ ok: true as const, views }))
+              .catch((error: unknown) => ({ ok: false as const, error }))
+        : Promise.resolve({ ok: true as const, views: null });
+
     const merchantRead = clock
         .time("merchant_ms", () =>
             supabase
@@ -1216,25 +1248,24 @@ async function buildFinancialsCardVMInner(
         readResponsibility(supabase, args.orgId, chargeIdsForReads),
     );
     /*
-     * The payment VIEWS genuinely need the payments, so they stay chained — but chained to the
-     * payments read itself rather than to everything that happens to be written between them. Both
-     * still fail as ONE outcome, because the existing contract is that either failing means the card
-     * cannot say what has been paid.
+     * The payments read starts here, where ITS inputs exist — the billable sources and the charge
+     * ids. The views have been in flight since entry; this JOINS them.
+     *
+     * The join, not the sequencing, is what carried the contract, and the contract is unchanged:
+     * either read failing means the card cannot say what has been paid, so both still resolve into
+     * ONE outcome and a views failure is re-thrown here rather than quietly becoming an absence.
      */
-    const household = t(args.customerId) || null;
     const paymentsP = clock
         .time("payments_ms", () =>
             readAccountPayments(supabase, args.orgId, billableSourceIds, chargeIdsForReads),
         )
-        .then(async (received) => ({
-            ok: true as const,
-            received,
-            views: household
-                ? await clock.time("payment_views_ms", () =>
-                      resolveHouseholdPaymentViews(supabase, { orgId: args.orgId, customerId: household }),
-                  )
-                : null,
-        }))
+        .then(async (received) => {
+            const seen = await paymentViewsP;
+            // A VIEWS FAILURE IS STILL A PAYMENTS FAILURE. Letting it resolve to `null` here would
+            // be the one thing concurrency must not buy: an error presented as "no payment views".
+            if (!seen.ok) throw seen.error;
+            return { ok: true as const, received, views: seen.views };
+        })
         .catch((e: unknown) => ({ ok: false as const, error: e }));
     const setupP = clock
         .time("payment_setup_ms", () =>

@@ -368,7 +368,14 @@ describe("the instrument names every boundary it crosses", () => {
          */
         const body = CODE.slice(CODE.indexOf("async function buildFinancialsCardVMInner"));
         const awaited = [...body.matchAll(/await ([A-Za-z_.]+)/g)].map((m) => m[1]);
-        const measuredPromises = ["configRead", "merchantRead", "responsibilityP", "paymentsP", "setupP", "payersP", "openCollectionsP", "Promise.all", "clock.time"];
+        const measuredPromises = [
+            "configRead", "merchantRead", "responsibilityP", "paymentsP", "setupP", "payersP",
+            // Slice 12F: the payment views, in flight from entry and measured where they are created.
+            // Admitted BY NAME, not by loosening the pattern — this gate caught the new await on its
+            // first run, which is the gate doing its job.
+            "paymentViewsP",
+            "openCollectionsP", "Promise.all", "clock.time",
+        ];
         for (const a of awaited) {
             expect(measuredPromises.some((p) => a.startsWith(p)), `unmeasured await: ${a}`).toBe(true);
         }
