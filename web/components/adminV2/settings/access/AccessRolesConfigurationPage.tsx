@@ -73,6 +73,7 @@ import {
     applyAreaPreset,
     areaLevelLabel,
     buildCapabilityMatrix,
+    normalModeMatrix,
     heldMatrixAreas,
     offerableAreaLevels,
     type MatrixArea,
@@ -276,7 +277,16 @@ export default function AccessRolesConfigurationPage({
      * The summary never travels without its rows — see `roleAuthoritySummary.ts` for why collapsing
      * a disagreeing area to one word would be an authority misstatement rather than a simplification.
      */
-    const matrix = useMemo(() => buildCapabilityMatrix(gridRows, grantKeys), [gridRows, grantKeys]);
+    /*
+     * NORMAL ROLE CREATION SHOWS CURRENT PRODUCT. `normalModeMatrix` drops rows nothing enforces and
+     * areas with no enforced row at all, so an administrator is not offered `Inquiries` or `Billing
+     * (legacy)` — two headings whose only rows the platform does not consult. It revokes nothing: an
+     * absent control cannot change a grant, and out-of-grid keys survive a save by `H2`/`RL-48`.
+     */
+    const matrix = useMemo(
+        () => normalModeMatrix(buildCapabilityMatrix(gridRows, grantKeys)),
+        [gridRows, grantKeys],
+    );
     const heldAreas = useMemo(() => heldMatrixAreas(matrix), [matrix]);
 
     /** Which areas are expanded to their underlying capabilities. Presentation only. */

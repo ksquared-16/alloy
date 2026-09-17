@@ -119,6 +119,26 @@ export const CAPABILITY_AREAS: readonly CapabilityArea[] = Object.freeze([
      */
     { key: "enrollment", label: "Enrollment", description: "Running enrollment — the inquiry record, the decision to enrol, and the exceptions to configured enrollment policy.", order: 25 },
     { key: "reports", label: "Reports", description: "Reports and analytics.", order: 70 },
+    /*
+     * ATTENDANCE, WORK, TOURS, JOBS, INTEGRATIONS and AI are areas because Access V2 built the
+     * authority and this file had not caught up. Every one of their rows was landing in the trailing
+     * "Not yet mapped" bucket — which had grown to the largest area in the editor, and was made
+     * largest by the very slices that were supposed to make the model legible. An administrator
+     * looking for "who may record attendance" or "who may perform work" was being sent to a heading
+     * named after the platform's own failure to classify.
+     *
+     * No capability moves, gains or loses meaning here. These are headings.
+     */
+    { key: "attendance", label: "Attendance", description: "Seeing the register, recording attendance, and the devices that capture it.", order: 33 },
+    { key: "work", label: "Work", description: "Designing work queues, and doing the work in them.", order: 34 },
+    /*
+     * TOURS IS NOT SCHEDULING. It was filed under "Schedules and calendars" because both keys carry
+     * the `scheduling` group, but a tour is the customer-facing booking product — availability an
+     * organization publishes and bookings families make — while Scheduling is the operating calendar.
+     * The description an operator read did not predict what the rows did.
+     */
+    { key: "tours", label: "Tours", description: "Tour availability, and the bookings families make against it.", order: 35 },
+    { key: "jobs", label: "Jobs", description: "Jobs, the vendors assigned to them, and job discounts.", order: 36 },
     { key: "workflows", label: "Workflows", description: "Operational workflows.", order: 80 },
     /*
      * BUSINESS PROCESS is the operator's noun, not Lifecycle and not Department.
@@ -131,6 +151,14 @@ export const CAPABILITY_AREAS: readonly CapabilityArea[] = Object.freeze([
     { key: "business_process", label: "Business Processes", description: "Designing business processes, and choosing which configuration is live.", order: 85 },
     { key: "expectations", label: "Operational expectations", description: "Authoring and ratifying operational expectations.", order: 90 },
     { key: "configuration", label: "Configuration", description: "How records look and behave — fields, layouts, sections, option sets and configuration assistance.", order: 100 },
+    { key: "integrations", label: "Integrations", description: "Connected applications and what they may do here.", order: 104 },
+    /*
+     * AI is its OWN area and it is deliberately SMALL. Only `ai.enrichment.use` is enforced; provider
+     * configuration and telemetry review are catalogued and consulted nowhere, so they are not
+     * offered as controls. An area that advertised three AI powers while the platform acts on one
+     * would be exactly the simulated capability `IA-R6` forbids.
+     */
+    { key: "ai", label: "AI", description: "Using AI assistance on records.", order: 106 },
     { key: "settings", label: "Settings", description: "Organization settings.", order: 110 },
     { key: "users_roles", label: "Users & roles", description: "Who can sign in, what their role allows, and where they may operate.", order: 120 },
 ] as const);
@@ -166,6 +194,8 @@ const GROUP_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
     reports: "reports",
     scheduling: "scheduling",
     settings: "settings",
+    integrations: "integrations",
+    ai: "ai",
     config: "configuration",
     fields: "configuration",
     layouts: "configuration",
@@ -220,6 +250,34 @@ const ROW_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
      * organization preferences, which is the precise confusion the override was written to prevent.
      */
     "settings.users_roles": "users_roles",
+    /*
+     * THE `operations` AND `scheduling` GROUPS ARE SHARED, so these are row overrides rather than
+     * group mappings. Attendance, Work and Jobs all carry `operations`; Tours carries `scheduling`.
+     * Mapping at the group grain would have swept unrelated legacy `ops.*` rows into a current
+     * product area, which is the flattering name this file's header refuses.
+     */
+    attendance: "attendance",
+    "attendance.record": "attendance",
+    "attendance.record.assigned_only": "attendance",
+    "attendance.devices": "attendance",
+    "work.configure": "work",
+    "work.operate": "work",
+    "tours.configure": "tours",
+    "tours.book": "tours",
+    /*
+     * `ops.jobs` is CURRENT, not legacy: `ops.jobs.write` is the declared owner of twelve route
+     * handlers across jobs, vendor assignment and job discounts. The rest of the `ops.*` family is
+     * dormant and is deliberately NOT mapped — a dormant key does not earn a product area by sharing
+     * a prefix with a live one.
+     */
+    "ops.jobs": "jobs",
+    /*
+     * `ops.messaging` is the LEGACY ALIAS of the communications send authority
+     * (`LEGACY_MESSAGING_SEND_PERMISSION_ALIAS`). It is enforced, so hiding it would remove reach an
+     * organization can still grant; it is messaging, so Communications is its truthful home rather
+     * than an invented one. Recorded for the Director as an alias, not a second product.
+     */
+    "ops.messaging": "communications",
     "admin.users": "users_roles",
     "admin.roles": "users_roles",
     "admin.access_scope": "users_roles",
