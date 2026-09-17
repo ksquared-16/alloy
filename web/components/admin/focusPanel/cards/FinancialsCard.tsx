@@ -10,6 +10,11 @@ import {
     type CollectionRail,
 } from "@/lib/financials/payments/collectionLifecycle";
 import ApprovedFinancialsCard, { AccountSummaryPending } from "@/components/operationalCards/FinancialsCard";
+import {
+    useRegisterFinancialCommandHost,
+    type FinancialCommandRequest,
+} from "@/components/financials/FinancialCommandChannel";
+import { executeFinancialCommand } from "@/lib/financials/commands/financialTransactionCommands";
 import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
 import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
@@ -1313,61 +1318,40 @@ export default function FinancialsCard({
      */
     const runRowAction = useCallback(
         async (
-            actionKey: "charge.post" | "charge.reverse",
+            actionKey: "post" | "reverse",
             row: { chargeId: string; description: string | null; subjectMemberId: string | null },
         ) => {
             if (running) return;
             setRunning(true);
             setCommandError(null);
-            try {
-                const res = await fetch("/api/admin/actions/execute", {
-                    method: "POST",
-                    headers: { "content-type": "application/json" },
-                    credentials: "include",
-                    body: JSON.stringify({
-                        action_key: actionKey,
-                        entity_type: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
-                        /*
-                         * The ROW's own subject when it has one, and the panel's when it does not.
-                         *
-                         * This sent an EMPTY STRING for a household charge, on the reasoning that a
-                         * family expense must not be attributed to one sibling and that neither
-                         * action requires an entity — `charge.post` and `charge.reverse` both
-                         * declare `requiresEntityId: false`. The reasoning is right about
-                         * attribution and wrong about the route: `/api/admin/actions/execute`
-                         * refuses any request without an entity id, so Post and Reverse on a
-                         * household charge answered 400 and the operator could not act on a
-                         * pre-enrolment fee at all. Found by driving the route the way this card
-                         * does; the action definitions alone say the call is legal.
-                         *
-                         * The charge_id in the payload is what decides which charge is posted or
-                         * reversed, and the service reads the row's own billable source — so the
-                         * fallback subject travels as request context, not as the money's
-                         * attribution. `posted_by` still records the operator, and the charge stays
-                         * on the household it was billed to.
-                         */
-                        entity_id: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
-                        mode: "execute",
-                        confirmation: { confirmed: true },
-                        payload: {
-                            charge_id: row.chargeId,
-                            charge_label: row.description ?? row.chargeId,
-                            ...(actionKey === "charge.reverse" ? { kind: "reversal" } : {}),
-                        },
-                    }),
-                });
-                const json = (await res.json()) as { ok?: boolean; error?: string | { message?: string } };
-                if (!json?.ok) {
-                    const err = typeof json?.error === "string" ? json.error : json?.error?.message;
-                    // The domain refusing is an answer. Surfaced, never swallowed.
-                    setCommandError(err || "That could not be done.");
-                }
-            } catch {
-                setCommandError("The request could not be sent.");
-            } finally {
-                setRunning(false);
-                await load();
-            }
+            /*
+             * THROUGH THE SHARED AUTHORITY. This built its own request to
+             * `/api/admin/actions/execute`; so did the reverse preview below it, and so would the
+             * workspace ledger if it were given commands of its own. One executor means one idea of
+             * what a refusal looks like and one place a financial action is spelled.
+             *
+             * The entity rule that lives here is request CONTEXT, not attribution: the route refuses
+             * a call without an entity id, while `charge_id` in the payload is what decides which
+             * charge is acted on. A household charge therefore travels with the panel's subject and
+             * still stays on the household it was billed to.
+             */
+            const result = await executeFinancialCommand({
+                action: actionKey,
+                entity: {
+                    entityType: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
+                    entityId: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
+                },
+                mode: "execute",
+                payload: {
+                    charge_id: row.chargeId,
+                    charge_label: row.description ?? row.chargeId,
+                    ...(actionKey === "reverse" ? { kind: "reversal" } : {}),
+                },
+            });
+            // The domain refusing is an answer. Surfaced, never swallowed.
+            if (!result.ok) setCommandError(result.error);
+            setRunning(false);
+            await load();
         },
         [load, running, chargeInvocation],
     );
@@ -1592,45 +1576,46 @@ export default function FinancialsCard({
         setReverseCharge(args);
     }, [closeAdjustPanels, closeMovePanels]);
 
+    /*
+     * ── THIS CARD IS THE COMMAND HOST ──────────────────────────────────────────────────────────
+     *
+     * Financials → Accounts renders this card above its own ledger, as siblings. The ledger's rows
+     * carry the same action icons as Details and must raise the same commands — so rather than the
+     * workspace growing a Reverse of its own, it asks, and this card performs. One command model,
+     * one eligibility model, one execution path, two presentation hosts.
+     *
+     * Registered only where a host actually provides the channel; in the Focus Panel there is none,
+     * and this is inert.
+     */
+    const handleCommandRequest = useCallback(
+        (request: FinancialCommandRequest) => {
+            if (request.kind === "adjust") openAdjustForCharge({ chargeId: request.chargeId });
+            else if (request.kind === "reverse") openReverseCharge({ chargeId: request.chargeId, label: request.label });
+            else if (request.kind === "post") void runRowAction("post", rowForCharge(request.chargeId));
+        },
+        [openAdjustForCharge, openReverseCharge, rowForCharge, runRowAction],
+    );
+    useRegisterFinancialCommandHost(handleCommandRequest);
+
     const previewReverseCharge = useCallback(async () => {
         if (!reverseCharge || running) return;
         setRunning(true);
         setReverseChargeError(null);
-        try {
-            const row = rowForCharge(reverseCharge.chargeId);
-            const res = await fetch("/api/admin/actions/execute", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({
-                    action_key: "charge.reverse",
-                    entity_type: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
-                    entity_id: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
-                    mode: "preview",
-                    payload: {
-                        charge_id: reverseCharge.chargeId,
-                        charge_label: reverseCharge.label,
-                        kind: "reversal",
-                    },
-                }),
-            });
-            const json = (await res.json()) as {
-                ok?: boolean;
-                error?: string | { message?: string };
-                data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
-            };
-            const p = json?.data?.execution_result?.preview;
-            if (!json?.ok || !p?.summary) {
-                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
-                setReverseChargeError(err || "This reversal could not be previewed.");
-                return;
-            }
-            setReverseChargePreview({ summary: p.summary, changes: p.changes ?? [] });
-        } catch (e) {
-            setReverseChargeError(e instanceof Error ? e.message : String(e));
-        } finally {
-            setRunning(false);
-        }
+        const row = rowForCharge(reverseCharge.chargeId);
+        /* The preview is the ACTION's, fetched through the one executor. */
+        const result = await executeFinancialCommand({
+            action: "reverse",
+            entity: {
+                entityType: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
+                entityId: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
+            },
+            mode: "preview",
+            payload: { charge_id: reverseCharge.chargeId, charge_label: reverseCharge.label, kind: "reversal" },
+        });
+        if (!result.ok) setReverseChargeError(result.error);
+        else if (!result.preview) setReverseChargeError("This reversal could not be previewed.");
+        else setReverseChargePreview(result.preview);
+        setRunning(false);
     }, [chargeInvocation, reverseCharge, rowForCharge, running]);
 
     const confirmReverseCharge = useCallback(async () => {
@@ -1638,7 +1623,7 @@ export default function FinancialsCard({
         const target = reverseCharge;
         setReverseCharge(null);
         setReverseChargePreview(null);
-        await runRowAction("charge.reverse", rowForCharge(target.chargeId));
+        await runRowAction("reverse", rowForCharge(target.chargeId));
         // The original stays posted; what changed is that a corrective line now references it.
         setAdjustNotice(`Reversed ${target.label}. The original charge stays on the record, with its correction beside it.`);
     }, [reverseCharge, reverseChargePreview, rowForCharge, runRowAction, running]);
@@ -2939,7 +2924,7 @@ export default function FinancialsCard({
                     /* Only offered where an enrolment exists: the action is scoped to an agreement. */
                     onAddAdjustment={adjustableSubjects.length > 0 ? openAddAdjustment : undefined}
                     onReverseAdjustment={openReverseAdjustment}
-                    onPostCharge={({ chargeId }) => void runRowAction("charge.post", rowForCharge(chargeId))}
+                    onPostCharge={({ chargeId }) => void runRowAction("post", rowForCharge(chargeId))}
                     onReverseCharge={openReverseCharge}
                     /*
                      * Reverse and Adjust are NOT two names for one operation and are not offered as
@@ -3550,7 +3535,7 @@ export default function FinancialsCard({
                                                                     data-financials-row-command="charge.post"
                                                                     data-financials-row-charge={row.chargeId}
                                                                     disabled={running}
-                                                                    onClick={() => void runRowAction("charge.post", row)}
+                                                                    onClick={() => void runRowAction("post", row)}
                                                                 >
                                                                     Post
                                                                 </button>
@@ -3561,7 +3546,7 @@ export default function FinancialsCard({
                                                                     data-financials-row-command="charge.reverse"
                                                                     data-financials-row-charge={row.chargeId}
                                                                     disabled={running}
-                                                                    onClick={() => void runRowAction("charge.reverse", row)}
+                                                                    onClick={() => void runRowAction("reverse", row)}
                                                                 >
                                                                     Reverse
                                                                 </button>

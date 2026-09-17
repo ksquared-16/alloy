@@ -1647,3 +1647,73 @@ describe("F39 · two modes of one command share one geometry", () => {
         expect(button.slice(0, 400), "and equal height whatever the host is").toMatch(/min-height:/);
     });
 });
+
+describe("F40 · one command authority, two presentation hosts", () => {
+    /*
+     * ── THE CONVERGENCE THIS LOCK EXISTS TO HOLD ──────────────────────────────────────────────
+     *
+     * Financials → Accounts and the Focus Panel's Details show the same ledger, and an operator must
+     * be able to do the same things to a transaction on both. The cheap way to deliver that is to
+     * give the workspace its own Reverse, its own Post and its own eligibility rule — and then the
+     * product has two writers that drift, and eventually two different answers about one charge.
+     *
+     * So: eligibility, the canonical action keys and the single execution path live in
+     * `lib/financials/commands`. The workspace REQUESTS; the card PERFORMS. These assertions are
+     * about that architecture, not about filenames or attribute spellings.
+     */
+    const WORKSPACE = "app/adminV2/financials/FinancialsAccountWorkspaceDetail.tsx";
+
+    it("keeps every financial mutation out of the workspace ledger", () => {
+        const ws = code(WORKSPACE);
+        expect(ws, "the workspace executes no financial action of its own").not.toMatch(
+            /actions\/execute/,
+        );
+        expect(ws, "and imports no financial writer").not.toMatch(
+            /from "@\/lib\/financials\/(chargeLifecycle|childcareCharge|reductions|payment)/,
+        );
+        for (const writer of ["postChildcareCharge", "reverseChildcareCharge", "writeTemplateDraftCharge"]) {
+            expect(ws, `${writer} is not called from a presentation host`).not.toContain(writer);
+        }
+    });
+
+    it("does not let the workspace decide what a transaction may do", () => {
+        const ws = code(WORKSPACE);
+        /* Eligibility comes from the shared model, never re-derived from a status string here. */
+        expect(ws).toMatch(/financialTransactionEligibility\(/);
+        expect(ws, "no local eligibility rule").not.toMatch(
+            /(lifecycleStatus|status)\s*===\s*"(posted|draft)"\s*&&/,
+        );
+    });
+
+    it("raises commands through the host that owns them", () => {
+        const ws = code(WORKSPACE);
+        expect(ws, "the ledger asks").toMatch(/useFinancialCommandChannel\(/);
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card, "and the card registers as the performer").toMatch(/useRegisterFinancialCommandHost\(/);
+        const accounts = code("app/adminV2/financials/sections/FinancialsAccounts.tsx");
+        expect(accounts, "with one host around both siblings").toMatch(/<FinancialCommandHost>/);
+    });
+
+    it("executes through one path", () => {
+        /*
+         * The card used to build its own request three times over. Every financial command — preview
+         * and execute — now goes through the one executor, so a refusal means the same thing
+         * wherever it is raised.
+         */
+        const shared = code("lib/financials/commands/financialTransactionCommands.ts");
+        expect(shared).toMatch(/fetch\("\/api\/admin\/actions\/execute"/);
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card, "the card's row commands go through the shared executor").toMatch(
+            /executeFinancialCommand\(/,
+        );
+    });
+
+    it("spells each canonical action once", () => {
+        const shared = code("lib/financials/commands/financialTransactionCommands.ts");
+        for (const key of ["charge.post", "charge.reverse", "billing.adjust_account"]) {
+            expect(shared, `${key} is named in the shared authority`).toContain(key);
+        }
+        const ws = code(WORKSPACE);
+        expect(ws, "and the workspace names none of them as an action_key").not.toMatch(/action_key/);
+    });
+});
