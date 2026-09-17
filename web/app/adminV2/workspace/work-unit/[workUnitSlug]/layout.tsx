@@ -1,10 +1,9 @@
 import WorkUnitSlugRouteHost from "@/components/admin/workspace/WorkUnitSlugRouteHost";
-import RouteTimingSeed from "@/components/admin/workspace/RouteTimingSeed";
 import { loadWorkUnitSlugRouteMetaServer } from "@/lib/admin/loadWorkUnitSlugRouteServer";
 import {
     routeTimingEnabled,
+    recordRouteTiming,
     timedSpan,
-    type RouteTimingMarks,
 } from "@/lib/perf/routeTimingDiagnostic";
 
 type LayoutProps = {
@@ -51,22 +50,24 @@ export default async function OperatorWorkUnitSlugLayout({ children, params }: L
 
     const [initialRouteMeta, routeMetaMs] = await timedSpan(loadWorkUnitSlugRouteMetaServer(workUnitSlug));
 
-    const marks: RouteTimingMarks | null = timing
-        ? {
-              layout_entry_epoch_ms: layoutEntryEpochMs,
-              route_meta_ms: Math.round(routeMetaMs),
-              // The compose no longer happens here — it moved to the page segment, which is the only
-              // boundary that can see which subject was asked for.
-              compose_wall_ms: 0,
-              layout_total_ms: Math.round(performance.now() - layoutStarted),
-              seeded: false,
-          }
-        : null;
+    /*
+     * THE LAYOUT REPORTS ONLY WHAT THE LAYOUT DOES (Slice 12A).
+     *
+     * It used to emit `compose_wall_ms: 0` and `seeded: false` as literals, with a comment noting the
+     * compose had moved to the page segment. Those were not measurements — they were a stale authority
+     * that would have reported the route's most expensive operation as costing nothing the moment the
+     * flag was switched on. The page now owns both fields, and the layout records only its own spans
+     * into the shared request-scoped collector.
+     */
+    recordRouteTiming({
+        layout_entry_epoch_ms: layoutEntryEpochMs,
+        route_meta_ms: Math.round(routeMetaMs),
+        layout_total_ms: Math.round(performance.now() - layoutStarted),
+    });
 
     return (
         <>
             <WorkUnitSlugRouteHost workUnitSlug={workUnitSlug} initialRouteMeta={initialRouteMeta} />
-            <RouteTimingSeed marks={marks} />
             {/* The page segment owns provisioning composition and the seed — it is the only server
                 boundary that receives `searchParams`, so only it can compose the subject the URL
                 actually asked for. It renders no UI; without `children` it would never mount. */}

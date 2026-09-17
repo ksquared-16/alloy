@@ -18,6 +18,8 @@
  * flag must be set for the build, not only for the server process.
  */
 
+import { cache } from "react";
+
 export const ROUTE_TIMING_SCRIPT_ID = "__alloy_route_timing";
 export const ROUTE_TIMING_HEADER_T0 = "x-alloy-mw-t0";
 export const ROUTE_TIMING_HEADER_AUTH_MS = "x-alloy-mw-auth-ms";
@@ -31,13 +33,93 @@ export type RouteTimingMarks = {
     layout_entry_epoch_ms: number;
     /** Route-identity/meta resolve, measured on its own even though it runs concurrently. */
     route_meta_ms: number;
-    /** Provisioning compose WALL time — includes the identity resolution that precedes `timings.t0`. */
-    compose_wall_ms: number;
-    /** Both of the above joined (they run under one `Promise.all`, so this is the max, not the sum). */
+    /** The layout's own wall time. It no longer composes, so this is route-meta plus its own render. */
     layout_total_ms: number;
-    /** Whether this request seeded an answer at all (a deep link resolves to null). */
+
+    // ── PAGE SEGMENT — the boundary that actually composes (Slice 12A) ───────────────────────────
+    /** Wall-clock epoch at page entry — subtract `layout_entry_epoch_ms` for the layout→page gap. */
+    page_entry_epoch_ms: number;
+    /**
+     * The REAL awaited `composeProvisioningAnswerForRoute` duration, measured where it happens.
+     *
+     * Until Slice 12A this was a literal `0` emitted by the layout, which had stopped composing —
+     * a precise, confident, wrong number for the single most expensive operation on the route.
+     */
+    compose_wall_ms: number;
+    /** Whether the PAGE actually produced an answer to seed (a gate failure / error terminal → false). */
     seeded: boolean;
+    /** The page segment's whole wall time, compose included. */
+    page_total_ms: number;
+
+    /**
+     * The compose's own internal sections, surfaced rather than re-timed.
+     *
+     * `composeWorkUnitProvisioningAnswer` has always carried `ProvisioningTimings`; it simply never
+     * reached the document, so no cold-load harness could see inside the compose. These are those
+     * numbers, verbatim — scattering a second set of timers over the same code would have created
+     * two authorities that can disagree, which is the defect this slice exists to remove.
+     */
+    /**
+     * The compose's own `total_ms`, available from BOTH composers.
+     *
+     * A contextual answer measures only this, so it is carried separately from `compose_sections`:
+     * the sections being null means "this composer has no breakdown", not "the breakdown was zero".
+     */
+    compose_total_ms: number | null;
+
+    compose_sections: {
+        authorization_ms: number;
+        work_unit_ms: number;
+        configuration_ms: number;
+        presentation_ms: number;
+        records_ms: number;
+        projection_ms: number;
+        composition_ms: number;
+        total_ms: number;
+        /** Named sub-spans inside composition, when the compose recorded any. */
+        spans?: Record<string, number>;
+    } | null;
+
+    /**
+     * When `focusPanelSummaryDoc` became available, measured from compose start (P0-7.6 item 13).
+     *
+     * DIAGNOSTIC ONLY. This slice does not decouple, flush or stream the published composition; it
+     * only answers how early it *could* be available if a later slice did.
+     */
+    composition_ready_ms: number | null;
 };
+
+/**
+ * THE ONE TIMING PAYLOAD FOR THIS ROUTE — collected across two server boundaries, emitted once.
+ *
+ * The layout and the page are separate server components with no prop channel between them (the
+ * page arrives as `children`), and both hold numbers the other cannot see. Rather than emit two
+ * script tags that a consumer must reconcile — the shape that let a stale layout field survive as an
+ * authority for work it no longer did — both write into one request-scoped collector and the PAGE
+ * emits it, because the page is the boundary that finishes last and owns the compose.
+ *
+ * `cache()` is the codebase's existing request-scoping mechanism (see `resolveWorkUnitRouteIdentity`),
+ * so the collector is per-request and needs no global.
+ */
+export const routeTimingCollector = cache((): { marks: Partial<RouteTimingMarks> } => ({ marks: {} }));
+
+/** Record one boundary's marks. Cheap and inert when the flag is off. */
+export function recordRouteTiming(partial: Partial<RouteTimingMarks>): void {
+    if (!routeTimingEnabled()) return;
+    Object.assign(routeTimingCollector().marks, partial);
+}
+
+/**
+ * The collected payload, or null when the flag is off or nothing was recorded.
+ *
+ * Returns what was ACTUALLY recorded. A boundary that did not run contributes no field, and the
+ * consumer sees its absence rather than a zero that reads like a measurement.
+ */
+export function collectedRouteTiming(): Partial<RouteTimingMarks> | null {
+    if (!routeTimingEnabled()) return null;
+    const { marks } = routeTimingCollector();
+    return Object.keys(marks).length > 0 ? marks : null;
+}
 
 /** Time a promise without changing its result or its rejection behaviour. */
 export async function timedSpan<T>(promise: Promise<T>): Promise<[T, number]> {
