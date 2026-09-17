@@ -1445,3 +1445,55 @@ describe("F34 · a command control is hosted by the platform card", () => {
         expect(command.indexOf("{modeSlot}"), "the slot is inside the card").toBeGreaterThan(cardStart);
     });
 });
+
+describe("F35 · an unanswered subject is not an absent account", () => {
+    /*
+     * ── THE DEPLOYED BUILD SAID THE OPPOSITE FOR 235 MILLISECONDS ─────────────────────────────
+     *
+     * Financials → Accounts on staging, a healthy household, frame by frame:
+     *
+     *   +4452ms  h=93  stats=3  "CURRENT BALANCE — Reading the account…"
+     *   +4687ms  h=67  stats=0  "Financial account unavailable"
+     *   +4707ms  h=93  stats=3  "… Reading the account…"
+     *   +7035ms  h=93  stats=3  "$0.00  DUE $0.00  PAST DUE None  Payment Add"
+     *
+     * "No account" was inferred from `!vm && !loading`. On a host that bootstraps its own read
+     * there is a paint where the subject is chosen, `vm` is cleared and `load()` has not started,
+     * so `loading` is still false — nobody has asked yet, which is not the same as having asked and
+     * been told there is nothing. On a financial surface that sentence is a verdict.
+     */
+    it("waits for an answer before claiming there is no account", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card, "the card knows which subject a read has answered for").toMatch(
+            /answeredKeyRef\.current = answeringKey/,
+        );
+        expect(card).toMatch(
+            /awaitingFirstAnswer\s*=\s*subjectKey != null && answeredKeyRef\.current !== subjectKey/,
+        );
+        /* And the render's pending branch honours it, not just the reserve. */
+        expect(card).toMatch(
+            /loading \|\| subjectStillResolving \|\| provisioningAccount \|\| awaitingFirstAnswer \?/,
+        );
+    });
+
+    it("records the answer whatever the answer was", () => {
+        /*
+         * If it were recorded only on success, a subject that genuinely has no account would wait
+         * forever and the honest "unavailable" sentence would become unreachable. The ref is set in
+         * the `finally`, before the spinner clears — that frame is the one that decides.
+         */
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        const fin = card.slice(card.indexOf("} finally {"));
+        const answered = fin.indexOf("answeredKeyRef.current = answeringKey");
+        const cleared = fin.indexOf("setLoading(false)");
+        expect(answered, "the answer is recorded in the finally").toBeGreaterThan(-1);
+        expect(answered, "and before the spinner clears").toBeLessThan(cleared);
+    });
+
+    it("still reaches the honest unavailable sentence", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(card, "the terminal sentence is not deleted, only gated").toContain(
+            "Financial account unavailable",
+        );
+    });
+});

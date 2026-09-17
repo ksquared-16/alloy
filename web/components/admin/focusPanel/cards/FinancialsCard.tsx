@@ -144,6 +144,14 @@ export default function FinancialsCard({
      * always its owner.
      */
     const deepLoadedForRef = useRef<string | null>(null);
+    /**
+     * WHICH SUBJECT A READ HAS ANSWERED FOR — not which one produced an account.
+     *
+     * `deepLoadedForRef` records a SUCCESSFUL deep read, so it cannot answer "has anyone asked about
+     * this subject yet". That difference is what put a terminal sentence on a healthy account: see
+     * `awaitingFirstAnswer` below.
+     */
+    const answeredKeyRef = useRef<string | null>(null);
     const [loading, setLoading] = useState(false);
     /*
      * ONE overlay at a time, and the Focus Panel's OWN depth layer renders it.
@@ -308,6 +316,7 @@ export default function FinancialsCard({
             setVm(null);
             return;
         }
+        const answeringKey = customerId ?? scopedMemberId ?? null;
         const seq = (requestSeq.current += 1);
         const current = () => seq === requestSeq.current;
         setLoading(true);
@@ -325,9 +334,17 @@ export default function FinancialsCard({
             setVm(null);
         } finally {
             // A superseded request must not clear the spinner belonging to the one that replaced it.
-            if (current()) setLoading(false);
+            if (current()) {
+                /*
+                 * THIS SUBJECT HAS NOW BEEN ANSWERED — whatever the answer was. Recorded before the
+                 * spinner clears, because the frame after `setLoading(false)` is exactly the one
+                 * that decides between "still reading" and "no account".
+                 */
+                answeredKeyRef.current = answeringKey;
+                setLoading(false);
+            }
         }
-    }, [requestQuery]);
+    }, [customerId, requestQuery, scopedMemberId]);
 
     /*
      * ── MOVING MONEY BETWEEN OBLIGATIONS ─────────────────────────────────────────────────────────
@@ -899,7 +916,34 @@ export default function FinancialsCard({
      * and nothing else. Both intents survive: the collapse is still removed while the account
      * resolves, and staging's new answers are still allowed to be answers.
      */
-    const reservingAccount = !vm && !deniedRead && (loading || subjectStillResolving || provisioningAccount);
+    /*
+     * ── A SUBJECT NOBODY HAS ANSWERED FOR IS NOT AN ABSENT ACCOUNT ─────────────────────────────
+     *
+     * Measured on the deployed build, Financials → Accounts, a healthy household:
+     *
+     *   +4452ms  h=93  stats=3  "CURRENT BALANCE — Reading the account…"
+     *   +4687ms  h=67  stats=0  "Financial account unavailable"        ← for 235ms
+     *   +4707ms  h=93  stats=3  "… Reading the account…"
+     *   +7035ms  h=93  stats=3  "$0.00  DUE $0.00  PAST DUE None  Payment Add"
+     *
+     * The card told an operator the account was unavailable, took it back a fifth of a second
+     * later, and then showed them the account. On a financial surface that sentence is a verdict,
+     * and it was wrong.
+     *
+     * The cause is a gap, not a race in the read: "no account" was inferred from `!vm && !loading`,
+     * and on a host that bootstraps its own read there is a paint where the subject is chosen, `vm`
+     * is cleared, and `load()` has not started yet — so `loading` is still false. Nobody has asked
+     * about this subject; that is not the same as having asked and been told there is nothing.
+     *
+     * `answeredKeyRef` is what closes it: set in `load()`'s `finally`, for the key that was
+     * requested, whatever the answer was. Before an answer the card waits; after an answer with no
+     * account, "unavailable" is still reached and still correct.
+     */
+    const subjectKey = customerId ?? scopedMemberId ?? null;
+    const awaitingFirstAnswer = subjectKey != null && answeredKeyRef.current !== subjectKey;
+
+    const reservingAccount =
+        !vm && !deniedRead && (loading || subjectStillResolving || provisioningAccount || awaitingFirstAnswer);
 
     /*
      * ── A FLOOR IS FOR A COLLAPSE, AND THE ACCOUNT VARIANT NO LONGER COLLAPSES ──────────────────
@@ -3037,7 +3081,7 @@ export default function FinancialsCard({
                         <p className="alloy-os-financials__empty" data-financials-empty="permission">
                             You do not have permission to view financial information.
                         </p>
-                    ) : loading || subjectStillResolving || provisioningAccount ? (
+                    ) : loading || subjectStillResolving || provisioningAccount || awaitingFirstAnswer ? (
                         /*
                          * The committed anatomy, with placeholders where values will land — never a
                          * number and never a zero, because a placeholder mistaken for $0.00 is
