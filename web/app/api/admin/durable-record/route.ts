@@ -9,6 +9,7 @@ import { composeDurablePersonSubject } from "@/lib/adminV2/runtime/focusPanel/du
 import { composeDurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurableChildSubject";
 import { composeDurableHouseholdSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurableHouseholdSubject";
 import { composeDurableChildScheduling } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurableChildScheduling";
+import { composeDurableChildStageWork } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurableChildStageWork";
 import { composeDurableStaffScheduling } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurableStaffScheduling";
 import {
     focusPanelWorkModeModelFromDurableChild,
@@ -252,9 +253,44 @@ export async function GET(request: NextRequest) {
               })
             : null;
 
+        /*
+         * THE CHILD'S OWN STAGE WORK, composed here for the same reason the schedule is: the card
+         * must reveal WITH the record rather than open a loading gate, and the host must not be the
+         * thing that decides what a child's process is. Composed only when the child actually has a
+         * journey at a stage; null is an answer, and a failure costs the Process card, never the
+         * record.
+         */
+        const stageWork = await composeDurableChildStageWork({
+            supabase,
+            orgId: ctx.orgId,
+            customerMemberId: subjectId,
+        }).catch((e) => {
+            console.error("[durable-record] child stage work composition failed", e);
+            return null;
+        });
+
         return NextResponse.json({
             ok: true,
             model: encodeDurableRecordModel(model),
+            /*
+             * The child's OWN process position and work, in the shape the client's operational
+             * context takes. Mapped here rather than shipped whole: the composer's result carries
+             * addressing the browser has no use for (department, opportunity, episode), and a wire
+             * shape that carries only what the context needs cannot grow a second meaning.
+             */
+            stageWork: stageWork
+                ? {
+                      processKey: stageWork.processKey,
+                      processLabel: null,
+                      stageKey: stageWork.stageKey,
+                      // The stage's operator-facing name as the projection resolved it — never a
+                      // title-cased key.
+                      stageLabel: stageWork.slice.stage_work_runtime?.stage_label ?? null,
+                      opportunityCustomerMemberId: stageWork.opportunityCustomerMemberId,
+                      stageWorkRuntime: stageWork.slice.stage_work_runtime,
+                      publishedStageInputs: stageWork.slice.published_stage_inputs,
+                  }
+                : null,
             // The composed child, carried so the CONTEXTUAL card can resolve its configured field
             // values without a second round trip. It is the same object the model was built from —
             // not a re-read, which could disagree with the panel rendered beside it.

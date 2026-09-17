@@ -100,7 +100,32 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * retired card's name. The runtime card already renders its configured process name; this is
      * the identity an operator picks it by.
      */
-    { key: "business_process", title: "Business Process", ownsWorkCompletion: true },
+    /*
+     * ── AND `child`, BECAUSE A CHILD RUNS A PROCESS OF THEIR OWN ──
+     *
+     * It was silent, which `DEFAULT_CARD_GRAINS` reads as case-only, and that was right while only a
+     * case had a stage. It is not right any more: a child moved to Enrolling through the real
+     * Decision path carries an explicit `process_instances.stage_key`, a published operating plan and
+     * a bound operator action — their own position in the process, not a projection of the family's.
+     * Measured: the case sat at Decision while the child sat at Enrolling, so the case card correctly
+     * refused the child's work and no other card could claim it.
+     *
+     * It clears the truthfulness bar at the child grain for the reason the card demands: the evidence
+     * comes from the CHILD's own journey (`composeDurableChildStageWork` resolves the child's stage
+     * and `resolveOpportunityStageWorkSlice` projects that stage's work for that participant), so the
+     * same card, the same renderer and the same evidence builder answer "where is this subject in the
+     * process" — only the producer of the subject differs. Declaring it is what lets the child record
+     * host the card instead of growing a second, smaller Enrollment card of its own.
+     *
+     * NOT declared for `household`: a family with two enrollments has two stages, so any single one
+     * would be a claim about the family that is true of at most one of its children.
+     */
+    {
+        key: "business_process",
+        title: "Business Process",
+        ownsWorkCompletion: true,
+        grains: ["opportunity", "child"],
+    },
     /**
      * Declared for the durable FAMILY as well as the case — and the declaration is what makes the
      * durable Household surface exist at all. Silence would have left it case-only by the

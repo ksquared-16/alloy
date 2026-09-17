@@ -49,13 +49,15 @@ import SchedulingCard from "@/components/admin/focusPanel/cards/SchedulingCard";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
 import { FocusPanelSummaryDocProvider } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
-import { buildChildrenCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { buildChildrenCardModel, buildCurrentWorkCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { DurableChildStageWorkContextInput } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildStageWorkContextInput";
 import { buildDurableChildFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/durableSubject/buildDurableChildFocusPanelMutation";
 import { derivePersonStaffCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
 import type { DurablePersonSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durablePersonSubjectModel";
 import { buildDurablePersonOperationalContext } from "@/lib/adminV2/runtime/focusPanel/durableSubject/focusPanelWorkModeModelFromDurableSubject";
 import DurableHouseholdContextCard from "@/components/presentation/durableRecord/DurableHouseholdContextCard";
-import { cardAppliesToGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
+import { cardAppliesToGrain, resolveCardIdentity } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import { DURABLE_STAFF_SUBJECT_KEY } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableStaffSchedulingSubject";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { deriveSchedulingCardModel } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveSchedulingCardModel";
@@ -126,6 +128,7 @@ export default function DurableRecordContextualCard({
     option,
     subject,
     schedulingProjection,
+    stageWork,
     onSaved,
 }: {
     option: DurableRecordContextOption;
@@ -135,6 +138,11 @@ export default function DurableRecordContextualCard({
      * when the subject holds no commitment — which is a state, not a failure.
      */
     schedulingProjection?: SchedulingProjectionFirstPaint | null;
+    /**
+     * The child's OWN process position and work. Absent means the child runs no process, which is
+     * ordinary — a child added from a phone call has a record long before they have a journey.
+     */
+    stageWork?: DurableChildStageWorkContextInput | null;
     /** Fired after a successful write so the list underneath can refresh this row. */
     onSaved?: () => void;
 }) {
@@ -194,7 +202,7 @@ export default function DurableRecordContextualCard({
                 },
             } as unknown as OperationalContext;
         }
-        const base = buildDurableChildOperationalContext(childSubject, true, null);
+        const base = buildDurableChildOperationalContext(childSubject, true, null, stageWork ?? null);
         return {
             ...base,
             truth: {
@@ -212,7 +220,7 @@ export default function DurableRecordContextualCard({
                 _scheduling_projection: schedulingProjection ?? null,
             },
         };
-    }, [subject, childSubject, schedulingProjection]);
+    }, [subject, childSubject, schedulingProjection, stageWork]);
 
     /*
      * THE CARD'S ACTIONS, on a host that has no case.
@@ -334,6 +342,67 @@ export default function DurableRecordContextualCard({
     };
 
     /*
+     * ── THE CHILD'S OWN PROCESS, IN THE CARD THE CASE USES ──
+     *
+     * Not a second Enrollment card and not a child-shaped copy of one: `FocusPanelCardRenderer`
+     * mounts `BusinessProcessCard`, against the same `OperationalContext` contract, reading the same
+     * published stage work. The difference between this and the case host is the SUBJECT — which is
+     * the whole point. The case sits at Decision while the child sits at Enrolling, so the family
+     * card correctly refuses this work and only the child's own record can host it.
+     *
+     * The registry is the gate, exactly as it is for the Children card: the card reaches the child
+     * grain because the registry declares that it can. The successor key is asked for rather than
+     * written down, so the day Business Process is superseded again this follows.
+     */
+    const renderCanonicalProcessCard = () => {
+        if (!childSubject || !childMutation) return null;
+        // No stage, no card. A child with no journey has no process position, and a card that
+        // rendered anyway would assert one.
+        if (!operationalContext.businessProcess.stageKey) return null;
+        const processCardKey = resolveCardIdentity("current_work", "child");
+        if (!cardAppliesToGrain(processCardKey, "child")) return null;
+
+        const model: FocusPanelCardModel = {
+            ...buildCurrentWorkCardModel({
+                stageWorkRuntime: operationalContext.stageWorkRuntime ?? null,
+                nextActionLabel: null,
+            }),
+            key: processCardKey,
+            // The card renders its configured process name; this is only the fallback the renderer
+            // uses when configuration has not resolved one.
+            title: operationalContext.businessProcess.label ?? "Business Process",
+        };
+
+        return (
+            <div
+                data-contextual-card="child"
+                data-contextual-card-context={option.key}
+                data-contextual-card-canonical-card={processCardKey}
+                data-contextual-card-stage={operationalContext.businessProcess.stageKey}
+                data-contextual-card-layout-id={resolved?.layoutId ?? ""}
+                data-contextual-card-layout-version={resolved?.version ?? ""}
+                data-contextual-card-from-published={resolved?.doc != null ? "true" : "false"}
+            >
+                <FocusPanelSummaryDocProvider
+                    enabled
+                    businessProcessKey={option.businessProcessKey}
+                    workViewId={option.workViewId}
+                    stageKey={option.stageKey}
+                    statusKey={option.statusKey}
+                >
+                    <FocusPanelCardRenderer
+                        model={model}
+                        context={operationalContext}
+                        focusPanelMode="summary"
+                        mutation={childMutation}
+                        compat={{ onSelectTab: () => {} }}
+                    />
+                </FocusPanelSummaryDocProvider>
+            </div>
+        );
+    };
+
+    /*
      * ── A DURABLE OPERATIONAL RELATIONSHIP RENDERS THE PLATFORM'S OWN CARD ──
      *
      * Not a published composition — there is no business process behind a commitment, and inventing
@@ -411,6 +480,17 @@ export default function DurableRecordContextualCard({
          */
         if (option.kind === "identity" && childSubject) {
             return renderCanonicalChildCard();
+        }
+        /*
+         * THE PROCESS CONTEXT — where this child is, in the process they are actually running.
+         *
+         * This fell through to `return null`, which is why an Enrolling child's own record showed
+         * their name and nothing about their enrollment: the context resolved, the chip was active,
+         * and no branch claimed it. A process context is the one context that has a stage, so it is
+         * the one that has a Business Process card to render.
+         */
+        if (option.kind === "process" && subject.kind === "child") {
+            return renderCanonicalProcessCard();
         }
         return null;
     }

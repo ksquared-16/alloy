@@ -45,6 +45,7 @@ import {
 import type { DurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
 import type { DurablePersonSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durablePersonSubjectModel";
 import type { SchedulingProjectionFirstPaint } from "@/lib/adminV2/viewModel/drawer/opportunity/loadSchedulingProjectionsForFirstPaint";
+import type { DurableChildStageWorkContextInput } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildStageWorkContextInput";
 import {
     decodeDurableRecordModel,
     type DurableRecordModelWire,
@@ -81,6 +82,8 @@ type LoadState =
            * record so the Schedule card reveals WITH the panel rather than opening its own gate.
            */
           schedulingProjection: SchedulingProjectionFirstPaint | null;
+          /** The child's OWN process position and work, when they are running one. */
+          stageWork: DurableChildStageWorkContextInput | null;
       }
     | { status: "not_found" }
     | { status: "error"; message: string };
@@ -155,6 +158,7 @@ export default function DurableRecordSurface({
                       childSubject?: DurableChildSubject | null;
                       personSubject?: DurablePersonSubject | null;
                       schedulingProjection?: SchedulingProjectionFirstPaint | null;
+                      stageWork?: DurableChildStageWorkContextInput | null;
                       message?: string;
                   }
                 | null;
@@ -175,6 +179,7 @@ export default function DurableRecordSurface({
                     : null,
                 schedulingProjection:
                     (json.schedulingProjection ?? null) as SchedulingProjectionFirstPaint | null,
+                stageWork: (json.stageWork ?? null) as DurableChildStageWorkContextInput | null,
             });
             /*
              * WHICH CONTEXT OPENS FIRST.
@@ -503,6 +508,7 @@ export default function DurableRecordSurface({
                                     : { kind: "staff", person: state.personSubject! }
                             }
                             schedulingProjection={state.schedulingProjection}
+                            stageWork={state.stageWork}
                             /*
                              * A SAVE REFRESHES THIS RECORD, not only the list underneath it.
                              *

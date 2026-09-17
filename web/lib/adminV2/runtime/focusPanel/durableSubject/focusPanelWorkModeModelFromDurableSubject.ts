@@ -38,6 +38,7 @@ import {
     type DurableChildSubject,
 } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
 import { deriveHouseholdFocusPanelCards } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveHouseholdFocusPanelCards";
+import type { DurableChildStageWorkContextInput } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildStageWorkContextInput";
 import {
     DURABLE_HOUSEHOLD_GRAIN,
     type DurableHouseholdSubject,
@@ -143,21 +144,71 @@ export type FocusPanelWorkModeFromDurableChildInput = {
  * family's stage would put the household's process state on the child's identity record. Workstream E
  * decides what enrichment may truthfully say.
  */
+/**
+ * `businessProcess` WAS ALL-NULL HERE, AND THAT WAS THE LOSS.
+ *
+ * A child moved to Enrolling through the real Process carries an explicit `process_instances.
+ * stage_key`, and this builder — the one the durable child record composes with — threw it away and
+ * asserted the child had no process at all. Every card downstream that asks "which stage is this
+ * subject at" then correctly answered "none", so a child with published stage work, a published
+ * operating plan and a bound operator action had no surface that could render any of it.
+ *
+ * The rule the household path states still holds and is not weakened: a HOUSEHOLD with two
+ * enrollments has two stages, so any single stage would be a claim about the family that is true of
+ * at most one of its cases. A CHILD is the opposite — the child IS the participant, their stage is
+ * theirs alone, and it is explicit. So the child may carry one and the household still may not.
+ *
+ * `stageWork` is optional and absent means absent: a child with no journey keeps exactly the
+ * all-null shape this had before, rather than a fabricated process.
+ */
 export function buildDurableChildOperationalContext(
     subject: DurableChildSubject,
     canMutate: boolean,
     operationalHost: OperationalHostContext | null = null,
+    stageWork?: DurableChildStageWorkContextInput | null,
 ): OperationalContext {
+    const stageKey = stageWork?.stageKey?.trim() || null;
     return {
         grain: DURABLE_CHILD_GRAIN,
         subject: { type: "child", id: subject.memberId, label: subject.label },
-        businessProcess: { key: null, label: null, stageKey: null },
+        businessProcess: stageKey
+            ? {
+                  key: stageWork?.processKey?.trim() || null,
+                  // The operator-facing process name is the published plan's, never this builder's.
+                  label: stageWork?.processLabel?.trim() || null,
+                  stageKey,
+              }
+            : { key: null, label: null, stageKey: null },
         perspective: null,
         truth: subject.truth,
         signals: NOT_APPLICABLE_CASE_SIGNALS,
         operationalHost,
         capabilities: { canMutate, maskedChannels: false },
         status: "ready",
+        ...(stageWork?.stageWorkRuntime ? { stageWorkRuntime: stageWork.stageWorkRuntime } : {}),
+        ...(stageWork?.publishedStageInputs
+            ? { publishedStageInputs: stageWork.publishedStageInputs }
+            : {}),
+        /*
+         * THE PARTICIPANT THIS PANEL IS ABOUT. On a case host this is a scope HINT over a family;
+         * here the child IS the subject, so it is simply true — and it is what lets a child-grain
+         * command (the Enrolling send) resolve its subject without the host re-deriving one.
+         */
+        ...(stageWork?.opportunityCustomerMemberId
+            ? {
+                  participantScope: {
+                      participationId: stageWork.opportunityCustomerMemberId,
+                      customerMemberId: subject.memberId,
+                      personId: subject.personId,
+                      displayName: subject.label,
+                      imageUrl: null,
+                      stageKey,
+                      // The stage's operator-facing name is the published plan's; the scope carries
+                      // the identity and lets whoever renders it ask configuration for the word.
+                      stageLabel: stageWork?.stageLabel?.trim() || null,
+                  },
+              }
+            : {}),
     };
 }
 
