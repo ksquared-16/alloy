@@ -1,0 +1,235 @@
+{
+ "deployed_check": "slice8",
+ "subject": {
+  "active_row": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "body_subject": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "attendance_subject": "bf7bb266-31b3-4cb3-ad9e-77d94fee4d12",
+  "health_subject": "bf7bb266-31b3-4cb3-ad9e-77d94fee4d12",
+  "runtime_diag": {
+   "isChildSubject": true,
+   "entityType": "child",
+   "subjectGrain": {
+    "grain": "child",
+    "subjectType": "child"
+   },
+   "operationalSubjectId": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+   "familyOpportunityIdFromTruth": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+   "familyOpportunityIdFromSeed": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+   "settlementSubjectId": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+   "identitySeed": {
+    "title": "Wrigley Kurzman",
+    "statusLabel": "Waitlist",
+    "familyOpportunityId": "d097e1a8-c3c0-4c51-a113-2275b009b9a9"
+   },
+   "truthFamily": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+   "displayVmId": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+   "structureSettled": true,
+   "runtimeError": null,
+   "bookingCount": 1,
+   "activityCount": 24
+  }
+ },
+ "transport": {
+  "drawer_vm_requests": [
+   {
+    "url": "/api/admin/view-models/drawer/opportunity/d097e1a8-c3c0-4c51-a113-2275b009b9a9?attention_subject_id=9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+    "opportunityId": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+    "attention_subject_id": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8"
+   }
+  ],
+  "attention_present": true,
+  "transported_id": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+  "opportunity_id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+  "equals_row_entity": true,
+  "equals_member_id": false
+ },
+ "attendance": {
+  "token_sequence": [
+   {
+    "dt": 2820,
+    "v": null
+   }
+  ],
+  "text_sequence": [
+   {
+    "dt": 2820,
+    "v": null
+   },
+   {
+    "dt": 14743,
+    "v": "ATTENDANCE — TODAY No record No attendance recorded today This child has no active enrolment, so attendance cannot be recorded for"
+   }
+  ],
+  "final_token": null,
+  "final_text": "ATTENDANCE — TODAY No record No attendance recorded today This child has no active enrolment, so attendance cannot be recorded for"
+ },
+ "health": {
+  "token_sequence": [
+   {
+    "dt": 2820,
+    "v": null
+   }
+  ],
+  "text_sequence": [
+   {
+    "dt": 2820,
+    "v": null
+   },
+   {
+    "dt": 14743,
+    "v": "HEALTH & SAFETY REQUIRED INFORMATION Physical / health assessment Missing Immunization record Missing Health care plan Missing Med"
+   }
+  ],
+  "final_token": null,
+  "final_text": "HEALTH & SAFETY REQUIRED INFORMATION Physical / health assessment Missing Immunization record Missing Health care plan Missing Med"
+ },
+ "p0_2": {
+  "first_cards_ms": 14743,
+  "bp_present_ms": 14743,
+  "bp_meaningful_ms": 14743,
+  "bp_final": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolling Lennon Enrolled Sep 12 LEAD Waitlist · Manage w"
+ },
+ "p0_6": {
+  "cw": {
+   "first_mount": null,
+   "first_meaningful": null,
+   "final": null,
+   "transitions": [
+    {
+     "dt": 2820,
+     "v": null
+    }
+   ]
+  },
+  "bp": {
+   "first_mount": 14743,
+   "first_meaningful": 14743,
+   "final": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolling Lennon Enrolled Sep 12 LEAD Waitlist · Manage w",
+   "transitions": [
+    {
+     "dt": 2820,
+     "v": null
+    },
+    {
+     "dt": 14743,
+     "v": "BUSINESS PROCESS WAITLIST Waitlist · Manage waitlist candidates and spot offers. Tour ▾ Add family member Send form Offer spot"
+    },
+    {
+     "dt": 21591,
+     "v": "ENROLLMENT Lead Aug 7 Tour North Campus Decision Sep 12 Waitlist Wrigley Enrolling Lennon Enrolled Sep 12 LEAD Waitlist · Manage w"
+    }
+   ]
+  },
+  "fin": {
+   "first_mount": 14743,
+   "first_meaningful": 14743,
+   "final": "FINANCIALS CURRENT PERIOD September 2026 CHARGES NET OBLIGATION $43.00 Payments received $43.00 CURRENT BALANCE $0.00 Add charge →",
+   "transitions": [
+    {
+     "dt": 2820,
+     "v": null
+    },
+    {
+     "dt": 14743,
+     "v": "FINANCIALS CURRENT PERIOD September 2026 CHARGES NET OBLIGATION $43.00 Payments received $43.00 CURRENT BALANCE $0.00 Add charge →"
+    }
+   ]
+  },
+  "att": {
+   "first_mount": 14743,
+   "first_meaningful": 14743,
+   "final": "ATTENDANCE — TODAY No record No attendance recorded today This child has no active enrolment, so attendance cannot be recorded for",
+   "transitions": [
+    {
+     "dt": 2820,
+     "v": null
+    },
+    {
+     "dt": 14743,
+     "v": "ATTENDANCE — TODAY No record No attendance recorded today This child has no active enrolment, so attendance cannot be recorded for"
+    }
+   ]
+  },
+  "hs": {
+   "first_mount": 14743,
+   "first_meaningful": 14743,
+   "final": "HEALTH & SAFETY REQUIRED INFORMATION Physical / health assessment Missing Immunization record Missing Health care plan Missing Med",
+   "transitions": [
+    {
+     "dt": 2820,
+     "v": null
+    },
+    {
+     "dt": 14743,
+     "v": "HEALTH & SAFETY REQUIRED INFORMATION Physical / health assessment Missing Immunization record Missing Health care plan Missing Med"
+    }
+   ]
+  },
+  "hh": {
+   "first_mount": 21591,
+   "first_meaningful": 21591,
+   "final": "HOUSEHOLD Needs contact Kurzman household Updated Sep 12, 2026 KK Kelly Kurzman Primary kelly.kurzman@gmail.com (602) 290-4816 KK ",
+   "transitions": [
+    {
+     "dt": 2820,
+     "v": null
+    },
+    {
+     "dt": 21591,
+     "v": "HOUSEHOLD Needs contact Kurzman household Updated Sep 12, 2026 KK Kelly Kurzman Primary kelly.kurzman@gmail.com (602) 290-4816 KK "
+    }
+   ]
+  },
+  "kids": {
+   "first_mount": 21591,
+   "first_meaningful": 21591,
+   "final": "CHILDREN Needs info 17 children · 1 enrolled, 1 waitlisted 17 children need program & schedule Lennon Kurzman Enrolling North Camp",
+   "transitions": [
+    {
+     "dt": 2820,
+     "v": null
+    },
+    {
+     "dt": 21591,
+     "v": "CHILDREN Needs info 17 children · 1 enrolled, 1 waitlisted 17 children need program & schedule Lennon Kurzman Enrolling North Camp"
+    }
+   ]
+  },
+  "ready": {
+   "first_mount": null,
+   "first_meaningful": null,
+   "final": null,
+   "transitions": [
+    {
+     "dt": 2820,
+     "v": null
+    }
+   ]
+  }
+ },
+ "performance": {
+  "provisioning": [
+   {
+    "start": 9077,
+    "dur": 5558
+   }
+  ],
+  "drawer_vm": [
+   {
+    "start": 14730,
+    "dur": 6641
+   }
+  ],
+  "drawer_body": [
+   {
+    "start": 21433,
+    "dur": 4532
+   }
+  ],
+  "total_requests": 39,
+  "total_kb": 1011,
+  "t_rows": 14743,
+  "t_first_cards": 14743,
+  "t_settled": 35966
+ }
+}
