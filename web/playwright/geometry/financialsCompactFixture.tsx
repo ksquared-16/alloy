@@ -29,8 +29,15 @@ export type FinancialsCompactMeasurement = {
     lines: { label: string; value: string; labelRight: number; valueLeft: number; clipped: boolean }[];
     commands: string[];
     statusChip: string | null;
-    /** Laid out wider than the box drawing it, anywhere inside the card. */
-    anyClipped: boolean;
+    /**
+     * Text that does not fit the box drawing it, named.
+     *
+     * Only elements that actually CARRY TEXT are considered. A scan of every descendant reports
+     * container divs whose scrollWidth exceeds clientWidth for layout reasons that no operator can
+     * see, and it is font-sensitive — it passed on a machine with the design fonts installed and
+     * failed on CI's fallback stack, which is a property of the runner rather than of the card.
+     */
+    clippedText: string[];
     /** Content taller/wider than its scroll box — the card overflowing its own placement. */
     overflowX: number;
 };
@@ -117,16 +124,22 @@ function measure(): FinancialsCompactMeasurement {
             clipped: l.scrollWidth > Math.ceil(l.getBoundingClientRect().width) + 1,
         };
     });
-    const anyClipped = Array.from(card.querySelectorAll<HTMLElement>("*")).some(
-        (el) => el.scrollWidth > Math.ceil(el.getBoundingClientRect().width) + 1,
-    );
+    const clippedText = Array.from(card.querySelectorAll<HTMLElement>("*"))
+        .filter((el) => {
+            // Leaf text only: an element whose own text is what would be truncated.
+            if (el.children.length > 0) return false;
+            const text = (el.textContent ?? "").trim();
+            if (!text) return false;
+            return el.scrollWidth > Math.ceil(el.getBoundingClientRect().width) + 1;
+        })
+        .map((el) => `${el.tagName.toLowerCase()}.${el.className || "-"}: ${(el.textContent ?? "").trim().slice(0, 40)}`);
     return {
         card: { width: +box.width.toFixed(2), left: +box.left.toFixed(2), right: +box.right.toFixed(2), height: +box.height.toFixed(2) },
         headline: insight ? (insight.textContent ?? "").trim() || null : null,
         lines,
         commands: Array.from(card.querySelectorAll("[data-financials-command],[data-financials-nav]")).map((n) => (n.textContent ?? "").trim()),
         statusChip: chip ? (chip.textContent ?? "").trim() || null : null,
-        anyClipped,
+        clippedText,
         overflowX: +(card.scrollWidth - card.clientWidth).toFixed(2),
     };
 }

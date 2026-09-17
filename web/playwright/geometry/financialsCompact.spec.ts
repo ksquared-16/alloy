@@ -37,7 +37,7 @@ async function mount(page: Page, name: string, width: number): Promise<Measureme
 
 const report = (name: string, w: number, m: Measurement) =>
     `${name} @ ${w}px — card ${m.card.width}x${m.card.height}, headline=${JSON.stringify(m.headline)}, `
-    + `chip=${JSON.stringify(m.statusChip)}, clipped=${m.anyClipped}, overflowX=${m.overflowX}\n`
+    + `chip=${JSON.stringify(m.statusChip)}, clippedText=${JSON.stringify(m.clippedText)}, overflowX=${m.overflowX}\n`
     + m.lines.map((l) => `    ${l.label.padEnd(18)} ${l.value}`).join("\n")
     + `\n    commands: ${m.commands.join(" | ")}`;
 
@@ -54,7 +54,7 @@ test.describe("Financials compact card", () => {
                 // Responsibility is still stated — the fix removes a duplicate, not a fact.
                 expect(m.lines.some((l) => l.label.startsWith("Responsibility")), report(name, width, m)).toBe(true);
                 for (const l of m.lines) expect(l.clipped, report(name, width, m)).toBe(false);
-                expect(m.anyClipped, report(name, width, m)).toBe(false);
+                expect(m.clippedText, report(name, width, m)).toEqual([]);
                 expect(m.overflowX, report(name, width, m)).toBeLessThanOrEqual(1);
             }
         });
@@ -64,7 +64,7 @@ test.describe("Financials compact card", () => {
             // A condition, not a repetition — it earns the prominent slot.
             expect(m.headline, report("past_due", width, m)).toContain("past due");
             expect(m.lines.some((l) => l.label.startsWith("Current balance")), report("past_due", width, m)).toBe(true);
-            expect(m.anyClipped, report("past_due", width, m)).toBe(false);
+            expect(m.clippedText, report("past_due", width, m)).toEqual([]);
         });
     }
 
@@ -81,7 +81,7 @@ test.describe("Financials compact card", () => {
 
     test("a long figure still fits the authored width", async ({ page }) => {
         const m = await mount(page, "long_labels", 252);
-        expect(m.anyClipped, report("long_labels", 252, m)).toBe(false);
+        expect(m.clippedText, report("long_labels", 252, m)).toEqual([]);
         expect(m.overflowX, report("long_labels", 252, m)).toBeLessThanOrEqual(1);
     });
 });
