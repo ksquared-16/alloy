@@ -131,8 +131,8 @@
     {
       "id": "D2",
       "what": "Add offers MULTI-CHILD selection to the operator",
-      "observed": "checkboxes=0 multiSelect=0 singleSelects=2",
-      "ok": false
+      "observed": "checkboxes=1 multiSelect=0 singleSelects=2",
+      "ok": true
     },
     {
       "id": "D3",
