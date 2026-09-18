@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-09-18
+supersedes: []
+---
+
 # Financials — the canonical authorities
 
 **Status:** current as of `agent/financials-11a-repair2`, Thread 11A.
