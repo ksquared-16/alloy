@@ -1,0 +1,68 @@
+{
+  "baseline": {
+    "overlay": "detail",
+    "detailPresent": true,
+    "entryMode": null,
+    "activeLens": "All",
+    "subject": null,
+    "responsible": null,
+    "period": null,
+    "account": null
+  },
+  "findings": [
+    {
+      "id": "N0",
+      "what": "Details is the resting deep surface",
+      "ok": true,
+      "observed": "{\"overlay\":\"detail\",\"detailPresent\":true,\"entryMode\":null,\"activeLens\":\"All\",\"subject\":null,\"responsible\":null,\"period\":null,\"account\":null}"
+    },
+    {
+      "id": "A1",
+      "what": "Add opens as one command surface",
+      "ok": true,
+      "observed": "overlay=add_charge mode=charge"
+    },
+    {
+      "id": "A2",
+      "what": "the mode control is present on the command",
+      "ok": true,
+      "observed": "[\"Charge\",\"Adjustment\",\"Add charge\",\"Cancel\"]"
+    },
+    {
+      "id": "A3",
+      "what": "child selection reachable in Charge mode",
+      "ok": true,
+      "observed": "checkboxes=1 subjectSelect=1"
+    },
+    {
+      "id": "N1",
+      "what": "Cancel returns to the SAME Details",
+      "ok": true,
+      "observed": "overlay=detail detail=true account=true"
+    },
+    {
+      "id": "N2",
+      "what": "Escape returns to the SAME Details",
+      "ok": true,
+      "observed": "overlay=detail detail=true"
+    },
+    {
+      "id": "N3",
+      "what": "outside click returns to the SAME Details",
+      "ok": true,
+      "observed": "hit={\"x\":1068,\"y\":1035,\"onScrim\":true,\"owner\":\"alloy-os-fp-depth-scrim\"} overlay=detail detail=true"
+    },
+    {
+      "id": "C1",
+      "what": "row Adjust opens bound to its source",
+      "ok": true,
+      "observed": "overlay=adjust_charge {\"agreement\":\"4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba\",\"agreementLabel\":\"Certa Certhouse\",\"sourceCharge\":\"32fc1712-661d-4270-8309-306ac549c7bb\"}"
+    },
+    {
+      "id": "N4",
+      "what": "Escape from row Adjust returns to Details",
+      "ok": true,
+      "observed": "overlay=detail"
+    }
+  ]
+}
