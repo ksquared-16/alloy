@@ -102,13 +102,41 @@ export async function executeFinancialCommand(input: {
         const json = (await res.json()) as {
             ok?: boolean;
             error?: string | { message?: string };
-            data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
+            data?: {
+                execution_result?: {
+                    preview?: { summary?: string; changes?: string[] };
+                    /* A domain outcome, for the commands that answer with one. */
+                    kind?: string;
+                    reason?: string;
+                    detail?: string;
+                };
+            };
         };
         if (!json?.ok) {
             const err = typeof json?.error === "string" ? json.error : json?.error?.message;
             return { ok: false, error: err || "The action was refused." };
         }
-        const p = json?.data?.execution_result?.preview;
+        /*
+         * ── AN ENVELOPE THAT SUCCEEDED IS NOT AN OPERATION THAT HAPPENED ─────────────────────
+         *
+         * `ok` here means the route ran the action; it says nothing about what the action DECIDED.
+         * The responsibility commands answer with a domain outcome, and two of those outcomes mean
+         * nothing was written: `refused` (the engine would not divide this obligation) and
+         * `reallocation_required` (the arrangement in force would divide a posted charge
+         * differently, which needs an explicit decision).
+         *
+         * Measured: resolving a $25.00 obligation against an arrangement whose fixed shares total
+         * $500.00 returned HTTP 200, ok:true, and `{"kind":"refused","reason":"fixed_exceeds_net",
+         * "detail":"fixed 50000 over net 2500"}`. The caller read `ok` and closed its surface, so an
+         * operator pressed Confirm, watched the command dismiss, and was told nothing at all — the
+         * exact failure the reverse command's own notes warn about. The refusal is the answer and
+         * it belongs in front of the operator.
+         */
+        const outcome = json?.data?.execution_result;
+        if (outcome?.kind === "refused" || outcome?.kind === "reallocation_required") {
+            return { ok: false, error: outcome.detail || outcome.reason || "The action was refused." };
+        }
+        const p = outcome?.preview;
         return { ok: true, preview: p?.summary ? { summary: p.summary, changes: p.changes ?? [] } : null };
     } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
