@@ -112,15 +112,15 @@ describe("filtering", () => {
     ];
 
     it("shows everything under All", () => {
-        expect(filterLedger(rows, { lens: "all", subject: null, periodKey: null })).toHaveLength(5);
+        expect(filterLedger(rows, { ...NO_FILTER, lens: "all", subject: null, periodKey: null })).toHaveLength(5);
     });
 
     it("narrows to one lens", () => {
-        expect(filterLedger(rows, { lens: "charges", subject: null, periodKey: null }).map((r) => r.chargeId))
+        expect(filterLedger(rows, { ...NO_FILTER, lens: "charges", subject: null, periodKey: null }).map((r) => r.chargeId))
             .toEqual(["t1", "t2", "r1"]);
-        expect(filterLedger(rows, { lens: "credits", subject: null, periodKey: null }).map((r) => r.chargeId))
+        expect(filterLedger(rows, { ...NO_FILTER, lens: "credits", subject: null, periodKey: null }).map((r) => r.chargeId))
             .toEqual(["d1"]);
-        expect(filterLedger(rows, { lens: "funding", subject: null, periodKey: null }).map((r) => r.chargeId))
+        expect(filterLedger(rows, { ...NO_FILTER, lens: "funding", subject: null, periodKey: null }).map((r) => r.chargeId))
             .toEqual(["s1"]);
     });
 
@@ -139,12 +139,12 @@ describe("filtering", () => {
      * itself, which is a different question from an attention context.
      */
     it("gives a child the household's rows too, and keeps Household as the deliberate narrow view", () => {
-        expect(filterLedger(rows, { lens: "all", subject: "m-ana", periodKey: null }).map((r) => r.chargeId))
+        expect(filterLedger(rows, { ...NO_FILTER, lens: "all", subject: "m-ana", periodKey: null }).map((r) => r.chargeId))
             .toEqual(["t1", "d1", "s1", "r1"]);
         // A sibling's rows stay out: child scope is child + household, MINUS siblings.
-        expect(filterLedger(rows, { lens: "all", subject: "m-ana", periodKey: null }).map((r) => r.chargeId))
+        expect(filterLedger(rows, { ...NO_FILTER, lens: "all", subject: "m-ana", periodKey: null }).map((r) => r.chargeId))
             .not.toContain("t2");
-        expect(filterLedger(rows, { lens: "all", subject: HOUSEHOLD_SUBJECT, periodKey: null }).map((r) => r.chargeId))
+        expect(filterLedger(rows, { ...NO_FILTER, lens: "all", subject: HOUSEHOLD_SUBJECT, periodKey: null }).map((r) => r.chargeId))
             .toEqual(["r1"]);
         expect(subjectTokenOf(rows[4])).toBe(HOUSEHOLD_SUBJECT);
     });
@@ -153,7 +153,7 @@ describe("filtering", () => {
     it("filters exactly as the Focus Panel's canonical scope authority does", () => {
         for (const scope of ["all", "m-ana", "m-rio", HOUSEHOLD_SUBJECT]) {
             expect(
-                filterLedger(rows, { lens: "all", subject: scope === "all" ? null : scope, periodKey: null })
+                filterLedger(rows, { ...NO_FILTER, lens: "all", subject: scope === "all" ? null : scope, periodKey: null })
                     .map((r) => r.chargeId),
                 `scope ${scope} agrees with financialsRowScope`,
             ).toEqual(financialsRowsInSubjectScope(rows, scope).map((r) => r.chargeId));
@@ -161,18 +161,18 @@ describe("filtering", () => {
     });
 
     it("narrows to one billing period", () => {
-        expect(filterLedger(rows, { lens: "all", subject: null, periodKey: "2026-08" }).map((r) => r.chargeId))
+        expect(filterLedger(rows, { ...NO_FILTER, lens: "all", subject: null, periodKey: "2026-08" }).map((r) => r.chargeId))
             .toEqual(["s1", "r1"]);
     });
 
     it("combines lens, child and period", () => {
-        expect(filterLedger(rows, { lens: "funding", subject: "m-ana", periodKey: "2026-08" }).map((r) => r.chargeId))
+        expect(filterLedger(rows, { ...NO_FILTER, lens: "funding", subject: "m-ana", periodKey: "2026-08" }).map((r) => r.chargeId))
             .toEqual(["s1"]);
     });
 
     /* The payments lens reads receipts, not the ledger. It must never show obligations. */
     it("shows no ledger rows under the Payments lens", () => {
-        expect(filterLedger(rows, { lens: "payments", subject: null, periodKey: null })).toEqual([]);
+        expect(filterLedger(rows, { ...NO_FILTER, lens: "payments", subject: null, periodKey: null })).toEqual([]);
     });
 
     it("narrows payments by who actually paid", () => {
@@ -186,7 +186,7 @@ describe("filtering", () => {
     });
 
     it("counts rows per lens, never cents", () => {
-        const counts = lensCounts(rows, [{ paymentId: "p1" }], { subject: null, periodKey: null });
+        const counts = lensCounts(rows, [{ paymentId: "p1" }], { subject: null, periodKey: null, responsibleParty: null });
         expect(counts).toEqual({ all: 5, charges: 3, credits: 1, funding: 1, payments: 1 });
         /*
          * Was 3 / 1. The counts follow the filter through the SAME authority, so a badge cannot
@@ -194,11 +194,11 @@ describe("filtering", () => {
          * the household rows. Ana's scope is t1 + d1 + s1 + the household's r1; two of those are
          * charges (t1, r1).
          */
-        const forAna = lensCounts(rows, [{ paymentId: "p1" }], { subject: "m-ana", periodKey: null });
+        const forAna = lensCounts(rows, [{ paymentId: "p1" }], { subject: "m-ana", periodKey: null, responsibleParty: null });
         expect(forAna.all).toBe(4);
         expect(forAna.charges).toBe(2);
         expect(forAna.all, "the badge counts what the lens shows").toBe(
-            filterLedger(rows, { lens: "all", subject: "m-ana", periodKey: null }).length,
+            filterLedger(rows, { ...NO_FILTER, lens: "all", subject: "m-ana", periodKey: null }).length,
         );
     });
 });
