@@ -84,3 +84,18 @@ instruction, the governed reseed owns cleanup.
 `THREAD_11A_QA_SUBJECT_RESEED` now additionally requires the responsibility arrangement chain on
 Certhouse Family to be returned to its governed baseline — the `$500.00 from 2026-09-06` arrangement
 and its successor both.
+
+## Section 4 final pass (run `erun_0e1374d1331f3547`) — further mutations
+
+| | |
+|---|---|
+| Charges created | `Late pickup $25.00 · Certa Certhouse · Sep 18 2026` (charge `6005cf5f-24e8-4fd2-a624-0bc83496b977`) via `charge.add`, plus its multi-child sibling for Certb where the Add committed |
+| Repeats | subsequent identical Adds returned `unchanged` through `tpl:late_pickup:2026-09-18:<agreement>` — no duplicates |
+| Responsibility | `billing.resolve_responsibility` was CONFIRMED against the historical `f089a3f4` (Sep 2) and against `6005cf5f` (Sep 18) |
+
+Resolving `f089a3f4` is the non-retroactivity proof and leaves it honestly Unassigned. Any allocation
+rows written by these resolutions are effective-dated/superseding records and must NOT be deleted by
+hand.
+
+`THREAD_11A_QA_SUBJECT_RESEED` now additionally requires: the Sep 18 Late pickup charges created by
+this pass, and any `financial_responsibility_allocations` written by the two resolve confirmations.
