@@ -1,0 +1,83 @@
+{
+  "chargeLevel": [
+    {
+      "chargeId": "45af76fe-731d-472f-af8a-31a9831ed939",
+      "cells": [
+        "—",
+        "Reversal",
+        "Certb Certhouse",
+        "4060 · Discounts & Credits",
+        "$7.77",
+        "posted",
+        "Not allocated",
+        "reversal of charge 00ca85be-2e0d-4155-9405-4ab85a7c022d"
+      ]
+    },
+    {
+      "chargeId": "93d82a29-4965-4fd8-858c-e0a32869cc6b",
+      "cells": [
+        "—",
+        "Reversal",
+        "Certb Certhouse",
+        "4060 · Discounts & Credits",
+        "$12.34",
+        "posted",
+        "Not allocated",
+        "reversal of charge 05e433e2-c848-454f-b2a7-de0c3db7797a"
+      ]
+    },
+    {
+      "chargeId": "a7611a00-87ea-4604-9343-3a7d7d4062ab",
+      "cells": [
+        "—",
+        "Reversal",
+        "Certb Certhouse",
+        "4060 · Discounts & Credits",
+        "-$12.34",
+        "posted",
+        "Not allocated",
+        "reversal of charge 029fe538-5cca-421d-9b23-cb3a4d37858c"
+      ]
+    },
+    {
+      "chargeId": "b4b0caed-adca-48ff-ab7b-6af83491718d",
+      "cells": [
+        "—",
+        "Reversal",
+        "Certa Certhouse",
+        "4060 · Discounts & Credits",
+        "-$25.00",
+        "posted",
+        "Not allocated",
+        "reversal of charge 6005cf5f-24e8-4fd2-a624-0bc83496b977"
+      ]
+    },
+    {
+      "chargeId": "f1613ca6-4c09-440e-b1c1-40b370f0999a",
+      "cells": [
+        "—",
+        "Reversal",
+        "Certb Certhouse",
+        "4060 · Discounts & Credits",
+        "$12.34",
+        "posted",
+        "Not allocated",
+        "reversal of charge 0f9a367f-f01f-4eca-8bc9-dbb58bc80150"
+      ]
+    }
+  ],
+  "orig": {
+    "chargeId": "6005cf5f-24e8-4fd2-a624-0bc83496b977",
+    "cells": [
+      "Sep 18, 2026",
+      "Late pickup",
+      "Certa Certhouse",
+      "4040 · Late Pickup Fees",
+      "$25.00",
+      "reversed",
+      "Not allocated",
+      "Late pickup"
+    ]
+  },
+  "total": 64
+}
