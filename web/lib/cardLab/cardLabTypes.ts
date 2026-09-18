@@ -341,6 +341,18 @@ export type FinancialsPeriod = {
      * a due DATE ("Was due Aug 15"), and the balance is already `currentBalance`.
      */
     dueNow: string;
+    /**
+     * MONEY THE FAMILY HAS ALREADY GIVEN THAT IS NOT YET SPENT — and only the spendable part.
+     *
+     * `null` when there is none, which is the ordinary case and must stay SILENT: a "$0.00" prepaid
+     * metric on every account would be noise occupying a slot meant for a fact. Present only when
+     * the organisation actually holds this family's money.
+     *
+     * It is NOT subtracted from `currentBalance`. Current balance sums what was APPLIED, so held
+     * money does not pay anything down until it is allocated — which is why `owes $0 with $200
+     * prepaid` is two figures and never one `-$200`.
+     */
+    availablePrepaid: string | null;
     dueLabel: string;
 };
 
@@ -503,6 +515,18 @@ export type ChargeTemplateOption = {
     payerTargeting: "default_split" | "operator_selectable" | "single_payer" | "third_party";
     requiresSubject: boolean;
     requiresNote: boolean;
+    /**
+     * WHETHER CONFIRMING WILL WAIT FOR REVIEW, resolved by the server from the tenant's
+     * `posting_review` policy OR'd with the template's own flag.
+     *
+     * The command previews the act it will PERFORM. Before this existed the preview hardcoded
+     * "Creates a draft", which was true of every tenant when it was written and is not true of a
+     * tenant that has configured no review boundary — the operator was told the balance would not
+     * move, and it moved.
+     */
+    reviewRequired: boolean;
+    /** The code-owned charge category, for grain decisions. Optional: older payloads omit it. */
+    categoryKey?: string;
 };
 
 export type AddChargeSpecimen = {

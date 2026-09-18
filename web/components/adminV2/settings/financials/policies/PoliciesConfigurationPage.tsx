@@ -37,6 +37,7 @@ import {
     writeLocationIdsMetadata,
 } from "@/lib/financials/applicability/locationApplicability";
 import { summarizeLocationApplicability } from "@/components/adminV2/settings/configurationRuntime/LocationMultiSelect";
+import FinancialPoliciesConfigurationPanel from "@/components/adminV2/settings/financials/FinancialPoliciesConfigurationPanel";
 
 type PolicyTab = "overview" | "rules" | "applies_to";
 
@@ -441,6 +442,47 @@ export default function PoliciesConfigurationPage({
                     </div>
                 }
             </ConfigurationShell>
+
+            {/*
+             * ── THE SECOND POLICY FAMILY, ON THE SURFACE THAT CLAIMS TO OWN IT ────────────────
+             *
+             * This chapter authored COMMERCIAL policies only — percentage and fixed discounts
+             * scoped to programs and plans. `financial_policies` is a different authority: it owns
+             * proration, posting review, billing cadence, deposit and due date, and it is what
+             * generation and the charge lifecycle actually resolve.
+             *
+             * It had a panel and no route. `/adminV2/settings/financials` redirects here, so
+             * `FinancialPoliciesConfigurationPanel` had become unreachable — which meant a
+             * `due_date` policy an organisation must set in order to state its own payment terms
+             * could be stored by the database and authored by nobody. Mounted proof found it; no
+             * amount of reading the registry would have, because the registry-driven form was
+             * correct and simply not rendered anywhere.
+             *
+             * SCOPE OPTIONS ARE DELIBERATELY EMPTY HERE. The panel narrows a policy to a location,
+             * service or rate plan when given those lists, and this chapter does not load them. The
+             * ORG scope — which is what "how does this organisation run financials" means, and the
+             * scope every one of these policy types is primarily authored at — works fully. Wiring
+             * the narrower scopes is a known, bounded follow-up rather than a reason to keep the
+             * whole authority unreachable.
+             */}
+            <section className="mt-8" data-testid="financial-execution-policies">
+                <div className="mb-3">
+                    <h2 className="text-sm font-semibold text-alloy-midnight">Financial execution policies</h2>
+                    <p className="mt-1 max-w-xl text-sm text-alloy-midnight/55">
+                        How this organisation runs billing: proration, billing cadence, when payment is due, posting
+                        review and deposits. These are resolved by charge generation and the charge lifecycle —
+                        distinct from the commercial discount rules above.
+                    </p>
+                </div>
+                <FinancialPoliciesConfigurationPanel
+                    canMutate
+                    todayYmd={new Date().toISOString().slice(0, 10)}
+                    locationOptions={[]}
+                    serviceOptions={[]}
+                    ratePlanOptions={[]}
+                    labelFor={() => undefined}
+                />
+            </section>
 
             {form ?
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-alloy-midnight/25 p-4" role="dialog" aria-modal="true">

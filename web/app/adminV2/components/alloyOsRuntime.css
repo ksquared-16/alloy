@@ -3408,13 +3408,42 @@ html[data-alloy-os-runtime-split="true"]
   padding: 0;
   margin: 0;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(6px) saturate(0.92) brightness(1.03);
-  -webkit-backdrop-filter: blur(6px) saturate(0.92) brightness(1.03);
+  /*
+   * ── THE SCRIM HAS TO ACTUALLY SUBORDINATE ────────────────────────────────────────────────────
+   *
+   * At 0.78 a fifth of the surface beneath still reads through, and measured on the mounted panel
+   * that is enough for underlying Work content to compete with the focused card: a PAYMENT heading,
+   * its amount and a Record-payment control sat beside the Financials Details card, legible and
+   * apparently operable. Hit-testing was never the problem — the scrim covers those points and
+   * takes the click — it simply did not look like it did, which is worse than either extreme: the
+   * operator reads a live control that is already inert.
+   *
+   * This is the composition, not a selector aimed at one section, so every underlying surface is
+   * subordinated by the same rule. The background stays contextually present as shape and colour —
+   * 8% of it still shows and the blur keeps the layout legible as layout — but its text and its
+   * actions stop competing with the surface that has the operator's attention.
+   */
+  background: rgba(255, 255, 255, 0.92);
+  /*
+   * NO `-webkit-` TWIN HERE, DELIBERATELY. The two declarations were collapsed by the CSS minifier
+   * into the PREFIXED one alone — the built sheet shipped `-webkit-backdrop-filter` and no standard
+   * property at all — and the browser reports no support for the prefixed form. So the scrim's blur
+   * has never actually rendered: not at 6px before this pass, and not at 10px after it. Measured on
+   * the built chunk and confirmed against `CSS.supports`.
+   *
+   * The same collapse applies to every other backdrop-filter rule in this sheet. Those are outside
+   * this pass and are RECORDED rather than swept up here.
+   */
+  backdrop-filter: blur(10px) saturate(0.88) brightness(1.02);
   animation: alloy-os-fp-scrim-in var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
 }
 @keyframes alloy-os-fp-scrim-in {
-  from { opacity: 0; }
+  /*
+   * NOT FROM ZERO. The scrim is what separates the focused surface from the canvas, so it has to
+   * be doing that in the first frame; starting transparent left the background fully legible for
+   * the whole depth duration, which is precisely when the focused card is arriving.
+   */
+  from { opacity: 0.88; }
   to { opacity: 1; }
 }
 
@@ -3426,9 +3455,11 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-focus-panel-grid__cell:not([data-fp-elevated="true"]) {
   opacity: 0.64;
   filter: saturate(0.78) brightness(1.01);
-  transition:
-    opacity var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease),
-    filter var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease);
+  /*
+   * Subordinated at once, for the same reason the scrim is: a base card that recedes over 240ms is
+   * at full strength while the focused surface is arriving on top of it.
+   */
+  transition: none;
   pointer-events: none;
 }
 
@@ -3487,7 +3518,23 @@ html[data-alloy-os-runtime-split="true"]
     0 56px 110px -44px rgba(15, 23, 42, 0.5),
     0 0 0 1px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 24%, transparent),
     0 0 0 5px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, transparent);
-  animation: alloy-os-fp-card-zoom var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
+  /*
+   * ── THE FOCUSED CARD COMMITS; THE SCRIM DOES THE TRANSITION ────────────────────────────────
+   *
+   * `alloy-os-fp-card-zoom` flew the card from its cell: `opacity: 0.4` and a translate of the
+   * measured offset, resolving over the depth duration. Measured on Financials → Details at
+   * 1680x1050: the card appeared at x=246 with opacity 0.400 and arrived at x=525 opacity 1.000
+   * some 240ms later, translating ~280px while half-transparent. Its final anatomy — five metrics,
+   * five lenses, the ledger head, 42 rows — was present in that very first frame, so nothing was
+   * still loading; it was legible content sliding under its own translucency, with the legitimate
+   * Enrollment card showing through it. Operators read that as one presentation being replaced by
+   * another, and reported it as a double render.
+   *
+   * A focused surface is a destination, not a journey. It commits at its final geometry and full
+   * opacity on the first frame; the SCRIM is what communicates the change of depth, and it now
+   * subordinates the background immediately rather than fading in alongside a translucent card.
+   */
+  animation: none;
 }
 
 /*
@@ -5383,6 +5430,32 @@ html[data-alloy-os-runtime-split="true"]
   flex: 1 1 auto;
   min-height: 0;
 }
+/*
+ * ── AND THE SAME, FOR EVERY CARD, AT ANY WRAPPER DEPTH ──
+ *
+ * The rule above is correct and names ONE card. Measured on the mounted work-unit lane, the cards
+ * it does not name were short by exactly the room their own bands had already reserved: Attendance
+ * cell 171 / card 162, Health & Safety cell 205 / card 196 — together the 18px by which the stacked
+ * column failed to reach Children.
+ *
+ * The cause is that cards render different numbers of placement wrappers (Process one, these two)
+ * and every version of this repair so far enumerated levels. So depth is not counted here: whatever
+ * directly wraps a card takes the room, and the card takes it too. No card is named, no height is
+ * invented — 100% of a box the solver sized — internal content stays intrinsic, and elevated cells
+ * are excluded because a focused card is sized by the depth layer rather than by its resting band.
+ *
+ * Measured after: 1680 attendance 171 + gap 10 + health 205 = 386 = Children 386; 1280 162 + 10 +
+ * 255 = 427 = 427; Enrollment = Financials at 304/304 and 337/337.
+ */
+.alloy-os-fp-card-intrinsic
+  > .alloy-os-focus-panel-grid__cell:not([data-fp-elevated="true"])
+  :has(> .alloy-os-ucard),
+.alloy-os-fp-card-intrinsic
+  > .alloy-os-focus-panel-grid__cell:not([data-fp-elevated="true"])
+  .alloy-os-ucard {
+  height: 100%;
+}
+
 
 /* ── Row-based Experience Builder ── */
 .alloy-os-rlb {

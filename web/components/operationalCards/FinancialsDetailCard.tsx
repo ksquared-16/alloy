@@ -54,9 +54,20 @@ export default function FinancialsDetailCard({
     onAdjustCharge,
     onApplyPayment,
     hydrating = false,
+    ledgerPending = false,
+    lens: lensProp,
+    onLensChange,
+    expandedPeriods,
+    onPeriodToggle,
 }: {
     evidence: FinancialsEvidence;
     periods: FinancialsLedgerPeriod[];
+    /** Controlled lens. Omit to let this card own it, which is what the workspace host does. */
+    lens?: AccountLens;
+    onLensChange?: (lens: AccountLens) => void;
+    /** Controlled period disclosure, keyed by period label. Omit for per-period local state. */
+    expandedPeriods?: Record<string, boolean>;
+    onPeriodToggle?: (label: string, expanded: boolean) => void;
     /**
      * TWO INDEPENDENT DIMENSIONS, deliberately not collapsed:
      *   subject — who or what the item is FOR   (Household · Avery · Riley)
@@ -107,6 +118,16 @@ export default function FinancialsDetailCard({
      * state has no standing to make.
      */
     hydrating?: boolean;
+    /**
+     * THE SHELL IS FINAL; THE LEDGER IS NOT YET AUTHORITATIVE.
+     *
+     * Distinct from `hydrating`, which means nothing has been read at all. This means the account
+     * HAS been read — enough for the metrics, the lenses and the filters, which are the same
+     * whatever the rows say — but the ledger on hand is the bounded summary rather than the
+     * account's history. Showing it would present a partial cohort as the complete one, and then
+     * replace it; the region waits instead, and the complete ledger commits once.
+     */
+    ledgerPending?: boolean;
 }) {
     const { period, pastDue } = evidence;
 
@@ -124,7 +145,20 @@ export default function FinancialsDetailCard({
      * angle on the account's activity, not a second report underneath it. Every action that section
      * carried — Move payment, Apply payment — moved with it and none was stranded.
      */
-    const [lens, setLens] = useState<AccountLens>("all");
+    /*
+     * ── THE LENS MAY BELONG TO THE HOST ───────────────────────────────────────────────────────
+     *
+     * Held here, the lens died every time a command surface replaced this one, so an operator who
+     * filtered to Credits, opened Adjust and cancelled came back to an unfiltered ledger. A host
+     * that survives commands can own it instead and hand it down; the uncontrolled path below is
+     * unchanged, so the Financials workspace keeps working exactly as before.
+     */
+    const [lensOwn, setLensOwn] = useState<AccountLens>("all");
+    const lens = (lensProp as AccountLens | undefined) ?? lensOwn;
+    const setLens = (next: AccountLens) => {
+        setLensOwn(next);
+        onLensChange?.(next);
+    };
     const [subject, setSubject] = useState<string | null>(null);
     const [periodLabel, setPeriodLabel] = useState<string | null>(null);
     const [payer, setPayer] = useState<string | null>(null);
@@ -250,6 +284,29 @@ export default function FinancialsDetailCard({
                     <Stat label="Responsibility" value={period.familyResponsibility} />
                     <Stat label="Paid" value={period.paymentsReceived.replace("−", "")} />
                     {/*
+                      * AVAILABLE PREPAID — money this family has already given that is not yet spent.
+                      *
+                      * SILENT WHEN THERE IS NONE. The adapter sends null rather than "$0.00", so an
+                      * ordinary account does not carry a permanent zero in a slot meant for a fact —
+                      * the same density rule that removed Autopay from this strip rather than
+                      * rendering it as a standing "not available".
+                      *
+                      * It sits BESIDE Current balance and never inside it. Held money pays nothing
+                      * down until it is applied, so `owes $0 with $200 available` stays two figures
+                      * and never collapses into `-$200`, which would say the organisation owes the
+                      * family money it does not owe.
+                      *
+                      * Toned `ok`: funds on the account are good news, not an exception to resolve.
+                      */}
+                    {period.availablePrepaid ? (
+                        <Stat
+                            label="Available prepaid"
+                            value={period.availablePrepaid}
+                            tone="ok"
+                            testId="available-prepaid"
+                        />
+                    ) : null}
+                    {/*
                      * "None" claimed an absence nothing could support. Payment setup has no producer
                      * yet, so the honest value is that it has not been recorded — and it is not
                      * toned as a problem, because an unknown is not a fault.
@@ -329,7 +386,7 @@ export default function FinancialsDetailCard({
                             onClick={() => setLens(key)}
                         >
                             {ACCOUNT_LENS_LABELS[key]}
-                            <span className="alloy-os-fdetail__lenscount">{hydrating ? "" : counts[key]}</span>
+                            <span className="alloy-os-fdetail__lenscount">{hydrating || ledgerPending ? "" : counts[key]}</span>
                         </button>
                     ))}
                     <span className="alloy-os-fdetail__lensfilters">
@@ -389,31 +446,31 @@ export default function FinancialsDetailCard({
                       * Filtering belongs here, but it belongs here WIRED.
                       */}
 
-                    {hydrating ? (
+                    {hydrating || ledgerPending ? (
                         /*
-                         * The columns, over placeholders. Same head component the hydrated ledger
-                         * uses, so the grid the operator is about to read is already the grid in
-                         * front of them and nothing shifts underneath when the rows arrive.
+                         * ── A RESERVED REGION, NOT THREE ROWS ─────────────────────────────────
+                         *
+                         * This used to render three placeholder rows of em dashes, on the reasoning
+                         * that the grid the operator is about to read should already be in front of
+                         * them. The grid still is — the same head component, so nothing shifts when
+                         * the real rows arrive — but the ROWS are gone.
+                         *
+                         * Three row-shaped things in a ledger are three transactions, whatever
+                         * characters sit in them, and a surface that shows three where fifty-six are
+                         * coming has told the operator something false about an account. An em dash
+                         * is the absence of an answer; a ROW is a claim that something happened.
+                         * The region says it is reading and claims nothing else.
                          */
-                        <div className="alloy-os-billingdetail__ledger" role="table" data-financials-ledger-hydrating="true">
+                        <div
+                            className="alloy-os-billingdetail__ledger"
+                            role="table"
+                            data-financials-ledger-hydrating="true"
+                            aria-busy="true"
+                        >
                             <FinancialsLedgerHead />
-                            {[0, 1, 2].map((i) => (
-                                <FinancialsLedgerRow
-                                    key={`hydrating-${i}`}
-                                    row={{
-                                        key: `hydrating-${i}`,
-                                        when: "—",
-                                        type: "—",
-                                        child: "—",
-                                        description: "",
-                                        glLabel: null,
-                                        amount: "—",
-                                        status: "—",
-                                        responsibleParty: null,
-                                        tone: "muted",
-                                    }}
-                                />
-                            ))}
+                            <p className="alloy-os-fdetail__ledgerpending" data-financials-ledger-reading="true">
+                                Reading this account&rsquo;s activity&hellip;
+                            </p>
                         </div>
                     ) : visiblePeriods.length === 0 ? (
                         <p className="alloy-os-fdetail__collapsed" data-financials-ledger-empty="true">
@@ -433,6 +490,8 @@ export default function FinancialsDetailCard({
                             label={per.label}
                             summary={per.summary}
                             open={per.open}
+                            expandedOverride={expandedPeriods?.[per.label]}
+                            onToggle={onPeriodToggle}
                             rows={per.entries.map((e, i) =>
                                 ledgerRowFromEntry(e, i, { onPostCharge, onReverseCharge, onAdjustCharge }),
                             )}
@@ -457,7 +516,12 @@ export default function FinancialsDetailCard({
                   * Every figure is still the adapter's. Nothing here adds, differences or decides
                   * what "applied" means.
                   */}
-                {lens === "payments" ? (
+                {/*
+                  * The payment and adjustment bands are ledger activity too, and they are drawn from
+                  * the same bounded projection — so while the ledger waits for its own authority,
+                  * they wait with it. Showing them would be the same partial truth in a second place.
+                  */}
+                {ledgerPending ? null : lens === "payments" ? (
                     <div className="alloy-os-billingdetail__ledger" role="table" data-financials-payments-ledger="true">
                         <FinancialsLedgerHead />
                         {visiblePayments.map((p) => (
@@ -474,8 +538,9 @@ export default function FinancialsDetailCard({
                                         <>
                                             {p.unappliedCents > 0 && onApplyPayment ? (
                                                 <RowAction
-                                                    label="Apply"
-                                                    title={`Apply ${p.unappliedLabel}`}
+                                                    kind="apply"
+                                                    command="payment.apply"
+                                                    title={`Apply ${p.unappliedLabel} to an obligation`}
                                                     onClick={() => onApplyPayment({ paymentId: p.paymentId })}
                                                 />
                                             ) : null}
@@ -486,7 +551,8 @@ export default function FinancialsDetailCard({
                                                       .map((a) => (
                                                           <RowAction
                                                               key={a.allocationId}
-                                                              label="Move"
+                                                              kind="move"
+                                                              command="payment.move"
                                                               title={`Move ${a.amountLabel} from ${a.chargeLabel}`}
                                                               onClick={() =>
                                                                   onMovePayment({
@@ -510,7 +576,7 @@ export default function FinancialsDetailCard({
                     </div>
                 ) : null}
 
-                {showAdjustments && evidence.adjustments.length ? (
+                {!ledgerPending && showAdjustments && evidence.adjustments.length ? (
                     <div className="alloy-os-billingdetail__ledger" role="table" data-financials-adjustments-ledger="true">
                         {/*
                           * ── NO FOOTER LINK FARM ───────────────────────────────────────────────
@@ -533,8 +599,9 @@ export default function FinancialsDetailCard({
                                     actions:
                                         !a.reversed && !a.isReversal && onReverseAdjustment ? (
                                             <RowAction
-                                                label="Reverse"
-                                                title={`Reverse ${a.categoryLabel} ${a.amountLabel}`}
+                                                kind="reverse"
+                                                command="billing.reverse_adjustment"
+                                                title={`Reverse ${a.categoryLabel} ${a.amountLabel} — the original stays on the record`}
                                                 onClick={() => onReverseAdjustment({ applicationId: a.applicationId })}
                                             />
                                         ) : undefined,
@@ -629,40 +696,38 @@ function ledgerRowFromEntry(
         actions:
             post || reverse || adjust ? (
                 <>
+                    {/*
+                     * POST IS OFFERED ONLY WHERE A LEGITIMATE DRAFT EXISTS. `offersPost` is the read
+                     * model's answer, not a guess from the status string — and under the 5H decision
+                     * a draft arises from a configured review boundary or a generated run, never from
+                     * an operator having used a manual command.
+                     */}
                     {post ? (
-                        <button
-                            type="button"
-                            className="alloy-os-fdetail__rowaction"
-                            data-charge-command="charge.post"
-                            data-charge-id={e.chargeId!}
+                        <RowAction
+                            kind="post"
+                            command="charge.post"
+                            chargeId={e.chargeId!}
+                            title={`Post ${e.label} — it becomes owed`}
                             onClick={() => actions.onPostCharge!({ chargeId: e.chargeId!, label: e.label })}
-                        >
-                            Post
-                        </button>
+                        />
                     ) : null}
                     {reverse ? (
-                        <button
-                            type="button"
-                            className="alloy-os-fdetail__rowaction"
-                            data-charge-command="charge.reverse"
-                            data-charge-id={e.chargeId!}
-                            title="Unwind this charge — it should never have stood"
+                        <RowAction
+                            kind="reverse"
+                            command="charge.reverse"
+                            chargeId={e.chargeId!}
+                            title={`Reverse ${e.label} — unwind a charge that should never have stood`}
                             onClick={() => actions.onReverseCharge!({ chargeId: e.chargeId!, label: e.label })}
-                        >
-                            Reverse
-                        </button>
+                        />
                     ) : null}
                     {adjust ? (
-                        <button
-                            type="button"
-                            className="alloy-os-fdetail__rowaction"
-                            data-charge-command="billing.adjust_account"
-                            data-charge-id={e.chargeId!}
-                            title="Adjust this charge — it stands, and something reduces it"
+                        <RowAction
+                            kind="adjust"
+                            command="billing.adjust_account"
+                            chargeId={e.chargeId!}
+                            title={`Adjust ${e.label} — it stands, and something reduces it`}
                             onClick={() => actions.onAdjustCharge!({ chargeId: e.chargeId! })}
-                        >
-                            Adjust
-                        </button>
+                        />
                     ) : null}
                 </>
             ) : undefined,
@@ -689,10 +754,18 @@ function ledgerRowFromAdjustment(a: FinancialsEvidence["adjustments"][number]): 
         child: a.subjectName ?? "Household",
         /* The reason is the description; the direction explains a row whose sign alone would not. */
         description: a.reason ?? direction,
+        /*
+         * The reduction read carries no resolved GL account. Core DOES map the credit and
+         * adjustment categories, so this is the row not knowing rather than the tenant not having
+         * configured one — and "Unmapped" would accuse them of the latter.
+         */
         glLabel: null,
+        glApplies: false,
         amount: a.amountLabel,
         status: state,
+        /* A reduction is not an obligation: responsibility belongs to the charge it reduces. */
         responsibleParty: null,
+        responsibilityApplies: false,
         tone: a.reversed ? "muted" : undefined,
         title: [direction, a.reason, a.applied ? null : "Recorded, not yet posted"].filter(Boolean).join(" · "),
     };
@@ -711,13 +784,29 @@ function ledgerRowFromPayment(p: FinancialsEvidence["payments"][number]): Financ
         key: p.paymentId,
         when: p.receivedOn ?? "—",
         type: "Payment",
-        child: "Household",
+        /*
+         * A RECEIPT IS NOT FOR A CHILD. This column is headed "Child", and it read "Household" on
+         * every payment row — writing an account-level word into a child-grain column, which is the
+         * kind of near-miss an operator stops trusting. A payment arrives against the account; the
+         * obligations it answers may belong to several children, and naming one would be a guess.
+         */
+        child: "—",
         description: p.method ? `${p.method}${p.payerLabel ? ` · ${p.payerLabel}` : ""}` : (p.payerLabel ?? "Payment"),
+        /* Core has no payment-GL authority: a receipt has no charge category to map. */
         glLabel: null,
+        glApplies: false,
         amount: p.receivedLabel,
         amountNote: p.unappliedCents > 0 ? `${p.unappliedLabel} unapplied` : `${p.appliedLabel} applied`,
-        status: p.unappliedCents > 0 ? "part applied" : "applied",
-        responsibleParty: p.payerLabel,
+        /* Received, and how much of it has answered an obligation — the authority's own figures. */
+        status: p.unappliedCents > 0 ? "Part applied" : "Applied",
+        /*
+         * THE PAYER IS NOT THE RESPONSIBLE PARTY. This column used to carry `payerLabel`, which
+         * asserted that whoever paid is whoever owed — they are frequently different people, and on
+         * a split household they are routinely different. The payer is stated in the description,
+         * beside the method, where it is a fact about the receipt rather than a claim about the debt.
+         */
+        responsibleParty: null,
+        responsibilityApplies: false,
         tone: p.unappliedCents > 0 ? "attention" : undefined,
     };
 }
@@ -764,9 +853,9 @@ function LensFilter({
  * account summary in the Financials workspace borrows this component rather than growing a second
  * label-over-value idiom with its own type scale. One anatomy, two placements.
  */
-export function Stat({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: "ok" | "due" }) {
+export function Stat({ label, value, strong, tone, testId }: { label: string; value: string; strong?: boolean; tone?: "ok" | "due"; testId?: string }) {
     return (
-        <span className="alloy-os-fdetail__stat" data-tone={tone}>
+        <span className="alloy-os-fdetail__stat" data-tone={tone} data-testid={testId}>
             <span className="alloy-os-fdetail__statlabel">{label}</span>
             <span className={clsx("alloy-os-fdetail__statvalue", strong && "alloy-os-fdetail__statvalue--strong")}>
                 {value}

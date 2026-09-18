@@ -19,7 +19,16 @@ import {
     resolveTuitionRecurrence,
     type ProrationMethod,
 } from "@/lib/financials/tuitionGeneration/resolveTuitionRecurrence";
-import type { TuitionGenerationOutcome, TuitionGenerationResult } from "@/lib/financials/tuitionGeneration/generateTuitionCharges";
+import {
+    assignmentBillingPeriods,
+    type TuitionGenerationOutcome,
+    type TuitionGenerationResult,
+} from "@/lib/financials/tuitionGeneration/generateTuitionCharges";
+import {
+    billingPeriodFromKey,
+    isPeriodBillableCadence,
+    type BillingCadence,
+} from "@/lib/financials/billingPeriod";
 
 export async function previewTuitionGeneration(
     supabase: SupabaseClient,
@@ -33,6 +42,19 @@ export async function previewTuitionGeneration(
     const periodKey = args.periodKey.trim();
     if (!/^\d{4}-\d{2}$/.test(periodKey)) throw new Error("period_key must be YYYY-MM");
     const cadenceKey = (args.cadenceKey ?? "monthly").trim();
+    const span = billingPeriodFromKey(periodKey);
+    if (!isPeriodBillableCadence(cadenceKey)) {
+        // Usage-priced cadences have no interval to preview — the same refusal generation gives.
+        return {
+            periodKey,
+            servicePeriod: { start: span.start, end: span.end },
+            cadenceKey,
+            periodsBilled: [],
+            counts: { generated: 0, notDue: 0, refused: 0, alreadyPosted: 0, errors: 0 },
+            outcomes: [],
+        };
+    }
+    const cadence: BillingCadence = cadenceKey;
 
     const allTerms = await readAcceptedPricingTerms(supabase, { orgId: args.orgId });
     const scope = args.opportunityCustomerMemberIds?.length
@@ -41,7 +63,7 @@ export async function previewTuitionGeneration(
     const terms = scope ? allTerms.filter((t) => scope.has(t.opportunityCustomerMemberId)) : allTerms;
 
     const policies = await listFinancialPolicies(supabase, args.orgId);
-    const proration = resolveFinancialPolicy(policies, "proration", {}, `${periodKey}-01`);
+    const proration = resolveFinancialPolicy(policies, "proration", {}, span.start);
     const prorationMethod = (proration.resolved
         ? ((proration.policy.value as { method?: string }).method ?? "none")
         : "none") as ProrationMethod;
@@ -54,31 +76,41 @@ export async function previewTuitionGeneration(
     }
 
     const outcomes: TuitionGenerationOutcome[] = [];
+    const billed = new Map<string, { key: string; label: string; start: string; end: string }>();
     for (const [assignmentId, assignmentTerms] of byAssignment) {
-        const d = resolveTuitionRecurrence({ terms: assignmentTerms, periodKey, prorationMethod, cadenceKey });
-        if (d.kind === "not_due") {
-            outcomes.push({ kind: "not_due", assignmentId, reason: d.reason });
-        } else if (d.kind === "refused") {
-            outcomes.push({ kind: "refused", assignmentId, reason: d.reason, detail: d.detail });
-        } else if (!d.term.enrollmentAgreementId) {
-            outcomes.push({ kind: "not_due", assignmentId, reason: "assignment_not_enrolled" });
-        } else {
-            outcomes.push({
-                kind: "generated",
-                assignmentId,
-                termId: d.term.termId,
-                chargeId: null,
-                amountCents: d.amountCents,
-                currencyCode: d.currencyCode,
-                obligationId: null,
-            });
+        // THE SAME TILING THE RUN WILL USE. Not a second opinion about what September contains.
+        for (const period of assignmentBillingPeriods(assignmentTerms, cadence, span)) {
+            billed.set(period.key, { key: period.key, label: period.label, start: period.start, end: period.end });
+            const periodKeyOf = period.key;
+            const periodLabel = period.label;
+            const d = resolveTuitionRecurrence({ terms: assignmentTerms, period, prorationMethod, cadenceKey });
+            if (d.kind === "not_due") {
+                outcomes.push({ kind: "not_due", assignmentId, periodKey: periodKeyOf, periodLabel, reason: d.reason });
+            } else if (d.kind === "refused") {
+                outcomes.push({ kind: "refused", assignmentId, periodKey: periodKeyOf, periodLabel, reason: d.reason, detail: d.detail });
+            } else if (!d.term.enrollmentAgreementId) {
+                outcomes.push({ kind: "not_due", assignmentId, periodKey: periodKeyOf, periodLabel, reason: "assignment_not_enrolled" });
+            } else {
+                outcomes.push({
+                    kind: "generated",
+                    assignmentId,
+                    periodKey: periodKeyOf,
+                    periodLabel,
+                    termId: d.term.termId,
+                    chargeId: null,
+                    amountCents: d.amountCents,
+                    currencyCode: d.currencyCode,
+                    obligationId: null,
+                });
+            }
         }
     }
 
-    const period = resolveTuitionRecurrence({ terms: [], periodKey }).period;
     return {
         periodKey,
-        servicePeriod: { start: period.start, end: period.end },
+        servicePeriod: { start: span.start, end: span.end },
+        cadenceKey,
+        periodsBilled: [...billed.values()].sort((a, b) => a.start.localeCompare(b.start)),
         counts: {
             generated: outcomes.filter((o) => o.kind === "generated").length,
             notDue: outcomes.filter((o) => o.kind === "not_due").length,

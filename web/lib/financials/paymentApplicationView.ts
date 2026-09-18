@@ -45,6 +45,14 @@ export type PaymentApplicationView = {
 
 export type PaymentView = {
     paymentId: string;
+    /**
+     * The receipt's canonical state — `posted` or `pending`.
+     *
+     * Exposed because AVAILABILITY depends on it and was previously unanswerable from this view. A
+     * pending receipt is money the platform has been told about, not money it has: counting it as
+     * available prepaid would offer an operator funds that may never arrive.
+     */
+    status: string;
     amountCents: number;
     currency: string;
     receivedAt: string | null;
@@ -174,6 +182,7 @@ export async function resolveHouseholdPaymentViews(
         const unappliedCents = await readPaymentUnappliedCents(supabase, orgId, p.id, amountCents);
         views.push({
             paymentId: p.id,
+            status: p.status,
             amountCents,
             currency: p.currency ?? "USD",
             receivedAt: p.received_at,

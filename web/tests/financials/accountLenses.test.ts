@@ -11,6 +11,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { financialsRowsInSubjectScope } from "@/lib/adminV2/runtime/focusPanel/financials/financialsRowScope";
+
 import {
     ACCOUNT_LENSES,
     HOUSEHOLD_SUBJECT,
@@ -119,12 +121,40 @@ describe("filtering", () => {
             .toEqual(["s1"]);
     });
 
-    it("narrows to one child, and files a household row under Household", () => {
+    /*
+     * DOCTRINE REVERSED, DELIBERATELY — this assertion used to expect ["t1", "d1", "s1"].
+     *
+     * It encoded an exact-match subject predicate private to this module, under which selecting a
+     * child DROPPED the household's own rows: the registration fee, the account fee, the family's
+     * credits. The Focus Panel had the same defect and repaired it with `financialsRowScope`; this
+     * surface kept the old rule, so the two surfaces disagreed about what "Ana's financial scope"
+     * means while showing the same account.
+     *
+     * The converged rule: a child scope is the child's rows AND the household's, because a
+     * household charge is the account's and the child is inside the account. The household token is
+     * now the one scope that is deliberately NARROWER — an explicit request to see the account by
+     * itself, which is a different question from an attention context.
+     */
+    it("gives a child the household's rows too, and keeps Household as the deliberate narrow view", () => {
         expect(filterLedger(rows, { lens: "all", subject: "m-ana", periodKey: null }).map((r) => r.chargeId))
-            .toEqual(["t1", "d1", "s1"]);
+            .toEqual(["t1", "d1", "s1", "r1"]);
+        // A sibling's rows stay out: child scope is child + household, MINUS siblings.
+        expect(filterLedger(rows, { lens: "all", subject: "m-ana", periodKey: null }).map((r) => r.chargeId))
+            .not.toContain("t2");
         expect(filterLedger(rows, { lens: "all", subject: HOUSEHOLD_SUBJECT, periodKey: null }).map((r) => r.chargeId))
             .toEqual(["r1"]);
         expect(subjectTokenOf(rows[4])).toBe(HOUSEHOLD_SUBJECT);
+    });
+
+    /* THE POINT OF THE CONVERGENCE: both surfaces now answer this question identically. */
+    it("filters exactly as the Focus Panel's canonical scope authority does", () => {
+        for (const scope of ["all", "m-ana", "m-rio", HOUSEHOLD_SUBJECT]) {
+            expect(
+                filterLedger(rows, { lens: "all", subject: scope === "all" ? null : scope, periodKey: null })
+                    .map((r) => r.chargeId),
+                `scope ${scope} agrees with financialsRowScope`,
+            ).toEqual(financialsRowsInSubjectScope(rows, scope).map((r) => r.chargeId));
+        }
     });
 
     it("narrows to one billing period", () => {
@@ -155,9 +185,18 @@ describe("filtering", () => {
     it("counts rows per lens, never cents", () => {
         const counts = lensCounts(rows, [{ paymentId: "p1" }], { subject: null, periodKey: null });
         expect(counts).toEqual({ all: 5, charges: 3, credits: 1, funding: 1, payments: 1 });
+        /*
+         * Was 3 / 1. The counts follow the filter through the SAME authority, so a badge cannot
+         * promise rows the lens will not show — before the convergence the two disagreed by exactly
+         * the household rows. Ana's scope is t1 + d1 + s1 + the household's r1; two of those are
+         * charges (t1, r1).
+         */
         const forAna = lensCounts(rows, [{ paymentId: "p1" }], { subject: "m-ana", periodKey: null });
-        expect(forAna.all).toBe(3);
-        expect(forAna.charges).toBe(1);
+        expect(forAna.all).toBe(4);
+        expect(forAna.charges).toBe(2);
+        expect(forAna.all, "the badge counts what the lens shows").toBe(
+            filterLedger(rows, { lens: "all", subject: "m-ana", periodKey: null }).length,
+        );
     });
 });
 
