@@ -3013,39 +3013,24 @@
  * already spans the card — is unaffected.
  */
 /*
- * ── A POSITION FACT STATES ITSELF IN FULL, OR IT STACKS ────────────────────────────────────────
+ * ── THE THRESHOLD WAS SET FOR SHORTER WORDS ───────────────────────────────────────────────────
  *
- * Releasing the value's floor (above) is enough at the wider columns, but a narrow position zone
- * cannot fit `Available` and `$200.00` on one line at any honest type size — measured, the zone is
- * 91px at a 1280 viewport while the pair needs ~108px.
+ * Raised from 230px to 340px, measured. The card is 265px at a 1280 viewport and 286px at 1440,
+ * so the collapse never fired and the position column stayed 91px and 100px — narrower than
+ * `Available` plus `$200.00` needs (~108px) at any honest type size. Only at 1680, where the card
+ * is 366px and the column 134px, do both halves fit on one line.
  *
- * The rule the card already keeps is that a financial LABEL is not abbreviated to fit a layout:
- * `Balance` and `Paid` are real product words, not truncations, and `Available` and `Unassigned`
- * are the facts they name. So below the width where both halves fit on one line, the row stacks —
- * the label on its own line, the figure beneath it, both complete.
+ * The first attempt at this stacked the label above its figure INSIDE the two-column layout. It
+ * removed the ellipsis and produced something worse: the taller right column overlapped the
+ * obligation story beside it, so `NET OBLIGATION` collided with `$18.00`. Clipping traded for a
+ * collision is not a repair.
  *
- * Same instrument as the two-column collapse below: the card is the query container, so this asks
- * about the CARD's width rather than the viewport's, which is the only question that means
- * anything to a card placed in an 8-column or a 4-column slot.
+ * This rule's own note already had the answer — "below the width where a second column can still
+ * state a figure, there is one column". The width was simply measured for `Balance` and `Paid`,
+ * before `Unassigned` and `Available` existed. One instrument, one threshold, moved to where the
+ * evidence puts it.
  */
 @container alloy-billing (max-width: 340px) {
-  .alloy-os-billing__zone--position .alloy-os-billing__line {
-    flex-wrap: wrap;
-    gap: 0 8px;
-  }
-  .alloy-os-billing__zone--position .alloy-os-billing__line-label {
-    white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
-    flex: 1 0 100%;
-  }
-  .alloy-os-billing__zone--position .alloy-os-billing__line-value {
-    flex: 1 0 100%;
-    text-align: left;
-  }
-}
-
-@container alloy-billing (max-width: 230px) {
   .alloy-os-billing__zones--two {
     grid-template-columns: minmax(0, 1fr);
   }

@@ -32,13 +32,22 @@ for (const width of [1280, 1440, 1680]) {
                     zoneW: Math.round(((h.closest(".alloy-os-billing__zone") as HTMLElement) ?? h).getBoundingClientRect().width),
                 });
             }
+            const card = document.querySelector(".alloy-os-billing") as HTMLElement | null;
+            const zones = document.querySelector(".alloy-os-billing__zones--two") as HTMLElement | null;
+            out.push({
+                text: "__CARD__",
+                cardW: card ? Math.round(card.getBoundingClientRect().width) : null,
+                zonesW: zones ? Math.round(zones.getBoundingClientRect().width) : null,
+                cols: zones ? getComputedStyle(zones).gridTemplateColumns : null,
+            } as never);
             return out;
         });
         writeFileSync(`${OUT}/clip-${width}.json`, JSON.stringify(r, null, 2));
         /* eslint-disable no-console */
         log(`\n=== ${width}px ===`);
         for (const l of r) {
-            log(`  ${l.clipped ? "CLIPPED" : "ok     "} "${l.text}" scroll=${l.scrollW} client=${l.clientW} parent=${l.parentW} zone=${l.zoneW} overflow=${l.overflow} textOverflow=${l.textOverflow} ws=${l.whiteSpace}`);
+            if (l.text === "__CARD__") { log(`  CARD width=${l.cardW} zones=${l.zonesW} cols=${l.cols}`); continue; }
+            log(`  ${l.clipped ? "CLIPPED" : "ok     "} "${l.text}" scroll=${l.scrollW} client=${l.clientW} parent=${l.parentW} zone=${l.zoneW}`);
         }
         /* eslint-enable no-console */
     });
