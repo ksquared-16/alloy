@@ -258,6 +258,8 @@ export type LedgerEntry = {
      * Every field is a stored fact or an explicit absence. `recurrenceLabel` is empty when the model
      * genuinely cannot say, rather than claiming "one-time".
      */
+    /** `reversal` | `credit` | `replacement` — the correction's own record of what it is. */
+    correctionKind?: string | null;
     reduction?: {
         applicationId: string;
         concept: "discount" | "credit" | "adjustment" | "reversal";

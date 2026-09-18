@@ -204,3 +204,38 @@ export function reductionProvenanceByChargeId(
     }
     return out;
 }
+
+/**
+ * WHAT A LEDGER ROW IS CALLED — one answer, for both deep surfaces.
+ *
+ * ── THE MISREADING THIS ENDS ─────────────────────────────────────────────────────────────────
+ *
+ * A charge-level REVERSAL is written as a correction charge in a contra-revenue category, and it
+ * carries no `financial_reduction_application` — it is not a reduction, it undoes a charge. Both
+ * surfaces fell through to the category label and called it `Credit`. A parent asking "why was I
+ * credited?" was being shown a reversal, and an operator reconciling the account could not tell a
+ * refund of goodwill from an entry that should never have stood.
+ *
+ * ── ORDER IS THE ARGUMENT ────────────────────────────────────────────────────────────────────
+ *
+ * Correction lineage wins, because `correction_kind` is the canonical record of what the writer
+ * INTENDED and is the most specific thing known about the row. Then reduction provenance, which
+ * already distinguishes its own four concepts. Only then the charge category, which is how the
+ * money POSTS and was never meant to name the transaction.
+ *
+ * Nothing is fabricated to achieve this: no reduction application is created merely to label a row.
+ */
+export function financialRowConceptLabel(input: {
+    /** `reversal` | `credit` | `replacement`, from the correction's own metadata. */
+    correctionKind?: string | null;
+    /** The reduction's concept, where this row IS a reduction. */
+    reductionConceptLabel?: string | null;
+    /** The category's label — the last resort, and the one that was misleading. */
+    categoryLabel: string;
+}): string {
+    const correction = (input.correctionKind ?? "").trim().toLowerCase();
+    if (correction === "reversal") return "Reversal";
+    if (correction === "replacement") return "Replacement";
+    if (correction === "credit") return "Credit";
+    return input.reductionConceptLabel || input.categoryLabel;
+}

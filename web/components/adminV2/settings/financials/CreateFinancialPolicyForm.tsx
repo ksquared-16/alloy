@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-    FINANCIAL_POLICY_TYPES,
+    OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES,
     POLICY_TYPE_REGISTRY,
     type FinancialPolicyType,
     type PolicyValueField,
@@ -84,13 +84,17 @@ export default function CreateFinancialPolicyForm({
 }) {
     const [scopeType, setScopeType] = useState("org");
     const [targetId, setTargetId] = useState("");
-    const [policyType, setPolicyType] = useState<FinancialPolicyType>(FINANCIAL_POLICY_TYPES[0]);
+    const [policyType, setPolicyType] = useState<FinancialPolicyType>(OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES[0]);
     const [valueDraft, setValueDraft] = useState<Record<string, string>>({});
     const [effectiveStart, setEffectiveStart] = useState("");
     const [label, setLabel] = useState("");
     const [formError, setFormError] = useState<string | null>(null);
 
-    const policyTypeOptions = useMemo(() => FINANCIAL_POLICY_TYPES.map((t) => ({ value: t, label: POLICY_TYPE_REGISTRY[t].label })), []);
+    /* Only what the runtime consumes — see OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES. */
+    const policyTypeOptions = useMemo(
+        () => OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES.map((t) => ({ value: t, label: POLICY_TYPE_REGISTRY[t].label })),
+        [],
+    );
     const def = POLICY_TYPE_REGISTRY[policyType];
     const targetOptions = scopeType === "location" ? locationOptions : scopeType === "service" ? serviceOptions : scopeType === "rate_plan" ? ratePlanOptions : [];
 

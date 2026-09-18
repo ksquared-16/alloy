@@ -1,5 +1,6 @@
 "use client";
 
+import { financialRowConceptLabel } from "@/lib/financials/reductions/reductionProvenance";
 import { financialResponsibilityEligibility } from "@/lib/financials/commands/financialTransactionCommands";
 import clsx from "clsx";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
@@ -839,7 +840,12 @@ function ledgerRowFromEntry(
          * Falls back to the category label wherever the row is not a reduction, which is every
          * ordinary charge.
          */
-        type: e.reduction?.conceptLabel || chargeCategoryLabel(e.type),
+        /* Correction lineage first, then reduction provenance, then the category. */
+        type: financialRowConceptLabel({
+            correctionKind: e.correctionKind,
+            reductionConceptLabel: e.reduction?.conceptLabel ?? null,
+            categoryLabel: chargeCategoryLabel(e.type),
+        }),
         child: e.subject,
         /*
          * A CONCISE PREVIEW, NOT A PARAGRAPH. The decision behind the money, in the words an

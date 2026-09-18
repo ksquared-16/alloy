@@ -1705,8 +1705,16 @@ describe("F40 · one command authority, two presentation hosts", () => {
         expect(ws, "the workspace executes no financial action of its own").not.toMatch(
             /actions\/execute/,
         );
+        /*
+         * WRITERS, not the read model. The `reductions` directory holds both: the services that
+         * APPLY a reduction, and `reductionProvenance`, which is a pure naming rule with no I/O —
+         * the one that decides a charge reversal is called "Reversal" rather than "Credit". Sharing
+         * that rule is what keeps the two hosts from naming the same row differently, so excluding
+         * it by directory would forbid the convergence this file exists to protect. The writers
+         * stay forbidden by name.
+         */
         expect(ws, "and imports no financial writer").not.toMatch(
-            /from "@\/lib\/financials\/(chargeLifecycle|childcareCharge|reductions|payment)/,
+            /from "@\/lib\/financials\/(chargeLifecycle|childcareCharge|payment)|from "@\/lib\/financials\/reductions\/(apply|manual|policy|resolve)/,
         );
         for (const writer of ["postChildcareCharge", "reverseChildcareCharge", "writeTemplateDraftCharge"]) {
             expect(ws, `${writer} is not called from a presentation host`).not.toContain(writer);

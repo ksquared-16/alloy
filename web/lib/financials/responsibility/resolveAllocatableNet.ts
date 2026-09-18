@@ -32,7 +32,8 @@ export type AllocatableNet = {
     currencyCode: string;
     customerId: string | null;
     customerMemberId: string | null;
-    enrollmentAgreementId: string;
+    /** The enrolment this obligation hangs off, or null when it was billed to the household. */
+    enrollmentAgreementId: string | null;
     serviceDate: string | null;
     periodKey: string | null;
     status: string;
@@ -83,8 +84,29 @@ export async function resolveAllocatableNet(
     if (charge.status === "void") {
         throw new AllocatableNetError("not_allocatable", "A void charge has nothing to allocate.");
     }
-    if (charge.billable_source_type !== "enrollment_agreement" || !charge.billable_source_id) {
-        throw new AllocatableNetError("not_allocatable", "Only an enrolment-backed charge carries responsibility.");
+    /*
+     * ── AN OBLIGATION IS AN OBLIGATION, WHOEVER IT WAS BILLED TO ─────────────────────────────
+     *
+     * This refused anything not backed by an enrolment agreement, which meant a HOUSEHOLD-grain
+     * charge — a registration fee, a waitlist fee, an account-wide charge the operator deliberately
+     * attributed to the household — could exist and could never be owed by anybody. Core can author
+     * that obligation, so Core must be able to say who is responsible for it.
+     *
+     * The two source types are the two the charge writer already uses, and each carries the
+     * household directly: an agreement names its customer and its child, a customer source IS the
+     * customer. Nothing new is derived here.
+     *
+     * SUBJECT GRAIN IS NOT ALLOCATION. A household charge keeps `customerMemberId: null` — that is
+     * intentional household grain, not missing data — and the arrangement that governs it is
+     * matched on exactly that, so an account-wide arrangement applies and a child-scoped one does
+     * not. Responsibility remains a separate question from whose obligation it is.
+     */
+    if (!charge.billable_source_id
+        || (charge.billable_source_type !== "enrollment_agreement" && charge.billable_source_type !== "customer")) {
+        throw new AllocatableNetError(
+            "not_allocatable",
+            "Only a charge billed to an enrolment or a household carries responsibility.",
+        );
     }
 
     const { data: reductionRows, error: reductionError } = await supabase
@@ -112,16 +134,26 @@ export async function resolveAllocatableNet(
         throw new AllocatableNetError("negative_net", `Charge ${args.chargeId} nets below zero.`);
     }
 
-    // The household and child come from the agreement, which is where every other childcare
-    // financial read resolves them — never re-derived from the reduction rows.
-    const { data: agreementRow, error: agreementError } = await supabase
-        .from("child_enrollment_agreements")
-        .select("customer_id, customer_member_id")
-        .eq("org_id", args.orgId)
-        .eq("id", charge.billable_source_id)
-        .maybeSingle();
-    if (agreementError) throw new AllocatableNetError("db_error", agreementError.message);
-    const agreement = agreementRow as { customer_id: string | null; customer_member_id: string | null } | null;
+    /*
+     * The household and child come from the SOURCE the charge was written against, which is where
+     * every other childcare financial read resolves them — never re-derived from the reduction rows.
+     * A household-grain charge is its own answer: the customer source IS the household, and there
+     * is no child, which is the whole point of that grain.
+     */
+    const enrolmentBacked = charge.billable_source_type === "enrollment_agreement";
+    let agreement: { customer_id: string | null; customer_member_id: string | null } | null = null;
+    if (enrolmentBacked) {
+        const { data: agreementRow, error: agreementError } = await supabase
+            .from("child_enrollment_agreements")
+            .select("customer_id, customer_member_id")
+            .eq("org_id", args.orgId)
+            .eq("id", charge.billable_source_id)
+            .maybeSingle();
+        if (agreementError) throw new AllocatableNetError("db_error", agreementError.message);
+        agreement = agreementRow as { customer_id: string | null; customer_member_id: string | null } | null;
+    } else {
+        agreement = { customer_id: charge.billable_source_id, customer_member_id: null };
+    }
 
     return {
         chargeId: charge.id,
@@ -131,7 +163,8 @@ export async function resolveAllocatableNet(
         currencyCode: charge.currency_code,
         customerId: agreement?.customer_id ?? null,
         customerMemberId: agreement?.customer_member_id ?? null,
-        enrollmentAgreementId: charge.billable_source_id,
+        /* Null on a household charge: there is no enrolment behind it, and that is not a defect. */
+        enrollmentAgreementId: enrolmentBacked ? charge.billable_source_id : null,
         serviceDate: charge.service_date,
         periodKey: charge.service_date ? charge.service_date.slice(0, 7) : null,
         status: charge.status,

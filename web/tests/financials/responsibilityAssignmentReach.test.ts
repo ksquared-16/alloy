@@ -61,8 +61,15 @@ describe("THE GATE — the two commands are different grains (§4B)", () => {
         expect(panel).toContain('"billing.configure_responsibility"');
         expect(panel, "the charge-grain commands stay out of this panel")
             .not.toMatch(/callAction[\s\S]{0,400}resolve_responsibility/);
-        // And the arrangement it writes is the household's, not the child whose charge is open.
-        expect(panel).toContain("customer_member_id: null");
+        /*
+         * The arrangement's grain is the operator's STATED scope — it was pinned to the household
+         * while that was the only authorable kind, and a child-grain arrangement could therefore
+         * decide who owed a child's charges while being impossible to create or supersede. What
+         * must never return is the old defect: the grain being inherited from whichever charge
+         * happened to be open.
+         */
+        expect(panel).toContain("customer_member_id: args.arrangementMemberId");
+        expect(panel).toContain('arrangementMemberId: scope === "child" ? customerMemberId : null');
     });
 
     /*

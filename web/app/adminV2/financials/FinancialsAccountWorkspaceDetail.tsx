@@ -9,6 +9,7 @@ import {
     RowAction,
     type FinancialsLedgerRowView,
 } from "@/components/operationalCards/FinancialsLedger";
+import { financialRowConceptLabel } from "@/lib/financials/reductions/reductionProvenance";
 import { financialResponsibilityEligibility, financialTransactionEligibility } from "@/lib/financials/commands/financialTransactionCommands";
 import { useFinancialCommandChannel } from "@/components/financials/FinancialCommandChannel";
 import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
@@ -638,7 +639,12 @@ function ledgerRowFromWorkspaceRow(row: Row, cur: string): FinancialsLedgerRowVi
          * how the money posts. Two surfaces showing one account must not disagree about whether a
          * row is a discount, so both read the same projected field.
          */
-        type: String(reductionOf(row)?.conceptLabel ?? row.categoryLabel ?? row.categoryKey ?? "—"),
+        /* Same order as the Focus Panel, from the same shared rule: a reversal is a Reversal. */
+        type: financialRowConceptLabel({
+            correctionKind: row.correctionKind ? String(row.correctionKind) : null,
+            reductionConceptLabel: reductionOf(row)?.conceptLabel ?? null,
+            categoryLabel: String(row.categoryLabel ?? row.categoryKey ?? "—"),
+        }),
         child: String(row.subjectName ?? "Household"),
         description: reductionPreviewOf(row) ?? String(row.description ?? "—"),
         glLabel: glCode ? (glName ? `${glCode} · ${glName}` : glCode) : null,

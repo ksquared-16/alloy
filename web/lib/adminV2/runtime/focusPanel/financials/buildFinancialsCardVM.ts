@@ -255,9 +255,13 @@ export type FinancialsLedgerRow = {
     responsiblePartyName: string | null;
     /** An allocation exists for this charge and deliberately names no party. */
     responsibilityUnassigned: boolean;
-    /** Owed by a named party on this obligation, and owed by nobody yet — both are true at once. */
-    responsibilityAssignedCents: number;
-    responsibilityUnassignedCents: number;
+    /*
+     * Owed by a named party on this obligation, and owed by nobody yet — both are true at once.
+     * Optional because a row that has never been through allocation simply has neither; the
+     * projection always supplies them, and absent reads as zero everywhere they are used.
+     */
+    responsibilityAssignedCents?: number;
+    responsibilityUnassignedCents?: number;
     /** Where the row came from — template key, or the manual service. */
     source: string | null;
     /**

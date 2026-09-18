@@ -443,6 +443,8 @@ export function adaptFinancialsVmToLedgerPeriods(input: {
             source: row.categoryLabel,
             responsibleParty: row.responsiblePartyName,
             responsibilityUnassigned: row.responsibilityUnassigned,
+            /* So a reversal can be named a Reversal rather than falling through to its category. */
+            correctionKind: row.correctionKind,
             /* PARTIAL is a state, not an inference: both halves travel with the name. */
             responsibilityAssignedCents: row.responsibilityAssignedCents,
             responsibilityUnassignedCents: row.responsibilityUnassignedCents,
