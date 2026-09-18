@@ -41,8 +41,17 @@ export type ProrationMethod = "none" | "daily" | "calendar_day" | "business_day"
 export type TuitionRecurrenceInput = {
     /** The accepted terms for ONE assignment. Superseded terms are excluded by the reader. */
     terms: readonly AcceptedPricingTerm[];
-    /** The service period being billed, as a billing-period key (`YYYY-MM`). */
-    periodKey: string;
+    /**
+     * The service period being billed.
+     *
+     * A RESOLVED INTERVAL is preferred and is what the generator now passes: a commercial period is
+     * its boundaries, and for a weekly or biweekly cadence those boundaries cannot be recovered
+     * from a key alone without knowing the organisation's anchor. `periodKey` remains accepted so
+     * a monthly caller — every existing one — is unchanged.
+     */
+    period?: BillingPeriod;
+    /** The service period being billed, as a billing-period key. Monthly callers may pass only this. */
+    periodKey?: string;
     /** The organisation's configured proration method, when it has configured one. */
     prorationMethod?: ProrationMethod | null;
     /** The cadence this run bills. A term on another cadence is not this run's business. */
@@ -94,7 +103,12 @@ function earlierOf(a: string, b: string): string {
  * Pure and total: every input produces a decision, and none of them is an exception.
  */
 export function resolveTuitionRecurrence(input: TuitionRecurrenceInput): TuitionRecurrenceDecision {
-    const period = billingPeriodFromKey(input.periodKey);
+    /*
+     * The interval wins over the key. They cannot disagree when both are supplied by the generator
+     * — it derives one from the other — and a caller passing only a key is monthly, where the key
+     * carries the boundaries itself.
+     */
+    const period = input.period ?? billingPeriodFromKey(input.periodKey ?? "");
     const cadence = (input.cadenceKey ?? "monthly").trim();
     const method: ProrationMethod = (input.prorationMethod ?? "none") as ProrationMethod;
 
