@@ -50,3 +50,53 @@ drawn from the allocation authority's own record
 The previous value is backed up in this session's scratchpad. Nothing outside this lane was changed.
 
 **Restore:** set `PORT="3012"` back in that file once the host condition is cleared.
+
+---
+
+## RECURRENCE — 2026-09-18, port 3112 (the lane's OWN allocated port)
+
+The condition first recorded here for `:::3012` has reappeared on **`:::3112`**, the port the
+gateway metadata allocates to the `financials` worktree (`ALLOY_WORKTREE_SLOT=2`,
+`PORT="3112"`). That makes it a *class* of host condition rather than a property of one port, which
+is the part worth knowing.
+
+**Evidence, in the order it was gathered:**
+
+```
+alloy-dev-start --production financials
+  → Error: listen EADDRINUSE: address already in use :::3112
+
+lsof -nP -iTCP:3112 -sTCP:LISTEN     → no rows
+netstat -an | grep 3112              → no rows
+curl http://127.0.0.1:3112/…         → 000 (no response)
+curl http://[::1]:3112/…             → 000 (no response)
+
+alloy-dev-reclaim financials
+  observation   unknown
+  class         unattributable
+  action        REFUSED — the listener probe could not run, so ownership is unknown.
+                Unknown is not free, and it is certainly not proof to stop something.
+```
+
+Node binds `::` (IPv6 any) and is refused, while every attribution tool reports nothing and nothing
+answers on either stack. The toolkit's own classifier reaches `unattributable` and **refuses to
+act** — which is the correct behaviour and is why this is being written down rather than worked
+around.
+
+**What was NOT done, deliberately:** nothing was forced, killed, reclaimed or otherwise mutated. The
+same standing rule that governs `:::3012` applies: an unknown holder is not a free port, and a
+process that cannot be attributed cannot be safely stopped.
+
+**Consequence for Thread 11A:** mounted proof on a fixed production candidate could not be obtained
+this pass. The build is green and the server has nowhere to listen.
+
+**Second, independent blocker on the same attempt:** the slot-2 QA session had expired (storage
+state ~4.6h old against a ~1h TTL) and the governed restore
+`environment.restore_qa_session` / `gar_fa8b2b9b50f64f` returned **failed — verification_failed**,
+terminally. So even with a port, authenticated surfaces would have rendered the login page.
+
+Either blocker alone prevents mounted proof; both were present.
+
+**For the operator:** this needs a host-level answer — an explanation for the phantom IPv6 binds, or
+a sanctioned way to allocate a different port through the lane/QA allocation authority — plus a
+working QA session restore path. Both are outside what this lane may do on its own.
