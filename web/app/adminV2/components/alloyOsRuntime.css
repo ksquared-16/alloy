@@ -6589,13 +6589,17 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork__composer-host > .alloy-os-activity-cockpit__comms {
   flex: 1 1 auto;
   min-height: 0;
-  max-height: min(70vh, 640px);
+  /* `--alloy-os-composer-available` is the space that actually exists below this host, published by
+   * `useComposerHostViewportFit`. Without it the cap was blind to where the host starts: measured on
+   * the Enrollment specimen at a 900px viewport the host began at y=433, 467px were available, the
+   * cap allowed 630, and the composer's Send button landed at y=905 — off the screen entirely. */
+  max-height: min(70vh, 640px, var(--alloy-os-composer-available, 70vh));
 }
 
 /* What's Next → Contact Family / Send Message / Tour Invitation: New Message focused.
  * History rail stays hidden while composing; composer body gets usable height. */
 .alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] {
-  max-height: min(70vh, 640px);
+  max-height: min(70vh, 640px, var(--alloy-os-composer-available, 70vh));
 }
 .alloy-os-currentwork__composer-host [data-work-compose-intent="new_message"] [data-cc-topic-rail],
 .alloy-os-currentwork__composer-host [data-cc-compose-intent="new_message"] [data-cc-topic-rail] {

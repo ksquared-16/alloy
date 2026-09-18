@@ -366,11 +366,34 @@ Type `Toureeb`.
 > ever appear. You are never expected to copy the link yourself.
 
 **D6. DO** — Click **Send**.
-**EXPECT** — A confirmation step: **Ready to send**, naming the recipient, with **Back to edit** and
-**Confirm send**. Nothing has been sent yet.
+**EXPECT** — The composer turns into its own confirmation — **not** a second window on top of it:
+
+```
+Ready to send
+To      Tourb Tourb0913 · Kurz16@gmail.com
+Email   Enrollment paperwork for Toureeb
+
+  the first lines of your message          Show 3 more lines
+  🔗 Participant link included
+
+Back to edit                               Confirm send
+```
+
+Nothing has been sent yet. The recipient row stays visible above it, and the message is summarised
+rather than reprinted in full — you just wrote it.
+
+> **STOP** if the participant-link line is missing. That line is checked against the message that
+> will actually be sent, so its absence means the link is not in it.
+
+**DO** — Press **Back to edit**, change one word, then **Send** again.
+**EXPECT** — Your edit is still there. Going back is a return to the draft, not a discard.
 
 **D7. DO** — Click **Confirm send**.
 **EXPECT** — **Message sent · Email sent to …** and a **Done** button.
+
+> **Sending the same paperwork twice is allowed and is a real second email.** Pressing Confirm twice
+> on the SAME send is not: that is one delivery, however many times the button is pressed. If you
+> ever see a message about a *send key*, stop and report it — you should never meet one.
 
 > If the send fails you will see **Could not send** with the reason and **Back to edit**, and your
 > draft is kept. That message is the truth: if it says it could not send, nothing went out.

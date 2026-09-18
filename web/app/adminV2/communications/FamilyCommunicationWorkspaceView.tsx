@@ -35,6 +35,7 @@ import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
 import ComposerScheduleSendModal from "@/components/adminV2/messaging/ComposerScheduleSendModal";
 import ComposerBosEnhanceModal from "@/components/adminV2/messaging/ComposerBosEnhanceModal";
 import FamilySendConfirmationDialog from "@/components/admin/communications/FamilySendConfirmationDialog";
+import FamilySendConfirmInSurface from "@/components/admin/communications/FamilySendConfirmInSurface";
 import { resolveComposeNewScheduleContext } from "@/lib/adminV2/messaging/messagingComposerScheduleContext";
 import {
     insertTextareaLink,
@@ -764,7 +765,18 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     visible, checkable answer. This is always the VISIBLE
                     identity; the delivery destination is transport and does not
                     appear in Communications at all. */}
-                {workspaceMode === "email" && sendingIdentity ? (
+                {/*
+                  * VERTICAL SPACE IS THE MESSAGE'S.
+                  *
+                  * From, the recipient box, the "Add another email / CC/BCC" strip and the
+                  * Preferences row were four stacked blocks, each with its own margin, sitting
+                  * between the channel tabs and the subject. Measured on the certified specimen at a
+                  * 900px viewport: 287px above the body, which left the body 206px and ran its last
+                  * 64px off the bottom of the screen. In the activity composer those four collapse
+                  * into ONE metadata line; nothing is removed, and every control keeps its own
+                  * handle. The full-height composer keeps the roomier stacked layout.
+                  */}
+                {workspaceMode === "email" && sendingIdentity && !isActivityEmbed ? (
                     <div
                         data-cc-compose-from="true"
                         className="mt-2 flex shrink-0 flex-wrap items-baseline gap-1.5 text-[11px] text-alloy-midnight/60"
@@ -886,28 +898,41 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                         Add
                                         <ChevronDown className={`h-3 w-3 transition ${recipientPickerOpen ? "rotate-180" : ""}`} />
                                     </button>
+                                    {workspaceMode === "email" ? (
+                                        <>
+                                            <button
+                                                type="button"
+                                                data-cc-add-email
+                                                onClick={() => setShowManualEmailInput((v) => !v)}
+                                                className="text-[10px] font-medium text-alloy-juniper hover:underline"
+                                            >
+                                                Add another email
+                                            </button>
+                                            <button
+                                                type="button"
+                                                data-cc-toggle-cc-bcc
+                                                aria-expanded={showCcBcc}
+                                                onClick={() => setShowCcBcc((v) => !v)}
+                                                className="text-[10px] font-medium text-alloy-midnight/55 hover:text-alloy-juniper"
+                                            >
+                                                CC/BCC
+                                            </button>
+                                        </>
+                                    ) : null}
+                                    {/* Whose address this arrives from — the same answer, on the same line. */}
+                                    {workspaceMode === "email" && sendingIdentity ? (
+                                        <span
+                                            data-cc-compose-from="true"
+                                            className="ml-auto inline-flex items-baseline gap-1 text-[10px] text-alloy-midnight/55"
+                                        >
+                                            <span className="font-medium text-alloy-midnight/40">From</span>
+                                            <span data-cc-compose-from-address className="text-alloy-midnight/70">
+                                                {sendingIdentity.address}
+                                            </span>
+                                        </span>
+                                    ) : null}
                                 </div>
-                                {workspaceMode === "email" ? (
-                                    <div className="mt-1.5 flex flex-wrap items-center gap-2 border-t border-alloy-stone/12 pt-1.5">
-                                        <button
-                                            type="button"
-                                            data-cc-add-email
-                                            onClick={() => setShowManualEmailInput((v) => !v)}
-                                            className="text-[10px] font-medium text-alloy-juniper hover:underline"
-                                        >
-                                            Add another email
-                                        </button>
-                                        <button
-                                            type="button"
-                                            data-cc-toggle-cc-bcc
-                                            aria-expanded={showCcBcc}
-                                            onClick={() => setShowCcBcc((v) => !v)}
-                                            className="text-[10px] font-medium text-alloy-midnight/55 hover:text-alloy-juniper"
-                                        >
-                                            CC/BCC
-                                        </button>
-                                    </div>
-                                ) : null}
+
                                 {workspaceMode === "email" && showCcBcc ? (
                                     <div className="mt-1.5 space-y-1 border-t border-alloy-stone/12 pt-1.5">
                                         <div className="flex items-center gap-1.5">
@@ -1008,7 +1033,10 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                   * show two different summaries, side by side.
                   */}
                 {LIVE_WORKSPACE && composeMode && selectedRecipientRows.length > 0 ? (
-                    <div data-cc-recipient-preferences-row className="mt-2 flex shrink-0 flex-wrap items-center gap-1.5">
+                    <div
+                        data-cc-recipient-preferences-row
+                        className={`flex shrink-0 flex-wrap items-center gap-1.5 ${isActivityEmbed ? "mt-1" : "mt-2"}`}
+                    >
                         <span className="text-[10px] font-medium text-alloy-midnight/45">Preferences</span>
                         {selectedRecipientRows.map((r) => (
                             <RecipientPreferenceAffordance
@@ -1042,7 +1070,51 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     />
                 ) : null}
 
+                {/*
+                  * THE CONFIRMATION IS THE LAST STEP OF THIS SURFACE, NOT AN ALERT OVER IT.
+                  *
+                  * Ready to send used to open a centered modal above the composer modal, repeating
+                  * the entire message inside a second scroller. The operator had just written that
+                  * message and was still looking at it. The editor is replaced in place instead, so
+                  * the recipient row above stays visible and Back to edit is a return rather than a
+                  * dismissal. Nothing sends until Confirm send.
+                  */}
+                {LIVE_WORKSPACE && sendResult?.mode === "preflight" && !sendError ? (
+                    <FamilySendConfirmInSurface
+                        sendResult={sendResult}
+                        sending={sending}
+                        channel={workspaceMode === "sms" ? "sms" : "email"}
+                        subjectDraft={subjectDraft}
+                        bodyDraft={bodyDraft}
+                        recipientName={
+                            selectedRecipientRows[0]?.displayName ??
+                            (detail ? detail.contactName : (selected?.family_label ?? ""))
+                        }
+                        recipientAddress={
+                            selectedRecipientRows.length === 1
+                                ? (workspaceMode === "sms"
+                                      ? selectedRecipientRows[0]?.phone
+                                      : selectedRecipientRows[0]?.email) ?? null
+                                : selectedRecipientRows.length > 1
+                                  ? `${selectedRecipientRows.length} recipients`
+                                  : null
+                        }
+                        onBackToEdit={onDismissSend}
+                        onConfirmSend={onConfirmSend}
+                    />
+                ) : null}
+
+                {/*
+                  * HIDDEN, NOT UNMOUNTED.
+                  *
+                  * Replacing the editor with the confirmation destroyed the contentEditable, and a
+                  * fresh one does not re-inherit the draft — Back to edit came back to a message
+                  * missing the operator's own last edit. Certified by typing a marker, confirming,
+                  * and going back: the marker was in the confirmation preview and gone from the
+                  * editor. `hidden` keeps the element and its draft exactly where they were.
+                  */}
                 <div
+                    hidden={LIVE_WORKSPACE && sendResult?.mode === "preflight" && !sendError}
                     className={`mt-2 flex min-h-0 flex-col overflow-hidden rounded-lg border bg-white shadow-sm ${
                         isActivityEmbed
                             ? isNewMessageMode
@@ -1153,9 +1225,12 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     )}
                 </div>
 
+                {/* Success and failure remain a brief centered acknowledgement: they end the
+                    workflow rather than asking the operator to decide anything, so they are not
+                    a second decision surface stacked on the first. */}
                 {LIVE_WORKSPACE ? (
                     <FamilySendConfirmationDialog
-                        open={Boolean(sendResult || sendError)}
+                        open={Boolean((sendResult && sendResult.mode !== "preflight") || sendError)}
                         sendResult={sendResult}
                         sendError={sendError}
                         sending={sending}
@@ -1180,7 +1255,14 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                         }
                     />
                 ) : null}
-                <div className="mt-2.5 flex items-center gap-1.5" data-cc-composer-footer>
+                {/* ONE primary action at a time. While the confirmation is up, the composer's own
+                    Send/Send later row is inert anyway — showing it puts two send affordances on
+                    screen and leaves the operator deciding which one is real. */}
+                <div
+                    hidden={LIVE_WORKSPACE && sendResult?.mode === "preflight" && !sendError}
+                    className="mt-2.5 flex items-center gap-1.5"
+                    data-cc-composer-footer
+                >
                     <button type="button" data-cc-send-button="true" disabled={sending || Boolean(sendResult) || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim() || subjectMissingForNewEmail))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : isNewMessageMode ? "Send" : "Send reply"}</button>
                     {LIVE_WORKSPACE && subjectMissingForNewEmail && bodyDraft.trim() ? (
                         <span data-cc-subject-required className="text-[10px] font-medium text-alloy-midnight/55">Add a subject to send</span>

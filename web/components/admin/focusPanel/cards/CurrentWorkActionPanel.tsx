@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback } from "react";
+
+import { useComposerHostViewportFit } from "@/components/admin/focusPanel/cards/useComposerHostViewportFit";
 import dynamic from "next/dynamic";
 
 import CurrentWorkStageTransitionPanel from "@/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel";
@@ -92,8 +94,10 @@ function CurrentWorkNewMessageComposerHost({
     opportunityId: string;
     draftSeed?: FamilyComposeDraftSeed | null;
 }) {
+    const composerHostRef = useComposerHostViewportFit();
     return (
         <div
+            ref={composerHostRef}
             className="alloy-os-currentwork__composer-host"
             data-work-action-panel="true"
             data-work-action-panel-key={actionKey}
@@ -136,13 +140,15 @@ function CurrentWorkEnrollmentPaperworkComposerHost({
     opportunityId: string;
     customerMemberId: string;
 }) {
+    const composerHostRef = useComposerHostViewportFit();
     const actionKey = (action.handlerKey ?? action.actionRef ?? action.key).trim();
     const seedState = useEnrollmentPaperworkComposeSeed(customerMemberId, true);
 
     if (seedState.phase !== "ready") {
         return (
             <div
-                className="alloy-os-currentwork__composer-host"
+                ref={composerHostRef}
+            className="alloy-os-currentwork__composer-host"
                 data-work-action-panel="true"
                 data-work-action-panel-key={actionKey}
                 data-work-action-surface="communications_composer"
@@ -178,13 +184,15 @@ function CurrentWorkTourInvitationComposerHost({
     action: CurrentWorkActionVM;
     opportunityId: string;
 }) {
+    const composerHostRef = useComposerHostViewportFit();
     const actionKey = (action.handlerKey ?? action.actionRef ?? action.key).trim();
     const seedState = useTourInvitationComposeSeed(opportunityId, true);
 
     if (seedState.phase === "preparing") {
         return (
             <div
-                className="alloy-os-currentwork__composer-host"
+                ref={composerHostRef}
+            className="alloy-os-currentwork__composer-host"
                 data-work-action-panel="true"
                 data-work-action-panel-key={actionKey}
                 data-work-action-surface="communications_composer"
@@ -202,7 +210,8 @@ function CurrentWorkTourInvitationComposerHost({
     if (seedState.phase === "error") {
         return (
             <div
-                className="alloy-os-currentwork__composer-host"
+                ref={composerHostRef}
+            className="alloy-os-currentwork__composer-host"
                 data-work-action-panel="true"
                 data-work-action-panel-key={actionKey}
                 data-work-action-surface="communications_composer"
