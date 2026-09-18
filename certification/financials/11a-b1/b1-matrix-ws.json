@@ -1,0 +1,27 @@
+{
+  "rows": 64,
+  "lenses": [
+    "all",
+    "charges",
+    "credits",
+    "funding",
+    "payments"
+  ],
+  "filters": [
+    "financials-filter-subject",
+    "financials-filter-period",
+    "financials-filter-responsible-party"
+  ],
+  "actions": [
+    "resolveResponsibility",
+    "reverse",
+    "adjust",
+    "reallocateResponsibility"
+  ],
+  "states": [
+    "not-allocated",
+    "partial",
+    "unassigned"
+  ],
+  "hasGL": true
+}

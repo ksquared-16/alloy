@@ -1,0 +1,80 @@
+[
+  {
+    "row": "A-tuition",
+    "what": "tuition plans and billing frequencies reachable",
+    "ok": true,
+    "observed": "⌘K / QS / Organization / financials / Financials / Tuition Plans, enrollment commitments, organization pricing, and location overrides. / Tu"
+  },
+  {
+    "row": "A-catalog",
+    "what": "catalog charge types reachable",
+    "ok": true,
+    "observed": "⌘K / QS / Organization / financials / Financials / Fees, optional services, and other chargeable offerings outside recur"
+  },
+  {
+    "row": "A-gl",
+    "what": "GL codes and category mapping reachable",
+    "ok": true,
+    "observed": "⌘K / QS / Organization / financials / Financials / GL Codes, revenue mappings, and where tuition and fees post. / Tuition / Catalog / Polici"
+  },
+  {
+    "row": "A-sim",
+    "what": "commercial simulator reachable",
+    "ok": true,
+    "observed": "⌘K / QS / Organization / financials / Financials / Preview how commercial execution resolves for a Program and schedule."
+  },
+  {
+    "row": "A-discount",
+    "what": "discount policy authoring reachable",
+    "ok": true,
+    "observed": "New Policy present"
+  },
+  {
+    "row": "A-policy",
+    "what": "six consuming execution policy types offered, inert ones withheld",
+    "ok": true,
+    "observed": "active=6 inertShown=[]"
+  },
+  {
+    "row": "A-due",
+    "what": "the due-date policy this run authored is in force",
+    "ok": false,
+    "observed": "not listed"
+  },
+  {
+    "row": "D-zero",
+    "what": "a zero-activity household is reachable and honestly described",
+    "ok": true,
+    "observed": "9+ / 6 / ⌘K / All locations / ▾ / QS / Firefly Early Learning / Operational Workspace / 6 / Needs attention / 6 / Overdue work / 20 / Pipeline Children / Actions (1) / ▶ / Enrollme"
+  },
+  {
+    "row": "D-unavail",
+    "what": "no false Financial Account Unavailable state",
+    "ok": true,
+    "observed": "absent"
+  },
+  {
+    "row": "D-ledger",
+    "what": "the same ledger, lenses and GL",
+    "ok": true,
+    "observed": "rows=64 lenses=5 gl=true"
+  },
+  {
+    "row": "D-filters",
+    "what": "the same filter vocabulary",
+    "ok": true,
+    "observed": "[\"financials-filter-subject\",\"financials-filter-period\",\"financials-filter-responsible-party\"]"
+  },
+  {
+    "row": "D-actions",
+    "what": "the same row commands",
+    "ok": true,
+    "observed": "[\"resolveResponsibility\",\"reverse\",\"adjust\",\"reallocateResponsibility\"]"
+  },
+  {
+    "row": "D-resp",
+    "what": "the same responsibility states including partial",
+    "ok": true,
+    "observed": "[\"not-allocated\",\"partial\",\"unassigned\"]"
+  }
+]
