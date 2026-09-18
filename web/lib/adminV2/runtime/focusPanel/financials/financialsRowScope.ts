@@ -33,8 +33,24 @@
  * and can act on.
  */
 
-/** The scope a Financials surface is showing: the whole account, or one child. */
-export type FinancialsSubjectScope = "all" | string;
+/**
+ * THE DELIBERATE HOUSEHOLD VIEW — "show me only what the account itself owes".
+ *
+ * Distinct from a child scope, which INCLUDES household rows, and from `all`. An operator
+ * administering the account needs to see the household's own obligations without a child's rows
+ * mixed in; the Focus Panel's attention model never needed that, but the Workspace does.
+ *
+ * A member id is a uuid, so this token cannot collide with one.
+ */
+export const FINANCIALS_HOUSEHOLD_SCOPE = "household";
+
+/**
+ * The scope a Financials surface is showing: the whole account, the household alone, or one child.
+ *
+ * `all` | `"household"` | `<customerMemberId>`. The three are what §2 of the subject-grain doctrine
+ * requires an operator to be able to inspect deliberately.
+ */
+export type FinancialsSubjectScope = "all" | typeof FINANCIALS_HOUSEHOLD_SCOPE | string;
 
 /** A row, narrowed to the only field this rule reads. */
 export type FinancialsScopedRow = { subjectMemberId: string | null };
@@ -43,10 +59,13 @@ export type FinancialsScopedRow = { subjectMemberId: string | null };
  * Is this row in scope?
  *
  * `all` takes everything. A named child takes that child's rows AND the household's, because a
- * household charge is the account's and the child is inside the account.
+ * household charge is the account's and the child is inside the account. `household` takes ONLY the
+ * account's own rows — the one scope that is deliberately narrower than the account, because it is
+ * an explicit request to look at the household by itself rather than an attention context.
  */
 export function rowInFinancialsSubjectScope(row: FinancialsScopedRow, scope: FinancialsSubjectScope): boolean {
     if (scope === "all") return true;
+    if (scope === FINANCIALS_HOUSEHOLD_SCOPE) return row.subjectMemberId == null;
     // Household-grain: the account's own charge, visible from anywhere inside the account.
     if (row.subjectMemberId == null) return true;
     return row.subjectMemberId === scope;

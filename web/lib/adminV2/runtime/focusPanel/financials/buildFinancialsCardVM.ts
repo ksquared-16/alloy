@@ -38,6 +38,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
+/*
+ * THE REVIEW BOUNDARY'S OTHER HALF. `listFinancialPolicies` reads the org's policies; this resolves
+ * the one that governs a given service. The pair is what makes `posting_review` a configured fact
+ * rather than a template's private opinion, and a restore that brought back only the reader left
+ * the resolver called but undeclared.
+ */
+import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
 import { financialsClock, recordFinancialsSpans } from "@/lib/perf/routeTimingDiagnostic";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
@@ -865,6 +872,14 @@ type FinancialsBuildArgs = {
     customerMemberId?: string | null;
     /** Operating day; defaults to today. Certification pins it. */
     today?: string | null;
+    /**
+     * Server-Timing phase marker, supplied by the route that is already measuring itself.
+     *
+     * Optional and defaulted to a no-op at the single consumption site, so a caller that is not
+     * instrumenting — every test, and the workspace path — passes nothing and measures nothing.
+     * The build does NOT create its own timing authority: it writes into the route's.
+     */
+    mark?: (phase: string) => void;
 };
 
 type FinancialsBuildClock = ReturnType<typeof financialsClock>;

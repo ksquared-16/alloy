@@ -26,6 +26,10 @@ import {
     isCollectibleOffsetRow,
     type FinancialsLedgerRow,
 } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
+import {
+    FINANCIALS_HOUSEHOLD_SCOPE,
+    rowInFinancialsSubjectScope,
+} from "@/lib/adminV2/runtime/focusPanel/financials/financialsRowScope";
 
 /** The angles. `payments` reads receipts rather than ledger rows — money in, not money owed. */
 export const ACCOUNT_LENSES = ["all", "charges", "credits", "funding", "payments"] as const;
@@ -77,9 +81,22 @@ export type LedgerFilter = {
 
 export const NO_FILTER: LedgerFilter = Object.freeze({ lens: "all", subject: null, periodKey: null });
 
-/** The token a row with no child subject filters under. Household rows are childless BY CONSTRUCTION. */
-export const HOUSEHOLD_SUBJECT = "household";
+/**
+ * The token a row with no child subject filters under. Household rows are childless BY CONSTRUCTION.
+ *
+ * RE-EXPORTED, not re-declared. This file used to own the string, and owning it was how it came to
+ * own a second definition of subject scope as well — see `filterLedger` below.
+ */
+export const HOUSEHOLD_SUBJECT = FINANCIALS_HOUSEHOLD_SCOPE;
 
+/**
+ * Which filter option a row CONTRIBUTES TO — not which rows a filter selects.
+ *
+ * Those are different questions and conflating them is exactly what broke this surface. A household
+ * row contributes to the "Household" option (one row, one option, so the counts add up), but it is
+ * SELECTED by a child scope too, because it is the account's row and the child is inside the
+ * account. Selection is `rowInFinancialsSubjectScope`'s job and only its job.
+ */
 export function subjectTokenOf(row: FinancialsLedgerRow): string {
     return row.subjectMemberId ? row.subjectMemberId : HOUSEHOLD_SUBJECT;
 }
@@ -92,7 +109,18 @@ export function filterLedger(
         /* The payments lens is not a view of the ledger at all — it reads receipts. */
         if (filter.lens === "payments") return false;
         if (filter.lens !== "all" && ledgerLensOf(row) !== filter.lens) return false;
-        if (filter.subject && subjectTokenOf(row) !== filter.subject) return false;
+        /*
+         * ONE SUBJECT-SCOPE AUTHORITY, SHARED WITH THE FOCUS PANEL.
+         *
+         * This line read `subjectTokenOf(row) !== filter.subject` — an EXACT match, which is a
+         * different definition of child scope from the one the Focus Panel ships. Selecting a child
+         * here returned that child's rows only and silently dropped every household row: the
+         * account fee, the registration fee, the family's own credits. That is the same defect
+         * `financialsRowScope` was created to repair one surface at a time, still live in the other
+         * surface, and two definitions of "this child's financial scope" is the thing the module
+         * note above says this file must never become.
+         */
+        if (filter.subject && !rowInFinancialsSubjectScope(row, filter.subject)) return false;
         if (filter.periodKey && (row.periodKey ?? "") !== filter.periodKey) return false;
         return true;
     });
@@ -117,9 +145,15 @@ export function lensCounts(
     payments: readonly LensPayment[],
     within: Omit<LedgerFilter, "lens">,
 ): Record<AccountLens, number> {
+    /*
+     * SCOPED THE SAME WAY `filterLedger` SCOPES, through the same authority. A count derived from a
+     * different predicate than the view it labels is a badge that promises rows the lens will not
+     * show — and before the convergence above, the child scopes disagreed by exactly the household
+     * rows.
+     */
     const scoped = rows.filter(
         (row) =>
-            (!within.subject || subjectTokenOf(row) === within.subject)
+            (!within.subject || rowInFinancialsSubjectScope(row, within.subject))
             && (!within.periodKey || (row.periodKey ?? "") === within.periodKey),
     );
     const counts: Record<AccountLens, number> = {

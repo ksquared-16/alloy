@@ -751,7 +751,7 @@ export default function FinancialsCard({
         setAdjustSourceChargeId(args.chargeId);
         setAdjustOpen(true);
         setEntryMode("adjustment");
-        setOverlay("add_charge");
+        push({ kind: "adjust_charge", chargeId: args.chargeId });
     }, [adjustableSubjects, closeAdjustPanels, closeMovePanels, vm]);
 
     const openReverseAdjustment = useCallback((args: { applicationId: string }) => {
@@ -1246,7 +1246,7 @@ export default function FinancialsCard({
                     subjectMemberId: row.subjectMemberId,
                 });
                 setPayAmount((row.outstandingCents / 100).toFixed(2));
-                setOverlay("payment");
+                push({ kind: "payment" });
             };
         },
         [],
@@ -1796,8 +1796,33 @@ export default function FinancialsCard({
     // Elevation reported from RENDER-adjacent state, so the depth layer and this card agree on the
     // same frame. A card that reported after paint would flash its base surface first.
     useReportPerspective(coordination, "financials", overlay ? "focused" : "base");
-    useDismissSignal(coordination, "financials", () => {
-        setOverlay(null);
+    /*
+     * ── DISMISSAL POPS ONE LEVEL ───────────────────────────────────────────────────────────────
+     *
+     * COMPACT → DETAILS → COMMAND is a stack, and closing a command returned the operator all the
+     * way to the compact card: open Details, work the ledger, adjust a row, cancel — and the ledger,
+     * the lens and the expanded periods were gone, because dismissal cleared the overlay outright.
+     *
+     * Dismissal pops ONE level, whatever the level happens to be: a command returns to Details,
+     * Details returns to the compact card. Escape, the backdrop and every Cancel run through this
+     * one path, so the three cannot drift apart.
+     *
+     * ── ONE GESTURE, ONE LEVEL ────────────────────────────────────────────────────────────────
+     *
+     * Dismissal has more than one announcer — the grid's backdrop publishes a signal, and this card
+     * listens for Escape itself — and on some hosts both speak for the same keypress. Two pops for
+     * one Escape would take the operator from a command past Details to the compact card, which is
+     * the wrong-return defect wearing a different hat. So the pop is coalesced: whoever announces
+     * first moves the stack, and anything arriving in the same gesture window is the same gesture.
+     */
+    const lastDismissRef = useRef(0);
+    const [dismissNonce, setDismissNonce] = useState(0);
+    const dismissOneLevel = useCallback(() => {
+        const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+        if (now - lastDismissRef.current < 150) return;
+        lastDismissRef.current = now;
+        setDismissNonce((n) => n + 1);
+        pop();
         setPending(null);
         setCommandError(null);
         closeMovePanels();
@@ -3401,8 +3426,8 @@ export default function FinancialsCard({
                      */
                     span={model.density === "compact" ? 1 : "row"}
                     /* No drill-down where the account's own body is already open beneath this. */
-                    onDetails={showDetailsAction ? () => setOverlay("detail") : undefined}
-                    onAddCharge={() => setOverlay("add_charge")}
+                    onDetails={showDetailsAction ? requestDetails : undefined}
+                    onAddCharge={() => push({ kind: "add_charge" })}
                     /*
                      * `Pay now` was always this card's primary action and the Focus Panel never wired
                      * it, so it rendered inert while Slice H's settle operation had no way in at all.
