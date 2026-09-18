@@ -160,3 +160,34 @@ describe("THE GATE — what the engine actually does with an arrangement (§4F)"
         expect(arr).toContain("effectiveStart");
     });
 });
+
+describe("THE GATE — the undivided-charge note does not claim a draft has posted", () => {
+    const panel = src("app/adminV2/financials/FinancialsResponsibilityPanel.tsx");
+
+    /*
+     * MEASURED ON THE MOUNTED CANDIDATE. Every charge on the Charges tab — each labelled
+     * "Draft · Service …" with its own "Post $25.00" control two lines above — carried the sentence
+     * "This posted charge is not divided under it." The branch that renders it tests only whether an
+     * arrangement exists and no party is allocated; it never asked whether the charge had posted.
+     *
+     * The reason the sentence gives is only true of posted money: Thread 6 refuses to move money
+     * that has already posted. A draft is not protected by that rule — it simply has no allocation
+     * yet — so the note explained a restriction that was not there, on the same screen that was
+     * calling the charge a draft.
+     */
+    it("states the posted reason only for a charge that has actually posted", () => {
+        expect(panel, "the claim is conditional on status").toContain("isPostedStatus(chargeStatus)");
+        expect(panel, "a draft gets a true sentence").toContain("This charge is not divided under it yet.");
+    });
+
+    it("takes the status from the charge rather than assuming it", () => {
+        expect(panel).toContain("chargeStatus?: string | null;");
+        expect(src("app/adminV2/financials/FinancialsChargeDetail.tsx")).toContain("chargeStatus={detail.status}");
+    });
+
+    /* The arrangement half of the sentence was correct and must survive the repair. */
+    it("still says an arrangement is in force, which was the other half of the fix", () => {
+        expect(panel).toContain('data-financials-responsibility-arrangement="in-force"');
+        expect(panel).toMatch(/1 responsible party|responsible parties/);
+    });
+});

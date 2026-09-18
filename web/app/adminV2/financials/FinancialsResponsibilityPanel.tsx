@@ -29,6 +29,7 @@ import { useCallback, useState } from "react";
 
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
+import { isPostedStatus } from "@/lib/financials/billableSource";
 
 export const CONFIGURE_RESPONSIBILITY_ACTION_KEY = "billing.configure_responsibility";
 
@@ -170,6 +171,7 @@ export default function FinancialsResponsibilityPanel({
     customerId,
     customerMemberId,
     chargeId,
+    chargeStatus,
     arrangement,
     parties,
     onCommitted,
@@ -178,6 +180,16 @@ export default function FinancialsResponsibilityPanel({
     customerMemberId: string | null;
     /** The obligation being looked at — carried so an arrangement in force can still be edited. */
     chargeId?: string | null;
+    /**
+     * WHETHER THIS CHARGE HAS POSTED, because the sentence below used to assert that it had.
+     *
+     * The undivided-charge note read "This posted charge is not divided under it" on every charge
+     * the arrangement had not allocated — including DRAFTS, which the same screen was labelling
+     * "Draft" two lines above. The reason it gives is only true of posted money: Thread 6 refuses
+     * to move money that has already posted. A draft is not protected by that rule, it simply has
+     * no allocation yet, and telling an operator otherwise explains a restriction that is not there.
+     */
+    chargeStatus?: string | null;
     /*
      * THE ACCOUNT'S ARRANGEMENT, which is not the same fact as this charge's allocation. Without it
      * the panel went on inviting the operator to create an arrangement they had just created.
@@ -280,7 +292,10 @@ export default function FinancialsResponsibilityPanel({
                                 ledger cell. Through the platform's formatter like every other date. */}
                             {arrangement.effectiveStart
                                 ? ` from ${formatDisplayDate(arrangement.effectiveStart)}`
-                                : ""}. This posted charge is not divided under it.
+                                : ""}.{" "}
+                            {chargeStatus == null || isPostedStatus(chargeStatus)
+                                ? "This posted charge is not divided under it."
+                                : "This charge is not divided under it yet."}
                         </p>
                     ) : (
                         /* A statement of fact and an invitation — not a reason the control is unusable. */

@@ -317,6 +317,7 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                     customerId={detail.customerId}
                     customerMemberId={detail.customerMemberId}
                     chargeId={detail.chargeId}
+                    chargeStatus={detail.status}
                     arrangement={detail.accountArrangement}
                     parties={detail.responsibility.parties}
                     onCommitted={reload}
