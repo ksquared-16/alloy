@@ -1,0 +1,38 @@
+[
+  {
+    "id": "3D-1",
+    "what": "the subject filter offers an explicit household option",
+    "ok": false,
+    "observed": "options=[]"
+  },
+  {
+    "id": "3D-2",
+    "what": "the Add surface states the subject it will charge",
+    "ok": true,
+    "observed": "subject=[] childBoxes=1"
+  },
+  {
+    "id": "3D-3",
+    "what": "a household-capable type offers a deliberate grain choice",
+    "ok": true,
+    "observed": "boxes=1 saysHousehold=true"
+  },
+  {
+    "id": "3F-1",
+    "what": "the Workspace raises the SAME Add command surface",
+    "ok": true,
+    "observed": "overlay=true mode=charge"
+  },
+  {
+    "id": "3F-2",
+    "what": "the Workspace Add offers the same multi-child selection",
+    "ok": false,
+    "observed": "childBoxes=0"
+  },
+  {
+    "id": "3F-3",
+    "what": "the same Charge/Adjustment tablist is present in the Workspace",
+    "ok": true,
+    "observed": "[\"charge\",\"adjustment\"]"
+  }
+]

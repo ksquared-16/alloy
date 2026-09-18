@@ -44,6 +44,8 @@ import {
     type CorrectionKind,
 } from "@/lib/financials/childcareChargeService";
 import { isPostedStatus } from "@/lib/financials/billableSource";
+import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
+import { subjectGrainIsLegal } from "@/lib/financials/chargeCategorySemantics";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -432,6 +434,42 @@ async function executeMultiChildAdd(args: {
     };
 }
 
+/**
+ * IS THIS CHARGE'S SUBJECT LEGAL FOR ITS CHARGE TYPE — asked BEFORE any money moves.
+ *
+ * `chargeCategorySemantics` is the code-owned authority on whose money a charge type can be, and
+ * until now nothing on the WRITE path consulted it: the grain rule was honoured only by the Focus
+ * Panel, which withheld the sibling checkboxes. Everything else — the household option in
+ * "Applies to", a governed invocation, a replayed payload — could author `tuition` at household
+ * grain, which the semantics module exists to call a contradiction.
+ *
+ * The check belongs here, beside the subject resolution loop that already runs before the first
+ * write, because a refusal discovered halfway through leaves a family half billed.
+ */
+async function refuseIllegalSubjectGrain(
+    supabase: SupabaseClient,
+    orgId: string,
+    templateId: string,
+    childIds: readonly string[],
+    correlationId: string,
+): Promise<ActionResult | null> {
+    if (!templateId) return null;
+    const template = (await listChargeTemplates(supabase, orgId)).find((x) => x.id === templateId);
+    // An unknown template is not this function's refusal to make; the writer says so with its own voice.
+    if (!template) return null;
+    // No child named IS household grain — the doctrine the whole subject model rests on.
+    if (subjectGrainIsLegal(template.charge_category, childIds[0] ?? null)) return null;
+    const grain = childIds.length ? "a child" : "the household";
+    return {
+        ok: false,
+        correlationId,
+        status: 409,
+        error: `"${template.label}" cannot be charged to ${grain}. This charge type is ${
+            childIds.length ? "household" : "child"
+        }-grained, and changing that would change what the charge means.`,
+    };
+}
+
 const addCharge: RegisteredAction = {
     actionKey: CHARGE_ADD_ACTION_KEY,
     defaultLabel: "Add charge",
@@ -593,6 +631,13 @@ const addCharge: RegisteredAction = {
          * converge. The operator is never lied to about what exists.
          */
         const childIds = childIdsFrom(payload, invocation.entityId, invocation.entityType);
+
+        /* The grain rule is checked BEFORE the first write, never after the second. */
+        const illegalGrain = await refuseIllegalSubjectGrain(
+            supabase as SupabaseClient, ctx.orgId, t(payload?.template_id), childIds, correlationId,
+        );
+        if (illegalGrain) return illegalGrain;
+
         const subjects: Array<{ childId: string; subject: Extract<ChargeSubject, { ok: true }> }> = [];
         try {
             /*

@@ -25,7 +25,10 @@ import {
     useDismissSignal,
     useReportPerspective,
 } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
-import { categoryPermitsChildGrain } from "@/lib/financials/chargeCategorySemantics";
+import {
+    categoryPermitsChildGrain,
+    categoryPermitsHouseholdGrain,
+} from "@/lib/financials/chargeCategorySemantics";
 import {
     adaptAddChargeSpecimen,
     adaptChargeTemplateOption,
@@ -2890,6 +2893,21 @@ export default function FinancialsCard({
                             selectedTemplateId: selected.key,
                             onSelectTemplate: (id) => {
                                 const tpl = templates.find((x) => x.key === id);
+                                /*
+                                 * A CHANGE OF TYPE CAN INVALIDATE THE SUBJECT. Switching to a
+                                 * child-grained type while the command is anchored on the
+                                 * household would leave the selection pointing at an option the
+                                 * list no longer offers — the operator would read the first child
+                                 * and the payload would still say household. Move the anchor to a
+                                 * real subject instead of letting the two disagree.
+                                 */
+                                const cat = tpl?.categoryKey ?? "";
+                                if (subjectFilter === "all" && !categoryPermitsHouseholdGrain(cat)) {
+                                    const first = vm.subjects[0]?.customerMemberId;
+                                    if (first) setSubjectFilter(first);
+                                } else if (subjectFilter !== "all" && !categoryPermitsChildGrain(cat)) {
+                                    setSubjectFilter("all");
+                                }
                                 void preview(id, tpl?.label ?? "");
                             },
                             /*
@@ -2922,12 +2940,30 @@ export default function FinancialsCard({
                                           perChildLabel: chargeAmount || selected.amount || null,
                                       }
                                     : undefined,
+                            /*
+                             * ── APPLIES TO, NARROWED BY WHAT THE CHARGE TYPE CAN MEAN ────────
+                             *
+                             * The same code-owned rule that governs "Also bill" governs this list.
+                             * It offered Household and every child for EVERY type, so an operator
+                             * could select Monthly tuition — a CHILD-grained charge — and apply it
+                             * to the household. The write path now refuses that, and a control that
+                             * offers a choice the domain will refuse is a worse surface than one
+                             * that never offers it.
+                             *
+                             * Both halves are conditional because both are real: a household
+                             * account fee cannot become a child's, and a child's tuition cannot
+                             * become the household's.
+                             */
                             subjects: [
-                                { id: "all", label: "Household" },
-                                ...vm.subjects.map((sub) => ({
-                                    id: sub.customerMemberId,
-                                    label: sub.displayName,
-                                })),
+                                ...(categoryPermitsHouseholdGrain(selected.categoryKey ?? "")
+                                    ? [{ id: "all", label: "Household" }]
+                                    : []),
+                                ...(categoryPermitsChildGrain(selected.categoryKey ?? "")
+                                    ? vm.subjects.map((sub) => ({
+                                          id: sub.customerMemberId,
+                                          label: sub.displayName,
+                                      }))
+                                    : []),
                             ],
                             selectedSubjectId: subjectFilter,
                             onSelectSubject: setSubjectFilter,

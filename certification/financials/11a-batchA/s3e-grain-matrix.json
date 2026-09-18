@@ -1,0 +1,58 @@
+{
+  "Field trip": {
+    "grainOptions": [
+      "Household",
+      "Certa Certhouse",
+      "Certb Certhouse"
+    ],
+    "grainValue": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "semantics": "Household · dated by the event · billed next cycle · fixed amount",
+    "confirmDisabled": false
+  },
+  "Late pickup": {
+    "grainOptions": [
+      "Household",
+      "Certa Certhouse",
+      "Certb Certhouse"
+    ],
+    "grainValue": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "semantics": "Household · dated today · billed immediately · fixed amount",
+    "confirmDisabled": false
+  },
+  "Materials": {
+    "grainOptions": [
+      "Household",
+      "Certa Certhouse",
+      "Certb Certhouse"
+    ],
+    "grainValue": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "semantics": "Household · dated today · billed on a configured offset · fixed amount",
+    "confirmDisabled": false
+  },
+  "Monthly tuition": {
+    "grainOptions": [
+      "Household",
+      "Certa Certhouse",
+      "Certb Certhouse"
+    ],
+    "grainValue": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "semantics": "Household · dated to the service period · billed immediately · fixed amount",
+    "confirmDisabled": false
+  },
+  "Registration fee": {
+    "grainOptions": [
+      "Household",
+      "Certa Certhouse",
+      "Certb Certhouse"
+    ],
+    "grainValue": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "semantics": "Household · dated today · billed immediately · fixed amount",
+    "confirmDisabled": false
+  },
+  "TUITION_AS_HOUSEHOLD": {
+    "grainValue": "all",
+    "confirmDisabled": false,
+    "refusal": false,
+    "text": "ADD\nCharge\nAdjustment\n\nCHARGE TYPEREQUIRED\nField trip\nLate pickup\nMaterials\nMonthly tuition\nRegistration fee\n5 configured types\n\nHousehold · dated to the service period · billed immediately · fixed amount\n\nCHARGE\n\nAPPLIES TOREQUIRED\nHousehold\nCerta Certhouse\nCertb Certhouse\n\nAMOUNT\n$400.00\n\nNOTE\n\nDATES\n\nSERVICE DATE\nResolved at commit\n\nBILLING PERIOD\nSeptember 2026\n\nDUE\nConfigured policy\n\nPOSTING\nPosts on confirm — owed immediately\n\nCHARGE TO\n\nRESPONSIBILITY\nHousehold\n\nPREVIEW\n\nMonthly tuition\n+$400.00\n\nPosts on confirm — this is what the family will owe.\n\nCurrent balance\n$387.87\n\nAFTER POSTING\n$387.87\n\nAdd charge\nCancel"
+  }
+}
