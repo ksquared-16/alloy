@@ -59,3 +59,28 @@ obligation — `Consumable fee $18.00`, which the Focus Panel reports as `Unassi
 remains reachable on this subject without seeding anything new.
 
 `THREAD_11A_QA_SUBJECT_RESEED` is unchanged and still required before Human QA.
+
+## §4B assignment (run `erun_c77d344c534736c8`) — A REAL MUTATION
+
+This pass executed one governed write on the Certhouse fixture. It is the only financial mutation
+any Batch A run has made.
+
+| | |
+|---|---|
+| Action | `billing.configure_responsibility` (existing authority; no new action) |
+| Path | Financials → Charges → Posted → charge detail → **Manage responsibility** |
+| Account | Certhouse Family |
+| Grain | HOUSEHOLD (`customer_member_id: null`) — the panel's deliberate choice |
+| Responsible party | `Cert Certhouse` (Primary contact) — the only candidate the authority offered |
+| Share method | FIXED, `$18.00` (entered as dollars, sent as `amount_cents`) |
+| Effective from | **2026-09-18** (the form's default — NOT backdated) |
+| Supersedes | the prior arrangement `Cert Certhouse $500.00 from 2026-09-06` |
+
+**The prior arrangement is CLOSED, not deleted** — `configureResponsibilityArrangement` closes a
+predecessor the day before its successor starts and links the two, so the division that governed
+early September is still readable. Nothing was undone by hand, and nothing should be: per the
+instruction, the governed reseed owns cleanup.
+
+`THREAD_11A_QA_SUBJECT_RESEED` now additionally requires the responsibility arrangement chain on
+Certhouse Family to be returned to its governed baseline — the `$500.00 from 2026-09-06` arrangement
+and its successor both.

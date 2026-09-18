@@ -1,0 +1,22 @@
+{
+  "states": {
+    "not-allocated": 57,
+    "unassigned": 1
+  },
+  "target": {
+    "chargeId": "f089a3f4-85a1-44b6-bb94-50588a581b00",
+    "responsibility": "unassigned",
+    "responsibilityText": "Unassigned",
+    "cells": [
+      "Sep 2, 2026",
+      "Consumable fee",
+      "Certa Certhouse",
+      "4030 · Supply Fees",
+      "$18.00",
+      "posted",
+      "Unassigned",
+      "Materials"
+    ]
+  },
+  "count": 58
+}
