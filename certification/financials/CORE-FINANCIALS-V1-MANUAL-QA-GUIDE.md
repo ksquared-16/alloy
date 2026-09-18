@@ -532,12 +532,17 @@ absence of the feature. Leave Chen alone for this pass.
 
 # PART TWO — SUBJECT GRAIN, DISCOUNTS, PREPAIDS, RECURRING BILLING
 
-Scenarios 23–45 cover the core financial semantics added after V1. They use the same household.
+Scenarios 23 onward cover the core financial semantics added after V1. They use the same household.
 
-> **Several of these describe behaviour that is NOT yet implemented.** Each such scenario is marked
-> **`GAP`** and names what is missing. Run it anyway: the point is to confirm the gap is the one
-> described, and that the product fails *honestly* rather than silently producing a wrong number.
-> A `GAP` scenario is not a defect report — it is a known, documented boundary.
+> **Every scenario here is now runnable.** Earlier drafts of this guide marked five as `GAP` —
+> behaviour described but not yet built. All five have since shipped and been rewritten as ordinary
+> scenarios, so if one fails it is a defect, not a known boundary.
+>
+> Two things in this section are deliberate platform positions rather than gaps, and both say so
+> where they appear: **late-pickup fees are discountable** (whether yours are is your discount
+> policy's decision, not the platform's), and **no held-deposit amount is shown anywhere** because
+> the platform cannot yet tell a restricted deposit from ordinary prepaid money and will not claim
+> a number it does not have.
 
 ---
 
@@ -622,17 +627,56 @@ rows actually listed.
 
 ---
 
-## 30 · `GAP` — MULTI-CHILD ADD
+## 30 · MULTI-CHILD ADD
 
-**Missing:** the Add command does not offer multi-child selection, and charge templates carry no
-subject-grain configuration.
+Open **Add charge**, choose a child-grained type (e.g. a $40 field trip) and select **both** Ana and
+Rio.
 
-Attempt to add one charge — e.g. a $40 field trip — for **both** Ana and Rio at once.
+Before confirming, read the preview.
 
-**PASS (for now):** you cannot. The command offers one subject.
+**PASS:** the preview states *$40 per child*, *2 children selected*, and *Total to create $80.00*.
+Confirming once creates **two** charges — $40 attributed to Ana and $40 attributed to Rio.
 
-**What must NOT happen when this ships:** a single $80 household charge, or one row carrying two
-children. Two children selected must produce **two independent $40 child-grained obligations**.
+**FAIL symptoms:** one $80 household charge; one $40 charge shared by both; one row naming two
+children; a preview showing $80 as the per-child amount; $20 each (the total silently divided).
+
+---
+
+## 30b · MULTI-CHILD RETRY DOES NOT DUPLICATE
+
+Run the **same** multi-child Add again, identically.
+
+**PASS:** no new charges. The account still shows one $40 charge for Ana and one for Rio.
+
+**FAIL symptoms:** four charges. This bills a family twice and is the most damaging failure in this
+scenario set.
+
+---
+
+## 30c · SELECTION DEFAULTS
+
+From the **Focus Panel with attention on Ana**, open Add charge.
+
+**PASS:** Ana is pre-selected. Rio is **not** — siblings are never added on your behalf.
+
+From **household/account Details**, open Add charge.
+
+**PASS:** no child is arbitrarily pre-selected. You choose deliberately.
+
+**FAIL symptoms:** siblings silently included; a child selected on the household path that you did
+not pick; a blank selection quietly creating a household charge.
+
+---
+
+## 30d · GRAIN IS ENFORCED
+
+Choose a **household-only** charge type, then a **child-only** type.
+
+**PASS:** the household-only type offers no child selection. The child-only type requires at least
+one child and will not proceed without one.
+
+**FAIL symptoms:** a household fee attributed to a child; tuition created with no child; an empty
+selection accepted as "household".
 
 ---
 
@@ -814,18 +858,52 @@ applied amount exceeding what was unapplied.
 
 ---
 
-## 46 · `GAP (SURFACE ONLY)` — PREPAID AS AN ACCOUNT POSITION
+## 46 · PREPAID AS AN ACCOUNT POSITION
 
-**Model closed; screen not yet.** The account position now distinguishes available prepaid money
-from the balance, and separates *available* from *pending* funds. What has not shipped is the
-indicator on the card.
+With $200 unapplied on the account (from scenario 45), look at **Details**.
 
-**PASS (for now):** you can find the $200 by opening the payment, and the balance correctly does
-**not** read −$200. There is no account-level "Prepaid: $200" beside Balance yet. Record that.
+**PASS:** an **Available prepaid $200.00** figure sits beside Current balance, Due and Past due.
+Current balance reads **$0.00** — *not* −$200.00. Those are two different statements: one is an
+account in good standing holding funds, the other says the organisation owes the family money.
 
-**What must NOT be true, ever:** Current Balance silently absorbing unapplied money. Prepaid funds
-do not reduce Balance or Due until they are **applied** — that is the accounting doctrine, not a
-display choice. If Balance moves when money merely arrives, that is a real defect.
+The compact card shows an **Available $200.00** line, and offers **no** Apply, Manage deposit or
+allocation controls — administering money is Details' work.
+
+**FAIL symptoms:** Current balance reading −$200; prepaid folded into Due; an *Apply* button on the
+compact card.
+
+---
+
+## 46b · ZERO PREPAID IS SILENT
+
+Open an account with no unapplied money.
+
+**PASS:** there is **no** prepaid metric at all — not "Available prepaid $0.00".
+
+**FAIL symptoms:** a permanent $0.00 prepaid figure on every account.
+
+---
+
+## 46c · PENDING MONEY IS NOT AVAILABLE
+
+If a pending (not yet posted) receipt exists on the account:
+
+**PASS:** it is **not** counted in Available prepaid. Money the platform has been told about is not
+money it has.
+
+**FAIL symptoms:** a pending receipt inflating available funds — which would invite you to settle an
+obligation with money that may never arrive.
+
+---
+
+## 46d · NO HELD-DEPOSIT CLAIM
+
+**PASS:** nothing anywhere claims a held or restricted deposit amount — there is no "$0 held
+deposit" figure. The platform cannot currently tell a restricted deposit from ordinary prepaid
+money, and it does not pretend otherwise.
+
+**FAIL symptoms:** any held-deposit figure at all. An absent capability shown as a zero measurement
+is worse than silence: it would let someone spend a refundable deposit believing none was held.
 
 ---
 
@@ -1001,7 +1079,10 @@ a second, disconnected financials configuration route.
 - [ ] Workspace and Focus Panel agree
 - [ ] Deliberate household view
 - [ ] All
-- [ ] Multi-child Add (GAP)
+- [ ] Multi-child Add
+- [ ] Multi-child retry does not duplicate
+- [ ] Selection defaults
+- [ ] Grain is enforced
 - [ ] Adjustment inherits subject grain
 - [ ] Household adjustment stays household
 - [ ] Responsibility on a child obligation
@@ -1017,7 +1098,10 @@ a second, disconnected financials configuration route.
 - [ ] Exempt charge — the category's own refusal
 - [ ] Prepaid — money before an obligation
 - [ ] Prepaid — partial application and remainder
-- [ ] Prepaid as an account position (GAP: surface only)
+- [ ] Prepaid as an account position
+- [ ] Zero prepaid is silent
+- [ ] Pending money is not available
+- [ ] No held-deposit claim
 - [ ] Application is deliberate
 - [ ] Billing period vs accounting period
 - [ ] Recurring tuition generates once

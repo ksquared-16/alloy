@@ -225,6 +225,71 @@ Current Balance and do not reduce Due until allocation. `owes $0 with $200 prepa
 **Application stays manual/governed.** `payment_allocations` is the only application mechanism;
 nothing auto-applies.
 
+## 3.4 Multi-child Add — one gesture, N obligations
+
+**Owner:** `charge.add` (`financialChargeActions.ts`), via `executeMultiChildAdd`.
+
+`customer_member_ids` (plural) selects one or more children; the singular `customer_member_id` still
+works unchanged. Selection is **de-duplicated**, so a double-clicked checkbox cannot bill twice.
+
+Two children at $40 produce **two independent $40 child-attributed charges**. The amount is **per
+child** and is never divided across the selection — splitting an entered amount would invent a price
+nobody quoted. The preview states both numbers: *$40 per child · 2 children selected · Total to
+create $80*.
+
+**Batch idempotency authority — the one that already exists.** No batch key, no batch table. Each
+charge goes through `writeTemplateDraftCharge` → `tpl:<template>:<occurs_on>:<scope>`, enforced by
+`charges_resolution_key_unique` scoped to the billable source. Two children are two billable sources,
+so a re-run **converges on the same two charges**. A batch-level key would be a second idempotency
+authority, and the two would disagree the first time an operator retried a partial batch with one
+child removed.
+
+**No rollback, deliberately.** Where no review boundary applies these charges *post*, and posted
+childcare money is immutable by trigger — undone by a reversing entry, never a DELETE. Unwinding a
+partial batch would mean fabricating reversals for money the operator never saw. Instead: every
+subject resolves **before** any charge is written, failures are named per child, the successes stay
+real, and the retry converges. A failed *post* does not unmake a charge — it is a draft the operator
+can post from the row.
+
+**Grain rules apply unchanged** (§3.3): a CHILD-only category requires at least one child; a
+HOUSEHOLD-only category offers no child selection; blank selection never silently means household.
+
+**Adjustments** inherit the source transaction's grain — Wrigley's charge cannot become Lennon's
+adjustment. Standalone adjustments follow their category's permitted grain and may use the same
+selection primitive.
+
+**Discounts evaluate per resulting child.** Each child's obligation is its own gross charge, so
+`resolveFinancialReductions` runs per child with that child's own eligibility facts — one sibling
+may receive 10% and the other nothing, and each reduction keeps its own subject identity and
+provenance. Reduction idempotency is `fred:<policyId>:<chargeId>`, and the charge is already
+child-specific, so a retry cannot double-reduce.
+
+**Responsibility is not part of Add.** The resulting obligations enter the existing responsibility
+model normally and are independently inspectable in Details.
+
+## 6.2 Rendering the prepaid position
+
+Projected into the read model as `vm.prepaid` by `resolveAccountPrepaidPosition`; **no component
+computes it**. A card summing unapplied cents itself would be a second answer to "what may this
+family spend", and would get the *pending* case wrong.
+
+**Zero is silence.** The adapter sends `null`, never `"$0.00"`, so an ordinary account carries no
+prepaid metric — the same density rule that removed Autopay from the metric strip.
+
+**Compact decision: an indicator, yes.** It earns its line on the `Unassigned` precedent — the test
+is whether a fact changes what the operator *does*. Due may read $150 while the family has already
+handed over $200 that is merely unallocated; without the line the card says *collect $150* about
+someone who owes nothing in cash terms. It is an indicator only: **no Apply, no Manage deposit, no
+allocation controls** — applying money is Details' work through `payment_allocations`.
+
+**Apply Payment is reused, not replaced.** There is no "use prepaid" writer. Available funds are
+applied through the canonical allocation path, which leaves payer identity unchanged and does not
+alter responsibility merely because money moved.
+
+**An absent capability is not a zero.** `heldSupported: false` is never rendered as "$0 held" —
+locked by test, because the claim would let an operator spend a refundable deposit believing none
+was held.
+
 ---
 
 ## 4. Recurring billing — the lifecycle, arrow by arrow
@@ -433,19 +498,15 @@ Both halves now vote. See §5.1.
 
 Category semantics now declare permitted grain, and a template may narrow within it. See §3.3.
 
-**Still open:** the multi-child **Add operation** itself. The model supports it — independent
-child-grained rows are what the category layer requires and what generation already produces per
-child — but the Add command still offers one subject at a time. This is UI work over a settled
-model, not an architectural question.
+**CLOSED.** The multi-child Add operation ships — see §3.4.
 
 ### 9.5 ~~Prepaid is representable but not surfaced as a position~~ — **CLOSED at the model layer**
 
 `resolveAccountPrepaidPosition` and `resolveAccountFinancialPosition` project the position over
 existing money. See §6.1.
 
-**Still open:** rendering it. The projection exists and is tested; the compact card does not yet
-show an "Available prepaid" figure beside Balance. Per §11 that indicator must be the *minimum
-financially necessary*, never an administration interface.
+**CLOSED.** The position is projected into the read model and rendered on both surfaces — see
+§6.2.
 
 ---
 
