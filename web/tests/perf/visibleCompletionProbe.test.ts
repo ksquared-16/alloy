@@ -22,9 +22,21 @@ import { installVisibleCompletionProbe } from "../../playwright/support/visibleC
 
 type V2 = {
     lastBlockingAuthoritativeMs: number;
-    perSection: Record<string, { lastMs: number; data: number; structure: number; anim: number }>;
+    perSection: Record<string, {
+        firstMs: number;
+        lastMs: number;
+        lastVisibleMs: number;
+        data: number;
+        structure: number;
+        anim: number;
+        imageExpected: boolean;
+        imageFinalMs: number;
+    }>;
     kinds: Record<string, number>;
     blockingSeen: string[];
+    latestGeneration: string | null;
+    staleGenerationSuppressed: number;
+    placeholderSuppressed: number;
 };
 const v2 = (): V2 => (window as unknown as { __p076v2: V2 }).__p076v2;
 /** MutationObserver delivers on a microtask; a macrotask hop is enough and also advances the clock. */
