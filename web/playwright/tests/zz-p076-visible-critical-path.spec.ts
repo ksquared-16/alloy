@@ -84,7 +84,11 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         const V2 = window as unknown as {
             __p076v2?: {
                 lastBlockingAuthoritativeMs: number;
-                perSection: Record<string, { lastMs: number; data: number; structure: number; anim: number }>;
+                perSection: Record<string, {
+                    firstMs: number; lastMs: number; lastVisibleMs: number;
+                    data: number; structure: number; anim: number;
+                    imageExpected: boolean; imageFinalMs: number;
+                }>;
                 kinds: Record<string, number>;
                 blockingSeen: string[];
             };
