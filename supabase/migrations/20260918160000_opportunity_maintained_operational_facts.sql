@@ -595,6 +595,29 @@ BEGIN
     IF (v_facts -> 'tour') IS DISTINCT FROM 'null'::jsonb THEN
         RAISE EXCEPTION 'SELFTEST: a COMPLETED tour is still maintained as active (%)', v_facts;
     END IF;
+
+    -- no_show is the fourth terminal status and the one with no specimen of its own until now. It
+    -- clears through the SAME recompute as completed — it is simply absent from the active set — but
+    -- "covered by the same code path" is an argument, not evidence, and the whole point of this block
+    -- is that arguments are not proof.
+    UPDATE public.tour_bookings SET status_key = 'no_show' WHERE id = v_tour;
+    PERFORM public.maintain_opportunity_tour_facts(v_org, v_opp);
+    SELECT maintained_operational_facts INTO v_facts FROM public.opportunities WHERE id = v_opp;
+    IF (v_facts -> 'tour') IS DISTINCT FROM 'null'::jsonb THEN
+        RAISE EXCEPTION 'SELFTEST: a NO_SHOW tour is still maintained as active (%)', v_facts;
+    END IF;
+
+    -- And the active set really does admit an active booking again, so the four terminal specimens
+    -- above are not passing merely because the recompute always returns null.
+    UPDATE public.tour_bookings SET status_key = 'confirmed' WHERE id = v_tour;
+    PERFORM public.maintain_opportunity_tour_facts(v_org, v_opp);
+    SELECT maintained_operational_facts INTO v_facts FROM public.opportunities WHERE id = v_opp;
+    IF (v_facts -> 'tour' ->> 'booking_id') IS DISTINCT FROM v_tour::text THEN
+        RAISE EXCEPTION 'SELFTEST: the tour recompute never returns an active booking — the terminal specimens prove nothing (%)', v_facts;
+    END IF;
+    UPDATE public.tour_bookings SET status_key = 'no_show' WHERE id = v_tour;
+    PERFORM public.maintain_opportunity_tour_facts(v_org, v_opp);
+    SELECT maintained_operational_facts INTO v_facts FROM public.opportunities WHERE id = v_opp;
     -- Maintaining the tour must not disturb the participants half.
     IF jsonb_array_length(v_facts -> 'participants') <> 2 THEN
         RAISE EXCEPTION 'SELFTEST: tour maintenance clobbered the participant set (%)', v_facts;

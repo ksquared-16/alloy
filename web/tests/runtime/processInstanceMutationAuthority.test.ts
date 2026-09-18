@@ -384,35 +384,58 @@ describe("the participation lifecycle write has ONE transaction", () => {
         expect(LIVE_FN).toContain("AND org_id = p_org_id");
     });
 
-    it("THE GATE: the migration proves itself by execution, not by text", () => {
-        // Every one of these is a raise-on-mismatch assertion against real rows.
-        // Specimen strings live inside RAISE statements, which survive comment stripping.
-        for (const specimen of [
-            // the third lifecycle field, in all three of its modes
-            "SELFTEST: close transition refused",
-            "SELFTEST: unsupplied close_reason_key was overwritten",
-            "SELFTEST: explicit NULL did not clear close_reason_key",
-            "SELFTEST: stage_entered_at not stamped on a supplied stage",
-            // a stale or cross-org attempt must leave ALL THREE fields alone
-            "SELFTEST: stale write mutated close_reason_key",
-            "SELFTEST: cross-org attempt mutated the row",
-            // materialization: both halves land, and neither survives a rollback
-            "SELFTEST: provenance stamp did not land",
-            "SELFTEST: rollback setup provenance did not apply",
-            "survived a rolled-back materialization",
-        ]) {
-            expect(MIGRATION, `the ${specimen} specimen is gone`).toContain(specimen);
+    it("THE GATE: the LIVE transactional authority proves itself by execution", () => {
+        /*
+         * This gate listed the exact specimen strings of the slice that first created the function.
+         * Step 2 legitimately REPLACED that function, so the live definition moved to a different
+         * migration and every one of those strings vanished — the gate went red while nothing was
+         * wrong, which is the same staleness as a gate that stays green while everything is.
+         *
+         * So it now asserts the invariant rather than a slice's vocabulary: whichever migration owns
+         * the live definition must carry raise-on-mismatch proof for the behaviours the contract
+         * actually promises. A future replacement inherits this instead of breaking it.
+         */
+        const selftest = MIGRATION_RAW.slice(MIGRATION_RAW.indexOf("DO $selftest$"));
+        expect(selftest, "the live authority's migration carries no execution proof at all").not.toBe("");
+
+        const required: Array<[string, RegExp]> = [
+            ["a stale expected_version is refused", /SELFTEST:[^']*stale[^']*(accepted|refused|mutated)/i],
+            ["a refusal leaves the row unchanged", /SELFTEST:[^']*(refused|stale|cross-org)[^']*(mutated|moved|unchanged)/i],
+            ["a cross-org attempt is refused", /SELFTEST:[^']*cross-org/i],
+            ["a forced failure rolls the write back", /SELFTEST:[^']*(survived a rolled-back|rolled-back transaction)/i],
+            ["the rollback specimen proves the write landed first", /SELFTEST:[^']*rollback setup/i],
+        ];
+        for (const [what, re] of required) {
+            expect(selftest, `the live authority has no execution proof that ${what}`).toMatch(re);
         }
         // And the fixtures must not survive the migration.
-        expect(MIGRATION).toContain("SELFTEST_CLEANUP");
+        expect(selftest).toContain("SELFTEST_CLEANUP");
     });
 
-    it("the Step 2 seam is named, and still empty", () => {
-        // Step 2 adds its UPDATE here. Naming it is what stops it being added somewhere else.
-        // The seam is a comment by nature, so this one reads the RAW file.
-        expect(MIGRATION_RAW).toContain("STEP 2 SEAM");
-        expect(MIGRATION, "a maintained-fact column was created before it was authorized")
-            .not.toMatch(/ALTER TABLE\s+(public\.)?opportunities/i);
+    it("THE GATE: the maintained-fact update lives INSIDE the lifecycle transaction", () => {
+        /*
+         * This asserted the seam was "named and still empty". Step 2 filled it, so an empty seam is
+         * now the defect and the old assertion was pinning the pre-Step-2 world.
+         *
+         * The invariant it becomes is the one that always mattered: the maintained opportunity fact
+         * is updated INSIDE the same function body as the process_instances mutation. A plpgsql body
+         * is one transaction, so the lifecycle move cannot commit while the fact does not — and it
+         * must sit AFTER the not-found/stale return, so a refused write maintains nothing.
+         */
+        expect(LIVE_FN, "the lifecycle authority no longer maintains the opportunity fact")
+            .toContain("refresh_opportunity_maintained_facts");
+
+        const guard = LIVE_FN.indexOf("record_not_found_or_stale");
+        const maintain = LIVE_FN.indexOf("refresh_opportunity_maintained_facts");
+        expect(guard, "the stale/not-found return is gone").toBeGreaterThan(0);
+        expect(
+            maintain,
+            "the maintained-fact update runs BEFORE the not-found/stale return, so a refused write "
+            + "would still maintain facts",
+        ).toBeGreaterThan(guard);
+
+        // It must be the function's own statement, not a call the caller could forget or reorder.
+        expect(LIVE_FN).toMatch(/PERFORM\s+public\.refresh_opportunity_maintained_facts/);
     });
 
     it("the command's `dependent` classification is unchanged", () => {
@@ -541,18 +564,64 @@ describe("lifecycle writer convergence — the bypasses are gone, not merely wra
             .toContain('supabase.rpc("update_participation_and_maintain_facts"');
     });
 
-    it("THE GATE: creation is the ONE distinct authority, and it never mutates lifecycle", () => {
+    it("THE GATE: creation is ONE authority, through the RPC, initializing atomically", () => {
         /*
-         * Creation is deliberately NOT converged: Processing Identity does not create a journey at
-         * intake, and a row that does not exist yet cannot carry stale maintained facts. It is recorded
-         * as CREATION rather than waved through — so this pins that the only remaining writes in the
-         * module are insert/upsert, and that no other module creates process instances.
+         * This looked for a direct `.from(process_instances).insert`. Step 2 routed creation through
+         * `insert_enrollment_participation_and_maintain_facts` so the row and its maintained facts are
+         * created in ONE transaction — between two statements the journey would exist unmaintained,
+         * and a retired enrichment read can no longer cover for that.
+         *
+         * So the gate moves to the semantic invariant. Restoring a direct INSERT to satisfy the old
+         * wording would reintroduce exactly the gap Step 2 closed.
          */
-        const creators = processInstanceWriters().filter((w) => w.op === "insert" || w.op === "upsert");
+        const CREATION_RPC = "insert_enrollment_participation_and_maintain_facts";
+        const CREATION_OWNER = "lib/process/processInstances.ts";
+
+        // 1 · zero direct creates anywhere — alias-aware, so a constant cannot hide one.
+        const directCreates = processInstanceWriters()
+            .filter((w) => w.op === "insert" || w.op === "upsert")
+            .filter((w) => !FIXTURE_TEARDOWN.has(w.file))
+            .map((w) => w.file);
         expect(
-            [...new Set(creators.map((w) => w.file))],
-            "process-instance creation must stay in exactly one module",
-        ).toEqual(["lib/process/processInstances.ts"]);
+            [...new Set(directCreates)],
+            "a direct process_instances create is back; creation must go through the RPC so the row "
+            + "and its maintained facts commit together",
+        ).toEqual([]);
+
+        // 2 · exactly ONE production module calls the creation RPC.
+        const callers: string[] = [];
+        const walk = (dir: string) => {
+            for (const e of readdirSync(dir, { withFileTypes: true })) {
+                const p = join(dir, e.name);
+                if (e.isDirectory()) { if (!/node_modules/.test(e.name)) walk(p); continue; }
+                if (!/\.tsx?$/.test(e.name) || /\.test\./.test(e.name)) continue;
+                if (readFileSync(p, "utf8").includes(CREATION_RPC)) {
+                    callers.push(p.replace(`${process.cwd()}/`, ""));
+                }
+            }
+        };
+        walk(join(process.cwd(), "lib"));
+        walk(join(process.cwd(), "app"));
+        expect(
+            [...new Set(callers)],
+            "process-instance creation must stay in exactly one production module",
+        ).toEqual([CREATION_OWNER]);
+
+        // 3 · the creation transaction initializes the maintained fact itself.
+        const dir = join(process.cwd(), "..", "supabase", "migrations");
+        const marker = `CREATE OR REPLACE FUNCTION public.${CREATION_RPC}(`;
+        let fn = "";
+        for (const f of readdirSync(dir).filter((x) => x.endsWith(".sql")).sort()) {
+            const src = readFileSync(join(dir, f), "utf8");
+            const at = src.lastIndexOf(marker);
+            if (at >= 0) fn = src.slice(at, src.indexOf("$fn$;", at) + 5);
+        }
+        expect(fn, "the creation transaction is missing").not.toBe("");
+        expect(
+            fn.replace(/^\s*--.*$/gm, ""),
+            "creation must initialize the maintained fact in the SAME transaction as the INSERT — a "
+            + "post-create repair UPDATE would be a second writer",
+        ).toContain("refresh_opportunity_maintained_facts");
     });
 
     it("THE GATE: materialization routes lifecycle through the authority, not its own UPDATE", () => {

@@ -184,6 +184,8 @@ describe("Step 2 — the maintained field is raw, and maintained where truth cha
             "a cross-org attempt moved the maintained facts",
             "a CANCELLED tour is still maintained as active",
             "a COMPLETED tour is still maintained as active",
+            "a NO_SHOW tour is still maintained as active",
+            "the tour recompute never returns an active booking",
             "recompute is not idempotent",
             "a closed participant was dropped from storage",
             "the participation-anchored journey was not rolled up",
