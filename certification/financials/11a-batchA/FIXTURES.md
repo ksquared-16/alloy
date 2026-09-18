@@ -1,0 +1,48 @@
+---
+title: Thread 11A — certification financial specimens (Sections 2/3)
+status: sprint
+---
+
+# What Sections 2 and 3 put on the QA subject, and what must be undone
+
+Recorded per §3J. This is an INVENTORY plus a reseed requirement — nothing here is deleted ad hoc,
+because posted financial history is immutable by design and hand-deleting it would destroy the
+lineage the provenance work exists to keep.
+
+## Subject
+
+`Certhouse Family` (children `Certa Certhouse`, `Certb Certhouse`), South Campus, org Firefly Early
+Learning, hosted project `ikaxilmwmrmbagoidedu`.
+
+## Specimens observed on the mounted candidate (61142365a)
+
+| Specimen | Where it shows | Created by |
+|---|---|---|
+| `Sibling discount (QA specimen)` commercial policy, Active from 2026-01-01 | /settings/organization/financials?chapter=policies | Section 2 |
+| Tuition charge $400.00 · Certa · September 2026 | Details · Charges lens | Section 2 (discount chain) |
+| Discount −$40.00 · Certa · September 2026 · `10% of $400.00` · Ongoing | Details · Credits & adjustments | Section 2 (`billing.apply_discounts`) |
+| Credit −$0.01 · Certa · September 2026 | Credits & adjustments | earlier 11A passes |
+| Credit −$12.34 and −$7.77 · Certb · September 2026 | Credits & adjustments | earlier 11A passes |
+| One-time charge $40.00 · Certb · November 2026 | Charges | earlier 11A passes |
+| Late pickup $25.00 · Certa · August 2026 · Draft, GL 4040 | Financials → Charges | earlier 11A passes |
+| Consumable fee $18.00 · unassigned responsibility | Details · current period | earlier 11A passes |
+| Available prepaid $200.00 | Details · position | Section 1/2 prepaid work |
+| Responsibility arrangement · `Cert Certhouse` $500.00 from 2026-09-06 | Charges → charge → RESPONSIBILITY ARRANGEMENT | earlier 11A passes |
+
+Counts at time of record: 9 awaiting posting, 52 posted, 49 rows under Credits & adjustments.
+
+## Cleanup / reseed requirement
+
+**Do not delete.** `charges`, `financial_reduction_applications` and
+`financial_responsibility_arrangements` are append-only/effective-dated by design: an arrangement is
+superseded rather than edited, and a reduction application records a decision. Ad-hoc deletion would
+remove the lineage that Sections 2 and 3 were built to make readable.
+
+Before Human QA the representative subject must be returned to its intended governed starting state
+through the canonical fixture/reseed mechanism — i.e. a reseed of the QA tenant subject, not a
+targeted DELETE. This is a **Director-owned capability**: this lane has no write path to the hosted
+fixture outside the product's own governed actions.
+
+**REQUIREMENT — `THREAD_11A_QA_SUBJECT_RESEED`**: reseed `Certhouse Family` (and the
+`Sibling discount (QA specimen)` commercial policy) to the governed baseline before Human QA begins.
+Until that runs, the account carries certification specimens and its balances are not a QA oracle.
