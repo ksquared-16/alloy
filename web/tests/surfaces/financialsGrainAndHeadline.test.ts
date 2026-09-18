@@ -132,6 +132,36 @@ describe("financial row grain — what a subject scope includes", () => {
         }
     });
 
+    it("CASE 5 — a PRIOR-PERIOD payable does not reach the compact card's Payment", () => {
+        /*
+         * CAUGHT BY THE DEPLOYED REGRESSION, not by a fixture.
+         *
+         * Wrigley's September is settled in full, yet Payment appeared on the live compact card. The
+         * culprit was an AUGUST registration fee: eligibility was drawn from `visibleRows`, which is
+         * scoped by subject but NOT by period, so once the grain fix correctly stopped discarding
+         * household rows the prior-period charge became reachable. The old subject-filter defect had
+         * been masking it.
+         *
+         * Compact is a current-period summary: its lines state this period's responsibility and
+         * balance, so offering a charge it never mentions is a cross-period claim it cannot support.
+         * Deep and prior-period settlement stays reachable through Details, which reads across
+         * periods deliberately.
+         */
+        const currentPeriod = "2026-09";
+        const rows = [
+            row(null, { description: "materials", periodKey: "2026-09", outstandingCents: 0, offersPayment: false }),
+            row(null, { description: "registration fee", periodKey: "2026-08", outstandingCents: 7500, offersPayment: true }),
+        ];
+
+        // What the DETAIL surfaces offer: everything in scope that can take money, across periods.
+        const inScopePayable = financialsRowsInSubjectScope(rows, CHILD_A).filter((r) => r.offersPayment);
+        expect(inScopePayable.map((r) => r.description)).toEqual(["registration fee"]);
+
+        // What COMPACT may offer: the same scope, narrowed to the period it actually states.
+        const compactPayable = inScopePayable.filter((r) => r.periodKey === currentPeriod);
+        expect(compactPayable, "a prior-period charge reached the compact Payment control").toEqual([]);
+    });
+
     it("does not let a null scope value swallow the household rule", () => {
         // Guarding the shape rather than the happy path: "all" is the only wildcard.
         expect(rowInFinancialsSubjectScope(row(CHILD_A), "")).toBe(false);

@@ -35,7 +35,9 @@ import {
     presentPayments,
     unappliedTotalCents,
 } from "@/lib/adminV2/runtime/focusPanel/financials/paymentPresentation";
-import type { FinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
+import type { FinancialsCardVM,
+    FinancialsLedgerRow,
+} from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
@@ -1100,21 +1102,53 @@ export default function FinancialsCard({
      * change both the charge and the amount once the panel is open. Undefined when nothing can take
      * money, so the control stays inert rather than opening a panel with nothing to act on.
      */
-    const openSettle = useMemo(() => {
-        if (!payableRows.length) return undefined;
-        return () => {
-            const row = payableRows[0];
-            setCommandError(null);
-            setPayTarget({
-                chargeId: row.chargeId,
-                label: row.description ?? row.categoryLabel,
-                outstandingCents: row.outstandingCents,
-                subjectMemberId: row.subjectMemberId,
-            });
-            setPayAmount((row.outstandingCents / 100).toFixed(2));
-            setOverlay("payment");
-        };
-    }, [payableRows]);
+    /** Open the settle form against the first charge in a given set. One body, two eligibilities. */
+    const makeSettleOpener = useCallback(
+        (rows: readonly FinancialsLedgerRow[]) => {
+            if (!rows.length) return undefined;
+            return () => {
+                const row = rows[0]!;
+                setCommandError(null);
+                setPayTarget({
+                    chargeId: row.chargeId,
+                    label: row.description ?? row.categoryLabel,
+                    outstandingCents: row.outstandingCents,
+                    subjectMemberId: row.subjectMemberId,
+                });
+                setPayAmount((row.outstandingCents / 100).toFixed(2));
+                setOverlay("payment");
+            };
+        },
+        [],
+    );
+
+    /** Everything in scope that can take money — what the ledger's own menu offers, across periods. */
+    const openSettle = useMemo(() => makeSettleOpener(payableRows), [makeSettleOpener, payableRows]);
+
+    /*
+     * ── WHAT THE COMPACT CARD MAY OFFER TO SETTLE ───────────────────────────────────────────────
+     *
+     * Compact is a CURRENT-PERIOD summary. Its lines state this period's responsibility and balance,
+     * so its Payment control must settle this period — offering a prior period's charge from a card
+     * that never mentions it is a cross-period claim the summary cannot support.
+     *
+     * This is NOT a second grain rule. It is the same canonical scope (`financialsRowScope`:
+     * household-grain rows plus the selected child's), narrowed by the period Compact already
+     * declares. Deep and prior-period settlement stays where it is reachable and explained — the
+     * Details ledger and its `Record payment →` menu, which still read `payableRows` across periods.
+     *
+     * Found by the deployed regression: Wrigley's September is settled in full, yet Payment appeared,
+     * because eligibility was drawn from `visibleRows` — which is not period-scoped — and reached an
+     * August registration fee. The subject-filter defect had been masking that.
+     */
+    const compactPayableRows = useMemo(
+        () => (vm == null ? [] : payableRows.filter((r) => r.periodKey === vm.period.key)),
+        [payableRows, vm],
+    );
+    const openSettleCurrentPeriod = useMemo(
+        () => makeSettleOpener(compactPayableRows),
+        [makeSettleOpener, compactPayableRows],
+    );
 
     /** Why Add charge cannot be offered, when it cannot. Stated, never silent. */
     const chargeUnavailableReason =
@@ -3007,7 +3041,7 @@ export default function FinancialsCard({
                      * detail representation, the panel's armed depth scrim sits over the operation
                      * and the commit button cannot be clicked — visible, enabled, and unreachable.
                      */
-                    onPayNow={openSettle}
+                    onPayNow={openSettleCurrentPeriod}
                     summaryVariant={summaryVariant}
                 />
             </div>
