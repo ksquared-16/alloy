@@ -77,8 +77,8 @@ import {
     type OperationalPresentation,
 } from "./operationalPresentation";
 import { resolveQueueRowLayoutServer } from "@/lib/layout/runtime/queueRowLayoutServer";
-import { attachEffectiveEnrollmentStagesToOpportunityRows } from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
-import { attachActiveTourFactsToOpportunityRows } from "@/lib/tours/queue/attachActiveTourFactsToOpportunityRows";
+import { attachEffectiveStagesFromMaintainedFacts } from "@/lib/process/definitions/enrollment/maintainedParticipantFacts";
+import { attachActiveTourFactsFromMaintainedFacts } from "@/lib/tours/queue/attachActiveTourFactsToOpportunityRows";
 import {
     effectiveParticipantStageKeysFromRow,
     resolveContextMissionStages,
@@ -1196,20 +1196,25 @@ export async function composeWorkUnitProvisioningAnswer(
         // opportunity_stage predicates use `_effective_participant_stage_keys`, not raw
         // `opportunities.stage_key`. Without this, families remain in Lead after every
         // child has diverged to Waitlist.
-        const baseWithEpp = await attachEffectiveEnrollmentStagesToOpportunityRows({
-            supabase: req.supabase,
-            orgId: req.orgId,
-            rows: (baseRows ?? []) as Array<Record<string, unknown>>,
-            logLabel: "provisioning",
-        });
-        // Active Tour facts before Work View predicates — family-grain Tours lenses filter on
-        // operational booking truth (`has_active_tour`), not stage_key alone.
-        const baseWithTourFacts = await attachActiveTourFactsToOpportunityRows({
-            supabase: req.supabase,
-            orgId: req.orgId,
-            rows: baseWithEpp,
-            logLabel: "provisioning",
-        });
+        /*
+         * ── TWO ROUND TRIPS RETIRED, NOT HIDDEN ──
+         *
+         * These were two awaited database enrichments between the records read and the evaluator, so
+         * the evaluated page cost THREE serial round trips for one page of rows. Both were already
+         * PURE derivations that simply had nowhere to get their rows from.
+         *
+         * The rows now arrive WITH the opportunity — `maintained_operational_facts`, maintained
+         * transactionally by the authority that changes each fact — so the derivations stay exactly
+         * where they were and the reads are gone. Not cached, not prefetched, not parallelised: gone.
+         *
+         * Both calls are SYNCHRONOUS, and that is the enforcement. An async signature is what let a
+         * round trip hide in the middle of this path; a pure function cannot grow one without
+         * changing shape.
+         */
+        const baseWithEpp = attachEffectiveStagesFromMaintainedFacts(
+            (baseRows ?? []) as Array<Record<string, unknown>>,
+        );
+        const baseWithTourFacts = attachActiveTourFactsFromMaintainedFacts(baseWithEpp);
         const projection = computeOperationalProjection({
             baseRows: baseWithTourFacts as OperationalProjectionRow[],
             workViews: [activeView], // only the active lens — no count fan-out, no second evaluation

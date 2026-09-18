@@ -456,6 +456,21 @@ function fakeSupabase(opts: {
     };
 
     return {
+        rpc(name: string, params: Record<string, unknown>) {
+            /*
+             * The creating row still exists — it now travels as `p_row` into the transaction that
+             * inserts it AND initializes the opportunity's maintained facts. Capturing it here keeps
+             * this file asking its actual question: does the pin ride the CREATION row, or arrive as
+             * a follow-up patch?
+             */
+            if (name === "insert_enrollment_participation_and_maintain_facts") {
+                opts.capture?.push(params.p_row as Record<string, unknown>);
+                return Promise.resolve({ data: { ok: true, id: "created-instance", conflict: false }, error: null });
+            }
+            // This double serves creation only; anything else reaching it is a fixture gap, and
+            // should say so rather than resolve to a silent success.
+            throw new Error(`unexpected rpc in this fake: ${name}`);
+        },
         from(table: string) {
             const rows = rowsFor(table);
             const filters: Record<string, unknown> = {};

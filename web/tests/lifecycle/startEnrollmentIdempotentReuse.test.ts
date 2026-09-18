@@ -17,6 +17,7 @@
  * `reused: true`. The two branches simply answered the same question differently. Now they do not.
  */
 
+import { participationLifecycleRpcFake } from "../support/participationLifecycleRpcFake";
 import { describe, expect, it } from "vitest";
 
 import { createEnrollmentProcessInstance } from "@/lib/process/processInstances";
@@ -34,6 +35,40 @@ type Row = Record<string, unknown>;
  * Models the ONE behaviour this is about: a unique conflict under `ignoreDuplicates` yields no row
  * and no error. Everything else is the minimum needed to reach that statement.
  */
+/**
+ * The journey INSERT moved into the transaction that also initializes the opportunity's maintained
+ * facts, so the conflict behaviour these tests are about — "a second Start Enrollment creates no
+ * second journey" — is modelled here. Shared by both doubles: when it lived on only one of them,
+ * `db.inserts` silently stopped counting for the other.
+ */
+function makeRpc(db: { instances: Row[]; inserts: number }) {
+    return (name: string, params: Record<string, unknown>) => {
+        if (name === "insert_enrollment_participation_and_maintain_facts") {
+            const row = params.p_row as Row;
+            const duplicate = db.instances.some(
+                (r) =>
+                    r.org_id === row.org_id
+                    && r.process_key === row.process_key
+                    && r.subject_id === row.subject_id
+                    && (r.context_id ?? null) === (row.context_id ?? null),
+            );
+            if (duplicate) {
+                if (params.p_ignore_duplicates === true) {
+                    return Promise.resolve({ data: { ok: true, id: null, conflict: true }, error: null });
+                }
+                return Promise.resolve({ data: null, error: { code: "23505", message: "duplicate key" } });
+            }
+            const created = { id: `pi-${db.instances.length + 1}`, ...row };
+            db.instances.push(created);
+            db.inserts += 1;
+            return Promise.resolve({ data: { ok: true, id: created.id, conflict: false }, error: null });
+        }
+        const res = participationLifecycleRpcFake(name, params, db.instances as never);
+        if (!res) throw new Error(`unexpected rpc in this fake: ${name}`);
+        return Promise.resolve(res);
+    };
+}
+
 function client(db: { instances: Row[]; opportunities?: Row[]; inserts: number }) {
     const from = (table: string) => {
         const filters: Record<string, unknown> = {};
@@ -116,7 +151,7 @@ function client(db: { instances: Row[]; opportunities?: Row[]; inserts: number }
         };
         return q;
     };
-    return { from } as never;
+    return { from, rpc: makeRpc(db) } as never;
 }
 
 const CONTEXT_ARGS = {
@@ -196,6 +231,7 @@ describe("a second Start Enrollment reports reuse, never failure", () => {
 function clientWithChild(db: { instances: Row[]; opportunities?: Row[]; inserts: number }) {
     const base = client(db) as unknown as { from: (t: string) => Record<string, unknown> };
     return {
+        rpc: makeRpc(db),
         from(table: string) {
             if (table === "customer_members") {
                 const q: Record<string, unknown> = {

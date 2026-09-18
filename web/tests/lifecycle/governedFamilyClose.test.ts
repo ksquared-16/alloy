@@ -9,6 +9,7 @@
  * before the call, because a field-by-field check only proves the fields someone remembered.
  */
 
+import { participationLifecycleRpcFake } from "../support/participationLifecycleRpcFake";
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import {
     executeGovernedFamilyClose,
@@ -184,6 +185,25 @@ type FailMode = { failChildStageMove?: boolean; failFamilyStatus?: boolean; bloc
 
 function makeSupabase(world: World, fail: FailMode = {}) {
     return {
+        rpc(name: string, params: Record<string, unknown>) {
+            /*
+             * The child lifecycle write is an RPC now, so the injected failures have to be reachable
+             * THROUGH it — otherwise the compensation and integrity-breach cases would silently start
+             * succeeding and these tests would pass while asserting nothing.
+             */
+            const stage = params.p_set_stage_key === true ? params.p_stage_key : null;
+            if (fail.failChildStageMove && stage === "closed_withdrawn") {
+                return Promise.resolve({ data: null, error: { message: "simulated child stage move failure" } });
+            }
+            // The child's inverse restores its ORIGINAL stage, which the forward path never writes,
+            // so this can only ever match a compensation.
+            if (fail.blockUndo && stage === "waitlist") {
+                return Promise.resolve({ data: null, error: { message: "simulated compensation failure" } });
+            }
+            const res = participationLifecycleRpcFake(name, params, world.process_instances as never);
+            if (!res) throw new Error(`unexpected rpc in this fake: ${name}`);
+            return Promise.resolve(res);
+        },
         from(table: string) {
             if (table === "departments") {
                 const chain: Record<string, unknown> = {};

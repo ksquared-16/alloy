@@ -283,11 +283,18 @@ export async function createEnrollmentProcessInstance(
         // governance fact that is not true of that instance.
         if (existing) return { id: existing, reused: true };
 
-        const { data, error } = await supabase
-            .from(PROCESS_INSTANCES_TABLE)
-            .insert(row)
-            .select("id")
-            .maybeSingle();
+        /*
+         * Creation INITIALIZES the opportunity's maintained facts in the SAME transaction as the
+         * insert. A post-create UPDATE would be a second lifecycle writer — exactly what the previous
+         * slice removed — and between the two statements the journey would exist unmaintained, which
+         * is the window a retired enrichment read can no longer cover for.
+         *
+         * TypeScript keeps the reuse and race decisions; the function does not invent a row.
+         */
+        const { data, error } = await supabase.rpc(
+            "insert_enrollment_participation_and_maintain_facts",
+            { p_org_id: args.orgId, p_row: row, p_ignore_duplicates: false },
+        );
         if (error) {
             // The partial index did its job against a concurrent writer.
             if (error.code === "23505") {
@@ -300,7 +307,8 @@ export async function createEnrollmentProcessInstance(
             }
             return { id: null, error: error.message };
         }
-        return { id: data ? String((data as { id: string }).id) : null, ...pinResult };
+        const created = (data ?? {}) as { id?: string | null };
+        return { id: created.id ? String(created.id) : null, ...pinResult };
     }
 
     /*
@@ -315,13 +323,13 @@ export async function createEnrollmentProcessInstance(
         if (priorShape) return { id: priorShape, reused: true };
     }
 
-    const { data, error } = await supabase
-        .from(PROCESS_INSTANCES_TABLE)
-        .upsert(row, { onConflict: "org_id,process_key,subject_id,context_id", ignoreDuplicates: true })
-        .select("id")
-        .maybeSingle();
+    const { data, error } = await supabase.rpc(
+        "insert_enrollment_participation_and_maintain_facts",
+        { p_org_id: args.orgId, p_row: row, p_ignore_duplicates: true },
+    );
     if (error) return { id: null, error: error.message };
-    if (data) return { id: String((data as { id: string }).id), ...pinResult };
+    const upserted = (data ?? {}) as { id?: string | null };
+    if (upserted.id) return { id: String(upserted.id), ...pinResult };
 
     /**
      * `ignoreDuplicates` means a conflict returns NO ROW. That is not a failure — the journey this
@@ -411,18 +419,68 @@ export const CONCLUDED_ENROLLMENT_PROCESS_STATES: readonly string[] = [
     "not_enrolling",
 ];
 
+/**
+ * THE ONE LIFECYCLE AUTHORITY, CALLED.
+ *
+ * Every function below that changes `stage_key`, `state` or `close_reason_key` goes through this and
+ * writes no column itself. They used to issue bare UPDATEs, and because this module uses the table
+ * constant it exports rather than the string literal, the single-writer gate never saw them — the
+ * invariant P0-7.6 Step 2 depends on was reported as held while five lifecycle writes sat here.
+ *
+ * The RPC is one transaction, so when Step 2 adds the maintained opportunity fact beside the
+ * participation UPDATE, every caller here inherits that maintenance instead of each having to
+ * remember it. That inheritance IS the point of converging.
+ *
+ * `stage_entered_at` is stamped by the RPC when `stage_key` is supplied, which is exactly what these
+ * callers did by hand; nothing about the transition's meaning changes.
+ */
+async function applyParticipationLifecycle(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        instanceId: string;
+        stageKey?: string | null;
+        state?: EnrollmentProcessState | null;
+        closeReasonKey?: string | null;
+        /** Present only when the caller holds a version to guard against. */
+        expectedVersion?: string | null;
+    },
+): Promise<{ applied: boolean; error?: string }> {
+    const setStage = Object.prototype.hasOwnProperty.call(args, "stageKey");
+    const setState = Object.prototype.hasOwnProperty.call(args, "state");
+    // `null` means SET NULL and absent means LEAVE ALONE — the flag carries the distinction, which a
+    // single nullable argument cannot express.
+    const setClose = Object.prototype.hasOwnProperty.call(args, "closeReasonKey");
+
+    const { data, error } = await supabase.rpc("update_participation_and_maintain_facts", {
+        p_org_id: args.orgId,
+        p_participation_id: args.instanceId,
+        p_expected_version: args.expectedVersion ?? null,
+        p_set_stage_key: setStage,
+        p_stage_key: setStage ? (args.stageKey ?? null) : null,
+        p_set_state: setState,
+        p_state: setState ? (args.state ?? null) : null,
+        p_set_close_reason_key: setClose,
+        p_close_reason_key: setClose ? (args.closeReasonKey ?? null) : null,
+    });
+    if (error) return { applied: false, error: error.message };
+    const result = (data ?? {}) as { ok?: boolean; error?: string };
+    // Not-found and stale are ONE outcome, as they have always been on this path: the predicate
+    // cannot tell them apart and no caller depended on the difference.
+    return result.ok === true ? { applied: true } : { applied: false };
+}
+
 /** Move a process instance's stage (outcome execution is the only caller). */
 export async function moveProcessInstanceStage(
     supabase: SupabaseClient,
     args: { orgId: string; instanceId: string; stageKey: string },
 ): Promise<{ error?: string }> {
-    const nowIso = stageEnteredAtNowIso();
-    const { error } = await supabase
-        .from(PROCESS_INSTANCES_TABLE)
-        .update({ stage_key: args.stageKey, stage_entered_at: nowIso, updated_at: nowIso })
-        .eq("id", args.instanceId)
-        .eq("org_id", args.orgId);
-    return error ? { error: error.message } : {};
+    const r = await applyParticipationLifecycle(supabase, {
+        orgId: args.orgId,
+        instanceId: args.instanceId,
+        stageKey: args.stageKey,
+    });
+    return r.error ? { error: r.error } : {};
 }
 
 /** Set a process instance's durable state (+ optional close reason). Outcome execution only. */
@@ -430,14 +488,14 @@ export async function setProcessInstanceState(
     supabase: SupabaseClient,
     args: { orgId: string; instanceId: string; state: EnrollmentProcessState; closeReasonKey?: string | null },
 ): Promise<{ error?: string }> {
-    const patch: Record<string, unknown> = { state: args.state, updated_at: new Date().toISOString() };
-    if (args.closeReasonKey !== undefined) patch.close_reason_key = args.closeReasonKey;
-    const { error } = await supabase
-        .from(PROCESS_INSTANCES_TABLE)
-        .update(patch)
-        .eq("id", args.instanceId)
-        .eq("org_id", args.orgId);
-    return error ? { error: error.message } : {};
+    const r = await applyParticipationLifecycle(supabase, {
+        orgId: args.orgId,
+        instanceId: args.instanceId,
+        state: args.state,
+        // Forwarded only when the caller supplied it, so "leave the close reason alone" survives.
+        ...(args.closeReasonKey !== undefined ? { closeReasonKey: args.closeReasonKey } : {}),
+    });
+    return r.error ? { error: r.error } : {};
 }
 
 /**
@@ -554,15 +612,15 @@ export async function moveEnrollmentInstanceStageByScope(
     if (resolved.ambiguous) return { moved: 2, instanceId: null };
     if (!resolved.id) return { moved: 0, instanceId: null };
 
-    const nowIso = stageEnteredAtNowIso();
-    const { data, error } = await supabase
-        .from(PROCESS_INSTANCES_TABLE)
-        .update({ stage_key: args.stageKey, stage_entered_at: nowIso, updated_at: nowIso })
-        .eq("org_id", args.orgId)
-        .eq("id", resolved.id)
-        .select("id");
-    if (error) return { moved: 0, error: error.message };
-    return { moved: (data ?? []).length, instanceId: resolved.id };
+    const r = await applyParticipationLifecycle(supabase, {
+        orgId: args.orgId,
+        instanceId: resolved.id,
+        stageKey: args.stageKey,
+    });
+    if (r.error) return { moved: 0, error: r.error, instanceId: resolved.id };
+    // `moved` keeps its exact meaning for `assertSingleParticipantWrite`: the RPC writes one row or
+    // none, and "none" is the same not-found outcome the row count reported before.
+    return { moved: r.applied ? 1 : 0, instanceId: resolved.id };
 }
 
 /** Set a child's enrollment instance durable state (+ close reason) by scope (opportunity + child). */
@@ -583,16 +641,16 @@ export async function setEnrollmentInstanceStateByScope(
     if (resolved.ambiguous) return { moved: 2, instanceId: null };
     if (!resolved.id) return { moved: 0, instanceId: null };
 
-    const patch: Record<string, unknown> = { state: args.state, updated_at: new Date().toISOString() };
-    if (args.closeReasonKey !== undefined) patch.close_reason_key = args.closeReasonKey;
-    const { data, error } = await supabase
-        .from(PROCESS_INSTANCES_TABLE)
-        .update(patch)
-        .eq("org_id", args.orgId)
-        .eq("id", resolved.id)
-        .select("id");
-    if (error) return { moved: 0, error: error.message };
-    return { moved: (data ?? []).length, instanceId: resolved.id };
+    const r = await applyParticipationLifecycle(supabase, {
+        orgId: args.orgId,
+        instanceId: resolved.id,
+        state: args.state,
+        // State and close reason move together — closing a journey is ONE transition, which is why
+        // close_reason_key had to join the lifecycle contract rather than stay a second write.
+        ...(args.closeReasonKey !== undefined ? { closeReasonKey: args.closeReasonKey } : {}),
+    });
+    if (r.error) return { moved: 0, error: r.error, instanceId: resolved.id };
+    return { moved: r.applied ? 1 : 0, instanceId: resolved.id };
 }
 
 /** Resolve a child's enrollment process-instance id by scope (opportunity + child). */
