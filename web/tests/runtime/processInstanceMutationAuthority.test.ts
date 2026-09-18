@@ -235,3 +235,68 @@ describe("the participation lifecycle write has ONE transaction", () => {
         expect(meta).toContain('idempotency: "operation_key"');
     });
 });
+
+describe("the certification fixture cannot silently prove nothing", () => {
+    /**
+     * Two fixture defects shipped as a green-looking self-test and were caught only by EXECUTION, not
+     * by thirteen passing gates or by reading the SQL:
+     *
+     *   · `orgs.slug` is NOT NULL UNIQUE and the fixture supplied only `name` — the apply aborted
+     *     before a single specimen ran;
+     *   · every assertion used `<>`. `stage_key` and `state` are NULLABLE and a missing jsonb key
+     *     extracts as NULL, so `NULL <> 'stale'` is NULL, which is not TRUE, so the IF never fires.
+     *     The stale-version check was structurally unable to fail on the path it existed to catch.
+     *
+     * These gates exist so that class cannot come back.
+     */
+    const SELFTEST = (() => {
+        const raw = readFileSync(
+            join(process.cwd(), "..", "supabase", "migrations",
+                 "20260918140000_participation_lifecycle_transaction_boundary.sql"), "utf8");
+        const body = raw.slice(raw.indexOf("DO $selftest$"), raw.indexOf("$selftest$;"));
+        return body.replace(/^\s*--.*$/gm, "");   // code only; the prose describes the traps
+    })();
+
+    it("THE GATE: no assertion can pass because a comparison evaluated NULL", () => {
+        const unsafe = SELFTEST.split("\n").filter((l) => {
+            if (!/^\s*IF .*THEN/.test(l)) return false;
+            if (/IS DISTINCT FROM|IS NOT DISTINCT FROM|IS NULL|IS NOT NULL/.test(l)) return false;
+            return /<>|[^<>!:]=[^=]/.test(l);
+        });
+        expect(
+            unsafe,
+            "these assertions compare with <> or = on a value that can be NULL, so they cannot fail "
+            + "when it is. Use IS DISTINCT FROM.",
+        ).toEqual([]);
+    });
+
+    it("THE GATE: the stale specimen uses a version that is non-null AND superseded", () => {
+        // A NULL expected_version means NO GUARD, so the specimen would perform an unguarded write and
+        // report success — which is exactly what happened.
+        expect(SELFTEST).toContain("v_prior := v_current;");
+        expect(SELFTEST, "the prior version is not asserted non-null")
+            .toMatch(/IF v_prior IS NULL THEN RAISE EXCEPTION/);
+        expect(SELFTEST, "staleness is assumed rather than proven")
+            .toMatch(/IF NOT \(v_prior < v_current\) THEN/);
+        expect(SELFTEST, "the INSERT-returned updated_at is NULL and must not be the version under test")
+            .not.toMatch(/RETURNING id, updated_at INTO v_pi/);
+    });
+
+    it("THE GATE: fixture rows satisfy their NOT NULL constraints", () => {
+        // orgs.slug is NOT NULL with a UNIQUE constraint.
+        expect(SELFTEST).toMatch(/INSERT INTO public\.orgs \(name, slug\)/);
+        expect(SELFTEST, "a fixed slug can collide with a prior run").toContain("gen_random_uuid()");
+    });
+
+    it("THE GATE: the rollback specimen proves the write landed before aborting", () => {
+        // Otherwise "the row is unchanged after rollback" would also pass if the write never happened.
+        expect(SELFTEST).toMatch(/rollback setup did not apply/);
+        expect(SELFTEST).toContain("SELFTEST_FORCED_ROLLBACK");
+    });
+
+    it("fixture cleanup stays transactionally contained", () => {
+        expect(SELFTEST).toContain("SELFTEST_CLEANUP");
+        expect(SELFTEST, "a fixture must never be removed by an explicit DELETE that could outlive a failure")
+            .not.toMatch(/DELETE FROM public\.(orgs|process_instances)/);
+    });
+});

@@ -97,78 +97,114 @@ DECLARE
     v_org  uuid;
     v_pi   uuid;
     v_res  jsonb;
-    v_v1   timestamptz;
-    v_v2   timestamptz;
+    v_prior   timestamptz;   -- a REAL, superseded version
+    v_current timestamptz;   -- the row's current version
     v_stage text;
     v_state text;
     v_entered timestamptz;
 BEGIN
-    -- `orgs.slug` is NOT NULL with a UNIQUE constraint (orgs_slug_key). The first attempt supplied
-    -- only `name` and the apply aborted here, before any specimen ran. A random slug keeps the
-    -- fixture collision-free even though the row is rolled back.
+    /*
+     * ── EVERY ASSERTION HERE IS NULL-SAFE, DELIBERATELY ──
+     *
+     * The first version of this block used `<>` throughout. `stage_key` and `state` are NULLABLE, and
+     * a missing jsonb key extracts as NULL, so `NULL <> 'stale'` evaluates to NULL — which is not TRUE,
+     * so the IF never fires. An assertion that cannot fail on the path it exists to catch is worse than
+     * no assertion: it reports success. One such check let a non-stale write past and only a later row
+     * comparison caught it.
+     *
+     * So: IS DISTINCT FROM / IS NOT DISTINCT FROM everywhere, with no bare `<>` or `=` on any value
+     * that can be NULL.
+     */
+
+    -- orgs.slug is NOT NULL with a UNIQUE constraint; the slug is randomised so the fixture cannot
+    -- collide even though every row here is rolled back.
     INSERT INTO public.orgs (name, slug)
     VALUES ('__selftest_participation_txn__', '__selftest_' || gen_random_uuid())
     RETURNING id INTO v_org;
+
     INSERT INTO public.process_instances (org_id, process_key, subject_type, subject_id, stage_key, state)
     VALUES (v_org, 'enrollment_process', 'child', gen_random_uuid(), 'lead', 'active')
-    RETURNING id, updated_at INTO v_pi, v_v1;
+    RETURNING id INTO v_pi;
 
-    -- 1 · SUCCESS: a state-only change must not touch stage_entered_at.
+    -- 1 · STATE-ONLY: state changes, stage untouched, stage_entered_at NOT stamped, updated_at stamped.
     v_res := public.update_participation_and_maintain_facts(v_org, v_pi, NULL, false, NULL, true, 'waitlisted');
-    IF (v_res ->> 'ok') <> 'true' THEN RAISE EXCEPTION 'SELFTEST: state update refused: %', v_res; END IF;
-    SELECT stage_key, state, stage_entered_at, updated_at INTO v_stage, v_state, v_entered, v_v2
+    IF (v_res ->> 'ok') IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'SELFTEST: state update refused: %', v_res; END IF;
+    SELECT stage_key, state, stage_entered_at, updated_at INTO v_stage, v_state, v_entered, v_current
       FROM public.process_instances WHERE id = v_pi;
-    IF v_state <> 'waitlisted' THEN RAISE EXCEPTION 'SELFTEST: state not applied (%)', v_state; END IF;
-    IF v_stage <> 'lead' THEN RAISE EXCEPTION 'SELFTEST: stage changed by a state-only patch (%)', v_stage; END IF;
+    IF v_state IS DISTINCT FROM 'waitlisted' THEN RAISE EXCEPTION 'SELFTEST: state not applied (%)', v_state; END IF;
+    IF v_stage IS DISTINCT FROM 'lead' THEN RAISE EXCEPTION 'SELFTEST: stage changed by a state-only patch (%)', v_stage; END IF;
     IF v_entered IS NOT NULL THEN RAISE EXCEPTION 'SELFTEST: stage_entered_at stamped without a stage_key patch'; END IF;
-    IF v_v2 IS NULL THEN RAISE EXCEPTION 'SELFTEST: updated_at not stamped'; END IF;
+    IF v_current IS NULL THEN RAISE EXCEPTION 'SELFTEST: updated_at not stamped by the RPC'; END IF;
 
-    -- 2 · STAGE CHANGE: supplying stage_key stamps stage_entered_at.
+    -- THE REAL PRIOR VERSION. `process_instances.updated_at` has NO DEFAULT, so the value returned by
+    -- the INSERT is NULL — and a NULL expected_version means NO GUARD, which is why the first attempt
+    -- at specimen 3 silently performed an unguarded write. This one is stamped by the RPC above.
+    v_prior := v_current;
+    IF v_prior IS NULL THEN RAISE EXCEPTION 'SELFTEST: prior version is NULL — specimen 3 would not test staleness'; END IF;
+
+    -- 2 · STAGE: supplied stage applies and stamps; unsupplied state is preserved. This also advances
+    --     updated_at, which is what makes v_prior genuinely superseded.
     v_res := public.update_participation_and_maintain_facts(v_org, v_pi, NULL, true, 'enrollment', false, NULL);
-    IF (v_res ->> 'ok') <> 'true' THEN RAISE EXCEPTION 'SELFTEST: stage update refused: %', v_res; END IF;
-    SELECT stage_key, state, stage_entered_at, updated_at INTO v_stage, v_state, v_entered, v_v2
+    IF (v_res ->> 'ok') IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'SELFTEST: stage update refused: %', v_res; END IF;
+    SELECT stage_key, state, stage_entered_at, updated_at INTO v_stage, v_state, v_entered, v_current
       FROM public.process_instances WHERE id = v_pi;
-    IF v_stage <> 'enrollment' THEN RAISE EXCEPTION 'SELFTEST: stage not applied (%)', v_stage; END IF;
+    IF v_stage IS DISTINCT FROM 'enrollment' THEN RAISE EXCEPTION 'SELFTEST: stage not applied (%)', v_stage; END IF;
     IF v_entered IS NULL THEN RAISE EXCEPTION 'SELFTEST: stage_entered_at not stamped on a stage change'; END IF;
-    IF v_state <> 'waitlisted' THEN RAISE EXCEPTION 'SELFTEST: unsupplied state was overwritten (%)', v_state; END IF;
+    IF v_state IS DISTINCT FROM 'waitlisted' THEN RAISE EXCEPTION 'SELFTEST: unsupplied state was overwritten (%)', v_state; END IF;
 
-    -- 3 · STALE VERSION: a superseded expected_version is refused, and nothing changes.
-    v_res := public.update_participation_and_maintain_facts(v_org, v_pi, v_v1, true, 'tour', false, NULL);
-    IF (v_res ->> 'code') <> 'stale' THEN RAISE EXCEPTION 'SELFTEST: stale write was accepted: %', v_res; END IF;
+    -- The specimen is only meaningful if the version it carries is demonstrably superseded. Assert it
+    -- rather than assume it.
+    IF NOT (v_prior < v_current) THEN
+        RAISE EXCEPTION 'SELFTEST: prior version % is not older than current % — specimen 3 is not a stale test', v_prior, v_current;
+    END IF;
+
+    -- 3 · STALE VERSION: non-null, genuinely superseded, refused, and the row unchanged.
+    v_res := public.update_participation_and_maintain_facts(v_org, v_pi, v_prior, true, 'tour', false, NULL);
+    IF (v_res ->> 'code') IS DISTINCT FROM 'stale' THEN RAISE EXCEPTION 'SELFTEST: stale write was accepted: %', v_res; END IF;
+    IF (v_res ->> 'error') IS DISTINCT FROM 'record_not_found_or_stale' THEN
+        RAISE EXCEPTION 'SELFTEST: stale refusal lost its canonical vocabulary: %', v_res;
+    END IF;
     SELECT stage_key INTO v_stage FROM public.process_instances WHERE id = v_pi;
-    IF v_stage <> 'enrollment' THEN RAISE EXCEPTION 'SELFTEST: refused write still mutated the row (%)', v_stage; END IF;
+    IF v_stage IS DISTINCT FROM 'enrollment' THEN RAISE EXCEPTION 'SELFTEST: refused write still mutated the row (%)', v_stage; END IF;
 
-    -- 4 · CURRENT VERSION accepted — proves test 3 failed on staleness, not on the guard always refusing.
-    v_res := public.update_participation_and_maintain_facts(v_org, v_pi, v_v2, true, 'tour', false, NULL);
-    IF (v_res ->> 'ok') <> 'true' THEN RAISE EXCEPTION 'SELFTEST: current-version write refused: %', v_res; END IF;
+    -- 4 · CURRENT VERSION: accepted — proving specimen 3 failed on staleness, not on a guard that
+    --     always refuses.
+    v_res := public.update_participation_and_maintain_facts(v_org, v_pi, v_current, true, 'tour', false, NULL);
+    IF (v_res ->> 'ok') IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'SELFTEST: current-version write refused: %', v_res; END IF;
 
-    -- 5 · MISSING ROW: same vocabulary, no invention.
+    -- 5 · MISSING ROW: canonical vocabulary, nothing invented.
     v_res := public.update_participation_and_maintain_facts(v_org, gen_random_uuid(), NULL, false, NULL, true, 'x');
-    IF (v_res ->> 'code') <> 'stale' THEN RAISE EXCEPTION 'SELFTEST: missing row not reported as stale: %', v_res; END IF;
+    IF (v_res ->> 'code') IS DISTINCT FROM 'stale' THEN RAISE EXCEPTION 'SELFTEST: missing row not reported as stale: %', v_res; END IF;
+    IF (v_res ->> 'error') IS DISTINCT FROM 'record_not_found_or_stale' THEN
+        RAISE EXCEPTION 'SELFTEST: missing row lost its canonical vocabulary: %', v_res;
+    END IF;
 
-    -- 6 · CROSS-ORG: another org's id cannot reach this row.
+    -- 6 · CROSS-ORG: refused, row unchanged. Written as a positive assertion so a NULL cannot pass.
     v_res := public.update_participation_and_maintain_facts(gen_random_uuid(), v_pi, NULL, true, 'leaked', false, NULL);
-    IF (v_res ->> 'ok') = 'true' THEN RAISE EXCEPTION 'SELFTEST: cross-org write succeeded'; END IF;
+    IF (v_res ->> 'ok') IS NOT DISTINCT FROM 'true' THEN RAISE EXCEPTION 'SELFTEST: cross-org write succeeded: %', v_res; END IF;
     SELECT stage_key INTO v_stage FROM public.process_instances WHERE id = v_pi;
-    IF v_stage <> 'tour' THEN RAISE EXCEPTION 'SELFTEST: cross-org attempt mutated the row (%)', v_stage; END IF;
+    IF v_stage IS DISTINCT FROM 'tour' THEN RAISE EXCEPTION 'SELFTEST: cross-org attempt mutated the row (%)', v_stage; END IF;
 
-    -- 7 · ROLLBACK: a failure AFTER the UPDATE must leave the row untouched. This is the proof that
-    --     Step 2 can add a second UPDATE here without a split commit.
+    -- 7 · FORCED ROLLBACK — the load-bearing Step 2 prerequisite. A failure AFTER the UPDATE must leave
+    --     the row untouched, which is what lets Step 2 add a second UPDATE here without a split commit.
     BEGIN
         v_res := public.update_participation_and_maintain_facts(v_org, v_pi, NULL, true, 'rolled_back', false, NULL);
-        IF (v_res ->> 'ok') <> 'true' THEN RAISE EXCEPTION 'SELFTEST: setup for rollback failed'; END IF;
+        IF (v_res ->> 'ok') IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'SELFTEST: setup for the rollback specimen failed: %', v_res; END IF;
+        -- Prove the write really landed before we abort, so the rollback assertion below is meaningful.
+        SELECT stage_key INTO v_stage FROM public.process_instances WHERE id = v_pi;
+        IF v_stage IS DISTINCT FROM 'rolled_back' THEN RAISE EXCEPTION 'SELFTEST: rollback setup did not apply (%)', v_stage; END IF;
         RAISE EXCEPTION 'SELFTEST_FORCED_ROLLBACK';
     EXCEPTION WHEN OTHERS THEN
-        IF SQLERRM <> 'SELFTEST_FORCED_ROLLBACK' THEN RAISE; END IF;
+        IF SQLERRM IS DISTINCT FROM 'SELFTEST_FORCED_ROLLBACK' THEN RAISE; END IF;
     END;
     SELECT stage_key INTO v_stage FROM public.process_instances WHERE id = v_pi;
-    IF v_stage <> 'tour' THEN
+    IF v_stage IS DISTINCT FROM 'tour' THEN
         RAISE EXCEPTION 'SELFTEST: participation UPDATE survived a rolled-back transaction (%) — a split commit is possible', v_stage;
     END IF;
 
     RAISE EXCEPTION 'SELFTEST_CLEANUP';
 EXCEPTION WHEN OTHERS THEN
     -- Fixtures are discarded by this frame. A real assertion failure re-raises and fails the migration.
-    IF SQLERRM <> 'SELFTEST_CLEANUP' THEN RAISE; END IF;
+    IF SQLERRM IS DISTINCT FROM 'SELFTEST_CLEANUP' THEN RAISE; END IF;
 END
 $selftest$;
