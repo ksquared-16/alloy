@@ -29,6 +29,7 @@ import {
 } from "@/lib/presentation/runtime/queueRowFilter";
 import { WS_QUEUE_TOOLBAR_CHROME } from "@/components/workspace/workspaceTokens";
 import { markPerceived } from "@/lib/perf/perceivedPerf";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import { CondensedQueueRow } from "./CondensedQueueRow";
 import { QueueFilterControls } from "./QueueFilterControls";
 import { useFocusPanelOpen } from "./FocusPanelOpenContext";
@@ -365,6 +366,7 @@ export function QueueRegion({
                     className={`shrink-0 px-3 py-2 pb-3 ${WS_QUEUE_TOOLBAR_CHROME}`}
                     data-queue-region-header
                     data-queue-region-controls
+                    {...alloySectionDomAttrs("WU-04")}
                 >
                     <QueueFilterControls
                         facets={facets}
@@ -378,7 +380,16 @@ export function QueueRegion({
                 </div>
             ) : null}
 
-            <div ref={queueScrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-2.5" data-queue-panel-body>
+            <div
+                ref={queueScrollRef}
+                className="min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-2.5"
+                data-queue-panel-body
+                /* The queue body is ONE element in one of two registered states: the rows
+                   themselves (WU-05) or everything that stands in for them — cold load,
+                   empty, no cohort, refusal (WU-06). Derived from the render state this
+                   component already computes; no new state, no wrapper. */
+                {...alloySectionDomAttrs(renderState === "rows" ? "WU-05" : "WU-06")}
+            >
                 {renderState === "error" ? (
                     /* A refusal names WHAT KIND of problem it is. Before this, a tenant configuration
                        problem and a missing record were the same anonymous red sentence, so an operator

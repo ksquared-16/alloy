@@ -24,6 +24,7 @@ import type {
     WorkspaceHeaderKpiVm,
     WorkspaceHeaderPresentationModel,
 } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import { WORKSPACE_HEADER_NO_DATA_VALUE } from "@/lib/presentation/runtime/workspaceHeaderCards";
 import { useAdaptiveMetricDensity } from "@/lib/presentation/useAmbientWorkspacePresentation";
 import { ProcessCardGlyph } from "./ProcessCardGlyph";
@@ -51,8 +52,9 @@ export type WorkUnitHeaderDensity = "browse" | "focus";
 const VARIANT_META: Record<
     SurfaceHeaderVariant,
     {
-        section: string;
-        calculationsSection: string;
+        /** Canonical registry ids — the DOM identity comes from `alloySectionMap`, not from here. */
+        sectionId: string;
+        calculationsSectionId: string;
         dataAttr: string;
         kpiIconAttr: string;
         kpiAria: string;
@@ -61,8 +63,8 @@ const VARIANT_META: Record<
     }
 > = {
     workspace: {
-        section: "WS.HEADER",
-        calculationsSection: "WS.HEADER_CALCULATIONS",
+        sectionId: "WS-02",
+        calculationsSectionId: "WS-03",
         dataAttr: "data-workspace-header",
         kpiIconAttr: "data-workspace-header-kpi-icon",
         kpiAria: "Workspace KPIs",
@@ -70,8 +72,8 @@ const VARIANT_META: Record<
         calculationsLabel: PRESENTATION_RUNTIME_LABELS.workspaceHeaderCalculations,
     },
     "work-unit": {
-        section: "WU.HEADER",
-        calculationsSection: "WU.HEADER_CALCULATIONS",
+        sectionId: "WU-01",
+        calculationsSectionId: "WU-02",
         dataAttr: "data-work-unit-header",
         kpiIconAttr: "data-work-unit-header-kpi-icon",
         kpiAria: "Work unit KPIs",
@@ -292,7 +294,7 @@ export function WorkspaceHeader({
     return (
         <header
             {...runtimeLabelProps(meta.headerLabel)}
-            data-alloy-section={meta.section}
+            {...alloySectionDomAttrs(meta.sectionId)}
             {...{ [meta.dataAttr]: true }}
             data-adaptive-metric-density={metricDensity}
             {...(variant === "work-unit"
@@ -380,7 +382,7 @@ export function WorkspaceHeader({
                 {model.kpis.length > 0 ? (
                     <div
                         {...runtimeLabelProps(meta.calculationsLabel)}
-                        data-alloy-section={meta.calculationsSection}
+                        {...alloySectionDomAttrs(meta.calculationsSectionId)}
                         {...{ [kpisAttr]: true }}
                         {...(focusMode
                             ? { "data-work-unit-header-kpi-compact-row": "true" }

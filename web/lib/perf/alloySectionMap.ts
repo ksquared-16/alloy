@@ -26,8 +26,24 @@ export type AlloySectionEntry = {
     surface: AlloySurface;
     /** Human-readable section name (kept short — also emitted as `data-alloy-section-name`). */
     name: string;
-    /** Primary component owner (repo-relative path). Split sections list the primary root. */
-    owner: string;
+    /**
+     * The file that renders this section's DOM root — the element `alloySectionDomAttrs(id)` is
+     * spread onto, which is what `data-alloy-section-owner` attributes the section to.
+     *
+     * `null` means NO renderer in the current build: the section is registered but nothing paints
+     * it. A null owner emits no owner attribute rather than naming a file that does not exist.
+     */
+    owner: string | null;
+    /** Why `owner` is null. Required whenever it is. */
+    ownerNote?: string;
+    /**
+     * The section's pre-registry DOM name (`data-alloy-section="WU.HEADER"`), where one exists.
+     *
+     * These were hand-written on the roots and are load-bearing — the runtime split controller and
+     * the acceptance suites select on them. They are emitted FROM HERE so the registry is the one
+     * source of section identity instead of a second, drifting copy in the components.
+     */
+    legacyDomSection?: string;
     /** Human label for the authoritative data source. */
     dataSource: string;
     /**
@@ -57,7 +73,8 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         id: "WU-01",
         surface: "work_unit",
         name: "Work Unit Context Header",
-        owner: "web/components/presentation/workUnit/WorkUnitSurface.tsx",
+        owner: "web/components/presentation/workspace/WorkspaceHeader.tsx",
+        legacyDomSection: "WU.HEADER",
         dataSource: "operational bootstrap (work unit title, process label, lane context)",
         blocking: true,
         cache: "bootstrap",
@@ -66,7 +83,8 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         id: "WU-02",
         surface: "work_unit",
         name: "Work Unit KPI Strip",
-        owner: "web/components/presentation/workUnit/WorkUnitSurface.tsx",
+        owner: "web/components/presentation/workspace/WorkspaceHeader.tsx",
+        legacyDomSection: "WU.HEADER_CALCULATIONS",
         dataSource: "bootstrap/cache placement KPI snapshot (default snapshot until first load)",
         blocking: false,
         cache: "snapshot",
@@ -76,7 +94,8 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         id: "WU-03",
         surface: "work_unit",
         name: "Work View / Lane Pills",
-        owner: "web/components/presentation/workUnit/WorkUnitSurface.tsx",
+        owner: "web/components/presentation/workUnit/WorkViewPillStrip.tsx",
+        legacyDomSection: "WU.WORK_VIEW_PILLS",
         dataSource: "operational bootstrap queue summaries / perspectives rail",
         blocking: true,
         cache: "bootstrap",
@@ -85,7 +104,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         id: "WU-04",
         surface: "work_unit",
         name: "Queue Header",
-        owner: "web/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
+        owner: "web/components/presentation/workUnit/QueueRegion.tsx",
         dataSource: "queue definition + active lane summary (bootstrap, refreshed)",
         blocking: true,
         cache: "bootstrap",
@@ -94,7 +113,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         id: "WU-05",
         surface: "work_unit",
         name: "Condensed Queue Rows",
-        owner: "web/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
+        owner: "web/components/presentation/workUnit/QueueRegion.tsx",
         dataSource: "primary lane rows (bootstrap inline, then quiet network refresh)",
         blocking: true,
         blockingNote: "WU-05 or WU-06 (whichever resolves) blocks",
@@ -104,7 +123,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         id: "WU-06",
         surface: "work_unit",
         name: "Queue Preparing / Empty State",
-        owner: "web/app/adminV2/components/workspace/blocks/OperationalModeQueuePreparePanel.tsx",
+        owner: "web/components/presentation/workUnit/QueueRegion.tsx",
         dataSource: "operational mode entry controller (preparing) / known-empty lane",
         blocking: true,
         blockingNote: "WU-05 or WU-06 (whichever resolves) blocks",
@@ -162,7 +181,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         id: "WU-12",
         surface: "work_unit",
         name: "Right Rail Actions",
-        owner: "web/app/adminV2/components/workspace/CommandRailCollapsibleActionsSection.tsx",
+        owner: "web/components/presentation/rightRail/WorkUnitRightRailActions.tsx",
         dataSource: "actions right-rail bundle",
         blocking: false,
         blockingNote: "shell renders without blocking core reveal",
@@ -172,7 +191,8 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         id: "WU-13",
         surface: "work_unit",
         name: "Right Rail Workflow Telemetry",
-        owner: "web/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock.tsx",
+        owner: null,
+        ownerNote: "Retired with the Work Unit automation rail; no component renders it.",
         dataSource: "workflow runs / summary telemetry",
         blocking: false,
         blockingNote: "shell renders without blocking core reveal",
@@ -214,7 +234,8 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         id: "WS-01",
         surface: "workspace",
         name: "Workspace Resume Chip",
-        owner: "web/components/admin/workspace/ResumeWhereYouLeftOffChip.tsx",
+        owner: null,
+        ownerNote: "Retired with the workspace resume chip; no component renders it.",
         dataSource: "session resume state",
         blocking: false,
         cache: "session",
@@ -223,7 +244,8 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         id: "WS-02",
         surface: "workspace",
         name: "Workspace Title / Command Center Header",
-        owner: "web/components/admin/workspace/layout/WorkspaceHealthPulseSection.tsx",
+        owner: "web/components/presentation/workspace/WorkspaceHeader.tsx",
+        legacyDomSection: "WS.HEADER",
         dataSource: "org / command center header (bootstrap)",
         blocking: true,
         cache: "bootstrap",
@@ -232,7 +254,8 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         id: "WS-03",
         surface: "workspace",
         name: "Workspace Health KPI Strip",
-        owner: "web/components/admin/workspace/layout/WorkspaceHealthPulseSection.tsx",
+        owner: "web/components/presentation/workspace/WorkspaceHeader.tsx",
+        legacyDomSection: "WS.HEADER_CALCULATIONS",
         dataSource: "OIP health snapshot (cache/default snapshot)",
         blocking: false,
         cache: "snapshot",
@@ -242,7 +265,8 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         id: "WS-04",
         surface: "workspace",
         name: "Operational Pulse / Primary KPI Area",
-        owner: "web/components/admin/workspace/layout/WorkspaceHealthPulseSection.tsx",
+        owner: null,
+        ownerNote: "Folded into the workspace header KPI strip (WS-03); nothing renders it.",
         dataSource: "operational pulse snapshot (cache/default snapshot)",
         blocking: false,
         cache: "snapshot",
@@ -262,6 +286,7 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         surface: "workspace",
         name: "Workspace Process Tile KPI Snapshot",
         owner: "web/components/presentation/workspace/ProcessSummaryCard.tsx",
+        legacyDomSection: "WS.PROCESS_SUMMARY_CARD",
         dataSource: "per-tile metric snapshot (cache/default snapshot)",
         blocking: false,
         cache: "snapshot",
@@ -271,7 +296,7 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         id: "WS-07",
         surface: "workspace",
         name: "Right Rail Actions",
-        owner: "web/app/adminV2/components/workspace/WorkspaceRootActionsRail.tsx",
+        owner: "web/components/presentation/rightRail/WorkspaceRightRailActions.tsx",
         dataSource: "workspace-root actions bundle",
         blocking: false,
         cache: "network",
@@ -333,8 +358,11 @@ export function alloySectionDomAttrs(id: AlloySectionId): Record<string, string>
     return {
         "data-alloy-section-id": entry.id,
         "data-alloy-section-name": entry.name,
-        "data-alloy-section-owner": entry.owner,
+        // A section with no renderer names no owner, rather than a file that is not there.
+        ...(entry.owner ? { "data-alloy-section-owner": entry.owner } : {}),
         "data-alloy-section-blocking": entry.blocking ? "true" : "false",
         "data-alloy-section-cache": entry.cache,
+        // The pre-registry name, emitted from the registry so the components hold no second copy.
+        ...(entry.legacyDomSection ? { "data-alloy-section": entry.legacyDomSection } : {}),
     };
 }
