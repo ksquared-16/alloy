@@ -114,3 +114,19 @@ The allocations on `907d1b64` are effective-dated, superseding records. **Do not
 
 `THREAD_11A_QA_SUBJECT_RESEED` now additionally requires: both Sep 18 registration fees and the
 responsibility allocations written against `907d1b64`.
+
+## B1 closeout (run `erun_53d2105805741201`)
+
+| Mutation | Identity |
+|---|---|
+| Registration fee $75.00 · **Certa Certhouse** · Sep 18 2026 | via `charge.add`, key `tpl:registration_fee:2026-09-18:4e3aa47e…` |
+
+No tuition was generated (nothing was billable), no payments were recorded, and no responsibility
+was written this run. Everything else observed was already on the fixture.
+
+**FOR THE B2 RESEED — `THREAD_11A_QA_SUBJECT_RESEED` must additionally ESTABLISH, not just clean:**
+a recurring billing specimen. There is currently none — no accepted `enrollment_pricing_terms`, so
+`billing.generate_tuition` has nothing to bill for any period. If Human QA is meant to exercise
+recurring billing at all, the reseed has to build the commercial tree (tuition plan → billing
+frequency → enrolment commitment → assignment → accepted terms), ideally one WEEKLY and one MONTHLY
+so both cadences are exercisable.
