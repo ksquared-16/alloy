@@ -35,8 +35,44 @@ const CANONICAL_OWNER = "lib/pos/processingIdentity/commands/ports.ts";
 
 const WRITE = /\.(insert|update|upsert|delete)\s*\(/;
 
+/*
+ * ── WHY THIS RESOLVES CONSTANTS ──
+ *
+ * This scan matched only the STRING LITERAL `.from("process_instances")`. `lib/process/`
+ * exports `PROCESS_INSTANCES_TABLE = "process_instances"` and the real write module uses it, so an
+ * entire process-instance writer module — insert plus four lifecycle update shapes, including
+ * `close_reason_key` — was invisible to every assertion below. The gate reported a single-writer
+ * invariant that the source tree did not have, which is worse than no gate: Step 2's maintained
+ * fact was about to be built on it.
+ *
+ * So the alias set is DERIVED from the tree, not listed. A new `const X = "process_instances"`
+ * is picked up automatically; it cannot be used to slip past this file.
+ */
+function processInstanceTableAliases(): string[] {
+    const aliases = new Set<string>();
+    const walk = (dir: string) => {
+        for (const e of readdirSync(dir, { withFileTypes: true })) {
+            const p = join(dir, e.name);
+            if (e.isDirectory()) {
+                if (!/node_modules/.test(e.name)) walk(p);
+                continue;
+            }
+            if (!/\.tsx?$/.test(e.name)) continue;
+            for (const m of readFileSync(p, "utf8")
+                .matchAll(/(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*["']process_instances["']/g)) {
+                aliases.add(m[1]!);
+            }
+        }
+    };
+    walk(join(process.cwd(), "lib"));
+    walk(join(process.cwd(), "app"));
+    return [...aliases];
+}
+
 function processInstanceWriters(): Array<{ file: string; chain: string }> {
     const out: Array<{ file: string; chain: string }> = [];
+    const alternatives = ["[\"']process_instances[\"']", ...processInstanceTableAliases()].join("|");
+    const from = new RegExp(`\\.from\\(\\s*(?:${alternatives})\\s*\\)`, "g");
     const walk = (dir: string) => {
         for (const e of readdirSync(dir, { withFileTypes: true })) {
             const p = join(dir, e.name);
@@ -46,9 +82,21 @@ function processInstanceWriters(): Array<{ file: string; chain: string }> {
             }
             if (!/\.tsx?$/.test(e.name) || /\.test\./.test(e.name)) continue;
             const src = readFileSync(p, "utf8");
-            for (const m of src.matchAll(/\.from\(\s*["']process_instances["']\s*\)/g)) {
-                const chain = src.slice(m.index ?? 0, (m.index ?? 0) + 500).split(/;\s*\n/)[0]!;
-                if (WRITE.test(chain)) out.push({ file: p.replace(`${process.cwd()}/`, ""), chain });
+            for (const m of src.matchAll(from)) {
+                const at = m.index ?? 0;
+                const forward = src.slice(at, at + 500).split(/;\s*\n/)[0]!;
+                if (!WRITE.test(forward)) continue;
+                /*
+                 * A payload built ABOVE the call is still this module writing that field.
+                 * `materializeEnrollmentFromProcessInstance` assembles `patch.state` / `patch.stage_key`
+                 * and then passes `patch`, so a forward-only window read it as metadata-only and the
+                 * enrollment materialization write — a real terminal lifecycle transition — went unseen.
+                 */
+                const payload = /\.(?:insert|update|upsert)\(\s*([A-Za-z_$][\w$]*)\s*[),]/.exec(forward)?.[1];
+                const chain = payload
+                    ? `${src.slice(Math.max(0, at - 1500), at)}${forward}`
+                    : forward;
+                out.push({ file: p.replace(`${process.cwd()}/`, ""), chain });
             }
         }
     };
@@ -56,6 +104,33 @@ function processInstanceWriters(): Array<{ file: string; chain: string }> {
     walk(join(process.cwd(), "app"));
     return out;
 }
+
+/*
+ * ── THE STEP 2 BLOCKER LEDGER ──
+ *
+ * These modules DO write process lifecycle truth outside the canonical owner. They are NOT exempt
+ * and NOT sanctioned: this is a blocker ledger, enumerated so the violation is visible instead of
+ * invisible. It exists because the scan above matched only the string literal, so these were never
+ * reported, and "updateProcessParticipation is the single production lifecycle writer" was recorded
+ * as an established fact that the source tree did not support.
+ *
+ * Why it blocks Step 2 specifically: the maintained EPP fact on `opportunities` is maintained INSIDE
+ * `update_participation_and_maintain_facts`. A lifecycle write that does not go through that RPC
+ * moves a participant's stage/state WITHOUT refreshing the opportunity's maintained facts. While the
+ * first-order enrichment read still runs, navigation re-derives the truth every request and nothing
+ * is wrong. The moment that read is retired, these writes become silent, durable, operator-visible
+ * wrong truth — a child materialized as enrolled would show its pre-enrollment stage forever.
+ *
+ * Emptying this ledger (routing each writer through the command runtime) is the precondition for
+ * retiring either first-order read. The gate below enforces exactly that, so it cannot be forgotten.
+ */
+const STEP_2_BLOCKING_UNROUTED_LIFECYCLE_WRITERS = new Map<string, number>([
+    // insert + four lifecycle update shapes, incl. close_reason_key; the real creation path
+    // (createEnrollmentProcessInstance, moveEnrollmentInstanceStageByScope, setEnrollmentInstanceStateByScope)
+    ["lib/process/processInstances.ts", 5],
+    // enrollment materialization: sets state='enrolled' and the completed stage_key
+    ["lib/childcareOperational/materializeEnrollmentFromProcessInstance.ts", 1],
+]);
 
 /** Writers that legitimately touch `process_instances` WITHOUT carrying lifecycle semantics. */
 const METADATA_ONLY_BY_DESIGN = new Set([
@@ -78,6 +153,7 @@ describe("process lifecycle truth has exactly one mutation owner", () => {
         const offenders = processInstanceWriters()
             .filter((w) => w.file !== CANONICAL_OWNER)
             .filter((w) => !FIXTURE_TEARDOWN.has(w.file))
+            .filter((w) => !STEP_2_BLOCKING_UNROUTED_LIFECYCLE_WRITERS.has(w.file))
             .filter((w) => LIFECYCLE_FIELDS.some((f) => w.chain.includes(f)))
             .map((w) => w.file);
 
@@ -87,6 +163,66 @@ describe("process lifecycle truth has exactly one mutation owner", () => {
             + `${CANONICAL_OWNER}. That table's lifecycle mutation is owned by the Processing Identity `
             + "command runtime, which supplies the idempotency key and the atomic group commit that "
             + "EPP maintenance will depend on. Route the mutation through updateProcessParticipation.",
+        ).toEqual([]);
+    });
+
+    it("THE GATE: a ledgered file cannot quietly acquire MORE unrouted lifecycle writes", () => {
+        /*
+         * The ledger is per FILE, so without this the two ledgered modules would be a free pass: any
+         * new lifecycle write added to them would inherit the exemption and never be reported. A
+         * planted extra write proved exactly that before this assertion existed.
+         *
+         * The count may FALL as writers are routed (that is the work); it may never RISE.
+         */
+        const counts = new Map<string, number>();
+        for (const w of processInstanceWriters()) {
+            if (!STEP_2_BLOCKING_UNROUTED_LIFECYCLE_WRITERS.has(w.file)) continue;
+            if (!LIFECYCLE_FIELDS.some((f) => w.chain.includes(f))) continue;
+            counts.set(w.file, (counts.get(w.file) ?? 0) + 1);
+        }
+        for (const [file, allowed] of STEP_2_BLOCKING_UNROUTED_LIFECYCLE_WRITERS) {
+            const actual = counts.get(file) ?? 0;
+            expect(
+                actual,
+                `${file} now has ${actual} unrouted lifecycle writes, up from the ledgered ${allowed}. `
+                + "A ledgered file is a known blocker, not an exemption — do not add lifecycle writes to it.",
+            ).toBeLessThanOrEqual(allowed);
+        }
+    });
+
+    it("THE GATE: neither first-order read may be retired while any lifecycle writer is unrouted", () => {
+        /*
+         * The Step 2 safety interlock, and the reason it is an assertion rather than a note.
+         *
+         * Retiring the enrichment reads is only safe if EVERY lifecycle write maintains the
+         * opportunity's facts. Today two modules write lifecycle truth outside the RPC that does that
+         * maintenance, so the reads are still load-bearing: they re-derive the truth each request and
+         * hide the gap. Retiring them with the ledger non-empty converts a hidden gap into silent,
+         * durable wrong truth on the operator's primary surface — and every functional test would
+         * still pass, because the rows are correctly SHAPED, just stale.
+         *
+         * So the two facts are pinned together: the read may disappear only as the ledger empties.
+         */
+        const provisioning = readFileSync(
+            join(process.cwd(), "lib", "runtime", "provisioning", "workUnitProvisioningAnswer.ts"),
+            "utf8",
+        );
+        const eppRetired = !/await attachEffectiveEnrollmentStagesToOpportunityRows\(/.test(provisioning);
+        const tourRetired = !/await attachActiveTourFactsToOpportunityRows\(/.test(provisioning);
+
+        if (!eppRetired && !tourRetired) {
+            // Pre-Step-2 state: the reads still run, so stale maintained facts cannot reach an operator.
+            expect(STEP_2_BLOCKING_UNROUTED_LIFECYCLE_WRITERS.size).toBeGreaterThanOrEqual(0);
+            return;
+        }
+
+        expect(
+            [...STEP_2_BLOCKING_UNROUTED_LIFECYCLE_WRITERS],
+            "a first-order enrichment read was retired from the evaluated-page path while these modules "
+            + "still write process lifecycle truth outside update_participation_and_maintain_facts. Their "
+            + "writes do not refresh the maintained opportunity facts, so navigation would serve stale "
+            + "stage/state truth with no failing test anywhere. Route them through the command runtime "
+            + "and empty this ledger BEFORE retiring the read.",
         ).toEqual([]);
     });
 
