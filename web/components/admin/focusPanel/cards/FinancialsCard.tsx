@@ -43,6 +43,7 @@ import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/fo
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { resolveFinancialSubjectId } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
 import {
+    compactPayableRows as selectCompactPayableRows,
     financialsRowsInSubjectScope,
     rowInFinancialsSubjectScope,
 } from "@/lib/adminV2/runtime/focusPanel/financials/financialsRowScope";
@@ -1142,8 +1143,8 @@ export default function FinancialsCard({
      * August registration fee. The subject-filter defect had been masking that.
      */
     const compactPayableRows = useMemo(
-        () => (vm == null ? [] : payableRows.filter((r) => r.periodKey === vm.period.key)),
-        [payableRows, vm],
+        () => (vm == null ? [] : selectCompactPayableRows(vm.rows, subjectFilter, vm.period.key)),
+        [vm, subjectFilter],
     );
     const openSettleCurrentPeriod = useMemo(
         () => makeSettleOpener(compactPayableRows),
