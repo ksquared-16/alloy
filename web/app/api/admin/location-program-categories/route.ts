@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { bumpOrgConfigFreshness } from "@/lib/admin/configFreshness";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireProgramsConfigurationCapability } from "@/lib/access/programsConfigurationAuthority";
@@ -307,6 +308,15 @@ export async function PATCH(request: NextRequest) {
         results.push(updated.row);
     }
 
+    if (results.length > 0) {
+        /*
+         * `loadLocationProgramCategoriesForOrg` holds these rows in a 90-second process cache that is
+         * read on EVERY provisioning answer. Before this, a category published here stayed invisible
+         * to the operator's own surface for up to a minute and a half, and the only thing that fixed
+         * it was a timer expiring.
+         */
+        bumpOrgConfigFreshness({ family: "location_program_categories", orgId: ctx.orgId });
+    }
     return NextResponse.json({ categories: results, updated: results.length });
 }
 
