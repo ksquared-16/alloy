@@ -21,6 +21,7 @@ import {
     hasChoice,
     lensCounts,
     payerOptions,
+    responsiblePartyOptions,
     periodOptions,
     subjectOptions,
     type AccountLens,
@@ -109,6 +110,7 @@ export default function FinancialsAccountWorkspaceDetail({
     const [subject, setSubject] = useState<string | null>(null);
     const [periodKey, setPeriodKey] = useState<string | null>(null);
     const [payer, setPayer] = useState<string | null>(null);
+    const [responsibleParty, setResponsibleParty] = useState<string | null>(null);
 
     /* The account still selected. Every response is checked against it before it is allowed to land. */
     const wantedRef = useRef(customerId);
@@ -148,17 +150,19 @@ export default function FinancialsAccountWorkspaceDetail({
     const subjects = useMemo(() => subjectOptions(rows as never), [rows]);
     const periods = useMemo(() => periodOptions(rows as never), [rows]);
     const payers = useMemo(() => payerOptions(payments as never), [payments]);
+    /* Who is OBLIGATED — a different question from whose child it is, and from who paid. */
+    const responsibleParties = useMemo(() => responsiblePartyOptions(rows as never), [rows]);
     const counts = useMemo(
-        () => lensCounts(rows as never, payments as never, { subject, periodKey }),
-        [rows, payments, subject, periodKey],
+        () => lensCounts(rows as never, payments as never, { subject, periodKey, responsibleParty }),
+        [rows, payments, subject, periodKey, responsibleParty],
     );
 
     const ledger = useMemo(
         () =>
-            filterLedger(rows as never, { ...NO_FILTER, lens, subject, periodKey })
+            filterLedger(rows as never, { ...NO_FILTER, lens, subject, periodKey, responsibleParty })
                 .slice()
                 .sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? ""))),
-        [rows, lens, subject, periodKey],
+        [rows, lens, subject, periodKey, responsibleParty],
     );
     const visiblePayments = useMemo(
         () => filterPayments(payments as never, { payerLabel: payer }) as unknown as Row[],
@@ -288,6 +292,24 @@ export default function FinancialsAccountWorkspaceDetail({
                                 onChange={(v) => setPeriodKey(v || null)}
                                 placeholder="All periods"
                                 options={periods}
+                            />
+                        ) : null}
+                        {/*
+                          * WHO OWES IT — offered beside the subject, never instead of it. A row can
+                          * concern Ana while responsibility belongs to a parent; those are two
+                          * questions and the ledger answers them from two authorities.
+                          *
+                          * Hidden under the Payments lens for the same reason the subject filter is:
+                          * a receipt is not an obligation, and responsibility is a fact about the
+                          * obligation. Payer is the question there, and it already has the control.
+                          */}
+                        {!loading && lens !== "payments" && hasChoice(responsibleParties) ? (
+                            <Filter
+                                testId="responsible-party"
+                                value={responsibleParty ?? ""}
+                                onChange={(v) => setResponsibleParty(v || null)}
+                                placeholder="Anyone responsible"
+                                options={responsibleParties}
                             />
                         ) : null}
                         {!loading && lens === "payments" && hasChoice(payers) ? (

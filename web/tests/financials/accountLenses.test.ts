@@ -25,6 +25,9 @@ import {
     periodOptions,
     subjectOptions,
     subjectTokenOf,
+    responsiblePartyOptions,
+    NO_FILTER,
+    UNASSIGNED_PARTY,
 } from "@/lib/financials/workspace/accountLenses";
 import type { FinancialsLedgerRow } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 
@@ -249,5 +252,56 @@ describe("no second financial answer", () => {
 
     it("names every lens exactly once", () => {
         expect(new Set(ACCOUNT_LENSES).size).toBe(ACCOUNT_LENSES.length);
+    });
+});
+
+/**
+ * WHO OWES IT — the third question, kept distinct from the other two.
+ *
+ * A row can concern Ana while responsibility belongs to a parent, and the money may ultimately
+ * arrive from a third person entirely. Subject, responsible party and payer are three different
+ * questions answered from three different authorities, and collapsing any two of them is how an
+ * operator chases the wrong person.
+ */
+describe("responsible party is not the subject and not the payer", () => {
+    const rows = [
+        row({ chargeId: "a", subjectMemberId: "m-ana", subjectName: "Ana", responsiblePartyName: "Kelly Kurzman" }),
+        row({ chargeId: "b", subjectMemberId: "m-ana", subjectName: "Ana", responsiblePartyName: "Kristi Kurzman" }),
+        row({ chargeId: "c", subjectMemberId: "m-rio", subjectName: "Rio", responsiblePartyName: "Kelly Kurzman" }),
+        row({ chargeId: "d", subjectMemberId: null, responsiblePartyName: null }),
+    ] as unknown as Parameters<typeof filterLedger>[0];
+
+    it("offers only the parties the account's rows actually name", () => {
+        const opts = responsiblePartyOptions(rows as never);
+        expect(opts.map((o) => o.label)).toEqual(["Kelly Kurzman", "Kristi Kurzman", "Unassigned"]);
+        // Unassigned sorts LAST: it is a state, not a person.
+        expect(opts.at(-1)!.value).toBe(UNASSIGNED_PARTY);
+    });
+
+    /* ONE CHILD, TWO RESPONSIBLE PARTIES — the case that proves the two questions are different. */
+    it("splits one child's rows across the parties responsible for them", () => {
+        const kelly = filterLedger(rows, { ...NO_FILTER, responsibleParty: "Kelly Kurzman" });
+        expect(kelly.map((r) => r.chargeId)).toEqual(["a", "c"]);
+        const kristi = filterLedger(rows, { ...NO_FILTER, responsibleParty: "Kristi Kurzman" });
+        expect(kristi.map((r) => r.chargeId)).toEqual(["b"]);
+    });
+
+    /* "Who has nobody answering for it" is the work, so it is a real choice rather than an absence. */
+    it("makes unassigned obligations selectable", () => {
+        expect(filterLedger(rows, { ...NO_FILTER, responsibleParty: UNASSIGNED_PARTY }).map((r) => r.chargeId))
+            .toEqual(["d"]);
+    });
+
+    /* The two dimensions compose; neither stands in for the other. */
+    it("combines subject scope with responsibility scope", () => {
+        const anaAndKelly = filterLedger(rows, { ...NO_FILTER, subject: "m-ana", responsibleParty: "Kelly Kurzman" });
+        // Ana's scope is Ana + household − siblings; of those, only "a" is Kelly's.
+        expect(anaAndKelly.map((r) => r.chargeId)).toEqual(["a"]);
+    });
+
+    /* A badge that counted differently from the ledger would promise rows that are not there. */
+    it("counts through the same predicate the ledger filters with", () => {
+        const counts = lensCounts(rows as never, [], { subject: null, periodKey: null, responsibleParty: "Kelly Kurzman" });
+        expect(counts.all).toBe(filterLedger(rows, { ...NO_FILTER, responsibleParty: "Kelly Kurzman" }).length);
     });
 });

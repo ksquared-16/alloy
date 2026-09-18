@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
@@ -40,6 +40,9 @@ import type { FinancialsEvidence, FinancialsLedgerPeriod } from "@/lib/cardLab/c
  * No running balance column: `ledger_transactions` has no authoritative running balance, and
  * computing one in the card would invent an ordering the backend does not guarantee.
  */
+/** An obligation nobody has been made answerable for. A state, not a person — so it sorts last. */
+const UNASSIGNED_LABEL = "Unassigned";
+
 export default function FinancialsDetailCard({
     evidence,
     periods,
@@ -179,14 +182,29 @@ export default function FinancialsDetailCard({
     const [subject, setSubject] = useState<string | null>(null);
     const [periodLabel, setPeriodLabel] = useState<string | null>(null);
     const [payer, setPayer] = useState<string | null>(null);
+    /* WHO OWES IT — distinct from whose child the row is, and from who paid. */
+    const [responsibleParty, setResponsibleParty] = useState<string | null>(null);
 
     const allEntries = useMemo(() => periods.flatMap((p) => p.entries), [periods]);
 
     /* Counts of ROWS, never sums of cents — the same rule `accountLenses` keeps. */
+    /*
+     * ONE PREDICATE FOR THE COUNTS AND THE ROWS. A badge derived from a different rule than the
+     * ledger it labels promises rows the operator will not find — the exact defect the subject
+     * convergence repaired once already.
+     */
+    const inResponsibleScope = useCallback(
+        (e: { responsibleParty?: string | null }) =>
+            !responsibleParty
+            || ((e.responsibleParty ?? "").trim() || UNASSIGNED_LABEL) === responsibleParty,
+        [responsibleParty],
+    );
+
     const counts = useMemo(() => {
         const scoped = allEntries.filter(
             (e) =>
                 (!subject || e.subject === subject)
+                && inResponsibleScope(e)
                 && (!periodLabel || periods.some((p) => p.label === periodLabel && p.entries.includes(e))),
         );
         const out: Record<AccountLens, number> = {
@@ -209,6 +227,20 @@ export default function FinancialsDetailCard({
         [allEntries],
     );
     const periodChoices = useMemo(() => periods.map((p) => p.label), [periods]);
+    /*
+     * Derived from the ROWS, never from household membership: a parent made responsible for nothing
+     * is not a filter an operator needs, and offering them implies an arrangement that does not
+     * exist. An obligation with no named party files under "Unassigned", which is a real and
+     * frequently the most actionable choice.
+     */
+    const responsiblePartyChoices = useMemo(
+        () =>
+            [...new Set(allEntries.map((e) => (e.responsibleParty ?? "").trim() || UNASSIGNED_LABEL))].sort(
+                (a, b) =>
+                    a === UNASSIGNED_LABEL ? 1 : b === UNASSIGNED_LABEL ? -1 : a.localeCompare(b),
+            ),
+        [allEntries],
+    );
     const payerChoices = useMemo(
         () =>
             [...new Set(evidence.payments.map((p) => p.payerLabel ?? "").filter(Boolean))].sort((a, b) =>
@@ -225,11 +257,14 @@ export default function FinancialsDetailCard({
             .map((p) => ({
                 ...p,
                 entries: p.entries.filter(
-                    (e) => (lens === "all" || e.lens === lens) && (!subject || e.subject === subject),
+                    (e) =>
+                        (lens === "all" || e.lens === lens)
+                        && (!subject || e.subject === subject)
+                        && inResponsibleScope(e),
                 ),
             }))
             .filter((p) => p.entries.length > 0);
-    }, [periods, lens, subject, periodLabel]);
+    }, [periods, lens, subject, periodLabel, inResponsibleScope]);
 
     const visiblePayments = useMemo(
         () => (payer ? evidence.payments.filter((p) => (p.payerLabel ?? "") === payer) : evidence.payments),
@@ -423,6 +458,20 @@ export default function FinancialsDetailCard({
                                 onChange={(v) => setPeriodLabel(v || null)}
                                 placeholder="All periods"
                                 options={periodChoices}
+                            />
+                        ) : null}
+                        {/*
+                          * WHO OWES IT — the second question the ledger answers about an obligation,
+                          * and a different one from whose child it is. Absent under the Payments
+                          * lens, where the question is who actually paid and Payer owns it.
+                          */}
+                        {lens !== "payments" && responsiblePartyChoices.length > 1 ? (
+                            <LensFilter
+                                testId="responsible-party"
+                                value={responsibleParty ?? ""}
+                                onChange={(v) => setResponsibleParty(v || null)}
+                                placeholder="Anyone responsible"
+                                options={responsiblePartyChoices}
                             />
                         ) : null}
                         {lens === "payments" && payerChoices.length > 1 ? (
