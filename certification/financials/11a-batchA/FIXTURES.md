@@ -46,3 +46,16 @@ fixture outside the product's own governed actions.
 **REQUIREMENT — `THREAD_11A_QA_SUBJECT_RESEED`**: reseed `Certhouse Family` (and the
 `Sibling discount (QA specimen)` commercial policy) to the governed baseline before Human QA begins.
 Until that runs, the account carries certification specimens and its balances are not a QA oracle.
+
+## Completion pass (run `erun_7cbcc98f3cd96d70`)
+
+**No new financial specimens were created.** Both repairs in this pass are code; every mounted probe
+was read-only. The §4B assignment was NOT executed, so no arrangement was written.
+
+Position observed on candidate `30dcc2859`: eight charge details all report the same arrangement —
+`Cert Certhouse $500.00 from Sep 6, 2026` (a FIXED share, which is one of the three methods
+`financial_responsibility_arrangements` supports). The account does still hold an unassigned
+obligation — `Consumable fee $18.00`, which the Focus Panel reports as `Unassigned $18.00` — so §4B
+remains reachable on this subject without seeding anything new.
+
+`THREAD_11A_QA_SUBJECT_RESEED` is unchanged and still required before Human QA.
