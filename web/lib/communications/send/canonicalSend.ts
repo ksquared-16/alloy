@@ -237,10 +237,20 @@ export async function canonicalSend(req: CanonicalSendRequest): Promise<Canonica
         };
     }
     if (claim.outcome === "conflict") {
+        /*
+         * OPERATOR LANGUAGE, BECAUSE THE OPERATOR IS THE ONE READING IT.
+         *
+         * This said "This send key was already used with different content or recipient. Use a new
+         * key." — and an operator reached it on the ordinary Send path, having chosen no key and
+         * having no way to choose one. A send key is our bookkeeping; telling a human to manage it
+         * is telling them to fix something they cannot see. See `useFamilyCommunicationRuntime`'s
+         * attempt token for the semantic repair; this is the copy that is left when the guard does
+         * legitimately fire.
+         */
         return fail(
             "invalid",
             "idempotency_payload_changed",
-            "This send key was already used with different content or recipient. Use a new key."
+            "A message has already been sent for this attempt. Go back to edit and send again — that will send a new message."
         );
     }
 

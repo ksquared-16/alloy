@@ -210,11 +210,19 @@ export async function POST(req: Request) {
                         bodyIsHtml: ch === "email" && bodyIsHtml,
                         subjectRaw: ch === "email" ? (subj ?? null) : null,
                         userAuthored: true,
-                        // Per-recipient identity: a three-recipient bulk request
-                        // yields three independently protected operations. The
-                        // content hash keeps a later, genuinely different message
-                        // from colliding with an earlier one when the client
-                        // supplies no token.
+                        /*
+                         * Per-recipient identity: a three-recipient bulk request yields three
+                         * independently protected operations.
+                         *
+                         * `client_token` is the composer naming ONE confirmation episode, and it is
+                         * what makes this correct. The content hash below it is the fallback for a
+                         * caller that names nothing, and on its own it was wrong in both directions:
+                         * a message the product generates identically every time — enrollment
+                         * paperwork for a child — hashes to the same key forever, so an intentional
+                         * resend was swallowed as a replay, and once the server fingerprint changed
+                         * (it includes the recipient address) the key conflicted permanently and
+                         * told the operator to "use a new key" on the ordinary Send path.
+                         */
                         idempotencyKey: `family_send:${clientToken || contentToken(text, subj)}:${personId}`,
                         metadata: {
                             source: "family_send",

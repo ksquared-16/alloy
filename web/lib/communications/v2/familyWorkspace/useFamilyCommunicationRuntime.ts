@@ -284,6 +284,44 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
         tour_invitation: boolean;
     } | null>(null);
     const confirmInFlightRef = useRef(false);
+
+    /**
+     * WHICH SEND ATTEMPT THIS IS — not which message it happens to contain.
+     *
+     * The server protects a send with an idempotency key, and with no token from the client that key
+     * was derived from the CONTENT: `family_send:<hash of subject+body>:<personId>`. For an authored
+     * one-off that is almost harmless. For a message the product GENERATES the same way every time —
+     * enrollment paperwork is regenerated verbatim for a child — the key is the same forever, so:
+     *
+     *   • an intentional resend of identical paperwork was swallowed as an idempotent replay, and
+     *   • once anything in the server's fingerprint changed (it includes the recipient ADDRESS), the
+     *     key permanently conflicted and the operator was told, on the ordinary Send path, to
+     *     "use a new key" for a key they never chose and cannot reach.
+     *
+     * Reproduced on the certified path: preflight ready, confirm failed, `Could not send · This send
+     * key was already used with different content or recipient.` The guardian's address had changed
+     * between QA sends months of product-time earlier.
+     *
+     * So the composer names the ATTEMPT. One token covers one confirmation episode — every Confirm
+     * retry inside it, including after a network timeout, so a double-send is still impossible — and
+     * a new one is minted the moment the operator returns to editing, starts a new message, switches
+     * thread, or acknowledges a completed send. Those are exactly the moments a human means "this is
+     * a different communication".
+     */
+    const attemptTokenRef = useRef<string | null>(null);
+    const beginSendAttempt = useCallback(() => {
+        if (attemptTokenRef.current) return attemptTokenRef.current;
+        const token =
+            typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+                ? crypto.randomUUID()
+                : `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+        attemptTokenRef.current = token;
+        return token;
+    }, []);
+    /** The operator went back to composing: whatever they confirm next is a different attempt. */
+    const endSendAttempt = useCallback(() => {
+        attemptTokenRef.current = null;
+    }, []);
     const [tourInvitationAck, setTourInvitationAck] = useState(Boolean(draftSeed?.tourInvitationId));
     const loadRequestSeqRef = useRef(0);
     const selectedThreadIdRef = useRef<string | null>(selectedThreadId);
@@ -473,6 +511,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
     ]);
 
     const openThread = useCallback((threadId: string) => {
+        endSendAttempt();
         hasUserThreadSelectionRef.current = true;
         setSelectedThreadId(threadId);
         selectedThreadIdRef.current = threadId;
@@ -482,7 +521,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
         const channel = resolveLoadComposerChannel(threadId, vm, liveChannel);
         if (vm) syncThreadContext(threadId, vm);
         void load(threadId, false, { channel });
-    }, [load, liveChannel, syncThreadContext, vm]);
+    }, [endSendAttempt, load, liveChannel, syncThreadContext, vm]);
 
     useEffect(() => {
         if (!isThreadScopedSurface || !vm || !selectedThreadId) return;
@@ -506,6 +545,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
     }, [forceNewMessage, initialThreadId, isActivityEmbed, liveChannel, load, selectedThreadId, syncThreadContext, vm]);
 
     const startNewMessage = useCallback(() => {
+        endSendAttempt();
         hasUserThreadSelectionRef.current = true;
         setSelectedThreadId(null);
         selectedThreadIdRef.current = null;
@@ -515,7 +555,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
         setSendError(null);
         if (vm) syncThreadContext(null, vm);
         void load(null, false);
-    }, [load, syncThreadContext, vm]);
+    }, [endSendAttempt, load, syncThreadContext, vm]);
 
     const showAllMessages = useCallback(() => {
         setSelectedThreadId(null);
@@ -531,6 +571,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
         async (confirm: boolean) => {
             const cust = vm?.scope.customerId;
             if (!cust || selectedRecipientIds.length === 0 || !bodyDraft.trim()) return;
+            const attemptToken = beginSendAttempt();
             if (confirm) {
                 if (confirmInFlightRef.current) return;
                 confirmInFlightRef.current = true;
@@ -552,6 +593,8 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                         body: bodyDraft,
                         reply_to_thread_id: selectedThreadId,
                         confirm,
+                        // Names this confirmation episode. See `attemptTokenRef`.
+                        client_token: attemptToken,
                         ...(opportunityId ? { opportunity_id: opportunityId } : {}),
                     }),
                 });
@@ -755,6 +798,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
             }
         },
         [
+            beginSendAttempt,
             vm,
             selectedRecipientIds,
             subjectDraft,
@@ -796,7 +840,9 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
     const dismissSendResult = useCallback(() => {
         setSendResult(null);
         setSendError(null);
-    }, []);
+        // Back to edit. The next confirmation is a new attempt, not a retry of this one.
+        endSendAttempt();
+    }, [endSendAttempt]);
 
     /**
      * Done on success (or dismiss error) — collapses reply / closes Current Work command surface.
@@ -805,6 +851,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
     const acknowledgeSendSuccess = useCallback(() => {
         setSendResult(null);
         setSendError(null);
+        endSendAttempt();
         setSendCompleteToken((n) => n + 1);
         const pending = pendingContactFamilyCompleteRef.current;
         pendingContactFamilyCompleteRef.current = null;
@@ -820,7 +867,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
             });
         }
         setTourInvitationAck(false);
-    }, []);
+    }, [endSendAttempt]);
 
     /**
      * Insert ▾ → Tour Invitation Link — same prepare authority as Send Tour Invitation.
