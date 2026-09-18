@@ -69,8 +69,8 @@ function processInstanceTableAliases(): string[] {
     return [...aliases];
 }
 
-function processInstanceWriters(): Array<{ file: string; chain: string }> {
-    const out: Array<{ file: string; chain: string }> = [];
+function processInstanceWriters(): Array<{ file: string; chain: string; op: string }> {
+    const out: Array<{ file: string; chain: string; op: string }> = [];
     const alternatives = ["[\"']process_instances[\"']", ...processInstanceTableAliases()].join("|");
     const from = new RegExp(`\\.from\\(\\s*(?:${alternatives})\\s*\\)`, "g");
     const walk = (dir: string) => {
@@ -96,7 +96,7 @@ function processInstanceWriters(): Array<{ file: string; chain: string }> {
                 const chain = payload
                     ? `${src.slice(Math.max(0, at - 1500), at)}${forward}`
                     : forward;
-                out.push({ file: p.replace(`${process.cwd()}/`, ""), chain });
+                out.push({ file: p.replace(`${process.cwd()}/`, ""), chain, op: WRITE.exec(forward)![1]! });
             }
         }
     };
@@ -125,11 +125,17 @@ function processInstanceWriters(): Array<{ file: string; chain: string }> {
  * retiring either first-order read. The gate below enforces exactly that, so it cannot be forgotten.
  */
 const STEP_2_BLOCKING_UNROUTED_LIFECYCLE_WRITERS = new Map<string, number>([
-    // insert + four lifecycle update shapes, incl. close_reason_key; the real creation path
-    // (createEnrollmentProcessInstance, moveEnrollmentInstanceStageByScope, setEnrollmentInstanceStateByScope)
-    ["lib/process/processInstances.ts", 5],
-    // enrollment materialization: sets state='enrolled' and the completed stage_key
-    ["lib/childcareOperational/materializeEnrollmentFromProcessInstance.ts", 1],
+    // EMPTY, and it must stay that way.
+    //
+    // Both entries were converged onto update_participation_and_maintain_facts:
+    // processInstances.ts had five lifecycle writes (moveProcessInstanceStage, setProcessInstanceState
+    // and their two *ByScope forms) and now calls the RPC through one private helper;
+    // materializeEnrollmentFromProcessInstance combined provenance metadata with a lifecycle move in a
+    // single bare UPDATE and now calls materialize_participation_and_stamp_provenance, which delegates
+    // its lifecycle half to the same authority inside one transaction.
+    //
+    // What remains in processInstances.ts is CREATION (insert/upsert), which is a distinct authority
+    // and is asserted as such below — not an exemption hiding a lifecycle mutation.
 ]);
 
 /** Writers that legitimately touch `process_instances` WITHOUT carrying lifecycle semantics. */
@@ -151,6 +157,11 @@ describe("process lifecycle truth has exactly one mutation owner", () => {
          * stale behind it.
          */
         const offenders = processInstanceWriters()
+            // CREATION is a separate authority with its own gate below. A row that does not exist yet
+            // cannot have stale maintained facts, and Processing Identity deliberately does not create
+            // a journey at intake — so insert/upsert is not a bypass, and is asserted as creation
+            // rather than waved through as an exemption.
+            .filter((w) => w.op === "update" || w.op === "delete")
             .filter((w) => w.file !== CANONICAL_OWNER)
             .filter((w) => !FIXTURE_TEARDOWN.has(w.file))
             .filter((w) => !STEP_2_BLOCKING_UNROUTED_LIFECYCLE_WRITERS.has(w.file))
@@ -292,21 +303,50 @@ describe("the participation lifecycle write has ONE transaction", () => {
      * version, missing row, cross-org and a forced rollback against real rows and raises on any
      * mismatch. These gates guard the CONTRACT so it cannot be quietly widened or weakened.
      */
-    const MIGRATION_RAW = readFileSync(
-        join(process.cwd(), "..", "supabase", "migrations",
-             "20260918140000_participation_lifecycle_transaction_boundary.sql"), "utf8");
+    /*
+     * ── THE LIVE DEFINITION, NOT A FILE ──
+     *
+     * These gates named one migration by filename. A later migration DROPPED that function and created
+     * a wider one (close_reason_key joined the contract), and every assertion here kept passing while
+     * describing a definition the database no longer had — a gate that is green about the wrong object.
+     *
+     * So the definition is RESOLVED: the last migration that creates the function wins, exactly as it
+     * does when the migrations are applied in order. Replacing the function again moves these gates
+     * with it instead of leaving them behind.
+     */
+    const MIGRATIONS_DIR = join(process.cwd(), "..", "supabase", "migrations");
+
+    function liveDefinitionOf(fn: string): { raw: string; file: string } {
+        const marker = `CREATE OR REPLACE FUNCTION public.${fn}(`;
+        const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql")).sort();
+        let found: { raw: string; file: string } | null = null;
+        for (const f of files) {
+            const src = readFileSync(join(MIGRATIONS_DIR, f), "utf8");
+            const at = src.lastIndexOf(marker);
+            if (at < 0) continue;
+            const end = src.indexOf("$fn$;", at);
+            found = { raw: src.slice(at, end + 5), file: f };
+        }
+        if (!found) throw new Error(`no migration defines ${fn}`);
+        return found;
+    }
+
+    const LIVE = liveDefinitionOf("update_participation_and_maintain_facts");
+    const MIGRATION_RAW = readFileSync(join(MIGRATIONS_DIR, LIVE.file), "utf8");
     /*
      * Code only. The file's prose names SECURITY DEFINER in order to explain why it is NOT used, and
      * a raw scan reads that explanation as the thing it forbids — the same comment-vs-code trap that
      * made an earlier gate assert against its own documentation.
      */
     const MIGRATION = MIGRATION_RAW.replace(/^\s*--.*$/gm, "");
+    /** The live CREATE statement only — prose and neighbouring functions cannot satisfy a gate. */
+    const LIVE_FN = LIVE.raw.replace(/^\s*--.*$/gm, "");
 
     it("THE GATE: the function is SECURITY INVOKER, never DEFINER", () => {
         // process_instances carries RLS org policies. A DEFINER function would bypass them and become
         // a privilege escalation for anyone who could reach it.
-        expect(MIGRATION).toContain("SECURITY INVOKER");
-        expect(MIGRATION, "SECURITY DEFINER would bypass the RLS org policies").not.toContain("SECURITY DEFINER");
+        expect(LIVE_FN).toContain("SECURITY INVOKER");
+        expect(LIVE_FN, "SECURITY DEFINER would bypass the RLS org policies").not.toContain("SECURITY DEFINER");
     });
 
     it("THE GATE: it is the domain operation, not a table writer", () => {
@@ -314,39 +354,52 @@ describe("the participation lifecycle write has ONE transaction", () => {
          * Exactly two settable fields, each with a supplied-flag, because `null` means SET NULL and
          * absent means LEAVE ALONE. No column list, no JSON patch language, no reachable third column.
          */
-        expect(MIGRATION).toContain("p_set_stage_key boolean");
-        expect(MIGRATION).toContain("p_set_state boolean");
+        expect(LIVE_FN).toContain("p_set_stage_key boolean");
+        expect(LIVE_FN).toContain("p_set_state boolean");
+        expect(LIVE_FN, "close_reason_key is lifecycle truth and arrives with the same SUPPLY flag")
+            .toContain("p_set_close_reason_key boolean");
         for (const forbidden of ["p_patch jsonb", "EXECUTE format", "quote_ident"]) {
-            expect(MIGRATION, `${forbidden} would make this generic CRUD`).not.toContain(forbidden);
+            expect(LIVE_FN, `${forbidden} would make this generic CRUD`).not.toContain(forbidden);
         }
-        expect(MIGRATION).not.toMatch(/SET\s+metadata\s*=/);
+        /*
+         * PLANTED DEFECT E. Provenance metadata must NOT become reachable through the generic
+         * lifecycle patch: materialization keeps its own narrow transaction precisely so this
+         * function never learns about metadata.
+         */
+        expect(LIVE_FN, "the lifecycle authority must never write metadata").not.toMatch(/metadata/);
     });
 
     it("THE GATE: the optimistic-concurrency predicate survives", () => {
-        expect(MIGRATION).toContain("p_expected_version IS NULL OR updated_at = p_expected_version");
-        expect(MIGRATION).toContain("'record_not_found_or_stale'");
+        expect(LIVE_FN).toContain("p_expected_version IS NULL OR updated_at = p_expected_version");
+        expect(LIVE_FN).toContain("'record_not_found_or_stale'");
     });
 
     it("THE GATE: stage entry stamps on SUPPLY, matching the port it replaced", () => {
         // Deliberately presence-based, not change-based: re-sending the same stage_key restamps today,
         // and this slice moves a transaction boundary without changing semantics.
-        expect(MIGRATION).toContain("stage_entered_at = CASE WHEN p_set_stage_key THEN v_now       ELSE stage_entered_at END");
+        expect(LIVE_FN).toMatch(/stage_entered_at\s*=\s*CASE WHEN p_set_stage_key\s+THEN v_now\s+ELSE stage_entered_at END/);
     });
 
     it("THE GATE: the org predicate is present, so a row cannot be reached cross-tenant", () => {
-        expect(MIGRATION).toContain("AND org_id = p_org_id");
+        expect(LIVE_FN).toContain("AND org_id = p_org_id");
     });
 
     it("THE GATE: the migration proves itself by execution, not by text", () => {
         // Every one of these is a raise-on-mismatch assertion against real rows.
         // Specimen strings live inside RAISE statements, which survive comment stripping.
         for (const specimen of [
-            "SELFTEST: state update refused",
-            "SELFTEST: stage_entered_at not stamped on a stage change",
-            "SELFTEST: stale write was accepted",
-            "SELFTEST: missing row not reported as stale",
-            "SELFTEST: cross-org write succeeded",
-            "survived a rolled-back transaction",
+            // the third lifecycle field, in all three of its modes
+            "SELFTEST: close transition refused",
+            "SELFTEST: unsupplied close_reason_key was overwritten",
+            "SELFTEST: explicit NULL did not clear close_reason_key",
+            "SELFTEST: stage_entered_at not stamped on a supplied stage",
+            // a stale or cross-org attempt must leave ALL THREE fields alone
+            "SELFTEST: stale write mutated close_reason_key",
+            "SELFTEST: cross-org attempt mutated the row",
+            // materialization: both halves land, and neither survives a rollback
+            "SELFTEST: provenance stamp did not land",
+            "SELFTEST: rollback setup provenance did not apply",
+            "survived a rolled-back materialization",
         ]) {
             expect(MIGRATION, `the ${specimen} specimen is gone`).toContain(specimen);
         }
@@ -462,5 +515,86 @@ describe("the certification fixture cannot silently prove nothing", () => {
         expect(SELFTEST).toContain("SELFTEST_CLEANUP");
         expect(SELFTEST, "a fixture must never be removed by an explicit DELETE that could outlive a failure")
             .not.toMatch(/DELETE FROM public\.(orgs|process_instances)/);
+    });
+});
+
+describe("lifecycle writer convergence — the bypasses are gone, not merely wrapped", () => {
+    const read = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
+
+    it("THE GATE: processInstances.ts holds NO lifecycle write and calls the authority", () => {
+        /*
+         * PLANTED DEFECT G. Convergence is not "old writer plus a new command call" — the old write
+         * has to be UNREACHABLE. This module had five lifecycle UPDATEs; what is left must be creation
+         * and reads only.
+         */
+        const src = read("lib/process/processInstances.ts");
+        const writes = [...src.matchAll(/\.from\(PROCESS_INSTANCES_TABLE\)/g)].map((m) => {
+            const fwd = src.slice(m.index ?? 0, (m.index ?? 0) + 300).split(/;\s*\n/)[0]!;
+            return /\.(insert|update|upsert|delete)\(/.exec(fwd)?.[1] ?? "read";
+        });
+        expect(
+            writes.filter((op) => op === "update" || op === "delete"),
+            "a direct lifecycle UPDATE came back to processInstances.ts. Route it through "
+            + "applyParticipationLifecycle, which calls update_participation_and_maintain_facts.",
+        ).toEqual([]);
+        expect(src, "the module no longer reaches the lifecycle authority at all")
+            .toContain('supabase.rpc("update_participation_and_maintain_facts"');
+    });
+
+    it("THE GATE: creation is the ONE distinct authority, and it never mutates lifecycle", () => {
+        /*
+         * Creation is deliberately NOT converged: Processing Identity does not create a journey at
+         * intake, and a row that does not exist yet cannot carry stale maintained facts. It is recorded
+         * as CREATION rather than waved through — so this pins that the only remaining writes in the
+         * module are insert/upsert, and that no other module creates process instances.
+         */
+        const creators = processInstanceWriters().filter((w) => w.op === "insert" || w.op === "upsert");
+        expect(
+            [...new Set(creators.map((w) => w.file))],
+            "process-instance creation must stay in exactly one module",
+        ).toEqual(["lib/process/processInstances.ts"]);
+    });
+
+    it("THE GATE: materialization routes lifecycle through the authority, not its own UPDATE", () => {
+        /*
+         * PLANTED DEFECT D. This combined provenance metadata with a lifecycle move in one bare UPDATE,
+         * which made it a second lifecycle writer and would have left a materialized child showing its
+         * pre-enrollment stage forever once Step 2 retires the enrichment read.
+         */
+        const src = read("lib/childcareOperational/materializeEnrollmentFromProcessInstance.ts");
+        const bypass = [...src.matchAll(/\.from\(PROCESS_INSTANCES_TABLE\)/g)].some((m) => {
+            const fwd = src.slice(m.index ?? 0, (m.index ?? 0) + 300).split(/;\s*\n/)[0]!;
+            return /\.(insert|update|upsert|delete)\(/.test(fwd);
+        });
+        expect(bypass, "materialization writes process_instances directly again").toBe(false);
+        expect(src).toContain('supabase.rpc(\n        "materialize_participation_and_stamp_provenance"');
+    });
+
+    it("THE GATE: materialization stays ONE commit — lifecycle delegated, provenance aborting", () => {
+        /*
+         * Section 5: do not make the system less atomic in order to route through a command. The domain
+         * transaction must (a) delegate its lifecycle half to the single authority rather than write the
+         * columns, and (b) RAISE if the provenance stamp matches no row — a RETURN there would commit a
+         * lifecycle move whose provenance never landed, which is the split commit this prevents.
+         */
+        const fn = (() => {
+            const dir = join(process.cwd(), "..", "supabase", "migrations");
+            const marker = "CREATE OR REPLACE FUNCTION public.materialize_participation_and_stamp_provenance(";
+            const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+            let out = "";
+            for (const f of files) {
+                const src = readFileSync(join(dir, f), "utf8");
+                const at = src.lastIndexOf(marker);
+                if (at >= 0) out = src.slice(at, src.indexOf("$fn$;", at) + 5);
+            }
+            return out.replace(/^\s*--.*$/gm, "");
+        })();
+        expect(fn, "the materialization transaction is missing").not.toBe("");
+        expect(fn, "it must delegate the lifecycle half, never write the columns itself")
+            .toContain("public.update_participation_and_maintain_facts(");
+        expect(fn, "it must not write lifecycle columns directly").not.toMatch(/SET[\s\S]{0,80}stage_key\s*=/);
+        expect(fn, "a provenance miss after a successful lifecycle write must ABORT, not return")
+            .toMatch(/RAISE EXCEPTION 'materialize_participation:/);
+        expect(fn).toContain("SECURITY INVOKER");
     });
 });
