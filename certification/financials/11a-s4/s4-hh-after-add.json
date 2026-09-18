@@ -1,0 +1,141 @@
+[
+  {
+    "request": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "mode": "preview",
+      "payload": {
+        "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+        "child_label": "Certb Certhouse"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "missing_event_date",
+            "changes": []
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "73ace9e2-5b6b-4759-8296-24f8792b8219"
+    }
+  },
+  {
+    "request": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "mode": "preview",
+      "payload": {
+        "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "c03e638e-0f3e-49f0-9d41-696276c8fa21",
+        "child_label": "Certb Certhouse"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "registration_fee $75.00",
+            "changes": [
+              "Applies to · Certb Certhouse",
+              "Occurs 2026-09-18",
+              "Billable 2026-09-18"
+            ]
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "9f71ed20-5ed0-45b6-825f-5f4cd1ad3200"
+    }
+  },
+  {
+    "request": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "mode": "preview",
+      "payload": {
+        "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "c03e638e-0f3e-49f0-9d41-696276c8fa21",
+        "child_label": "Certb Certhouse"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "registration_fee $75.00",
+            "changes": [
+              "Applies to · Certb Certhouse",
+              "Occurs 2026-09-18",
+              "Billable 2026-09-18"
+            ]
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "83fbf34c-24a0-49c2-be4e-a905411bed86"
+    }
+  },
+  {
+    "request": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "mode": "execute",
+      "confirmation": {
+        "confirmed": true
+      },
+      "payload": {
+        "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "c03e638e-0f3e-49f0-9d41-696276c8fa21"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "write_status": "created",
+          "resolution_key": "tpl:registration_fee:2026-09-18:6f409c2d-2227-48e7-a365-f2c12fc2d929",
+          "review_required": false,
+          "posted": true
+        },
+        "affected_id": "907d1b64-09d5-4926-bed0-63d044c15441"
+      },
+      "correlation_id": "b91b7cf6-22b5-4434-91ee-d47082d5350c"
+    }
+  }
+]

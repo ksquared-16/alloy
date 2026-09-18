@@ -133,3 +133,44 @@ describe("THE GATE — the operator is not offered a choice the domain refuses",
         expect(card).toMatch(/alsoChildren:[\s\S]{0,200}categoryPermitsChildGrain/);
     });
 });
+
+describe("THE GATE — choosing Household must WRITE household grain", () => {
+    const card = src("components/admin/focusPanel/cards/FinancialsCard.tsx");
+
+    /*
+     * ── SAID HOUSEHOLD, BILLED A CHILD ───────────────────────────────────────────────────────
+     *
+     * Section 3D certified that "Applies to · Household" is a deliberate, stated grain choice, and
+     * it proved exactly that — what the SURFACE said. It never read what the command SENT. Measured
+     * later on the mounted candidate: with APPLIES TO showing "Household", `charge.add` carried
+     * `customer_member_id: "46105cd4…"` (Certb) and the resulting ledger row read "Certb Certhouse".
+     *
+     * `chargeTarget` falls back to the panel's scoped child whenever the subject filter is `all`,
+     * and that one value was answering two different questions: which entity the ROUTE is called
+     * against, and which child the charge is ATTRIBUTED to. The route refuses a call with no entity,
+     * so the child must still travel as context — but a deliberate household choice means there is
+     * no child to attribute to, and the payload must omit the member id so `childIdsFrom` reads it
+     * as household grain.
+     */
+    it("sends no member id when the operator deliberately chose Household", () => {
+        const at = card.indexOf("const chargeInvocation");
+        expect(at, "the invocation builder is findable").toBeGreaterThan(0);
+        const block = card.slice(at, at + 1800);
+        expect(block, "attribution is conditional on the grain choice")
+            .toContain('customerMemberId: subjectFilter === "all" ? null : chargeTarget');
+        expect(block, "the entity still travels, because the route demands one")
+            .toContain("entityId: chargeTarget");
+    });
+
+    /* And the payload omits the field entirely when there is no child to name. */
+    it("omits customer_member_id rather than sending an empty one", () => {
+        expect(card).toMatch(/chargeInvocation\.customerMemberId\s*\n?\s*\?\s*\{ customer_member_id/);
+    });
+
+    /* The grain choice must reach the invocation, or the fix is inert on the second render. */
+    it("recomputes the invocation when the grain choice changes", () => {
+        const at = card.indexOf("const chargeInvocation");
+        const block = card.slice(at, at + 2400);
+        expect(block).toMatch(/\}, \[chargeTarget, customerId, subjectFilter,/);
+    });
+});

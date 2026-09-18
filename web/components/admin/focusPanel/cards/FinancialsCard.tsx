@@ -1239,7 +1239,26 @@ export default function FinancialsCard({
         customerMemberId: string | null;
     } | null => {
         if (chargeTarget) {
-            return { entityType: "child", entityId: chargeTarget, customerMemberId: chargeTarget };
+            /*
+             * ── THE ENTITY IS ROUTING; THE MEMBER ID IS ATTRIBUTION ───────────────────────────
+             *
+             * "Applies to · Household" said Household on screen and wrote a CHILD. `chargeTarget`
+             * falls back to the panel's scoped child whenever the subject filter is `all`, and that
+             * fallback was being used for BOTH questions — so choosing Household still sent
+             * `customer_member_id: <a child>` and the charge was billed to that child. Measured on
+             * the mounted candidate: APPLIES TO read "Household", the payload carried Certb's member
+             * id, and the ledger row came back "Certb Certhouse".
+             *
+             * The route refuses a call with no entity, so the child still travels as CONTEXT. The
+             * member id is the ATTRIBUTION, and a deliberate household choice means there is no
+             * child to attribute to — `childIdsFrom` then reads the absent field as household grain,
+             * which is the doctrine the whole subject model rests on.
+             */
+            return {
+                entityType: "child",
+                entityId: chargeTarget,
+                customerMemberId: subjectFilter === "all" ? null : chargeTarget,
+            };
         }
         const subjectId = (context.subject?.id ?? "").trim();
         if (customerId && subjectId) {
@@ -1251,7 +1270,7 @@ export default function FinancialsCard({
         }
         // Genuinely unresolvable: no child, and no household to fall back to.
         return null;
-    }, [chargeTarget, customerId, context.subject?.id, context.subject?.type]);
+    }, [chargeTarget, customerId, subjectFilter, context.subject?.id, context.subject?.type]);
 
     /**
      * Open the settle operation on the obligation most likely to be settled.

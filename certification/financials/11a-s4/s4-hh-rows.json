@@ -1,0 +1,25 @@
+{
+  "fresh": [
+    {
+      "chargeId": "907d1b64-09d5-4926-bed0-63d044c15441",
+      "responsibility": "not-allocated",
+      "responsibilityText": "Not allocated",
+      "actions": [
+        "reverse",
+        "adjust",
+        "resolveResponsibility"
+      ],
+      "cells": [
+        "Sep 18, 2026",
+        "Fee",
+        "Certb Certhouse",
+        "4010 · Registration Fees",
+        "$75.00",
+        "posted",
+        "Not allocated",
+        "Registration fee"
+      ]
+    }
+  ],
+  "household": []
+}
