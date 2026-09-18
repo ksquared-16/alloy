@@ -173,7 +173,15 @@ export function installVisibleCompletionProbe(): void {
             const host = blockingHost(r.target);
             if (host) {
                 if (!v2.blockingSeen.includes(host)) v2.blockingSeen.push(host);
-                const ps = v2.perSection[host] ?? { lastMs: -1, data: 0, structure: 0, anim: 0 };
+                const ps = v2.perSection[host] ?? {
+                    firstMs: t, lastMs: -1, lastVisibleMs: -1,
+                    data: 0, structure: 0, anim: 0,
+                    imageExpected: false, imageFinalMs: -1,
+                };
+                // FINAL_VISIBLE_MS counts every visible change, animation included: the honest
+                // "when did this region stop moving at all". The gap between it and lastMs is the
+                // trailing motion V1 was billing as loading, measured per region not asserted.
+                ps.lastVisibleMs = t;
                 if (kind === "PRESENTATIONAL_ANIMATION") {
                     ps.anim++;
                 } else {
@@ -209,6 +217,32 @@ export function installVisibleCompletionProbe(): void {
     // addInitScript runs BEFORE the document is parsed, so documentElement can be null and
     // observe() then fails silently — which reported visibleComplete=0 on five straight samples.
     // Observing `document` works from the same point and survives the parse.
+    /*
+     * IMAGE FINALITY. A section whose avatar has not decoded is not final, and a decode lands with
+     * NO DOM mutation — so mutation evidence alone calls it done early, systematically on exactly
+     * the sections that carry images. Captured on the capture phase: load/error do not bubble.
+     * Attributed through the same leaf-most rule as everything else.
+     */
+    const imageSettled = (e: Event) => {
+        const el = e.target as Element | null;
+        if (!el || el.tagName !== "IMG") return;
+        const host = blockingHost(el);
+        if (!host) return;
+        const store = V2.__p076v2;
+        if (!store) return;
+        const t = Date.now() - w.__p076!.t0;
+        const ps = store.perSection[host] ?? {
+            firstMs: t, lastMs: -1, lastVisibleMs: t,
+            data: 0, structure: 0, anim: 0,
+            imageExpected: false, imageFinalMs: -1,
+        };
+        ps.imageExpected = true;
+        if (t > ps.imageFinalMs) ps.imageFinalMs = t;
+        store.perSection[host] = ps;
+    };
+    document.addEventListener("load", imageSettled, true);
+    document.addEventListener("error", imageSettled, true);
+
     const attach = () => {
         try {
             new MutationObserver((recs) => mark(recs)).observe(document, {
