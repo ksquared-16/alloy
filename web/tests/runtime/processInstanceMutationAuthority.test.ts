@@ -247,6 +247,12 @@ describe("the certification fixture cannot silently prove nothing", () => {
      *     extracts as NULL, so `NULL <> 'stale'` is NULL, which is not TRUE, so the IF never fires.
      *     The stale-version check was structurally unable to fail on the path it existed to catch.
      *
+     * A third followed, from the repair itself: the stale specimen CAPTURED a version from an earlier
+     * call and asserted it was OLDER than current. `now()` is `transaction_timestamp()` and a migration
+     * is ONE transaction, so every call stamped the SAME value — the captured version was EQUAL to
+     * current, which the equality guard ACCEPTS. The assertion also demanded an ordering the contract
+     * never made.
+     *
      * These gates exist so that class cannot come back.
      */
     const SELFTEST = (() => {
@@ -270,16 +276,38 @@ describe("the certification fixture cannot silently prove nothing", () => {
         ).toEqual([]);
     });
 
-    it("THE GATE: the stale specimen uses a version that is non-null AND superseded", () => {
-        // A NULL expected_version means NO GUARD, so the specimen would perform an unguarded write and
-        // report success — which is exactly what happened.
-        expect(SELFTEST).toContain("v_prior := v_current;");
-        expect(SELFTEST, "the prior version is not asserted non-null")
-            .toMatch(/IF v_prior IS NULL THEN RAISE EXCEPTION/);
-        expect(SELFTEST, "staleness is assumed rather than proven")
-            .toMatch(/IF NOT \(v_prior < v_current\) THEN/);
+    it("THE GATE: the stale specimen carries a non-null version PROVEN distinct from current", () => {
+        // Two ways this specimen can silently prove nothing, and both have happened:
+        //   · a NULL expected_version means NO GUARD, so the write lands unguarded and reports success;
+        //   · a version CAPTURED from an earlier call is EQUAL to the current one, because now() is
+        //     transaction-stable — so the equality guard ACCEPTS it and the specimen proves the reverse.
+        // The contract is equality, so the version under test must be CONSTRUCTED different and that
+        // difference asserted — never captured, never ordered, never assumed.
+        expect(SELFTEST).toContain("v_stale := v_current - interval '1 second';");
+        expect(SELFTEST, "the current version is used in arithmetic before being asserted non-null")
+            .toMatch(/IF v_current IS NULL THEN/);
+        expect(SELFTEST, "the constructed version is not asserted non-null")
+            .toMatch(/IF v_stale IS NULL THEN/);
+        expect(SELFTEST, "distinctness is assumed rather than proven")
+            .toMatch(/IF v_stale IS NOT DISTINCT FROM v_current THEN/);
+        expect(SELFTEST, "the stale specimen must carry the constructed version")
+            .toMatch(/update_participation_and_maintain_facts\(v_org, v_pi, v_stale,/);
+        expect(SELFTEST, "ordering is not part of the equality contract, and cannot hold in one transaction")
+            .not.toMatch(/v_\w+ < v_current/);
         expect(SELFTEST, "the INSERT-returned updated_at is NULL and must not be the version under test")
             .not.toMatch(/RETURNING id, updated_at INTO v_pi/);
+    });
+
+    it("THE GATE: the harness never bends production timestamp semantics to pass", () => {
+        // The cheap way to make an ordering assertion pass is to switch the RPC to clock_timestamp(),
+        // which advances inside a transaction. That changes the production contract to suit the test.
+        // The version stamp is now(), and the fix belongs in the fixture.
+        const MIGRATION = readFileSync(
+            join(process.cwd(), "..", "supabase", "migrations",
+                 "20260918140000_participation_lifecycle_transaction_boundary.sql"), "utf8");
+        expect(MIGRATION, "production timestamp semantics were changed to make a test pass")
+            .not.toContain("clock_timestamp");
+        expect(MIGRATION).toContain("v_now timestamptz := now();");
     });
 
     it("THE GATE: fixture rows satisfy their NOT NULL constraints", () => {

@@ -97,7 +97,7 @@ DECLARE
     v_org  uuid;
     v_pi   uuid;
     v_res  jsonb;
-    v_prior   timestamptz;   -- a REAL, superseded version
+    v_stale   timestamptz;   -- a deliberately DIFFERENT non-null version
     v_current timestamptz;   -- the row's current version
     v_stage text;
     v_state text;
@@ -136,14 +136,8 @@ BEGIN
     IF v_entered IS NOT NULL THEN RAISE EXCEPTION 'SELFTEST: stage_entered_at stamped without a stage_key patch'; END IF;
     IF v_current IS NULL THEN RAISE EXCEPTION 'SELFTEST: updated_at not stamped by the RPC'; END IF;
 
-    -- THE REAL PRIOR VERSION. `process_instances.updated_at` has NO DEFAULT, so the value returned by
-    -- the INSERT is NULL — and a NULL expected_version means NO GUARD, which is why the first attempt
-    -- at specimen 3 silently performed an unguarded write. This one is stamped by the RPC above.
-    v_prior := v_current;
-    IF v_prior IS NULL THEN RAISE EXCEPTION 'SELFTEST: prior version is NULL — specimen 3 would not test staleness'; END IF;
-
-    -- 2 · STAGE: supplied stage applies and stamps; unsupplied state is preserved. This also advances
-    --     updated_at, which is what makes v_prior genuinely superseded.
+    -- 2 · STAGE: supplied stage applies and stamps; unsupplied state is preserved. Note the stamp keys
+    --     on the stage_key being SUPPLIED, not on its value CHANGING — the RPC's documented semantics.
     v_res := public.update_participation_and_maintain_facts(v_org, v_pi, NULL, true, 'enrollment', false, NULL);
     IF (v_res ->> 'ok') IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'SELFTEST: stage update refused: %', v_res; END IF;
     SELECT stage_key, state, stage_entered_at, updated_at INTO v_stage, v_state, v_entered, v_current
@@ -152,14 +146,32 @@ BEGIN
     IF v_entered IS NULL THEN RAISE EXCEPTION 'SELFTEST: stage_entered_at not stamped on a stage change'; END IF;
     IF v_state IS DISTINCT FROM 'waitlisted' THEN RAISE EXCEPTION 'SELFTEST: unsupplied state was overwritten (%)', v_state; END IF;
 
-    -- The specimen is only meaningful if the version it carries is demonstrably superseded. Assert it
-    -- rather than assume it.
-    IF NOT (v_prior < v_current) THEN
-        RAISE EXCEPTION 'SELFTEST: prior version % is not older than current % — specimen 3 is not a stale test', v_prior, v_current;
+    -- ── WHY THE STALE VERSION IS CONSTRUCTED, NOT CAPTURED ──
+    --
+    -- The obvious specimen is "keep the version from before specimen 2 and replay it". That does not
+    -- work here, and the reason is worth stating: `now()` IS `transaction_timestamp()`, so it is
+    -- constant for the whole transaction — and a migration with this DO block is ONE transaction. Every
+    -- RPC call above therefore stamped `updated_at` with the SAME value, so a captured "prior" version
+    -- would be EQUAL to the current one, the guard would ACCEPT it, and the specimen would prove the
+    -- opposite of what it claims.
+    --
+    -- The contract is equality: expected_version is stale when it is a different non-null value from
+    -- the current `updated_at`. Ordering is NOT part of the contract, and an earlier revision of this
+    -- block wrongly asserted it. So the specimen CONSTRUCTS a guaranteed-different value and asserts
+    -- that difference rather than assuming it. Subtraction is only a way to obtain a different value.
+    IF v_current IS NULL THEN
+        RAISE EXCEPTION 'SELFTEST: current version is NULL — specimen 3 cannot test staleness';
+    END IF;
+    v_stale := v_current - interval '1 second';
+    IF v_stale IS NULL THEN
+        RAISE EXCEPTION 'SELFTEST: constructed stale version is NULL — specimen 3 would run unguarded';
+    END IF;
+    IF v_stale IS NOT DISTINCT FROM v_current THEN
+        RAISE EXCEPTION 'SELFTEST: constructed version % is not distinct from current % — specimen 3 is not a stale test', v_stale, v_current;
     END IF;
 
-    -- 3 · STALE VERSION: non-null, genuinely superseded, refused, and the row unchanged.
-    v_res := public.update_participation_and_maintain_facts(v_org, v_pi, v_prior, true, 'tour', false, NULL);
+    -- 3 · STALE VERSION: non-null, genuinely DIFFERENT from current, refused, and the row unchanged.
+    v_res := public.update_participation_and_maintain_facts(v_org, v_pi, v_stale, true, 'tour', false, NULL);
     IF (v_res ->> 'code') IS DISTINCT FROM 'stale' THEN RAISE EXCEPTION 'SELFTEST: stale write was accepted: %', v_res; END IF;
     IF (v_res ->> 'error') IS DISTINCT FROM 'record_not_found_or_stale' THEN
         RAISE EXCEPTION 'SELFTEST: stale refusal lost its canonical vocabulary: %', v_res;
