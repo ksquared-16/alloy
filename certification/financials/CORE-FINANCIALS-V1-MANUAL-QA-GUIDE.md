@@ -528,6 +528,396 @@ absence of the feature. Leave Chen alone for this pass.
 
 ---
 
+---
+
+# PART TWO — SUBJECT GRAIN, DISCOUNTS, PREPAIDS, RECURRING BILLING
+
+Scenarios 23–45 cover the core financial semantics added after V1. They use the same household.
+
+> **Several of these describe behaviour that is NOT yet implemented.** Each such scenario is marked
+> **`GAP`** and names what is missing. Run it anyway: the point is to confirm the gap is the one
+> described, and that the product fails *honestly* rather than silently producing a wrong number.
+> A `GAP` scenario is not a defect report — it is a known, documented boundary.
+
+---
+
+## 23 · HOUSEHOLD ROW IS HOUSEHOLD-GRAINED
+
+Add a charge against the **household**, not a child — e.g. a registration fee. Post it.
+
+In Details, look at the row's subject.
+
+**PASS:** the row reads **Household** (or the account name) — never a child's name, and never blank.
+
+**FAIL symptoms:** the fee attributed to Ana or Rio; an empty subject cell; the word `null`.
+
+---
+
+## 24 · CHILD ROW IS CHILD-GRAINED
+
+Add and post a charge against **Ana**.
+
+**PASS:** the row names Ana.
+
+**FAIL symptoms:** it reads Household; it reads Rio.
+
+---
+
+## 25 · CHILD ATTENTION INCLUDES HOUSEHOLD TRUTH
+
+In the **Focus Panel**, open Financials with attention on **Ana**. Then open Details.
+
+**PASS:** you see Ana's charges **and** the household registration fee from scenario 23. A child
+view is the child *plus* the account — because a household charge is the account's, and the child
+is inside the account.
+
+**FAIL symptoms:** the household fee disappears when attention is on a child; the balance drops by
+the household amount.
+
+---
+
+## 26 · SIBLING EXCLUSION
+
+Same view, attention on **Ana**.
+
+**PASS:** none of Rio's child-specific charges appear.
+
+**FAIL symptoms:** Rio's rows listed under Ana; the balance includes them.
+
+---
+
+## 27 · WORKSPACE AND FOCUS PANEL AGREE
+
+Open **Financials → Accounts** for the Alvarez household. Set the subject filter to **Ana**.
+Compare with scenario 25's Focus Panel Details list.
+
+**PASS:** the same rows, in both places. Selecting Ana in the workspace shows Ana's rows **and**
+the household's.
+
+**FAIL symptoms:** the workspace shows fewer rows than the Focus Panel — specifically, missing the
+household fee. That was the defect this convergence repaired; seeing it again means the workspace
+has drifted back to its own filter.
+
+---
+
+## 28 · DELIBERATE HOUSEHOLD VIEW
+
+In the workspace subject filter, choose **Household**.
+
+**PASS:** only household-grained rows — the registration fee, not Ana's or Rio's tuition. This is
+the one view that is deliberately *narrower* than the account.
+
+**FAIL symptoms:** children's rows included; the filter showing nothing at all.
+
+---
+
+## 29 · ALL
+
+Set the subject filter to **All**.
+
+**PASS:** every row — both children and the household. The lens badge count matches the number of
+rows actually listed.
+
+**FAIL symptoms:** a badge promising more rows than the list shows.
+
+---
+
+## 30 · `GAP` — MULTI-CHILD ADD
+
+**Missing:** the Add command does not offer multi-child selection, and charge templates carry no
+subject-grain configuration.
+
+Attempt to add one charge — e.g. a $40 field trip — for **both** Ana and Rio at once.
+
+**PASS (for now):** you cannot. The command offers one subject.
+
+**What must NOT happen when this ships:** a single $80 household charge, or one row carrying two
+children. Two children selected must produce **two independent $40 child-grained obligations**.
+
+---
+
+## 31 · ADJUSTMENT INHERITS SUBJECT GRAIN
+
+Adjust one of **Ana's** posted charges.
+
+**PASS:** the adjustment is attributed to Ana — the same subject as the charge it adjusts.
+
+**FAIL symptoms:** the adjustment lands on the household; it lands on Rio; you are offered a
+subject picker that lets it become someone else's.
+
+---
+
+## 32 · HOUSEHOLD ADJUSTMENT STAYS HOUSEHOLD
+
+Adjust the **household** registration fee.
+
+**PASS:** the adjustment is household-grained.
+
+**FAIL symptoms:** it acquires a child.
+
+---
+
+## 33 · RESPONSIBILITY ON A CHILD OBLIGATION
+
+Assign responsibility for one of Ana's charges to Dana.
+
+**PASS:** Dana named against Ana's obligation; the obligation amount and the payments are
+unchanged; the subject is still Ana. **Responsibility is who owes it — not who or what it is for.**
+
+**FAIL symptoms:** the balance moves; the subject changes to Dana.
+
+---
+
+## 34 · RESPONSIBILITY ON A HOUSEHOLD OBLIGATION
+
+Assign responsibility for the household registration fee.
+
+**PASS:** assignable, and the row stays household-grained.
+
+**FAIL symptoms:** assigning responsibility forces a child onto the row.
+
+---
+
+## 35 · RESPONSIBILITY IS NOT PAYER
+
+Record a payment for one of Ana's charges from someone **other** than the responsible party.
+
+**PASS:** the payment records the actual payer; responsibility is unchanged. The two are separate
+facts and the screen says so.
+
+**FAIL symptoms:** paying reassigns responsibility; the payer is silently replaced by the
+responsible party.
+
+---
+
+## 36 · RESPONSIBILITY LIVES IN DETAILS
+
+**PASS:** responsibility is administered in **Details**. The Compact card does not offer
+responsibility management, discount administration, deposit administration, payer setup, payment
+methods or allocation management.
+
+**FAIL symptoms:** any of those controls on the compact card.
+
+---
+
+## 37 · DISCOUNT IS A SEPARATE LINE, NOT AN EDIT
+
+Apply a discount to one of Ana's posted tuition charges.
+
+**PASS:** the tuition charge still shows its **original gross** amount, and the discount appears as
+its **own line**. The balance reflects both.
+
+**FAIL symptoms:** the tuition amount itself changes; the discount replaces rather than accompanies
+the gross charge. **Gross must stay gross.**
+
+---
+
+## 38 · DISCOUNT PROVENANCE
+
+Open the discount line.
+
+**PASS:** you can tell **why** it exists — which policy, what it was calculated on, who decided.
+
+**FAIL symptoms:** a bare negative amount with no explanation. Six months from now, a family asking
+"why is my bill this number" is owed an answer.
+
+---
+
+## 39 · PERCENTAGE VS FIXED
+
+Apply a percentage discount to one charge and a fixed-amount discount to another.
+
+**PASS:** both supported; each line shows its basis; the arithmetic matches.
+
+**FAIL symptoms:** a percentage silently stored as a fixed amount; rounding that does not match a
+hand calculation.
+
+---
+
+## 40 · CHILD-SPECIFIC VS HOUSEHOLD DISCOUNT
+
+Apply a discount that belongs to **Ana** (e.g. a sibling or scholarship reduction), and one that
+belongs to the **household**.
+
+**PASS:** each reduction keeps the subject identity of what it reduces — a child discount stays on
+Ana, a household discount stays on the account.
+
+**FAIL symptoms:** a child discount appearing as a household reduction; a reduction pinned to
+whichever sibling sorted first.
+
+---
+
+## 41 · ONGOING DISCOUNT ACROSS PERIODS
+
+If a recurring/effective-dated discount policy is configured, check two successive eligible periods.
+
+**PASS:** it applies **once per period** — not twice in one period, and not only once ever.
+
+**FAIL symptoms:** two identical reduction lines in one period; the discount silently stopping.
+
+---
+
+## 42 · EFFECTIVE BOUNDARY
+
+Check a period **outside** a discount's effective window.
+
+**PASS:** no reduction. An effective-dated policy that discounts a period it does not cover is
+wrong, even when the number looks plausible.
+
+**FAIL symptoms:** the discount applied to every period regardless of dates.
+
+---
+
+## 43 · `GAP` — EXEMPT CHARGE
+
+**Missing:** no charge category or template carries a "discountable / exempt" flag. A discount
+configured as applying to *fees* currently means **every** non-tuition category — which sweeps in
+late-pickup and returned-payment fees that most organisations would exempt.
+
+Apply a fees-scoped discount and look at which charges it reaches.
+
+**PASS (for now):** confirm it reaches late-pickup-style fees, and record that as the known gap.
+
+**What must be true when this ships:** a discount applies only if the discount allows the category
+**AND** the category permits discounting. Neither side may override the other.
+
+---
+
+## 44 · PREPAID — MONEY BEFORE AN OBLIGATION
+
+On an account with **nothing owed**, record a payment of $500.
+
+**PASS:** the payment records successfully, and **$500 shows as unapplied**. Nothing owed becomes
+owed; no revenue is fabricated by cash arriving. A customer may pay before an obligation exists.
+
+**FAIL symptoms:** the product refuses because there is nothing to apply to; a $500 obligation
+appears from nowhere; the balance reads −$500 with no indication that this is money held.
+
+---
+
+## 45 · PREPAID — PARTIAL APPLICATION AND REMAINDER
+
+Now post a $300 tuition charge and apply the prepaid money to it.
+
+**PASS:** $300 applied, **$200 still unapplied**, outstanding $0. The remaining prepaid is still
+visible as money held.
+
+**FAIL symptoms:** the whole $500 consumed by a $300 charge; the remaining $200 disappearing; the
+applied amount exceeding what was unapplied.
+
+---
+
+## 46 · `GAP` — PREPAID AS AN ACCOUNT POSITION
+
+**Missing:** unapplied money is tracked per payment but is not aggregated into an account-level
+**Prepaid / available credit** figure shown beside Balance.
+
+**PASS (for now):** you can find the $200 by opening the payment, but there is no account-level
+"Prepaid: $200" beside the balance. Record that.
+
+**What must be true when this ships:** *owes $0 with $200 prepaid* must be visibly different from
+*owes −$200*. The data already distinguishes them; the screen does not yet.
+
+---
+
+## 47 · APPLICATION IS DELIBERATE
+
+**PASS:** prepaid money moves to an obligation only when someone applies it. Nothing is
+auto-applied silently.
+
+**FAIL symptoms:** a new charge automatically consuming prepaid money with no operator action and
+no policy saying it should.
+
+---
+
+## 48 · BILLING PERIOD VS ACCOUNTING PERIOD
+
+Find a charge and check both its **billing period** and its **accounting attribution**.
+
+**PASS:** they are independently inspectable, and posting a charge does not close an accounting
+period.
+
+**FAIL symptoms:** one control that changes both; "posted" presented as meaning the accounting
+period is closed.
+
+---
+
+## 49 · RECURRING TUITION GENERATES ONCE
+
+With an active tuition assignment, run tuition generation for a period.
+
+**PASS:** one tuition charge per child per period, attributed to the right child, in the right
+billing period.
+
+**FAIL symptoms:** two charges for one child in one period; a charge on the household instead of
+the child; the wrong period.
+
+---
+
+## 50 · RERUNNING GENERATION DOES NOT DUPLICATE
+
+Run generation for the **same** period again.
+
+**PASS:** no second charge. The rerun reports it as already generated.
+
+**FAIL symptoms:** a duplicate obligation. This is the single most damaging failure in recurring
+billing — it bills a family twice.
+
+---
+
+## 51 · FUTURE AND ENDED ASSIGNMENTS
+
+Run generation for a period **before** an assignment starts, and for a period **after** one ends.
+
+**PASS:** nothing generated, and the reason is stated — "not yet effective" and "already ended"
+are told apart.
+
+**FAIL symptoms:** charges generated outside the agreement's effective window; a silent empty
+result with no explanation.
+
+---
+
+## 52 · `GAP` — WEEKLY CADENCE PERIOD IDENTITY
+
+**Missing:** billing period identity is always a calendar month (`YYYY-MM`), while billing cadence
+is configurable as weekly, biweekly, monthly and others.
+
+If a weekly cadence can be configured, generate for a month.
+
+**PASS (for now):** confirm the period is reported as a **month**, and that a weekly-billed
+organisation therefore gets **one** charge for the month rather than four weekly ones. Record it.
+
+**What must be true when this ships:** a weekly organisation must see a real commercial period such
+as **Sep 21–27, 2026** — not all weeks grouped into September.
+
+---
+
+## 53 · `GAP` — DUE DATE RULE IS NOT CONFIGURABLE
+
+**Missing:** templates configure the invoice/bill date (`billable_on`) but there is no configurable
+due-date rule.
+
+**PASS (for now):** confirm billing period, invoice date and due date are three separate values on
+a charge and can legitimately differ, and that the due date is not configurable per template.
+
+**What must be true when this ships:** an organisation can configure "due on the 1st" or "due 10
+days after invoice" the same way it configures the bill date.
+
+---
+
+## 54 · ORGANIZATION FINANCIALS CONFIGURATION
+
+Go to **/organization/financials** and open the **Policies** chapter.
+
+**PASS:** organization-level financial policy is configured here — not in a separate screen, and
+not only in the database. Proration, billing cadence, deposit and posting review are visible and
+editable as policies.
+
+**FAIL symptoms:** an operator-configurable financial policy that has no home on this surface;
+a second, disconnected financials configuration route.
+
+---
+
 ## HUMAN SIGN-OFF CHECKLIST
 
 - [ ] Financial Subject
@@ -554,6 +944,41 @@ absence of the feature. Leave Chen alone for this pass.
 - [ ] Narrow viewport
 - [ ] Overview smoke
 - [ ] Subsidy excluded
+
+**Part two — subject grain, discounts, prepaids, recurring billing**
+
+- [ ] Household row is household-grained
+- [ ] Child row is child-grained
+- [ ] Child attention includes household truth
+- [ ] Sibling exclusion
+- [ ] Workspace and Focus Panel agree
+- [ ] Deliberate household view
+- [ ] All
+- [ ] Multi-child Add (GAP)
+- [ ] Adjustment inherits subject grain
+- [ ] Household adjustment stays household
+- [ ] Responsibility on a child obligation
+- [ ] Responsibility on a household obligation
+- [ ] Responsibility is not payer
+- [ ] Responsibility lives in Details
+- [ ] Discount is a separate line
+- [ ] Discount provenance
+- [ ] Percentage vs fixed
+- [ ] Child-specific vs household discount
+- [ ] Ongoing discount across periods
+- [ ] Effective boundary
+- [ ] Exempt charge (GAP)
+- [ ] Prepaid — money before an obligation
+- [ ] Prepaid — partial application and remainder
+- [ ] Prepaid as an account position (GAP)
+- [ ] Application is deliberate
+- [ ] Billing period vs accounting period
+- [ ] Recurring tuition generates once
+- [ ] Rerunning generation does not duplicate
+- [ ] Future and ended assignments
+- [ ] Weekly cadence period identity (GAP)
+- [ ] Due date rule is not configurable (GAP)
+- [ ] Organization financials configuration
 
 **OVERALL RESULT:  PASS / FAIL**
 
