@@ -12,6 +12,7 @@ import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import { ProcessSummaryCard } from "./ProcessSummaryCard";
 
 export function ProcessGrid({
@@ -35,6 +36,7 @@ export function ProcessGrid({
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.processGrid)}
             className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3"
+            {...alloySectionDomAttrs("WS-05")}
         >
             {processes.map((process) => (
                 <ProcessSummaryCard key={process.id} process={process} config={config} />

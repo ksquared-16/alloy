@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -39,7 +39,12 @@ describe("Alloy section map — registry integrity", () => {
         for (const entry of ALLOY_SECTION_LIST) {
             expect(entry.surface).toBe(entry.id.startsWith("WU-") ? "work_unit" : "workspace");
             expect(VALID_CACHE).toContain(entry.cache);
-            expect(entry.owner).toMatch(/^web\/.+\.tsx?$/);
+            if (entry.owner === null) {
+                // A null owner is a claim that nothing renders this section. It has to say why.
+                expect(entry.ownerNote, `${entry.id} needs an ownerNote`).toBeTruthy();
+            } else {
+                expect(entry.owner).toMatch(/^web\/.+\.tsx?$/);
+            }
             expect(entry.name.length).toBeGreaterThan(0);
             expect(entry.dataSource.length).toBeGreaterThan(0);
         }
@@ -100,6 +105,8 @@ describe("Alloy section map — DOM attributes", () => {
             "data-alloy-section-owner": ALLOY_SECTION_MAP["WU-02"].owner,
             "data-alloy-section-blocking": "false",
             "data-alloy-section-cache": "snapshot",
+            // Emitted FROM the registry — the component no longer hand-writes this name.
+            "data-alloy-section": "WU.HEADER_CALCULATIONS",
         });
     });
 
@@ -127,33 +134,20 @@ describe("perfSection logger", () => {
     });
 });
 
+/**
+ * This block used to carry its OWN hardcoded list of section -> owner paths — a third copy of a fact
+ * the registry already owns, beside the registry itself and the components. It drifted exactly as a
+ * duplicated fact does: eight of its paths named files that no longer existed, so eight cases could
+ * not pass and the suite sat red. The list is gone; the cases are derived from the registry, so the
+ * owner is stated once and this can only go red when the wiring is genuinely missing.
+ */
 describe("Section map — DOM wiring presence on key roots", () => {
-    const cases: Array<[string, string]> = [
-        ["WU-00", "app/adminV2/components/AdminV2Shell.tsx"],
-        ["WU-01", "components/admin/workspace/layout/WorkUnitCommandSurface.tsx"],
-        ["WU-02", "components/admin/workspace/layout/WorkUnitCommandSurface.tsx"],
-        ["WU-03", "components/admin/workspace/layout/WorkUnitCommandSurface.tsx"],
-        ["WU-04", "app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx"],
-        ["WU-05", "app/adminV2/components/workspace/blocks/QueueBlock.tsx"],
-        ["WU-06", "app/adminV2/components/workspace/blocks/OperationalModeQueuePreparePanel.tsx"],
-        ["WU-07", "components/admin/drawer/EntityDrawerOperatingShell.tsx"],
-        ["WU-08", "components/admin/focusPanel/FocusPanelModeSwitch.tsx"],
-        ["WU-09", "components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx"],
-        ["WU-10", "components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx"],
-        ["WU-11", "components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace.tsx"],
-        ["WU-12", "app/adminV2/components/workspace/WorkspaceCommandRailActionsSection.tsx"],
-        ["WU-13", "app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock.tsx"],
-        ["WU-14", "app/adminV2/components/CommandRailBosMount.tsx"],
-        ["WU-15", "app/adminV2/components/AdminV2WorkspaceBosModalShell.tsx"],
-        ["WS-01", "components/admin/workspace/ResumeWhereYouLeftOffChip.tsx"],
-        ["WS-02", "components/admin/workspace/layout/WorkspaceHealthPulseSection.tsx"],
-        ["WS-03", "components/admin/workspace/layout/WorkspaceHealthPulseSection.tsx"],
-        ["WS-04", "components/admin/workspace/layout/WorkspaceHealthPulseSection.tsx"],
-        ["WS-05", "components/admin/workspace/WorkspaceRootLifecycleGrid.tsx"],
-        ["WS-06", "components/admin/workspace/WorkspaceRootLifecycleGrid.tsx"],
-        ["WS-07", "app/adminV2/components/workspace/WorkspaceCommandRailActionsSection.tsx"],
-        ["WS-08", "app/adminV2/components/workspace/CommandRailDefaultEmptyTelemetry.tsx"],
-    ];
+    // Skipped: no renderer (owner null), and the workspace twins that share a Work Unit root — both
+    // pinned with their reasons in the dedicated blocks at the end of this file.
+    const SHARED_ROOT_TWINS = new Set(["WS-00", "WS-09", "WS-10"]);
+    const cases: Array<[string, string]> = ALLOY_SECTION_LIST.filter(
+        (e) => e.owner !== null && !SHARED_ROOT_TWINS.has(e.id),
+    ).map((e) => [e.id, (e.owner as string).replace(/^web\//, "")]);
 
     it.each(cases)("%s is wired via alloySectionDomAttrs in its owner root", (id, rel) => {
         const src = readSrc(rel);
@@ -203,5 +197,105 @@ describe("Section map — documentation completeness", () => {
         expect(readDoc("docs/platform/operator/alloy-runtime-specification.md")).toContain(link);
         expect(readDoc("docs/platform/operator/operational-surface-design-system.md")).toContain(link);
         expect(readDoc("docs/platform/operator/operational-mode-default-state-doctrine.md")).toContain(link);
+    });
+});
+
+
+/**
+ * The registry is what the visible-completion metric reads to know WHICH regions it is waiting on,
+ * and it emits `owner` straight into the DOM. So an entry that names a file which is not there is
+ * not a stale comment — it is the metric attributing a section to a component that cannot paint it.
+ *
+ * Seven entries had rotted to exactly that before these gates existed, because the only owner
+ * assertion checked that the string LOOKED like a path (`/^web\/.+\.tsx?$/`) and never that it
+ * resolved. A shape check on a path is not a check on a path.
+ */
+describe("Alloy section map — the owner has to be real", () => {
+    it("every named owner file exists on disk", () => {
+        const missing = ALLOY_SECTION_LIST.filter(
+            (e) => e.owner !== null && !existsSync(join(repoRoot, e.owner)),
+        ).map((e) => `${e.id} -> ${e.owner}`);
+        expect(missing, `registry owners that do not exist:\n${missing.join("\n")}`).toEqual([]);
+    });
+
+    it("every named owner file actually emits section identity", () => {
+        const silent = ALLOY_SECTION_LIST.filter(
+            (e) => e.owner !== null && !readDoc(e.owner).includes("alloySectionDomAttrs"),
+        ).map((e) => `${e.id} -> ${e.owner}`);
+        expect(silent, `owners that never call alloySectionDomAttrs:\n${silent.join("\n")}`).toEqual([]);
+    });
+
+    it("a section with no renderer emits no owner attribute", () => {
+        for (const entry of ALLOY_SECTION_LIST.filter((e) => e.owner === null)) {
+            expect(alloySectionDomAttrs(entry.id)).not.toHaveProperty("data-alloy-section-owner");
+        }
+    });
+});
+
+/**
+ * There were TWO section-identity conventions on these roots: the registry's `data-alloy-section-*`
+ * and an older hand-written `data-alloy-section="WU.HEADER"`. The old one is load-bearing — the
+ * runtime split controller and the acceptance specs select on it — so it was converged rather than
+ * deleted: the registry owns the name and emits it, and no component restates it.
+ */
+describe("Alloy section map — one source of section identity", () => {
+    const REGISTERED_LEGACY = new Set(
+        ALLOY_SECTION_LIST.map((e) => e.legacyDomSection).filter(Boolean) as string[],
+    );
+
+    it("emits the legacy name from the registry for aliased sections", () => {
+        expect(alloySectionDomAttrs("WU-01")["data-alloy-section"]).toBe("WU.HEADER");
+        expect(alloySectionDomAttrs("WS-02")["data-alloy-section"]).toBe("WS.HEADER");
+        expect(alloySectionDomAttrs("WU-03")["data-alloy-section"]).toBe("WU.WORK_VIEW_PILLS");
+        // A section with no legacy name emits no legacy attribute.
+        expect(alloySectionDomAttrs("WU-12")).not.toHaveProperty("data-alloy-section");
+    });
+
+    it("no component hand-writes a name the registry already owns", () => {
+        const offenders: string[] = [];
+        for (const entry of ALLOY_SECTION_LIST) {
+            if (!entry.owner) continue;
+            const src = readDoc(entry.owner);
+            for (const legacy of REGISTERED_LEGACY) {
+                if (src.includes(`data-alloy-section="${legacy}"`)) {
+                    offenders.push(`${entry.owner} hand-writes ${legacy}`);
+                }
+            }
+        }
+        expect(offenders, offenders.join("\n")).toEqual([]);
+    });
+});
+
+/**
+ * The metric can only wait on a section it can SEE. Every Work Unit section that has a renderer must
+ * therefore reach the DOM through the registry.
+ *
+ * Three ids are excluded, each for a stated reason rather than convenience:
+ *   - WU-13 has no renderer at all (`owner: null`), so there is nothing to stamp.
+ *   - WS-00 / WS-09 / WS-10 are the workspace registrations of roots SHARED with their Work Unit
+ *     twins (WU-00 / WU-14 / WU-15). One element cannot carry two ids, and it emits the WU one.
+ *     Making that surface-aware needs the surface threaded into shared shells — new product state,
+ *     which this slice is explicitly not allowed to add. Pinned here so it cannot drift silently.
+ */
+describe("Alloy section map — every applicable Work Unit section reaches the DOM", () => {
+    const SHARED_ROOT_WITH_WU_TWIN: Record<string, string> = {
+        "WS-00": "WU-00",
+        "WS-09": "WU-14",
+        "WS-10": "WU-15",
+    };
+
+    it("stamps every Work Unit section that something renders", () => {
+        const unstamped = ALLOY_SECTION_LIST.filter((e) => e.surface === "work_unit")
+            .filter((e) => e.owner !== null)
+            .filter((e) => !readDoc(e.owner as string).includes(`"${e.id}"`))
+            .map((e) => `${e.id} -> ${e.owner}`);
+        expect(unstamped, `Work Unit sections not reaching the DOM:\n${unstamped.join("\n")}`).toEqual([]);
+    });
+
+    it("pins the shared-root workspace sections that emit their Work Unit twin's id", () => {
+        for (const [wsId, wuId] of Object.entries(SHARED_ROOT_WITH_WU_TWIN)) {
+            expect(ALLOY_SECTION_MAP[wsId].owner).toBe(ALLOY_SECTION_MAP[wuId].owner);
+            expect(readDoc(ALLOY_SECTION_MAP[wsId].owner as string)).not.toContain(`"${wsId}"`);
+        }
     });
 });
