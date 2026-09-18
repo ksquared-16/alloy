@@ -737,6 +737,24 @@ export default function FinancialsDetailCard({
  * Nothing here computes. Every label, sign and status arrives already decided by the adapter that
  * owns it.
  */
+/**
+ * The provenance an operator needs at a glance, joined into one short line.
+ *
+ * Deliberately bounded: basis, recurrence and the human sentence. Ids, timestamps and the policy
+ * snapshot are real provenance and belong at depth, not in a ledger row — this file's whole
+ * argument is that a row states a fact and does not become a paragraph.
+ */
+function reductionPreview(e: FinancialsEvidence["ledger"][number]): string | null {
+    const r = e.reduction;
+    if (!r) return null;
+    const parts = [r.basisSummary, r.recurrenceLabel || null, r.explanation].filter(
+        (v): v is string => Boolean(v && v.trim()),
+    );
+    if (!parts.length) return e.label || null;
+    // The label still leads: it is what the row has always been called.
+    return [e.label, ...parts].filter(Boolean).join(" · ");
+}
+
 function ledgerRowFromEntry(
     e: FinancialsEvidence["ledger"][number],
     index: number,
@@ -758,9 +776,27 @@ function ledgerRowFromEntry(
     return {
         key: e.chargeId || `${e.when}-${index}`,
         when: e.when,
-        type: chargeCategoryLabel(e.type),
+        /*
+         * ── THE OPERATOR'S WORD FOR THIS ROW ─────────────────────────────────────────────────
+         *
+         * A reduction produced by an authored discount policy said "Credit", because the CATEGORY
+         * it is written under is the contra-revenue one it shares with every other reduction. The
+         * category is how the money posts; it is not what the row IS. `reduction.conceptLabel` is
+         * the canonical answer — Discount, Credit, Adjustment or Reversal — and a reversal says so
+         * rather than appearing as a second unrelated discount.
+         *
+         * Falls back to the category label wherever the row is not a reduction, which is every
+         * ordinary charge.
+         */
+        type: e.reduction?.conceptLabel || chargeCategoryLabel(e.type),
         child: e.subject,
-        description: e.label,
+        /*
+         * A CONCISE PREVIEW, NOT A PARAGRAPH. The decision behind the money, in the words an
+         * operator would use to answer "why is my bill this number" — the policy's basis, whether
+         * it recurs, and the sentence somebody wrote if they wrote one. Each part is omitted when
+         * the model does not know it, so nothing here is padding and the ledger stays dense.
+         */
+        description: reductionPreview(e) || e.label,
         glLabel: e.glCode,
         amount: e.amount,
         status: e.status ?? "—",

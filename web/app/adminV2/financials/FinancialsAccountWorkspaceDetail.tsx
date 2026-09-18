@@ -430,6 +430,37 @@ export default function FinancialsAccountWorkspaceDetail({
  * about money — the exact thing `accountLenses` refuses to do. A number on screen is either
  * canonical or it is a row count, never a subtotal invented by a presentation layer.
  */
+/*
+ * ── PROVENANCE, READ THE SAME WAY ON BOTH SURFACES ─────────────────────────────────────────────
+ *
+ * The projection already decided what this reduction is and how its number was reached; these only
+ * reach into the row for it. The preview is the same short line the Focus Panel's detail card
+ * builds — basis, recurrence, and the sentence somebody wrote — because a row that meant one thing
+ * here and another there would be exactly the semantic fork the convergence forbids.
+ */
+type RowReduction = {
+    conceptLabel?: string;
+    basisSummary?: string | null;
+    recurrenceLabel?: string;
+    explanation?: string | null;
+};
+
+function reductionOf(row: Record<string, unknown>): RowReduction | null {
+    const r = row.reduction as RowReduction | null | undefined;
+    return r ?? null;
+}
+
+function reductionPreviewOf(row: Record<string, unknown>): string | null {
+    const r = reductionOf(row);
+    if (!r) return null;
+    const label = row.description == null ? "" : String(row.description);
+    const parts = [r.basisSummary, r.recurrenceLabel || null, r.explanation].filter(
+        (v): v is string => Boolean(v && String(v).trim()),
+    );
+    if (!parts.length) return label || null;
+    return [label, ...parts].filter(Boolean).join(" · ");
+}
+
 function LedgerPeriods({
     rows,
     cur,
@@ -556,9 +587,15 @@ function ledgerRowFromWorkspaceRow(row: Row, cur: string): FinancialsLedgerRowVi
     return {
         key: String(row.chargeId),
         when: shortDate(row.date as string | null),
-        type: String(row.categoryLabel ?? row.categoryKey ?? "—"),
+        /*
+         * THE SAME MEANING THE FOCUS PANEL STATES. `reduction.conceptLabel` is the canonical answer
+         * to what this row IS — Discount, Credit, Adjustment or Reversal — and the category is only
+         * how the money posts. Two surfaces showing one account must not disagree about whether a
+         * row is a discount, so both read the same projected field.
+         */
+        type: String(reductionOf(row)?.conceptLabel ?? row.categoryLabel ?? row.categoryKey ?? "—"),
         child: String(row.subjectName ?? "Household"),
-        description: String(row.description ?? "—"),
+        description: reductionPreviewOf(row) ?? String(row.description ?? "—"),
         glLabel: glCode ? (glName ? `${glCode} · ${glName}` : glCode) : null,
         amount: moneyExact(n(row.amountCents), cur),
         amountNote:

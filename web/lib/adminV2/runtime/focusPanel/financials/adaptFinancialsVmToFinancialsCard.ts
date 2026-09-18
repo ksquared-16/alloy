@@ -443,6 +443,26 @@ export function adaptFinancialsVmToLedgerPeriods(input: {
             source: row.categoryLabel,
             responsibleParty: row.responsiblePartyName,
             responsibilityUnassigned: row.responsibilityUnassigned,
+            /*
+             * The decision behind the money, formatted once here so both deep surfaces state the
+             * same thing. This adapter decides nothing about the reduction — `reductionProvenance`
+             * already read it; this only turns the period into the operator's words.
+             */
+            reduction: row.reduction
+                ? {
+                      applicationId: row.reduction.applicationId,
+                      concept: row.reduction.concept,
+                      conceptLabel: row.reduction.conceptLabel,
+                      recurrenceLabel: row.reduction.recurrenceLabel,
+                      decidedBy: row.reduction.decidedBy,
+                      basisSummary: row.reduction.basisSummary,
+                      explanation: row.reduction.explanation,
+                      sourceChargeId: row.reduction.sourceChargeId,
+                      periodLabel: row.reduction.periodKey ? billingPeriodLabel(row.reduction.periodKey) : null,
+                      reversesApplicationId: row.reduction.reversesApplicationId,
+                      reversedByApplicationId: row.reduction.reversedByApplicationId,
+                  }
+                : null,
             /* Borrowed, not restated — the one classifier both Financials surfaces filter by. */
             lens: ledgerLensOf(row),
             /*
