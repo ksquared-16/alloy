@@ -99,7 +99,7 @@ describe("one gesture, N independent obligations", () => {
             correlationId: "c",
         });
 
-        const detail = (res as { result: { detail: Record<string, unknown> } }).result.detail;
+        const detail = (res as unknown as { result: { detail: Record<string, unknown> } }).result.detail;
         expect(detail.multi_child).toBe(true);
         expect(detail.children_selected).toBe(2);
         expect(detail.charges_created).toBe(2);
@@ -131,7 +131,7 @@ describe("one gesture, N independent obligations", () => {
             ],
             correlationId: "c",
         });
-        const detail = (res as { result: { detail: Record<string, unknown> } }).result.detail;
+        const detail = (res as unknown as { result: { detail: Record<string, unknown> } }).result.detail;
         const perChild = detail.per_child as Array<{ charge_id: string; write_status: string }>;
         expect(perChild.map((r) => r.charge_id)).toEqual(["c-w", "c-l"]);
         expect(perChild.every((r) => r.write_status === "recalculated")).toBe(true);
@@ -160,7 +160,7 @@ describe("one gesture, N independent obligations", () => {
         });
 
         expect(res.ok, "the charge that exists is not denied").toBe(true);
-        const detail = (res as { result: { detail: Record<string, unknown> } }).result.detail;
+        const detail = (res as unknown as { result: { detail: Record<string, unknown> } }).result.detail;
         expect(detail.charges_created).toBe(1);
         expect(detail.charges_failed).toBe(1);
         const perChild = detail.per_child as Array<{ customer_member_id: string; error?: string }>;
@@ -207,7 +207,7 @@ describe("one gesture, N independent obligations", () => {
             correlationId: "c",
         });
         expect(res.ok).toBe(true);
-        const perChild = (res as { result: { detail: { per_child: Array<{ charge_id: string; posted: boolean; error?: string }> } } })
+        const perChild = (res as unknown as { result: { detail: { per_child: Array<{ charge_id: string; posted: boolean; error?: string }> } } })
             .result.detail.per_child;
         expect(perChild[0]!.charge_id, "the charge still exists").toBe("c-w");
         expect(perChild[0]!.posted).toBe(false);
