@@ -57,6 +57,17 @@ export type AlloySectionEntry = {
     cache: AlloySectionCache;
     /** KPI snapshot section — occupies final placement immediately, refreshes quietly, never blocks. */
     snapshot?: boolean;
+    /**
+     * A shell that WRAPS other sections rather than painting first-order content itself.
+     *
+     * Completion attribution needs this stated, not inferred. The structural test — "does this
+     * element currently contain another registered section" — is right whenever the inner sections
+     * exist, and silently wrong when they do not: with WU-09 unidentified, the shell contains
+     * nothing registered, reads as a leaf, and takes ownership of the whole surface again. That is
+     * the failure this flag closes, and it is a property of the section, so it lives here and not
+     * as a list of ids inside a measurement harness.
+     */
+    container?: boolean;
 };
 
 const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
@@ -68,6 +79,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "session shell (sidebar, top nav, global search, location selector)",
         blocking: true,
         cache: "session",
+        container: true,
     },
     {
         id: "WU-01",
@@ -229,6 +241,7 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "session shell (sidebar, top nav, global search, location selector)",
         blocking: true,
         cache: "session",
+        container: true,
     },
     {
         id: "WS-01",
@@ -362,6 +375,8 @@ export function alloySectionDomAttrs(id: AlloySectionId): Record<string, string>
         ...(entry.owner ? { "data-alloy-section-owner": entry.owner } : {}),
         "data-alloy-section-blocking": entry.blocking ? "true" : "false",
         "data-alloy-section-cache": entry.cache,
+        // Stated, so completion attribution never has to infer it from what happens to be inside.
+        ...(entry.container ? { "data-alloy-section-container": "true" } : {}),
         // The pre-registry name, emitted from the registry so the components hold no second copy.
         ...(entry.legacyDomSection ? { "data-alloy-section": entry.legacyDomSection } : {}),
     };
