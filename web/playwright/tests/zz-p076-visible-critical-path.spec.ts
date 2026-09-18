@@ -108,14 +108,48 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
             return els > 0 ? "AUTHORITATIVE_STRUCTURE" : "AUTHORITATIVE_DATA";
         };
 
-        /** Nearest ancestor that the registry marked blocking, or null. */
+        /*
+         * THE OWNING SECTION, AND WHY "NEAREST BLOCKING ANCESTOR" WAS THE WRONG QUESTION.
+         *
+         * First cut walked up to the nearest ancestor marked blocking. Measured against deployed
+         * staging that produced V2 == V1 to the millisecond on both windows (9306/9306, 9086/9086),
+         * with every sample blaming WU-00 — because WU-00 is the persistent OS shell, an ancestor of
+         * the entire page. "Inside a blocking section" was true of every mutation on the surface, so
+         * the narrowing narrowed nothing and V2 was V1 wearing a different name.
+         *
+         * A section that CONTAINS another registered section is a container, not a region that
+         * paints. So attribute each mutation to its LEAF-MOST section and ignore containers: churn
+         * whose closest owner is the shell is, by construction, outside every content region.
+         *
+         * Derived live from the DOM — no id is named here, so this cannot drift from the registry
+         * and needs no second list of "things that do not count".
+         */
+        /*
+         * Memoize only the POSITIVE. "Is a container" is time-varying in one direction: the shell
+         * exists before the regions inside it do, so the first mutation on WU-00 sees no descendant
+         * section and a two-sided cache pins it as a leaf for the rest of the run — which is exactly
+         * what happened, and left WU-00 driving completion again after the rule was added.
+         * Once a section has contained another, it never stops having done so.
+         */
+        const knownContainer = new WeakSet<Element>();
+        const isContainer = (el: Element): boolean => {
+            if (knownContainer.has(el)) return true;
+            if (el.querySelector("[data-alloy-section-id]")) {
+                knownContainer.add(el);
+                return true;
+            }
+            return false;
+        };
         const blockingHost = (n: Node | null): string | null => {
             let el: Node | null = n;
             while (el && el.nodeType !== 1) el = el.parentNode;
             let cur = el as Element | null;
             while (cur) {
-                if (cur.getAttribute?.("data-alloy-section-blocking") === "true") {
-                    return cur.getAttribute("data-alloy-section-id");
+                const id = cur.getAttribute?.("data-alloy-section-id");
+                if (id) {
+                    // Leaf-most section owns it. A container owns nothing it does not paint itself.
+                    if (isContainer(cur)) return null;
+                    return cur.getAttribute("data-alloy-section-blocking") === "true" ? id : null;
                 }
                 cur = cur.parentElement;
             }
