@@ -130,3 +130,30 @@ a recurring billing specimen. There is currently none — no accepted `enrollmen
 recurring billing at all, the reseed has to build the commercial tree (tuition plan → billing
 frequency → enrolment commitment → assignment → accepted terms), ideally one WEEKLY and one MONTHLY
 so both cadences are exercisable.
+
+## B1 final closure (run `erun_6316fc1a23a34af7`)
+
+**Certification residue created this run** (remove at reseed):
+
+| Mutation | Identity |
+|---|---|
+| Field trip $40.00 · Certa Certhouse · Sep 18 | `1bfb2795-58dd-4c84-a04c-212917150ab9` |
+| Field trip $40.00 · Certb Certhouse · Sep 18 | `34d1fd8c-bdab-4a82-9fcc-83068c90f711` |
+
+Both via one multi-child `charge.add`; the rerun created nothing.
+
+## INTENTIONAL HUMAN-QA SETUP — rebuild after the reseed, do not merely delete
+
+These are **configuration**, not transactions, and Human QA needs them:
+
+| Setup | Why |
+|---|---|
+| Due-date policies (`on_invoice` from Sep 18; `days_after_invoice 10` from Sep 19) | the only way to exercise due-date behaviour |
+| `Sibling discount (QA specimen)` commercial policy | discount + provenance scenarios |
+| Responsibility arrangements (household and child grain) | responsibility scenarios |
+| **MISSING — must be BUILT: accepted `enrollment_pricing_terms`, one WEEKLY and one MONTHLY** | without these, recurring billing cannot be tested at all |
+
+The weekly one additionally needs a **weekly billing frequency** on a tuition plan; the tenant
+currently has Monthly and Semi-Annual only. The canonical writer is the registered
+`enrollment.pricing.accept` action (operator surface: `AssignmentTuitionCard`, which is **not**
+mounted on the enrolled-children Focus Panel).

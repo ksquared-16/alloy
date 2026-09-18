@@ -1,0 +1,440 @@
+[
+  {
+    "phase": "request",
+    "payload": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "mode": "preview",
+      "payload": {
+        "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+        "child_label": "Certb Certhouse"
+      }
+    }
+  },
+  {
+    "phase": "response",
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "missing_event_date",
+            "changes": []
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "73ea99eb-ef83-4d15-9f76-7c69c4d01d7a"
+    }
+  },
+  {
+    "phase": "request",
+    "payload": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "mode": "preview",
+      "payload": {
+        "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+        "child_label": "Certb Certhouse"
+      }
+    }
+  },
+  {
+    "phase": "response",
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "missing_event_date",
+            "changes": []
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "004251b9-0185-453e-9025-6b387ab9c13e"
+    }
+  },
+  {
+    "phase": "request",
+    "payload": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "mode": "preview",
+      "payload": {
+        "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+        "child_label": "Certa Certhouse"
+      }
+    }
+  },
+  {
+    "phase": "response",
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "missing_event_date",
+            "changes": []
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "3e9ca5f4-ee7b-491f-8b6e-34c89bbbf6bb"
+    }
+  },
+  {
+    "phase": "request",
+    "payload": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "mode": "preview",
+      "payload": {
+        "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+        "child_label": "Certa Certhouse",
+        "customer_member_ids": [
+          "e408fa51-7261-43c4-8e60-555d17fc9888",
+          "46105cd4-6030-417d-a7cb-faf409071c0d"
+        ],
+        "child_labels": [
+          "Certa Certhouse",
+          "Certb Certhouse"
+        ],
+        "event_date": "2026-09-18"
+      }
+    }
+  },
+  {
+    "phase": "response",
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "field_trip $40.00 per child",
+            "changes": [
+              "Applies to · Certa Certhouse, Certb Certhouse",
+              "$40.00 per child",
+              "2 children selected",
+              "Total to create · $80.00",
+              "Each child receives their own charge",
+              "Occurs 2026-09-18",
+              "Billable 2026-10-01",
+              "Scheduled — a future billing context"
+            ]
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "f329614b-db2e-4aa0-b161-a4c5ab51bb80"
+    }
+  },
+  {
+    "phase": "request",
+    "payload": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "mode": "execute",
+      "confirmation": {
+        "confirmed": true
+      },
+      "payload": {
+        "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+        "customer_member_ids": [
+          "e408fa51-7261-43c4-8e60-555d17fc9888",
+          "46105cd4-6030-417d-a7cb-faf409071c0d"
+        ],
+        "child_labels": [
+          "Certa Certhouse",
+          "Certb Certhouse"
+        ],
+        "event_date": "2026-09-18"
+      }
+    }
+  },
+  {
+    "phase": "response",
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "multi_child": true,
+          "children_selected": 2,
+          "charges_created": 2,
+          "charges_failed": 0,
+          "per_child": [
+            {
+              "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+              "charge_id": "1bfb2795-58dd-4c84-a04c-212917150ab9",
+              "write_status": "skipped_posted",
+              "resolution_key": "tpl:field_trip:2026-09-18:4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba",
+              "review_required": false,
+              "posted": false
+            },
+            {
+              "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+              "charge_id": "34d1fd8c-bdab-4a82-9fcc-83068c90f711",
+              "write_status": "skipped_posted",
+              "resolution_key": "tpl:field_trip:2026-09-18:6f409c2d-2227-48e7-a365-f2c12fc2d929",
+              "review_required": false,
+              "posted": false
+            }
+          ]
+        },
+        "affected_id": "1bfb2795-58dd-4c84-a04c-212917150ab9"
+      },
+      "correlation_id": "03b44b1d-b905-4ab0-8e28-f809ce4f04b7"
+    }
+  },
+  {
+    "phase": "request",
+    "payload": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "mode": "preview",
+      "payload": {
+        "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+        "child_label": "Certa Certhouse",
+        "customer_member_ids": [
+          "e408fa51-7261-43c4-8e60-555d17fc9888",
+          "46105cd4-6030-417d-a7cb-faf409071c0d"
+        ],
+        "child_labels": [
+          "Certa Certhouse",
+          "Certb Certhouse"
+        ]
+      }
+    }
+  },
+  {
+    "phase": "response",
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "missing_event_date",
+            "changes": []
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "e46195aa-bd7b-4b34-b6d7-fa6f891e824d"
+    }
+  },
+  {
+    "phase": "request",
+    "payload": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "mode": "preview",
+      "payload": {
+        "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+        "child_label": "Certa Certhouse",
+        "customer_member_ids": [
+          "e408fa51-7261-43c4-8e60-555d17fc9888",
+          "46105cd4-6030-417d-a7cb-faf409071c0d"
+        ],
+        "child_labels": [
+          "Certa Certhouse",
+          "Certb Certhouse"
+        ]
+      }
+    }
+  },
+  {
+    "phase": "response",
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "missing_event_date",
+            "changes": []
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "5b0f49f9-b35d-48ae-bb64-a91587060750"
+    }
+  },
+  {
+    "phase": "request",
+    "payload": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "mode": "preview",
+      "payload": {
+        "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+        "child_label": "Certa Certhouse",
+        "customer_member_ids": [
+          "e408fa51-7261-43c4-8e60-555d17fc9888",
+          "46105cd4-6030-417d-a7cb-faf409071c0d"
+        ],
+        "child_labels": [
+          "Certa Certhouse",
+          "Certb Certhouse"
+        ],
+        "event_date": "2026-09-18"
+      }
+    }
+  },
+  {
+    "phase": "response",
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "field_trip $40.00 per child",
+            "changes": [
+              "Applies to · Certa Certhouse, Certb Certhouse",
+              "$40.00 per child",
+              "2 children selected",
+              "Total to create · $80.00",
+              "Each child receives their own charge",
+              "Occurs 2026-09-18",
+              "Billable 2026-10-01",
+              "Scheduled — a future billing context"
+            ]
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "fdd15999-a315-42f2-8bbc-c5e3815c9ef7"
+    }
+  },
+  {
+    "phase": "request",
+    "payload": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "mode": "execute",
+      "confirmation": {
+        "confirmed": true
+      },
+      "payload": {
+        "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+        "customer_member_ids": [
+          "e408fa51-7261-43c4-8e60-555d17fc9888",
+          "46105cd4-6030-417d-a7cb-faf409071c0d"
+        ],
+        "child_labels": [
+          "Certa Certhouse",
+          "Certb Certhouse"
+        ],
+        "event_date": "2026-09-18"
+      }
+    }
+  },
+  {
+    "phase": "response",
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "multi_child": true,
+          "children_selected": 2,
+          "charges_created": 2,
+          "charges_failed": 0,
+          "per_child": [
+            {
+              "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+              "charge_id": "1bfb2795-58dd-4c84-a04c-212917150ab9",
+              "write_status": "skipped_posted",
+              "resolution_key": "tpl:field_trip:2026-09-18:4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba",
+              "review_required": false,
+              "posted": false
+            },
+            {
+              "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+              "charge_id": "34d1fd8c-bdab-4a82-9fcc-83068c90f711",
+              "write_status": "skipped_posted",
+              "resolution_key": "tpl:field_trip:2026-09-18:6f409c2d-2227-48e7-a365-f2c12fc2d929",
+              "review_required": false,
+              "posted": false
+            }
+          ]
+        },
+        "affected_id": "1bfb2795-58dd-4c84-a04c-212917150ab9"
+      },
+      "correlation_id": "219fae3a-57ba-4fec-9d9b-abdc14385b9f"
+    }
+  }
+]

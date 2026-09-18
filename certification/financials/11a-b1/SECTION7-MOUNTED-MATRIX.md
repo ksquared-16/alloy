@@ -96,6 +96,14 @@ Engineering mounted PASS. **This is not Human QA PASS, which remains ZERO.**
 | **E6 recurring due date** | — | resolved on generated charges | nothing generated to inspect | **BLOCKED — no specimen** |
 | **E7 accounting period independence** | — | independent of billing period | nothing generated; stated honestly rather than fabricated | **BLOCKED — no specimen** |
 
+**THE CANONICAL PATH IS NOW IDENTIFIED, AND THE FIXTURE STILL HAS NO SPECIMEN.** Accepted terms are
+written by the registered `enrollment.pricing.accept` action, whose operator surface is
+`AssignmentTuitionCard`. **That card is not mounted on the enrolled-children Focus Panel** — the
+cards there are business_process, financials, children, household, attendance, health_safety — so
+the acceptance surface was not reachable from where this thread has been working. Establishing a
+weekly specimen additionally needs a WEEKLY billing frequency configured on a plan; the tenant's
+plans are Monthly and Semi-Annual.
+
 **THE FIXTURE HAS NO RECURRING BILLING SPECIMEN.** The generation surface works and is honest — it
 enumerated the organisation for September 2026 and reported nothing to bill, with every bucket zero,
 meaning no assignment was even *considered*. The tuition charges on this account were authored by
@@ -107,35 +115,36 @@ The boundary arithmetic — the part most likely to be wrong and the part the we
 distinction actually turns on — is proven directly on the authority the generator and the preview
 both call, with the month-collapse regression planted and caught.
 
-## F · multi-child — PARTIAL
+## F · multi-child — PASS (CASE D: the earlier result was a harness defect)
 
 | Check | Expected | Actual | Verdict |
 |---|---|---|---|
 | F1 unified Add command | opens | `add_charge` overlay | **PASS** |
-| F2 child-grain type exposes the sibling | offered | 1 sibling checkbox | **PASS** |
-| F3 amount stated per child with count | per-child + count | `$75.00 per child · 2 children · each receives their own charge` | **PASS** |
-| F7 obligations stay child-attributed | no household row | `["Certa Certhouse"]` | **PASS** |
-| F8 responsibility stays per obligation | not one household answer | per-row state | **PASS** |
-| **F4/F5/F6 two independent obligations from one gesture** | `customer_member_ids`, 2 created | payload carried only `customer_member_id`; one charge created | **NOT PROVEN — OPEN QUESTION** |
+| F2 child-grain type exposes the sibling | offered | 1 sibling checkbox (the ANCHOR child is not a checkbox — the earlier probe expected two and mis-read one) | **PASS** |
+| F3 amount per child with count | per-child + count | `$40.00 per child · 2 children · each receives their own charge` | **PASS** |
+| F4 pre-Confirm selection asserted | 2 selected | boxes `[{46105cd4, checked:true}]` + anchor `e408fa51`, childSum "2 children", Add enabled | **PASS** |
+| F5 **plural intent reaches the command** | `customer_member_ids` | `["e408fa51","46105cd4"]` with `child_labels ["Certa Certhouse","Certb Certhouse"]` | **PASS** |
+| F6 two independent obligations | 2, per child | `multi_child:true · children_selected:2 · charges_created:2 · charges_failed:0` — Certa `1bfb2795`, Certb `34d1fd8c` | **PASS** |
+| F7 independent resolution keys | per agreement | `tpl:field_trip:2026-09-18:4e3aa47e` and `…:6f409c2d` | **PASS** |
+| F8 no household aggregation | child-attributed | both rows child-attributed, no Household row | **PASS** |
+| F9 rerun creates no duplicates | same ids | identical plural payload; both `skipped_posted` on the SAME charge ids and keys | **PASS** |
+| F10 responsibility independent | per obligation | per-row state, no household answer manufactured | **PASS** |
 
-**OPEN AND UNRESOLVED.** The summary line rendered `2 children`, which it only does when the
-selection is greater than one — so the selection was 2 when the surface drew it and 1 when the
-command was sent. The payload builder is intact (`customer_member_ids` is sent when the selection
-exceeds one), so the question is what emptied the extra-child selection between render and confirm:
-a probe timing artifact, or a real regression in the multi-child path.
+**CASE D.** The previous run's singular payload was a harness artifact, not a product defect. This
+run asserted the selection in the same evaluate that preceded the click, with no navigation between,
+and the plural intent reached the command. **No product source was changed.**
 
-I have not established which, and I will not guess at it. **This is the single most important thing
-to settle next** — multi-child is a Core claim that Section 3 certified on an earlier candidate.
-
-## G · prepaid — PASS
+## G · prepaid — PASS with one row NOT RUN
 
 | Check | Expected | Actual | Verdict |
 |---|---|---|---|
-| G1 positive available prepaid visible | > $0 through the read model | **Available $200.00** | **PASS** |
-| G2 balance and prepaid are separate facts | two figures | **Balance $37.87** · **Available $200.00** | **PASS** |
-| G3 prepaid not netted into the balance | balance stands alone | $37.87 unchanged by $200.00 of available money | **PASS** |
-| G4 pending/unavailable money not offered | fail toward do-not-offer | `heldSupported: false`; carried from the prepaid authority, not re-proven here | **CARRIED** |
-| G5 allocation reduces available and settles the target | canonical allocation | not exercised this run | **NOT RUN** |
+| G1 positive available prepaid | > $0 through the read model | **Available $200.00** | **PASS** |
+| G2 balance and prepaid separate | two figures | **Balance $37.87** · **Available $200.00** | **PASS** |
+| G3 not netted into the balance | balance stands alone | $37.87 unchanged by $200.00 available | **PASS** |
+| G4 **zero is silence** | no `Available $0.00` line | Kurzman Family renders **no Available line at all** (`prepaidNodes=0`) | **PASS** |
+| G5 allocation control reachable | an apply path exists | 1 `apply` row action under the Payments lens, against unapplied money | **PASS** |
+| G6 allocation executed end to end | prepaid decreases, obligation settles, payer and responsibility unchanged | not executed | **NOT RUN** |
+| G7 pending/unavailable money not offered as prepaid | fail toward do-not-offer | `heldSupported: false` in the prepaid authority; no mounted pending specimen exists to exercise | **CARRIED** |
 
 ## Deferred boundaries — behaving honestly, not reopened
 
@@ -144,10 +153,18 @@ to settle next** — multi-child is a Core claim that Section 3 certified on an 
 
 ## Tally
 
-**PASS 58 · FAIL 0 · BLOCKED 4 (E2/E3/E5/E6/E7 — one absent specimen) · NOT PROVEN 1 (F4/F5/F6) · NOT RUN 1 (G5) · CARRIED 1 (G4) · DEFERRED 3.**
+**PASS 70 · FAIL 0 · BLOCKED 5 · NOT PROVEN 0 · NOT RUN 1 · CARRIED 1 · DEFERRED 3.**
 
-44 from the surfaces and the three named repairs, plus 14 closed here: 7 weekly-boundary checks,
-5 multi-child checks and 3 prepaid checks (G1–G3).
+44 from the surfaces and the three named repairs · 7 weekly-boundary checks · 10 multi-child checks
+(all PASS, CASE D) · 5 prepaid checks (G1–G5) · 4 earlier E/E4 checks.
+
+**BLOCKED 5** — every one the same single cause: no accepted `enrollment_pricing_terms` exists, so
+recurring generation has nothing to bill (E2 weekly generation, E3 monthly generation, E5 recurring
+discount, E6 recurring due date, E7 accounting attribution on a generated charge).
+**NOT RUN 1** — G6 allocation executed end to end. **CARRIED 1** — G7 pending money.
+
+**SECTION 7 IS NOT FULLY MOUNTED-CERTIFIED.** Recurring billing — the single largest Core claim —
+cannot be exercised until the fixture has a commercial specimen.
 
 Three rows failed on first execution and all three were probe artifacts, corrected and re-run: a
 1100-character text capture that cut off the resolved-policy panel, a 6-second wait that read the
