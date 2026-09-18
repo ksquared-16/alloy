@@ -191,6 +191,7 @@ describe("Step 2 — the maintained field is raw, and maintained where truth cha
             "the maintained fact survived a rolled-back transaction",
             "rollback setup did not move the maintained facts",
             "creation did not generate the defaulted columns",
+            "maintenance restamped the family updated_at",
         ]) {
             expect(SQL, `the "${specimen}" specimen is gone`).toContain(specimen);
         }

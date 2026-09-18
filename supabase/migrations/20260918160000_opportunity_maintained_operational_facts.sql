@@ -348,6 +348,44 @@ UPDATE public.opportunities o
            'tour',         public.opportunity_active_tour_facts(o.org_id, o.id)
        );
 
+-- ── THE MAINTAINED COLUMN IS MECHANICAL, LIKE metadata ──
+--
+-- `set_updated_at_opportunities` stamps `updated_at = now()` whenever anything OTHER than `metadata`
+-- changes, and deliberately preserves it for metadata-only patches so mechanical writes do not erase
+-- timestamps the queues depend on.
+--
+-- Maintained facts are that same class of write, and they now change on every participation lifecycle
+-- move. Without this, a child changing stage would restamp its FAMILY's `updated_at` — and
+-- `QueueService` both sorts and filters opportunities on that column, so operator queues would quietly
+-- reorder themselves every time an unrelated child moved. The rows would all still be correct, which
+-- is why nothing would fail.
+--
+-- So the column joins `metadata` in the existing rule rather than getting a rule of its own. An
+-- operator edit alongside a maintained change still stamps, exactly as it does today.
+
+CREATE OR REPLACE FUNCTION public.set_updated_at_opportunities()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn$
+DECLARE
+    new_wo jsonb;
+    old_wo jsonb;
+BEGIN
+    new_wo := to_jsonb(NEW) - 'metadata' - 'updated_at' - 'maintained_operational_facts';
+    old_wo := to_jsonb(OLD) - 'metadata' - 'updated_at' - 'maintained_operational_facts';
+
+    IF (NEW.metadata IS DISTINCT FROM OLD.metadata
+        OR NEW.maintained_operational_facts IS DISTINCT FROM OLD.maintained_operational_facts)
+       AND new_wo IS NOT DISTINCT FROM old_wo THEN
+        NEW.updated_at := OLD.updated_at;
+        RETURN NEW;
+    END IF;
+
+    NEW.updated_at := now();
+    RETURN NEW;
+END;
+$fn$;
+
 -- ── EXECUTION PROOF ─────────────────────────────────────────────────────────────────────────────
 -- SQL text is not evidence. Every assertion is NULL-safe, the stale specimen CONSTRUCTS a
 -- guaranteed-different version (now() is transaction-stable, so a captured one would be EQUAL and the
@@ -370,6 +408,7 @@ DECLARE
     v_current timestamptz;
     v_stale   timestamptz;
     v_tour  uuid;
+    v_opp_stamp timestamptz;
 BEGIN
     INSERT INTO public.orgs (name, slug) VALUES ('__selftest_step2__', '__selftest_' || gen_random_uuid()) RETURNING id INTO v_org;
     INSERT INTO public.orgs (name, slug) VALUES ('__selftest_step2_other__', '__selftest_' || gen_random_uuid()) RETURNING id INTO v_org2;
@@ -439,12 +478,20 @@ BEGIN
         RAISE EXCEPTION 'SELFTEST: an unexpected top-level key was persisted (%)', v_facts;
     END IF;
 
+    -- 3b · MAINTENANCE DOES NOT RESTAMP THE FAMILY. QueueService sorts and filters opportunities on
+    --      updated_at, so a child moving stage must not reorder its family in every operator queue.
+    UPDATE public.opportunities SET updated_at = '2026-01-01T00:00:00Z' WHERE id = v_opp;
+    SELECT updated_at INTO v_opp_stamp FROM public.opportunities WHERE id = v_opp;
+
     -- 4 · POST-CREATION LIFECYCLE MAINTENANCE, through the one authority.
     v_res := public.update_participation_and_maintain_facts(v_org, v_pi, NULL, true, 'tour', false, NULL);
     IF (v_res ->> 'ok') IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'SELFTEST: lifecycle update refused: %', v_res; END IF;
     SELECT maintained_operational_facts INTO v_facts FROM public.opportunities WHERE id = v_opp;
     IF (v_facts -> 'participants' -> 0 ->> 'stage_key') IS DISTINCT FROM 'tour' THEN
         RAISE EXCEPTION 'SELFTEST: lifecycle mutation did not maintain the opportunity fact (%)', v_facts;
+    END IF;
+    IF (SELECT updated_at FROM public.opportunities WHERE id = v_opp) IS DISTINCT FROM v_opp_stamp THEN
+        RAISE EXCEPTION 'SELFTEST: maintenance restamped the family updated_at — operator queues would reorder';
     END IF;
 
     -- 5 · THE SECOND ANCHOR. A journey anchored to the Enrollment Participation still belongs to the
