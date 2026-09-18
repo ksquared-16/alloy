@@ -263,6 +263,25 @@ export function adaptFinancialsVmToFinancialsCard(input: {
             /* The SAME canonical figure `collectibleNow` reads, stated unconditionally. See the
                field's note in `cardLabTypes`: one authority, two rendering policies. */
             dueNow: money(vm.collectible.currentlyCollectibleCents, currency),
+            /*
+             * ZERO IS SILENCE. The metric appears only when the organisation actually holds
+             * spendable money for this family — the information-density rule the rest of this strip
+             * already follows, and the reason Autopay was dropped from it rather than rendered as a
+             * permanent "not available".
+             *
+             * PENDING MONEY IS NOT SHOWN HERE. It is reported by the authority and deliberately not
+             * offered: a receipt that has not cleared is money the platform was told about, and
+             * putting it in a figure labelled "available" would invite an operator to spend it.
+             */
+            /*
+             * OPTIONAL-CHAINED DELIBERATELY. `prepaid` is a new read-model field, and during a
+             * deploy this adapter can be handed a payload produced by a server that predates it —
+             * the card is client-rendered against a cached `/api/admin/financials/card` response.
+             * Crashing the whole card over a missing prepaid figure would take out Balance, Due and
+             * Past due to avoid omitting a line that is usually absent anyway.
+             */
+            availablePrepaid:
+                (vm.prepaid?.availableCents ?? 0) > 0 ? money(vm.prepaid!.availableCents, currency) : null,
             dueLabel,
         },
         pastDue,
@@ -312,7 +331,16 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 paymentId: p.paymentId,
                 receivedLabel: money(p.amountCents, p.currencyCode || currency),
                 payerLabel: p.payerLabel ?? null,
-                receivedOn: p.receivedAt,
+                /*
+                 * THROUGH THE CANONICAL FORMATTER, like every other date on the surface.
+                 *
+                 * This passed `receivedAt` RAW while every sibling field went through
+                 * `displayDate`. `receivedAt` is a timestamp, so the Payments lens rendered a full
+                 * ISO string into a 78px Date column — the garbled, overlapping date on an
+                 * otherwise ordinary ledger row, and the reason that lens looked like a different
+                 * renderer rather than the same one.
+                 */
+                receivedOn: displayDate(p.receivedAt),
                 method: p.method || null,
                 appliedLabel: money(p.appliedCents, p.currencyCode || currency),
                 unappliedLabel: money(p.unappliedCents, p.currencyCode || currency),
@@ -462,6 +490,14 @@ export function adaptChargeTemplateOption(
         payerTargeting: "default_split",
         requiresSubject: true,
         requiresNote: tpl.amountStrategy !== "fixed",
+        /* The server's answer, carried across unchanged. This adapter formats; it decides nothing. */
+        reviewRequired: tpl.reviewRequired,
+        /*
+         * The category, so the command can honour the CODE-OWNED grain rule: a template whose
+         * category does not permit child grain must not offer a child selection at all. Carried,
+         * never interpreted here.
+         */
+        categoryKey: tpl.categoryKey,
     };
 }
 
@@ -577,6 +613,7 @@ export function hydratingFinancialsEvidence(): FinancialsEvidence {
             paymentsReceived: dash,
             currentBalance: dash,
             dueNow: dash,
+            availablePrepaid: null,
             dueLabel: "",
         },
         /*

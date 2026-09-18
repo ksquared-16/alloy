@@ -55,6 +55,14 @@ export type ChargeResolutionContext = {
     unitAmountCents?: number | null;
     /** Posting-review policy resolution (OR'd with the template's review flag). */
     reviewRequiredByPolicy?: boolean;
+    /**
+     * Due date, already resolved from the organisation's `due_date` policy by the caller.
+     *
+     * Passed in rather than resolved here for the same reason `reviewRequiredByPolicy` is: this
+     * function is PURE and reads no policies. `null`/absent means the organisation has configured no
+     * due-date rule, and the charge keeps whatever due date it would have had — never "due today".
+     */
+    dueDate?: string | null;
     /** Stable scope discriminator for the idempotency key (e.g. agreement id, "org"). */
     scopeKey?: string | null;
 };
@@ -71,6 +79,8 @@ export type ChargeIntent = {
     currencyCode: string;
     occursOn: string | null;
     billableOn: string | null;
+    /** When payment is expected, from the org's `due_date` policy. Null = no configured rule. */
+    dueDate: string | null;
     glMappingKey: string | null;
     responsibilityKey: string | null;
     reviewRequired: boolean;
@@ -94,6 +104,7 @@ function notEligible(template: ChargeTemplateRow, reason: string, resolutionKey:
         currencyCode: template.currency_code,
         occursOn: null,
         billableOn: null,
+        dueDate: null,
         glMappingKey: template.default_gl_mapping_key,
         responsibilityKey: template.default_responsibility_key,
         reviewRequired: template.review_required,
@@ -180,6 +191,12 @@ export function resolveChargeFromTemplate(template: ChargeTemplateRow, ctx: Char
         currencyCode: template.currency_code,
         occursOn,
         billableOn,
+        /*
+         * The invoice date and the due date are SEPARATE facts. This carries whatever the
+         * organisation's policy resolved — and null when it has configured none, so the charge
+         * keeps today's behaviour rather than acquiring a collections deadline nobody set.
+         */
+        dueDate: ctx.dueDate ?? null,
         glMappingKey: template.default_gl_mapping_key,
         responsibilityKey: template.default_responsibility_key,
         reviewRequired: template.review_required || ctx.reviewRequiredByPolicy === true,

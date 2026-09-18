@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
+import type { AccountLens } from "@/lib/financials/workspace/accountLenses";
 import { FOCUS_PANEL_RESERVED_MIN_HEIGHT } from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
@@ -10,6 +12,11 @@ import {
     type CollectionRail,
 } from "@/lib/financials/payments/collectionLifecycle";
 import ApprovedFinancialsCard, { AccountSummaryPending } from "@/components/operationalCards/FinancialsCard";
+import {
+    useRegisterFinancialCommandHost,
+    type FinancialCommandRequest,
+} from "@/components/financials/FinancialCommandChannel";
+import { executeFinancialCommand } from "@/lib/financials/commands/financialTransactionCommands";
 import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
 import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
@@ -18,6 +25,7 @@ import {
     useDismissSignal,
     useReportPerspective,
 } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
+import { categoryPermitsChildGrain } from "@/lib/financials/chargeCategorySemantics";
 import {
     adaptAddChargeSpecimen,
     adaptChargeTemplateOption,
@@ -168,7 +176,43 @@ export default function FinancialsCard({
      * already uses. Neither of these is a new page or a second modal system, and the scrim click /
      * ESC path comes back through `useDismissSignal` rather than a close button this card owns.
      */
-    const [overlay, setOverlay] = useState<null | "detail" | "add_charge" | "payment">(null);
+    /*
+     * ── FINANCIALS NAVIGATION IS A STACK, AND THE STACK IS WRITTEN DOWN ───────────────────────
+     *
+     * It used to be one `overlay` string plus a single-slot memory of where a command had been
+     * raised from. That memory could hold exactly one answer, so it could only be right about the
+     * simplest journey, and it recorded a KIND rather than a destination: dismissing a command
+     * restored "detail", which remounted Details from scratch — a different Details, at the top of
+     * an unfiltered ledger, with every disclosure closed.
+     *
+     * Worse, the row-level Adjust had no surface of its own and borrowed the Add command in
+     * adjustment mode. Cancelling it therefore landed on the Add selector, a destination the
+     * operator had never asked for. That is the wrong-return defect, and no amount of remembering
+     * "the previous kind" fixes it, because the previous kind was never the problem: the previous
+     * STATE was.
+     *
+     * So the stack is explicit and each entry carries what its surface needs. `push` goes deeper,
+     * `pop` goes back exactly one level, and what "back" means is never inferred from whichever
+     * component happened to render last.
+     */
+    /*
+     * ── MULTI-CHILD ADD IS AN OPERATION, AND THIS IS THE SELECTION ────────────────────────────
+     *
+     * `subjectFilter` remains the ONE subject the command is anchored to — the attention context,
+     * and the child a single Add bills. This holds the ADDITIONAL children the operator ticked.
+     *
+     * Kept separate rather than folded into one array because the two mean different things: the
+     * anchor is where the operator already was, and these are a deliberate widening of it. Merging
+     * them would make "which child is this panel about" unanswerable the moment the last checkbox
+     * was cleared.
+     */
+    const [extraChildIds, setExtraChildIds] = useState<string[]>([]);
+    const [stack, setStack] = useState<FinancialsSurface[]>([]);
+    const surface = stack.length ? stack[stack.length - 1] : null;
+    const overlay = surface?.kind ?? null;
+    const push = useCallback((next: FinancialsSurface) => setStack((st) => [...st, next]), []);
+    const pop = useCallback(() => setStack((st) => st.slice(0, -1)), []);
+    const resetStack = useCallback(() => setStack([]), []);
     /*
      * ── ONE ENTRY, TWO OPERATIONS ─────────────────────────────────────────────────────────────
      *
@@ -183,6 +227,16 @@ export default function FinancialsCard({
     const [entryMode, setEntryMode] = useState<"charge" | "adjustment">("charge");
 
     const expanded = overlay === "detail";
+    /*
+     * ── THE DETAILS VIEW BELONGS TO THE CARD, NOT TO THE DETAILS COMPONENT ────────────────────
+     *
+     * Lens, period disclosure and scroll position lived inside the surface that displays them, so
+     * they died with it every time a command took the screen. Held here, they outlive any number
+     * of command round trips, which is what "Details exactly as it was" has to mean.
+     */
+    const [detailLens, setDetailLens] = useState<AccountLens | null>(null);
+    const [expandedPeriods, setExpandedPeriods] = useState<Record<string, boolean>>({});
+    const detailScrollRef = useRef(0);
     const [subjectFilter, setSubjectFilter] = useState<string>("all");
     const [running, setRunning] = useState(false);
     const [commandError, setCommandError] = useState<string | null>(null);
@@ -710,7 +764,7 @@ export default function FinancialsCard({
         setAdjustSourceChargeId(args.chargeId);
         setAdjustOpen(true);
         setEntryMode("adjustment");
-        setOverlay("add_charge");
+        push({ kind: "adjust_charge", chargeId: args.chargeId });
     }, [adjustableSubjects, closeAdjustPanels, closeMovePanels, vm]);
 
     const openReverseAdjustment = useCallback((args: { applicationId: string }) => {
@@ -971,6 +1025,58 @@ export default function FinancialsCard({
      */
     const reservesFootprint = reservingAccount && summaryVariant !== "account";
 
+    /*
+     * ── A BOUNDED SUMMARY IS NOT A LEDGER ──────────────────────────────────────────────────────
+     *
+     * The card is seeded from the operational projection, which is the BOUNDED summary by
+     * construction — enough rows to state a position, not the account's history. Details rendered
+     * those same rows, so opening it on a subject whose projection carried two rows showed a
+     * complete-looking ledger of two transactions, which the deep read then replaced with fifty-six.
+     * Two real-looking rows presented as the whole truth, and then a different whole truth.
+     *
+     * `deepLoadedForRef` already records which account has been read IN FULL. Until that is this
+     * account the ledger is PENDING: the shell, the metrics, the lenses and the filters commit
+     * immediately — they are the same whatever the rows say — and the ledger region reserves itself
+     * rather than showing a partial cohort as if it were complete.
+     */
+    const ledgerComplete = deepLoadedForRef.current === (customerId ?? scopedMemberId);
+
+    /*
+     * ── DETAILS COMMITS ONCE, OR IT DOES NOT COMMIT ───────────────────────────────────────────
+     *
+     * The previous two attempts both left a visible intermediate. The first replaced the compact
+     * card with a Details skeleton the instant it was clicked; the second kept the skeleton out of
+     * the metrics but reserved the ledger region, so Details still arrived with an empty body that
+     * filled in afterwards. Both are the same lie told at different volumes: the operator is shown
+     * the destination before the destination exists.
+     *
+     * The rule here is simpler and has no tuning knob. Details is not ENTERED until the deep read
+     * its ledger depends on has resolved. Clicking it records a request; the request becomes the
+     * surface when — and only when — the account has actually been read in full. Until then the
+     * compact card stays on screen, unchanged, with its Details control marked busy.
+     *
+     * If the read takes 500ms the operator looks at the compact card for 500ms. That is the whole
+     * cost, and it buys the thing Kelly has been asking for since 5H: one commit, no double load.
+     */
+    const [detailPending, setDetailPending] = useState(false);
+
+    /*
+     * ── THE LEDGER'S SCROLL POSITION SURVIVES A COMMAND ───────────────────────────────────────
+     *
+     * The last thing an operator loses on a command round trip, and the most disorienting: they
+     * were two thirds of the way down a fifty-six row ledger. Written on every scroll and put back
+     * before paint, so returning to Details does not start from the top.
+     */
+    useLayoutEffect(() => {
+        if (overlay !== "detail") return;
+        const el = document.querySelector("[data-financials-detail-scroll]") as HTMLElement | null;
+        if (!el) return;
+        if (detailScrollRef.current > 0) el.scrollTop = detailScrollRef.current;
+        const remember = () => { detailScrollRef.current = el.scrollTop; };
+        el.addEventListener("scroll", remember, { passive: true });
+        return () => el.removeEventListener("scroll", remember);
+    }, [overlay]);
+
     useEffect(() => {
         // Clear FIRST: the previous household's balance must not linger while the next resolves.
         // Any in-flight RELOAD is superseded too — its ordinal can no longer be current.
@@ -986,11 +1092,6 @@ export default function FinancialsCard({
      * flow, add-charge — loads the full model once per account. The initial panel still issues no
      * request at all, which is the invariant; this is the operator asking.
      */
-    useEffect(() => {
-        if (!overlay) return;
-        const key = customerId ?? scopedMemberId;
-        if (key && deepLoadedForRef.current !== key) void load();
-    }, [overlay, customerId, scopedMemberId, load]);
 
     /*
      * ── A HOST THAT SUPPLIES NO PROJECTION IS NOT A HOST THAT IS STILL PROVISIONING ────────────
@@ -1019,6 +1120,47 @@ export default function FinancialsCard({
         if (!key || deepLoadedForRef.current === key) return;
         void load();
     }, [hostSuppliesProjection, customerId, scopedMemberId, load]);
+
+    /*
+     * ── THE LIKELY NEXT SURFACE IS RESOLVED BEFORE IT IS ASKED FOR ────────────────────────────
+     *
+     * Details opened instantly and then said "Reading this account's activity…" for two seconds,
+     * because the deep read only STARTED on the click. The account is known while the compact card
+     * is on screen, so the read can be in flight long before anyone asks — the same doctrine
+     * `focusPanelActivityPrewarm` already states for mode switching: sanctioned idle prefetch,
+     * never a reveal gate, so the operator never waits for what was predictable.
+     *
+     * No second authority and no new cache: this is the SAME `load()` filling the SAME `vm` and
+     * `deepLoadedForRef` that Details already consumes. Only its timing moved.
+     *
+     * Subject safety is not an extra mechanism either. `requestSeq` makes a superseded response
+     * unable to land, and a new projection clears both `vm` and `deepLoadedForRef` — so a prewarm
+     * for household A cannot become household B's ledger; it can only be discarded.
+     */
+    useEffect(() => {
+        const key = customerId ?? scopedMemberId;
+        if (!key || deepLoadedForRef.current === key) return;
+        // Asked for: now. The operator is waiting, so idle is the wrong queue.
+        if (overlay || detailPending) {
+            void load();
+            return;
+        }
+        if (!hostSuppliesProjection || provisioned?.state !== "ready") return;
+        /*
+         * Otherwise it is a prediction, so it yields: queued at idle and cancelled if the subject
+         * changes first, which keeps a panel of cards from racing the surface's own first paint.
+         */
+        const w = window as unknown as {
+            requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+            cancelIdleCallback?: (h: number) => void;
+        };
+        if (typeof w.requestIdleCallback === "function") {
+            const handle = w.requestIdleCallback(() => void load(), { timeout: 1_200 });
+            return () => w.cancelIdleCallback?.(handle);
+        }
+        const t = setTimeout(() => void load(), 0);
+        return () => clearTimeout(t);
+    }, [overlay, detailPending, customerId, scopedMemberId, load, hostSuppliesProjection, provisioned]);
 
     /*
      * A SCOPED CHILD PRESELECTS THE SUBJECT FILTER.
@@ -1076,6 +1218,14 @@ export default function FinancialsCard({
      * household id goes in the payload as `customer_id` exactly as it always did, no
      * `customer_member_id` is invented, and the resolver — not this card — decides the subject.
      */
+    /*
+     * EVERY CHILD THIS OPERATION WILL BILL — the anchor plus whatever the operator ticked.
+     *
+     * De-duplicated and anchor-first, so the preview and the commit name the children in the same
+     * order the operator sees them, and a child cannot be billed twice by being both the anchor
+     * and a ticked sibling.
+     */
+
     const chargeInvocation = useMemo((): {
         entityType: string;
         entityId: string;
@@ -1104,6 +1254,27 @@ export default function FinancialsCard({
      * money, so the control stays inert rather than opening a panel with nothing to act on.
      */
     /** Open the settle form against the first charge in a given set. One body, two eligibilities. */
+    /**
+     * EVERY CHILD THIS OPERATION WILL BILL — the anchor, plus whatever the operator ticked.
+     *
+     * Anchor-first and de-duplicated, so the preview and the commit name children in the order the
+     * operator sees them, and a child cannot be billed twice by being both the anchor and a ticked
+     * sibling. Empty when the command is anchored at the household, which is how a household charge
+     * reaches the resolver: by naming no child at all, never by an empty array standing in for one.
+     */
+    const selectedChildIds = useMemo(() => {
+        const anchorId = chargeInvocation?.customerMemberId ?? null;
+        const ids = [anchorId, ...extraChildIds].filter((v): v is string => Boolean(v));
+        return [...new Set(ids)];
+    }, [chargeInvocation, extraChildIds]);
+
+    const selectedChildLabels = useMemo(
+        () => selectedChildIds.map(
+            (id) => vm?.subjects.find((sub) => sub.customerMemberId === id)?.displayName ?? "Child",
+        ),
+        [selectedChildIds, vm],
+    );
+
     const makeSettleOpener = useCallback(
         (rows: readonly FinancialsLedgerRow[]) => {
             if (!rows.length) return undefined;
@@ -1117,7 +1288,7 @@ export default function FinancialsCard({
                     subjectMemberId: row.subjectMemberId,
                 });
                 setPayAmount((row.outstandingCents / 100).toFixed(2));
-                setOverlay("payment");
+                push({ kind: "payment" });
             };
         },
         [],
@@ -1200,6 +1371,15 @@ export default function FinancialsCard({
                                       (s) => s.customerMemberId === chargeInvocation.customerMemberId,
                                   )?.displayName
                                 : undefined,
+                            /*
+                             * ONLY WHEN THE OPERATION IS ACTUALLY WIDER THAN ONE CHILD. Sending the
+                             * plural form for a single subject would route an ordinary Add through
+                             * the batch path and report it in batch language, which is a different
+                             * story told about the same act.
+                             */
+                            ...(selectedChildIds.length > 1
+                                ? { customer_member_ids: selectedChildIds, child_labels: selectedChildLabels }
+                                : {}),
                             // An `event_date` template is REFUSED without one — the preview returns
                             // `missing_event_date` — so the operator's date has to travel with the
                             // preview, not only with the commit.
@@ -1270,6 +1450,11 @@ export default function FinancialsCard({
                         // same resolver, so they must be asked the same question.
                         customer_id: customerId,
                         template_id: pending.templateId,
+                        // The same selection the preview was given — preview and commit run the
+                        // same resolver, so they must be asked the same question.
+                        ...(selectedChildIds.length > 1
+                            ? { customer_member_ids: selectedChildIds, child_labels: selectedChildLabels }
+                            : {}),
                         ...(chargeEventDate ? { event_date: chargeEventDate } : {}),
                         ...(chargeNote ? { note: chargeNote } : {}),
                     },
@@ -1285,7 +1470,7 @@ export default function FinancialsCard({
             setPending(null);
             // The command card closes on success only. A refusal keeps it open with the domain's
             // own message, so the operator can correct the charge rather than re-open and retype it.
-            setOverlay(null);
+            resetStack();
             setChargeAmount("");
             setChargeNote("");
             setChargeEventDate("");
@@ -1313,61 +1498,40 @@ export default function FinancialsCard({
      */
     const runRowAction = useCallback(
         async (
-            actionKey: "charge.post" | "charge.reverse",
+            actionKey: "post" | "reverse",
             row: { chargeId: string; description: string | null; subjectMemberId: string | null },
         ) => {
             if (running) return;
             setRunning(true);
             setCommandError(null);
-            try {
-                const res = await fetch("/api/admin/actions/execute", {
-                    method: "POST",
-                    headers: { "content-type": "application/json" },
-                    credentials: "include",
-                    body: JSON.stringify({
-                        action_key: actionKey,
-                        entity_type: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
-                        /*
-                         * The ROW's own subject when it has one, and the panel's when it does not.
-                         *
-                         * This sent an EMPTY STRING for a household charge, on the reasoning that a
-                         * family expense must not be attributed to one sibling and that neither
-                         * action requires an entity — `charge.post` and `charge.reverse` both
-                         * declare `requiresEntityId: false`. The reasoning is right about
-                         * attribution and wrong about the route: `/api/admin/actions/execute`
-                         * refuses any request without an entity id, so Post and Reverse on a
-                         * household charge answered 400 and the operator could not act on a
-                         * pre-enrolment fee at all. Found by driving the route the way this card
-                         * does; the action definitions alone say the call is legal.
-                         *
-                         * The charge_id in the payload is what decides which charge is posted or
-                         * reversed, and the service reads the row's own billable source — so the
-                         * fallback subject travels as request context, not as the money's
-                         * attribution. `posted_by` still records the operator, and the charge stays
-                         * on the household it was billed to.
-                         */
-                        entity_id: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
-                        mode: "execute",
-                        confirmation: { confirmed: true },
-                        payload: {
-                            charge_id: row.chargeId,
-                            charge_label: row.description ?? row.chargeId,
-                            ...(actionKey === "charge.reverse" ? { kind: "reversal" } : {}),
-                        },
-                    }),
-                });
-                const json = (await res.json()) as { ok?: boolean; error?: string | { message?: string } };
-                if (!json?.ok) {
-                    const err = typeof json?.error === "string" ? json.error : json?.error?.message;
-                    // The domain refusing is an answer. Surfaced, never swallowed.
-                    setCommandError(err || "That could not be done.");
-                }
-            } catch {
-                setCommandError("The request could not be sent.");
-            } finally {
-                setRunning(false);
-                await load();
-            }
+            /*
+             * THROUGH THE SHARED AUTHORITY. This built its own request to
+             * `/api/admin/actions/execute`; so did the reverse preview below it, and so would the
+             * workspace ledger if it were given commands of its own. One executor means one idea of
+             * what a refusal looks like and one place a financial action is spelled.
+             *
+             * The entity rule that lives here is request CONTEXT, not attribution: the route refuses
+             * a call without an entity id, while `charge_id` in the payload is what decides which
+             * charge is acted on. A household charge therefore travels with the panel's subject and
+             * still stays on the household it was billed to.
+             */
+            const result = await executeFinancialCommand({
+                action: actionKey,
+                entity: {
+                    entityType: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
+                    entityId: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
+                },
+                mode: "execute",
+                payload: {
+                    charge_id: row.chargeId,
+                    charge_label: row.description ?? row.chargeId,
+                    ...(actionKey === "reverse" ? { kind: "reversal" } : {}),
+                },
+            });
+            // The domain refusing is an answer. Surfaced, never swallowed.
+            if (!result.ok) setCommandError(result.error);
+            setRunning(false);
+            await load();
         },
         [load, running, chargeInvocation],
     );
@@ -1517,6 +1681,32 @@ export default function FinancialsCard({
             : subjectFilter === "all"
               ? vm.pastDue
               : vm.pastDueBySubject[subjectFilter] ?? null;
+
+    const detailReady = Boolean(vm && reconciliation && ledgerComplete);
+
+    const requestDetails = useCallback(() => {
+        /*
+         * ── THE SHELL IS NOT DATA-DEPENDENT ───────────────────────────────────────────────────
+         *
+         * Holding the request until the deep read resolved removed the false intermediate, and it
+         * bought that with a wait on the compact card — which is not how any other Focus Panel card
+         * behaves. Invoking a focused surface establishes the depth immediately; Financials now does
+         * the same, at final geometry, because its structure is known the moment it is asked for.
+         *
+         * What must NOT arrive with it is ledger content nobody has read. The header, metrics,
+         * lenses and filters commit from the account values the compact card is already authoritative
+         * for; the ledger REGION alone says it is still reading, and it says so without inventing a
+         * single row. That distinction — an honest empty region versus fabricated rows — is the whole
+         * difference between this and the skeleton that was rejected three passes running.
+         */
+        setDetailPending(true);
+        setStack([{ kind: "detail" }]);
+    }, []);
+
+    useEffect(() => {
+        if (!detailPending || !detailReady) return;
+        setDetailPending(false);
+    }, [detailPending, detailReady]);
     /*
      * DENSITY IS A REAL DISTINCTION, not a label.
      *
@@ -1583,6 +1773,20 @@ export default function FinancialsCard({
         [vm],
     );
 
+    /*
+     * ── REVERSE IS A COMMAND, SO IT GETS THE COMMAND SHELL ────────────────────────────────────
+     *
+     * It rendered as a band inside the Details tree: a full-width strip of unstyled controls laid
+     * horizontally across the ledger, sharing the Move-payment panel's classes because that is
+     * what it was copied from. Beside Add and Payment — which are focused command cards — it read
+     * as an unfinished part of the page rather than a deliberate operation, and it was the one
+     * money-destroying command on the surface.
+     *
+     * Nothing about the operation changes. `charge.reverse` is still the only writer and it is
+     * still reached through the shared command authority. What changes is that Reverse is now a
+     * destination on the stack like every other command, so it is drawn in the same shell, it is
+     * dismissed by the same three gestures, and dismissing it returns to Details.
+     */
     const openReverseCharge = useCallback((args: { chargeId: string; label: string }) => {
         closeMovePanels();
         closeAdjustPanels();
@@ -1590,47 +1794,49 @@ export default function FinancialsCard({
         setReverseChargeError(null);
         setAdjustNotice(null);
         setReverseCharge(args);
-    }, [closeAdjustPanels, closeMovePanels]);
+        push({ kind: "reverse_charge", chargeId: args.chargeId, label: args.label });
+    }, [closeAdjustPanels, closeMovePanels, push]);
+
+    /*
+     * ── THIS CARD IS THE COMMAND HOST ──────────────────────────────────────────────────────────
+     *
+     * Financials → Accounts renders this card above its own ledger, as siblings. The ledger's rows
+     * carry the same action icons as Details and must raise the same commands — so rather than the
+     * workspace growing a Reverse of its own, it asks, and this card performs. One command model,
+     * one eligibility model, one execution path, two presentation hosts.
+     *
+     * Registered only where a host actually provides the channel; in the Focus Panel there is none,
+     * and this is inert.
+     */
+    const handleCommandRequest = useCallback(
+        (request: FinancialCommandRequest) => {
+            if (request.kind === "adjust") openAdjustForCharge({ chargeId: request.chargeId });
+            else if (request.kind === "reverse") openReverseCharge({ chargeId: request.chargeId, label: request.label });
+            else if (request.kind === "post") void runRowAction("post", rowForCharge(request.chargeId));
+        },
+        [openAdjustForCharge, openReverseCharge, rowForCharge, runRowAction],
+    );
+    useRegisterFinancialCommandHost(handleCommandRequest);
 
     const previewReverseCharge = useCallback(async () => {
         if (!reverseCharge || running) return;
         setRunning(true);
         setReverseChargeError(null);
-        try {
-            const row = rowForCharge(reverseCharge.chargeId);
-            const res = await fetch("/api/admin/actions/execute", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({
-                    action_key: "charge.reverse",
-                    entity_type: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
-                    entity_id: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
-                    mode: "preview",
-                    payload: {
-                        charge_id: reverseCharge.chargeId,
-                        charge_label: reverseCharge.label,
-                        kind: "reversal",
-                    },
-                }),
-            });
-            const json = (await res.json()) as {
-                ok?: boolean;
-                error?: string | { message?: string };
-                data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
-            };
-            const p = json?.data?.execution_result?.preview;
-            if (!json?.ok || !p?.summary) {
-                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
-                setReverseChargeError(err || "This reversal could not be previewed.");
-                return;
-            }
-            setReverseChargePreview({ summary: p.summary, changes: p.changes ?? [] });
-        } catch (e) {
-            setReverseChargeError(e instanceof Error ? e.message : String(e));
-        } finally {
-            setRunning(false);
-        }
+        const row = rowForCharge(reverseCharge.chargeId);
+        /* The preview is the ACTION's, fetched through the one executor. */
+        const result = await executeFinancialCommand({
+            action: "reverse",
+            entity: {
+                entityType: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
+                entityId: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
+            },
+            mode: "preview",
+            payload: { charge_id: reverseCharge.chargeId, charge_label: reverseCharge.label, kind: "reversal" },
+        });
+        if (!result.ok) setReverseChargeError(result.error);
+        else if (!result.preview) setReverseChargeError("This reversal could not be previewed.");
+        else setReverseChargePreview(result.preview);
+        setRunning(false);
     }, [chargeInvocation, reverseCharge, rowForCharge, running]);
 
     const confirmReverseCharge = useCallback(async () => {
@@ -1638,7 +1844,7 @@ export default function FinancialsCard({
         const target = reverseCharge;
         setReverseCharge(null);
         setReverseChargePreview(null);
-        await runRowAction("charge.reverse", rowForCharge(target.chargeId));
+        await runRowAction("reverse", rowForCharge(target.chargeId));
         // The original stays posted; what changed is that a corrective line now references it.
         setAdjustNotice(`Reversed ${target.label}. The original charge stays on the record, with its correction beside it.`);
     }, [reverseCharge, reverseChargePreview, rowForCharge, runRowAction, running]);
@@ -1646,11 +1852,99 @@ export default function FinancialsCard({
     // Elevation reported from RENDER-adjacent state, so the depth layer and this card agree on the
     // same frame. A card that reported after paint would flash its base surface first.
     useReportPerspective(coordination, "financials", overlay ? "focused" : "base");
-    useDismissSignal(coordination, "financials", () => {
-        setOverlay(null);
+    /*
+     * ── DISMISSAL POPS ONE LEVEL ───────────────────────────────────────────────────────────────
+     *
+     * COMPACT → DETAILS → COMMAND is a stack, and closing a command returned the operator all the
+     * way to the compact card: open Details, work the ledger, adjust a row, cancel — and the ledger,
+     * the lens and the expanded periods were gone, because dismissal cleared the overlay outright.
+     *
+     * Dismissal pops ONE level, whatever the level happens to be: a command returns to Details,
+     * Details returns to the compact card. Escape, the backdrop and every Cancel run through this
+     * one path, so the three cannot drift apart.
+     *
+     * ── ONE GESTURE, ONE LEVEL ────────────────────────────────────────────────────────────────
+     *
+     * Dismissal has more than one announcer — the grid's backdrop publishes a signal, and this card
+     * listens for Escape itself — and on some hosts both speak for the same keypress. Two pops for
+     * one Escape would take the operator from a command past Details to the compact card, which is
+     * the wrong-return defect wearing a different hat. So the pop is coalesced: whoever announces
+     * first moves the stack, and anything arriving in the same gesture window is the same gesture.
+     */
+    const lastDismissRef = useRef(0);
+    const [dismissNonce, setDismissNonce] = useState(0);
+    const dismissOneLevel = useCallback(() => {
+        const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+        if (now - lastDismissRef.current < 150) return;
+        lastDismissRef.current = now;
+        setDismissNonce((n) => n + 1);
+        pop();
         setPending(null);
         setCommandError(null);
-    });
+        closeMovePanels();
+        closeAdjustPanels();
+        setReverseCharge(null);
+        setReverseChargePreview(null);
+        setReverseChargeError(null);
+    }, [closeAdjustPanels, closeMovePanels, pop]);
+
+    useDismissSignal(coordination, "financials", dismissOneLevel);
+
+    /*
+     * ── ESCAPE BELONGS TO THIS CARD'S OWN STACK ───────────────────────────────────────────────
+     *
+     * Measured on the mounted work-unit lane: Escape over an open Financials command did nothing
+     * at all — the grid that owns the backdrop on this route publishes no dismissal, so the card
+     * waited for a signal that never came while Cancel and the backdrop both worked. A stack whose
+     * three dismissal gestures do not agree is not a stack.
+     *
+     * The yield condition is the shared one rather than a second opinion about it: an open select
+     * menu or inline editor closes itself first, exactly as it does for the grid.
+     */
+    /*
+     * ── A DISMISSAL THAT LEAVES A SURFACE STANDING MUST RE-ASSERT DEPTH ───────────────────────
+     *
+     * The host clears its OWN depth layer when the backdrop is clicked — reasonably, since for
+     * every other card a dismissal means there is nothing left to elevate. This card has a stack,
+     * so dismissing a command leaves Details standing and still owed the depth layer.
+     *
+     * `useReportPerspective` reports only when the LEVEL changes, and the level does not change
+     * here: it was "focused" for the command and is "focused" for Details. So nothing re-reported,
+     * the host stayed collapsed, and everything from then on rendered un-elevated — measured as a
+     * Reverse command with no backdrop at all in the DOM, which is how an operator ends up with a
+     * money-destroying command open over a live, clickable page.
+     *
+     * Re-asserting is the whole fix: same value, said again, because the host has forgotten it.
+     */
+    useEffect(() => {
+        if (dismissNonce === 0 || !overlay) return;
+        coordination?.reportPerspective?.("financials", "focused");
+    }, [dismissNonce, overlay, coordination]);
+
+    useEffect(() => {
+        if (!overlay) return;
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key !== "Escape") return;
+            if (hasInnerDismissibleLayer(document)) return;
+            event.preventDefault();
+            /*
+             * DELIBERATELY NOT stopPropagation.
+             *
+             * Swallowing the key kept the grid from seeing a dismissal it also tracks, and the two
+             * drifted apart: measured after one Escape-dismissed command, re-opening a command
+             * rendered the surface with NO backdrop in the DOM — the card thought it was elevated
+             * and the grid no longer did. An operator then has a money-destroying command open
+             * over an un-scrimmed page.
+             *
+             * The key is allowed to continue, so every listener keeps its own books straight, and
+             * `dismissOneLevel` makes the extra announcements harmless: one gesture still moves the
+             * stack exactly one level.
+             */
+            dismissOneLevel();
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [overlay, dismissOneLevel]);
 
     /*
      * ── ADD CHARGE — the approved command card, over the domain's own preview ──
@@ -1683,6 +1977,19 @@ export default function FinancialsCard({
      * Same state, same `billing.adjust_account` preview and commit, same enrolment scoping. What
      * changed is only WHERE it renders: it was a band beneath the ledger reached by a footer link,
      * and it is now the Adjustment mode of the one financial entry command.
+     */
+    /*
+     * ── AN EMPTY COMMAND IS NOT A COMMAND ─────────────────────────────────────────────────────
+     *
+     * `adjustmentBand` is null whenever `adjustOpen` is false, and the two could fall out of step:
+     * `closeAdjustPanels` clears `adjustOpen` while `entryMode` keeps saying "adjustment", so the
+     * next Add opened straight onto the Adjustment mode with nothing beneath the selector — a
+     * committed destination whose whole body was missing. Kelly screenshotted it.
+     *
+     * The band is the destination's body, so `adjustmentReady` below is what the render asks
+     * before committing to Adjustment at all, and the effect after it opens the band whenever the
+     * mode is selected. Neither alone is enough: the effect keeps them in step, and the guard
+     * makes the empty state unrenderable even if some future path breaks step again.
      */
     const adjustmentBand = adjustOpen ? (
 
@@ -1841,12 +2148,29 @@ export default function FinancialsCard({
                             >
                                 Confirm
                             </button>
-                            <button type="button" data-testid="adjustment-cancel" onClick={closeAdjustPanels}>
+                            <button
+                                type="button"
+                                data-testid="adjustment-cancel"
+                                onClick={() => {
+                                    closeAdjustPanels();
+                                    /* Cancel is a dismissal like any other: one level back. */
+                                    pop();
+                                }}
+                            >
                                 Cancel
                             </button>
                         </div>
                     </div>
     ) : null;
+
+    /** The Adjustment destination's body. Without it there is no destination to commit to. */
+    const adjustmentReady = adjustmentBand != null;
+
+    useEffect(() => {
+        if (entryMode !== "adjustment" || adjustOpen) return;
+        if (adjustableSubjects.length === 0) return;
+        openAddAdjustment();
+    }, [entryMode, adjustOpen, adjustableSubjects.length, openAddAdjustment]);
 
     const paymentBandFor = (labelled: boolean) => vm ? (
             <section className="alloy-os-financials__band" data-financials-band="payment">
@@ -2524,7 +2848,7 @@ export default function FinancialsCard({
                  * focusable and would not take a pointer click, with `elementFromPoint` returning
                  * the depth scrim. Add charge and Payment each learned this before it.
                  */}
-                {entryMode === "adjustment" ? (
+                {entryMode === "adjustment" && adjustmentReady ? (
                     /*
                      * The SAME canonical adjustment entry, in the command's shell rather than in a
                      * band under the ledger. `billing.adjust_account` is unchanged and is still the
@@ -2568,6 +2892,36 @@ export default function FinancialsCard({
                                 const tpl = templates.find((x) => x.key === id);
                                 void preview(id, tpl?.label ?? "");
                             },
+                            /*
+                             * ── ALSO BILL THESE CHILDREN ─────────────────────────────────────
+                             *
+                             * Offered only where widening is LEGITIMATE: the charge category must
+                             * permit child grain (the code-owned rule — a household account fee
+                             * cannot become a child's), the command must be anchored on a child
+                             * rather than the household, and there must be a sibling to add.
+                             *
+                             * Anchored at the household the control is absent BY DESIGN: a
+                             * household charge is reached by naming NO child, and offering
+                             * checkboxes there would invite an empty selection to mean "household",
+                             * which is precisely the ambiguity the grain model forbids.
+                             */
+                            alsoChildren:
+                                selected
+                                && categoryPermitsChildGrain(selected.categoryKey ?? "")
+                                && subjectFilter !== "all"
+                                && vm.subjects.length > 1
+                                    ? {
+                                          options: vm.subjects
+                                              .filter((sub) => sub.customerMemberId !== subjectFilter)
+                                              .map((sub) => ({ id: sub.customerMemberId, label: sub.displayName })),
+                                          selectedIds: selectedChildIds,
+                                          onToggle: (id: string) =>
+                                              setExtraChildIds((prev) =>
+                                                  prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                                              ),
+                                          perChildLabel: chargeAmount || selected.amount || null,
+                                      }
+                                    : undefined,
                             subjects: [
                                 { id: "all", label: "Household" },
                                 ...vm.subjects.map((sub) => ({
@@ -2585,7 +2939,8 @@ export default function FinancialsCard({
                             onEventDate: setChargeEventDate,
                             onSubmit: () => void commit(),
                             onCancel: () => {
-                                setOverlay(null);
+                                /* One level back. Raised from Details, this returns to Details. */
+                                pop();
                                 setPending(null);
                                 setCommandError(null);
                             },
@@ -2667,7 +3022,7 @@ export default function FinancialsCard({
                                 data-financials-payment-close="true"
                                 onClick={() => {
                                     setPayTarget(null);
-                                    setOverlay("detail");
+                                    pop();
                                 }}
                             >
                                 ← Back to details
@@ -2682,40 +3037,184 @@ export default function FinancialsCard({
     }
 
     /*
-     * ── ONE DETAILS SURFACE, COMMITTED THE MOMENT IT IS ASKED FOR ───────────────────────────────
+     * ── THE ROW COMMANDS, IN THE SAME SHELL AS EVERY OTHER FINANCIALS COMMAND ─────────────────
      *
-     * Measured sequence before this branch existed: compact card → a pending card → a SECOND card
-     * at a different span → the hydrated detail. Four surfaces for one interaction.
+     * Reverse and Adjust are the two things an operator does TO a ledger row, and both used to be
+     * bands rendered inside the ledger itself. Add and Payment were already focused command cards,
+     * so the surface taught two different lessons about what a command looks like — and the raw
+     * one was attached to the operation that destroys money.
      *
-     * The cause was structural. The Details tree below is guarded on `vm && reconciliation`, so
-     * while the deep read was in flight the component fell THROUGH it into the generic card at the
-     * bottom of this function — which renders its own anatomy, and renders it at `gridSpan="row"`
-     * precisely because `expanded` is true. That ternary is the proof the fall-through was reachable
-     * while expanded; it was written for this state.
-     *
-     * Falling through is the defect. Details has a KNOWN shape the instant the operator asks for it
-     * — a metric row, two commands, five lenses, eight ledger columns — and only its figures are
-     * outstanding. So this branch commits that shape, in the same container with the same
-     * `data-financials-overlay="detail"`, and the values hydrate inside it. Nothing below changes:
-     * once the read lands, the branch beneath takes over with identical markup around real data.
-     *
-     * `hydrating` is what keeps the placeholders honest. An em dash is the absence of an answer; a
-     * `$0.00` would be a financial claim about a family, made by a loading state.
+     * Both are destinations now. Same `UniversalCard` shell, same `modalClass="command"`, same
+     * three dismissal gestures, and each sits ON TOP of Details in the stack so dismissing it
+     * returns to the ledger the operator was reading, in the state they left it.
      */
-    if (overlay === "detail" && (!vm || !reconciliation)) {
+    if (surface?.kind === "reverse_charge" && vm) {
+        const row = vm.rows.find((r) => r.chargeId === surface.chargeId) ?? null;
+        const subjectName =
+            row?.subjectName
+            ?? vm.subjects.find((sub) => sub.customerMemberId === row?.subjectMemberId)?.displayName
+            ?? "Household";
         return (
             <div
                 className="alloy-os-financials"
                 data-financials-card="true"
-                data-financials-overlay="detail"
-                data-financials-hydrating="true"
-                aria-busy="true"
+                data-financials-overlay="reverse_charge"
+                data-financials-command-shell="reverse"
             >
-                <FinancialsDetailCard hydrating evidence={hydratingFinancialsEvidence()} periods={[]} />
+                <UniversalCard
+                    title="Reverse charge"
+                    insight=""
+                    iconName="Receipt"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="reverse_charge"
+                    footerAction={null}
+                >
+                    <div className="alloy-os-financials__commandbody" data-financials-command="reverse_charge">
+                        {/*
+                          * WHAT IS ABOUT TO BE UNDONE, stated before the button that undoes it. The
+                          * band said only the row's label; an operator reversing money is entitled to
+                          * the amount, the child it belongs to, the date it is filed under and the
+                          * status it stands in.
+                          */}
+                        <dl className="alloy-os-financials__commandfacts" data-testid="charge-reverse-facts">
+                            <div>
+                                <dt>Charge</dt>
+                                <dd data-testid="charge-reverse-subject">
+                                    {row?.description ?? row?.categoryLabel ?? surface.label}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>Amount</dt>
+                                <dd data-testid="charge-reverse-amount">
+                                    {row ? money(row.amountCents, row.currencyCode || currency) : "—"}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>For</dt>
+                                <dd data-testid="charge-reverse-child">{subjectName}</dd>
+                            </div>
+                            <div>
+                                <dt>Dated</dt>
+                                <dd data-testid="charge-reverse-date">{formatDisplayDate(row?.date ?? null) || "—"}</dd>
+                            </div>
+                            <div>
+                                <dt>Status</dt>
+                                <dd data-testid="charge-reverse-status">{row?.lifecycleStatus ?? "—"}</dd>
+                            </div>
+                        </dl>
+                        <p className="alloy-os-financials__commandnote" data-testid="charge-reverse-effect">
+                            The charge stays on the record and a correction is appended beside it. What the
+                            family owes falls by this amount once the correction posts; nothing is deleted and
+                            the reversal itself can never be reversed.
+                        </p>
+                        {reverseChargePreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="charge-reverse-preview">
+                                <strong>{reverseChargePreview.summary}</strong>
+                                {reverseChargePreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                            </div>
+                        ) : null}
+                        {reverseChargeError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="charge-reverse-error">
+                                {reverseChargeError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-financials__commandactions">
+                            <button
+                                type="button"
+                                data-testid="charge-reverse-preview-button"
+                                className="alloy-os-financials__action"
+                                disabled={running}
+                                onClick={() => void previewReverseCharge()}
+                            >
+                                Preview
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="charge-reverse-confirm"
+                                className="alloy-os-financials__action alloy-os-financials__action--primary"
+                                disabled={running || !reverseChargePreview}
+                                onClick={() => void confirmReverseCharge()}
+                            >
+                                Reverse charge
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="charge-reverse-cancel"
+                                className="alloy-os-financials__quiet"
+                                onClick={() => {
+                                    setReverseCharge(null);
+                                    setReverseChargePreview(null);
+                                    setReverseChargeError(null);
+                                    pop();
+                                }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </UniversalCard>
             </div>
         );
     }
 
+    /*
+     * ADJUST, RAISED FROM A ROW. The same canonical adjustment entry the unified Add command hosts
+     * — same band, same `billing.adjust_account` — with no mode selector, because the operator did
+     * not ask to choose between a charge and an adjustment. They asked to correct one row.
+     */
+    if (surface?.kind === "adjust_charge" && adjustmentReady) {
+        return (
+            <div
+                className="alloy-os-financials"
+                data-financials-card="true"
+                data-financials-overlay="adjust_charge"
+                data-financials-command-shell="adjust"
+            >
+                <UniversalCard
+                    title="Adjust charge"
+                    insight=""
+                    iconName="Receipt"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="adjust_charge"
+                    footerAction={null}
+                >
+                    <div className="alloy-os-financials__entrybody" data-financials-entry="adjustment">
+                        {adjustmentBand}
+                    </div>
+                </UniversalCard>
+            </div>
+        );
+    }
+
+    /*
+     * ── ONE DETAILS SURFACE, AND IT IS THE FINAL ONE ────────────────────────────────────────────
+     *
+     * There used to be a second Details branch above this one that committed the SHAPE of Details
+     * while the deep read was still in flight — a metric row, five lenses and eight ledger columns
+     * over em dashes — on the reasoning that the anatomy is known the moment the operator asks and
+     * only the figures are outstanding.
+     *
+     * That reasoning was wrong about what an operator reads. A committed Details surface is a
+     * claim that they have arrived, and arriving at a ledger that then rewrites itself from three
+     * placeholder rows to fifty-six real ones is the "double load" reported in every pass of this
+     * thread. The honest intermediate is the one the operator was already looking at: the compact
+     * card.
+     *
+     * So there is exactly ONE Details branch, and its guard is total. `ledgerComplete` is in the
+     * condition, not merely passed down as a hint, which means no Details tree can be reached — by
+     * this path or any future one — while the read its ledger depends on is unresolved. The
+     * request is held in `detailPending` until then and the compact card stays on screen.
+     */
     if (overlay === "detail" && vm && reconciliation) {
         return (
             <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="detail">
@@ -2833,53 +3332,15 @@ export default function FinancialsCard({
                   * honour. Confirm stays disabled until the ACTION has said what this will do.
                   */}
 
-                {reverseCharge ? (
-                    <div className="alloy-os-fdetail__movepanel" data-testid="charge-reverse-panel">
-                        <div className="alloy-os-fdetail__moveheader">Reverse charge</div>
-                        <div className="alloy-os-fdetail__movefield">
-                            <span data-testid="charge-reverse-subject">{reverseCharge.label}</span>
-                        </div>
-                        {reverseChargePreview ? (
-                            <div className="alloy-os-fdetail__movepreview" data-testid="charge-reverse-preview">
-                                <strong>{reverseChargePreview.summary}</strong>
-                                {reverseChargePreview.changes.map((c) => (
-                                    <span key={c}>{c}</span>
-                                ))}
-                            </div>
-                        ) : null}
-                        {reverseChargeError ? (
-                            <div className="alloy-os-fdetail__moveerror" data-testid="charge-reverse-error">
-                                {reverseChargeError}
-                            </div>
-                        ) : null}
-                        <div className="alloy-os-fdetail__moveactions">
-                            <button
-                                type="button"
-                                data-testid="charge-reverse-preview-button"
-                                disabled={running}
-                                onClick={() => void previewReverseCharge()}
-                            >
-                                Preview
-                            </button>
-                            <button
-                                type="button"
-                                data-testid="charge-reverse-confirm"
-                                disabled={running || !reverseChargePreview}
-                                onClick={() => void confirmReverseCharge()}
-                            >
-                                Confirm
-                            </button>
-                            <button
-                                type="button"
-                                data-testid="charge-reverse-cancel"
-                                onClick={() => { setReverseCharge(null); setReverseChargePreview(null); }}
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                ) : null}
-
+                {/*
+                  * REVERSE CHARGE IS NOT RENDERED HERE ANY MORE.
+                  *
+                  * It was a band inside the ledger — a horizontal strip of raw controls wearing the
+                  * Move-payment panel's classes. Reverse is a command, so it is a destination on the
+                  * stack and is drawn in the canonical command shell above, beside Add and Payment.
+                  * Nothing about the operation moved: `charge.reverse`, through the shared command
+                  * authority, is still the only writer.
+                  */}
                 {/* REVERSE. The original is never edited; its opposite is appended. */}
                 {reversePending ? (
                     <div className="alloy-os-fdetail__movepanel" data-testid="adjustment-reverse-panel">
@@ -2939,7 +3400,7 @@ export default function FinancialsCard({
                     /* Only offered where an enrolment exists: the action is scoped to an agreement. */
                     onAddAdjustment={adjustableSubjects.length > 0 ? openAddAdjustment : undefined}
                     onReverseAdjustment={openReverseAdjustment}
-                    onPostCharge={({ chargeId }) => void runRowAction("charge.post", rowForCharge(chargeId))}
+                    onPostCharge={({ chargeId }) => void runRowAction("post", rowForCharge(chargeId))}
                     onReverseCharge={openReverseCharge}
                     /*
                      * Reverse and Adjust are NOT two names for one operation and are not offered as
@@ -2948,6 +3409,24 @@ export default function FinancialsCard({
                      * the row because both are about that row; only their meaning differs.
                      */
                     onAdjustCharge={adjustableSubjects.length > 0 ? openAdjustForCharge : undefined}
+                    /*
+                     * The surface is mounted; the ledger may still be reading. This is the ONLY
+                     * region allowed to say so, and it says it by reserving itself — never by
+                     * rendering rows, and never by changing the surface's geometry when the real
+                     * rows arrive.
+                     */
+                    ledgerPending={!ledgerComplete}
+                    /*
+                     * THE VIEW OUTLIVES THE COMMANDS. Lens and disclosure are held by this card, so
+                     * a row command and its dismissal cannot quietly reset the ledger the operator
+                     * was reading.
+                     */
+                    lens={detailLens ?? undefined}
+                    onLensChange={setDetailLens}
+                    expandedPeriods={expandedPeriods}
+                    onPeriodToggle={(label, isExpanded) =>
+                        setExpandedPeriods((prev) => ({ ...prev, [label]: isExpanded }))
+                    }
                     evidence={adaptFinancialsVmToFinancialsCard({
                         vm,
                         reconciliation,
@@ -2973,7 +3452,7 @@ export default function FinancialsCard({
                      * describe.
                      */
                     onPayment={openSettle}
-                    onAddCharge={() => setOverlay("add_charge")}
+                    onAddCharge={() => push({ kind: "add_charge" })}
                 />
                 {/*
                     WHAT ARRIVED, WHERE AN OPERATOR CAN STILL SEE IT.
@@ -3033,8 +3512,8 @@ export default function FinancialsCard({
                      */
                     span={model.density === "compact" ? 1 : "row"}
                     /* No drill-down where the account's own body is already open beneath this. */
-                    onDetails={showDetailsAction ? () => setOverlay("detail") : undefined}
-                    onAddCharge={() => setOverlay("add_charge")}
+                    onDetails={showDetailsAction ? requestDetails : undefined}
+                    onAddCharge={() => push({ kind: "add_charge" })}
                     /*
                      * `Pay now` was always this card's primary action and the Focus Panel never wired
                      * it, so it rendered inert while Slice H's settle operation had no way in at all.
@@ -3550,7 +4029,7 @@ export default function FinancialsCard({
                                                                     data-financials-row-command="charge.post"
                                                                     data-financials-row-charge={row.chargeId}
                                                                     disabled={running}
-                                                                    onClick={() => void runRowAction("charge.post", row)}
+                                                                    onClick={() => void runRowAction("post", row)}
                                                                 >
                                                                     Post
                                                                 </button>
@@ -3561,7 +4040,7 @@ export default function FinancialsCard({
                                                                     data-financials-row-command="charge.reverse"
                                                                     data-financials-row-charge={row.chargeId}
                                                                     disabled={running}
-                                                                    onClick={() => void runRowAction("charge.reverse", row)}
+                                                                    onClick={() => void runRowAction("reverse", row)}
                                                                 >
                                                                     Reverse
                                                                 </button>
@@ -3600,9 +4079,11 @@ export default function FinancialsCard({
                                 data-financials-details="true"
                                 // The overlay state owns elevation now; reporting perspective here as
                                 // well would give the depth layer two authorities for one card.
-                                onClick={() => setOverlay(expanded ? null : "detail")}
+                                onClick={() => (expanded ? pop() : requestDetails())}
+                                aria-busy={detailPending || undefined}
+                                data-financials-details-pending={detailPending ? "true" : undefined}
                             >
-                                {expanded ? "← Less" : "Details →"}
+                                {expanded ? "Less" : "Details"}
                             </button>
                         ) : null}
                     </>
@@ -3627,6 +4108,21 @@ export default function FinancialsCard({
  * hazard — "admitting on one key and reading another is how a card mounts and then sits still".
  * Both now call `resolveFinancialSubjectId`, so the two decisions cannot diverge.
  */
+/**
+ * A DESTINATION, NOT A NAME.
+ *
+ * Every entry carries what its surface needs to render itself, so returning to one never means
+ * reconstructing it from whatever state happens to survive. `adjust_charge` and `reverse_charge`
+ * are row-scoped commands and say which row; `detail`, `add_charge` and `payment` need nothing
+ * beyond their kind.
+ */
+export type FinancialsSurface =
+    | { kind: "detail" }
+    | { kind: "add_charge" }
+    | { kind: "payment" }
+    | { kind: "adjust_charge"; chargeId: string }
+    | { kind: "reverse_charge"; chargeId: string; label: string };
+
 function householdIdFrom(context: OperationalContext): string | null {
     /*
      * THE SHARED RULE, NOT A COPY OF IT. The registry decides whether this card may mount from the

@@ -86,6 +86,27 @@ describe("the solved height reaches the visible card", () => {
         expect(classCount(".alloy-os-focus-panel-grid--composed .alloy-os-focus-panel-grid__cell")).toBe(2);
     });
 
+    it("THE GATE IT WAS MISSING: nothing later in the sheet takes the stretch back", () => {
+        /*
+         * The rule above existed and did not apply. `.alloy-os-focus-panel-grid--composed
+         * .alloy-os-focus-panel-grid__cell` sets `align-items: flex-start` at the SAME specificity
+         * and was written later, so the cascade handed the decision to file order and the card sat
+         * at its natural height inside a cell that already carried the band — measured: cell 285,
+         * card 262, computed flex-start.
+         *
+         * Asserting the rule's text could never catch that, which is this file's own lesson applied
+         * to itself. So the order is asserted too: the solved-grid contract must have the last word.
+         */
+        const gate = ".alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell";
+        const lanes = ".alloy-os-focus-panel-grid--composed .alloy-os-focus-panel-grid__cell";
+        const lastGate = CSS.lastIndexOf(`\n${gate} {`);
+        const lastLanes = CSS.lastIndexOf(`\n${lanes} {`);
+        expect(lastGate, "the stretch contract is declared").toBeGreaterThan(-1);
+        expect(lastLanes, "the lanes rule is declared").toBeGreaterThan(-1);
+        expect(lastGate, "and it is declared after the equal-specificity rule that contradicts it")
+            .toBeGreaterThan(lastLanes);
+    });
+
     it("the wrapper still carries the solved height, and the intrinsic node still resolves against it", () => {
         expect(ruleFor(".alloy-os-fp-card-intrinsic")).toMatch(/min-height:\s*100%/);
         expect(GRID).toContain("height: `${boxOf.height}px`");

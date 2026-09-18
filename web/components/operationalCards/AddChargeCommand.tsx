@@ -76,6 +76,21 @@ export default function AddChargeCommand({
         subjects: Array<{ id: string; label: string }>;
         selectedSubjectId: string | null;
         onSelectSubject: (subjectId: string) => void;
+        /**
+         * ── ALSO BILL THESE CHILDREN ──────────────────────────────────────────────────────────
+         *
+         * Absent when the operation cannot legitimately widen: the charge category does not permit
+         * child grain, or the account has only one child. MULTIPLE CHILDREN IS AN OPERATION, not a
+         * grain — each ticked child receives their own independent obligation at the full amount,
+         * and nothing here creates a shared or household row.
+         */
+        alsoChildren?: {
+            options: Array<{ id: string; label: string }>;
+            selectedIds: string[];
+            onToggle: (id: string) => void;
+            /** The per-child amount, already formatted, so the total can be stated honestly. */
+            perChildLabel: string | null;
+        };
         amount: string;
         onAmount: (value: string) => void;
         note: string;
@@ -191,6 +206,42 @@ export default function AddChargeCommand({
                     <Value>{specimen.subject}</Value>
                 )}
             </Field>
+            {controls?.alsoChildren && controls.alsoChildren.options.length > 0 ? (
+                <Field label="Also bill">
+                    {/*
+                     * ── PER CHILD, STATED SO IT CANNOT BE MISREAD ────────────────────────────
+                     *
+                     * The amount is what EACH selected child is billed. Two children at $40 is two
+                     * $40 obligations totalling $80 — never $40 split in half, and never one $80
+                     * household charge. The count and the total are both said out loud, because
+                     * those are the two numbers an operator checks before committing money.
+                     */}
+                    <div className="alloy-os-addcharge__children" data-addcharge-children>
+                        {controls.alsoChildren.options.map((c) => {
+                            const checked = controls.alsoChildren!.selectedIds.includes(c.id);
+                            return (
+                                <label key={c.id} className="alloy-os-addcharge__child">
+                                    <input
+                                        type="checkbox"
+                                        data-addcharge-child={c.id}
+                                        checked={checked}
+                                        onChange={() => controls.alsoChildren!.onToggle(c.id)}
+                                    />
+                                    <span>{c.label}</span>
+                                </label>
+                            );
+                        })}
+                    </div>
+                    {controls.alsoChildren.selectedIds.length > 1 ? (
+                        <p className="alloy-os-addcharge__childsum" data-addcharge-childsum>
+                            {controls.alsoChildren.perChildLabel
+                                ? `${controls.alsoChildren.perChildLabel} per child · `
+                                : ""}
+                            {controls.alsoChildren.selectedIds.length} children · each receives their own charge
+                        </p>
+                    ) : null}
+                </Field>
+            ) : null}
             <Field label="Amount" required={!amountLocked}>
                 {controls && !amountLocked ? (
                     <input
@@ -241,10 +292,22 @@ export default function AddChargeCommand({
             <Field label="Due">
                 <Value>{specimen.due}</Value>
             </Field>
-            {/* A DRAFT IS NOT YET OWED. The card says what confirming actually does rather than
-                naming the mechanism that does it. */}
+            {/*
+                ── WHAT CONFIRMING ACTUALLY DOES, ON THIS TENANT ────────────────────────────────
+                This read "Creates a draft — not yet owed" unconditionally. That was true of every
+                tenant when it was written, and it stopped being true once manual entry began
+                honouring the configured review boundary: on an organization that has configured
+                none, the charge posts on confirm and the balance moves. A command may not describe
+                a mechanism it will not use.
+                `reviewRequired` is the server's answer — the posting_review policy for this
+                template's service, OR'd with the template's own flag — so this states the act.
+            */}
             <Field label="Posting">
-                <Value locked>Creates a draft — not yet owed</Value>
+                <Value locked>
+                    {t.reviewRequired
+                        ? "Creates a draft — not yet owed"
+                        : "Posts on confirm — owed immediately"}
+                </Value>
             </Field>
 
             <SectionHead ruled={false}>Charge to</SectionHead>
@@ -280,19 +343,38 @@ export default function AddChargeCommand({
                     </>
                 ) : null}
                 {/*
-                    A DRAFT IS NOT YET OWED, so the balance does not move here.
-                    Showing "$75.00 → $115.00" would claim a posted increase that confirming this
-                    command does not cause: it creates a draft, and the balance changes when the
-                    draft posts. The charge amount above is the implication; the balance below is
-                    the fact, and it is stated unchanged on purpose.
+                    THE BALANCE LINE MUST MATCH THE ACT.
+
+                    Under a review boundary a draft is not yet owed, so the balance genuinely does
+                    not move and stating it unchanged is the fact. Without one the charge posts on
+                    confirm — and showing the balance UNCHANGED there would be the same lie in the
+                    other direction, telling an operator nothing will happen a moment before it does.
                 */}
-                <p className="alloy-os-addcharge__draftnote">
-                    Creates a draft — the balance does not change until it posts.
-                </p>
-                <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
-                    <span className="alloy-os-billing__line-label">Current balance</span>
-                    <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
-                </p>
+                {t.reviewRequired ? (
+                    <>
+                        <p className="alloy-os-addcharge__draftnote">
+                            Creates a draft — the balance does not change until it posts.
+                        </p>
+                        <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
+                            <span className="alloy-os-billing__line-label">Current balance</span>
+                            <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
+                        </p>
+                    </>
+                ) : (
+                    <>
+                        <p className="alloy-os-addcharge__draftnote">
+                            Posts on confirm — this is what the family will owe.
+                        </p>
+                        <p className="alloy-os-billing__line">
+                            <span className="alloy-os-billing__line-label">Current balance</span>
+                            <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
+                        </p>
+                        <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
+                            <span className="alloy-os-billing__line-label">After posting</span>
+                            <span className="alloy-os-billing__line-value">{specimen.previewAfter}</span>
+                        </p>
+                    </>
+                )}
             </div>
 
             {controls?.error ? (

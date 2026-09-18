@@ -17,12 +17,30 @@ import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissi
  * tenant resolves to nothing rather than to that tenant's ledger.
  */
 export async function GET(request: NextRequest) {
+    /*
+     * ── WHERE THE SECONDS GO ──────────────────────────────────────────────────────────────────
+     *
+     * Opening Details waits on this one request, and the wait was reported as "several seconds"
+     * before anyone knew which part was slow. Guessing at that is how a read gets a cache it does
+     * not need. These marks are published as `Server-Timing`, which the browser records natively
+     * and any probe can read, so the decomposition is a measurement rather than an argument.
+     */
+    const t0 = performance.now();
+    const marks: Array<[string, number]> = [];
+    let last = t0;
+    const mark = (name: string) => {
+        const now = performance.now();
+        marks.push([name, now - last]);
+        last = now;
+    };
+
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const auth = await getAdminAuthCached();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    mark("auth");
 
     const allowedRead = await assertFinancialsReadAllowed({
         supabase: createAdminClient(),
@@ -35,6 +53,7 @@ export async function GET(request: NextRequest) {
             { status: 403 },
         );
     }
+    mark("perm");
 
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get("customer_id")?.trim() || null;
@@ -52,8 +71,22 @@ export async function GET(request: NextRequest) {
             customerId,
             customerMemberId,
             today: searchParams.get("date")?.trim() || null,
+            mark,
         });
-        return NextResponse.json({ ok: true, vm });
+        mark("read");
+        const body = JSON.stringify({ ok: true, vm });
+        mark("serialize");
+        return new NextResponse(body, {
+            status: 200,
+            headers: {
+                "content-type": "application/json",
+                "cache-control": "no-store",
+                "server-timing": marks
+                    .map(([name, ms]) => `${name};dur=${ms.toFixed(1)}`)
+                    .concat(`total;dur=${(performance.now() - t0).toFixed(1)}`)
+                    .join(", "),
+            },
+        });
     } catch (e) {
         return NextResponse.json(
             { ok: false, error: e instanceof Error ? e.message : String(e) },

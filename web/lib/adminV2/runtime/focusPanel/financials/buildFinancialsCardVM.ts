@@ -34,9 +34,18 @@
 
 import { readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
 import { resolveHouseholdPaymentViews, type PaymentView } from "@/lib/financials/paymentApplicationView";
+import { resolveAccountPrepaidPosition } from "@/lib/financials/prepaid/availableFunds";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
+import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
+/*
+ * THE REVIEW BOUNDARY'S OTHER HALF. `listFinancialPolicies` reads the org's policies; this resolves
+ * the one that governs a given service. The pair is what makes `posting_review` a configured fact
+ * rather than a template's private opinion, and a restore that brought back only the reader left
+ * the resolver called but undeclared.
+ */
+import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
 import { financialsClock, recordFinancialsSpans } from "@/lib/perf/routeTimingDiagnostic";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
@@ -288,6 +297,15 @@ export type FinancialsChargeTemplateOption = {
     /** Present only for `fixed` templates; anything else is priced by resolution. */
     amountCents: number | null;
     currencyCode: string;
+    /**
+     * WHETHER CONFIRMING THIS TEMPLATE WILL WAIT FOR REVIEW.
+     *
+     * The tenant's `posting_review` Financial Policy resolved for this template's service, OR'd with
+     * the template's own `review_required` — the same disjunction `resolveChargeFromTemplate` applies
+     * when it writes. It is carried here so the command can PREVIEW the act it will perform rather
+     * than describing a mechanism that may not apply.
+     */
+    reviewRequired: boolean;
     occursOnStrategy: string;
     billableOnStrategy: string;
 };
@@ -426,6 +444,24 @@ export type FinancialsCardVM = {
      * when an agency short-pays, the difference is a decision somebody owes, not a bill the family
      * silently inherits.
      */
+    /**
+     * MONEY THIS ACCOUNT HOLDS THAT IS NOT YET SPENT — and only the part that may be spent.
+     *
+     * Projected by `resolveAccountPrepaidPosition`, which is the authority; nothing here computes
+     * it. UNAPPLIED IS NOT AVAILABLE: a pending receipt is money the platform has been told about,
+     * not money it has, so it is reported separately and never offered.
+     *
+     * `heldSupported: false` means the platform CANNOT TELL a restricted deposit from ordinary
+     * prepaid money. A surface must not render that as "$0 held" — an absent capability is not a
+     * zero measurement, and claiming it would let an operator spend a refundable deposit believing
+     * none was held.
+     */
+    prepaid: {
+        availableCents: number;
+        pendingCents: number;
+        heldCents: number;
+        heldSupported: boolean;
+    };
     collectible: {
         outstandingCents: number;
         expectedSubsidyCents: number;
@@ -470,6 +506,7 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         payers: [],
         responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
         expectedFunding: [],
+        prepaid: { availableCents: 0, pendingCents: 0, heldCents: 0, heldSupported: false },
         collectible: {
             outstandingCents: 0,
             expectedSubsidyCents: 0,
@@ -855,6 +892,14 @@ type FinancialsBuildArgs = {
     customerMemberId?: string | null;
     /** Operating day; defaults to today. Certification pins it. */
     today?: string | null;
+    /**
+     * Server-Timing phase marker, supplied by the route that is already measuring itself.
+     *
+     * Optional and defaulted to a no-op at the single consumption site, so a caller that is not
+     * instrumenting — every test, and the workspace path — passes nothing and measures nothing.
+     * The build does NOT create its own timing authority: it writes into the route's.
+     */
+    mark?: (phase: string) => void;
 };
 
 type FinancialsBuildClock = ReturnType<typeof financialsClock>;
@@ -888,6 +933,7 @@ async function buildFinancialsCardVMInner(
     args: FinancialsBuildArgs,
     clock: FinancialsBuildClock,
 ): Promise<FinancialsCardVM> {
+    const mark = args.mark ?? (() => {});
     const today = t(args.today) || ymdToday();
     const period = billingPeriodForDate(today);
     const vm = baseVm(period);
@@ -922,7 +968,14 @@ async function buildFinancialsCardVMInner(
                 .from("financial_charge_templates")
                 .select(
                     "id, label, charge_category, amount_strategy, amount_cents, currency_code, "
-                    + "occurs_on_strategy, billable_on_strategy, trigger_type, is_active, effective_start, effective_end",
+                    /*
+                 * `review_required` and `service_id` are read because the CARD has to be able to
+                 * say what confirming Add will actually do. Without them the command could only
+                 * assume, and it assumed the old universal-draft behaviour — telling an operator
+                 * a charge would wait for review on a tenant that posts it immediately.
+                 */
+                + "occurs_on_strategy, billable_on_strategy, trigger_type, is_active, effective_start, effective_end, "
+                + "review_required, service_id",
                 )
                 .eq("org_id", args.orgId)
                 .eq("is_active", true)
@@ -1346,6 +1399,18 @@ async function buildFinancialsCardVMInner(
      * The filter is the same distinction `reconcileRows` already makes: gross is what is owed, and
      * funding, discounts, adjustments and corrections are things that happen TO it.
      */
+    /*
+     * ── ASKED CONCURRENTLY, BECAUSE THE QUESTIONS ARE INDEPENDENT ──────────────────────────────
+     *
+     * The resolver is unchanged and is still the only authority on a family's collectible position;
+     * what changed is that the account no longer waits for each charge in turn. Measured on the
+     * mounted card via Server-Timing: this phase was 1206ms of a 3157ms response — 38% of the whole
+     * Details wait — because one round trip per posted obligation ran end to end.
+     *
+     * Nothing here caches a financial figure or answers the question a second way. The charges are
+     * independent of each other, the sums are addition, and a refusal still contributes nothing.
+     * Concurrency is bounded so a long period cannot open an unbounded number of connections.
+     */
     const collectible = { outstandingCents: 0, expectedSubsidyCents: 0, submittedClaimSuppressionCents: 0, actualSubsidyReceivedCents: 0, unresolvedVarianceCents: 0, currentlyCollectibleCents: 0 };
     const collectibleRows = rows.filter(
         (r) => r.lifecycleStatus === "posted" && r.periodKey === period.key && !isCollectibleOffsetRow(r),
@@ -1353,24 +1418,46 @@ async function buildFinancialsCardVMInner(
     // How many round trips this loop makes. A duration alone cannot tell one slow read from N reads,
     // and those two facts want opposite repairs.
     clock.count("collectible_calls", collectibleRows.length);
-    for (const row of collectibleRows) {
-        try {
-            const position = await clock.time("collectible_ms", () =>
-                resolveFamilyCollectible(supabase, { orgId: args.orgId, chargeId: row.chargeId }),
-            );
+    /*
+     * ── ASKED CONCURRENTLY, BECAUSE THE QUESTIONS ARE INDEPENDENT ──────────────────────────────
+     *
+     * Staging parallelised the phases around this one and left this loop serial. Measured on the
+     * mounted card through Server-Timing before that change: 1206ms of a 3157ms response — 38% of
+     * the whole Details wait — because one round trip per posted obligation ran end to end.
+     *
+     * The resolver is untouched and is still the only authority on a family's collectible position.
+     * The charges are independent of one another, the sums are addition, and a refusal still
+     * contributes nothing. Only the waiting is concurrent, and it is bounded so a long period
+     * cannot open an unbounded number of connections. The diagnostics above are staging's and are
+     * kept: the call count is exactly what distinguishes one slow read from N reads.
+     */
+    const COLLECTIBLE_CONCURRENCY = 8;
+    for (let i = 0; i < collectibleRows.length; i += COLLECTIBLE_CONCURRENCY) {
+        const positions = await clock.time("collectible_ms", () =>
+            Promise.all(
+                collectibleRows.slice(i, i + COLLECTIBLE_CONCURRENCY).map((row) =>
+                    resolveFamilyCollectible(supabase, { orgId: args.orgId, chargeId: row.chargeId }).catch(
+                        () => null,
+                    ),
+                ),
+            ),
+        );
+        for (const position of positions) {
+            if (!position) {
+                // A charge the resolver cannot speak for (a void, a charge with no allocatable net)
+                // contributes nothing rather than failing the account — the same rule every other
+                // read on this card follows.
+                continue;
+            }
             collectible.outstandingCents += position.outstandingCents;
             collectible.expectedSubsidyCents += position.expectedSubsidyCents;
             collectible.submittedClaimSuppressionCents += position.submittedClaimSuppressionCents;
             collectible.actualSubsidyReceivedCents += position.actualSubsidyReceivedCents;
             collectible.unresolvedVarianceCents += position.unresolvedVarianceCents;
             collectible.currentlyCollectibleCents += position.currentlyCollectibleCents;
-        } catch {
-            // A charge the resolver cannot speak for (a void, a charge with no allocatable net)
-            // contributes nothing rather than failing the account — the same rule every other read
-            // on this card follows. Reduction rows no longer reach here: they are excluded above,
-            // by what they ARE, rather than being silently absorbed by a refusal.
         }
     }
+    mark("collectible");
     vm.collectible = collectible;
     vm.responsibility = responsibilityRead.responsibility;
     vm.payers = responsibilityRead.payers;
@@ -1417,6 +1504,15 @@ async function buildFinancialsCardVMInner(
                     applications: view.applications,
                 };
             });
+
+            /*
+             * THE PREPAID POSITION, FROM THE AUTHORITY THAT OWNS IT.
+             *
+             * Asked here rather than derived in a component: a card that summed unapplied cents
+             * itself would be a second answer to "what may this family spend", and it would get the
+             * PENDING case wrong — which is the one that can offer money that never arrives.
+             */
+            vm.prepaid = resolveAccountPrepaidPosition(views);
         }
     } catch (e) {
         /*
@@ -1495,6 +1591,21 @@ async function buildFinancialsCardVMInner(
     });
 
     // ── ADD CHARGE OPTIONS: the tenant's own templates, effective today ──────────────────────────
+    /*
+     * ── THE REVIEW BOUNDARY, RESOLVED ONCE FOR EVERY TEMPLATE ON OFFER ──────────────────────────
+     *
+     * One read of the tenant's financial policies, then a per-service resolution, because
+     * `posting_review` may be scoped to a service. This is the same authority the writer consults;
+     * consulting it here means the command can state what confirming will do instead of assuming.
+     */
+    mark("payments");
+    const financialPolicies = await listFinancialPolicies(supabase, args.orgId).catch(() => []);
+    mark("policies");
+    const reviewPolicyForService = (serviceId: string | null) => {
+        const r = resolveFinancialPolicy(financialPolicies, "posting_review", { serviceId: serviceId ?? undefined }, today);
+        return r.resolved ? r.policy.value.required === true : false;
+    };
+
     vm.chargeTemplates = ((templateResult.data ?? []) as unknown as Array<Record<string, unknown>>)
         .filter((row) => {
             const start = t(row.effective_start);
@@ -1512,6 +1623,8 @@ async function buildFinancialsCardVMInner(
             currencyCode: t(row.currency_code) || "USD",
             occursOnStrategy: t(row.occurs_on_strategy),
             billableOnStrategy: t(row.billable_on_strategy),
+            reviewRequired:
+                reviewPolicyForService(t(row.service_id) || null) || row.review_required === true,
         }));
 
     /*

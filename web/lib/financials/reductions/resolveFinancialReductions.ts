@@ -35,6 +35,8 @@
  * Pure. No I/O, no clock, no Supabase.
  */
 
+import { chargeCategorySemantics } from "@/lib/financials/chargeCategorySemantics";
+
 /** How a benefit is expressed — the authoring vocabulary of the policy registry. */
 export type ReductionBasis = "percentage" | "amount";
 
@@ -101,7 +103,14 @@ export type NotEligibleReason =
     | "not_enough_siblings"
     | "rank_not_covered"
     | "not_an_employee_household"
-    | "category_not_covered";
+    | "category_not_covered"
+    /**
+     * THE OTHER HALF OF THE INTERSECTION. The discount policy would have covered this charge, and
+     * the CATEGORY refuses. Told apart from `category_not_covered` — which means the policy did not
+     * name this category — because the two are different conversations with an operator: one is
+     * "your policy does not cover this", the other is "this kind of charge cannot be discounted".
+     */
+    | "category_not_discountable";
 
 export type RefusalReason =
     | "unreadable_basis"
@@ -173,6 +182,27 @@ function evaluateOne(
     facts: EligibilityFacts,
 ): AppliedReduction | { skip: NotEligibleReason } | { refuse: RefusalReason; detail: string } {
     if (!coversCategory(policy.params, gross.categoryKey)) return { skip: "category_not_covered" };
+
+    /*
+     * ── THE CATEGORY'S OWN SAY ──────────────────────────────────────────────────────────────
+     *
+     * Eligibility is an INTERSECTION and this is the half that was missing:
+     *
+     *     applies only if  the discount policy permits this charge
+     *                AND   the charge category permits discounting
+     *
+     * Until now only the policy had a vote, so a policy authored as `applies_to: "fees"` reached
+     * every non-tuition category — including `discount`, `credit` and `adjustment`, where a
+     * reduction of a reduction is not something any reconciliation can explain.
+     *
+     * Note what this deliberately does NOT encode: business opinion. `late_pickup` IS discountable
+     * here. An organisation that never discounts late fees says so through its policy's own
+     * `applies_to`; hard-coding that belief would take the decision away from every tenant that
+     * disagrees. Only incoherence is refused.
+     */
+    if (!chargeCategorySemantics(gross.categoryKey).discountable) {
+        return { skip: "category_not_discountable" };
+    }
 
     // ── A WAIVER IS NOT A PERCENTAGE. It removes the charge, and says so in one place.
     if (policy.kind === "waiver") {

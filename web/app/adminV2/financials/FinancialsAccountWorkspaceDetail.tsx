@@ -6,8 +6,11 @@ import { money, moneyExact, shortDate } from "@/app/adminV2/financials/financial
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import {
     FinancialsLedgerPeriod,
+    RowAction,
     type FinancialsLedgerRowView,
 } from "@/components/operationalCards/FinancialsLedger";
+import { financialTransactionEligibility } from "@/lib/financials/commands/financialTransactionCommands";
+import { useFinancialCommandChannel } from "@/components/financials/FinancialCommandChannel";
 import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 import {
     ACCOUNT_LENSES,
@@ -99,6 +102,10 @@ export default function FinancialsAccountWorkspaceDetail({
     const [vm, setVm] = useState<Vm | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [lens, setLens] = useState<AccountLens>("all");
+    /*
+     * The account card above this ledger owns the Financials command shell. A row asks it; this
+     * surface performs nothing — there is no financial mutation anywhere in this file.
+     */
     const [subject, setSubject] = useState<string | null>(null);
     const [periodKey, setPeriodKey] = useState<string | null>(null);
     const [payer, setPayer] = useState<string | null>(null);
@@ -411,6 +418,12 @@ function LedgerPeriods({
     /** period key → the server's own total for that period, when the view is unfiltered. */
     canonicalTotals: Map<string, number> | null;
 }) {
+    /*
+     * The channel is context, so the component that renders the rows reads it directly rather than
+     * having it threaded down as a prop. Null outside a command host, and the rows then offer none.
+     */
+    const channel = useFinancialCommandChannel();
+    const commandRequest = channel ? channel.request : null;
     const groups = useMemo(() => {
         const byKey = new Map<string, Row[]>();
         for (const row of rows) {
@@ -439,7 +452,10 @@ function LedgerPeriods({
                                 : `${groupRows.length} ${groupRows.length === 1 ? "entry" : "entries"}`
                         }
                         open
-                        rows={groupRows.map((row) => ledgerRowFromWorkspaceRow(row, cur))}
+                        rows={groupRows.map((row) => ({
+                            ...ledgerRowFromWorkspaceRow(row, cur),
+                            actions: workspaceRowActions(row, commandRequest),
+                        }))}
                     />
                 );
             })}
@@ -454,6 +470,60 @@ function LedgerPeriods({
  * correction lineage the read model already decided becomes the row's title rather than a column of
  * its own; and the outstanding note appears only when money has been applied to the charge.
  */
+/**
+ * ── THE SAME ACTIONS, RAISED THROUGH THE CARD THAT OWNS THEM ───────────────────────────────────
+ *
+ * Eligibility is the read model's answer via the shared `financialTransactionEligibility`, the icons
+ * are the shared `RowAction`, and the command is raised on the channel the account card registered
+ * against. Nothing here writes, previews, or decides what a charge may do — this file contains no
+ * financial mutation at all, which is the point.
+ */
+function workspaceRowActions(
+    row: Row,
+    request: ((r: { kind: "adjust" | "reverse" | "post"; chargeId: string; label: string }) => void) | null,
+) {
+    const chargeId = row.chargeId ? String(row.chargeId) : null;
+    if (!request || !chargeId) return undefined;
+    const label = String(row.description ?? row.categoryLabel ?? chargeId);
+    const eligible = financialTransactionEligibility({
+        chargeId,
+        offersPost: Boolean(row.offersPost),
+        offersReverse: Boolean(row.offersReverse),
+    });
+    if (!eligible.post && !eligible.reverse && !eligible.adjust) return undefined;
+    return (
+        <>
+            {eligible.post ? (
+                <RowAction
+                    kind="post"
+                    command="charge.post"
+                    chargeId={chargeId}
+                    title={`Post ${label} — it becomes owed`}
+                    onClick={() => request({ kind: "post", chargeId, label })}
+                />
+            ) : null}
+            {eligible.reverse ? (
+                <RowAction
+                    kind="reverse"
+                    command="charge.reverse"
+                    chargeId={chargeId}
+                    title={`Reverse ${label} — unwind a charge that should never have stood`}
+                    onClick={() => request({ kind: "reverse", chargeId, label })}
+                />
+            ) : null}
+            {eligible.adjust ? (
+                <RowAction
+                    kind="adjust"
+                    command="billing.adjust_account"
+                    chargeId={chargeId}
+                    title={`Adjust ${label} — it stands, and something reduces it`}
+                    onClick={() => request({ kind: "adjust", chargeId, label })}
+                />
+            ) : null}
+        </>
+    );
+}
+
 function ledgerRowFromWorkspaceRow(row: Row, cur: string): FinancialsLedgerRowView {
     const glCode = row.glCode ? String(row.glCode) : "";
     const glName = row.glAccountName ? String(row.glAccountName) : "";
