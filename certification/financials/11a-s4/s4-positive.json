@@ -1,0 +1,75 @@
+{
+  "arranged": {
+    "done": "skipped — predecessor_starts_later",
+    "inForce": null
+  },
+  "before": {
+    "chargeId": "907d1b64-09d5-4926-bed0-63d044c15441",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "actions": [
+      "reverse",
+      "adjust",
+      "resolveResponsibility"
+    ],
+    "cells": [
+      "Sep 18, 2026",
+      "Fee",
+      "Certb Certhouse",
+      "4010 · Registration Fees",
+      "$75.00",
+      "posted",
+      "Not allocated",
+      "Registration fee"
+    ]
+  },
+  "afterConfirm": {
+    "overlay": "detail",
+    "error": null
+  },
+  "after": {
+    "chargeId": "907d1b64-09d5-4926-bed0-63d044c15441",
+    "responsibility": "named",
+    "responsibilityText": "Cert Certhouse",
+    "actions": [
+      "reverse",
+      "adjust",
+      "reallocateResponsibility"
+    ],
+    "cells": [
+      "Sep 18, 2026",
+      "Fee",
+      "Certb Certhouse",
+      "4010 · Registration Fees",
+      "$75.00",
+      "posted",
+      "Cert Certhouse",
+      "Registration fee"
+    ]
+  },
+  "historical": {
+    "chargeId": "f089a3f4-85a1-44b6-bb94-50588a581b00",
+    "responsibility": "unassigned",
+    "responsibilityText": "Unassigned",
+    "actions": [
+      "reverse",
+      "adjust",
+      "resolveResponsibility"
+    ],
+    "cells": [
+      "Sep 2, 2026",
+      "Consumable fee",
+      "Certa Certhouse",
+      "4030 · Supply Fees",
+      "$18.00",
+      "posted",
+      "Unassigned",
+      "Materials"
+    ]
+  },
+  "filters": [
+    "financials-filter-subject",
+    "financials-filter-period",
+    "financials-filter-responsible-party"
+  ]
+}

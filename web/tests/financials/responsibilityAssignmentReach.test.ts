@@ -114,7 +114,7 @@ describe("THE GATE — the Responsible Party filter divides only when it can (§
         expect(opts.map((o) => o.value).sort()).toEqual([UNASSIGNED_PARTY, "Cert Certhouse"].sort());
         expect(hasChoice(opts)).toBe(true);
         expect(filterLedger(rows as never, { ...NO_FILTER, responsibleParty: "Cert Certhouse" })
-            .map((r) => (r as { id: string }).id)).toEqual(["c1"]);
+            .map((r) => (r as unknown as { id: string }).id)).toEqual(["c1"]);
     });
 
     /* The control exists and is wired; it is its CHOICES that were empty. */

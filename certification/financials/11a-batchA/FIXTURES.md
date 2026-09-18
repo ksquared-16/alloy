@@ -99,3 +99,18 @@ hand.
 
 `THREAD_11A_QA_SUBJECT_RESEED` now additionally requires: the Sep 18 Late pickup charges created by
 this pass, and any `financial_responsibility_allocations` written by the two resolve confirmations.
+
+## Section 4 final resolution probe (run `erun_df57dbc91108d60c`)
+
+| Mutation | Identity |
+|---|---|
+| Registration fee $75.00 · **Certb Certhouse** · Sep 18 2026 | `907d1b64-09d5-4926-bed0-63d044c15441` (via `charge.add`) |
+| Registration fee $75.00 · **Household** · Sep 18 2026 | `2279460a-0b4e-4d31-9d86-3a00a4d4daf4` (via `charge.add`, household grain) |
+| Responsibility allocations on `907d1b64` | `billing.resolve_responsibility` → `kind: resolved`, arrangement `30d94536-691b-465a-933d-288b5249301c`, 2 allocations, net $75.00, unassigned $57.00 |
+| Resolve attempts that wrote nothing | `6005cf5f` (refused `fixed_exceeds_net`), `f089a3f4` (stays unassigned — non-retroactivity), `2279460a` (refused `not_allocatable`) |
+| Arrangement authoring attempts that wrote nothing | two `billing.configure_responsibility` executes refused `predecessor_starts_later` |
+
+The allocations on `907d1b64` are effective-dated, superseding records. **Do not delete them by hand.**
+
+`THREAD_11A_QA_SUBJECT_RESEED` now additionally requires: both Sep 18 registration fees and the
+responsibility allocations written against `907d1b64`.
