@@ -48,6 +48,7 @@ import {
 } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
 import { MOTION_SETTLE } from "@/lib/motion/motionTokens";
 import { markPerceived } from "@/lib/perf/perceivedPerf";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
 import { AlloyIdentityLoader } from "@/app/adminV2/components/bos/identity/AlloyIdentityLoader";
 import { AlloyThinkingLabel } from "@/components/admin/workspace/AlloyThinkingLabel";
@@ -768,6 +769,7 @@ export function InlineOpportunityFocusPanel() {
         >
             <section
                 data-inline-focus-panel="true"
+                {...alloySectionDomAttrs("WU-07")}
                 data-inline-focus-panel-mode={focusPanelMode}
                 data-inline-focus-panel-subject={selectedSubjectId ?? undefined}
                 // OPERATIONAL truth from the committed snapshot — NOT the Settlement fetch.
