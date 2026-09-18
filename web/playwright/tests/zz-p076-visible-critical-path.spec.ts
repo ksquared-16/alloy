@@ -101,6 +101,9 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
                 }>;
                 kinds: Record<string, number>;
                 blockingSeen: string[];
+                latestGeneration: string | null;
+                staleGenerationSuppressed: number;
+                placeholderSuppressed: number;
             };
         };
         const s = V2.__p076v2;
@@ -113,6 +116,12 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
                 Object.entries(s.perSection).sort((a, b) => b[1].lastMs - a[1].lastMs),
             ),
             mutationKinds: s.kinds,
+            // Did the finality rules actually fire on the real surface, or is this path simply
+            // free of reserved geometry and stale generations? Reporting the counts answers it;
+            // an absent field would have been read as "zero" without ever being measured.
+            placeholderSuppressed: s.placeholderSuppressed,
+            staleGenerationSuppressed: s.staleGenerationSuppressed,
+            latestGeneration: s.latestGeneration,
         };
     });
 
