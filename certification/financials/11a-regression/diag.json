@@ -1,0 +1,16 @@
+{
+  "hostPresent": true,
+  "RENDERED_VARIANT": "FinancialsCompactCard (SPARSE)",
+  "universalCardDensity": null,
+  "universalCardAttrs": [
+    "data-universal-card-density=compact",
+    "data-universal-card-span=1",
+    "data-universal-card-key=financials"
+  ],
+  "zoneHeads": [],
+  "lines": [
+    "Responsibility",
+    "Current balance"
+  ],
+  "cardText": "FINANCIALS\nResponsibility\n-$55.13\nCurrent balance\n-$55.13\nPayment\nAdd\nDetails"
+}
