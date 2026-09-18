@@ -263,9 +263,15 @@ export default function ProcessCard({
                     Two bands became one. The rail already says who is where, so the left half
                     carries only what the rail cannot: a scoped child with its own action, or the
                     fact that everyone is together. The right half spends NO height on activity —
-                    the list is revealed on demand, never printed onto the card face. */}
+                    the list is revealed on demand, never printed onto the card face.
+
+                    This row is CARD-LEVEL, so it carries the shared `alloy-os-ucard__body-footer`
+                    primitive: when the band assigns more height than the card needs, the surplus
+                    opens ABOVE this row rather than below the whole card. The command region above
+                    is deliberately untouched — commands belong to the work they act on, not to the
+                    bottom of the card. See docs/platform/experience/focus-panel-card-format.md §5. */}
                 {scopedChild || (aligned && evidence.participantsLabel) || evidence.activity.length ? (
-                    <div className="alloy-os-process__foot">
+                    <div className="alloy-os-process__foot alloy-os-ucard__body-footer">
                         <div className="alloy-os-process__foot-left">
                             {scopedChild ? (
                                 <div className="alloy-os-process__scoped">
