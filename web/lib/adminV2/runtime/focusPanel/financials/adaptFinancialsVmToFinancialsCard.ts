@@ -443,6 +443,9 @@ export function adaptFinancialsVmToLedgerPeriods(input: {
             source: row.categoryLabel,
             responsibleParty: row.responsiblePartyName,
             responsibilityUnassigned: row.responsibilityUnassigned,
+            /* PARTIAL is a state, not an inference: both halves travel with the name. */
+            responsibilityAssignedCents: row.responsibilityAssignedCents,
+            responsibilityUnassignedCents: row.responsibilityUnassignedCents,
             /*
              * The decision behind the money, formatted once here so both deep surfaces state the
              * same thing. This adapter decides nothing about the reduction — `reductionProvenance`

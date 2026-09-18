@@ -3106,3 +3106,16 @@
     padding-top: 12px;
     border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
 }
+
+/*
+ * THE UNOWNED REMAINDER ON A PARTIALLY ALLOCATED OBLIGATION.
+ *
+ * Quieter than the party's name because the name is the answer and this is the qualifier — but
+ * present in the cell rather than hidden behind a hover, because "someone owes this" and "most of
+ * it is still nobody's" are different facts and an operator must not read the first as both.
+ */
+.alloy-os-billingdetail__partial {
+    color: color-mix(in srgb, currentColor 62%, transparent);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}

@@ -228,6 +228,9 @@ export type LedgerEntry = {
     responsibleParty: string | null;
     /** An allocation exists and deliberately names no party. Rendered as a state, not as a blank. */
     responsibilityUnassigned: boolean;
+    /** Owed by the named party, and owed by nobody yet — a partially allocated obligation is both. */
+    responsibilityAssignedCents?: number;
+    responsibilityUnassignedCents?: number;
     label: string;
     /** Signed and formatted upstream. Account-balance direction: charge +, payment/credit −. */
     amount: string;

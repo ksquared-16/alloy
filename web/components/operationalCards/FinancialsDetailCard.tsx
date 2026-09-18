@@ -853,6 +853,8 @@ function ledgerRowFromEntry(
         status: e.status ?? "—",
         responsibleParty: e.responsibleParty,
         responsibilityUnassigned: e.responsibilityUnassigned,
+        responsibilityAssignedCents: e.responsibilityAssignedCents,
+        responsibilityUnassignedCents: e.responsibilityUnassignedCents,
         actions:
             post || reverse || adjust || resolveResp || reallocateResp ? (
                 <>

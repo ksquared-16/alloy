@@ -21,6 +21,8 @@
  * one, and it is what stops a retry from making 2N.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const listChargeTemplates = vi.fn();
 const listFinancialPolicies = vi.fn();
@@ -200,5 +202,61 @@ describe("THE GATE — the review boundary is policy, not ceremony (§3H)", () =
         const r = await preview([], { agreementId: "agr-ana" });
         expect(r.intent).not.toHaveProperty("periodClosed");
         expect(r.intent.lifecycleStatus, "an immediate charge is a draft, not a posting verdict").toBe("draft");
+    });
+});
+
+describe("THE GATE — the due-date policy actually runs (§7E)", () => {
+    /*
+     * ── A CONFIGURABLE POLICY THAT NOTHING CONSUMED ──────────────────────────────────────────
+     *
+     * `resolveDueDate` shipped with four strategies and a deliberate null for "no rule". It had NO
+     * CALLER: `ChargeResolutionContext.dueDate` was declared and never supplied, the insert never
+     * wrote the column, and every charge recorded `due_date: null`. An operator could configure
+     * terms on /organization/financials and the product ignored them — configurable, and not a
+     * capability.
+     *
+     * The five dates stay five dates. These lock that the DUE date is derived from the INVOICE date
+     * and the period, and that neither is overwritten by it.
+     */
+    const dueDatePolicy = (value: Record<string, unknown>) => ([{
+        id: "pol-due", org_id: "org-1", policy_type: "due_date", scope_type: "org",
+        location_id: null, service_id: null, rate_plan_id: null,
+        value, effective_start: "2026-01-01", effective_end: null, is_active: true,
+    }]);
+
+    it("leaves the due date alone when the organisation has configured no terms", async () => {
+        listFinancialPolicies.mockResolvedValue([]);
+        const r = await preview([], { agreementId: "agr-ana" });
+        expect(r.intent.dueDate, "not today, not the invoice date — untouched").toBeNull();
+    });
+
+    it("resolves on_invoice to the invoice date itself", async () => {
+        listFinancialPolicies.mockResolvedValue(dueDatePolicy({ strategy: "on_invoice" }));
+        const r = await preview([], { agreementId: "agr-ana" });
+        expect(r.intent.dueDate).toBe(r.intent.billableOn);
+        expect(r.intent.dueDate).toBe(TODAY);
+    });
+
+    it("resolves days_after_invoice by counting from the invoice date", async () => {
+        listFinancialPolicies.mockResolvedValue(dueDatePolicy({ strategy: "days_after_invoice", offset_days: 10 }));
+        const r = await preview([], { agreementId: "agr-ana" });
+        expect(r.intent.dueDate).toBe("2026-09-28");
+        expect(r.intent.billableOn, "the invoice date is not moved by the due date").toBe(TODAY);
+        expect(r.intent.occursOn, "and neither is the service date").toBe(TODAY);
+    });
+
+    /* An unreadable strategy is not a guess: no date rather than a wrong one. */
+    it("writes no due date for a strategy it cannot carry out", async () => {
+        listFinancialPolicies.mockResolvedValue(dueDatePolicy({ strategy: "whenever_feels_right" }));
+        expect((await preview([], { agreementId: "agr-ana" })).intent.dueDate).toBeNull();
+    });
+
+    /* And the column is actually written, which is the half that made this invisible. */
+    it("persists the resolved due date on the charge", () => {
+        const svc = readFileSync(join(process.cwd(), "lib/financials/chargeLifecycle/chargeLifecycleService.ts"), "utf8");
+        const insertAt = svc.indexOf("        .insert({");
+        expect(insertAt, "the create insert is findable").toBeGreaterThan(0);
+        expect(svc.slice(insertAt, insertAt + 1400), "the create writes it").toContain("due_date: intent.dueDate");
+        expect(svc, "and a recalculated draft re-dates it").toMatch(/update\(\{[\s\S]{0,600}due_date: intent\.dueDate/);
     });
 });

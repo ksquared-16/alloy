@@ -650,6 +650,9 @@ function ledgerRowFromWorkspaceRow(row: Row, cur: string): FinancialsLedgerRowVi
         status: String(row.lifecycleStatus ?? row.status ?? "—"),
         responsibleParty: row.responsiblePartyName ? String(row.responsiblePartyName) : null,
         responsibilityUnassigned: Boolean(row.responsibilityUnassigned),
+        /* Same projection, same two halves — neither host infers PARTIAL for itself. */
+        responsibilityAssignedCents: Number(row.responsibilityAssignedCents ?? 0),
+        responsibilityUnassignedCents: Number(row.responsibilityUnassignedCents ?? 0),
         /* History that no longer counts — a business state, never the amount's sign. */
         tone: row.lifecycleStatus === "reversed" ? "muted" : undefined,
         title: corrected ?? undefined,
