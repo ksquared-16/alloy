@@ -81,6 +81,59 @@ export function installVisibleCompletionProbe(): void {
     };
 
     /*
+     * RESERVED GEOMETRY IS NOT DATA (Track-A finality).
+     *
+     * Track-A reserves the card's space first and fills it when the answer resolves. Both are
+     * structural mutations, so a rule counting "any authoritative mutation" marks the section final
+     * the moment the EMPTY BOX appears — the one moment an operator would certainly not call it
+     * done. The product already says which state it is in; these are its own markers, not invented
+     * ones: data-settlement-reserved, *-skeleton, data-*-pending, data-placeholder.
+     */
+    const PLACEHOLDER_ATTR = /(^data-placeholder$)|(-skeleton(-[a-z]+)?$)|(-reserved$)|(-pending$)/;
+    const isPlaceholderNode = (n: Node | null): boolean => {
+        let el: Node | null = n;
+        while (el && el.nodeType !== 1) el = el.parentNode;
+        let cur = el as Element | null;
+        let hops = 0;
+        while (cur && hops < 6) {
+            const attrs = cur.attributes;
+            for (let i = 0; i < attrs.length; i++) {
+                const a = attrs[i];
+                if (PLACEHOLDER_ATTR.test(a.name) && a.value !== "false") return true;
+            }
+            if (cur.getAttribute("data-alloy-section-id")) break;
+            cur = cur.parentElement;
+            hops++;
+        }
+        return false;
+    };
+
+    /*
+     * DESTINATION GENERATION.
+     *
+     * On A -> B -> C the earlier subjects' requests are still in flight and their answers still
+     * mutate the DOM. Counting them lets a stale subject's late data declare the CURRENT
+     * destination complete — "finished" while showing a record the operator already left. The panel
+     * stamps its own subject; that stamp is the generation.
+     */
+    /** The destination the surface is settling on RIGHT NOW, read from the live DOM. */
+    const currentGeneration = (): string | null =>
+        document.querySelector("[data-inline-focus-panel-subject]")
+            ?.getAttribute("data-inline-focus-panel-subject") ?? null;
+
+    const generationOf = (n: Node | null): string | null => {
+        let el: Node | null = n;
+        while (el && el.nodeType !== 1) el = el.parentNode;
+        let cur = el as Element | null;
+        while (cur) {
+            const g = cur.getAttribute?.("data-inline-focus-panel-subject");
+            if (g) return g;
+            cur = cur.parentElement;
+        }
+        return null;
+    };
+
+    /*
      * THE OWNING SECTION, AND WHY "NEAREST BLOCKING ANCESTOR" WAS THE WRONG QUESTION.
      *
      * First cut walked up to the nearest ancestor marked blocking. Measured against deployed
@@ -135,9 +188,21 @@ export function installVisibleCompletionProbe(): void {
     const V2 = window as unknown as {
         __p076v2?: {
             lastBlockingAuthoritativeMs: number;
-            perSection: Record<string, { lastMs: number; data: number; structure: number; anim: number }>;
+            perSection: Record<string, {
+                firstMs: number;
+                lastMs: number;
+                lastVisibleMs: number;
+                data: number;
+                structure: number;
+                anim: number;
+                imageExpected: boolean;
+                imageFinalMs: number;
+            }>;
             kinds: Record<Kind, number>;
             blockingSeen: string[];
+            latestGeneration: string | null;
+            staleGenerationSuppressed: number;
+            placeholderSuppressed: number;
         };
     };
     V2.__p076v2 = {
@@ -145,6 +210,9 @@ export function installVisibleCompletionProbe(): void {
         perSection: {},
         kinds: { AUTHORITATIVE_DATA: 0, AUTHORITATIVE_STRUCTURE: 0, PRESENTATIONAL_ANIMATION: 0 },
         blockingSeen: [],
+        latestGeneration: null,
+        staleGenerationSuppressed: 0,
+        placeholderSuppressed: 0,
     };
 
     const mark = (recs?: MutationRecord[]) => {
@@ -164,9 +232,37 @@ export function installVisibleCompletionProbe(): void {
             const host = blockingHost(r.target);
             if (host) {
                 if (!v2.blockingSeen.includes(host)) v2.blockingSeen.push(host);
-                const ps = v2.perSection[host] ?? { lastMs: -1, data: 0, structure: 0, anim: 0 };
+                const ps = v2.perSection[host] ?? {
+                    firstMs: t, lastMs: -1, lastVisibleMs: -1,
+                    data: 0, structure: 0, anim: 0,
+                    imageExpected: false, imageFinalMs: -1,
+                };
+                // FINAL_VISIBLE_MS counts every visible change, animation included: the honest
+                // "when did this region stop moving at all". The gap between it and lastMs is the
+                // trailing motion V1 was billing as loading, measured per region not asserted.
+                ps.lastVisibleMs = t;
+
+                /*
+                 * A childList record's `target` is the PARENT. Judging the parent asks "where did
+                 * something change", when finality is a question about WHAT ARRIVED — the reserved
+                 * wrapper and the stale-subject block are the added nodes, and inspecting their
+                 * container silently classified both as ordinary content.
+                 */
+                const arrived = Array.from(r.addedNodes).filter((n) => n.nodeType === 1);
+                const judged: Node[] = arrived.length ? arrived : [r.target];
+
+                const live = currentGeneration();
+                if (live) v2.latestGeneration = live;
+                const genOfMutation = generationOf(judged[0]);
+                const stale = genOfMutation !== null && live !== null && genOfMutation !== live;
+
                 if (kind === "PRESENTATIONAL_ANIMATION") {
                     ps.anim++;
+                } else if (stale) {
+                    v2.staleGenerationSuppressed++;
+                } else if (judged.every(isPlaceholderNode)) {
+                    // Reserved space arrived, not the answer. Activity, never finality.
+                    v2.placeholderSuppressed++;
                 } else {
                     if (kind === "AUTHORITATIVE_DATA") ps.data++; else ps.structure++;
                     ps.lastMs = t;
@@ -200,6 +296,32 @@ export function installVisibleCompletionProbe(): void {
     // addInitScript runs BEFORE the document is parsed, so documentElement can be null and
     // observe() then fails silently — which reported visibleComplete=0 on five straight samples.
     // Observing `document` works from the same point and survives the parse.
+    /*
+     * IMAGE FINALITY. A section whose avatar has not decoded is not final, and a decode lands with
+     * NO DOM mutation — so mutation evidence alone calls it done early, systematically on exactly
+     * the sections that carry images. Captured on the capture phase: load/error do not bubble.
+     * Attributed through the same leaf-most rule as everything else.
+     */
+    const imageSettled = (e: Event) => {
+        const el = e.target as Element | null;
+        if (!el || el.tagName !== "IMG") return;
+        const host = blockingHost(el);
+        if (!host) return;
+        const store = V2.__p076v2;
+        if (!store) return;
+        const t = Date.now() - w.__p076!.t0;
+        const ps = store.perSection[host] ?? {
+            firstMs: t, lastMs: -1, lastVisibleMs: t,
+            data: 0, structure: 0, anim: 0,
+            imageExpected: false, imageFinalMs: -1,
+        };
+        ps.imageExpected = true;
+        if (t > ps.imageFinalMs) ps.imageFinalMs = t;
+        store.perSection[host] = ps;
+    };
+    document.addEventListener("load", imageSettled, true);
+    document.addEventListener("error", imageSettled, true);
+
     const attach = () => {
         try {
             new MutationObserver((recs) => mark(recs)).observe(document, {

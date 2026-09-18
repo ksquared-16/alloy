@@ -18,6 +18,9 @@
 export type AlloySurface = "work_unit" | "workspace";
 
 /** Where the section's first-paint data comes from. */
+/** See `AlloySectionEntry.applicability`. */
+export type AlloySectionApplicability = "always" | "exclusive" | "when_open" | "never";
+
 export type AlloySectionCache = "bootstrap" | "session" | "network" | "snapshot" | "none";
 
 export type AlloySectionEntry = {
@@ -58,6 +61,19 @@ export type AlloySectionEntry = {
     /** KPI snapshot section — occupies final placement immediately, refreshes quietly, never blocks. */
     snapshot?: boolean;
     /**
+     * WHEN this section is expected in the DOM. Coverage is a registry question, not a harness one:
+     * a measurement run must be able to compute "which blocking sections must be here" from the
+     * registry alone, or every absence becomes an argument.
+     *
+     *   always     — expected whenever the surface renders
+     *   exclusive  — one of `exclusiveGroup` is expected; which one depends on runtime state
+     *   when_open  — only once an operator opens it
+     *   never      — nothing renders it (must pair with owner: null)
+     */
+    applicability: AlloySectionApplicability;
+    /** For `exclusive`: the group in which exactly one member is expected to render. */
+    exclusiveGroup?: string;
+    /**
      * A shell that WRAPS other sections rather than painting first-order content itself.
      *
      * Completion attribution needs this stated, not inferred. The structural test — "does this
@@ -79,6 +95,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "session shell (sidebar, top nav, global search, location selector)",
         blocking: true,
         cache: "session",
+        applicability: "always",
         container: true,
     },
     {
@@ -90,6 +107,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "operational bootstrap (work unit title, process label, lane context)",
         blocking: true,
         cache: "bootstrap",
+        applicability: "always",
     },
     {
         id: "WU-02",
@@ -100,6 +118,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "bootstrap/cache placement KPI snapshot (default snapshot until first load)",
         blocking: false,
         cache: "snapshot",
+        applicability: "always",
         snapshot: true,
     },
     {
@@ -111,6 +130,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "operational bootstrap queue summaries / perspectives rail",
         blocking: true,
         cache: "bootstrap",
+        applicability: "always",
     },
     {
         id: "WU-04",
@@ -120,6 +140,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "queue definition + active lane summary (bootstrap, refreshed)",
         blocking: true,
         cache: "bootstrap",
+        applicability: "always",
     },
     {
         id: "WU-05",
@@ -130,6 +151,8 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         blocking: true,
         blockingNote: "WU-05 or WU-06 (whichever resolves) blocks",
         cache: "bootstrap",
+        applicability: "exclusive",
+        exclusiveGroup: "queue_body",
     },
     {
         id: "WU-06",
@@ -140,15 +163,24 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         blocking: true,
         blockingNote: "WU-05 or WU-06 (whichever resolves) blocks",
         cache: "none",
+        applicability: "exclusive",
+        exclusiveGroup: "queue_body",
     },
     {
         id: "WU-07",
         surface: "work_unit",
         name: "Focus Panel Shell",
-        owner: "web/components/admin/drawer/EntityDrawerOperatingShell.tsx",
+        owner: "web/components/presentation/workUnit/InlineOpportunityFocusPanel.tsx",
+        // Was EntityDrawerOperatingShell, which NOTHING renders: its only reference is a pure
+        // re-export (subjectSurface/FocusPanelShell), nothing imports that, and no caller ever
+        // passed focusPanelPresentation, so the attributes could not be emitted even if it did.
+        // The region itself is real and blocking — the inline Focus Panel paints exactly this
+        // chrome + subject identity before the VM payload — so the owner moved to the live host
+        // rather than the section being quietly downgraded to make coverage green.
         dataSource: "drawer chrome + subject identity (shell renders before VM payload)",
         blocking: true,
         cache: "session",
+        applicability: "always",
     },
     {
         id: "WU-08",
@@ -158,6 +190,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "static UI (Summary / Work / Activity tablist)",
         blocking: true,
         cache: "none",
+        applicability: "always",
     },
     {
         id: "WU-09",
@@ -168,6 +201,8 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         blocking: true,
         blockingNote: "active_mode_only — blocks only when Summary is the active mode",
         cache: "network",
+        applicability: "exclusive",
+        exclusiveGroup: "focus_panel_mode",
     },
     {
         id: "WU-10",
@@ -178,6 +213,8 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         blocking: false,
         blockingNote: "does not block when inactive",
         cache: "network",
+        applicability: "exclusive",
+        exclusiveGroup: "focus_panel_mode",
     },
     {
         id: "WU-11",
@@ -188,6 +225,8 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         blocking: false,
         blockingNote: "does not block when inactive",
         cache: "network",
+        applicability: "exclusive",
+        exclusiveGroup: "focus_panel_mode",
     },
     {
         id: "WU-12",
@@ -198,6 +237,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         blocking: false,
         blockingNote: "shell renders without blocking core reveal",
         cache: "network",
+        applicability: "always",
     },
     {
         id: "WU-13",
@@ -209,6 +249,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         blocking: false,
         blockingNote: "shell renders without blocking core reveal",
         cache: "network",
+        applicability: "never",
     },
     {
         id: "WU-14",
@@ -219,6 +260,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         blocking: false,
         blockingNote: "shell renders without blocking core reveal",
         cache: "network",
+        applicability: "always",
     },
     {
         id: "WU-15",
@@ -229,6 +271,7 @@ const WORK_UNIT_SECTIONS: readonly AlloySectionEntry[] = [
         blocking: false,
         blockingNote: "when_open — blocks only when explicitly opened",
         cache: "network",
+        applicability: "when_open",
     },
 ];
 
@@ -241,6 +284,7 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "session shell (sidebar, top nav, global search, location selector)",
         blocking: true,
         cache: "session",
+        applicability: "always",
         container: true,
     },
     {
@@ -252,6 +296,7 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "session resume state",
         blocking: false,
         cache: "session",
+        applicability: "never",
     },
     {
         id: "WS-02",
@@ -262,6 +307,7 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "org / command center header (bootstrap)",
         blocking: true,
         cache: "bootstrap",
+        applicability: "always",
     },
     {
         id: "WS-03",
@@ -272,6 +318,7 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "OIP health snapshot (cache/default snapshot)",
         blocking: false,
         cache: "snapshot",
+        applicability: "always",
         snapshot: true,
     },
     {
@@ -283,6 +330,7 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "operational pulse snapshot (cache/default snapshot)",
         blocking: false,
         cache: "snapshot",
+        applicability: "never",
         snapshot: true,
     },
     {
@@ -293,6 +341,7 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "lifecycle catalog + departments (bootstrap)",
         blocking: true,
         cache: "bootstrap",
+        applicability: "always",
     },
     {
         id: "WS-06",
@@ -303,6 +352,7 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "per-tile metric snapshot (cache/default snapshot)",
         blocking: false,
         cache: "snapshot",
+        applicability: "always",
         snapshot: true,
     },
     {
@@ -313,6 +363,7 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "workspace-root actions bundle",
         blocking: false,
         cache: "network",
+        applicability: "always",
     },
     {
         id: "WS-08",
@@ -322,6 +373,7 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "workflow telemetry (default empty on workspace root)",
         blocking: false,
         cache: "network",
+        applicability: "always",
     },
     {
         id: "WS-09",
@@ -331,6 +383,7 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         dataSource: "BOS assistant panel (lazy)",
         blocking: false,
         cache: "network",
+        applicability: "always",
     },
     {
         id: "WS-10",
@@ -341,6 +394,7 @@ const WORKSPACE_SECTIONS: readonly AlloySectionEntry[] = [
         blocking: false,
         blockingNote: "when_open — blocks only when explicitly opened",
         cache: "network",
+        applicability: "when_open",
     },
 ];
 
@@ -380,4 +434,33 @@ export function alloySectionDomAttrs(id: AlloySectionId): Record<string, string>
         // The pre-registry name, emitted from the registry so the components hold no second copy.
         ...(entry.legacyDomSection ? { "data-alloy-section": entry.legacyDomSection } : {}),
     };
+}
+
+
+/**
+ * EXPECTED BLOCKING COVERAGE for the canonical Work Unit / Summary shape.
+ *
+ * The rule lives here rather than in the measurement harness on purpose. A harness that keeps its
+ * own idea of "which sections should be present" can always be adjusted until a run goes green —
+ * which is exactly how WU-07 sat absent and unexplained while coverage was reported as complete.
+ *
+ * `exclusive` groups contribute their ACTIVE member, which the caller supplies from observed state
+ * (Summary mode, queue showing rows). Everything else is derived.
+ */
+export function expectedBlockingSections(active: {
+    focusPanelMode: "summary" | "work" | "activity";
+    queueBody: "rows" | "placeholder";
+}): string[] {
+    const activeOf: Record<string, string> = {
+        focus_panel_mode: { summary: "WU-09", work: "WU-10", activity: "WU-11" }[active.focusPanelMode],
+        queue_body: active.queueBody === "rows" ? "WU-05" : "WU-06",
+    };
+    return ALLOY_SECTION_LIST.filter((e) => {
+        if (e.surface !== "work_unit" || !e.blocking) return false;
+        if (e.applicability === "never" || e.applicability === "when_open") return false;
+        // A container wraps other sections and never owns completion, so it is not a coverage target.
+        if (e.container) return false;
+        if (e.applicability === "exclusive") return activeOf[e.exclusiveGroup ?? ""] === e.id;
+        return true;
+    }).map((e) => e.id).sort();
 }

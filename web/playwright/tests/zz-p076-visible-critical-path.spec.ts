@@ -31,6 +31,16 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         const u = r.url();
         if (/\/api\//.test(u)) requests.push({ url: u.replace(/^https?:\/\/[^/]+/, ""), at: Date.now() - t0 });
     });
+    /*
+     * RESPONSE END, not just request start. A dependency edge is "this landed, then that painted";
+     * with start times alone the gap between a request and a mutation is unattributable and the
+     * long pole cannot honestly be traced to anything.
+     */
+    const responses: Array<{ url: string; at: number; status: number }> = [];
+    page.on("response", (r) => {
+        const u = r.url();
+        if (/\/api\//.test(u)) responses.push({ url: u.replace(/^https?:\/\/[^/]+/, ""), at: Date.now() - t0, status: r.status() });
+    });
 
     /*
      * VISIBLE-COMPLETE BY DOM QUIESCENCE, NOT networkidle.
@@ -84,7 +94,11 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         const V2 = window as unknown as {
             __p076v2?: {
                 lastBlockingAuthoritativeMs: number;
-                perSection: Record<string, { lastMs: number; data: number; structure: number; anim: number }>;
+                perSection: Record<string, {
+                    firstMs: number; lastMs: number; lastVisibleMs: number;
+                    data: number; structure: number; anim: number;
+                    imageExpected: boolean; imageFinalMs: number;
+                }>;
                 kinds: Record<string, number>;
                 blockingSeen: string[];
             };
@@ -133,6 +147,12 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         };
     });
 
+    /* The fingerprints of what actually mutated late — the evidence for the long pole. */
+    const lateMutations = await page.evaluate(() => {
+        const L = window as unknown as { __p076late?: unknown[] };
+        return (L.__p076late ?? []).slice(-40);
+    });
+
     const marks = await page.evaluate(() => {
         const el = document.getElementById("__alloy_route_timing");
         try { return el ? JSON.parse(el.textContent || "null") : null; } catch { return null; }
@@ -157,6 +177,8 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         valid: dataProbe.rows > 0 && !dataProbe.signedOut,
         apiRequestCount: requests.length,
         apiRequests: requests,
+        apiResponses: responses,
+        lateMutations,
         retiredReadProbe: {
             eppEnrichmentHttp: requests.filter((r) => /effective-enrollment|epp/i.test(r.url)).length,
             tourEnrichmentHttp: requests.filter((r) => /tour-bookings|active-tour/i.test(r.url)).length,

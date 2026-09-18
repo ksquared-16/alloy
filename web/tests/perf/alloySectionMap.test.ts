@@ -6,6 +6,7 @@ import {
     ALLOY_SECTION_LIST,
     ALLOY_SECTION_MAP,
     alloySectionDomAttrs,
+    expectedBlockingSections,
     getAlloySection,
     type AlloySectionCache,
 } from "@/lib/perf/alloySectionMap";
@@ -297,5 +298,76 @@ describe("Alloy section map — every applicable Work Unit section reaches the D
             expect(ALLOY_SECTION_MAP[wsId].owner).toBe(ALLOY_SECTION_MAP[wuId].owner);
             expect(readDoc(ALLOY_SECTION_MAP[wsId].owner as string)).not.toContain(`"${wsId}"`);
         }
+    });
+});
+
+/**
+ * COVERAGE IS A REGISTRY QUESTION.
+ *
+ * WU-07 sat absent from the canonical DOM while coverage was reported complete, and the reason it
+ * survived scrutiny is that "which sections should be here" was a judgement made per run rather
+ * than a rule anything could fail. Its owner was `EntityDrawerOperatingShell`, which NOTHING
+ * renders: the only reference is a pure re-export nothing imports, and no caller ever passed
+ * `focusPanelPresentation`, so the attributes could not be emitted even if something did.
+ *
+ * The earlier owner gates did not catch it because they asked whether the file EXISTS and whether
+ * it CONTAINS the emitter. Both were true. Existence is not reachability.
+ */
+describe("Alloy section map — expected blocking coverage is derived, not asserted", () => {
+    const CANON = { focusPanelMode: "summary", queueBody: "rows" } as const;
+
+    it("derives the canonical Work Unit / Summary blocking set from the registry", () => {
+        expect(expectedBlockingSections(CANON)).toEqual(["WU-01", "WU-03", "WU-04", "WU-05", "WU-07", "WU-08", "WU-09"]);
+    });
+
+    it("excludes mode-inactive members by the registry rule, not a harness exception", () => {
+        const work = expectedBlockingSections({ focusPanelMode: "work", queueBody: "rows" });
+        expect(work).not.toContain("WU-09");
+        // WU-10 is the active member there but is non-blocking, so it is not a coverage target.
+        expect(work).not.toContain("WU-10");
+        const empty = expectedBlockingSections({ focusPanelMode: "summary", queueBody: "placeholder" });
+        expect(empty).toContain("WU-06");
+        expect(empty).not.toContain("WU-05");
+    });
+
+    it("never expects a section nothing renders, or one that is only open on demand", () => {
+        const all = expectedBlockingSections(CANON);
+        for (const id of ["WU-13", "WU-15"]) expect(all).not.toContain(id);
+        // The shell contains the others and can never own completion, so it is not a target either.
+        expect(all).not.toContain("WU-00");
+    });
+
+    it("every expected blocking section names a live owner that emits its id", () => {
+        for (const id of expectedBlockingSections(CANON)) {
+            const entry = ALLOY_SECTION_MAP[id];
+            expect(entry.owner, `${id} must name an owner`).toBeTruthy();
+            expect(existsSync(join(repoRoot, entry.owner as string)), `${id} owner missing`).toBe(true);
+            expect(readDoc(entry.owner as string), `${id} owner must emit its id`).toContain(`"${id}"`);
+        }
+    });
+
+    it("applicability and owner agree: nothing renders it iff it says so", () => {
+        for (const e of ALLOY_SECTION_LIST) {
+            if (e.applicability === "never") {
+                expect(e.owner, `${e.id} says never but names an owner`).toBeNull();
+            } else {
+                expect(e.owner, `${e.id} is ${e.applicability} but has no owner`).not.toBeNull();
+            }
+        }
+    });
+
+    it("every exclusive section declares the group it is exclusive within", () => {
+        for (const e of ALLOY_SECTION_LIST) {
+            if (e.applicability === "exclusive") expect(e.exclusiveGroup, `${e.id}`).toBeTruthy();
+            else expect(e.exclusiveGroup, `${e.id} should not declare a group`).toBeUndefined();
+        }
+    });
+
+    it("WU-07 is owned by the host that actually renders, not the dead re-export chain", () => {
+        const owner = ALLOY_SECTION_MAP["WU-07"].owner as string;
+        expect(owner).toContain("InlineOpportunityFocusPanel");
+        // One section, one emitter: the unreachable drawer shell must not claim it too.
+        expect(readDoc("web/components/admin/drawer/EntityDrawerOperatingShell.tsx"))
+            .not.toContain('alloySectionDomAttrs("WU-07")');
     });
 });
