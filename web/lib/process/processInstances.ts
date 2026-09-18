@@ -283,11 +283,18 @@ export async function createEnrollmentProcessInstance(
         // governance fact that is not true of that instance.
         if (existing) return { id: existing, reused: true };
 
-        const { data, error } = await supabase
-            .from(PROCESS_INSTANCES_TABLE)
-            .insert(row)
-            .select("id")
-            .maybeSingle();
+        /*
+         * Creation INITIALIZES the opportunity's maintained facts in the SAME transaction as the
+         * insert. A post-create UPDATE would be a second lifecycle writer — exactly what the previous
+         * slice removed — and between the two statements the journey would exist unmaintained, which
+         * is the window a retired enrichment read can no longer cover for.
+         *
+         * TypeScript keeps the reuse and race decisions; the function does not invent a row.
+         */
+        const { data, error } = await supabase.rpc(
+            "insert_enrollment_participation_and_maintain_facts",
+            { p_org_id: args.orgId, p_row: row, p_ignore_duplicates: false },
+        );
         if (error) {
             // The partial index did its job against a concurrent writer.
             if (error.code === "23505") {
@@ -300,7 +307,8 @@ export async function createEnrollmentProcessInstance(
             }
             return { id: null, error: error.message };
         }
-        return { id: data ? String((data as { id: string }).id) : null, ...pinResult };
+        const created = (data ?? {}) as { id?: string | null };
+        return { id: created.id ? String(created.id) : null, ...pinResult };
     }
 
     /*
@@ -315,13 +323,13 @@ export async function createEnrollmentProcessInstance(
         if (priorShape) return { id: priorShape, reused: true };
     }
 
-    const { data, error } = await supabase
-        .from(PROCESS_INSTANCES_TABLE)
-        .upsert(row, { onConflict: "org_id,process_key,subject_id,context_id", ignoreDuplicates: true })
-        .select("id")
-        .maybeSingle();
+    const { data, error } = await supabase.rpc(
+        "insert_enrollment_participation_and_maintain_facts",
+        { p_org_id: args.orgId, p_row: row, p_ignore_duplicates: true },
+    );
     if (error) return { id: null, error: error.message };
-    if (data) return { id: String((data as { id: string }).id), ...pinResult };
+    const upserted = (data ?? {}) as { id?: string | null };
+    if (upserted.id) return { id: String(upserted.id), ...pinResult };
 
     /**
      * `ignoreDuplicates` means a conflict returns NO ROW. That is not a failure — the journey this

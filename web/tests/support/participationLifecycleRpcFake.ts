@@ -77,5 +77,33 @@ export function participationLifecycleRpcFake(
         row.updated_at = new Date().toISOString();
         return { data: { ok: true }, error: null };
     }
+    /*
+     * Step 2: creation initializes the opportunity's maintained facts in the same transaction as the
+     * INSERT, and the tour authority refreshes them on every transition. Both are RPCs now, so a
+     * `.from()`-only double fails with "supabase.rpc is not a function".
+     *
+     * The insert emulation appends to the caller's row array so the suites that assert WHICH row was
+     * created keep asking that question; maintenance itself has no observable effect on these rows,
+     * so it simply succeeds.
+     */
+    if (name === "insert_enrollment_participation_and_maintain_facts") {
+        const row = (params.p_row ?? {}) as Record<string, unknown>;
+        const id = typeof row.id === "string" && row.id ? row.id : `pi-${rows.length + 1}`;
+        const conflictOn = (r: LifecycleRow & Record<string, unknown>) =>
+            r.org_id === row.org_id
+            && r["process_key"] === row.process_key
+            && r["subject_id"] === row.subject_id
+            && r["context_id"] === row.context_id;
+        if (params.p_ignore_duplicates === true && rows.some((r) => conflictOn(r as never))) {
+            return { data: { ok: true, id: null, conflict: true } as never, error: null };
+        }
+        rows.push({ ...(row as object), id } as LifecycleRow);
+        return { data: { ok: true, id, conflict: false } as never, error: null };
+    }
+
+    if (name === "maintain_opportunity_tour_facts") {
+        return { data: { ok: true }, error: null };
+    }
+
     return null;
 }

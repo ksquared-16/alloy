@@ -176,6 +176,10 @@ async function mirrorTourMetadataAndSignal(input: {
         .eq("org_id", orgId);
     if (updErr) throw new Error(`tour_booking: opportunity metadata mirror failed — ${updErr.message}`);
 
+    // Scheduled, rescheduled, completed and no-show all pass through here, so all four maintain the
+    // active-tour fact the evaluated page now reads instead of the bookings table.
+    await maintainOpportunityTourFacts(supabase, orgId, opportunityId);
+
     const undo = async () => {
         const { error } = await supabase
             .from("opportunities")
@@ -211,6 +215,29 @@ async function mirrorTourMetadataAndSignal(input: {
 }
 
 /**
+ * Refresh the opportunity's maintained active-tour facts from the bookings table.
+ *
+ * Called on EVERY transition that can change whether a tour is active, because the evaluated Work
+ * Unit page no longer reads `tour_bookings` — it reads this. A transition that forgets to call it
+ * leaves a stale booking rendering as operational truth, and no functional test would notice,
+ * because the row would still be correctly shaped.
+ *
+ * It recomputes rather than patches: the answer is "the soonest active booking", which a single
+ * booking's new status cannot determine on its own.
+ */
+async function maintainOpportunityTourFacts(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityId: string,
+): Promise<void> {
+    const { error } = await supabase.rpc("maintain_opportunity_tour_facts", {
+        p_org_id: orgId,
+        p_opportunity_id: opportunityId,
+    });
+    if (error) throw new Error(`tour_booking: maintained tour facts refresh failed — ${error.message}`);
+}
+
+/**
  * Keep `opportunities` metadata + `status_key` aligned for enrollment CRM / queue consumers.
  * Call after the `tour_bookings` row is committed, before tour lifecycle workflow events.
  */
@@ -241,6 +268,13 @@ export async function applyTourBookingOpportunityIntegration(
         if (error) {
             throw new Error(`tour_booking: cancel signal failed — ${error.message}`);
         }
+        /*
+         * THE CANCEL BRANCH RETURNS EARLY, before the metadata mirror. Every other transition picks up
+         * maintenance on its way through `mirrorTourMetadataAndSignal`; this one never goes there, so a
+         * cancelled tour would have gone on rendering as an active one forever. It is maintained here,
+         * explicitly, for exactly that reason.
+         */
+        await maintainOpportunityTourFacts(supabase, orgId, opportunityId);
         return {};
     }
 
