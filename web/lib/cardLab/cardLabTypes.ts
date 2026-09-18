@@ -525,6 +525,8 @@ export type ChargeTemplateOption = {
      * move, and it moved.
      */
     reviewRequired: boolean;
+    /** The code-owned charge category, for grain decisions. Optional: older payloads omit it. */
+    categoryKey?: string;
 };
 
 export type AddChargeSpecimen = {

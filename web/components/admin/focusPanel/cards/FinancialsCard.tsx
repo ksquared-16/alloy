@@ -25,6 +25,7 @@ import {
     useDismissSignal,
     useReportPerspective,
 } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
+import { categoryPermitsChildGrain } from "@/lib/financials/chargeCategorySemantics";
 import {
     adaptAddChargeSpecimen,
     adaptChargeTemplateOption,
@@ -194,6 +195,18 @@ export default function FinancialsCard({
      * `pop` goes back exactly one level, and what "back" means is never inferred from whichever
      * component happened to render last.
      */
+    /*
+     * ── MULTI-CHILD ADD IS AN OPERATION, AND THIS IS THE SELECTION ────────────────────────────
+     *
+     * `subjectFilter` remains the ONE subject the command is anchored to — the attention context,
+     * and the child a single Add bills. This holds the ADDITIONAL children the operator ticked.
+     *
+     * Kept separate rather than folded into one array because the two mean different things: the
+     * anchor is where the operator already was, and these are a deliberate widening of it. Merging
+     * them would make "which child is this panel about" unanswerable the moment the last checkbox
+     * was cleared.
+     */
+    const [extraChildIds, setExtraChildIds] = useState<string[]>([]);
     const [stack, setStack] = useState<FinancialsSurface[]>([]);
     const surface = stack.length ? stack[stack.length - 1] : null;
     const overlay = surface?.kind ?? null;
@@ -1205,6 +1218,14 @@ export default function FinancialsCard({
      * household id goes in the payload as `customer_id` exactly as it always did, no
      * `customer_member_id` is invented, and the resolver — not this card — decides the subject.
      */
+    /*
+     * EVERY CHILD THIS OPERATION WILL BILL — the anchor plus whatever the operator ticked.
+     *
+     * De-duplicated and anchor-first, so the preview and the commit name the children in the same
+     * order the operator sees them, and a child cannot be billed twice by being both the anchor
+     * and a ticked sibling.
+     */
+
     const chargeInvocation = useMemo((): {
         entityType: string;
         entityId: string;
@@ -1233,6 +1254,27 @@ export default function FinancialsCard({
      * money, so the control stays inert rather than opening a panel with nothing to act on.
      */
     /** Open the settle form against the first charge in a given set. One body, two eligibilities. */
+    /**
+     * EVERY CHILD THIS OPERATION WILL BILL — the anchor, plus whatever the operator ticked.
+     *
+     * Anchor-first and de-duplicated, so the preview and the commit name children in the order the
+     * operator sees them, and a child cannot be billed twice by being both the anchor and a ticked
+     * sibling. Empty when the command is anchored at the household, which is how a household charge
+     * reaches the resolver: by naming no child at all, never by an empty array standing in for one.
+     */
+    const selectedChildIds = useMemo(() => {
+        const anchorId = chargeInvocation?.customerMemberId ?? null;
+        const ids = [anchorId, ...extraChildIds].filter((v): v is string => Boolean(v));
+        return [...new Set(ids)];
+    }, [chargeInvocation, extraChildIds]);
+
+    const selectedChildLabels = useMemo(
+        () => selectedChildIds.map(
+            (id) => vm?.subjects.find((sub) => sub.customerMemberId === id)?.displayName ?? "Child",
+        ),
+        [selectedChildIds, vm],
+    );
+
     const makeSettleOpener = useCallback(
         (rows: readonly FinancialsLedgerRow[]) => {
             if (!rows.length) return undefined;
@@ -1329,6 +1371,15 @@ export default function FinancialsCard({
                                       (s) => s.customerMemberId === chargeInvocation.customerMemberId,
                                   )?.displayName
                                 : undefined,
+                            /*
+                             * ONLY WHEN THE OPERATION IS ACTUALLY WIDER THAN ONE CHILD. Sending the
+                             * plural form for a single subject would route an ordinary Add through
+                             * the batch path and report it in batch language, which is a different
+                             * story told about the same act.
+                             */
+                            ...(selectedChildIds.length > 1
+                                ? { customer_member_ids: selectedChildIds, child_labels: selectedChildLabels }
+                                : {}),
                             // An `event_date` template is REFUSED without one — the preview returns
                             // `missing_event_date` — so the operator's date has to travel with the
                             // preview, not only with the commit.
@@ -1399,6 +1450,11 @@ export default function FinancialsCard({
                         // same resolver, so they must be asked the same question.
                         customer_id: customerId,
                         template_id: pending.templateId,
+                        // The same selection the preview was given — preview and commit run the
+                        // same resolver, so they must be asked the same question.
+                        ...(selectedChildIds.length > 1
+                            ? { customer_member_ids: selectedChildIds, child_labels: selectedChildLabels }
+                            : {}),
                         ...(chargeEventDate ? { event_date: chargeEventDate } : {}),
                         ...(chargeNote ? { note: chargeNote } : {}),
                     },
@@ -2836,6 +2892,36 @@ export default function FinancialsCard({
                                 const tpl = templates.find((x) => x.key === id);
                                 void preview(id, tpl?.label ?? "");
                             },
+                            /*
+                             * ── ALSO BILL THESE CHILDREN ─────────────────────────────────────
+                             *
+                             * Offered only where widening is LEGITIMATE: the charge category must
+                             * permit child grain (the code-owned rule — a household account fee
+                             * cannot become a child's), the command must be anchored on a child
+                             * rather than the household, and there must be a sibling to add.
+                             *
+                             * Anchored at the household the control is absent BY DESIGN: a
+                             * household charge is reached by naming NO child, and offering
+                             * checkboxes there would invite an empty selection to mean "household",
+                             * which is precisely the ambiguity the grain model forbids.
+                             */
+                            alsoChildren:
+                                selected
+                                && categoryPermitsChildGrain(selected.categoryKey ?? "")
+                                && subjectFilter !== "all"
+                                && vm.subjects.length > 1
+                                    ? {
+                                          options: vm.subjects
+                                              .filter((sub) => sub.customerMemberId !== subjectFilter)
+                                              .map((sub) => ({ id: sub.customerMemberId, label: sub.displayName })),
+                                          selectedIds: selectedChildIds,
+                                          onToggle: (id: string) =>
+                                              setExtraChildIds((prev) =>
+                                                  prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                                              ),
+                                          perChildLabel: chargeAmount || selected.amount || null,
+                                      }
+                                    : undefined,
                             subjects: [
                                 { id: "all", label: "Household" },
                                 ...vm.subjects.map((sub) => ({

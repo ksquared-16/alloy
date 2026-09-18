@@ -76,6 +76,21 @@ export default function AddChargeCommand({
         subjects: Array<{ id: string; label: string }>;
         selectedSubjectId: string | null;
         onSelectSubject: (subjectId: string) => void;
+        /**
+         * ── ALSO BILL THESE CHILDREN ──────────────────────────────────────────────────────────
+         *
+         * Absent when the operation cannot legitimately widen: the charge category does not permit
+         * child grain, or the account has only one child. MULTIPLE CHILDREN IS AN OPERATION, not a
+         * grain — each ticked child receives their own independent obligation at the full amount,
+         * and nothing here creates a shared or household row.
+         */
+        alsoChildren?: {
+            options: Array<{ id: string; label: string }>;
+            selectedIds: string[];
+            onToggle: (id: string) => void;
+            /** The per-child amount, already formatted, so the total can be stated honestly. */
+            perChildLabel: string | null;
+        };
         amount: string;
         onAmount: (value: string) => void;
         note: string;
@@ -191,6 +206,42 @@ export default function AddChargeCommand({
                     <Value>{specimen.subject}</Value>
                 )}
             </Field>
+            {controls?.alsoChildren && controls.alsoChildren.options.length > 0 ? (
+                <Field label="Also bill">
+                    {/*
+                     * ── PER CHILD, STATED SO IT CANNOT BE MISREAD ────────────────────────────
+                     *
+                     * The amount is what EACH selected child is billed. Two children at $40 is two
+                     * $40 obligations totalling $80 — never $40 split in half, and never one $80
+                     * household charge. The count and the total are both said out loud, because
+                     * those are the two numbers an operator checks before committing money.
+                     */}
+                    <div className="alloy-os-addcharge__children" data-addcharge-children>
+                        {controls.alsoChildren.options.map((c) => {
+                            const checked = controls.alsoChildren!.selectedIds.includes(c.id);
+                            return (
+                                <label key={c.id} className="alloy-os-addcharge__child">
+                                    <input
+                                        type="checkbox"
+                                        data-addcharge-child={c.id}
+                                        checked={checked}
+                                        onChange={() => controls.alsoChildren!.onToggle(c.id)}
+                                    />
+                                    <span>{c.label}</span>
+                                </label>
+                            );
+                        })}
+                    </div>
+                    {controls.alsoChildren.selectedIds.length > 1 ? (
+                        <p className="alloy-os-addcharge__childsum" data-addcharge-childsum>
+                            {controls.alsoChildren.perChildLabel
+                                ? `${controls.alsoChildren.perChildLabel} per child · `
+                                : ""}
+                            {controls.alsoChildren.selectedIds.length} children · each receives their own charge
+                        </p>
+                    ) : null}
+                </Field>
+            ) : null}
             <Field label="Amount" required={!amountLocked}>
                 {controls && !amountLocked ? (
                     <input

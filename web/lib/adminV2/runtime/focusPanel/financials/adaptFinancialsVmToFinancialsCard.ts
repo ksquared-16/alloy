@@ -492,6 +492,12 @@ export function adaptChargeTemplateOption(
         requiresNote: tpl.amountStrategy !== "fixed",
         /* The server's answer, carried across unchanged. This adapter formats; it decides nothing. */
         reviewRequired: tpl.reviewRequired,
+        /*
+         * The category, so the command can honour the CODE-OWNED grain rule: a template whose
+         * category does not permit child grain must not offer a child selection at all. Carried,
+         * never interpreted here.
+         */
+        categoryKey: tpl.categoryKey,
     };
 }
 
