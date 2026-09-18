@@ -24,7 +24,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    compactPayableRows as selectCompactPayable,
     financialsRowsInSubjectScope,
+    ledgerPayableRows as selectLedgerPayable,
     rowInFinancialsSubjectScope,
 } from "@/lib/adminV2/runtime/focusPanel/financials/financialsRowScope";
 import { adaptFinancialsVmToFinancialsCard } from "@/lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard";
@@ -257,3 +259,113 @@ describe("the compact headline says something the lines do not", () => {
         }
     });
 });
+
+/**
+ * TWO INDEPENDENT SCOPE DIMENSIONS, AND COMPACT PAYMENT REQUIRES BOTH.
+ *
+ *   SUBJECT SCOPE — whose financial truth is relevant here. Child attention keeps household-grain
+ *                   rows and the selected child's, and excludes another child's.
+ *   PERIOD SCOPE  — which part of that truth belongs in a CURRENT-PERIOD summary card.
+ *
+ * They are independent, and one must never be solved by abusing the other. Compact Payment needs
+ * subject scope AND the current period AND `offersPayment`. The Details ledger deliberately crosses
+ * periods, so a prior-period obligation stays reachable rather than hidden.
+ *
+ * The seventh case is the one that produced the live defect: a settled current period beside an
+ * outstanding prior one. Compact offered Payment against August while stating September's $0.
+ */
+describe("compact payment eligibility — subject scope AND current period", () => {
+    const CURRENT = "2026-09";
+    const PRIOR = "2026-08";
+
+    /*
+     * These call the SHIPPED rules, not a restatement of them. A matrix that recomputed the
+     * predicate here would stay green while the card did something else entirely — which is exactly
+     * how the period bound went missing in the first place.
+     */
+    const compactPayable = (rows: TestRow[], scope: string) =>
+        selectCompactPayable(rows, scope, CURRENT).map((r) => r.description);
+
+    const detailPayable = (rows: TestRow[], scope: string) =>
+        selectLedgerPayable(rows, scope).map((r) => r.description);
+
+    const payable = (over: Partial<TestRow>) => row(over.subjectMemberId ?? null, { outstandingCents: 7500, offersPayment: true, ...over });
+    const settled = (over: Partial<TestRow>) => row(over.subjectMemberId ?? null, { outstandingCents: 0, offersPayment: false, ...over });
+
+    it("1 — household current-period payable → Payment", () => {
+        const rows = [payable({ description: "household fee", periodKey: CURRENT })];
+        expect(compactPayable(rows, CHILD_A)).toEqual(["household fee"]);
+        expect(compactPayable(rows, CHILD_B)).toEqual(["household fee"]);
+    });
+
+    it("2 — selected-child current-period payable → Payment", () => {
+        const rows = [payable({ description: "a tuition", subjectMemberId: CHILD_A, periodKey: CURRENT })];
+        expect(compactPayable(rows, CHILD_A)).toEqual(["a tuition"]);
+    });
+
+    it("3 — another child's current-period payable → excluded from this child's view", () => {
+        const rows = [payable({ description: "b tuition", subjectMemberId: CHILD_B, periodKey: CURRENT })];
+        expect(compactPayable(rows, CHILD_A), "a sibling's charge reached this child's card").toEqual([]);
+        // And it is not lost — it belongs to the sibling and to the account view.
+        expect(compactPayable(rows, CHILD_B)).toEqual(["b tuition"]);
+        expect(compactPayable(rows, "all")).toEqual(["b tuition"]);
+    });
+
+    it("4 — household PRIOR-period payable only → no Compact Payment, still in Details", () => {
+        const rows = [payable({ description: "registration fee", periodKey: PRIOR })];
+        expect(compactPayable(rows, CHILD_A)).toEqual([]);
+        // The decisive half: depth must not lose it.
+        expect(detailPayable(rows, CHILD_A)).toEqual(["registration fee"]);
+    });
+
+    it("5 — selected-child PRIOR-period payable only → no Compact Payment, still in Details", () => {
+        const rows = [payable({ description: "a late fee", subjectMemberId: CHILD_A, periodKey: PRIOR })];
+        expect(compactPayable(rows, CHILD_A)).toEqual([]);
+        expect(detailPayable(rows, CHILD_A)).toEqual(["a late fee"]);
+    });
+
+    it("6 — current period fully paid → no Payment", () => {
+        const rows = [settled({ description: "materials", periodKey: CURRENT }), settled({ description: "late pickup", periodKey: CURRENT })];
+        expect(compactPayable(rows, CHILD_A)).toEqual([]);
+        expect(detailPayable(rows, CHILD_A)).toEqual([]);
+    });
+
+    it("7 — WRIGLEY: settled current period beside an outstanding prior one", () => {
+        /*
+         * The live defect, as a fixture. September is settled in full; August carries $75 at
+         * household grain. Compact states September, so it may not offer August — while Details,
+         * which crosses periods, must still reach it.
+         */
+        const rows = [
+            settled({ description: "materials", periodKey: CURRENT }),
+            settled({ description: "late pickup", periodKey: CURRENT }),
+            payable({ description: "registration fee", periodKey: PRIOR }),
+        ];
+        expect(compactPayable(rows, CHILD_A), "a prior-period charge reached the compact card").toEqual([]);
+        expect(detailPayable(rows, CHILD_A), "depth lost the prior-period obligation").toEqual(["registration fee"]);
+    });
+
+    it("mixed current + prior: Compact takes only the current one, Details keeps both", () => {
+        const rows = [
+            payable({ description: "september tuition", periodKey: CURRENT }),
+            payable({ description: "august registration", periodKey: PRIOR }),
+        ];
+        expect(compactPayable(rows, CHILD_A)).toEqual(["september tuition"]);
+        expect(detailPayable(rows, CHILD_A)).toEqual(["september tuition", "august registration"]);
+    });
+
+    it("the two dimensions are independent — neither substitutes for the other", () => {
+        /*
+         * A sibling's CURRENT-period charge and the household's PRIOR-period charge are each excluded
+         * for a different reason. If either rule were doing the other's job, one of these would leak.
+         */
+        const rows = [
+            payable({ description: "b tuition", subjectMemberId: CHILD_B, periodKey: CURRENT }),
+            payable({ description: "household prior", periodKey: PRIOR }),
+        ];
+        expect(compactPayable(rows, CHILD_A)).toEqual([]);
+        // Period scope alone would have admitted the sibling; subject scope alone would have admitted August.
+        expect(detailPayable(rows, CHILD_A)).toEqual(["household prior"]);
+    });
+});
+

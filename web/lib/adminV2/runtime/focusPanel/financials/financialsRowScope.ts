@@ -59,3 +59,53 @@ export function financialsRowsInSubjectScope<T extends FinancialsScopedRow>(
 ): T[] {
     return rows.filter((row) => rowInFinancialsSubjectScope(row, scope));
 }
+
+/**
+ * ── THE SECOND SCOPE DIMENSION ──────────────────────────────────────────────────────────────────
+ *
+ * Subject scope answers WHOSE financial truth is relevant. Period scope answers WHICH PART of that
+ * truth belongs in a current-period summary. They are independent, and one must never be solved by
+ * abusing the other.
+ *
+ * The compact card states this period's responsibility and balance, so its Payment control may only
+ * settle this period. A prior-period obligation is not hidden — the Details ledger crosses periods
+ * deliberately, and that is where it stays reachable and explained.
+ *
+ * Found on the deployed build: Wrigley's September was settled in full, yet Compact offered Payment
+ * against an AUGUST registration fee, because eligibility was drawn from rows scoped by subject but
+ * never by period. The subject-filter defect had been masking it.
+ */
+
+/** A row, narrowed to the fields payment eligibility reads. */
+export type FinancialsPayableRow = FinancialsScopedRow & {
+    periodKey: string | null;
+    offersPayment: boolean;
+};
+
+/**
+ * What the COMPACT card may offer to settle: in subject scope, in the stated period, able to take
+ * money. All three, because each excludes a different thing for a different reason.
+ */
+export function compactPayableRows<T extends FinancialsPayableRow>(
+    rows: readonly T[],
+    scope: FinancialsSubjectScope,
+    currentPeriodKey: string | null,
+): T[] {
+    return financialsRowsInSubjectScope(rows, scope).filter(
+        (row) => row.offersPayment && row.periodKey === currentPeriodKey,
+    );
+}
+
+/**
+ * What the DEPTH surfaces may offer: in subject scope and able to take money, across every period.
+ *
+ * Deliberately NOT period-bound. The ledger shows the account over time, so a prior-period
+ * obligation must remain settleable from it.
+ */
+export function ledgerPayableRows<T extends FinancialsPayableRow>(
+    rows: readonly T[],
+    scope: FinancialsSubjectScope,
+): T[] {
+    return financialsRowsInSubjectScope(rows, scope).filter((row) => row.offersPayment);
+}
+

@@ -2076,3 +2076,34 @@ charge has no child agreement to adjust against.
   would be a separate product decision and was not invented here.
 - **The bounded producer.** No deep collections restored.
 
+### 32.6 Two scope dimensions — and Compact Payment requires both
+
+The deployed regression for §32.4 exposed a SECOND, independent dimension. Repairing subject scope
+correctly stopped discarding household rows, and that immediately made a PRIOR-PERIOD obligation
+reachable: Wrigley's September was settled in full ($43 responsibility, $43 payments, $0 balance),
+yet the compact card offered Payment against an **August** $75 registration fee. Eligibility was
+drawn from rows scoped by subject but never by period; the old subject-filter defect had been masking
+it, which is why the screen had looked right.
+
+| dimension | question | Compact | Details / ledger |
+| --- | --- | --- | --- |
+| **subject** | whose financial truth is relevant | household-grain + selected child; never a sibling's | same |
+| **period** | which part of that truth belongs on a current-period card | current period only | may cross periods |
+
+> **COMPACT PAYMENT ELIGIBILITY IS BOTH SUBJECT-SCOPED AND CURRENT-PERIOD-SCOPED.
+> DEPTH/LEDGER SETTLEMENT MAY CROSS PERIODS.**
+
+The two are independent and neither may be solved by abusing the other — a sibling's current-period
+charge and the household's prior-period charge are each excluded for a different reason, and the
+matrix proves that by failing if either rule starts doing the other's job.
+
+`compactPayableRows` and `ledgerPayableRows` are the shipped authorities; the certification calls them
+rather than restating the predicate, because a matrix that recomputed the rule would have stayed green
+while the card did something else — which is precisely how the period bound went missing.
+
+**Certified on the deployed build** (`22939a2d6`), Wrigley, child-scoped: compact rendered at
+`density=compact` / col 9/4, no duplicate headline, Responsibility $43.00 and Current balance $0.00
+both stated, **Payment absent**, Add and Details present, no clipping, footer and card overflow 0,
+Process/Financials row rhythm unchanged — while Details still surfaces the August $75 with a
+settlement path.
+
