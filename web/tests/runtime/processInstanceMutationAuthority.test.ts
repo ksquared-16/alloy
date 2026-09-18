@@ -105,25 +105,25 @@ describe("process lifecycle truth has exactly one mutation owner", () => {
         }
     });
 
-    it("THE GATE: the canonical owner still stamps stage entry and holds optimistic concurrency", () => {
+    it("THE GATE: the canonical owner routes through the transaction, holding no direct write", () => {
         /*
-         * Scoped to the FUNCTION BODY, not the file. The optimistic-concurrency guard appears four
-         * times in this module — once per update port — so a file-wide `toContain` passes happily
-         * while the process-participation port loses its own. A plant proved exactly that: the guard
-         * was deleted from `updateProcessParticipation` and the assertion still found one of the
-         * other three. Asserting against the file was measuring nothing.
+         * These semantics MOVED, deliberately and under authorization: the port used to issue a bare
+         * UPDATE, which left the participation lifecycle write with no transaction for Step 2's
+         * maintained fact to join. They now live in SQL, so this gate follows them there rather than
+         * asserting against the file they left — and it asserts the port no longer writes the table
+         * itself, which is the half that would otherwise regress silently.
          */
         const owner = readFileSync(join(process.cwd(), CANONICAL_OWNER), "utf8");
         const start = owner.indexOf("async updateProcessParticipation");
-        expect(start, "the canonical lifecycle port is gone").toBeGreaterThan(-1);
         const nextPort = owner.indexOf("async ", start + 10);
         const body = owner.slice(start, nextPort > start ? nextPort : undefined);
 
-        expect(body).toContain('hasOwnProperty.call(input.patch, "stage_key")');
-        expect(body, "stage entry is no longer stamped on a stage change").toContain("patch.stage_entered_at");
-        expect(body, "optimistic concurrency was dropped from the lifecycle port")
-            .toContain('q.eq("updated_at", input.expected_version)');
-        expect(body).toContain("record_not_found_or_stale");
+        expect(body, "the port writes process_instances directly again")
+            .not.toMatch(/\.from\(\s*["']process_instances["']\s*\)/);
+        expect(body).toContain('ctx.supabase.rpc("update_participation_and_maintain_facts"');
+        expect(body, "the not-found/stale vocabulary was dropped").toContain("record_not_found_or_stale");
+        expect(body, "the patch allowlist is gone — this would become a generic table writer")
+            .toContain("ALLOWED_PATCH_FIELDS");
     });
 
     it("the canonical runtime keeps the commit boundary Step 2 will attach to", () => {
@@ -143,5 +143,95 @@ describe("process lifecycle truth has exactly one mutation owner", () => {
         const create = owner.slice(owner.indexOf("async createProcessParticipation"), owner.indexOf("async updateProcessParticipation"));
         expect(create).not.toMatch(/\.from\(\s*["']process_instances["']\s*\)/);
         expect(create).toContain("ensureOpportunityCustomerMemberParticipation");
+    });
+});
+
+describe("the participation lifecycle write has ONE transaction", () => {
+    /**
+     * Step 2 needs somewhere to put the maintained opportunity fact such that it cannot commit while
+     * the participation update rolls back, or vice versa. A plpgsql function body IS one transaction,
+     * so the seam is real the moment the write lives inside it.
+     *
+     * The migration carries its own execution proof — it exercises success, stage stamping, stale
+     * version, missing row, cross-org and a forced rollback against real rows and raises on any
+     * mismatch. These gates guard the CONTRACT so it cannot be quietly widened or weakened.
+     */
+    const MIGRATION_RAW = readFileSync(
+        join(process.cwd(), "..", "supabase", "migrations",
+             "20260918140000_participation_lifecycle_transaction_boundary.sql"), "utf8");
+    /*
+     * Code only. The file's prose names SECURITY DEFINER in order to explain why it is NOT used, and
+     * a raw scan reads that explanation as the thing it forbids — the same comment-vs-code trap that
+     * made an earlier gate assert against its own documentation.
+     */
+    const MIGRATION = MIGRATION_RAW.replace(/^\s*--.*$/gm, "");
+
+    it("THE GATE: the function is SECURITY INVOKER, never DEFINER", () => {
+        // process_instances carries RLS org policies. A DEFINER function would bypass them and become
+        // a privilege escalation for anyone who could reach it.
+        expect(MIGRATION).toContain("SECURITY INVOKER");
+        expect(MIGRATION, "SECURITY DEFINER would bypass the RLS org policies").not.toContain("SECURITY DEFINER");
+    });
+
+    it("THE GATE: it is the domain operation, not a table writer", () => {
+        /*
+         * Exactly two settable fields, each with a supplied-flag, because `null` means SET NULL and
+         * absent means LEAVE ALONE. No column list, no JSON patch language, no reachable third column.
+         */
+        expect(MIGRATION).toContain("p_set_stage_key boolean");
+        expect(MIGRATION).toContain("p_set_state boolean");
+        for (const forbidden of ["p_patch jsonb", "EXECUTE format", "quote_ident"]) {
+            expect(MIGRATION, `${forbidden} would make this generic CRUD`).not.toContain(forbidden);
+        }
+        expect(MIGRATION).not.toMatch(/SET\s+metadata\s*=/);
+    });
+
+    it("THE GATE: the optimistic-concurrency predicate survives", () => {
+        expect(MIGRATION).toContain("p_expected_version IS NULL OR updated_at = p_expected_version");
+        expect(MIGRATION).toContain("'record_not_found_or_stale'");
+    });
+
+    it("THE GATE: stage entry stamps on SUPPLY, matching the port it replaced", () => {
+        // Deliberately presence-based, not change-based: re-sending the same stage_key restamps today,
+        // and this slice moves a transaction boundary without changing semantics.
+        expect(MIGRATION).toContain("stage_entered_at = CASE WHEN p_set_stage_key THEN v_now       ELSE stage_entered_at END");
+    });
+
+    it("THE GATE: the org predicate is present, so a row cannot be reached cross-tenant", () => {
+        expect(MIGRATION).toContain("AND org_id = p_org_id");
+    });
+
+    it("THE GATE: the migration proves itself by execution, not by text", () => {
+        // Every one of these is a raise-on-mismatch assertion against real rows.
+        // Specimen strings live inside RAISE statements, which survive comment stripping.
+        for (const specimen of [
+            "SELFTEST: state update refused",
+            "SELFTEST: stage_entered_at not stamped on a stage change",
+            "SELFTEST: stale write was accepted",
+            "SELFTEST: missing row not reported as stale",
+            "SELFTEST: cross-org write succeeded",
+            "survived a rolled-back transaction",
+        ]) {
+            expect(MIGRATION, `the ${specimen} specimen is gone`).toContain(specimen);
+        }
+        // And the fixtures must not survive the migration.
+        expect(MIGRATION).toContain("SELFTEST_CLEANUP");
+    });
+
+    it("the Step 2 seam is named, and still empty", () => {
+        // Step 2 adds its UPDATE here. Naming it is what stops it being added somewhere else.
+        // The seam is a comment by nature, so this one reads the RAW file.
+        expect(MIGRATION_RAW).toContain("STEP 2 SEAM");
+        expect(MIGRATION, "a maintained-fact column was created before it was authorized")
+            .not.toMatch(/ALTER TABLE\s+(public\.)?opportunities/i);
+    });
+
+    it("the command's `dependent` classification is unchanged", () => {
+        // The RPC is an implementation detail of the existing command, not a new operator command.
+        const handlers = readFileSync(join(process.cwd(), "lib/pos/processingIdentity/commands/handlers.ts"), "utf8");
+        const cmd = handlers.slice(handlers.indexOf("const updateProcessParticipation"));
+        const meta = cmd.slice(0, cmd.indexOf("async validate"));
+        expect(meta).toContain('atomicity: "dependent"');
+        expect(meta).toContain('idempotency: "operation_key"');
     });
 });

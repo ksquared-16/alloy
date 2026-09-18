@@ -359,26 +359,55 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
         },
 
         async updateProcessParticipation(ctx, input) {
-            const patch: Record<string, unknown> = {
-                ...input.patch,
-                updated_at: new Date().toISOString(),
-            };
-            if (
-                Object.prototype.hasOwnProperty.call(input.patch, "stage_key") &&
-                patch.stage_entered_at == null
-            ) {
-                patch.stage_entered_at = new Date().toISOString();
+            /*
+             * ── ONE TRANSACTION, NOT A BARE UPDATE ───────────────────────────────────────────────
+             *
+             * This used to issue the UPDATE directly. That left the participation lifecycle write
+             * with no transaction of its own, so Step 2 had nowhere to attach the maintained
+             * opportunity fact without risking a split commit — canonical truth moving while the
+             * fact it feeds did not.
+             *
+             * The RPC IS that transaction. Semantics are unchanged and now live in SQL: the
+             * stage-entry stamp keys on `stage_key` being SUPPLIED (not on the value changing), the
+             * optimistic-concurrency guard is absent when no expected version is given, and not-found
+             * and stale remain one outcome under the same `record_not_found_or_stale` / `stale`
+             * vocabulary.
+             *
+             * The command above this port sends at most `stage_key` and `state`, so anything else is
+             * refused rather than silently dropped — this is the domain operation, not a table writer.
+             */
+            const ALLOWED_PATCH_FIELDS = new Set(["stage_key", "state"]);
+            const unexpected = Object.keys(input.patch).filter((k) => !ALLOWED_PATCH_FIELDS.has(k));
+            if (unexpected.length > 0) {
+                return {
+                    ok: false,
+                    error: `unsupported_participation_patch_fields: ${unexpected.sort().join(",")}`,
+                    code: "unsupported_patch",
+                };
             }
-            let q = ctx.supabase
-                .from("process_instances")
-                .update(patch)
-                .eq("id", input.participation_id)
-                .eq("org_id", ctx.orgId);
-            if (input.expected_version) q = q.eq("updated_at", input.expected_version);
-            const { data, error } = await q.select("id");
+
+            const setStage = Object.prototype.hasOwnProperty.call(input.patch, "stage_key");
+            const setState = Object.prototype.hasOwnProperty.call(input.patch, "state");
+
+            const { data, error } = await ctx.supabase.rpc("update_participation_and_maintain_facts", {
+                p_org_id: ctx.orgId,
+                p_participation_id: input.participation_id,
+                p_expected_version: input.expected_version ?? null,
+                p_set_stage_key: setStage,
+                // `null` means SET NULL and absent means LEAVE ALONE; the flag carries that distinction.
+                p_stage_key: setStage ? ((input.patch.stage_key as string | null) ?? null) : null,
+                p_set_state: setState,
+                p_state: setState ? ((input.patch.state as string | null) ?? null) : null,
+            });
             if (error) return { ok: false, error: error.message, code: error.code };
-            if (!data || (Array.isArray(data) && data.length === 0)) {
-                return { ok: false, error: "record_not_found_or_stale", code: "stale" };
+
+            const result = (data ?? {}) as { ok?: boolean; error?: string; code?: string };
+            if (result.ok !== true) {
+                return {
+                    ok: false,
+                    error: result.error ?? "record_not_found_or_stale",
+                    code: result.code ?? "stale",
+                };
             }
             return { ok: true };
         },
