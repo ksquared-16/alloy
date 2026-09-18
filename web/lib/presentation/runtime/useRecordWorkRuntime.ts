@@ -35,7 +35,6 @@ import {
 import { dispatchDrawerLayoutRuntimeBodyInvalidate } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyInvalidate";
 import {
     invalidateDrawerLayoutRuntimeBodyCacheForEntity,
-    prefetchDrawerLayoutRuntimeBody,
 } from "@/lib/layout/runtime/drawerLayoutRuntimeBodySessionCache";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import {
@@ -272,14 +271,24 @@ export function useRecordWorkRuntime(
                 attentionSubjectId,
             },
         );
-        prefetchDrawerLayoutRuntimeBody({
-            apiPath: "/api/admin/layout-runtime/opportunity-drawer-body",
-            entityId: vm.entity.id,
-            queryParams: {
-                departmentId: vm.workspace.department_id ?? null,
-                workUnitId: vm.workspace.work_unit_id ?? null,
-            },
-        });
+        /*
+         * ── THE DRAWER BODY IS NOT FIRST-ORDER WORK ──────────────────────────────────────────────
+         *
+         * A prefetch fired from here, the moment the VM was applied. Slice 12G measured what it cost:
+         * a 4,957 ms request starting at 8,074 ms and finishing at 13,031 ms — the last request of
+         * the navigation and the longest single item in the entire trace.
+         *
+         * It bought the operator nothing. The payload is the full record drawer BODY layout, and the
+         * Focus Panel destination does not render it: 12G recorded ZERO visible mutation from this
+         * response. The operator has to open the full record drawer before any of it is seen, and
+         * most never do on a given visit.
+         *
+         * So it is not made faster and it is not cached — it simply does not happen yet. When the
+         * drawer is actually opened, `useOpportunityDrawerLayoutRuntimeBody` fetches it through
+         * `fetchDrawerLayoutRuntimeBodyDeduped`, which is the same owner this prefetch used: the
+         * demand path is unchanged, and an execution already in flight is joined rather than
+         * duplicated. Post-mutation invalidation below is untouched.
+         */
         const applyMs = typeof performance !== "undefined" ? Math.round(performance.now() - startedAt) : 0;
         logDrawerVmRuntime("payload_ready", { opportunity_id: vm.entity.id, reason, generation: vm.generation, payload_apply_ms: applyMs });
     }, [attentionSubjectId]);
