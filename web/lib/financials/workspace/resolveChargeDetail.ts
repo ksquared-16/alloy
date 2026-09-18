@@ -79,6 +79,10 @@ export type ChargeDetail = {
     /** "posted" | "draft" | "void" | whatever the spine says. Never re-derived here. */
     status: string;
     serviceDate: string | null;
+    /** When the obligation is issued — `billable_on`. */
+    invoiceDate: string | null;
+    /** When payment is expected. Null where the organisation has configured no terms. */
+    dueDate: string | null;
     postedAt: string | null;
 
     /** ATTRIBUTION — the child this is about, or null when it is genuinely the household's. */
@@ -172,7 +176,7 @@ export async function resolveChargeDetail(
         .from("charges")
         .select(
             "id, billable_source_type, billable_source_id, amount_cents, currency_code, status, "
-            + "service_date, posted_at, description, charge_template_id, billable_on, occurs_on, created_at, "
+            + "service_date, posted_at, description, charge_template_id, billable_on, occurs_on, due_date, created_at, "
             + "charge_category, charge_type, metadata",
         )
         .eq("org_id", args.orgId)
@@ -194,6 +198,7 @@ export async function resolveChargeDetail(
         charge_template_id: string | null;
         /* The period and GL inputs. `placeInBillingPeriod` reads the date columns by name. */
         billable_on: string | null;
+        due_date: string | null;
         occurs_on: string | null;
         created_at: string | null;
         charge_category: string | null;
@@ -408,6 +413,20 @@ export async function resolveChargeDetail(
         status: t(charge.status),
         serviceDate: charge.service_date,
         postedAt: charge.posted_at,
+        /*
+         * ── FIVE DATES, FIVE FIELDS ──────────────────────────────────────────────────────────
+         *
+         * The detail already carried the service date, the billing period and the accounting
+         * period, and stopped there. The INVOICE date — when the obligation is issued — was read
+         * from the row and never exposed, and the DUE date was not read at all, so an organisation
+         * could configure its payment terms, the charge could record them, and no surface in the
+         * product would say what they were.
+         *
+         * They are separate fields because they are separate facts. A specimen where they coincide
+         * is a coincidence, not a licence to collapse them.
+         */
+        invoiceDate: charge.billable_on,
+        dueDate: charge.due_date,
         billingPeriodKey: billing.key,
         billingPeriodLabel: billing.key ? billingPeriodLabel(billing.key) : null,
         accountingPeriod,

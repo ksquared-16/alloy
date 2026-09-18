@@ -118,3 +118,41 @@ describe("THE GATE — a reversal is a Reversal, not a Credit (§7G)", () => {
         }
     });
 });
+
+describe("THE GATE — the five dates are five fields (§7E)", () => {
+    const resolver = src("lib/financials/workspace/resolveChargeDetail.ts");
+    const detail = src("app/adminV2/financials/FinancialsChargeDetail.tsx");
+
+    /*
+     * ── WIRED, AND INVISIBLE ─────────────────────────────────────────────────────────────────
+     *
+     * The due-date resolver was wired into charge resolution and the column was written — and no
+     * surface in the product displayed it. The charge detail carried the service date, the billing
+     * period and the accounting period, read `billable_on` without exposing it, and did not read
+     * `due_date` at all. An organisation could state its payment terms, the charge could record
+     * them, and an operator could never see them. A capability nobody can observe cannot be
+     * certified, and would have entered Human QA as a working feature on the strength of a unit
+     * test alone.
+     */
+    it("reads the due date from the charge at all", () => {
+        expect(resolver, "the select asks for it").toMatch(/select[\s\S]{0,400}due_date/);
+        expect(resolver).toContain("dueDate: charge.due_date");
+        expect(resolver, "and the invoice date it already read is exposed too")
+            .toContain("invoiceDate: charge.billable_on");
+    });
+
+    /* Separate fields because they are separate facts — a specimen where they coincide is a coincidence. */
+    it("states invoice date and due date beside the periods, not folded into them", () => {
+        for (const id of ['testId="invoice-date"', 'testId="due-date"', 'testId="billing-period"', 'testId="accounting-period"']) {
+            expect(detail, `the detail states ${id}`).toContain(id);
+        }
+    });
+
+    /*
+     * NO CONFIGURED TERMS IS AN ANSWER. An organisation that has stated none must read as that
+     * rather than as an empty cell an operator would take for missing data — and never as "today".
+     */
+    it("says so plainly when the organisation has configured no terms", () => {
+        expect(detail).toContain('detail.dueDate ? formatDisplayDate(detail.dueDate) : "No configured terms"');
+    });
+});

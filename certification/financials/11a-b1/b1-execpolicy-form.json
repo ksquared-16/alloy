@@ -1,0 +1,74 @@
+{
+  "selects": [
+    {
+      "testid": "create-policy-type",
+      "value": "proration",
+      "options": [
+        "Proration",
+        "Billing cadence",
+        "Grace period",
+        "Posting review",
+        "Vacation credit",
+        "Due date"
+      ]
+    },
+    {
+      "testid": "create-policy-scope",
+      "value": "org",
+      "options": [
+        "Org default",
+        "Location",
+        "Service",
+        "Rate Plan"
+      ]
+    },
+    {
+      "testid": "policy-value-method",
+      "value": "none",
+      "options": [
+        "No proration",
+        "Daily",
+        "Calendar day",
+        "Business day"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "type": "search",
+      "name": "Search…"
+    },
+    {
+      "type": "text",
+      "name": "policies-search"
+    },
+    {
+      "type": "text",
+      "name": "create-policy-label"
+    },
+    {
+      "type": "date",
+      "name": "create-policy-effective_start"
+    }
+  ],
+  "buttons": [
+    "QS",
+    "Tuition",
+    "Catalog",
+    "Policies",
+    "Accounting",
+    "Simulator",
+    "Funding",
+    "New Policy",
+    "Sibling discount (QA specimen)\nPricing · Discount\nActive · from 2026-01-01",
+    "Create policy",
+    "Cancel",
+    "Reset",
+    "Pin",
+    "Close",
+    "Here are some ways I can help\n▾",
+    "Explain this configuration\nSummarize the active state and working changes",
+    "Review configuration attention\nIdentify setup, publication, or assignment issues",
+    "Review unpublished changes\nExplain what remains private to Organization"
+  ]
+}
