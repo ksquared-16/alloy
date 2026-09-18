@@ -101,6 +101,132 @@ that bills it.
 
 ---
 
+## 3.1 Billing period identity — the interval, not the month
+
+**Owner:** `lib/financials/billingPeriod.ts`.
+
+A billing period is a **commercial interval**. Its identity carries its boundaries:
+
+| Cadence | Key | Label |
+|---|---|---|
+| monthly | `2026-09` *(unchanged)* | September 2026 |
+| weekly | `2026-09-21~2026-09-27` | Sep 21–27, 2026 |
+| biweekly | `2026-09-21~2026-10-04` | Sep 21–Oct 4, 2026 |
+| crossing a year | `2026-12-28~2027-01-03` | Dec 28, 2026–Jan 3, 2027 |
+
+**Monthly is unchanged byte-for-byte.** `YYYY-MM` is what every existing resolution key, stored
+`service_period`, ledger grouping and `<input type="month">` already holds. A monthly commercial
+period *is* the calendar month, so it ignores the anchor.
+
+**Weeks are not ISO weeks.** Periods tile from the **agreement's own anchor** — the earliest
+accepted term's `effective_start` — so one tenant's week runs Mon–Sun and another's Thu–Wed, and
+both are right. A shared calendar would impose a boundary nobody signed.
+
+**`hourly` and `per_session` have no interval.** They price a unit of usage; `isPeriodBillableCadence`
+is how a caller finds out before assuming, and generation refuses rather than inventing a month.
+
+Labels **derive from boundaries** (`billingPeriodLabel`), never from the key. `placeInBillingPeriod`
+takes an optional commercial grain and stays **monthly by default**, because every existing caller
+groups by calendar month and a ledger that silently regrouped would restate history.
+
+One tiling, called twice: `assignmentBillingPeriods` is shared by generation **and preview**, so a
+preview cannot show four weeks and then create five.
+
+## 3.2 Invoice date and due date
+
+| Date | Owner | Configured by |
+|---|---|---|
+| Invoice / bill date | `charges.billable_on` | template `billable_on_strategy` (`immediate` / `offset_days` / `next_billing_cycle`) |
+| Due date | `charges.due_date` | **`financial_policies` type `due_date`** |
+
+Four due strategies, each computable from a date the charge already carries: `on_invoice`,
+`days_after_invoice`, `on_period_start`, `days_after_period_start`.
+
+*Fixed day of the month* was evaluated and deliberately excluded: it is month-shaped and meaningless
+for a weekly organisation, and `days_after_period_start` expresses the same intent for every cadence
+(offset 0 = the first day of the period).
+
+**An unconfigured organisation is unchanged.** `resolveDueDate` returns `null`, meaning *leave the
+due date alone* — never "due today". An unknown stored strategy is **reported, not guessed**.
+
+`Billing Period Oct 1–31, invoiced Sep 25, due Oct 1` is an ordinary arrangement and is supported;
+the dates are separate columns and separate identities.
+
+## 3.3 Subject grain — two layers that cannot contradict
+
+**Owner:** `lib/financials/chargeCategorySemantics.ts` (code-owned, beside `CHARGE_CATEGORIES`).
+
+```
+CATEGORY   declares what is semantically PERMITTED     CHILD | HOUSEHOLD | CHILD_OR_HOUSEHOLD
+TEMPLATE   may select, default or NARROW within it
+```
+
+A template may say a field trip is always child-grained. It **may not** say tuition is
+household-grained: `narrowSubjectGrain` returns `contradicts_category` and **refuses**, rather than
+picking a winner, because either answer would be a guess about whose money a charge is.
+
+Why code and not a table: `CHARGE_CATEGORIES` is a code-owned invariant, and "tuition is for a
+child" is what tuition *means*, not a preference a tenant may invert.
+
+**There is no `CHILD_OR_MULTIPLE_CHILDREN`.** Multiple children is an *operation* producing
+independent child-grained rows. A stored grain meaning "several children" would be a row whose money
+belongs to nobody in particular, and every per-child question asked of it afterwards would have no
+answer.
+
+## 5.1 Discount eligibility is an intersection
+
+```
+a discount applies ONLY IF   the discount policy permits this charge/category/subject
+                      AND    the charge category permits discounting
+```
+
+The policy half is `policy.params.applies_to` (`tuition | fees | all`). The category half is
+`chargeCategorySemantics(...).discountable`. Neither side can override the other.
+
+Refused as **incoherent**: `discount`, `credit`, `adjustment`, `subsidy_offset` — a reduction of a
+reduction is not something any reconciliation can explain.
+
+**Business opinion is deliberately not encoded.** `late_pickup` *is* discountable at the category
+layer. "Late fees are never discounted" is a belief many organisations hold and some do not, so the
+tenant's own policy decides. `category_not_discountable` is reported separately from
+`category_not_covered`, because "this kind of charge cannot be discounted" and "your policy does not
+cover this" are different conversations with an operator.
+
+## 6.1 The prepaid position — unapplied is not available
+
+**Owner:** `lib/financials/prepaid/availableFunds.ts`. A projection over existing money; it computes
+no money of its own.
+
+| Bucket | Meaning |
+|---|---|
+| **available** | posted, inbound, not refunded, not allocated — the only figure fit to be offered |
+| **pending** | the platform has been *told* about money it does not have |
+| **held** | deposit-restricted — **`heldSupported: false`**, see below |
+
+Anything not explicitly `posted` fails toward *do not offer it*: the cost of under-reporting is an
+operator asking a question; the cost of over-reporting is money applied that never arrived.
+
+**Held deposits are not invented.** The `deposit` policy carries `amount_cents` and `refundable`,
+but nothing marks an individual receipt as held, so the platform cannot tell a held deposit from
+ordinary prepaid money. It reports `heldCents: 0` **with `heldSupported: false`** — saying plainly
+that the zero is an absent capability, not a measurement. Silently classifying every deposit as
+spendable would let an operator spend a refundable deposit by accident.
+
+**Deposit vs prepaid — the decision:** they are **one money spine with policy metadata over it**,
+not two stores. A refundable held deposit and an account credit balance are the same unapplied money
+under different policy. A distinct financial object would only be justified if the accounting
+lifecycle genuinely diverged, and it does not.
+
+**Current Balance excludes unapplied money**, and that is the *existing* doctrine, not a new rule:
+`balance = responsibility − payments` sums only what was **applied**. So prepaid funds do not move
+Current Balance and do not reduce Due until allocation. `owes $0 with $200 prepaid` and
+`balance −$200` therefore stay two different facts, distinguishable at rest.
+
+**Application stays manual/governed.** `payment_allocations` is the only application mechanism;
+nothing auto-applies.
+
+---
+
 ## 4. Recurring billing — the lifecycle, arrow by arrow
 
 There **is** a recurring billing engine. Do not write a second scheduler or generator.
@@ -287,66 +413,39 @@ the first reversal would make the two disagree. The applications are the record.
 
 These are reported rather than patched, because each needs a decision that is not a lane's to make.
 
-### 9.1 `BILLING_PERIOD_CADENCE_CONVERGENCE_REQUIRED`
+### 9.1 ~~`BILLING_PERIOD_CADENCE_CONVERGENCE_REQUIRED`~~ — **CLOSED**
 
-`BillingPeriodKey` is `"YYYY-MM"` — every billing period identity is a calendar month. Meanwhile
-cadence is configurable as `weekly | biweekly | monthly | annual | daily | hourly | per_session`.
+Billing period identity is now the interval's **boundaries**, resolved from the configured cadence
+and the agreement's own anchor. See §3.1. A weekly organisation billing a four-week span now
+produces four independent obligations with four distinct identities.
 
-`resolveTuitionRecurrence` accepts a `cadenceKey` but uses it only to **filter which terms** a run
-bills; the period itself is still a month. Because the occurrence key is
-`cev:tuition:<assignmentId>:<periodKey>`, a weekly-billed organisation would generate **one charge
-per month**, not four — the idempotency guarantee working exactly as designed, over the wrong period
-grain.
+### 9.2 ~~Due-date rule has no configuration authority~~ — **CLOSED**
 
-A weekly organisation must eventually be able to represent `Sep 21–27, 2026` as a real commercial
-billing period. The smallest evolution is to make billing-period identity a function of the
-configured cadence inside the existing `billingPeriod.ts` authority — **not** a parallel period
-system, and not a new column, since the period is derived.
+`due_date` is now a financial policy type with four strategies. See §3.2. It landed as a *policy*
+rather than a template column because due terms are how an organisation runs billing, not a property
+of one charge kind — and policies are already effective-dated and scopable.
 
-### 9.2 Due-date rule has no configuration authority
+### 9.3 ~~Discount eligibility is only half an intersection~~ — **CLOSED**
 
-`billable_on_strategy` gives the invoice/bill date a configured rule. `due_date` has none — it is
-supplied by the caller. So the model *can* represent `Billing Period Oct 1–31, invoiced Sep 25, due
-Oct 1` (the three dates are separate columns), but an organisation cannot **configure** the due-date
-rule. Smallest extension: `due_on_strategy` + `due_offset_days` on `financial_charge_templates`,
-mirroring the billable pair exactly.
+Both halves now vote. See §5.1.
 
-### 9.3 Discount eligibility is only half an intersection
+### 9.4 ~~Subject grain has no configuration authority~~ — **CLOSED at the model layer**
 
-The intended rule is:
+Category semantics now declare permitted grain, and a template may narrow within it. See §3.3.
 
-```
-discount applies ONLY IF  discount allows charge category
-                     AND  charge category permits discounting
-```
+**Still open:** the multi-child **Add operation** itself. The model supports it — independent
+child-grained rows are what the category layer requires and what generation already produces per
+child — but the Add command still offers one subject at a time. This is UI work over a settled
+model, not an architectural question.
 
-The **first** half exists: `policy.params.applies_to` is `tuition | fees | all`. The **second** half
-does not — no charge category or template carries a "discountable / exempt" flag, so `applies_to:
-"fees"` currently means *every* non-tuition category, sweeping in late-pickup and returned-payment
-fees that most organisations would exempt. Neither side should be able to override the other
-unilaterally.
+### 9.5 ~~Prepaid is representable but not surfaced as a position~~ — **CLOSED at the model layer**
 
-### 9.4 Subject grain has no configuration authority
+`resolveAccountPrepaidPosition` and `resolveAccountFinancialPosition` project the position over
+existing money. See §6.1.
 
-Nothing on charge categories, templates or policies expresses `CHILD_REQUIRED` / `HOUSEHOLD` /
-`CHILD_OR_HOUSEHOLD`.
-
-Note the shape of the category authority before extending it: `CHARGE_CATEGORIES` is a **code-owned
-invariant** in `lib/financials/billableSource.ts`, not a tenant-editable table. So the *permitted*
-grain per category belongs beside it in code, and a template may only **narrow** within that
-permitted set — which is exactly the intended doctrine and needs no new table for the category half.
-
-`MULTIPLE CHILDREN` is an **operational selection mode**, never a stored row grain. Selecting two
-children for a $40 field trip produces two independent $40 child-grained obligations — never one
-$80 household charge, and never an array of subject ids on one row.
-
-### 9.5 Prepaid is representable but not surfaced as a position
-
-The data distinguishes *owes $0 with $200 prepaid* from *owes −$200*: the former is a $0 obligation
-balance plus a $200 unapplied payment; the latter would be a negative responsibility. They are
-different rows and cannot be confused at the storage layer. **This is not an architectural
-deficiency.** What is missing is an account-level aggregate of unapplied money presented beside
-Balance, so an operator can see the distinction the data already holds.
+**Still open:** rendering it. The projection exists and is tested; the compact card does not yet
+show an "Available prepaid" figure beside Balance. Per §11 that indicator must be the *minimum
+financially necessary*, never an administration interface.
 
 ---
 
@@ -361,20 +460,41 @@ The chapter is `?chapter=policies`, rendered by `FinancialPoliciesConfigurationP
 `POLICY_TYPE_REGISTRY[policyType].fields` generically. A policy type added to the registry is
 therefore configurable by an operator **automatically**, with no new route and no bespoke screen.
 
-`financial_policies` scopes are `org | location | service | rate_plan`, effective-dated. The
-database already permits these types:
+`financial_policies` scopes are `org | location | service | rate_plan`, effective-dated.
 
-```
-proration · billing_cadence · grace_period · late_fee · nsf_fee · deposit · refund
-vacation_credit · withdrawal · write_off · adjustment_approval · draft_expiration
-posting_review
-```
+### The policy-type audit
 
-The application registry currently declares nine of the thirteen. `withdrawal`, `write_off`,
-`adjustment_approval` and `draft_expiration` are **permitted by the database and absent from the
-application model** — the same gap `vacation_credit` documents having had, where the consumption
-path read a boolean off an operational fact instead, putting commercial authority in the wrong
-place. Closing that gap is registry work, not schema work.
+Three questions, and they have three different answers — which is why counting types is misleading:
+*permitted by the database*, *declared in the application registry* (and therefore configurable by
+an operator), and *actually resolved by runtime code*.
+
+| Policy type | DB | Registry | Operator-visible | Consumed by runtime | Classification |
+|---|:--:|:--:|:--:|:--:|---|
+| `proration` | ✓ | ✓ | ✓ | ✓ (4 sites) | ACTIVE_RUNTIME_POLICY |
+| `posting_review` | ✓ | ✓ | ✓ | ✓ (4 sites) | ACTIVE_RUNTIME_POLICY |
+| `billing_cadence` | ✓ | ✓ | ✓ | ✓ | ACTIVE_RUNTIME_POLICY |
+| `grace_period` | ✓ | ✓ | ✓ | ✓ | ACTIVE_RUNTIME_POLICY |
+| `vacation_credit` | ✓ | ✓ | ✓ | ✓ | ACTIVE_RUNTIME_POLICY |
+| **`due_date`** | ✓ | ✓ | ✓ | ✓ | ACTIVE_RUNTIME_POLICY *(added this pass)* |
+| `deposit` | ✓ | ✓ | ✓ | — | DECLARED, INERT — configurable, not yet read. Holds the `refundable` flag §6.1 will need. |
+| `late_fee` | ✓ | ✓ | ✓ | — | DECLARED, INERT |
+| `nsf_fee` | ✓ | ✓ | ✓ | — | DECLARED, INERT |
+| `refund` | ✓ | ✓ | ✓ | — | DECLARED, INERT |
+| `withdrawal` | ✓ | — | — | — | FUTURE |
+| `write_off` | ✓ | — | — | — | FUTURE |
+| `adjustment_approval` | ✓ | — | — | — | FUTURE |
+| `draft_expiration` | ✓ | — | — | — | FUTURE |
+
+**The four DB-only types were deliberately NOT registered.** Registering them would make an operator
+a configuration screen for policies nothing resolves — a control that changes no behaviour, which is
+worse than an absent one because it looks like a capability. They are recorded here so a future lane
+finds them instead of inventing a parallel mechanism, and each becomes registry work *at the moment
+a runtime consumer exists for it*, not before.
+
+This is the same gap `vacation_credit` documents having had — the database permitted it, the
+application never caught up, and the consumption path read a boolean off an operational fact
+instead, putting commercial authority in the wrong place. The lesson is that a type should become
+configurable **when something reads it**, which is exactly how `due_date` was added this pass.
 
 **What is NOT configuration:** individual household or child state stays in its operational record
 and in Financials Details. Generated billing periods and transactions are operational Financials

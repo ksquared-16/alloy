@@ -768,18 +768,25 @@ wrong, even when the number looks plausible.
 
 ---
 
-## 43 · `GAP` — EXEMPT CHARGE
+## 43 · EXEMPT CHARGE — THE CATEGORY'S OWN REFUSAL
 
-**Missing:** no charge category or template carries a "discountable / exempt" flag. A discount
-configured as applying to *fees* currently means **every** non-tuition category — which sweeps in
-late-pickup and returned-payment fees that most organisations would exempt.
+Eligibility is now an intersection: a discount applies only if the **policy** permits the charge
+**and** the **category** permits discounting.
 
-Apply a fees-scoped discount and look at which charges it reaches.
+Apply a broadly-scoped discount (`all`, or `fees`) to an account that has a discount line, a credit
+and an adjustment on it.
 
-**PASS (for now):** confirm it reaches late-pickup-style fees, and record that as the known gap.
+**PASS:** the discount reaches ordinary priced charges (tuition, fees, field trips) and does **not**
+reach the discount, credit or adjustment rows. A reduction of a reduction is not something the
+ledger can explain, and it must not be created.
 
-**What must be true when this ships:** a discount applies only if the discount allows the category
-**AND** the category permits discounting. Neither side may override the other.
+**FAIL symptoms:** a discount line acquiring its own discount; a credit reduced by a discount; the
+net going below zero.
+
+> **Note on late-pickup fees.** The platform deliberately leaves `late_pickup` **discountable**.
+> "Late fees are never discounted" is a business decision, and your organisation expresses it
+> through the discount policy's own scope — not by the platform deciding for you. If you expect late
+> fees to be exempt here, that is a **policy configuration** question, not a defect.
 
 ---
 
@@ -807,16 +814,18 @@ applied amount exceeding what was unapplied.
 
 ---
 
-## 46 · `GAP` — PREPAID AS AN ACCOUNT POSITION
+## 46 · `GAP (SURFACE ONLY)` — PREPAID AS AN ACCOUNT POSITION
 
-**Missing:** unapplied money is tracked per payment but is not aggregated into an account-level
-**Prepaid / available credit** figure shown beside Balance.
+**Model closed; screen not yet.** The account position now distinguishes available prepaid money
+from the balance, and separates *available* from *pending* funds. What has not shipped is the
+indicator on the card.
 
-**PASS (for now):** you can find the $200 by opening the payment, but there is no account-level
-"Prepaid: $200" beside the balance. Record that.
+**PASS (for now):** you can find the $200 by opening the payment, and the balance correctly does
+**not** read −$200. There is no account-level "Prepaid: $200" beside Balance yet. Record that.
 
-**What must be true when this ships:** *owes $0 with $200 prepaid* must be visibly different from
-*owes −$200*. The data already distinguishes them; the screen does not yet.
+**What must NOT be true, ever:** Current Balance silently absorbing unapplied money. Prepaid funds
+do not reduce Balance or Due until they are **applied** — that is the accounting doctrine, not a
+display choice. If Balance moves when money merely arrives, that is a real defect.
 
 ---
 
@@ -877,31 +886,69 @@ result with no explanation.
 
 ---
 
-## 52 · `GAP` — WEEKLY CADENCE PERIOD IDENTITY
+## 52 · WEEKLY CADENCE PRODUCES WEEKLY PERIODS
 
-**Missing:** billing period identity is always a calendar month (`YYYY-MM`), while billing cadence
-is configurable as weekly, biweekly, monthly and others.
+Configure a weekly billing cadence for an assignment and run generation over a four-week span.
 
-If a weekly cadence can be configured, generate for a month.
+**PASS:** **four** charges, one per week, each naming its own period in words — *Sep 7–13, 2026*,
+*Sep 14–20, 2026*, and so on. Not one September charge, and not a technical identifier on screen.
 
-**PASS (for now):** confirm the period is reported as a **month**, and that a weekly-billed
-organisation therefore gets **one** charge for the month rather than four weekly ones. Record it.
+**FAIL symptoms:** one charge for the whole month (the original defect); four charges all labelled
+"September 2026"; a period key such as `2026-09-07~2026-09-13` shown to a human.
 
-**What must be true when this ships:** a weekly organisation must see a real commercial period such
-as **Sep 21–27, 2026** — not all weeks grouped into September.
+> The week boundaries follow **your agreement's own start date**, not a calendar Monday. Two
+> families on weekly tuition may legitimately sit on different week boundaries. That is correct.
 
 ---
 
-## 53 · `GAP` — DUE DATE RULE IS NOT CONFIGURABLE
+## 52b · RERUN A WEEKLY SPAN
 
-**Missing:** templates configure the invoice/bill date (`billable_on`) but there is no configurable
-due-date rule.
+Run the same weekly generation again.
 
-**PASS (for now):** confirm billing period, invoice date and due date are three separate values on
-a charge and can legitimately differ, and that the due date is not configurable per template.
+**PASS:** no new charges. Each week reports as already generated.
 
-**What must be true when this ships:** an organisation can configure "due on the 1st" or "due 10
-days after invoice" the same way it configures the bill date.
+**FAIL symptoms:** four more charges; eight charges total. This is the most damaging failure in
+recurring billing — it bills a family twice.
+
+---
+
+## 52c · BIWEEKLY AND MONTHLY
+
+Repeat with a biweekly cadence, then a monthly one.
+
+**PASS:** biweekly produces fourteen-day periods with correct boundaries; monthly produces exactly
+one period per month, labelled *September 2026* exactly as it always was.
+
+**FAIL symptoms:** monthly behaviour changing in any way — that is a regression, not a feature.
+
+---
+
+## 53 · DUE DATE IS A CONFIGURED TERM
+
+Go to **/organization/financials → Policies** and add a **Due date** policy — for example *Days
+after the invoice date*, offset **10**.
+
+Generate or add a charge and look at its dates.
+
+**PASS:** the due date is ten days after the invoice date. Billing period, invoice date and due date
+remain three separate values and may legitimately differ — *Billing Period Oct 1–31, invoiced Sep
+25, due Oct 1* is an ordinary arrangement and must be representable.
+
+**FAIL symptoms:** the due date equal to the invoice date regardless of the policy; the policy
+absent from the Policies chapter; the due date changing on charges created **before** the policy's
+effective date.
+
+---
+
+## 53b · NO DUE POLICY MEANS NO CHANGE
+
+On an organisation with **no** due-date policy configured, create a charge.
+
+**PASS:** the due date behaves exactly as it did before this policy existed. It is **not** set to
+today, and not silently set to the invoice date.
+
+**FAIL symptoms:** charges acquiring a due date nobody configured. A due date is a collections
+consequence; the platform must not invent one.
 
 ---
 
@@ -967,17 +1014,20 @@ a second, disconnected financials configuration route.
 - [ ] Child-specific vs household discount
 - [ ] Ongoing discount across periods
 - [ ] Effective boundary
-- [ ] Exempt charge (GAP)
+- [ ] Exempt charge — the category's own refusal
 - [ ] Prepaid — money before an obligation
 - [ ] Prepaid — partial application and remainder
-- [ ] Prepaid as an account position (GAP)
+- [ ] Prepaid as an account position (GAP: surface only)
 - [ ] Application is deliberate
 - [ ] Billing period vs accounting period
 - [ ] Recurring tuition generates once
 - [ ] Rerunning generation does not duplicate
 - [ ] Future and ended assignments
-- [ ] Weekly cadence period identity (GAP)
-- [ ] Due date rule is not configurable (GAP)
+- [ ] Weekly cadence produces weekly periods
+- [ ] Rerun a weekly span
+- [ ] Biweekly and monthly
+- [ ] Due date is a configured term
+- [ ] No due policy means no change
 - [ ] Organization financials configuration
 
 **OVERALL RESULT:  PASS / FAIL**
