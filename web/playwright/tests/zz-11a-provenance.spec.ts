@@ -45,8 +45,33 @@ test("A · Focus Panel Details — reductions state their decision", async ({ pa
 test("B · Workspace Accounts — the same meaning", async ({ page }) => {
     await page.goto("/workspace", { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(9000);
-    const fin = page.getByRole("button", { name: /^Financials$/ }).first();
-    if (await fin.count()) { await fin.click(); await page.waitForTimeout(8000); }
+    /*
+     * THE SIDEBAR NAV ITEM, not a button named "Financials".
+     *
+     * The previous probe clicked the first control matching /^Financials$/ and left the shell at 930
+     * characters — the account surface never opened and the run reported a false absence. Financials
+     * → Accounts is a MODAL raised from the sidebar, and the item's accessible name is its TITLE:
+     * "Financials — the financial work waiting on an operator, and the accounts it belongs to".
+     *
+     * This was a harness defect. Nothing in the product changed to accommodate it.
+     */
+    const fin = page.getByRole("button", { name: /Financials — the financial work/ }).first();
+    if (await fin.count()) { await fin.click(); await page.waitForTimeout(9000); }
+    else {
+        const alt = page.locator('[aria-label^="Financials"]').first();
+        if (await alt.count()) { await alt.click(); await page.waitForTimeout(9000); }
+    }
+    /*
+     * The modal opens on OVERVIEW. Accounts is a tab, and an account must then be chosen — the
+     * ledger belongs to an account, so a probe that stopped at the modal was measuring a dashboard
+     * and calling it an absence.
+     */
+    const accountsTab = page.getByRole("tab", { name: /^Accounts$/ }).or(page.getByRole("button", { name: /^Accounts$/ })).first();
+    if (await accountsTab.count()) { await accountsTab.click(); await page.waitForTimeout(6000); }
+    const account = page.getByText(/Certhouse Family/).first();
+    if (await account.count()) { await account.click(); await page.waitForTimeout(7000); }
+    const lens2 = page.getByRole("button", { name: /Credits & adjustments/i }).first();
+    if (await lens2.count()) { await lens2.click(); await page.waitForTimeout(3500); }
     await page.screenshot({ path: `${OUT}/b-workspace.png` });
     const r = await page.evaluate(() => {
         const txt = document.body.innerText || "";
@@ -54,10 +79,15 @@ test("B · Workspace Accounts — the same meaning", async ({ page }) => {
             saysDiscount: /\bDiscount\b/.test(txt),
             saysReversal: /\bReversal\b/.test(txt),
             saysCreditsLens: /Credits & adjustments/i.test(txt),
+            saysOngoing: /\bOngoing\b/.test(txt),
+            hasPercentBasis: /\d+% of \$/.test(txt),
+            typeValues: [...new Set(Array.from(document.querySelectorAll("[class*='type']"))
+                .map((e) => (e as HTMLElement).innerText.trim()).filter((v) => v && v.length < 20))].slice(0, 12),
             len: txt.length,
         };
     });
     /* eslint-disable no-console */
-    log(`workspace: Discount=${r.saysDiscount} Reversal=${r.saysReversal} lens=${r.saysCreditsLens} textLen=${r.len}`);
+    log(`workspace: Discount=${r.saysDiscount} Reversal=${r.saysReversal} lens=${r.saysCreditsLens} Ongoing=${r.saysOngoing} basis%=${r.hasPercentBasis} textLen=${r.len}`);
+    log(`workspace type values: ${JSON.stringify(r.typeValues)}`);
     /* eslint-enable no-console */
 });

@@ -454,11 +454,18 @@ function reductionPreviewOf(row: Record<string, unknown>): string | null {
     const r = reductionOf(row);
     if (!r) return null;
     const label = row.description == null ? "" : String(row.description);
-    const parts = [r.basisSummary, r.recurrenceLabel || null, r.explanation].filter(
+    /* Same rule as the Focus Panel: an explanation that already carries the basis is not repeated. */
+    const basis = r.basisSummary ?? null;
+    const explanation =
+        basis && r.explanation && String(r.explanation).includes(basis) ? null : r.explanation;
+    const parts = [basis, r.recurrenceLabel || null, explanation].filter(
         (v): v is string => Boolean(v && String(v).trim()),
     );
     if (!parts.length) return label || null;
-    return [label, ...parts].filter(Boolean).join(" · ");
+    /* Same rule as the Focus Panel: the TYPE column already states the concept. */
+    const concept = String(r.conceptLabel ?? "");
+    const redundant = label.toLowerCase() === concept.toLowerCase();
+    return (redundant ? parts : [label, ...parts]).filter(Boolean).join(" · ");
 }
 
 function LedgerPeriods({

@@ -747,12 +747,35 @@ export default function FinancialsDetailCard({
 function reductionPreview(e: FinancialsEvidence["ledger"][number]): string | null {
     const r = e.reduction;
     if (!r) return null;
-    const parts = [r.basisSummary, r.recurrenceLabel || null, r.explanation].filter(
+    /*
+     * THE EXPLANATION SOMETIMES IS THE BASIS. `applyFinancialReductions` writes an explanation like
+     * "discount · 10% of $400.00", so stating both produced
+     * "10% of $400.00 · Ongoing · discount · 10% of $400.00" — the row saying one fact twice in its
+     * narrowest column. Where the explanation already carries the basis, the basis alone is kept.
+     */
+    const basis = r.basisSummary;
+    const explanation =
+        basis && r.explanation && r.explanation.includes(basis) ? null : r.explanation;
+    const parts = [basis, r.recurrenceLabel || null, explanation].filter(
         (v): v is string => Boolean(v && v.trim()),
     );
     if (!parts.length) return e.label || null;
-    // The label still leads: it is what the row has always been called.
-    return [e.label, ...parts].filter(Boolean).join(" · ");
+
+    /*
+     * ── THE TYPE COLUMN ALREADY SAID IT ──────────────────────────────────────────────────────
+     *
+     * The label led here at first, and measured at 1680 the cell renders "discount · 10% of …" in
+     * 103px — the row spent its scarcest column repeating the word already printed one column to
+     * the left, and truncated the only part an operator could not get elsewhere.
+     *
+     * So where the label merely restates the concept, it is dropped and the BASIS leads. Where it
+     * says something the concept does not — a real description — it is kept. The column is not
+     * widened and the ledger keeps its density; the row simply stops saying the same thing twice.
+     */
+    const label = (e.label ?? "").trim();
+    const redundant = label.toLowerCase() === r.conceptLabel.toLowerCase()
+        || label.toLowerCase() === r.concept.toLowerCase();
+    return (redundant ? parts : [label, ...parts]).filter(Boolean).join(" · ");
 }
 
 function ledgerRowFromEntry(
