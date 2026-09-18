@@ -4,6 +4,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { revalidateEffectiveStatusDefinitionsCache } from "@/lib/admin/statusDefinitionsCache";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 import { normalizeStatusDefinitionMetadata } from "@/lib/admin/normalizeStatusMetadata";
@@ -156,6 +157,24 @@ export async function persistStageStatusAssignments(
         changedIds.push(String(row.id));
     }
 
+    /*
+     * THE WRITE IS COMMITTED; SAY SO.
+     *
+     * This is the canonical owner for stage/status assignment writes — both the Enrollment Process
+     * route and `saveLifecycleStageRuntimeConfig` come through here — and neither of them bumped the
+     * status-definition caches. So an operator could edit assignments, write canonical truth, read
+     * again, and be served the PRE-EDIT definitions from the process LRU and the Next Data Cache.
+     * Nothing errored and nothing logged; the stale value looked authoritative until a 90s timer
+     * expired.
+     *
+     * Bumped here rather than in the callers because a caller can be added, and a caller that forgets
+     * reintroduces exactly this defect. Bumped only when something actually changed, and only after
+     * the writes above returned — a bump for a write that did not commit would re-cache the old row
+     * under a fresh timestamp, which is worse than never bumping.
+     */
+    if (changedIds.length > 0) {
+        revalidateEffectiveStatusDefinitionsCache(orgId);
+    }
     return { changedIds };
 }
 

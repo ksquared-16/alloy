@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateEffectiveStatusDefinitionsCache } from "@/lib/admin/statusDefinitionsCache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
@@ -214,6 +215,14 @@ async function resetStageMetadata(
             .eq("org_id", orgId);
         if (upErr) return NextResponse.json({ error: upErr.message }, { status: 400 });
         changedIds.push(String(row.id));
+    }
+
+    if (changedIds.length > 0) {
+        // The reset path writes status_definitions directly rather than through
+        // `persistStageStatusAssignments`, so it carries its own bump. Without it this handler's OWN
+        // response — rebuilt from `fetchEffectiveStatusDefinitions` below, which reads through the
+        // cache — could return the metadata it just cleared.
+        revalidateEffectiveStatusDefinitionsCache(orgId);
     }
 
     logAdminAudit({

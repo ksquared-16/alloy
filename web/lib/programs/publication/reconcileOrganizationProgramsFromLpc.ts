@@ -9,6 +9,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { bumpOrgConfigFreshness } from "@/lib/admin/configFreshness";
 
 export type ProgramReconciliationSourceClass =
     | "canonical_organization_program"
@@ -334,6 +335,11 @@ export async function reconcileOrganizationProgramsFromLpc(
                 .eq("key", target.key)
                 .is("program_id", null)
                 .select("id");
+            if (!linkError && (linkedRows?.length ?? 0) > 0) {
+                // Reconciliation rewrites program_id on this org's categories; the cached read in
+                // front of them must not keep serving the unlinked rows.
+                bumpOrgConfigFreshness({ family: "location_program_categories", orgId: target.orgId });
+            }
             if (linkError) {
                 unresolved.push({
                     orgId: target.orgId,

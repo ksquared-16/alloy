@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { bumpOrgConfigFreshness } from "@/lib/admin/configFreshness";
 import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
 import {
     buildConfigurationDeliveryPlan,
@@ -1273,5 +1274,10 @@ export async function removeProgramLocationAssociations(input: {
         removedLocationIds.push(locationId);
     }
 
+    if (removedLocationIds.length > 0) {
+        // Removing a Program from a Location deletes location_program_categories rows, which the
+        // provisioning answer reads through a 90-second process cache.
+        bumpOrgConfigFreshness({ family: "location_program_categories", orgId: input.orgId });
+    }
     return { removedLocationIds, blocked };
 }
