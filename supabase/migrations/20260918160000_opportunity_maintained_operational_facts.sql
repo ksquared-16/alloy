@@ -506,7 +506,9 @@ BEGIN
 
     -- 10 · TOUR: schedule → reschedule → cancel → complete, each at the maintaining authority.
     INSERT INTO public.tour_bookings (org_id, opportunity_id, location_id, start_at, end_at, timezone, status_key, source)
-    VALUES (v_org, v_opp, v_loc, '2026-10-01T15:00:00Z', '2026-10-01T16:00:00Z', 'UTC', 'confirmed', 'selftest')
+    -- chk_tour_bookings_source allows admin|public_link|form_submission|automation only; a
+    -- descriptive value like 'selftest' is refused, and chk_tour_bookings_time_window needs end > start.
+    VALUES (v_org, v_opp, v_loc, '2026-10-01T15:00:00Z', '2026-10-01T16:00:00Z', 'UTC', 'confirmed', 'admin')
     RETURNING id INTO v_tour;
     PERFORM public.maintain_opportunity_tour_facts(v_org, v_opp);
     SELECT maintained_operational_facts INTO v_facts FROM public.opportunities WHERE id = v_opp;
@@ -521,7 +523,11 @@ BEGIN
         RAISE EXCEPTION 'SELFTEST: a derived tour value was persisted (%)', v_facts;
     END IF;
 
-    UPDATE public.tour_bookings SET start_at = '2026-10-02T15:00:00Z', status_key = 'rescheduled' WHERE id = v_tour;
+    -- end_at moves WITH start_at: chk_tour_bookings_time_window requires end_at > start_at, and a
+    -- reschedule that moved only the start pushed the booking past its own end.
+    UPDATE public.tour_bookings
+       SET start_at = '2026-10-02T15:00:00Z', end_at = '2026-10-02T16:00:00Z', status_key = 'rescheduled'
+     WHERE id = v_tour;
     PERFORM public.maintain_opportunity_tour_facts(v_org, v_opp);
     SELECT maintained_operational_facts INTO v_facts FROM public.opportunities WHERE id = v_opp;
     IF (v_facts -> 'tour' ->> 'start_at') IS NULL OR (v_facts -> 'tour' ->> 'status_key') IS DISTINCT FROM 'rescheduled' THEN
