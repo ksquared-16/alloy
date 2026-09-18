@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
@@ -55,6 +55,7 @@ export default function FinancialsDetailCard({
     onApplyPayment,
     hydrating = false,
     ledgerPending = false,
+    paymentBand,
     lens: lensProp,
     onLensChange,
     expandedPeriods,
@@ -81,6 +82,22 @@ export default function FinancialsDetailCard({
      * changes what is owed and stays its peer. Absent in the lab, where the controls are inert.
      */
     onPayment?: () => void;
+    /**
+     * THE PAYMENT BAND, RENDERED INSIDE THIS CARD.
+     *
+     * It used to be a SIBLING of this component — the host rendered `<FinancialsDetailCard/>` and
+     * then the band next to it, inside the surface wrapper. So the band sat outside the card's own
+     * box, at the wrapper's left edge, and once Details was focused an operator saw a stray
+     * `Record payment →` floating beside the focused surface with no card around it. Measured
+     * mounted: a visible leaf at 509,522 whose nearest `data-universal-card-key` ancestor was null,
+     * while the Details card itself began at x≈528.
+     *
+     * The content was always legitimate — a ledger that cannot show what was received is half a
+     * ledger. What was wrong was OWNERSHIP: a focused surface owns everything it presents. Passing
+     * it in as a slot puts it inside the card that owns the interaction, and costs no depth
+     * mechanism, no z-index exception and no second scrim.
+     */
+    paymentBand?: ReactNode;
     onAddCharge?: () => void;
     onManagePayment?: () => void;
     /** Correct WHICH obligation a receipt answered. Absent in the lab, where controls are inert. */
@@ -643,6 +660,13 @@ export default function FinancialsDetailCard({
                 {onManagePayment ? (
                     <div className="alloy-os-fdetail__utility">
                         <FooterAction onClick={onManagePayment}>Manage payment →</FooterAction>
+                    </div>
+                ) : null}
+
+                {/* Inside the card, because the focused surface owns what it presents. */}
+                {paymentBand ? (
+                    <div className="alloy-os-fdetail__paymentband" data-financials-payment-band="detail">
+                        {paymentBand}
                     </div>
                 ) : null}
 

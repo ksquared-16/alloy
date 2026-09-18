@@ -3453,6 +3453,21 @@ export default function FinancialsCard({
                      */
                     onPayment={openSettle}
                     onAddCharge={() => push({ kind: "add_charge" })}
+                    /*
+                     * ── THE BAND IS THE CARD'S, NOT THE WRAPPER'S ────────────────────────────
+                     *
+                     * This was rendered as a SIBLING of the card, immediately below. The content is
+                     * right and stays — see the note that follows — but a sibling of the focused
+                     * card is not owned by it: the band sat outside the card's box at the wrapper's
+                     * left edge, so a focused Details surface had a stray `Record payment →`
+                     * floating beside it with no card around it. Measured mounted at 509,522 with
+                     * no `data-universal-card-key` ancestor, while the card began at x≈528.
+                     *
+                     * Passed as a slot, the focused surface owns everything it presents. No
+                     * z-index, no extra scrim, no second depth mechanism — the composition was the
+                     * defect, so the composition is the repair.
+                     */
+                    paymentBand={paymentBandFor(true)}
                 />
                 {/*
                     WHAT ARRIVED, WHERE AN OPERATOR CAN STILL SEE IT.
@@ -3467,8 +3482,10 @@ export default function FinancialsCard({
 
                     Details is where an operator works the ledger, and a ledger that cannot show what
                     was received is only half of one.
+
+                    It is passed to the card as `paymentBand` above rather than rendered here, so it
+                    lives inside the surface that owns it.
                 */}
-                {paymentBandFor(true)}
             </div>
         );
     }

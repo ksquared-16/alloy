@@ -3062,3 +3062,16 @@
     line-height: 1.35;
     color: color-mix(in srgb, currentColor 65%, transparent);
 }
+
+/*
+ * THE DETAIL SURFACE'S OWN PAYMENT BAND.
+ *
+ * It rendered as a sibling of the card and therefore outside its box — an orphan `Record payment →`
+ * beside a focused surface. It is now a slot INSIDE the card, so it needs only to sit apart from
+ * the ledger above it, the way the utility footer does.
+ */
+.alloy-os-fdetail__paymentband {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+}
