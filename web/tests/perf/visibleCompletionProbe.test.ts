@@ -171,3 +171,142 @@ describe("presentational animation does not advance completion (section 6)", () 
         expect(v2().lastBlockingAuthoritativeMs).toBeGreaterThan(before);
     });
 });
+
+/**
+ * FINALITY: reserved geometry, images, and destination generation.
+ *
+ * Each of these is a way for a section to look finished while an operator would plainly say it is
+ * not. They are certified here rather than only on a hosted sample because a hosted run cannot
+ * produce them on demand — you cannot ask staging for a stale subject at a chosen moment.
+ */
+const SHELL = (inner: string) => {
+    document.body.innerHTML = `
+        <div data-alloy-section-id="WU-00" data-alloy-section-blocking="true" data-alloy-section-container="true" id="shell">
+            ${inner}
+        </div>`;
+};
+const SUMMARY = (gen = "subjA", body = "") =>
+    `<section data-alloy-section-id="WU-07" data-alloy-section-blocking="true" data-inline-focus-panel-subject="${gen}" id="panel">
+        <div data-alloy-section-id="WU-09" data-alloy-section-blocking="true" id="wu09">${body}</div>
+     </section>`;
+
+describe("Track-A finality — reserved geometry is not the answer (section 3)", () => {
+    it("does not treat reserved space as final content", async () => {
+        SHELL(SUMMARY("subjA"));
+        installVisibleCompletionProbe();
+
+        // RESOLVING: the card reserves its geometry. Structural, but not an answer.
+        const card = document.createElement("div");
+        card.setAttribute("data-settlement-reserved", "true");
+        document.getElementById("wu09")!.appendChild(card);
+        await settle();
+        expect(v2().lastBlockingAuthoritativeMs, "reserved geometry must not be final").toBe(-1);
+        expect(v2().placeholderSuppressed).toBeGreaterThan(0);
+
+        // FINAL: the answer lands outside the reserved wrapper.
+        await settle(25);
+        const real = document.createElement("div");
+        real.textContent = "Financials — September 2026";
+        document.getElementById("wu09")!.appendChild(real);
+        await settle();
+        expect(v2().lastBlockingAuthoritativeMs).toBeGreaterThan(0);
+    });
+
+    it("treats a skeleton card the same way", async () => {
+        SHELL(SUMMARY("subjA"));
+        installVisibleCompletionProbe();
+        const sk = document.createElement("div");
+        sk.setAttribute("data-financials-card-skeleton", "true");
+        document.getElementById("wu09")!.appendChild(sk);
+        await settle();
+        expect(v2().lastBlockingAuthoritativeMs).toBe(-1);
+    });
+});
+
+describe("image finality — both branches (section 4)", () => {
+    it("EXPECTED IMAGE: the section is not final until the decode lands", async () => {
+        SHELL(SUMMARY("subjA"));
+        installVisibleCompletionProbe();
+        const wu09 = document.getElementById("wu09")!;
+        const img = document.createElement("img");
+        wu09.appendChild(img);
+        wu09.appendChild(document.createTextNode("Child name"));
+        await settle();
+        const contentDone = v2().perSection["WU-09"].lastMs;
+        expect(contentDone).toBeGreaterThanOrEqual(0);
+        expect(v2().perSection["WU-09"].imageExpected).toBe(false);
+
+        await settle(30);
+        img.dispatchEvent(new Event("load"));
+        await settle();
+        const ps = v2().perSection["WU-09"];
+        expect(ps.imageExpected, "a decoded image must be recorded as expected").toBe(true);
+        expect(ps.imageFinalMs, "decode must land after the content").toBeGreaterThan(contentDone);
+    });
+
+    it("NO IMAGE: initials are final immediately and wait for nothing", async () => {
+        SHELL(SUMMARY("subjA"));
+        installVisibleCompletionProbe();
+        const wu09 = document.getElementById("wu09")!;
+        const initials = document.createElement("span");
+        initials.textContent = "KM";
+        wu09.appendChild(initials);
+        await settle();
+        const ps = v2().perSection["WU-09"];
+        expect(ps.lastMs).toBeGreaterThanOrEqual(0);
+        // No imaginary image wait: nothing is expected and no decode timestamp is invented.
+        expect(ps.imageExpected).toBe(false);
+        expect(ps.imageFinalMs).toBe(-1);
+    });
+});
+
+describe("destination generation — only the latest subject counts (section 5)", () => {
+    it("late A data cannot satisfy C", async () => {
+        SHELL(SUMMARY("subjA"));
+        installVisibleCompletionProbe();
+        const panel = document.getElementById("panel")!;
+        const wu09 = document.getElementById("wu09")!;
+
+        wu09.appendChild(document.createTextNode("A content"));
+        await settle();
+
+        // A -> B -> C: the operator moves on twice.
+        panel.setAttribute("data-inline-focus-panel-subject", "subjB");
+        await settle();
+        panel.setAttribute("data-inline-focus-panel-subject", "subjC");
+        wu09.appendChild(document.createTextNode("C content"));
+        await settle();
+        const cDone = v2().lastBlockingAuthoritativeMs;
+
+        /*
+         * A's request finally answers INSIDE the summary region — the case that matters. Appending
+         * it to the panel instead would be dropped by the container rule and the test would pass
+         * without the generation rule ever running.
+         */
+        await settle(30);
+        const straggler = document.createElement("div");
+        straggler.setAttribute("data-inline-focus-panel-subject", "subjA");
+        straggler.textContent = "A's late answer";
+        wu09.appendChild(straggler);
+        await settle();
+
+        expect(v2().lastBlockingAuthoritativeMs, "stale A must not satisfy C").toBe(cDone);
+        expect(v2().staleGenerationSuppressed).toBeGreaterThan(0);
+    });
+
+    it("a late image belonging to B cannot satisfy C either", async () => {
+        SHELL(SUMMARY("subjC"));
+        installVisibleCompletionProbe();
+        document.getElementById("wu09")!.appendChild(document.createTextNode("C content"));
+        await settle();
+        const cDone = v2().lastBlockingAuthoritativeMs;
+
+        await settle(25);
+        const old = document.createElement("div");
+        old.setAttribute("data-inline-focus-panel-subject", "subjB");
+        document.getElementById("wu09")!.appendChild(old);
+        await settle();
+        expect(v2().lastBlockingAuthoritativeMs).toBe(cDone);
+        expect(v2().staleGenerationSuppressed).toBeGreaterThan(0);
+    });
+});
