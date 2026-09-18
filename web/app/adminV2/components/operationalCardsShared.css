@@ -2913,6 +2913,19 @@
   white-space: nowrap;
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
+  /*
+   * ── THE 76px FLOOR IS VESTIGIAL HERE, AND IT WAS STARVING THE LABEL ──────────────────────────
+   *
+   * The base `__line-value` reserves `min-width: 76px` so amounts line up as a column. In THIS zone
+   * the value is `flex: 0 0 auto` and sits at the row's end by `space-between`, so it already
+   * aligns; the floor only takes width away from the label beside it.
+   *
+   * Measured mounted at 1280: zone 91px − 76px value − 8px gap left the label SEVEN PIXELS, so
+   * `Balance`, `Paid`, `Unassigned` and `Available` all ellipsised to "…". At 1680 the label got
+   * 50px and the two longer words still clipped. Releasing the floor gives the label everything the
+   * figure does not need.
+   */
+  min-width: 0;
 }
 .alloy-os-billing__clear,
 .alloy-os-billing__age {
@@ -2999,6 +3012,39 @@
  * obligation story keeps its measure, Due states itself in full, and the command cluster — which
  * already spans the card — is unaffected.
  */
+/*
+ * ── A POSITION FACT STATES ITSELF IN FULL, OR IT STACKS ────────────────────────────────────────
+ *
+ * Releasing the value's floor (above) is enough at the wider columns, but a narrow position zone
+ * cannot fit `Available` and `$200.00` on one line at any honest type size — measured, the zone is
+ * 91px at a 1280 viewport while the pair needs ~108px.
+ *
+ * The rule the card already keeps is that a financial LABEL is not abbreviated to fit a layout:
+ * `Balance` and `Paid` are real product words, not truncations, and `Available` and `Unassigned`
+ * are the facts they name. So below the width where both halves fit on one line, the row stacks —
+ * the label on its own line, the figure beneath it, both complete.
+ *
+ * Same instrument as the two-column collapse below: the card is the query container, so this asks
+ * about the CARD's width rather than the viewport's, which is the only question that means
+ * anything to a card placed in an 8-column or a 4-column slot.
+ */
+@container alloy-billing (max-width: 340px) {
+  .alloy-os-billing__zone--position .alloy-os-billing__line {
+    flex-wrap: wrap;
+    gap: 0 8px;
+  }
+  .alloy-os-billing__zone--position .alloy-os-billing__line-label {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    flex: 1 0 100%;
+  }
+  .alloy-os-billing__zone--position .alloy-os-billing__line-value {
+    flex: 1 0 100%;
+    text-align: left;
+  }
+}
+
 @container alloy-billing (max-width: 230px) {
   .alloy-os-billing__zones--two {
     grid-template-columns: minmax(0, 1fr);
