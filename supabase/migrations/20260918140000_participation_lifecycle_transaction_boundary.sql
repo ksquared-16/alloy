@@ -103,7 +103,12 @@ DECLARE
     v_state text;
     v_entered timestamptz;
 BEGIN
-    INSERT INTO public.orgs (name) VALUES ('__selftest_participation_txn__') RETURNING id INTO v_org;
+    -- `orgs.slug` is NOT NULL with a UNIQUE constraint (orgs_slug_key). The first attempt supplied
+    -- only `name` and the apply aborted here, before any specimen ran. A random slug keeps the
+    -- fixture collision-free even though the row is rolled back.
+    INSERT INTO public.orgs (name, slug)
+    VALUES ('__selftest_participation_txn__', '__selftest_' || gen_random_uuid())
+    RETURNING id INTO v_org;
     INSERT INTO public.process_instances (org_id, process_key, subject_type, subject_id, stage_key, state)
     VALUES (v_org, 'enrollment_process', 'child', gen_random_uuid(), 'lead', 'active')
     RETURNING id, updated_at INTO v_pi, v_v1;
