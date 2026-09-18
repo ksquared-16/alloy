@@ -188,3 +188,41 @@ describe("THE GATE — the operator surface states the per-child economics", () 
         expect(host, "one command surface declares which mode it is in").toContain("data-financials-entry-mode={entryMode}");
     });
 });
+
+describe("THE GATE — a stated household grain is not overruled by routing", () => {
+    /*
+     * `childIdFrom` falls back to the invocation entity, which is correct for a caller acting FROM
+     * a child's record: it says nothing about grain. But the Focus Panel sends the panel's child as
+     * ROUTING context on every call, so a deliberate "Applies to · Household" was being overruled
+     * and the charge came back attributed to that child.
+     *
+     * Omission cannot mean household, because omission is exactly what a caller with no opinion
+     * does. So the grain is STATED, and stating it wins over the routing entity.
+     */
+    it("names no child when the caller states household grain", () => {
+        expect(childIdsFrom({ subject_grain: "household" }, "m-certb", "child")).toEqual([]);
+    });
+
+    /* The routing fallback still works for everyone who has not stated a grain. */
+    it("still infers the child from the entity when no grain was stated", () => {
+        expect(childIdsFrom({}, "m-certb", "child")).toEqual(["m-certb"]);
+    });
+
+    /* Naming children explicitly is unaffected when no grain is stated. */
+    it("still honours an explicit multi-child selection", () => {
+        expect(childIdsFrom({ customer_member_ids: ["m-ana", "m-ben"] }, "m-certb", "child"))
+            .toEqual(["m-ana", "m-ben"]);
+    });
+
+    /*
+     * PRECEDENCE, STATED RATHER THAN IMPLIED. A payload carrying BOTH a household grain and named
+     * children is self-contradictory, and household wins because it is checked first. The Focus
+     * Panel cannot produce that combination — the sibling checkboxes are withheld at household
+     * anchor precisely so an empty selection can never mean household — but the rule is written
+     * down here so the next caller inherits an answer instead of discovering one.
+     */
+    it("lets a stated household grain win over named children, and says so", () => {
+        expect(childIdsFrom({ subject_grain: "household", customer_member_ids: ["m-ana"] }, "m-certb", "child"))
+            .toEqual([]);
+    });
+});

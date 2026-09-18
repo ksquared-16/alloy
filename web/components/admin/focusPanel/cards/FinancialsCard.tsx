@@ -1387,7 +1387,8 @@ export default function FinancialsCard({
                             // "no child", which is what sends it to the household.
                             ...(chargeInvocation.customerMemberId
                                 ? { customer_member_id: chargeInvocation.customerMemberId }
-                                : {}),
+                                /* Deliberately household — stated, because omission means "no opinion". */
+                                : { subject_grain: "household" }),
                             // The household, so a pre-enrolment family has a billable subject when
                             // no child agreement exists. The resolver still prefers an agreement.
                             customer_id: customerId,
@@ -1471,7 +1472,7 @@ export default function FinancialsCard({
                     payload: {
                         ...(chargeInvocation.customerMemberId
                             ? { customer_member_id: chargeInvocation.customerMemberId }
-                            : {}),
+                            : { subject_grain: "household" }),
                         // Same subject inputs the preview was given — preview and commit run the
                         // same resolver, so they must be asked the same question.
                         customer_id: customerId,

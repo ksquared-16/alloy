@@ -76,7 +76,8 @@ test("S4 · a household obligation the household arrangement governs", async ({ 
     }
     const afterAdd = await ledger(page);
     const fresh = afterAdd.filter((r) => r.chargeId && !beforeIds.has(r.chargeId));
-    const household = afterAdd.filter((r) => /Household|—/.test((r.cells as string[])[2] ?? "")
+    /* Household grain renders with an em dash in the Child column — no child is named. */
+    const household = afterAdd.filter((r) => /^(Household|—|-)$/.test(((r.cells as string[])[2] ?? "").trim())
         && (r.actions as string[]).includes("resolveResponsibility"));
     log(`fresh=${fresh.length} householdRowsOfferingResolve=${household.length}`);
     for (const h of household.slice(0, 5)) log(`  ${h.chargeId} ${JSON.stringify((h.cells as string[]).slice(0, 6))}`);

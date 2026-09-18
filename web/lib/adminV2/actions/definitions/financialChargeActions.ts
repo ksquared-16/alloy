@@ -174,6 +174,20 @@ function childIdsFrom(
     entityId: string | undefined,
     entityType?: string | undefined,
 ): string[] {
+    /*
+     * ── "DIDN'T SAY" IS NOT "SAID HOUSEHOLD" ─────────────────────────────────────────────────
+     *
+     * `childIdFrom` falls back to the invocation entity, which is right for a caller acting FROM a
+     * child's record and says nothing about grain. But a surface where the operator deliberately
+     * chose Household has said something, and it was being overruled: the payload named no child,
+     * the entity was still the panel's child for ROUTING, and the charge came back attributed to
+     * that child. Measured: "Applies to · Household" produced a Certb-grain registration fee.
+     *
+     * `subjectMemberId: null` IS household grain rather than missing data — that is the doctrine
+     * the whole subject model rests on — so a caller needs a way to state it. Omitting the field
+     * cannot mean it, because omitting is exactly what a caller that has no opinion does.
+     */
+    if (t(payload?.subject_grain) === "household") return [];
     const raw = payload?.customer_member_ids;
     const many = Array.isArray(raw) ? raw.map((v) => t(v)).filter(Boolean) : [];
     if (many.length) return [...new Set(many)];
