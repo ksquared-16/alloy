@@ -18,6 +18,17 @@ export const FINANCIAL_TRANSACTION_ACTIONS = {
     reverseAdjustment: "billing.reverse_adjustment",
     movePayment: "payment.reverse_application",
     applyPayment: "payment.apply",
+    /*
+     * WHO OWES THIS ONE OBLIGATION — the charge-grain half of responsibility.
+     *
+     * `billing.configure_responsibility` answers "what arrangement should apply", and it is
+     * account-grain and effective-dated. These two answer a different question: how THIS eligible
+     * obligation is divided under the arrangement in force. They existed as registered commands
+     * with no operator surface at all, so an operator could say who should be responsible and had
+     * no way to resolve an obligation under what they had just said.
+     */
+    resolveResponsibility: "billing.resolve_responsibility",
+    reallocateResponsibility: "billing.reallocate_responsibility",
 } as const;
 
 export type FinancialTransactionCommandKind = keyof typeof FINANCIAL_TRANSACTION_ACTIONS;
@@ -102,4 +113,39 @@ export async function executeFinancialCommand(input: {
     } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
+}
+
+/**
+ * WHICH RESPONSIBILITY COMMAND THIS ROW CAN RAISE — from the state the ledger already shows.
+ *
+ * ── THE THREE STATES ARE NOT TWO ─────────────────────────────────────────────────────────────
+ *
+ * `not-allocated` (no allocation exists), `unassigned` (an allocation exists naming nobody) and
+ * `named` are genuinely different, and the first two both mean the same thing to an operator:
+ * nobody owes this yet, so RESOLVE it. A row that already names a party is not resolved again —
+ * changing it moves what one real person owes another, which is REALLOCATION and needs a reason.
+ *
+ * ── AND ONE STATE OFFERS NOTHING ─────────────────────────────────────────────────────────────
+ *
+ * `responsibilityApplies === false` is a reduction: responsibility belongs to the charge it
+ * reduces, not to the credit. Offering Resolve there would invite an operator to divide a discount.
+ */
+export type FinancialResponsibilityEligibilityInput = {
+    chargeId: string | null;
+    /** False on a row where the question does not arise at all — a reduction. */
+    responsibilityApplies?: boolean;
+    /** The party already named on this obligation, if any. */
+    responsibleParty?: string | null;
+};
+
+export type FinancialResponsibilityEligibility = { resolve: boolean; reallocate: boolean };
+
+export function financialResponsibilityEligibility(
+    row: FinancialResponsibilityEligibilityInput,
+): FinancialResponsibilityEligibility {
+    const hasCharge = Boolean(row.chargeId);
+    if (!hasCharge || row.responsibilityApplies === false) return { resolve: false, reallocate: false };
+    const named = Boolean((row.responsibleParty ?? "").trim());
+    /* Exactly one of the two is ever offered: a row is either divided or it is not. */
+    return { resolve: !named, reallocate: named };
 }

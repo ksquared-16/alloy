@@ -1,5 +1,6 @@
 "use client";
 
+import { financialResponsibilityEligibility } from "@/lib/financials/commands/financialTransactionCommands";
 import clsx from "clsx";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 
@@ -55,6 +56,8 @@ export default function FinancialsDetailCard({
     onPostCharge,
     onReverseCharge,
     onAdjustCharge,
+    onResolveResponsibility,
+    onReallocateResponsibility,
     onApplyPayment,
     hydrating = false,
     ledgerPending = false,
@@ -118,6 +121,12 @@ export default function FinancialsDetailCard({
      * card neither writes nor composes an adjustment of its own.
      */
     onAdjustCharge?: (args: { chargeId: string }) => void;
+    /*
+     * WHO OWES AN OBLIGATION — the charge-grain responsibility commands. Details ADMINISTERS
+     * responsibility; Summary only reports it, so these never travel to the compact card.
+     */
+    onResolveResponsibility?: (args: { chargeId: string; label: string }) => void;
+    onReallocateResponsibility?: (args: { chargeId: string; label: string }) => void;
     /** Put already-received money against an obligation. */
     onApplyPayment?: (args: { paymentId: string }) => void;
     /**
@@ -559,7 +568,10 @@ export default function FinancialsDetailCard({
                             expandedOverride={expandedPeriods?.[per.label]}
                             onToggle={onPeriodToggle}
                             rows={per.entries.map((e, i) =>
-                                ledgerRowFromEntry(e, i, { onPostCharge, onReverseCharge, onAdjustCharge }),
+                                ledgerRowFromEntry(e, i, {
+                                    onPostCharge, onReverseCharge, onAdjustCharge,
+                                    onResolveResponsibility, onReallocateResponsibility,
+                                }),
                             )}
                         />
                     ))}
@@ -785,6 +797,9 @@ function ledgerRowFromEntry(
         onPostCharge?: (args: { chargeId: string; label: string }) => void;
         onReverseCharge?: (args: { chargeId: string; label: string }) => void;
         onAdjustCharge?: (args: { chargeId: string }) => void;
+        /* Who owes this obligation. Charge-grain, and a different question from the arrangement. */
+        onResolveResponsibility?: (args: { chargeId: string; label: string }) => void;
+        onReallocateResponsibility?: (args: { chargeId: string; label: string }) => void;
     },
 ): FinancialsLedgerRowView {
     const post = e.chargeId && e.offersPost && actions.onPostCharge;
@@ -796,6 +811,19 @@ function ledgerRowFromEntry(
      * is why it gates both — Reverse and Adjust are two readings of one eligibility, not two.
      */
     const adjust = e.chargeId && e.offersReverse && actions.onAdjustCharge;
+    /*
+     * WHO OWES IT — offered from the state this very row is already showing, through the shared
+     * eligibility rule rather than a second reading of it here. A reduction offers neither: its
+     * responsibility belongs to the charge it reduces.
+     */
+    const responsibility = financialResponsibilityEligibility({
+        chargeId: e.chargeId ?? null,
+        /* A reduction is not an obligation: its responsibility belongs to the charge it reduces. */
+        responsibilityApplies: !e.reduction,
+        responsibleParty: e.responsibleParty,
+    });
+    const resolveResp = responsibility.resolve && actions.onResolveResponsibility;
+    const reallocateResp = responsibility.reallocate && actions.onReallocateResponsibility;
     return {
         key: e.chargeId || `${e.when}-${index}`,
         when: e.when,
@@ -826,7 +854,7 @@ function ledgerRowFromEntry(
         responsibleParty: e.responsibleParty,
         responsibilityUnassigned: e.responsibilityUnassigned,
         actions:
-            post || reverse || adjust ? (
+            post || reverse || adjust || resolveResp || reallocateResp ? (
                 <>
                     {/*
                      * POST IS OFFERED ONLY WHERE A LEGITIMATE DRAFT EXISTS. `offersPost` is the read
@@ -859,6 +887,33 @@ function ledgerRowFromEntry(
                             chargeId={e.chargeId!}
                             title={`Adjust ${e.label} — it stands, and something reduces it`}
                             onClick={() => actions.onAdjustCharge!({ chargeId: e.chargeId! })}
+                        />
+                    ) : null}
+                    {/*
+                     * RESOLVE AND REALLOCATE ARE NEVER BOTH OFFERED. A row either names a party or
+                     * it does not, and the operator reads which question this obligation is asking
+                     * from which control is there.
+                     */}
+                    {resolveResp ? (
+                        <RowAction
+                            kind="resolveResponsibility"
+                            command="billing.resolve_responsibility"
+                            chargeId={e.chargeId!}
+                            title={`Resolve who owes ${e.label} — divide it under the arrangement in force`}
+                            onClick={() =>
+                                actions.onResolveResponsibility!({ chargeId: e.chargeId!, label: e.label })
+                            }
+                        />
+                    ) : null}
+                    {reallocateResp ? (
+                        <RowAction
+                            kind="reallocateResponsibility"
+                            command="billing.reallocate_responsibility"
+                            chargeId={e.chargeId!}
+                            title={`Reallocate ${e.label} — move what one party owes to another`}
+                            onClick={() =>
+                                actions.onReallocateResponsibility!({ chargeId: e.chargeId!, label: e.label })
+                            }
                         />
                     ) : null}
                 </>

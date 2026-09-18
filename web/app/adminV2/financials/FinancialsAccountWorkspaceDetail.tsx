@@ -9,7 +9,7 @@ import {
     RowAction,
     type FinancialsLedgerRowView,
 } from "@/components/operationalCards/FinancialsLedger";
-import { financialTransactionEligibility } from "@/lib/financials/commands/financialTransactionCommands";
+import { financialResponsibilityEligibility, financialTransactionEligibility } from "@/lib/financials/commands/financialTransactionCommands";
 import { useFinancialCommandChannel } from "@/components/financials/FinancialCommandChannel";
 import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 import {
@@ -540,7 +540,10 @@ function LedgerPeriods({
  */
 function workspaceRowActions(
     row: Row,
-    request: ((r: { kind: "adjust" | "reverse" | "post"; chargeId: string; label: string }) => void) | null,
+    request: ((r: {
+        kind: "adjust" | "reverse" | "post" | "resolveResponsibility" | "reallocateResponsibility";
+        chargeId: string; label: string;
+    }) => void) | null,
 ) {
     const chargeId = row.chargeId ? String(row.chargeId) : null;
     if (!request || !chargeId) return undefined;
@@ -550,7 +553,24 @@ function workspaceRowActions(
         offersPost: Boolean(row.offersPost),
         offersReverse: Boolean(row.offersReverse),
     });
-    if (!eligible.post && !eligible.reverse && !eligible.adjust) return undefined;
+    /*
+     * WHO OWES IT — the same shared rule the Focus Panel applies, read from the same row fields.
+     * The workspace does not decide this and does not perform it: it asks on the channel, and the
+     * account card raises the canonical command. A workspace-only resolve would be the second
+     * writer this whole architecture exists to prevent.
+     */
+    const responsibility = financialResponsibilityEligibility({
+        chargeId,
+        /*
+         * A reduction is not an obligation — its responsibility belongs to the charge it reduces.
+         * The Focus Panel derives this the same way, from the same reduction fact, so neither host
+         * can end up offering to divide a discount while the other refuses.
+         */
+        responsibilityApplies: !reductionOf(row),
+        responsibleParty: row.responsiblePartyName ? String(row.responsiblePartyName) : null,
+    });
+    if (!eligible.post && !eligible.reverse && !eligible.adjust
+        && !responsibility.resolve && !responsibility.reallocate) return undefined;
     return (
         <>
             {eligible.post ? (
@@ -578,6 +598,24 @@ function workspaceRowActions(
                     chargeId={chargeId}
                     title={`Adjust ${label} — it stands, and something reduces it`}
                     onClick={() => request({ kind: "adjust", chargeId, label })}
+                />
+            ) : null}
+            {responsibility.resolve ? (
+                <RowAction
+                    kind="resolveResponsibility"
+                    command="billing.resolve_responsibility"
+                    chargeId={chargeId}
+                    title={`Resolve who owes ${label} — divide it under the arrangement in force`}
+                    onClick={() => request({ kind: "resolveResponsibility", chargeId, label })}
+                />
+            ) : null}
+            {responsibility.reallocate ? (
+                <RowAction
+                    kind="reallocateResponsibility"
+                    command="billing.reallocate_responsibility"
+                    chargeId={chargeId}
+                    title={`Reallocate ${label} — move what one party owes to another`}
+                    onClick={() => request({ kind: "reallocateResponsibility", chargeId, label })}
                 />
             ) : null}
         </>

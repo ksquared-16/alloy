@@ -10,6 +10,8 @@ import {
     SlidersHorizontal,
     Undo2,
     type LucideIcon,
+    UserCog,
+    UserPlus,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -137,7 +139,10 @@ export type FinancialsLedgerRowView = {
  * the markup, and is therefore reachable by keyboard as well as pointer. Nothing here depends on
  * hover.
  */
-export type FinancialsRowActionKind = "adjust" | "reverse" | "post" | "move" | "apply";
+export type FinancialsRowActionKind =
+    | "adjust" | "reverse" | "post" | "move" | "apply"
+    /* Who owes this obligation — resolve it under the arrangement, or move it to another party. */
+    | "resolveResponsibility" | "reallocateResponsibility";
 
 const ROW_ACTION_ICON: Record<FinancialsRowActionKind, LucideIcon> = {
     adjust: SlidersHorizontal,
@@ -145,6 +150,8 @@ const ROW_ACTION_ICON: Record<FinancialsRowActionKind, LucideIcon> = {
     post: CheckCircle2,
     move: ArrowLeftRight,
     apply: CircleDollarSign,
+    resolveResponsibility: UserPlus,
+    reallocateResponsibility: UserCog,
 };
 
 export function RowAction({

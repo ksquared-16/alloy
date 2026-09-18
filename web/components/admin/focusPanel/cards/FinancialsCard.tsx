@@ -453,6 +453,10 @@ export default function FinancialsCard({
     /* Reversing a posted charge is a correction to money already told to a family: it previews first. */
     const [reverseCharge, setReverseCharge] = useState<{ chargeId: string; label: string } | null>(null);
     const [reverseChargePreview, setReverseChargePreview] = useState<{ summary: string; changes: string[] } | null>(null);
+    const [responsibilityPreview, setResponsibilityPreview] = useState<{ summary: string; changes: string[] } | null>(null);
+    const [responsibilityError, setResponsibilityError] = useState<string | null>(null);
+    /* Reallocation moves what one person owes another, so the authority demands a stated reason. */
+    const [reallocationReason, setReallocationReason] = useState("");
     const [reverseChargeError, setReverseChargeError] = useState<string | null>(null);
 
     const [movePreview, setMovePreview] = useState<{ summary: string; changes: string[] } | null>(null);
@@ -1539,6 +1543,7 @@ export default function FinancialsCard({
         [load, running, chargeInvocation],
     );
 
+
     /*
      * MONEY IN, AND MONEY BACK OUT — through the registered actions that already own both.
      *
@@ -1801,6 +1806,91 @@ export default function FinancialsCard({
     }, [closeAdjustPanels, closeMovePanels, push]);
 
     /*
+     * ── WHO OWES THIS OBLIGATION ──────────────────────────────────────────────────────────────
+     *
+     * Opened per row, in the mode the row's own state earned: a charge nobody owes yet is RESOLVED
+     * under the arrangement in force; a charge that already names a party is REALLOCATED, which is
+     * a different act and needs a reason. Nothing is decided here — the mode only chooses which
+     * canonical command the shell will raise.
+     */
+    const openResponsibility = useCallback(
+        (args: { chargeId: string; label: string; mode: "resolve" | "reallocate" }) => {
+            closeMovePanels();
+            closeAdjustPanels();
+            setResponsibilityPreview(null);
+            setResponsibilityError(null);
+            setReallocationReason("");
+            push({ kind: "responsibility", chargeId: args.chargeId, label: args.label, mode: args.mode });
+        },
+        [closeAdjustPanels, closeMovePanels, push],
+    );
+
+    /*
+     * THE PREVIEW IS THE ACTION'S. `buildPreview` reads the allocatable net from the charge itself
+     * — gross, then the Thread 10 reductions, then what is left to divide — so the number an
+     * operator confirms is the engine's, and this card never computes a responsibility base.
+     */
+    const runResponsibilityCommand = useCallback(
+        async (mode: "preview" | "execute", target: { chargeId: string; mode: "resolve" | "reallocate" }) => {
+            const row = rowForCharge(target.chargeId);
+            const result = await executeFinancialCommand({
+                action: target.mode === "resolve" ? "resolveResponsibility" : "reallocateResponsibility",
+                entity: {
+                    entityType: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
+                    entityId: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
+                },
+                mode,
+                payload: {
+                    charge_id: target.chargeId,
+                    /* The authority refuses a reallocation with no reason; it is never defaulted here. */
+                    ...(target.mode === "reallocate" ? { reason: reallocationReason } : {}),
+                },
+            });
+            return result;
+        },
+        [chargeInvocation, reallocationReason, rowForCharge],
+    );
+
+    const previewResponsibility = useCallback(
+        async (target: { chargeId: string; mode: "resolve" | "reallocate" }) => {
+            if (running) return;
+            setRunning(true);
+            setResponsibilityError(null);
+            const result = await runResponsibilityCommand("preview", target);
+            if (result.ok) setResponsibilityPreview(result.preview ?? null);
+            else setResponsibilityError(result.error);
+            setRunning(false);
+        },
+        [runResponsibilityCommand, running],
+    );
+
+    const confirmResponsibility = useCallback(
+        async (target: { chargeId: string; mode: "resolve" | "reallocate" }) => {
+            if (running) return;
+            setRunning(true);
+            setResponsibilityError(null);
+            const result = await runResponsibilityCommand("execute", target);
+            /*
+             * A REFUSAL IS AN ANSWER AND STAYS ON SCREEN. `reallocation_required` in particular is
+             * the engine telling the operator that the arrangement in force would divide this
+             * posted charge differently — which is a decision for them, not a retry for us.
+             */
+            if (!result.ok) {
+                setResponsibilityError(result.error);
+                setRunning(false);
+                return;
+            }
+            setResponsibilityPreview(null);
+            setReallocationReason("");
+            setRunning(false);
+            pop();
+            await load();
+        },
+        [load, pop, runResponsibilityCommand, running],
+    );
+
+
+    /*
      * ── THIS CARD IS THE COMMAND HOST ──────────────────────────────────────────────────────────
      *
      * Financials → Accounts renders this card above its own ledger, as siblings. The ledger's rows
@@ -1816,8 +1906,14 @@ export default function FinancialsCard({
             if (request.kind === "adjust") openAdjustForCharge({ chargeId: request.chargeId });
             else if (request.kind === "reverse") openReverseCharge({ chargeId: request.chargeId, label: request.label });
             else if (request.kind === "post") void runRowAction("post", rowForCharge(request.chargeId));
+            /* The workspace asks for the same two commands; this card performs them. */
+            else if (request.kind === "resolveResponsibility") {
+                openResponsibility({ chargeId: request.chargeId, label: request.label, mode: "resolve" });
+            } else if (request.kind === "reallocateResponsibility") {
+                openResponsibility({ chargeId: request.chargeId, label: request.label, mode: "reallocate" });
+            }
         },
-        [openAdjustForCharge, openReverseCharge, rowForCharge, runRowAction],
+        [openAdjustForCharge, openReverseCharge, openResponsibility, rowForCharge, runRowAction],
     );
     useRegisterFinancialCommandHost(handleCommandRequest);
 
@@ -3084,6 +3180,140 @@ export default function FinancialsCard({
      * three dismissal gestures, and each sits ON TOP of Details in the stack so dismissing it
      * returns to the ledger the operator was reading, in the state they left it.
      */
+    if (surface?.kind === "responsibility" && vm) {
+        const row = vm.rows.find((r) => r.chargeId === surface.chargeId) ?? null;
+        const subjectName =
+            row?.subjectName
+            ?? vm.subjects.find((sub) => sub.customerMemberId === row?.subjectMemberId)?.displayName
+            ?? "Household";
+        const reallocating = surface.mode === "reallocate";
+        const target = { chargeId: surface.chargeId, mode: surface.mode };
+        return (
+            <div
+                className="alloy-os-financials"
+                data-financials-card="true"
+                data-financials-overlay="responsibility"
+                data-financials-responsibility-mode={surface.mode}
+                data-financials-command-shell="responsibility"
+            >
+                <UniversalCard
+                    title={reallocating ? "Reallocate responsibility" : "Resolve responsibility"}
+                    insight=""
+                    iconName="Receipt"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="responsibility"
+                    footerAction={null}
+                >
+                    <div className="alloy-os-financials__commandbody" data-financials-command="responsibility">
+                        <dl className="alloy-os-financials__commandfacts" data-testid="responsibility-facts">
+                            <div>
+                                <dt>Obligation</dt>
+                                <dd data-testid="responsibility-charge">
+                                    {row?.description ?? row?.categoryLabel ?? surface.label}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>Amount</dt>
+                                <dd data-testid="responsibility-amount">
+                                    {row ? money(row.amountCents, row.currencyCode || currency) : "—"}
+                                </dd>
+                            </div>
+                            {/* WHO IT IS FOR — and it is not what this command changes. */}
+                            <div>
+                                <dt>For</dt>
+                                <dd data-testid="responsibility-child">{subjectName}</dd>
+                            </div>
+                            <div>
+                                <dt>Dated</dt>
+                                <dd data-testid="responsibility-date">{formatDisplayDate(row?.date ?? null) || "—"}</dd>
+                            </div>
+                            <div>
+                                <dt>Owes it now</dt>
+                                <dd data-testid="responsibility-current">
+                                    {row?.responsiblePartyName || (row?.responsibilityUnassigned ? "Unassigned" : "Not allocated")}
+                                </dd>
+                            </div>
+                        </dl>
+                        {/*
+                          * CONFIGURE IS NOT RESOLVE, AND THE OPERATOR IS TOLD SO HERE. Naming who
+                          * should be responsible is an account-grain arrangement effective from a
+                          * date; it does not reach back over obligations that already stand. This
+                          * command applies the arrangement IN FORCE for this obligation's own
+                          * service date — and where none is, it says so rather than inventing one.
+                          */}
+                        <p className="alloy-os-financials__commandnote" data-testid="responsibility-effect">
+                            {reallocating
+                                ? "This moves what one party owes to another. The previous division stays readable beside the new one; nothing is edited in place."
+                                : "This divides the obligation between the parties named by the arrangement in force for its service date. Where no arrangement was in force then, it stays honestly unassigned — configuring one now does not reach backwards."}
+                        </p>
+                        {reallocating ? (
+                            <label className="alloy-os-financials__commandfield">
+                                <span>Why responsibility is moving</span>
+                                <input
+                                    data-testid="responsibility-reason"
+                                    className="alloy-os-addcharge__input"
+                                    value={reallocationReason}
+                                    onChange={(e) => setReallocationReason(e.target.value)}
+                                    placeholder="Required — this changes what one real person owes another"
+                                />
+                            </label>
+                        ) : null}
+                        {responsibilityPreview ? (
+                            <div className="alloy-os-fdetail__movepreview" data-testid="responsibility-preview">
+                                <strong>{responsibilityPreview.summary}</strong>
+                                {responsibilityPreview.changes.map((c) => (
+                                    <span key={c}>{c}</span>
+                                ))}
+                            </div>
+                        ) : null}
+                        {responsibilityError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="responsibility-error">
+                                {responsibilityError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-financials__commandactions">
+                            <button
+                                type="button"
+                                data-testid="responsibility-preview-button"
+                                className="alloy-os-financials__action"
+                                disabled={running}
+                                onClick={() => void previewResponsibility(target)}
+                            >
+                                Preview
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="responsibility-confirm"
+                                className="alloy-os-financials__action alloy-os-financials__action--primary"
+                                disabled={running || !responsibilityPreview || (reallocating && reallocationReason.trim().length < 3)}
+                                onClick={() => void confirmResponsibility(target)}
+                            >
+                                {reallocating ? "Reallocate" : "Resolve responsibility"}
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="responsibility-cancel"
+                                className="alloy-os-financials__quiet"
+                                onClick={() => {
+                                    setResponsibilityPreview(null);
+                                    setResponsibilityError(null);
+                                    setReallocationReason("");
+                                    pop();
+                                }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </UniversalCard>
+            </div>
+        );
+    }
+
     if (surface?.kind === "reverse_charge" && vm) {
         const row = vm.rows.find((r) => r.chargeId === surface.chargeId) ?? null;
         const subjectName =
@@ -3445,6 +3675,12 @@ export default function FinancialsCard({
                      * the row because both are about that row; only their meaning differs.
                      */
                     onAdjustCharge={adjustableSubjects.length > 0 ? openAdjustForCharge : undefined}
+                    /*
+                     * DETAILS ADMINISTERS RESPONSIBILITY. Summary reports it and is given neither
+                     * of these, which is the doctrine rather than an oversight.
+                     */
+                    onResolveResponsibility={(a) => openResponsibility({ ...a, mode: "resolve" })}
+                    onReallocateResponsibility={(a) => openResponsibility({ ...a, mode: "reallocate" })}
                     /*
                      * The surface is mounted; the ledger may still be reading. This is the ONLY
                      * region allowed to say so, and it says it by reserving itself — never by
@@ -4174,7 +4410,13 @@ export type FinancialsSurface =
     | { kind: "add_charge" }
     | { kind: "payment" }
     | { kind: "adjust_charge"; chargeId: string }
-    | { kind: "reverse_charge"; chargeId: string; label: string };
+    | { kind: "reverse_charge"; chargeId: string; label: string }
+    /*
+     * WHO OWES ONE OBLIGATION. Row-scoped like the two above, and it carries its MODE because
+     * resolving and reallocating are different intents that happen to share a shell: one divides a
+     * charge nobody owes yet, the other moves what one real person owes to another.
+     */
+    | { kind: "responsibility"; chargeId: string; label: string; mode: "resolve" | "reallocate" };
 
 function householdIdFrom(context: OperationalContext): string | null {
     /*

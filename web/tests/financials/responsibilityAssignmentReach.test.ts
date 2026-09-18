@@ -66,26 +66,30 @@ describe("THE GATE — the two commands are different grains (§4B)", () => {
     });
 
     /*
-     * THE REACHABILITY FACT, LOCKED SO IT CANNOT BE MISREAD AS PRESENT. If an operator surface for
-     * charge-grain resolution is ever added, this test SHOULD fail — and whoever adds it should
-     * delete this expectation and prove the flow end to end instead.
+     * THE GAP IS CLOSED, AND THIS IS THE TEST THAT SAID SO FIRST.
+     *
+     * Its previous form asserted that NOTHING invoked the charge-grain commands, and it was written
+     * to fail the day someone added the surface — with a note telling that person to delete it and
+     * prove the flow instead. That day is this one, so the expectation is inverted rather than
+     * quietly deleted: both deep hosts now raise the canonical commands, and the account-grain
+     * panel still does not.
      */
-    it("records that charge-grain resolution has no operator surface today", () => {
-        const roots = ["app/adminV2/financials/FinancialsChargeDetail.tsx",
-                       "app/adminV2/financials/FinancialsResponsibilityPanel.tsx",
-                       "app/adminV2/financials/FinancialsAccountWorkspaceDetail.tsx",
-                       "components/admin/focusPanel/cards/FinancialsCard.tsx",
-                       "components/operationalCards/FinancialsDetailCard.tsx"];
-        for (const r of roots) {
-            expect(code(r), `${r} does not invoke charge-grain resolution`)
-                .not.toContain("billing.resolve_responsibility");
-            expect(code(r), `${r} does not invoke reallocation`)
-                .not.toContain("billing.reallocate_responsibility");
+    it("has both deep hosts reaching charge-grain resolution now that the surface exists", () => {
+        for (const r of ["components/operationalCards/FinancialsDetailCard.tsx",
+                         "app/adminV2/financials/FinancialsAccountWorkspaceDetail.tsx"]) {
+            expect(code(r), `${r} raises Resolve`).toContain("billing.resolve_responsibility");
+            expect(code(r), `${r} raises Reallocate`).toContain("billing.reallocate_responsibility");
         }
-        // They do exist as authorities — this is a reachability gap, not a missing capability.
+        // The account-grain panel keeps its own intent and does not grow a charge-grain command.
+        expect(code("app/adminV2/financials/FinancialsResponsibilityPanel.tsx"))
+            .not.toContain("billing.resolve_responsibility");
+    });
+
+    it("keeps both authorities registered and distinct", () => {
         const actions = src("lib/adminV2/actions/definitions/financialResponsibilityActions.ts");
         expect(actions).toContain("billing.resolve_responsibility");
         expect(actions).toContain("billing.reallocate_responsibility");
+        expect(actions).toContain("billing.configure_responsibility");
     });
 });
 
