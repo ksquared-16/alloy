@@ -80,13 +80,62 @@ Engineering mounted PASS. **This is not Human QA PASS, which remains ZERO.**
 | child identity unchanged | byte-identical before/after | **PASS** |
 | payer unchanged | write-boundary proof; no payment created | **PASS** |
 
-## Not covered by this run
+## E · recurring billing — PARTIAL
 
-| Row | Status | Why |
-|---|---|---|
-| **E · recurring billing (weekly + monthly)** | **NOT RUN** | The weekly/monthly boundary proof is its own specimen chain — assignment → cadence → generation → idempotent rerun. It was not reached before the run ended, and monthly grouping must not be used as evidence for weekly billing. |
-| **F · multi-child independence** | carried from Section 3 | Proven on earlier candidates (`$40.00 per child · 2 children`, independent discounts, independent responsibility); **not re-run on `b8247f946`**. |
-| **G · prepaid** | partial | `Available` shown when positive (B-prepaid). Zero-silence, allocation reuse and payer-unchanged were proven earlier in the thread, not re-run here. |
+| Check | Authority | Expected | Actual | Verdict |
+|---|---|---|---|---|
+| E1 weekly periods are seven days | `assignmentBillingPeriods` | whole weeks | 4+ periods, all 7 days | **PASS** |
+| E1 anchored on the agreement, not ISO weeks | same | the term's own weekday | every period starts on the anchor's weekday; a household anchored two days later gets different boundaries | **PASS** |
+| E1 tiles with no overlap or gap | same | contiguous | each period starts the day after the previous ends | **PASS** |
+| E1 month-crossing week stays whole | `billingPeriodsBetween` | one period spanning Sep→Oct | start `2026-09`, end `2026-10`, key carries both dates | **PASS** |
+| E1 weekly key is not `YYYY-MM` | `billingPeriodKeyFor` | `start~end` weekly, `YYYY-MM` monthly | both confirmed | **PASS** |
+| E4 span honoured, anchor outside it | `assignmentBillingPeriods` | only the requested span | held for a January anchor billing September | **PASS** |
+| E4 no accepted term | same | falls back to the span | periods still produced | **PASS** |
+| **E2/E3 monthly + weekly GENERATION and rerun** | `billing.generate_tuition` | charges generated, rerun creates none | **`Generate 0 · $0.00` — 0 to bill · 0 not due · 0 already posted · 0 refused · 0 errored** | **BLOCKED — no specimen** |
+| **E5 recurring discount** | — | per-obligation resolution | nothing generated to discount | **BLOCKED — no specimen** |
+| **E6 recurring due date** | — | resolved on generated charges | nothing generated to inspect | **BLOCKED — no specimen** |
+| **E7 accounting period independence** | — | independent of billing period | nothing generated; stated honestly rather than fabricated | **BLOCKED — no specimen** |
+
+**THE FIXTURE HAS NO RECURRING BILLING SPECIMEN.** The generation surface works and is honest — it
+enumerated the organisation for September 2026 and reported nothing to bill, with every bucket zero,
+meaning no assignment was even *considered*. The tuition charges on this account were authored by
+hand across the thread; no accepted `enrollment_pricing_terms` exist. Establishing one is a
+commercial configuration tree (plan → billing frequency → commitment → assignment → accepted terms)
+and is **B2 reseed work**, not something to improvise here.
+
+The boundary arithmetic — the part most likely to be wrong and the part the weekly/monthly
+distinction actually turns on — is proven directly on the authority the generator and the preview
+both call, with the month-collapse regression planted and caught.
+
+## F · multi-child — PARTIAL
+
+| Check | Expected | Actual | Verdict |
+|---|---|---|---|
+| F1 unified Add command | opens | `add_charge` overlay | **PASS** |
+| F2 child-grain type exposes the sibling | offered | 1 sibling checkbox | **PASS** |
+| F3 amount stated per child with count | per-child + count | `$75.00 per child · 2 children · each receives their own charge` | **PASS** |
+| F7 obligations stay child-attributed | no household row | `["Certa Certhouse"]` | **PASS** |
+| F8 responsibility stays per obligation | not one household answer | per-row state | **PASS** |
+| **F4/F5/F6 two independent obligations from one gesture** | `customer_member_ids`, 2 created | payload carried only `customer_member_id`; one charge created | **NOT PROVEN — OPEN QUESTION** |
+
+**OPEN AND UNRESOLVED.** The summary line rendered `2 children`, which it only does when the
+selection is greater than one — so the selection was 2 when the surface drew it and 1 when the
+command was sent. The payload builder is intact (`customer_member_ids` is sent when the selection
+exceeds one), so the question is what emptied the extra-child selection between render and confirm:
+a probe timing artifact, or a real regression in the multi-child path.
+
+I have not established which, and I will not guess at it. **This is the single most important thing
+to settle next** — multi-child is a Core claim that Section 3 certified on an earlier candidate.
+
+## G · prepaid — PASS
+
+| Check | Expected | Actual | Verdict |
+|---|---|---|---|
+| G1 positive available prepaid visible | > $0 through the read model | **Available $200.00** | **PASS** |
+| G2 balance and prepaid are separate facts | two figures | **Balance $37.87** · **Available $200.00** | **PASS** |
+| G3 prepaid not netted into the balance | balance stands alone | $37.87 unchanged by $200.00 of available money | **PASS** |
+| G4 pending/unavailable money not offered | fail toward do-not-offer | `heldSupported: false`; carried from the prepaid authority, not re-proven here | **CARRIED** |
+| G5 allocation reduces available and settles the target | canonical allocation | not exercised this run | **NOT RUN** |
 
 ## Deferred boundaries — behaving honestly, not reopened
 
@@ -95,7 +144,10 @@ Engineering mounted PASS. **This is not Human QA PASS, which remains ZERO.**
 
 ## Tally
 
-**PASS 44 · FAIL 0 · BLOCKED 0 · NOT RUN 3 (E, F re-proof, G re-proof) · DEFERRED 3.**
+**PASS 58 · FAIL 0 · BLOCKED 4 (E2/E3/E5/E6/E7 — one absent specimen) · NOT PROVEN 1 (F4/F5/F6) · NOT RUN 1 (G5) · CARRIED 1 (G4) · DEFERRED 3.**
+
+44 from the surfaces and the three named repairs, plus 14 closed here: 7 weekly-boundary checks,
+5 multi-child checks and 3 prepaid checks (G1–G3).
 
 Three rows failed on first execution and all three were probe artifacts, corrected and re-run: a
 1100-character text capture that cut off the resolved-policy panel, a 6-second wait that read the
