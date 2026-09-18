@@ -349,6 +349,7 @@ export const FINANCIALS_CURRENT: FinancialsEvidence = {
         paymentsReceived: "−$1,665",
         currentBalance: "$0",
         dueNow: "$0",
+        availablePrepaid: null,
         dueLabel: "Next charge Sep 1",
     },
     pastDue: null,
@@ -400,6 +401,7 @@ export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
         paymentsReceived: "−$925",
         currentBalance: "$255",
         dueNow: "$560",
+        availablePrepaid: null,
         dueLabel: "Was due Aug 15",
     },
     pastDue: {
@@ -457,6 +459,7 @@ export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
         paymentsReceived: "−$925",
         currentBalance: "$40",
         dueNow: "$40",
+        availablePrepaid: null,
         dueLabel: "Due Sep 1",
     },
     pastDue: null,

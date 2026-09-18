@@ -284,6 +284,29 @@ export default function FinancialsDetailCard({
                     <Stat label="Responsibility" value={period.familyResponsibility} />
                     <Stat label="Paid" value={period.paymentsReceived.replace("−", "")} />
                     {/*
+                      * AVAILABLE PREPAID — money this family has already given that is not yet spent.
+                      *
+                      * SILENT WHEN THERE IS NONE. The adapter sends null rather than "$0.00", so an
+                      * ordinary account does not carry a permanent zero in a slot meant for a fact —
+                      * the same density rule that removed Autopay from this strip rather than
+                      * rendering it as a standing "not available".
+                      *
+                      * It sits BESIDE Current balance and never inside it. Held money pays nothing
+                      * down until it is applied, so `owes $0 with $200 available` stays two figures
+                      * and never collapses into `-$200`, which would say the organisation owes the
+                      * family money it does not owe.
+                      *
+                      * Toned `ok`: funds on the account are good news, not an exception to resolve.
+                      */}
+                    {period.availablePrepaid ? (
+                        <Stat
+                            label="Available prepaid"
+                            value={period.availablePrepaid}
+                            tone="ok"
+                            testId="available-prepaid"
+                        />
+                    ) : null}
+                    {/*
                      * "None" claimed an absence nothing could support. Payment setup has no producer
                      * yet, so the honest value is that it has not been recorded — and it is not
                      * toned as a problem, because an unknown is not a fault.
@@ -830,9 +853,9 @@ function LensFilter({
  * account summary in the Financials workspace borrows this component rather than growing a second
  * label-over-value idiom with its own type scale. One anatomy, two placements.
  */
-export function Stat({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: "ok" | "due" }) {
+export function Stat({ label, value, strong, tone, testId }: { label: string; value: string; strong?: boolean; tone?: "ok" | "due"; testId?: string }) {
     return (
-        <span className="alloy-os-fdetail__stat" data-tone={tone}>
+        <span className="alloy-os-fdetail__stat" data-tone={tone} data-testid={testId}>
             <span className="alloy-os-fdetail__statlabel">{label}</span>
             <span className={clsx("alloy-os-fdetail__statvalue", strong && "alloy-os-fdetail__statvalue--strong")}>
                 {value}

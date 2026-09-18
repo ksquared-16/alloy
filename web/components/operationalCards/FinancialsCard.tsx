@@ -246,6 +246,33 @@ export default function FinancialsCard({
                             {period.responsibility?.unassigned ? (
                                 <Line label="Unassigned" value={period.responsibility.unassigned} />
                             ) : null}
+                            {/*
+                             * ── AVAILABLE FUNDS EARN A COMPACT LINE, ON THE UNASSIGNED PRECEDENT ──
+                             *
+                             * The test this card applies is whether a fact changes what the operator
+                             * DOES, not whether it is interesting. This one does: Due may read $150
+                             * while the family has already handed over $200 that is simply not
+                             * allocated yet. Without this line the compact card says "collect $150"
+                             * about a family that owes the organisation nothing in cash terms, and
+                             * chasing them is a real, avoidable error.
+                             *
+                             * SILENT WHEN THERE IS NONE, which is the ordinary account — so the
+                             * accepted anatomy is unchanged for almost every family, exactly as
+                             * `Unassigned` is. A permanent "$0.00 available" would be the noise the
+                             * density doctrine forbids.
+                             *
+                             * IT IS AN INDICATOR, NOT ADMINISTRATION. No Apply, no Manage deposit,
+                             * no allocation control: applying money is Details' work, and the
+                             * compact card's job here is only to stop the operator acting on an
+                             * incomplete reading of the position.
+                             */}
+                            {period.availablePrepaid ? (
+                                <Line
+                                    label="Available"
+                                    value={period.availablePrepaid}
+                                    testId="available-prepaid"
+                                />
+                            ) : null}
                         </div>
                         {/* Payment belongs to the payment position, so it sits at the foot of it. */}
                         {onPayNow ? (
@@ -484,9 +511,9 @@ function Group({ children }: { children: React.ReactNode }) {
     return <p className="alloy-os-billingdetail__group">{children}</p>;
 }
 
-function Line({ label, value, emphasis }: { label: string; value: string; emphasis?: boolean }) {
+function Line({ label, value, emphasis, testId }: { label: string; value: string; emphasis?: boolean; testId?: string }) {
     return (
-        <div className={clsx("alloy-os-billing__line", emphasis && "alloy-os-billing__line--emphasis")}>
+        <div className={clsx("alloy-os-billing__line", emphasis && "alloy-os-billing__line--emphasis")} data-testid={testId}>
             <span className="alloy-os-billing__line-label">{label}</span>
             <span className="alloy-os-billing__line-value">{value}</span>
         </div>

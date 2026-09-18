@@ -34,6 +34,7 @@
 
 import { readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
 import { resolveHouseholdPaymentViews, type PaymentView } from "@/lib/financials/paymentApplicationView";
+import { resolveAccountPrepaidPosition } from "@/lib/financials/prepaid/availableFunds";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
@@ -443,6 +444,24 @@ export type FinancialsCardVM = {
      * when an agency short-pays, the difference is a decision somebody owes, not a bill the family
      * silently inherits.
      */
+    /**
+     * MONEY THIS ACCOUNT HOLDS THAT IS NOT YET SPENT — and only the part that may be spent.
+     *
+     * Projected by `resolveAccountPrepaidPosition`, which is the authority; nothing here computes
+     * it. UNAPPLIED IS NOT AVAILABLE: a pending receipt is money the platform has been told about,
+     * not money it has, so it is reported separately and never offered.
+     *
+     * `heldSupported: false` means the platform CANNOT TELL a restricted deposit from ordinary
+     * prepaid money. A surface must not render that as "$0 held" — an absent capability is not a
+     * zero measurement, and claiming it would let an operator spend a refundable deposit believing
+     * none was held.
+     */
+    prepaid: {
+        availableCents: number;
+        pendingCents: number;
+        heldCents: number;
+        heldSupported: boolean;
+    };
     collectible: {
         outstandingCents: number;
         expectedSubsidyCents: number;
@@ -487,6 +506,7 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         payers: [],
         responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
         expectedFunding: [],
+        prepaid: { availableCents: 0, pendingCents: 0, heldCents: 0, heldSupported: false },
         collectible: {
             outstandingCents: 0,
             expectedSubsidyCents: 0,
@@ -1484,6 +1504,15 @@ async function buildFinancialsCardVMInner(
                     applications: view.applications,
                 };
             });
+
+            /*
+             * THE PREPAID POSITION, FROM THE AUTHORITY THAT OWNS IT.
+             *
+             * Asked here rather than derived in a component: a card that summed unapplied cents
+             * itself would be a second answer to "what may this family spend", and it would get the
+             * PENDING case wrong — which is the one that can offer money that never arrives.
+             */
+            vm.prepaid = resolveAccountPrepaidPosition(views);
         }
     } catch (e) {
         /*
