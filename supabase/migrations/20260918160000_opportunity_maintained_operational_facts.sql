@@ -246,6 +246,24 @@ DECLARE
     v_opp uuid;
 BEGIN
     v_new := jsonb_populate_record(NULL::public.process_instances, p_row);
+
+    /*
+     * ── WHY THE DEFAULTS ARE APPLIED BY HAND ──
+     *
+     * `jsonb_populate_record` fills every column the jsonb does not mention with NULL, and
+     * `INSERT ... VALUES (v_new.*)` then inserts those NULLs EXPLICITLY — which overrides the column
+     * defaults rather than falling back to them. The caller's row legitimately omits id, metadata and
+     * created_at because the table generates them, so without this the insert fails on
+     * `null value in column "id" ... violates not-null constraint`.
+     *
+     * These are exactly the NOT NULL columns of `process_instances` that carry a DEFAULT. Nullable
+     * columns (updated_at, stage_entered_at, business_process_revision_id) are left alone: NULL is a
+     * legitimate value for each, and coalescing them would invent facts the caller did not state.
+     */
+    v_new.id         := COALESCE(v_new.id, gen_random_uuid());
+    v_new.metadata   := COALESCE(v_new.metadata, '{}'::jsonb);
+    v_new.created_at := COALESCE(v_new.created_at, now());
+
     IF v_new.org_id IS DISTINCT FROM p_org_id THEN
         RAISE EXCEPTION 'insert_enrollment_participation: row org % does not match caller org %', v_new.org_id, p_org_id;
     END IF;
@@ -386,6 +404,15 @@ BEGIN
     IF (v_res ->> 'ok') IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'SELFTEST: creation refused: %', v_res; END IF;
     v_pi := (v_res ->> 'id')::uuid;
     IF v_pi IS NULL THEN RAISE EXCEPTION 'SELFTEST: creation returned no id: %', v_res; END IF;
+    -- The caller's row omits id / metadata / created_at because the table generates them. A
+    -- composite INSERT passes the populated NULLs through EXPLICITLY and overrides those defaults,
+    -- so generation is asserted rather than assumed.
+    IF NOT EXISTS (
+        SELECT 1 FROM public.process_instances
+         WHERE id = v_pi AND metadata IS NOT NULL AND created_at IS NOT NULL
+    ) THEN
+        RAISE EXCEPTION 'SELFTEST: creation did not generate the defaulted columns for %', v_pi;
+    END IF;
 
     SELECT maintained_operational_facts INTO v_facts FROM public.opportunities WHERE id = v_opp;
     IF jsonb_array_length(v_facts -> 'participants') <> 1 THEN
