@@ -167,45 +167,70 @@ describe("the card's own content is unchanged", () => {
  */
 describe("the painted card consumes the band — the last hop", () => {
     const BP = readFileSync(join(process.cwd(), "components/operationalCards/ProcessCard.tsx"), "utf8");
-    const PROC_WRAPPER = ".alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell > .alloy-os-process";
-    const PROC_CARD = `${PROC_WRAPPER} > .alloy-os-ucard`;
+    const HEALTH = readFileSync(join(process.cwd(), "components/admin/focusPanel/cards/HealthSafetyCard.tsx"), "utf8");
+    const CHAIN = ".alloy-os-fp-card-intrinsic *:has(.alloy-os-ucard)";
+    const CHAIN_GROWTH = `${CHAIN},\n.alloy-os-fp-card-intrinsic .alloy-os-ucard`;
 
-    it("THE PREMISE: Business Process really does wrap its UniversalCard, and is the only card that does", () => {
-        // If this ever stops being true the defect is gone and so is the reason for the repair —
-        // the reader should learn that here rather than from a mystery rule that matches nothing.
-        const wrapperAt = BP.indexOf('className="alloy-os-process" data-process-card="true"');
-        expect(wrapperAt, "ProcessCard renders the alloy-os-process wrapper").toBeGreaterThan(-1);
-        expect(BP.indexOf("<UniversalCard"), "…and UniversalCard is rendered inside it").toBeGreaterThan(wrapperAt);
+    it("THE PREMISE, CORRECTED: Business Process is NOT the only card that wraps its UniversalCard", () => {
+        /*
+         * The rule this replaces was scoped to `.alloy-os-process` on a premise written directly
+         * above it: "For every other card that child IS the painted article.alloy-os-ucard". The
+         * premise was false when it was written, and THIS TEST IS WHERE IT SHOULD HAVE BEEN CAUGHT —
+         * the old version of it asserted only that ProcessCard wraps, while its own title claimed
+         * ProcessCard was the only card that does. A claim stated in a test name and never asserted
+         * is not a claim.
+         *
+         * Measured on deployed dced5ba79 at 1440: health_safety band 640px, painted article 141.8px.
+         */
+        const bpWrapper = BP.indexOf('className="alloy-os-process" data-process-card="true"');
+        expect(bpWrapper, "ProcessCard wraps").toBeGreaterThan(-1);
+        expect(BP.indexOf("<UniversalCard"), "…with UniversalCard inside it").toBeGreaterThan(bpWrapper);
+
+        // Health & Safety wraps too — twice — which is the shape the per-card rule could not reach.
+        const healthWrapper = HEALTH.indexOf('className="alloy-os-health"');
+        expect(healthWrapper, "HealthSafetyCard also wraps").toBeGreaterThan(-1);
+        expect(HEALTH.indexOf("<UniversalCard"), "…with UniversalCard inside it").toBeGreaterThan(healthWrapper);
     });
 
-    it("THE GATE: the wrapper is made to pass the height on, rather than left a block box", () => {
-        const rule = ruleFor(PROC_WRAPPER);
-        expect(rule, "the propagation rule must exist").not.toBe("");
-        // A block container does not hand its height to a child; that is the whole defect.
+    it("THE GATE: the propagation is stated over the CHAIN, not over a named card", () => {
+        // A rule naming one card can only ever fix one card; the next wrapper reopens the defect.
+        const rule = ruleFor(CHAIN);
+        expect(rule, "the chain propagation rule must exist").not.toBe("");
         expect(rule).toMatch(/display:\s*flex/);
         expect(rule).toMatch(/flex-direction:\s*column/);
     });
 
-    it("THE GATE: the painted card is made to TAKE the height, not merely be allowed to", () => {
-        const rule = ruleFor(PROC_CARD);
+    it("THE GATE: the painted card is made to TAKE the height, at any wrapping depth", () => {
+        const rule = ruleFor(CHAIN_GROWTH);
         expect(rule, "the consumption rule must exist").not.toBe("");
         // In a column flex container height is the MAIN axis, so `align-items: stretch` would do
         // nothing here — growth is what consumes the band.
         expect(rule).toMatch(/flex:\s*1\s+1\s+auto/);
     });
 
+    it("no card name survives in the propagation rule, so no future wrapper is left out", () => {
+        for (const sel of [CHAIN, CHAIN_GROWTH]) {
+            const rule = ruleFor(sel);
+            expect(rule).not.toMatch(/alloy-os-process|alloy-os-health|alloy-os-financials|alloy-os-billing/);
+        }
+        // And the per-card rule it replaced is gone rather than left to rot beside it.
+        expect(CSS).not.toContain(".alloy-os-focus-panel-grid__cell > .alloy-os-process {");
+    });
+
     it("no pixel value is named, so any solved H propagates — 299, 325 or otherwise", () => {
-        for (const rule of [ruleFor(PROC_WRAPPER), ruleFor(PROC_CARD)]) {
+        for (const rule of [ruleFor(CHAIN), ruleFor(CHAIN_GROWTH)]) {
             expect(rule).not.toMatch(/\d+px/);
             expect(rule).not.toMatch(/299|325/);
         }
     });
 
     it("the repair is scoped to the solved grid — lanes, stack, standalone and the lab are untouched", () => {
-        // Both new selectors are rooted at the intrinsic node, which only the solved-grid branch
-        // renders. A bare `.alloy-os-process` rule would reach ProcessCard everywhere it mounts.
-        for (const sel of [PROC_WRAPPER, PROC_CARD]) {
-            expect(sel.startsWith(".alloy-os-fp-card-intrinsic >")).toBe(true);
+        // EVERY selector in the chain rule is rooted at the intrinsic node, which only the
+        // solved-grid branch renders. This matters more now than it did for the per-card rule:
+        // `*:has(.alloy-os-ucard)` is deliberately broad, so the root is the only thing keeping it
+        // off the lanes, stack, standalone and design-lab mounts, where cards keep natural height.
+        for (const sel of [CHAIN, ...CHAIN_GROWTH.split(",\n")]) {
+            expect(sel.trim().startsWith(".alloy-os-fp-card-intrinsic ")).toBe(true);
         }
         const bare = CSS.indexOf("\n.alloy-os-process {");
         expect(bare, "no unscoped .alloy-os-process rule may exist").toBe(-1);

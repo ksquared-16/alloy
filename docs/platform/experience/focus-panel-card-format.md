@@ -319,3 +319,143 @@ Its binding is proven by planting each shipped defect and watching it fail:
 A scenario asserting that cards in **different** bands stay independent sits alongside them, so an
 implementation that simply equalised everything fails too. Between them, neither wrong
 implementation this work shipped can pass.
+
+---
+
+## 5 · Internal vertical rhythm — what a card does with the height it is given
+
+§4 ends at *"the painted card is the band's height"*. That is the outer half. This section owns the
+inner half, and it is a **frozen contract**:
+
+> **OUTER COMPOSITION OWNS ASSIGNED HEIGHT.**
+> **CARD CONTENT OWNS NATURAL MINIMUM HEIGHT.**
+> **SURPLUS HEIGHT IS DISTRIBUTED BETWEEN SEMANTIC REGIONS.**
+> **CARD-LEVEL FOOTERS MAY ANCHOR TO THE BOTTOM.**
+> **INLINE ACTIONS REMAIN WITH THE CONTENT THEY ACT ON.**
+> **TEXT AND CONTROLS DO NOT STRETCH.**
+> **ASSIGNED HEIGHT MUST NOT CONTAMINATE INTRINSIC MEASUREMENT.**
+
+Cards sharing a band have very different intrinsic heights, and that is legitimate: Financials
+Compact carries more summary content than a Process card whose stage has no configured work. The
+answer is never to invent Process content or densify Financials. It is to let the shorter card
+spend its surplus deliberately.
+
+### 5.1 The defect, measured
+
+Two separate faults produced one symptom — *a short card floating at the top of a tall box*.
+
+**Fault 1 — the band did not reach the card at all.** §4.6's propagation rule was written as
+`.alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell > .alloy-os-process`, on a premise
+stated in its own comment: *"For every other card that child IS the painted `article.alloy-os-ucard`"*.
+That premise was false when written. Measured on deployed `dced5ba79` at 1440:
+
+| card | wrapper chain | band | painted card |
+| --- | --- | --- | --- |
+| `business_process` | `.alloy-os-process` *(flex column — the card this rule named)* | 234px | 234px |
+| **`health_safety`** | `div.alloy-os-health` → `div.alloy-os-health` → `article` *(both **block**)* | **640px** | **141.8px** |
+| `financials` | `div.alloy-os-financials` → `div.alloy-os-billing` → `article` *(both **block**)* | 131px | 130.9px |
+
+A block container does not hand its height to its child, so Health & Safety lost **498.2px** into a
+transparent wrapper. Financials has the same shape and never showed it, because its band happens to
+be the height its content already needs — it was one composition away from the same defect.
+
+**A rule naming one card can only ever fix one card.** The propagation is now stated over the
+*chain* — `.alloy-os-fp-card-intrinsic *:has(.alloy-os-ucard)` — so any wrapper, at any depth, and
+any card added later, passes the height on.
+
+**Fault 2 — the card had nowhere to put the surplus.** `.alloy-os-ucard` was already
+`flex-direction: column`, but nothing inside it grew, so free space collected *after the last
+child*: the footer's `border-top` floated mid-card with white beneath it. `.alloy-os-ucard__body`
+now grows, which puts the surplus between the body's content and the footer.
+
+### 5.2 The shared primitive
+
+One owner, no per-card rules:
+
+| | |
+| --- | --- |
+| **height delivery** | `.alloy-os-fp-card-intrinsic *:has(.alloy-os-ucard)` — every ancestor of the painted card becomes a column and grows; the card grows with it |
+| **surplus absorption** | `.alloy-os-ucard__body` — `display: flex; flex-direction: column; flex: 1 1 auto` |
+| **body-resident footer** | `.alloy-os-ucard__body-footer` — `margin-top: auto` |
+
+Normal flow only. **No** `position: absolute`, no spacer heights, no `min-height` floors, no
+`height: 100%` anywhere in the chain — growth says *take the room the band already assigned*, while
+a percentage would resolve against the assigned band and feed it back (§5.4).
+
+Two footer spellings exist because Alloy has two, and both must anchor. Most cards pass
+`footerAction` and get the real `<footer class="alloy-os-ucard__footer">`, which the body's growth
+pushes to the bottom edge. Business Process carries its foot row *inside* the body, and the
+`timeline` archetype hides the shell footer outright — those use `__body-footer`.
+
+**Only card-level content may anchor.** Process command buttons stay in
+`.alloy-os-process__work`, attached to the work they act on; `Record outcome` stays with its stage;
+Attendance's `Check in` / `Mark absent` stay with the attendance state; Household member actions
+stay on their member. Moving a control down to fill space makes the card lie about what it applies
+to. Only *card-level* navigation and activity settle — Process's `Recent activity` foot row,
+`View children →`, `View health details →`.
+
+### 5.3 Card anatomy, as rendered
+
+Audited on deployed `dced5ba79`. `HEADER` is the shell's own and is omitted.
+
+| card | archetype | primary | supporting / actions | semantic footer | anchors via |
+| --- | --- | --- | --- | --- | --- |
+| Business Process | `action` | lifecycle rail, stage/current-work | `__work` commands, Record outcome | `__foot` — participants + Recent activity | `__body-footer` |
+| Financials Compact | `status` | responsibility, balance, past-due | — | `__footer` — Payment / Add / Details | body growth |
+| Attendance | `timeline` | attendance state | Check in / Mark absent *(stay with state)* | **none** — shell footer is `display: none` | *n/a* |
+| Children | `collection` | child rows | — | `__footer` — `View children →` | body growth |
+| Health & Safety | `status` | status / attention rows | — | `__footer` — `View health details →` | body growth |
+| Household | `profile` | summary regions | member-level actions *(stay on the member)* | `__footer` — card-level nav | body growth |
+| Current Work | *(see §2)* | current work | command rail | `Recent activity` context region — **identified, not yet anchored** | *(none)* |
+
+Attendance has **no** card-level footer, so it anchors nothing — its surplus stays below its
+content, which is correct. A card with nothing to anchor is not given something to anchor.
+
+Current Work is audited but **not changed** in this slice. It passes `footerAction = null`, so it has
+no shell footer, and its `Recent activity` region sits inside a wider context block alongside
+`Also in progress` — anchoring part of that block is a composition decision, not a mechanical one.
+It is also superseded by the Process card on the focused surface
+([`process-card-supersedes-current-work`]), so the change could not be verified against a rendered
+surface here. Identified as the footer candidate; left as debt rather than applied unmeasured.
+
+Sparse states — `loading`, `empty`, `unavailable`, `forbidden`, `error` — keep the same anatomy and
+are **not** vertically centred. Space existing is not a reason to move a message to the middle of a
+card; an empty Health card and a populated one must read as the same card.
+
+### 5.4 Intrinsic measurement is unaffected — and why that is structural
+
+The danger this repair had to avoid is §4.6's loop in a third spelling: a card that consumes its
+assigned height must not then *report* that height as its natural content height, or the solver
+would assign it, the card would consume it, report it again, and the row would ratchet open.
+
+It cannot, and that is a property of `flex-grow` rather than a hope. The measurement neutralizes
+the wrapper's height (§4.6 rule 1), which leaves `.alloy-os-fp-card-intrinsic` content-sized — and
+**a flex child cannot grow past a container that is itself content-sized**. Nothing in the chain
+resolves a percentage against the assigned band, which is the spelling that *would* feed back.
+
+The gate is the round trip: measure `X` with the wrapper neutralized, assign `Y > X`, confirm the
+painted card really is `Y`, measure again, and get `X` back — then repeat at 320/480/640/900px and
+confirm `X` never moves.
+
+### 5.5 Certification
+
+Extends the existing painted-surface gate rather than adding a harness.
+
+| claim | owner |
+| --- | --- |
+| the chain rule exists, names no card, names no pixel, stays scoped to the solved grid | `web/tests/surfaces/focusPanelBandFillRuntimePath.test.ts` |
+| sparse card anchors its footer; growth collapses the surplus; content is not stretched | `web/playwright/geometry/paintedSurface.spec.ts` |
+| `X → assign Y → still X`, and no ratchet across four bands | *(same spec)* |
+
+The jsdom suite's premise test is now the corrected one. Its previous version was titled *"Business
+Process really does wrap its UniversalCard, **and is the only card that does**"* and asserted only
+the first half — **a claim stated in a test name and never asserted is not a claim**, and that is
+precisely the hole the 498px passed through.
+
+Binding proven by planting each defect and watching the right gate fail:
+
+| planted defect | result |
+| --- | --- |
+| `margin-top: auto` removed from `__body-footer` | 3 fail — sparse anchor, growth, no-stretch *(shell-footer cases correctly still pass — different mechanism)* |
+| `__body-footer` forced `position: absolute; bottom: 0` | 2 fail — the `position: static` gate and no-stretch |
+| assigned height applied to the intrinsic node instead of the wrapper | 4 fail — every `X → Y → X` gate and the ratchet test |

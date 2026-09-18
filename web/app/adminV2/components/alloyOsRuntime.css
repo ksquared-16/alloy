@@ -2431,9 +2431,41 @@ html[data-alloy-os-runtime="on"]
   color: var(--alloy-os-text-secondary, #4b5563);
 }
 
+/*
+ * THE BODY ABSORBS SURPLUS BAND HEIGHT — the card's half of internal vertical rhythm.
+ *
+ * The shell is already `flex-direction: column`, but nothing in it grew, so a card given more height
+ * than its content needs left the surplus BELOW the footer: the footer's border-top floated in the
+ * middle of the card with white beneath it. Growing the body instead puts the surplus between the
+ * body's content and the footer, which is where a reader expects a card to breathe.
+ *
+ * A column body is also what lets a body-resident card-level footer anchor (`__body-footer`). It
+ * changes no card's rendering on its own: every card's regions measured identically before and after
+ * on deployed `dced5ba79`, at 1180/1440/1680.
+ */
 .alloy-os-ucard__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 0 12px 8px;
   font-size: 12px;
+}
+
+/*
+ * A CARD-LEVEL FOOTER THAT LIVES INSIDE THE BODY.
+ *
+ * Some cards cannot use `<footer>`: Business Process carries its foot row inside the body, and the
+ * timeline archetype hides the shell footer outright. `margin-top: auto` in the column body gives
+ * them the same anchoring the shell footer gets from the body's growth — in normal flow, with no
+ * spacer, no min-height and no absolute positioning.
+ *
+ * ONLY card-level content may carry this. Actions that belong to a particular row, stage or member
+ * stay with what they act on; moving them down to fill space would make the card lie about what the
+ * control applies to.
+ */
+.alloy-os-ucard__body-footer {
+  margin-top: auto;
 }
 
 .alloy-os-ucard--expanded .alloy-os-ucard__body {
@@ -5296,43 +5328,58 @@ html[data-alloy-os-runtime-split="true"]
   align-items: stretch;
 }
 
-/* ── AND THE HEIGHT REACHES THE PAINTED CARD (P0-7.5, the last layer) ──
+/* ── AND THE HEIGHT REACHES THE PAINTED CARD, AT WHATEVER DEPTH IT WRAPS (P0-7.5, then §5) ──
  *
- * The rule above stretches the CELL's direct child. For every other card that child IS the painted
- * `article.alloy-os-ucard`, so the band height lands on the surface the operator sees. Business
- * Process is the one card that wraps: `ProcessCard` renders
- * `<div class="alloy-os-process" data-process-card="true">` AROUND its `UniversalCard`, so the
- * chain is cell → .alloy-os-process → article.
+ * The rule above stretches the CELL's direct child. That child is not always the painted
+ * `article.alloy-os-ucard`: several cards wrap it in one or two plain `<div>`s, and a block
+ * container does not hand its own height to its child. The article — `display:flex; flex:0 1 auto`
+ * from the `.alloy-os-ucard` base — then keeps its CONTENT height and the band shows through.
  *
- * `.alloy-os-process` has no base rule anywhere, so it is a plain block box. A block container does
- * not pass its own height to its child, and the article — `display:flex; flex:0 1 auto` from the
- * `.alloy-os-ucard` base — kept its CONTENT height. Measured on deployed f30e3bb0f: cell 299px,
- * .alloy-os-process 299px, painted article 231.77px. 67.23px of the panel ground showed beneath a
- * white, bordered card. Financials reads 299.19px on the same band because it has no wrapper.
+ * This has now been measured twice, and the second time is why the rule is written over the chain:
  *
- * So the defect was never the solver, the wrapper, or the cascade — all three were already correct
- * and stayed correct. It was the last hop, and it is the third distinct contract in this chain:
+ *   P0-7.5, deployed f30e3bb0f   cell 299px    .alloy-os-process 299px   painted article 231.77px
+ *   §5,     deployed dced5ba79   band 640px    .alloy-os-health  640px   painted article 141.80px
+ *
+ * The first repair named `.alloy-os-process`, on a premise written into this very comment: "for
+ * every other card that child IS the painted article". That was false when it was written. Health &
+ * Safety wraps TWICE (`div.alloy-os-health > div.alloy-os-health > article`) and Financials wraps
+ * too (`div.alloy-os-financials > div.alloy-os-billing > article`) — Financials merely sits on a
+ * band its content already fills, so it never showed. A rule naming one card can only ever fix one
+ * card, and the next wrapper reopens the defect somewhere else. So the propagation is stated over
+ * the CHAIN: every ancestor of the painted card, inside the solved-grid branch, becomes a column
+ * that hands its height on, and the card takes it. `:has()` is what makes that expressible without
+ * enumerating wrappers, or asking cards to stop wrapping.
+ *
+ * The defect was never the solver, the wrapper, or the cascade — all three were correct and stayed
+ * correct. It is the last hop, and it is the third distinct contract in this chain:
  *
  *     the solver produces H  →  the cell applies H  →  the painted card CONSUMES H
  *
  * Each is certified separately, because each has now been green while a later one was broken.
  *
- * Flex column rather than `height: 100%`: the wrapper's height here is a stretched flex cross-size,
+ * Flex growth rather than `height: 100%`: the wrapper's height here is a stretched flex cross-size,
  * and resolving a percentage against it is the fragile spelling of the same intent. `flex: 1 1 auto`
- * says what is meant — take the space the band already assigned. `min-height: 0` on both keeps a
- * tall card scrollable inside the band instead of overflowing the solved row.
+ * says what is meant — take the space the band already assigned. `min-height: 0` keeps a tall card
+ * scrollable inside the band instead of overflowing the solved row.
  *
- * NO HEIGHT IS NAMED. The card inherits whatever H the solver chose, 299 or otherwise.
+ * INTRINSIC MEASUREMENT IS UNAFFECTED, and that is a property of growth rather than a hope: the read
+ * takes the wrapper's height away, so the intrinsic node collapses to content height, and flex-grow
+ * cannot grow a child past a container that is itself content-sized. A percentage resolved against
+ * the assigned band is the spelling that WOULD feed back, and there is none in this chain.
+ *
+ * NO HEIGHT IS NAMED. The card inherits whatever H the solver chose, 299, 640 or otherwise.
  *
  * Scoped to `.alloy-os-fp-card-intrinsic` — rendered ONLY by the solved-grid branch — so the lanes,
- * stack, standalone and design-lab paths keep ProcessCard's natural height untouched.
+ * stack, standalone and design-lab paths keep every card's natural height untouched. That scope
+ * matters more here than it did for the per-card rule, because `*:has(.alloy-os-ucard)` is
+ * deliberately broad; the root is the only thing holding it to the solved grid.
  */
-.alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell > .alloy-os-process {
+.alloy-os-fp-card-intrinsic *:has(.alloy-os-ucard) {
   display: flex;
   flex-direction: column;
-  min-height: 0;
 }
-.alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell > .alloy-os-process > .alloy-os-ucard {
+.alloy-os-fp-card-intrinsic *:has(.alloy-os-ucard),
+.alloy-os-fp-card-intrinsic .alloy-os-ucard {
   flex: 1 1 auto;
   min-height: 0;
 }
