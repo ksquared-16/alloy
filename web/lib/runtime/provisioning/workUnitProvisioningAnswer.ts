@@ -156,6 +156,8 @@ import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/f
  */
 import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
+import { resolveParticipantScope } from "@/lib/adminV2/runtime/operationalContext/resolveParticipantScope";
+import { participantCandidatesFromTruth } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
 export const PROVISIONING_ROW_PAGE_CAP = 100;
@@ -710,6 +712,41 @@ export function resolveLensRowGrain(
 }
 
 /** THE BOUNDED PROVISIONING ANSWER. */
+
+/**
+ * THE SOLE PARTICIPANT, STATED AT COMMIT BECAUSE THE ANSWER ALREADY HOLDS IT.
+ *
+ * Same declaration-not-a-read pattern as `customer.id` above, for the other identity. Measured on
+ * deployed staging: Attendance, Health & Safety and Children could not MOUNT at commit because
+ * commit truth never said WHICH child the panel was about. They mounted ~3.3s later, and that late
+ * mount re-rendered the shared Summary grid — giving all six visible areas one final timestamp
+ * despite first paints spread over 3.3s. This removes that wait by stating the identity, not by
+ * loosening any readiness rule.
+ *
+ * No query is added and no participant is exposed that the operator was not already sent: the
+ * candidates are the `_inquiry_children` this very binding already carries.
+ *
+ * Nothing is guessed. The decision is `resolveParticipantScope` — the one existing authority, which
+ * returns a scope only for an explicit selection or a SOLE participant and refuses `ambiguous`
+ * outright — over `participantCandidatesFromTruth`, the one existing mapper. A family with several
+ * children still states nothing and its participant cards still reserve, which is the truthful
+ * answer when the panel genuinely cannot say which child it is about.
+ */
+export function soleParticipantIdentityBindings(inquiryChildren: unknown): Record<string, string> {
+    if (!Array.isArray(inquiryChildren) || inquiryChildren.length === 0) return {};
+    const resolved = resolveParticipantScope({
+        participants: participantCandidatesFromTruth({ _inquiry_children: inquiryChildren }),
+    });
+    const scope = resolved.scope;
+    // Both keys or neither: `participantScopeFromChildSubjectTruth` requires the participation id
+    // too, and a member id without one is not a participation it will accept.
+    if (!scope?.customerMemberId || !scope.participationId) return {};
+    return {
+        "child.customer_member_id": scope.customerMemberId,
+        "child.process_instance_id": scope.participationId,
+    };
+}
+
 export async function composeWorkUnitProvisioningAnswer(
     req: ProvisioningRequest,
 ): Promise<ProvisioningAnswer> {
@@ -1924,6 +1961,8 @@ export async function composeWorkUnitProvisioningAnswer(
         ...(primaryContactPhone ? { "person.primary_phone": primaryContactPhone } : {}),
         ...(primaryContactEmail ? { "person.primary_email": primaryContactEmail } : {}),
         ...(inquiryChildren != null ? { _inquiry_children: inquiryChildren } : {}),
+        // The scoped participant, when the case has exactly one. See the helper: refuses ambiguity.
+        ...(childComposition ? {} : soleParticipantIdentityBindings(inquiryChildren)),
         // Context Mission metadata (family grain) — presentation may aggregate participant count;
         // never invents stage labels (keys only; labels come from stage records / runtime).
         ...(!childComposition && familyMissionStageKeys.length
