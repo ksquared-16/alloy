@@ -13,7 +13,13 @@ import { cardSuccessor } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRe
 import { emitPerf } from "@/lib/perf/perfNamespaceLog";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import { perceivedMarksEnabled } from "@/lib/perf/perceivedPerf";
-import { readCommitChain, resetCommitChainForSubject } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitTiming";
+import {
+    chainConsoleEnabled,
+    chainDiag,
+    chainRecordingEnabled,
+    readCommitChain,
+    resetCommitChainForSubject,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitTiming";
 import type { FocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";
 
 function now(): number | null {
@@ -69,7 +75,7 @@ export function setFocusPanelCardParticipation(
  * that proves (or disproves) "meaningfully complete at commit".
  */
 export function markFocusPanelWorkModeModel(model: FocusPanelWorkModeModel): void {
-    if (!perceivedMarksEnabled()) return;
+    if (!chainRecordingEnabled()) return;
     const t = now();
     let __chain = readCommitChain();
 
@@ -127,7 +133,19 @@ export function markFocusPanelWorkModeModel(model: FocusPanelWorkModeModel): voi
 
     if (model.source === "provisioning_answer" && __chain.modelAt == null) {
         __chain.modelAt = t;
-        emitPerf("work-unit", "focus_panel_chain:model_commit_critical", {
+        /*
+         * SUMMARY_COMMIT_ELIGIBLE. The body's predicate is literally `if (!model) return null`, and
+         * the commit-critical model is what makes it non-null — so the moment this arrives IS the
+         * moment the Summary becomes eligible to commit. Recorded from the existing mark rather
+         * than from a second predicate that could drift from the real one.
+         */
+        const d0 = chainDiag();
+        if (d0) {
+            d0.modelAt = t;
+            if (d0.eligibleAt == null) d0.eligibleAt = t;
+            if (d0.generation == null) d0.generation = model.subject.id;
+        }
+        if (chainConsoleEnabled()) emitPerf("work-unit", "focus_panel_chain:model_commit_critical", {
             event: "model_commit_critical",
             entity_id: entityId,
             ready_count: readyKeys.length,
@@ -139,7 +157,17 @@ export function markFocusPanelWorkModeModel(model: FocusPanelWorkModeModel): voi
     for (const key of readyKeys) {
         if (__chain.cardReadyAt.has(key)) continue;
         __chain.cardReadyAt.set(key, t ?? 0);
-        emitPerf("work-unit", "focus_panel_chain:card_ready", {
+        // SUMMARY_READINESS_FLIP — pending -> ready, bound to this destination generation.
+        const dFlip = chainDiag();
+        if (dFlip && t != null) {
+            dFlip.flips.push({
+                key, from: "pending", to: "ready", at: t,
+                sinceCommitMs: sinceMs(__chain.commitAt, t),
+                generation: model.subject.id,
+                source: model.source,
+            });
+        }
+        if (chainConsoleEnabled()) emitPerf("work-unit", "focus_panel_chain:card_ready", {
             event: "card_ready",
             entity_id: entityId,
             card_key: key,
@@ -151,7 +179,9 @@ export function markFocusPanelWorkModeModel(model: FocusPanelWorkModeModel): voi
 
     if (model.source === "drawer_vm" && __chain.settledAt == null) {
         __chain.settledAt = t;
-        emitPerf("work-unit", "focus_panel_chain:settlement", {
+        const dS = chainDiag();
+        if (dS) dS.settledAt = t;
+        if (chainConsoleEnabled()) emitPerf("work-unit", "focus_panel_chain:settlement", {
             event: "settlement",
             entity_id: entityId,
             ready_count: readyKeys.length,
