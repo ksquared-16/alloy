@@ -229,9 +229,16 @@ describe("LOCK C — the Settings read model preserves the canonical role", () =
 });
 
 // ---------------------------------------------------------------------------
-// LOCK D — this slice added NO write capability.
+// LOCK D — the topology transport is never UNGATED.
+//
+// Slice 2 locked this as "PATCH refuses unit_role and parent_location_id
+// outright". Slice 3 deliberately opened that transport so the canonical
+// mutation authority could be proven end-to-end (no operator surface offers it).
+// The invariant Slice 2 was protecting is unchanged and is asserted here in its
+// current form: topology may not reach the row except through the authority.
+// The full safety contract lives in tests/location/topologyMutationAuthority.test.ts.
 // ---------------------------------------------------------------------------
-describe("LOCK D — PATCH remains topology-closed", () => {
+describe("LOCK D — topology reaches the row only through the canonical authority", () => {
     beforeEach(() => {
         captured.locationRows = [
             { id: "legacy", org_id: ORG, location_type: "unit", unit_role: null, label: "Infant Room", parent_location_id: "site", customer_id: null },
@@ -245,22 +252,31 @@ describe("LOCK D — PATCH remains topology-closed", () => {
         );
     }
 
-    it("drops unit_role from the update even when an allowed field carries it along", async () => {
-        await patch({ label: "Renamed", unit_role: "physical_space" });
-        expect(captured.update).not.toBeNull();
-        expect(captured.update).toHaveProperty("label", "Renamed");
-        expect(captured.update).not.toHaveProperty("unit_role");
+    it("refuses a topology change the authority rejects, and writes nothing", async () => {
+        // The stub returns the single legacy row for every locations read, so the
+        // proposed parent cannot be resolved — the authority refuses.
+        const res = await patch({ label: "Renamed", parent_location_id: "some-other-space" });
+        expect(res.status).toBe(400);
+        expect(captured.update).toBeNull();
     });
 
-    it("drops parent_location_id from the update — no re-parenting through this slice", async () => {
-        await patch({ label: "Renamed", parent_location_id: "some-other-space" });
+    it("refuses an invalid role before it can reach the row", async () => {
+        const res = await patch({ unit_role: "cupboard" });
+        expect(res.status).toBe(400);
+        expect(captured.update).toBeNull();
+    });
+
+    it("still lets an ordinary edit through untouched by topology rules", async () => {
+        const res = await patch({ label: "Renamed" });
+        expect(res.status).toBe(200);
         expect(captured.update).toHaveProperty("label", "Renamed");
+        expect(captured.update).not.toHaveProperty("unit_role");
         expect(captured.update).not.toHaveProperty("parent_location_id");
     });
 
-    it("writes nothing to locations when topology fields are the only input", async () => {
-        await patch({ unit_role: "shared_space", parent_location_id: "elsewhere" });
-        expect(captured.update).toBeNull();
+    it("routes every topology refusal through the named error contract", async () => {
+        const res = await patch({ unit_role: "cupboard" });
+        const body = (await res.json()) as { code?: string };
+        expect(body.code).toBe("invalid_unit_role");
     });
 });
-
