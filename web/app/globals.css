@@ -126,6 +126,31 @@
                                    transform var(--motion-standard) var(--motion-ease-move); }
 .motion-swap        { transition: opacity var(--motion-micro) var(--motion-ease-move); }
 
+/* Navigation swap acknowledgement — the destination is changing.
+   Applied to the region whose IDENTITY changes (the queue on a Work View switch, the record
+   boundary on a row switch), never to the application shell. Opacity and pointer-events ONLY:
+   neither participates in layout, so width, column geometry, the queue rail and the Focus Panel
+   boundary cannot move. Reuses `--motion-micro` / `--motion-ease-move` — the same tokens
+   `.motion-swap` already exposes for Continuity/Drawer crossfades; no new timing is invented.
+
+   The dim is cleared by a fixed timer, NOT by the destination arriving. That is deliberate: a
+   region held dim until its data lands would be a loading state that hides truth for as long as
+   the load takes, and would delay when the operator is allowed to see an authoritative answer.
+   This is a fixed, brief acknowledgement that the click registered; the content appears whenever
+   it is ready, neither sooner nor later.
+
+   Stale interaction is refused for the same brief window, so a command aimed at the new selection
+   cannot land on the outgoing one.
+
+   THE TOGGLE IS A CLASS, DELIBERATELY. Metric V2.1 classifies `class` and `style` mutations as
+   PRESENTATIONAL_ANIMATION, which does not advance finality. A `data-swapping` attribute would
+   NOT be presentational: V2.1's semantic authority rule counts an attribute as authoritative when
+   a live stylesheet selects on it, and this rule would be exactly such a selector — so the
+   acknowledgement would have advanced the metric it is forbidden to touch. Using the class channel
+   the classifier already understands means V2.1 needs no redefinition for this feature at all. */
+.motion-swap-region > *          { transition: opacity var(--motion-micro) var(--motion-ease-move); }
+.motion-swap-region.is-swapping > *            { opacity: 0.7; pointer-events: none; }
+
 /* Interaction-feedback primitives (consumed by the Interaction System — Capability 4) */
 .motion-press        { transition: transform var(--motion-instant) var(--motion-ease-move); }
 .motion-press:active { transform: scale(0.98); }
@@ -162,6 +187,7 @@
   .motion-acknowledge { animation: none; }
   .motion-navigate,
   .motion-swap,
+  .motion-swap-region > *,
   .motion-press,
   .motion-interactive,
   .motion-control { transition-duration: 1ms; }

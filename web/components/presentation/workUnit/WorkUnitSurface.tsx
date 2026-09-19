@@ -25,6 +25,7 @@ import { CreateLeadEventHost } from "@/components/presentation/rightRail/CreateL
 import { BosWorkspaceScopeSync } from "@/components/presentation/rightRail/BosWorkspaceScopeSync";
 import { WorkUnitHeader } from "./WorkUnitHeader";
 import { WorkViewPillStrip } from "./WorkViewPillStrip";
+import { useSwapAcknowledgement } from "./useSwapAcknowledgement";
 import type {
     WorkUnitSurfaceModel,
     WorkUnitSurfaceIntents,
@@ -60,6 +61,20 @@ export function WorkUnitSurfaceBodyFromModel({
     // Selected subject identity belongs in the Focus Panel — never demote Enrollment/Pipeline chrome
     // into "focus" density when a row is selected (that made Waitlist look like a different page).
     const headerDensity = "browse" as const;
+
+    /*
+     * SWAP ACKNOWLEDGEMENT for the two navigations that change what the operator is looking at.
+     * Two independent windows, because the regions are independent: a Work View switch changes the
+     * QUEUE's identity, a row click changes the RECORD's. Animating the shell for either would
+     * move surfaces whose identity did not change.
+     *
+     * Both handlers below call the intent FIRST and acknowledge second. Both calls are synchronous
+     * and in the same handler, so the destination request starts on the click, not after a frame
+     * of animation — there is no CLICK -> animation -> request edge, which is the one thing this
+     * enhancement is forbidden to introduce.
+     */
+    const queueSwap = useSwapAcknowledgement();
+    const recordSwap = useSwapAcknowledgement();
     return (
         <>
             <BosWorkspaceScopeSync
@@ -82,14 +97,22 @@ export function WorkUnitSurfaceBodyFromModel({
                     />
                     <WorkViewPillStrip
                         workViews={model.workViews}
-                        onSelect={intents.selectWorkView}
+                        onSelect={(id) => {
+                            intents.selectWorkView(id);
+                            queueSwap.acknowledge();
+                        }}
                         onPrefetch={intents.prefetchWorkView}
                     />
                 </div>
                 <FocusPanelSurface
-                    openRecord={intents.openRecord}
+                    openRecord={(row) => {
+                        intents.openRecord(row);
+                        recordSwap.acknowledge();
+                    }}
                     prefetchRecord={intents.prefetchRecord}
                     subjectRefusal={model.subjectRefusal ?? null}
+                    queueSwapping={queueSwap.swapping}
+                    recordSwapping={recordSwap.swapping}
                 >
                     <QueueRegion
                         queue={model.queue}
