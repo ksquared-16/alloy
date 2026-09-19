@@ -156,6 +156,13 @@ import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/f
  */
 import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import { attachOpportunityInquiryChildrenShell } from "@/lib/admin/opportunityEntityRecord";
+import {
+    resolveWorkUnitHeaderKpis,
+    workUnitHeaderKpiKeysFromSlots,
+    WORK_UNIT_HEADER_KPI_JOIN_GRACE_MS,
+    type WorkUnitHeaderKpiSeed,
+} from "@/lib/runtime/provisioning/workUnitHeaderKpiResolution";
+import { buildOipWarmScopeKey } from "@/lib/metrics/oipWorkspaceWarmCache";
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
@@ -408,6 +415,12 @@ export type ProvisioningAnswer =
           settlement: SettlementLocators;
           /** B — resolved right-rail Actions, committed WITH the surface (count at commit, no flash). */
           actionsProjection: WorkUnitActionsProjection;
+          /**
+           * Header KPI values resolved during THIS composition, or null when they did not land
+           * inside the join grace. Null means "resolve as before" — never zero, never stale. The
+           * seed states the scope it was resolved for; a client on a different scope ignores it.
+           */
+          headerKpis: WorkUnitHeaderKpiSeed | null;
           timings: ProvisioningTimings;
       }
     | {
@@ -1052,6 +1065,41 @@ export async function composeWorkUnitProvisioningAnswer(
     // Early-return safety (grain/records/subject fails never await it): keep the promise handled. The real
     // await at the assembly join re-sees any rejection so a genuine failure still surfaces 1:1.
     void presentationPromise.catch(() => {});
+
+    /*
+     * THE HEADER KPI ANSWER, STARTED AS SOON AS ITS CONFIG EXISTS.
+     *
+     * These three numerals are the Work Unit's COMPLETION OWNER. Measured on deployed staging the
+     * client hook that fetches them starts ~50ms AFTER the document lands and finishes ~1.2-1.9s
+     * later, holding V2.1 to ~5.6-5.8s while the cards themselves finish at ~4.74s. Nothing about
+     * the work needs hydration: org, work unit, site scope, the key set and the authorization
+     * bundle all exist here.
+     *
+     * It chains off the presentation branch because the KEY SET is published header config, which
+     * that branch already reads — so this adds no read of its own. It is deliberately NOT awaited
+     * inline: the join below takes what is ready and never blocks the document behind the rest.
+     */
+    const tHeaderKpi = now();
+    const headerKpiPromise: Promise<WorkUnitHeaderKpiSeed> = presentationPromise
+        .then(async (p) => {
+            const keys = workUnitHeaderKpiKeysFromSlots(p.header.kpiSlots);
+            const answer = await resolveWorkUnitHeaderKpis({
+                supabase: req.supabase,
+                orgId: req.orgId,
+                workUnitId: workUnit.id,
+                // The composer carries no site filter; the seed therefore states the scope it was
+                // resolved for and the client uses it only on an exact match. A seed resolved
+                // org-wide must never answer for an operator who has a site selected.
+                siteLocationId: null,
+                keys,
+            });
+            return {
+                scopeKey: buildOipWarmScopeKey({ siteId: null, workUnitId: workUnit.id, keys }),
+                ...answer,
+            } as WorkUnitHeaderKpiSeed;
+        })
+        .catch(() => ({ scopeKey: "", status: "unavailable" } as WorkUnitHeaderKpiSeed));
+    void headerKpiPromise.catch(() => {});
 
     // ── B: COMMIT-CRITICAL ACTIONS PROJECTION — resolve the right-rail action set CONCURRENTLY with the
     // presentation branch (it depends only on org + department + work unit, all known here). The SAME
@@ -2152,6 +2200,28 @@ export async function composeWorkUnitProvisioningAnswer(
             subjectGrain,
     });
 
+    /*
+     * JOIN WITH A BOUNDED GRACE — overlap, never relocation.
+     *
+     * By here the KPI work has had the whole records/projection/enrichment branch to run in. If it
+     * has landed, it travels and the client issues no request at all. If it has not, we wait only
+     * a small measured grace and then ship without it: the client's existing fetch is the fallback,
+     * so the worst case is today's behaviour, never a document blocked behind the KPI cost.
+     * `header_kpi_wait_ms` is what this join actually added — the number to hold honest.
+     */
+    const headerKpis = await (async (): Promise<WorkUnitHeaderKpiSeed | null> => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const grace = new Promise<null>((resolve) => {
+            timer = setTimeout(() => resolve(null), WORK_UNIT_HEADER_KPI_JOIN_GRACE_MS);
+        });
+        try {
+            return await Promise.race([headerKpiPromise, grace]);
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+    })();
+    markSpan("header_kpi_wait_ms", tHeaderKpi);
+
     const answer: ProvisioningAnswer = {
         terminal: "operational",
         orgId: req.orgId,
@@ -2242,6 +2312,11 @@ export async function composeWorkUnitProvisioningAnswer(
             return projected;
         })(),
         focusPanelSummaryDoc,
+        /*
+         * The header KPI answer, resolved during THIS composition. Absent (null) means it did not
+         * land inside the join grace, which the client reads as "fetch as before" — never as zero.
+         */
+        headerKpis,
         presentation,
         settlement,
         actionsProjection,

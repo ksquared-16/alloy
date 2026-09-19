@@ -40,6 +40,26 @@ function isFresh(entry: OipWarmEntry | undefined): entry is OipWarmEntry {
     return Boolean(entry && Date.now() - entry.fetchedAt < CACHE_TTL_MS);
 }
 
+/**
+ * SEED a scope from truth the document already resolved.
+ *
+ * The Work Unit header KPIs are now resolved during the document's own composition, where every
+ * input already exists. Writing that answer in here — rather than adding a parallel store — means
+ * the existing snapshot/subscribe/stale-while-revalidate machinery serves it unchanged, and the
+ * hook's normal fetch is simply never needed. No new cache: the same Map, one extra writer.
+ *
+ * Deliberately does NOT mark anything in flight and does NOT notify a refresh: a seed is already
+ * the answer.
+ */
+export function seedOipWarmCache(scopeKey: string, resolved: ResolvedMetricMap): void {
+    if (!scopeKey) return;
+    const existing = entries.get(scopeKey);
+    // Never overwrite a fresher live answer with a seed from an older document.
+    if (isFresh(existing)) return;
+    entries.set(scopeKey, { scopeKey, resolved, fetchedAt: Date.now(), error: null });
+    notify();
+}
+
 export function getOipWarmSnapshot(scopeKey: string): ResolvedMetricMap | null {
     const entry = entries.get(scopeKey);
     return isFresh(entry) ? entry.resolved : null;
