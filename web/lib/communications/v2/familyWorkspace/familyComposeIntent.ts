@@ -23,6 +23,15 @@ export type FamilyComposeDraftSeed = {
     enrollmentPaperworkSessionId?: string | null;
     /** The durable child the paperwork is about — the subject the send action takes. */
     enrollmentPaperworkChildId?: string | null;
+    /**
+     * WHO or WHAT this message is about, when that is not the recipient.
+     *
+     * Generic on purpose: a tour invitation is about a visit, enrolment paperwork is about a child,
+     * and neither is the person it is addressed to. Presentation only — nothing routes on it — but
+     * without it the composer showed only "To", and an operator sending one of two siblings'
+     * paperwork had nothing on the screen telling them which.
+     */
+    subjectLabel?: string | null;
 };
 
 export function resolveFamilyComposeIntent(

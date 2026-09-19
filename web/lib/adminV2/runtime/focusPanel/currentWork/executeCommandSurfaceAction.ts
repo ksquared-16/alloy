@@ -25,6 +25,8 @@
  * command with resolved inputs needs no second host.
  */
 
+import { adminActionErrorMessage } from "@/lib/admin/actions/adminActionErrorMessage";
+
 export type CommandSurfaceExecuteRequest = {
     /** Canonical registered action identity. */
     actionKey: string;
@@ -92,12 +94,7 @@ export async function executeCommandSurfaceAction(
         if (!res.ok || json.ok === false) {
             // The route's refusal IS the message. Restating it would put a second explanation of the
             // same rule in a second place, and would hide an eligibility reason the operator can act on.
-            const error =
-                typeof json.error === "string" ? json.error
-                : json.error && typeof json.error === "object" && "message" in json.error ?
-                    String((json.error as { message: unknown }).message)
-                :   "This command could not be run.";
-            return { ok: false, error };
+            return { ok: false, error: adminActionErrorMessage(json, "This command could not be run.") };
         }
         return { ok: true, data: json.data ?? null };
     } catch (e) {

@@ -221,6 +221,14 @@ export type FamilyCommunicationWorkspaceViewProps = {
     viewerUserId?: string | null;
     /** Increments after a confirmed send — collapses Activity reply composer. */
     sendCompleteToken?: number;
+    /**
+     * WHO or WHAT the message being composed is about, when that is not the recipient.
+     *
+     * Rendered above "To" as "For: <name>". Enrolment paperwork is the case that forced it: the
+     * composer named the adult it was addressed to and never the child whose paperwork it was, so
+     * a household with two children in Enrolling gave the operator nothing to check before sending.
+     */
+    composeSubjectLabel?: string | null;
 };
 
 export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicationWorkspaceViewProps) {
@@ -238,6 +246,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         onAcknowledgeSendSuccess, tourInvitationAck = false,
         onInsertTourInvitationLink,
         viewerUserId = null, sendCompleteToken = 0,
+        composeSubjectLabel = null,
     } = props;
     const isActivityEmbed = surfaceVariant === "activity_embed";
     const isWorkspaceInbox = surfaceVariant === "workspace_inbox";
@@ -852,6 +861,17 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     isActivityEmbed ? (
                         <div className="relative mt-2 space-y-1.5" data-cc-recipient-compact>
                             <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5 shadow-sm">
+                                {composeSubjectLabel ? (
+                                    <div
+                                        className="mb-1 flex items-baseline gap-1 text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45"
+                                        data-cc-compose-subject={composeSubjectLabel}
+                                    >
+                                        For
+                                        <span className="text-[11px] font-semibold normal-case tracking-normal text-alloy-midnight/80">
+                                            {composeSubjectLabel}
+                                        </span>
+                                    </div>
+                                ) : null}
                                 <div className="flex flex-wrap items-center gap-1.5">
                                     <span className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">To</span>
                                     {selectedRecipientRows.slice(0, 2).map((r) => (
@@ -918,6 +938,29 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                                 CC/BCC
                                             </button>
                                         </>
+                                    ) : null}
+                                    {/*
+                                      * WHAT EACH RECIPIENT HAS AGREED TO — on the line that names them.
+                                      *
+                                      * It had its own row, which cost 40px of the message's height to say
+                                      * one word and repeat the names directly above it. The affordance is
+                                      * unchanged and still per-person; only its row is gone.
+                                      */}
+                                    {selectedRecipientRows.length > 0 ? (
+                                        <span className="inline-flex flex-wrap items-center gap-1.5" data-cc-recipient-preferences-inline>
+                                            <span className="text-[10px] font-medium text-alloy-midnight/35">·</span>
+                                            {selectedRecipientRows.map((r) => (
+                                                <RecipientPreferenceAffordance
+                                                    key={r.id}
+                                                    personId={r.id}
+                                                    displayName={r.displayName}
+                                                    profile={preferenceProfilesByContact[r.id] ?? null}
+                                                    canEdit={canEditPreferences}
+                                                    saving={preferenceSaving}
+                                                    onChange={onPreferenceChange}
+                                                />
+                                            ))}
+                                        </span>
                                     ) : null}
                                     {/* Whose address this arrives from — the same answer, on the same line. */}
                                     {workspaceMode === "email" && sendingIdentity ? (
@@ -1032,10 +1075,10 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                   * answer it states. Two recipients with different preferences
                   * show two different summaries, side by side.
                   */}
-                {LIVE_WORKSPACE && composeMode && selectedRecipientRows.length > 0 ? (
+                {LIVE_WORKSPACE && composeMode && !isActivityEmbed && selectedRecipientRows.length > 0 ? (
                     <div
                         data-cc-recipient-preferences-row
-                        className={`flex shrink-0 flex-wrap items-center gap-1.5 ${isActivityEmbed ? "mt-1" : "mt-2"}`}
+                        className="mt-2 flex shrink-0 flex-wrap items-center gap-1.5"
                     >
                         <span className="text-[10px] font-medium text-alloy-midnight/45">Preferences</span>
                         {selectedRecipientRows.map((r) => (
@@ -1386,8 +1429,18 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 <div data-cc-ws-column="conversation" className="flex min-h-0 flex-1 flex-col bg-white">
                     <div data-cc-thread-header className="flex shrink-0 items-start justify-between gap-2 border-b border-alloy-stone/20 bg-white px-3 py-2">
                         <div className="min-w-0 flex-1">
+                        {/*
+                          * "New Message" is not said twice.
+                          *
+                          * In the Focus Panel the surrounding action panel is already titled — "Contact
+                          * Family", "Send enrollment paperwork" — so this bar repeated it 37px above the
+                          * body, in a host where the body had 31% of the height. The full-height
+                          * Communications workspace has no such title and keeps it.
+                          */}
                         {isNewMessageMode ? (
-                            <div className="text-[12px] font-semibold text-alloy-juniper">New Message</div>
+                            isActivityEmbed ? null : (
+                                <div className="text-[12px] font-semibold text-alloy-juniper">New Message</div>
+                            )
                         ) : activeThread ? (
                             (() => {
                                 const headerTitle = threadDisplayTitle(activeThread, timelineMessages);

@@ -153,6 +153,15 @@ export function semanticEditorFor(input: {
     }
 
     const authored = (input.inputType ?? "").toLowerCase();
+    /*
+     * A CLOSED QUESTION IS CORRECTED THE WAY IT WAS ASKED.
+     *
+     * The turn already offers Yes and No — `valueControlForTurn` has understood `boolean` all
+     * along. Change did not, so a parent who had answered "Does your child have siblings?" with a
+     * button was handed a free text box to correct it with, and anything they typed that was not a
+     * yes/no word would be refused by the Form's own validator. Two answers, one closed vocabulary.
+     */
+    if (authored === "boolean" || authored === "checkbox") return { kind: "options", options: ["Yes", "No"] };
     if (authored === "date") return { kind: "value", inputType: "date" };
     if (authored === "number") return { kind: "value", inputType: "number" };
     if (authored === "email") return { kind: "value", inputType: "email" };

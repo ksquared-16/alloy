@@ -175,6 +175,7 @@ export const sendEnrollmentPaperworkAction: RegisteredAction = {
                     launch_outcome: d.launchOutcome,
                     reused_journey: d.reusedJourney,
                     access_url: d.accessUrl,
+                    child_label: d.childLabel,
                     recipient_person_id: d.recipientPersonId,
                     recipient_display_name: d.recipientDisplayName,
                     recipient_email: d.recipientEmail,

@@ -111,6 +111,7 @@ export default function FamilyCommunicationWorkspace(props: {
                 }
                 viewerUserId={adminAuth?.userId ?? null}
                 sendCompleteToken={runtime.sendCompleteToken}
+                composeSubjectLabel={runtime.composeSubjectLabel}
             />
         </section>
     );

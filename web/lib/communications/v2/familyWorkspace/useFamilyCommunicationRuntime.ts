@@ -908,6 +908,8 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
     return {
         vm,
         loading,
+        /** What this message is about, when that is not its recipient. Presentation only. */
+        composeSubjectLabel: draftSeed?.subjectLabel?.trim() || null,
         error,
         servedFromWarmCache,
         workspaceMode,

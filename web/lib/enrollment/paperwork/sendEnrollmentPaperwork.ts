@@ -65,6 +65,14 @@ export type EnrollmentPaperworkDraft = {
     /** True when the journey already existed — a resend, not a second start. */
     reusedJourney: boolean;
     accessUrl: string;
+    /**
+     * WHOSE paperwork this is, in the words an operator would use.
+     *
+     * Carried so the composer can say "For: Lennon Kurzman" above the recipient. Without it the
+     * only name on the surface was the person being written TO, and on a household with two
+     * children in Enrolling nothing on the screen said which child's paperwork was about to go.
+     */
+    childLabel: string;
     recipientPersonId: string;
     recipientDisplayName: string | null;
     recipientEmail: string | null;
@@ -192,6 +200,7 @@ export async function prepareEnrollmentPaperwork(
             launchOutcome: launch.outcome,
             reusedJourney: started.reused,
             accessUrl,
+            childLabel: (child.display_name ?? "").trim() || childName,
             recipientPersonId: recipient.recipient.personId,
             recipientDisplayName: recipient.recipient.displayName,
             recipientEmail: recipient.recipient.email,

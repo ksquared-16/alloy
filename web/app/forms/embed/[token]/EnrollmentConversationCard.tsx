@@ -584,11 +584,21 @@ function SettledRecord({
  * What the parent told us in this session — collected, and never labelled Confirmed.
  *
  * These are settled and evidenced exactly like a confirmation, and they are not one: a parent who
- * has just described their child's sleep routine has verified nothing. Kept out of the confirmation
- * cards entirely, flat rather than grouped by subject, and folded by default — this is conversation
- * history that recedes, not a summary of what the platform holds about a person.
+ * has just described their child's sleep routine has verified nothing. They stay out of the
+ * confirmation cards entirely.
+ *
+ * ## Why this stopped being a list of rows
+ *
+ * It was a flat, three-row fold — "conversation history that recedes". On the real packet that
+ * became "What you told us" followed by three arbitrary answers and **Show 22 more**, which is the
+ * ledger this surface exists to avoid: to find one answer a parent had to expand every answer.
+ *
+ * The default is now one line per CHAPTER — the same block the conversation announces when it moves
+ * between people and topics, carried on each row by the runtime — and **Review all answers** opens
+ * the whole record, still grouped, with every correction exactly where it was. Nothing is hidden
+ * that was not hidden before; what changed is that the closed state says something true about the
+ * shape of what you have said, instead of showing three rows of it.
  */
-const COLLECTED_ROWS_VISIBLE = 3;
 
 function CollectedAnswers({
     collected,
@@ -608,61 +618,114 @@ function CollectedAnswers({
     onSave: (ref: string, value: unknown) => void;
 }) {
     const [open, setOpen] = useState(false);
+
+    /*
+     * Chapters in the order the parent met them, which is the order the runtime handed them over.
+     * A row whose need has no block of its own joins "Other answers" rather than inventing one.
+     */
+    const chapters = useMemo(() => {
+        const out: { key: string; title: string; facts: ParticipantObjectiveWire["collected"][number][] }[] = [];
+        const index = new Map<string, number>();
+        for (const fact of collected) {
+            const key = fact.group?.key ?? "__other";
+            const title = fact.group?.title ?? "Other answers";
+            let at = index.get(key);
+            if (at === undefined) {
+                at = out.length;
+                index.set(key, at);
+                out.push({ key, title, facts: [] });
+            }
+            out[at]!.facts.push(fact);
+        }
+        return out;
+    }, [collected]);
+
     if (collected.length === 0) return null;
+    // An edit in progress always shows its own row, whichever state the record is in.
     const editingHere = collected.some((f) => f.ref === editingRef);
-    const rows = open || editingHere ? collected : collected.slice(0, COLLECTED_ROWS_VISIBLE);
-    const hidden = collected.length - rows.length;
+    const expanded = open || editingHere;
+
     return (
         <section className="px-0.5" data-participant-collected={collected.length}>
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.13em] text-alloy-midnight/25">
                 What you told us
             </p>
-            <dl className="mt-1.5 space-y-1">
-                {rows.map((fact) => (
-                    <div key={fact.ref} className="flex flex-wrap items-baseline gap-x-2 gap-y-1" data-participant-collected-fact={fact.ref}>
-                        <dt className="text-[12px] text-alloy-midnight/30">{fact.label}</dt>
-                        <span aria-hidden className="text-alloy-midnight/15">·</span>
-                        {editingRef === fact.ref ? (
-                            <dd className="w-full">
-                                <StructuredFactEditor
-                                    editor={fact.editor}
-                                    label={fact.label}
-                                    initial={fact.value}
-                                    busy={busy}
-                                    onSave={(value) => onSave(fact.ref, value)}
-                                    onCancel={onCancel}
-                                />
+
+            {expanded ? (
+                <div className="mt-1.5 space-y-3" data-participant-collected-state="expanded">
+                    {chapters.map((chapter) => (
+                        <div key={chapter.key} data-participant-collected-chapter={chapter.key}>
+                            <p className="text-[11px] font-medium text-alloy-midnight/35">{chapter.title}</p>
+                            <dl className="mt-1 space-y-1">
+                                {chapter.facts.map((fact) => (
+                                    <div
+                                        key={fact.ref}
+                                        className="flex flex-wrap items-baseline gap-x-2 gap-y-1"
+                                        data-participant-collected-fact={fact.ref}
+                                    >
+                                        <dt className="text-[12px] text-alloy-midnight/30">{fact.label}</dt>
+                                        <span aria-hidden className="text-alloy-midnight/15">·</span>
+                                        {editingRef === fact.ref ? (
+                                            <dd className="w-full">
+                                                <StructuredFactEditor
+                                                    editor={fact.editor}
+                                                    label={fact.label}
+                                                    initial={fact.value}
+                                                    busy={busy}
+                                                    onSave={(value) => onSave(fact.ref, value)}
+                                                    onCancel={onCancel}
+                                                />
+                                            </dd>
+                                        ) : (
+                                            <dd className="flex items-baseline gap-2 text-[13px] text-alloy-midnight/50">
+                                                <span data-participant-collected-value={fact.ref}>{fact.value || "—"}</span>
+                                                {justUpdated.has(fact.ref) ? (
+                                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-bend-pine/70">
+                                                        Updated
+                                                    </span>
+                                                ) : null}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onEdit(fact.ref)}
+                                                    disabled={busy}
+                                                    className="text-[12px] text-alloy-midnight/35 underline underline-offset-2 hover:text-alloy-bend-pine disabled:opacity-50"
+                                                >
+                                                    Edit
+                                                </button>
+                                            </dd>
+                                        )}
+                                    </div>
+                                ))}
+                            </dl>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <dl className="mt-1.5 space-y-1" data-participant-collected-state="summary">
+                    {chapters.map((chapter) => (
+                        <div
+                            key={chapter.key}
+                            className="flex flex-wrap items-baseline gap-x-2"
+                            data-participant-collected-chapter={chapter.key}
+                        >
+                            <dt className="text-[12px] text-alloy-midnight/30">{chapter.title}</dt>
+                            <span aria-hidden className="text-alloy-midnight/15">·</span>
+                            <dd className="text-[13px] text-alloy-midnight/50">
+                                {chapter.facts.length === 1 ? "1 answer" : `${chapter.facts.length} answers`}
                             </dd>
-                        ) : (
-                            <dd className="flex items-baseline gap-2 text-[13px] text-alloy-midnight/50">
-                                <span data-participant-collected-value={fact.ref}>{fact.value || "—"}</span>
-                                {justUpdated.has(fact.ref) ? (
-                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-bend-pine/70">
-                                        Updated
-                                    </span>
-                                ) : null}
-                                <button
-                                    type="button"
-                                    onClick={() => onEdit(fact.ref)}
-                                    disabled={busy}
-                                    className="text-[12px] text-alloy-midnight/35 underline underline-offset-2 hover:text-alloy-bend-pine disabled:opacity-50"
-                                >
-                                    Edit
-                                </button>
-                            </dd>
-                        )}
-                    </div>
-                ))}
-            </dl>
-            {hidden > 0 ? (
-                <button
-                    type="button"
-                    onClick={() => setOpen(true)}
-                    className="mt-1.5 text-[12px] text-alloy-midnight/35 underline underline-offset-2"
-                >
-                    Show {hidden} more
-                </button>
-            ) : null}
+                        </div>
+                    ))}
+                </dl>
+            )}
+
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                data-participant-collected-toggle={expanded ? "collapse" : "review"}
+                className="mt-1.5 text-[12px] text-alloy-midnight/35 underline underline-offset-2 hover:text-alloy-bend-pine"
+            >
+                {expanded ? "Hide answers" : "Review all answers →"}
+            </button>
         </section>
     );
 }

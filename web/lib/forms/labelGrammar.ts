@@ -39,11 +39,19 @@ const AUXILIARY_LEAD = /^(has|have|does|do|did|is|are|was|were|can|could|will|wo
  */
 const INTERROGATIVE_LEAD = /^(how|what|whats|what's|when|where|which|who|whom|whose|why)\b/i;
 
-/** Strip the decoration an authoring tool or a source document leaves around a label. */
+/**
+ * Strip the decoration an authoring tool or a source document leaves around a label.
+ *
+ * The TRAILING parenthetical is the one that matters and the one that was missed: the real packet
+ * asks "Does your child have any fears? (dark, spiders, etc.)", which is a closed question with an
+ * example list stapled to it. Reading only the last character called it open, and it would have
+ * reached a parent as a paragraph box.
+ */
 function core(label: string | null | undefined): string {
     return (label ?? "")
         .replace(/^\(optional\)\s*/i, "")
         .replace(/^[\s*•\-–—\d.)]+/, "")
+        .replace(/\s*\([^()]*\)\s*$/, "")
         .trim();
 }
 

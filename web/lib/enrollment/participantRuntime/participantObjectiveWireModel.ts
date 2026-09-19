@@ -252,14 +252,27 @@ export type ParticipantObjectiveWire = {
      *
      * Settled and evidenced exactly like a confirmation, and NOT one — a parent who has just told
      * the school their child's sleep routine has not verified anything. Kept separate so a
-     * confirmation card can never accumulate them, and flat rather than grouped by subject: this is
-     * conversation history that recedes, not a summary of what the platform holds about a person.
+     * confirmation card can never accumulate them.
+     *
+     * ## Why each row now names its block
+     *
+     * This list was deliberately FLAT — "conversation history that recedes" — and on a packet of
+     * this size that reasoning failed in front of a person: by the health chapter it was twenty-six
+     * unrelated rows under one heading, with "Show 22 more" beneath them. A parent looking for the
+     * answer they wanted to fix had to read every answer they had ever given.
+     *
+     * The block is the SAME one the traversal already uses to decide where the conversation is —
+     * `participantConversationGroup` — so the surface groups by a relationship the packet
+     * evidenced rather than one the component invented. The list stays flat on the wire; only the
+     * block travels with each row, so nothing that reads `collected` today has to change.
      */
     readonly collected: readonly {
         readonly ref: string;
         readonly label: string;
         readonly value: string;
         readonly editor: SemanticEditor;
+        /** The chapter this answer was given in — for summarising, never for identity. */
+        readonly group: { readonly key: string; readonly title: string } | null;
     }[];
     /**
      * An outstanding question the runtime raised about this need.
@@ -420,13 +433,25 @@ function groupVoice(group: ConfirmationGroup, subjectName: string | null) {
  * what the parent said. The label and value composition is shared with the confirmation card so the
  * same fact never reads two ways.
  */
-function collectedRecord(objective: ParticipantEnrollmentObjective): ParticipantObjectiveWire["collected"] {
+function collectedRecord(
+    objective: ParticipantEnrollmentObjective,
+    subjectName: string | null,
+): ParticipantObjectiveWire["collected"] {
     const byKey = new Map(objective.needs.needs.map((n) => [n.identity.key, n]));
+    const childName = (subjectName ?? "").trim().split(/\s+/)[0] ?? null;
+    const policy = enrollmentConfirmationPolicy();
     return collectedAnswers(objective.needs.needs).flatMap((member) => {
         const need = byKey.get(member.need_key);
         if (!need) return [];
         const { ref, label, value, editor } = factRow(need, member.ref);
-        return [{ ref, label, value, editor }];
+        // The traversal's own block, asked for the need this answer settled — not re-derived here.
+        const group = participantConversationGroup({
+            need,
+            allNeeds: objective.needs.needs,
+            requiresConfirmation: policy,
+            childName,
+        });
+        return [{ ref, label, value, editor, group: group ? { key: group.key, title: group.title } : null }];
     });
 }
 
@@ -699,7 +724,7 @@ export function participantObjectiveWireModel(
         },
         known: knownRecord(objective, subjectName),
         settled: settledRecord(objective, subjectName),
-        collected: collectedRecord(objective),
+        collected: collectedRecord(objective, subjectName),
         pending_clarification: context?.pendingClarificationQuestion
             ? { question: context.pendingClarificationQuestion }
             : null,

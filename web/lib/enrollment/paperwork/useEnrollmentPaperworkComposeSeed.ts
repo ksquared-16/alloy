@@ -14,6 +14,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { adminActionErrorMessage } from "@/lib/admin/actions/adminActionErrorMessage";
 
 import type { FamilyComposeDraftSeed } from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
 import { SEND_ENROLLMENT_PAPERWORK_ACTION_KEY } from "@/lib/adminV2/actions/definitions/sendEnrollmentPaperworkAction";
@@ -27,6 +28,7 @@ type PrepareDetail = {
     session_id?: string;
     access_url?: string;
     recipient_person_id?: string;
+    child_label?: string;
     subject?: string;
     email_body?: string;
     sms_body?: string;
@@ -55,6 +57,7 @@ export function seedFromEnrollmentPaperworkDetail(
         recipientPersonIds: recipientId ? [recipientId] : null,
         enrollmentPaperworkSessionId: String(detail.session_id ?? "").trim() || null,
         enrollmentPaperworkChildId: childCustomerMemberId || null,
+        subjectLabel: String(detail.child_label ?? "").trim() || null,
     };
 }
 
@@ -106,7 +109,8 @@ export function useEnrollmentPaperworkComposeSeed(
                  */
                 const body = (await res.json().catch(() => ({}))) as {
                     ok?: boolean;
-                    error?: string;
+                    /** `{code, message}`, not a string — see `adminActionErrorMessage`. */
+                    error?: unknown;
                     data?: { execution_result?: PrepareDetail };
                 };
                 if (cancelled) return;
@@ -114,7 +118,10 @@ export function useEnrollmentPaperworkComposeSeed(
                 if (!res.ok || body.ok === false || !detail?.access_url) {
                     setState({
                         phase: "error",
-                        message: body.error ?? "The enrollment paperwork could not be prepared.",
+                        message: adminActionErrorMessage(
+                            body,
+                            "The enrollment paperwork could not be prepared.",
+                        ),
                     });
                     return;
                 }
