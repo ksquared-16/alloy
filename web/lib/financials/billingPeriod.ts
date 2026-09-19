@@ -308,6 +308,47 @@ export function billingPeriodLabel(key: string | null | undefined): string {
     return billingPeriodFromKey(raw).label;
 }
 
+/**
+ * THE PERIOD AN ASSIGNMENT IS IN, AND THE ONE AFTER IT — a READ, for a surface to state.
+ *
+ * ── WHY THIS LIVES HERE ──────────────────────────────────────────────────────────────────────
+ *
+ * A billing period is DERIVED: accepted term + cadence + the agreement anchor. The Assignment
+ * Tuition card owns the accepted cadence and could not say which period the assignment was in,
+ * which left three operator questions unanswered on the one surface that should know them. The
+ * answer is a read presentation, and the calculation belongs beside the other period functions —
+ * a component that worked out its own boundaries would be a second period model.
+ *
+ * ── WHAT IT REFUSES ──────────────────────────────────────────────────────────────────────────
+ *
+ * No accepted term, no cadence with an interval, or a term that has already ended → `null`. A
+ * surface must not fabricate a period for an assignment that has no commercial cadence, and a
+ * usage-priced cadence has no interval to state.
+ *
+ * This is NOT the accounting period. That is attributed at write time against the accounting
+ * calendar and is a different question with a different owner.
+ */
+export function acceptedTermBillingPeriods(
+    term: { cadenceKey?: string | null; effectiveStart?: string | null; effectiveEnd?: string | null } | null | undefined,
+    todayYmd: string,
+): { current: BillingPeriod; next: BillingPeriod } | null {
+    const cadence = (term?.cadenceKey ?? "").trim();
+    const anchor = (term?.effectiveStart ?? "").trim();
+    if (!term || !anchor || !isPeriodBillableCadence(cadence)) return null;
+
+    /*
+     * BEFORE IT BEGINS, THE FIRST PERIOD IS THE ANSWER. A term accepted for next month should say
+     * which period it starts in rather than describing a period it does not cover.
+     */
+    const from = todayYmd < anchor ? anchor : todayYmd;
+    const end = (term.effectiveEnd ?? "").trim();
+    if (end && end < from) return null;
+
+    const current = billingPeriodFor(cadence, anchor, from);
+    const next = billingPeriodFor(cadence, anchor, addDaysYmd(current.end, 1));
+    return { current, next };
+}
+
 /** The period a given day falls in. */
 export function billingPeriodForDate(ymd: string): BillingPeriod {
     return billingPeriodFromKey(ymd.slice(0, 7));

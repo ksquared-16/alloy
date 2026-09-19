@@ -381,6 +381,36 @@ function FinancialsAccountSummaryCard({
                                 value={pastDue ? pastDue.amount : "None"}
                                 tone={pastDue ? "due" : "ok"}
                             />
+                            {/*
+                             * ── AVAILABLE, ON THE SAME TERMS AS EVERYWHERE ELSE ────────────────
+                             *
+                             * Measured on the certified build: the Focus Panel Summary read
+                             * `Available $125.00` and Details read `AVAILABLE PREPAID $125.00`
+                             * while this strip — the account's ONE summary, in the dedicated
+                             * financial workspace — showed nothing. An operator working in Accounts
+                             * saw Due and Past due for a family whose money the organisation was
+                             * already holding, and chasing them is a real, avoidable error.
+                             *
+                             * The same figure from the same projection: no arithmetic here, no
+                             * second read, and `availablePrepaid` is already null unless the
+                             * authority says the money is genuinely AVAILABLE — pending, failed and
+                             * voided receipts are excluded upstream.
+                             *
+                             * SILENT AT ZERO, which is the ordinary account. A permanent
+                             * "Available $0.00" would be the noise the density doctrine forbids,
+                             * and it is never netted into Current balance: they answer two
+                             * different questions and the balance is the one the family owes.
+                             *
+                             * It is NOT a deposit. A held deposit is a Payments concept with its
+                             * own lifecycle; this is unapplied money the family has already sent.
+                             */}
+                            {period.availablePrepaid ? (
+                                <Stat
+                                    label="Available"
+                                    value={period.availablePrepaid}
+                                    testId="available-prepaid"
+                                />
+                            ) : null}
                         </div>
                     </div>
                     {/*

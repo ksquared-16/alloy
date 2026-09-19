@@ -8,6 +8,7 @@ import {
     loadFinancialConfig,
 } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
 import { readFinancialNestedSurfaceGroupsFromDoc } from "@/lib/adminV2/runtime/focusPanel/billingPreview/financialNestedSurfaceRuntime";
+import { acceptedTermBillingPeriods } from "@/lib/financials/billingPeriod";
 import { resolveFocusPanelMutationOpportunityId } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import type { FinancialConfigApiResponse } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigTypes";
@@ -323,6 +324,8 @@ export default function AssignmentTuitionCard({
                 const accepted = view.accepted;
                 const acceptedOption =
                     view.applicable.find((o) => o.sourceId === accepted?.source.id) ?? null;
+                /* The commercial interval the accepted term implies — derived by its own authority. */
+                const billingPeriods = acceptedTermBillingPeriods(accepted, view.facts.asOf);
                 return (
                     <section
                         key={view.opportunityCustomerMemberId}
@@ -384,6 +387,36 @@ export default function AssignmentTuitionCard({
                                     <p className="alloy-os-tuition__stale" data-tuition-stale-notice="true">
                                         The assignment has changed since this was agreed. Re-resolve before
                                         accepting again.
+                                    </p>
+                                ) : null}
+                                {/*
+                                 * ── WHICH COMMERCIAL PERIOD THIS ASSIGNMENT IS IN ────────────────
+                                 *
+                                 * A billing period is DERIVED — accepted term + cadence + the
+                                 * agreement anchor — and this card owns the accepted cadence and
+                                 * could not say which period the assignment was in. Three operator
+                                 * questions went unanswered on the one surface that should know
+                                 * them: what period am I in, what is next, and what will Generate
+                                 * Tuition create.
+                                 *
+                                 * READ ONLY, and the boundaries come from `billingPeriod`'s own
+                                 * function. This card states the period; it does not calculate one,
+                                 * and it offers no Generate control — generation stays Financials'.
+                                 *
+                                 * Absent without an accepted term, and absent for a cadence with no
+                                 * interval to state. A fabricated period would be worse than none.
+                                 *
+                                 * NOT the accounting period, which is a different question
+                                 * attributed at write time against the accounting calendar.
+                                 */}
+                                {billingPeriods ? (
+                                    <p
+                                        className="alloy-os-tuition__periods"
+                                        data-tuition-billing-period={billingPeriods.current.key}
+                                        data-tuition-next-billing-period={billingPeriods.next.key}
+                                    >
+                                        Billing period {billingPeriods.current.label} · next{" "}
+                                        {billingPeriods.next.label}
                                     </p>
                                 ) : null}
                             </div>
