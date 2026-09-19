@@ -3,7 +3,6 @@ import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/f
 import {
     buildOperationalContext,
     canonicalParticipantScopeFromTruth,
-    participantCardProducerContract,
     type ParticipantCardProducerContract,
 } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
@@ -52,47 +51,7 @@ export type ComposeOpportunityDrawerViewModelParams = {
      * build below. Absent means nothing was resolvable, and the candidate fallback stands.
      */
     resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
-    /**
-     * INTERNAL — set only by `startOpportunityDrawerViewModelCompose` in this module, which is the
-     * sanctioned two-stage entry point. It is not part of the compose contract callers use, and
-     * nothing outside this file may pass it: the public shape of stage one is a PROMISE, not a
-     * callback, and the route consumes it as one. Kept here only because a promise cannot be
-     * settled from inside an async function without something to settle it.
-     */
-    onParticipantContract?: (contract: ParticipantCardProducerContract | null) => void;
 };
-
-/**
- * THE TWO-STAGE COMPOSE — the whole of the authorized new mechanism.
- *
- * Stage one is the participant contract the card producers need; stage two is the view model. The
- * caller awaits stage one, starts the producers, and awaits stage two while they run, so a median
- * 763ms of producer work stops sitting on the end of a median 2,897ms compose.
- *
- * Deliberately NOT a stream, emitter, scheduler or background task: two promises from one call,
- * both settled by one execution of the existing composer. Stage one resolves `null` rather than
- * rejecting when there is no participant, and is settled on every exit path — skip, failure and
- * throw included — so awaiting it can never hang. A compose that throws rejects stage two and
- * resolves stage one to null, leaving the route's existing error handling untouched.
- */
-export function startOpportunityDrawerViewModelCompose(
-    params: Omit<ComposeOpportunityDrawerViewModelParams, "onParticipantContract">,
-): {
-    participantForCardProducers: Promise<ParticipantCardProducerContract | null>;
-    result: Promise<OpportunityDrawerViewModelResult>;
-} {
-    let settle: (c: ParticipantCardProducerContract | null) => void = () => {};
-    const participantForCardProducers = new Promise<ParticipantCardProducerContract | null>((resolve) => {
-        settle = resolve;
-    });
-    const result = composeOpportunityDrawerViewModel({
-        ...params,
-        onParticipantContract: (c) => settle(c),
-    });
-    // A throw before the publish point must not strand a caller already awaiting stage one.
-    void result.catch(() => settle(null));
-    return { participantForCardProducers, result };
-}
 
 export async function composeOpportunityDrawerViewModel(
     params: ComposeOpportunityDrawerViewModelParams
@@ -107,25 +66,6 @@ export async function composeOpportunityDrawerViewModel(
         return result;
     };
 
-    /*
-     * STAGE ONE OF TWO.
-     *
-     * `publishParticipant` is resolved exactly once, below, the moment the children shell has
-     * settled — and unconditionally on every exit path, including the skips and the throw, so a
-     * caller awaiting stage one can never hang. It is an internal resolver, not a callback the
-     * caller supplies: the public contract is two promises (see
-     * `startOpportunityDrawerViewModelCompose`), which is what keeps this a bounded two-stage
-     * result rather than an event emitter.
-     */
-    let publishParticipant: (c: ParticipantCardProducerContract | null) => void = () => {};
-    if (params.onParticipantContract) publishParticipant = params.onParticipantContract;
-    let participantPublished = false;
-    const publishOnce = (c: ParticipantCardProducerContract | null) => {
-        if (participantPublished) return;
-        participantPublished = true;
-        publishParticipant(c);
-    };
-
     // S4.2 — the shared canonical DATA foundation (Module C): opportunity record (visible payload +
     // household attach), layout inputs, work-unit identity + queue definition, department metadata +
     // status definitions, and the lifecycle rail. Resolved once; both tiers read it by value.
@@ -137,7 +77,6 @@ export async function composeOpportunityDrawerViewModel(
         workUnitId: params.workUnitId,
     });
     if (!shared.ok) {
-        publishOnce(null);
         return finishCompose({
             ok: false,
             skipped: {
@@ -180,17 +119,6 @@ export async function composeOpportunityDrawerViewModel(
      * the settled scope built at the end of this function cannot disagree.
      */
     phases.participant_contract_ready_ms = Date.now() - composeStart;
-    const earlyTruth = record as Record<string, unknown>;
-    publishOnce(
-        participantCardProducerContract(
-            canonicalParticipantScopeFromTruth({
-                truth: earlyTruth,
-                selectedParticipationId: params.attentionSubjectId ?? null,
-                resolvedParticipant: params.resolvedParticipant ?? null,
-            }),
-            earlyTruth,
-        ),
-    );
 
     // S4.4 — the Tier-2 Initial Panel composition (Module A): readiness, first-paint deps, above-fold
     // render model, first-paint contract, header, registry actions, and Tier-2 summaries. Mutates the

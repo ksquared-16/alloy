@@ -120,6 +120,21 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         page.off("request", seen);
     }
 
+    /*
+     * THE OWNERSHIP PROOF: withhold the drawer response entirely.
+     *
+     * If first-order truth is genuinely document-owned, every blocking area except Children —
+     * which is deliberately still drawer-owned — must reach authoritative finality without the
+     * drawer ever answering. Nothing else demonstrates that as directly as never sending it.
+     */
+    let drawerBlocked = 0;
+    if (process.env.P076_BLOCK_DRAWER === "1") {
+        await page.route(/\/api\/admin\/view-models\/drawer\/opportunity\//, (route) => {
+            drawerBlocked++;
+            return route.abort();
+        });
+    }
+
     const nav0 = Date.now();
     await page.goto(URL_PATH, { waitUntil: "domcontentloaded", timeout: 120_000 });
     const domMs = Date.now() - nav0;
@@ -303,6 +318,7 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         regions,
         valid: dataProbe.rows > 0 && !dataProbe.signedOut,
         apiRequestCount: requests.length,
+        drawerBlocked,
         warmUpUrl: WARM_URL || null,
         warmUpDrawerVmRequests: warmRequests,
         apiRequests: requests,
