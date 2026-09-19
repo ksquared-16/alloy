@@ -47,7 +47,31 @@ export type MountableCardSpec = {
 /** The answer named the participant this surface is about — enough to address a card-owned read. */
 export const PARTICIPANT_IDENTITY_TRUTH_KEYS = ["child.customer_member_id"] as const;
 
+/**
+ * IS THE PARTICIPANT KNOWN? — asked of both places the answer legitimately lives.
+ *
+ * This read only `child.customer_member_id` from truth, which is how a CHILD-grain answer names
+ * its subject. A family-grain opportunity never carries that key, so on the canonical shape the
+ * predicate was always false and Attendance and Health reserved until the drawer settled.
+ *
+ * Measured on deployed ad4f0f6d7, after the participant was transported to the browser: the
+ * document had resolved the participant, the browser had it in `participantScope`, the producers
+ * had already computed both cards' content — and both cells stayed reserved for a further ~3s,
+ * because the predicate that decides mountability never consulted the scope. The transport was
+ * correct and inert.
+ *
+ * The scope IS the authoritative answer to this question: it comes from the one OCM-backed
+ * resolver, and it is null unless exactly one member was resolved. So the predicate consults it
+ * directly rather than a `child.*` truth key being fabricated to satisfy it — that would put a
+ * child-grain binding on a family-grain subject, which every other reader of that key would then
+ * see.
+ *
+ * The truth-key path is KEPT, not replaced: a child-grain frame is told its subject directly and
+ * has no scope to resolve. Either representation answers the same question; neither invents one.
+ */
 function hasParticipantIdentity(context: OperationalContext): boolean {
+    const scoped = context.participantScope?.customerMemberId;
+    if (typeof scoped === "string" && scoped.trim()) return true;
     return hasAnyTruthKey(context, PARTICIPANT_IDENTITY_TRUTH_KEYS);
 }
 
