@@ -50,17 +50,33 @@ describe("gate B — the shell's real inputs are supplied, not defaulted away", 
 
 describe("gate C — not-loaded is not the same answer as no children", () => {
     it("the identity bag carries the rows only when the chain actually returned them", () => {
-        const guard = ANSWER.slice(ANSWER.indexOf("subjectIdentityTruthWithChildren"));
-        expect(guard.slice(0, 400)).toContain("documentChildren");
-        // A ternary, not a spread of a possibly-null value: absent must leave the bag untouched.
-        expect(guard.slice(0, 400)).toContain("?");
+        const guard = ANSWER.slice(ANSWER.indexOf("subjectIdentityTruthWithChildren"), ANSWER.indexOf("subjectIdentityTruthWithChildren") + 400);
+        /*
+         * The BRANCH, precisely. A first draft asserted the slice merely contained "?", which `??`
+         * satisfies — so replacing the ternary with an unconditional `_inquiry_children:
+         * documentChildren ?? []` left the gate green while turning "not loaded" into "no
+         * children", the exact defect. The guard must branch on documentChildren and must leave
+         * the bag untouched on the absent side.
+         */
+        expect(guard).toMatch(/documentChildren\s*\n?\s*\?/);
+        expect(guard).toContain(": subjectIdentityTruth;");
+        expect(guard).not.toMatch(/_inquiry_children:\s*documentChildren\s*\?\?/);
     });
 
     it("a failed chain resolves to null rather than to an empty roster", () => {
-        const chain = ANSWER.slice(ANSWER.indexOf("const documentChildrenP"));
-        expect(chain.slice(0, 500)).toContain(".catch(() => null)");
+        const chain = ANSWER.slice(
+            ANSWER.indexOf("const documentChildrenP"),
+            ANSWER.indexOf("const documentChildrenP") + 900,
+        );
+        /*
+         * Scoped to the whole chain, not its first 500 characters — the earlier slice stopped
+         * before the catch, so planting `.catch(() => [])` left the gate green while making a
+         * failed read indistinguishable from a family with no children.
+         */
+        expect(chain).toContain(".catch(() => null)");
+        expect(chain).not.toMatch(/\.catch\(\(\)\s*=>\s*\[\]\)/);
         // `[]` from the shell is a real loaded-empty answer and must survive as `[]`, not null.
-        expect(chain.slice(0, 500)).toContain("Array.isArray");
+        expect(chain).toContain("Array.isArray");
     });
 });
 
