@@ -22,6 +22,7 @@ import {
 import { resolveWorkUnitRouteIdentity } from "@/lib/admin/resolveWorkUnitRouteIdentity";
 import { parseCardFocusAspect } from "@/lib/runtime/kernel/attentionCardFocus";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
+import { resolveFinancialSubjectId } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
 import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 import { collectedRouteTiming, recordRouteTiming, routeTimingEnabled } from "@/lib/perf/routeTimingDiagnostic";
@@ -150,14 +151,7 @@ export async function composeProvisioningAnswerForRoute(input: {
      */
     const tProducers = mark();
     if (answer.terminal === "operational" && answer.focusPanelOperationalProjection) {
-        answer.focusPanelOperationalProjection = {
-            ...answer.focusPanelOperationalProjection,
-            cards: await projectFocusPanelCardProducers({
-                supabase,
-                orgId: gate.orgId,
-                // The route's OWN resolved authority — same canonical bundle as the endpoint.
-                access: gate.access,
-                context: buildCommitCriticalOperationalContext({
+        const commitContext = buildCommitCriticalOperationalContext({
                     mode: "work",
                     subjectId: answer.recordOfAttention?.id ?? "",
                     title: "",
@@ -178,7 +172,29 @@ export async function composeProvisioningAnswerForRoute(input: {
                         : null,
                     subjectIdentityTruth: answer.subjectIdentityTruth ?? null,
                     subjectGrain: answer.subjectGrain,
-                }),
+        });
+        answer.focusPanelOperationalProjection = {
+            ...answer.focusPanelOperationalProjection,
+            cards: await projectFocusPanelCardProducers({
+                supabase,
+                orgId: gate.orgId,
+                // The route's OWN resolved authority — same canonical bundle as the endpoint.
+                access: gate.access,
+                context: commitContext,
+                /*
+                 * The commit frame states it from its own context, exactly as the producers used to
+                 * derive it internally. Same function, same key precedence — the settled frame now
+                 * states it too, from the composer's truth, so neither frame derives it privately.
+                 */
+                financialSubjectId: (() => {
+                    // Same promise as the settled frame: a malformed truth costs Financials, not
+                    // the commit answer.
+                    try {
+                        return resolveFinancialSubjectId(commitContext);
+                    } catch {
+                        return null;
+                    }
+                })(),
             }),
         };
         cardProducersMs = timing ? performance.now() - tProducers : 0;

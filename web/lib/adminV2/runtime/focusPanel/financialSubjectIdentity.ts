@@ -55,7 +55,23 @@ export const HOUSEHOLD_IDENTITY_TRUTH_KEYS = [
  * composition had it and did not carry it" — that is the defect this module was extracted for.
  */
 export function resolveFinancialSubjectId(context: OperationalContext): string | null {
-    const truth = context.truth as Record<string, unknown>;
+    return resolveFinancialSubjectIdFromTruth(context.truth as Record<string, unknown>);
+}
+
+/**
+ * The same answer, from truth alone.
+ *
+ * The drawer composer resolves this at the moment its children shell settles, so the Financials
+ * producer can start without being handed a context that does not exist yet. Extracted rather than
+ * re-implemented: the key precedence above is the whole definition of "whose money is this", and a
+ * second copy of it is how one family's balance reaches another family's screen.
+ *
+ * Every key it reads comes from the visible payload and household attach, both complete before the
+ * first-paint patches run — and those patches write only `_`-prefixed internals
+ * (`_stage_work_runtime`, `_operational_attention`, `_scheduling_projection`, …), never a household
+ * identity key. So this answer is stable for the life of the request.
+ */
+export function resolveFinancialSubjectIdFromTruth(truth: Record<string, unknown>): string | null {
     for (const key of HOUSEHOLD_IDENTITY_TRUTH_KEYS) {
         const value = truth[key];
         const trimmed = value != null ? String(value).trim() : "";

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
-import { composeOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel";
+import { startOpportunityDrawerViewModelCompose } from "@/lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel";
 import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 import { resolveParticipationSubjectForOpportunity } from "@/lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity";
 import { logDrawerVmRuntimeServer } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
@@ -56,7 +56,16 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     try {
         const attentionSubjectId = (sp.get("attention_subject_id") ?? "").trim() || null;
 
-        const result = await composeOpportunityDrawerViewModel({
+        /*
+         * TWO STAGES, ONE COMPOSE.
+         *
+         * The producers below need exactly two fields — customerMemberId and displayName — and both
+         * are settled once the children shell has run, a median 1,355ms before the view model is
+         * finished. They used to wait for all of it. Now stage one hands over those two fields, the
+         * producers start, and the remaining composition runs alongside them; both are joined
+         * before the response is assembled, so the response itself is unchanged.
+         */
+        const staged = startOpportunityDrawerViewModelCompose({
             supabase,
             gate,
             opportunityId: opportunityId.trim(),
@@ -118,6 +127,39 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             })(),
         });
 
+        /*
+         * START THE PRODUCERS, DO NOT AWAIT THEM YET.
+         *
+         * Awaiting stage one costs only what the children shell already costs. The producers then
+         * run against the remaining compose rather than after it. `access` is the route's own
+         * resolved authority, exactly as before — the grants come from `loadAdminRouteGate` at the
+         * top of this handler, so starting earlier cannot outrun authorization.
+         */
+        const participantForProducers = await staged.participantForCardProducers;
+        routePhases.participant_contract_ready_ms = Date.now() - routeT0;
+        const tProducers = Date.now();
+        const producedCardsP = participantForProducers
+            ? projectFocusPanelCardProducers({
+                  supabase,
+                  orgId: gate.orgId,
+                  // The contract itself — no synthetic scope, no fabricated participationId.
+                  context: { participantScope: participantForProducers },
+                  financialSubjectId: participantForProducers.financialSubjectId,
+                  // The route's OWN resolved authority — the same canonical bundle the health
+                  // endpoint reads, never anything the browser sent.
+                  access: gate.access,
+              }).then((cards) => {
+                  routePhases.card_producers_ms = Date.now() - tProducers;
+                  return cards;
+              })
+            : null;
+        // A producer rejection must never become an unhandled rejection on a skip/throw path; the
+        // join below is still the only place its VALUE is read.
+        void producedCardsP?.catch(() => {});
+
+        const result = await staged.result;
+        routePhases.full_compose_end_ms = Date.now() - routeT0;
+
         if (!result.ok) {
             logDrawerVmRuntimeServer("compose_skip", {
                 opportunity_id: opportunityId.trim(),
@@ -158,30 +200,24 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
          * disagree about the subject. Producer failure is bounded by `Promise.allSettled` inside the
          * producer module: an Attendance outage costs the operator Attendance, not the drawer.
          */
-        const tProducers = Date.now();
+        /*
+         * JOIN. The producers ran ONCE, started early; this is where their answer is folded in.
+         * The guard is unchanged apart from requiring the producers' own result, so a frame that
+         * produced no cards before produces none now.
+         */
         const settledContext = result.operationalContext ?? null;
         const projection = result.viewModel.workspace.operational_projection ?? null;
+        const producedCards = producedCardsP ? await producedCardsP : null;
         const viewModel =
-            settledContext && projection
+            settledContext && projection && producedCards
                 ? {
                       ...result.viewModel,
                       workspace: {
                           ...result.viewModel.workspace,
-                          operational_projection: {
-                              ...projection,
-                              cards: await projectFocusPanelCardProducers({
-                                  supabase,
-                                  orgId: gate.orgId,
-                                  context: settledContext,
-                                  // The route's OWN resolved authority — the same canonical bundle
-                                  // the health endpoint reads, never anything the browser sent.
-                                  access: gate.access,
-                              }),
-                          },
+                          operational_projection: { ...projection, cards: producedCards },
                       },
                   }
                 : result.viewModel;
-        routePhases.card_producers_ms = Date.now() - tProducers;
 
         return NextResponse.json(viewModel, {
             headers: {
