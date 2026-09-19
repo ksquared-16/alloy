@@ -18,6 +18,7 @@
 
 import type { FormField } from "@/lib/forms/schema";
 import { formFieldAsksParticipant } from "@/lib/forms/formFieldCollectsValue";
+import { labelIsQuestion } from "@/lib/forms/labelGrammar";
 
 export const PARTICIPANT_COLLECTION_MODES = [
     /** A question in the conversation, answered in words or through a control. */
@@ -35,27 +36,45 @@ export const PARTICIPANT_COLLECTION_MODES = [
 export type ParticipantCollectionMode = (typeof PARTICIPANT_COLLECTION_MODES)[number];
 
 /**
- * AN UNBOUND, REQUIRED BOOLEAN IS A STATEMENT TO ACCEPT — NOT A QUESTION TO ANSWER.
+ * AN UNBOUND, REQUIRED BOOLEAN IS A STATEMENT TO ACCEPT — UNLESS IT IS A QUESTION.
  *
- * This is not a new rule. `compileParticipantArtifact` has classified exactly this shape as an
+ * This is not a new rule. `compileParticipantArtifact` has classified this shape as an
  * `acknowledgment` all along, which is how the sign step already knows to render it beside the
- * document. The rule is lifted here so both layers read ONE definition, because they disagreed:
- * the artifact compiler called the field an acknowledgment while the need projection called it a
+ * document. The rule is lifted here so both layers read ONE definition, because they disagreed: the
+ * artifact compiler called the field an acknowledgment while the need projection called it a
  * question, and the parent was asked it twice.
  *
- * The three clauses each carry weight, and together they are what keeps a real question a question:
+ * The clauses each carry weight, and together they are what keeps a real question a question:
  *
- *   unbound     a bound boolean is canonical truth about the child or household
- *               ("does this child have allergies") and is genuinely asked;
- *   boolean     only a yes/no shape can be an acceptance;
- *   required    an OPTIONAL unbound boolean is a bespoke school question, which the compiler
- *               already routes to `unresolved_artifact_specific` rather than to acknowledgment.
+ *   unbound       a bound boolean is canonical truth about the child or household
+ *                 ("does this child have allergies") and is genuinely asked;
+ *   boolean       only a yes/no shape can be an acceptance;
+ *   required      an OPTIONAL unbound boolean is a bespoke school question, which the compiler
+ *                 already routes to `unresolved_artifact_specific` rather than to acknowledgment;
+ *   not a question  see below.
  *
  * Measured on the certification tenant: `f_ack` — "I acknowledge the information above is accurate."
  * — is unbound, boolean and required, and sits immediately before the signature field it attests to.
+ *
+ * ## Why the fourth clause had to be added
+ *
+ * The first three were STRUCTURE only, which was the point: a label-matching rule would break the
+ * moment a tenant wrote "I agree" instead of "I acknowledge". But structure alone made a whole
+ * class of question unauthorable. The real Admissions packet asks fourteen yes/no questions —
+ * "Does your child have siblings?", "Is your child able to play alone?" — every one of them
+ * unbound and required, and authoring them as the booleans they are would have classified all
+ * fourteen as attestations and removed them from the conversation entirely. The family would never
+ * have been asked, and nothing would have said so.
+ *
+ * So the fourth clause is GRAMMAR, not vocabulary, and it lives in `lib/forms/labelGrammar.ts`
+ * where the importer reads it too: an acknowledgement is a STATEMENT a person accepts, and a
+ * statement is not interrogative. "I agree to the terms" is still an acknowledgement. A label that
+ * is neither clearly — a bare "Chickenpox" — is unchanged from before, which is the safe direction:
+ * an unasked attestation is visible beside its document, where a parent can see it.
  */
 export function fieldIsAcknowledgement(field: FormField, opts: { readonly bound: boolean }): boolean {
-    return !opts.bound && field.type === "boolean" && field.required === true;
+    if (opts.bound || field.type !== "boolean" || field.required !== true) return false;
+    return !labelIsQuestion(field.label);
 }
 
 /**

@@ -20,7 +20,8 @@ import {
     type SourceFieldMapping,
 } from "@/lib/enrollment/participantRuntime/sourceLabelIdentity";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
-import type { FormSchemaV1 } from "@/lib/forms/schema";
+import { evaluateFieldVisibility } from "@/lib/forms/validateSubmission";
+import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import {
     resolveEnrollmentNeedIdentity,
     type EnrollmentNeedIdentity,
@@ -245,7 +246,7 @@ export function projectEnrollmentInformationNeeds(
                 label: field.label,
                 required: field.required === true,
                 section_title: sectionByFieldId.get(field.id) ?? null,
-                field_type: field.type,
+                field_type: conversationalControlType(field),
                 options: readFieldOptions(field),
             };
 
@@ -262,6 +263,14 @@ export function projectEnrollmentInformationNeeds(
             });
         });
     }
+
+    /*
+     * CONDITIONAL DESTINATIONS, decided by the Form and only by the Form.
+     *
+     * Runs after the whole walk because a condition names another FIELD, and that field's value is
+     * only known once every destination has been collapsed onto its need.
+     */
+    pruneInvisibleOccurrences(byKey, input);
 
     return [...byKey.values()].map((acc) => finalize(acc, input));
 }
@@ -295,6 +304,117 @@ function readFieldOptions(field: unknown): readonly string[] {
         }
     }
     return out;
+}
+
+/**
+ * The authored control type as the CONVERSATION needs to hear it.
+ *
+ * `text` with `multiline` is ONE control in the Form schema and TWO in a conversation: a one-line
+ * answer and a paragraph. `valueControlForTurn` has always understood `long_text`; the projection
+ * simply never said it, so every narrative question in a real packet — "Developmental history",
+ * "How is your child comforted?" — reached the parent as a single-line box.
+ *
+ * Nothing else is translated. The authored type is the operator's decision and this only carries a
+ * flag that already sits beside it.
+ */
+function conversationalControlType(field: FormField): string {
+    if (field.type === "text" && (field as { multiline?: boolean }).multiline === true) return "long_text";
+    return field.type;
+}
+
+/** Does any destination in this schema declare a condition at all? Almost none do. */
+function schemaDeclaresVisibility(schema: FormSchemaV1): boolean {
+    let found = false;
+    const walk = (fields: readonly FormField[]) => {
+        for (const f of fields) {
+            if (found) return;
+            if (f.visibility) { found = true; return; }
+            if (f.type === "group") walk(f.fields);
+        }
+    };
+    walk(schema.fields);
+    return found;
+}
+
+/**
+ * The value this need currently holds — session first, canonical record second.
+ *
+ * Extracted from `finalize` because the conditional pass below needs exactly the same answer BEFORE
+ * any need is finalized, and two readings of "what does this field hold" that could drift apart is
+ * how a follow-up gets asked after a parent has already said no.
+ */
+function resolveNeedValue(
+    identity: EnrollmentNeedIdentity,
+    input: ProjectNeedsInput,
+): { readonly value: unknown; readonly source: EnrollmentNeedValueSource } {
+    if (!identity.session_value_key) return { value: null, source: "none" };
+    // Precedence mirrors `mergeFormPrefillPayload`: the session's own shared value outranks canonical
+    // record prefill. Anything else would let a stale record overwrite what the parent just typed.
+    const sessionValue = input.sharedValues[identity.session_value_key];
+    // Canonical prefill can only speak for a canonical datum. A process-scoped answer has no record
+    // behind it by construction, so there is nothing for a record to prefill.
+    const canonicalValue = identity.shared_value_key ? input.canonicalValues?.[identity.shared_value_key] : undefined;
+    if (usableValue(sessionValue)) return { value: sessionValue, source: "session_shared_value" };
+    if (usableValue(canonicalValue)) return { value: canonicalValue, source: "canonical_prefill" };
+    return { value: null, source: "none" };
+}
+
+/**
+ * A QUESTION THE FORM SAYS DOES NOT APPLY IS NOT ASKED.
+ *
+ * ## The distinction this enforces
+ *
+ * "If yes, please explain arrangements and custody" is not a question. It is the second half of one,
+ * and a family who has just said there are no custody arrangements must not meet it — not greyed
+ * out, not skipped past with an explanation, not asked. The paperwork has always said so: the Form
+ * schema has carried `visibility` since v1, the public renderer honours it, and `validateSubmission`
+ * will not demand a hidden required field. The PARTICIPANT projection was the one reader that never
+ * asked, so every conditional destination in every packet became an unconditional turn.
+ *
+ * ## Why it lives here and not in the conversation
+ *
+ * Conditionality is authored, not inferred. The alternative — a runtime rule that notices a label
+ * beginning "If yes" and attaches it to whatever came before — would be a second, invisible
+ * information architecture that no operator could see, change, or be held to. This function knows
+ * nothing about Admissions, nothing about labels, and nothing about English; it evaluates the
+ * operator's own condition with the platform's own evaluator.
+ *
+ * ## Safe direction
+ *
+ * A controlling field with no value reads as `undefined`, so `equals true` is not satisfied and the
+ * dependent question is withheld until the answer exists. Withholding a follow-up nobody has earned
+ * is recoverable on the next turn; asking a parent to explain a custody arrangement they have just
+ * told us does not exist is not.
+ */
+function pruneInvisibleOccurrences(byKey: Map<string, Accumulator>, input: ProjectNeedsInput): void {
+    const conditioned = input.forms.filter((f) => schemaDeclaresVisibility(f.schema));
+    if (conditioned.length === 0) return;
+
+    // Every destination's current value, at Form-field grain — the grain a condition names.
+    const valueByFieldId = new Map<string, unknown>();
+    for (const acc of byKey.values()) {
+        const { value } = resolveNeedValue(acc.identity, input);
+        for (const o of acc.occurrences) valueByFieldId.set(o.form_field_id, value);
+    }
+
+    const schemaByVersion = new Map<string, FormSchemaV1>();
+    for (const f of conditioned) schemaByVersion.set(f.form_definition_version_id, f.schema);
+
+    for (const [key, acc] of [...byKey.entries()]) {
+        const visible = acc.occurrences.filter((o) => {
+            const schema = schemaByVersion.get(o.form_definition_version_id);
+            // A Form that authors no condition is not consulted; its destinations always apply.
+            if (!schema) return true;
+            return evaluateFieldVisibility(o.form_field_id, schema, (id) => valueByFieldId.get(id));
+        });
+        if (visible.length === acc.occurrences.length) continue;
+        // Every destination this need had is conditioned away: the need itself does not exist yet.
+        if (visible.length === 0) {
+            byKey.delete(key);
+            continue;
+        }
+        acc.occurrences = visible;
+    }
 }
 
 function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInformationNeed {
@@ -331,22 +451,9 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
         };
     }
 
-    // Precedence mirrors `mergeFormPrefillPayload`: the session's own shared value outranks canonical
-    // record prefill. Anything else would let a stale record overwrite what the parent just typed.
-    const sessionValue = input.sharedValues[identity.session_value_key];
-    // Canonical prefill can only speak for a canonical datum. A process-scoped answer has no record
-    // behind it by construction, so there is nothing for a record to prefill.
-    const canonicalValue = identity.shared_value_key ? input.canonicalValues?.[identity.shared_value_key] : undefined;
-
-    let current_value: unknown = null;
-    let value_source: EnrollmentNeedValueSource = "none";
-    if (usableValue(sessionValue)) {
-        current_value = sessionValue;
-        value_source = "session_shared_value";
-    } else if (usableValue(canonicalValue)) {
-        current_value = canonicalValue;
-        value_source = "canonical_prefill";
-    }
+    const resolved = resolveNeedValue(identity, input);
+    const current_value: unknown = resolved.value;
+    const value_source: EnrollmentNeedValueSource = resolved.source;
 
     const has_value = value_source !== "none";
     if (!has_value) {

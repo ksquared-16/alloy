@@ -51,7 +51,7 @@ const AFFIRMATIVE = new Set([
 const NEGATIVE = new Set(["n", "no", "nope", "incorrect", "wrong", "not right"]);
 
 /** Controls whose value simply IS the words the participant wrote. */
-const FREE_TEXT_CONTROLS = new Set(["text", "textarea", "string"]);
+const FREE_TEXT_CONTROLS = new Set(["text", "textarea", "long_text", "string"]);
 
 const UNKNOWN = new Set([
     "i don't know",
