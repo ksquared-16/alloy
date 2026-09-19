@@ -422,6 +422,16 @@ export function installVisibleCompletionProbe(): void {
             latestGeneration: string | null;
             staleGenerationSuppressed: number;
             placeholderSuppressed: number;
+            /*
+             * HOW MANY ATTRIBUTES THE PRODUCT SAYS IT PAINTS.
+             *
+             * The V2.1 rule reads the live stylesheets. If they are unreadable — a cross-origin
+             * sheet, or none parsed yet — the set is empty and EVERY data attribute silently
+             * becomes diagnostic. That is a FALSE correction that looks exactly like a real one:
+             * the number goes down and nothing errors. Reported so a sample that measured nothing
+             * cannot be read as a sample that measured zero.
+             */
+            styledAttrCount: number;
             perCard: Record<string, { firstMs: number; lastMs: number; auth: number; anim: number }>;
         };
     };
@@ -439,6 +449,7 @@ export function installVisibleCompletionProbe(): void {
         latestGeneration: null,
         staleGenerationSuppressed: 0,
         placeholderSuppressed: 0,
+        styledAttrCount: 0,
         perCard: {},
     };
 
@@ -455,6 +466,7 @@ export function installVisibleCompletionProbe(): void {
             // ── V2 ──
             const kind = classify(r);
             const kind21 = classify21(r);
+            V2.__p076v2!.styledAttrCount = styledAttributes().size;
             const v2 = V2.__p076v2!;
             v2.kinds[kind]++;
             v2.kinds21[kind21]++;

@@ -125,6 +125,7 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
                 latestGeneration: string | null;
                 staleGenerationSuppressed: number;
                 placeholderSuppressed: number;
+                styledAttrCount: number;
                 perCard: Record<string, { firstMs: number; lastMs: number; auth: number; anim: number }>;
             };
         };
@@ -158,6 +159,9 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
             // an absent field would have been read as "zero" without ever being measured.
             placeholderSuppressed: s.placeholderSuppressed,
             staleGenerationSuppressed: s.staleGenerationSuppressed,
+            // Zero here means the stylesheets were unreadable and the semantic rule degraded to
+            // "nothing is styled" — a correction that is not one. Never read a sample without it.
+            styledAttrCount: s.styledAttrCount,
             latestGeneration: s.latestGeneration,
             // Per-area paint timeline, ordered latest-final first: which area finishes last.
             perCard: Object.fromEntries(Object.entries(s.perCard).sort((a, b) => b[1].lastMs - a[1].lastMs)),
@@ -254,6 +258,7 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         + `V2.1=${v2?.visibleCompleteV21Ms}ms correction=${v2?.measurementCorrectionMs}ms `
         + `ownerV2=${v2?.completionOwnerV2} ownerV21=${v2?.completionOwnerV21} `
         + `falseAuth=${v2?.falseAuthoritativeRemoved} `
+        + `styledAttrs=${v2?.styledAttrCount} `
         + `lastBlocking=${Object.keys(v2?.perSection ?? {})[0] ?? "none"} `
         + `blockingSeen=${v2?.blockingSectionsSeen.length ?? 0} `
         + `chain=${focusChain.diag ? "present" : "ABSENT"} flips=${(focusChain.diag as {flips?:unknown[]} | null)?.flips?.length ?? 0} `
