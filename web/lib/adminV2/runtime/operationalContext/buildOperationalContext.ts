@@ -17,6 +17,7 @@
  * @see docs/platform/operator/operational-context-boundary.md
  */
 
+import { resolveFinancialSubjectIdFromTruth } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
 import {
     participantScopeFromChildSubjectTruth,
     resolveParticipantScope,
@@ -378,6 +379,75 @@ function participantCandidatesFromTruth(truth: Record<string, unknown>): Partici
 }
 
 /**
+ * THE ONE PLACE THAT DECIDES WHICH PARTICIPANT THIS PANEL IS ABOUT.
+ *
+ * Extracted so it can be asked TWICE in one request without becoming two authorities: the drawer
+ * route now starts the Attendance/Health/Financials producers as soon as the composer's children
+ * shell has settled, rather than after the whole view model is built, and both that early call and
+ * the final `buildOperationalContext` must reach the identical verdict. Two hand-written copies of
+ * a three-way precedence is precisely how the settled and commit frames would drift apart again.
+ *
+ * The precedence itself is unchanged: a stated child subject wins, then the route's resolved
+ * participation, then the candidate scan — which refuses to guess rather than taking the first row.
+ */
+export function canonicalParticipantScopeFromTruth(input: {
+    truth: Record<string, unknown>;
+    selectedParticipationId: string | null;
+    resolvedParticipant: { participationId: string; customerMemberId: string } | null;
+}): OperationalParticipantScope | null {
+    return (
+        participantScopeFromChildSubjectTruth(input.truth)
+        ?? scopeFromResolvedParticipant(input.resolvedParticipant, input.truth)
+        ?? resolveParticipantScope({
+            selectedParticipationId: input.selectedParticipationId,
+            participants: participantCandidatesFromTruth(input.truth),
+        }).scope
+    );
+}
+
+/**
+ * WHAT THE CARD PRODUCERS ACTUALLY NEED — and deliberately nothing else.
+ *
+ * `projectFocusPanelCardProducers` reads exactly two fields of the operational context, both off
+ * `participantScope`. Handing it the whole scope early would hand it `imageUrl`, which is NOT
+ * settled at that point: the children shell's photo projection writes `resolved_photo_url`
+ * afterwards, and the candidate mapper prefers it precisely because it is the only URL that
+ * renders. So the early contract carries the two stable fields and is frozen — the settled scope
+ * is still built exactly as before, at the end, and remains the one the avatar reads.
+ */
+export type ParticipantCardProducerContract = {
+    readonly customerMemberId: string | null;
+    readonly displayName: string | null;
+    /** Whose money the Financials producer reads — resolved from truth, never from a live context. */
+    readonly financialSubjectId: string | null;
+};
+
+export function participantCardProducerContract(
+    scope: OperationalParticipantScope | null,
+    truth: Record<string, unknown>,
+): ParticipantCardProducerContract {
+    return Object.freeze({
+        customerMemberId: scope?.customerMemberId ?? null,
+        displayName: scope?.displayName ?? null,
+        /*
+         * ONE CARD, NEVER THE PANEL.
+         *
+         * The key scan used to sit behind a try/catch inside the producers, where a malformed
+         * truth cost the operator Financials and nothing else. Resolving it here moved that risk
+         * ONTO THE COMPOSE PATH, where the same throw would cost the whole drawer — strictly worse
+         * than the behaviour it replaced. The guard travels with the derivation.
+         */
+        financialSubjectId: (() => {
+            try {
+                return resolveFinancialSubjectIdFromTruth(truth);
+            } catch {
+                return null;
+            }
+        })(),
+    });
+}
+
+/**
  * The resolved participation as a scope — identity from the resolver, presentation from truth.
  *
  * The member id is the authority here; a candidate row is consulted ONLY to borrow the child's name
@@ -493,23 +563,11 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
          * resolved to nobody, so the Attendance card asked the operator to select a child while
          * showing that child's own record.
          */
-        participantScope:
-            childSubjectScope
-            /*
-             * The composer's RESOLVED participation outranks the candidate scan: it was read from
-             * `process_instances` under this org and THIS opportunity, which is both more
-             * authoritative than intake metadata and the authorization boundary the drawer route
-             * already documents. It never overrides `childSubjectScope` — a frame carrying `child.*`
-             * truth has been told its subject directly and needs no resolution.
-             *
-             * Presentation is still borrowed from the candidate row when one names the same member,
-             * so the scope keeps its name and photo; identity comes from the resolver either way.
-             */
-            ?? scopeFromResolvedParticipant(input.resolvedParticipant ?? null, truth)
-            ?? resolveParticipantScope({
-                selectedParticipationId: input.selectedParticipationId ?? null,
-                participants: participantCandidatesFromTruth(truth),
-            }).scope,
+        participantScope: canonicalParticipantScopeFromTruth({
+            truth,
+            selectedParticipationId: input.selectedParticipationId ?? null,
+            resolvedParticipant: input.resolvedParticipant ?? null,
+        }),
         stageWorkRuntime: subjectVm.workspace.stage_work_runtime ?? null,
         stageWorkPending: subjectVm.workspace.stage_work?.status === "pending",
         recordHeaderActions: subjectVm.actions.record_header ?? null,
