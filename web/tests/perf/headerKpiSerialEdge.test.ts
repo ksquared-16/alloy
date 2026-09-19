@@ -38,8 +38,14 @@ describe("A — the work starts before hydration, in the document", () => {
     it("the client stops issuing the request when the document answered", () => {
         const effect = HOOK.slice(HOOK.indexOf("const seeded"), HOOK.indexOf("return () => {"));
         expect(effect).toContain("seedOipWarmCache(scopeKey, seeded)");
-        // The fetch must be in the ELSE branch — seeded frames issue nothing.
-        expect(effect).toMatch(/if \(seeded\)[\s\S]*?\} else \{[\s\S]*?prefetchOipMetricsWarm/);
+        // The fetch must be in the ELSE branch — seeded frames issue NOTHING. Asserting only that
+        // an else-branch fetch exists is not enough: it stays true when a second fetch is added
+        // inside the seeded branch, which is exactly the duplicate-execution defect.
+        const seededBranch = effect.slice(effect.indexOf("if (seeded) {"), effect.indexOf("} else {"));
+        expect(seededBranch.length).toBeGreaterThan(0);
+        expect(seededBranch, "a seeded frame must issue no request").not.toContain("prefetchOipMetricsWarm");
+        expect(seededBranch).not.toContain("fetch(");
+        expect(effect).toMatch(/\} else \{[\s\S]*?prefetchOipMetricsWarm/);
     });
 });
 
@@ -107,7 +113,12 @@ describe("D — one metric path, one serialisation", () => {
 
 describe("E — truthful states: absent is not zero", () => {
     it("a failed or late resolution is unavailable, never a fabricated value", () => {
-        expect(KPI).toMatch(/status: "unavailable"/);
+        // Anchored to the composer's failure path. The module only DECLARES the union member;
+        // asserting against that type line passes whatever the runtime actually returns.
+        const chain = ANSWER.slice(ANSWER.indexOf("const headerKpiPromise"), ANSWER.indexOf("void headerKpiPromise"));
+        expect(chain.length).toBeGreaterThan(0);
+        expect(chain).toMatch(/\.catch\(\(\) => \(\{[^}]*status: "unavailable"/);
+        expect(chain).not.toMatch(/\.catch\(\(\) => \(\{[^}]*status: "ok"/);
         expect(KPI).not.toMatch(/value:\s*0/);
     });
 
