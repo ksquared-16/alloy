@@ -1,0 +1,19 @@
+{
+  "step": "done",
+  "fromVersion": 158,
+  "newVersion": 159,
+  "createdStatus": 201,
+  "publishStatus": 200,
+  "cards": [
+    "business_process",
+    "financials",
+    "children",
+    "household",
+    "health_safety",
+    "attendance",
+    "scheduling",
+    "billing_preview",
+    "milestones"
+  ],
+  "placed": true
+}
