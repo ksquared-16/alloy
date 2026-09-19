@@ -6,7 +6,6 @@ import {
     resolveColumnAwareLayout,
     type ColumnAwareLayout,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelColumnAwareLayout";
-import { solveRowHeights } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelRowHeights";
 import type { FocusPanelGridLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 
 /**
@@ -257,20 +256,33 @@ export function useColumnAwareStack(args: {
                 ? new Map(heights).set(holdCard, holdHeight)
                 : heights;
         /*
-         * THE PUBLISHED COMPOSITION DECIDES HOW TALL A CARD IS DRAWN.
+         * A CARD IS AS TALL AS ITS OWN CONTENT. THE COMPOSITION DECIDES ONLY WHERE IT SITS.
          *
-         * `intrinsic` is what each card's content needs; `assigned` is what the authored VISUAL
-         * BAND gives it. Placement then runs on the assigned heights, so a card beneath a band
-         * that grew is pushed down by the band rather than by one neighbour's content.
+         * This used to run `solveRowHeights` and substitute the EQUALISED VISUAL-BAND height for
+         * each card's measured one before placing it. `resolveColumnAwareLayout` was therefore
+         * being handed numbers that were not measurements at all, and it dutifully placed them —
+         * the engine was never wrong, it was lied to about how tall each card was.
          *
-         * The two never merge: `solveRowHeights` is pure and receives only measurements, and the
-         * measurement above reads the intrinsic node with the assignment neutralised, so the
-         * number this produces cannot return as the number it consumes.
+         * The cost, measured on deployed `d0870c58c` at 1440 (see the card-format doctrine §6):
+         *
+         *     business_process   content 227px   drawn 402px   (+175px, because Financials is tall)
+         *     health_safety      content 178px   drawn 419px   (+241px, matching a card it shares
+         *                                                       NO COLUMN with)
+         *
+         * Health spans columns 1-3 and was inflated to the height of a card in columns 9-12. That
+         * is the whole argument against cross-column equalisation: on a canvas where operators
+         * compose arbitrary spans, "the row" is not a thing the operator authored, and making
+         * unrelated cards agree on a bottom edge manufactures emptiness nobody asked for.
+         *
+         * So the measured height goes straight through. Vertical position still comes from the
+         * same engine, which already places a card below only those cards whose COLUMNS it
+         * overlaps — that part was always right and is untouched.
+         *
+         * The measurement contract from the vertical-rhythm work is kept, not reverted: `measure`
+         * still reads the intrinsic node with the wrapper's height neutralised. It matters even
+         * more now, because the height it reports is the height that gets drawn.
          */
-        const { assigned } = solveRowHeights({ areas: layout.areas, intrinsic, gapPx });
-        const effective = new Map(intrinsic);
-        for (const [card, height] of assigned) if (intrinsic.has(card)) effective.set(card, height);
-        return resolveColumnAwareLayout({ layout, heights: effective, width, gapPx, unmeasuredHeightFor });
+        return resolveColumnAwareLayout({ layout, heights: intrinsic, width, gapPx, unmeasuredHeightFor });
     }, [layout, heights, width, gapPx, unmeasuredHeightFor, holdCard, holdHeight]);
 
     return { containerRef, registerCard, resolved };
