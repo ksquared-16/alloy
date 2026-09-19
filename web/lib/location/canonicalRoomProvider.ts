@@ -18,6 +18,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CanonicalLocation, CanonicalRoom } from "@/lib/location/canonicalLocationModel";
+import { isOperationalGroupRole } from "@/lib/location/canonicalLocationModel";
 import {
     resolveLocationById,
     resolveLocationHierarchy,
@@ -157,9 +158,19 @@ export function rowsBelongingToSite<T extends LocationAncestryRow>(
     return rows.filter((r) => rowBelongsToSite(r, siteId, byId));
 }
 
+/**
+ * The operational groups among these rooms — the classrooms/cohorts themselves.
+ *
+ * The neutral filter. A physical space is the licensed shell and a shared space
+ * is somewhere a child may BE without belonging to it, so neither is a group.
+ */
+export function operationalGroupRooms(rooms: readonly CanonicalRoom[]): CanonicalRoom[] {
+    return rooms.filter((r) => isOperationalGroupRole(r.unitRole));
+}
+
 /** Rooms a child may be PLACED into — operational groups only. */
 export function placeableRooms(rooms: readonly CanonicalRoom[]): CanonicalRoom[] {
-    return rooms.filter((r) => r.unitRole === "operational_group");
+    return operationalGroupRooms(rooms);
 }
 
 /** The operational groups a physical space contains. */

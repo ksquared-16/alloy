@@ -224,6 +224,11 @@ export async function buildCombinedRoster(
     const { orgId, siteLocationId, date } = input;
     const weekday = weekdayOf(date);
 
+    // EVERY unit, deliberately — this is a name lookup, not an option set. The
+    // attendance events folded below may legitimately name a shared space (a child
+    // on the playground) or a physical room, and a roster that could not name them
+    // would render a blank where a real location belongs. Narrowing this to
+    // operational groups is the one change that would break it.
     const rooms = await resolveRoomsForLocation(supabase, orgId, siteLocationId);
     const roomNameById = new Map(rooms.map((r) => [r.id, r.name?.trim() || "Room"]));
 

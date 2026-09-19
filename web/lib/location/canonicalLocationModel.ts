@@ -49,9 +49,28 @@ export function effectiveUnitRole(
     return storedRole ?? DEFAULT_UNIT_ROLE;
 }
 
-/** A unit a child may be PLACED into. Placement is committed group membership. */
-export function isPlaceableUnitRole(role: CanonicalUnitRole | null): boolean {
+/**
+ * Is this unit an operational group — the classroom/cohort itself?
+ *
+ * The neutral predicate. Several domains need this same question with different
+ * reasons: placement asks because committed membership belongs to a group, and
+ * scheduling asks because a schedule assignment and a ratio roster are group
+ * facts. They agree on the answer and would otherwise each spell the comparison
+ * themselves, which is how a fifth reading of `unit_role` gets born.
+ */
+export function isOperationalGroupRole(role: CanonicalUnitRole | null): boolean {
     return role === "operational_group";
+}
+
+/**
+ * A unit a child may be PLACED into. Placement is committed group membership.
+ *
+ * Kept as its own name because the REASON is placement-specific even though the
+ * test is not; broadening this one to cover scheduling would make its contract
+ * read false at every placement call site.
+ */
+export function isPlaceableUnitRole(role: CanonicalUnitRole | null): boolean {
+    return isOperationalGroupRole(role);
 }
 
 /** A unit attendance may name. Any unit at the site qualifies — including a shared space. */
