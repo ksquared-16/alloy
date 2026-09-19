@@ -261,7 +261,16 @@ export async function resolveChargeDetail(
     }
 
     const responsibilityRead = await readResponsibility(supabase, args.orgId, [chargeId]);
-    const accountArrangement = await readAccountArrangement(supabase, { orgId: args.orgId, customerId });
+    /*
+     * THE ARRANGEMENT IN FORCE FOR THIS CHARGE, not "whatever this account most recently arranged".
+     * The charge is for a child, and a child-scoped arrangement beats the household one — so the
+     * charge's own subject is what decides which arrangement governs it.
+     */
+    const accountArrangement = await readAccountArrangement(supabase, {
+        orgId: args.orgId,
+        customerId,
+        customerMemberId,
+    });
 
     /*
      * ── THE TWO PERIODS AND THE GL ACCOUNT ─────────────────────────────────────────────────────
