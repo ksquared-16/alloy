@@ -216,7 +216,43 @@ export function installVisibleCompletionProbe(): void {
         DIAGNOSTIC_ATTRIBUTE_CHANGE: false,
         PRESENTATIONAL_ANIMATION: false,
     };
-    const classify21 = (r: MutationRecord): Kind21 => {
+    /*
+     * THE SAME REPLACEMENT, SPLIT ACROSS TWO RECORDS.
+     *
+     * The per-record rule below only sees a replacement when React puts the removal and the
+     * insertion in ONE MutationRecord. It frequently does not: an unmount and a remount of the
+     * same subtree can arrive as two one-sided records in the same observer batch, and each one
+     * alone looks like a bare structure change.
+     *
+     * So the question is asked once per PARENT per batch, over everything that left and everything
+     * that arrived. If the visible semantic fingerprints match, nothing the operator can see
+     * changed and it is a rerender.
+     *
+     * This does NOT suppress real structure: a parent that gained a child, lost one, or exchanged
+     * one for a different one has unequal fingerprint lists and still advances finality. Only
+     * like-for-like is excused, and only within a single batch — a replacement observed across two
+     * batches is a genuinely later arrival and is deliberately left alone.
+     */
+    const identicalRerenderParents = (recs: MutationRecord[]): Set<Node> => {
+        const byParent = new Map<Node, { added: Node[]; removed: Node[] }>();
+        for (const r of recs) {
+            if (r.type !== "childList") continue;
+            const e = byParent.get(r.target) ?? { added: [], removed: [] };
+            for (const n of Array.from(r.addedNodes)) e.added.push(n);
+            for (const n of Array.from(r.removedNodes)) e.removed.push(n);
+            byParent.set(r.target, e);
+        }
+        const out = new Set<Node>();
+        byParent.forEach((e, parent) => {
+            if (e.added.length > 0 && e.removed.length > 0 &&
+                fingerprintList(e.added) === fingerprintList(e.removed)) {
+                out.add(parent);
+            }
+        });
+        return out;
+    };
+
+    const classify21 = (r: MutationRecord, batchIdentical?: Set<Node>): Kind21 => {
         if (r.type === "attributes") {
             const raw = r.attributeName ?? "";
             const name = raw.toLowerCase();
@@ -243,6 +279,9 @@ export function installVisibleCompletionProbe(): void {
             const was = (r.oldValue || "").replace(/\s+/g, " ").trim();
             return now === was ? "IDENTICAL_RERENDER" : "AUTHORITATIVE_CONTENT_CHANGE";
         }
+        // The batch answer first: it sees both halves of a split replacement, the per-record rule
+        // below only sees a replacement that arrived whole.
+        if (batchIdentical && batchIdentical.has(r.target)) return "IDENTICAL_RERENDER";
         const added = Array.from(r.addedNodes);
         const removed = Array.from(r.removedNodes);
         /*
@@ -467,6 +506,8 @@ export function installVisibleCompletionProbe(): void {
     const mark = (recs?: MutationRecord[]) => {
         const now = performance.now();
         w.__p076!.last = now; w.__p076!.count++;
+        // Once per batch, not once per record: the question is about the parent, not the record.
+        const batchIdentical = identicalRerenderParents(recs ?? []);
         for (const r of recs ?? []) {
             const key = attribute(r.target);
             const t = now - w.__p076!.t0;
@@ -476,7 +517,7 @@ export function installVisibleCompletionProbe(): void {
 
             // ── V2 ──
             const kind = classify(r);
-            const kind21 = classify21(r);
+            const kind21 = classify21(r, batchIdentical);
             V2.__p076v2!.styledAttrCount = styledAttributes().size;
             const v2 = V2.__p076v2!;
             v2.kinds[kind]++;
@@ -601,6 +642,15 @@ export function installVisibleCompletionProbe(): void {
                     cls: (el?.getAttribute?.("class") || "").slice(0, 70),
                     txt: (el?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60),
                     added: r.addedNodes?.length ?? 0,
+                    /*
+                     * WHAT arrived, not just how many. A post-complete childList record reporting
+                     * `added: 1, removed: 0` is indistinguishable from real late truth without the
+                     * arriving subtree's own semantic fingerprint — the record's `txt` is the
+                     * PARENT's text, which is unchanged in exactly the case under investigation.
+                     * This is how the WU-07 observation was finally named: `SPAN|Work: 1`.
+                     */
+                    addedFp: Array.from(r.addedNodes ?? []).map(fingerprint).join("~").slice(0, 160),
+                    removedFp: Array.from(r.removedNodes ?? []).map(fingerprint).join("~").slice(0, 160),
                     /*
                      * WHICH attribute, whether nodes LEFT, and which card owns it.
                      *

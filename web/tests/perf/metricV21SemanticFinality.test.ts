@@ -323,3 +323,146 @@ describe("the deployed specimen — the binding render, replayed", () => {
         expect(v2().lastBlockingAuthoritativeMs).toBeGreaterThanOrEqual(0);
     });
 });
+
+/*
+ * ── SPLIT-RECORD SUBTREE REPLACEMENT ───────────────────────────────────────────────────────────
+ *
+ * The per-record rule only recognises a replacement when React puts the removal and the insertion
+ * in ONE MutationRecord. It frequently does not. Measured on deployed staging, the compact Focus
+ * Panel header unmounted and remounted the same context row as TWO one-sided records 1-2ms apart —
+ * same parent, same rendered text — and scored two AUTHORITATIVE_STRUCTURE_CHANGEs AFTER the
+ * surface was already complete, in 4 of 4 normal samples.
+ *
+ * These seven specimens pin the repaired contract from both sides. The repair must excuse
+ * like-for-like and nothing else: every gate below that ends in "DOES advance" is a real structure
+ * or content change that a careless fix would silently swallow.
+ */
+/*
+ * These gates assert PER SECTION, not on the global counters. Every `installVisibleCompletionProbe`
+ * in this file leaves its MutationObserver attached to the same jsdom document, so by the time gate
+ * S runs, ~19 earlier observers also process each record and the global `kinds21` /
+ * `finalAuthoritativeMs` carry their contributions. A "does advance" gate written against the
+ * global number would pass on that pollution alone and prove nothing.
+ */
+describe("gate S — split-record subtree replacement", () => {
+    /** Remove then re-add as two separate records, the way React actually does it. */
+    const splitReplace = (host: HTMLElement, build: () => HTMLElement) => {
+        const old = host.firstElementChild!;
+        host.removeChild(old);
+        host.appendChild(build());
+    };
+
+    it("S1 identical subtree replacement does NOT advance finality", async () => {
+        surface(area("business_process", `<div class="ctx">New Lead North Campus Work: 1</div>`));
+        const host = document.getElementById("business_process")!;
+        installVisibleCompletionProbe();
+
+        splitReplace(host, () => {
+            const d = document.createElement("div");
+            d.className = "ctx";
+            d.textContent = "New Lead North Campus Work: 1";
+            return d;
+        });
+        await settle();
+
+        expect(v2().perSection.business_process.identicalRerenders).toBeGreaterThan(0);
+        expect(v2().perSection.business_process.structureMs).toBe(-1);
+        expect(v2().perSection.business_process.finalAuthMs).toBe(-1);
+    });
+
+    it("S2 changed TEXT in the replacement DOES advance finality", async () => {
+        surface(area("business_process", `<div class="ctx">New Lead North Campus Work: 1</div>`));
+        const host = document.getElementById("business_process")!;
+        installVisibleCompletionProbe();
+
+        splitReplace(host, () => {
+            const d = document.createElement("div");
+            d.className = "ctx";
+            d.textContent = "New Lead North Campus Work: 2"; // the operator can see this
+            return d;
+        });
+        await settle();
+
+        expect(v2().perSection.business_process.finalAuthMs).toBeGreaterThan(-1);
+    });
+
+    it("S3 a visible child ADDED does advance finality", async () => {
+        surface(area("children", `<ul><li>Ada</li></ul>`));
+        const host = document.querySelector("#children ul")!;
+        installVisibleCompletionProbe();
+
+        const li = document.createElement("li");
+        li.textContent = "Grace";
+        host.appendChild(li);
+        await settle();
+
+        expect(v2().perSection.children.finalAuthMs).toBeGreaterThan(-1);
+    });
+
+    it("S4 a visible child REMOVED does advance finality", async () => {
+        surface(area("children", `<ul><li>Ada</li><li>Grace</li></ul>`));
+        const host = document.querySelector("#children ul")!;
+        installVisibleCompletionProbe();
+
+        host.removeChild(host.lastElementChild!);
+        await settle();
+
+        expect(v2().perSection.children.finalAuthMs).toBeGreaterThan(-1);
+    });
+
+    it("S5 a visible-state attribute change inside the replacement DOES advance finality", async () => {
+        styleOn("[aria-expanded]");
+        surface(area("household", `<div class="row" aria-expanded="false">Household</div>`));
+        const host = document.getElementById("household")!;
+        installVisibleCompletionProbe();
+
+        splitReplace(host, () => {
+            const d = document.createElement("div");
+            d.className = "row";
+            d.setAttribute("aria-expanded", "true"); // same text, genuinely different visible state
+            d.textContent = "Household";
+            return d;
+        });
+        await settle();
+
+        expect(v2().perSection.household.finalAuthMs).toBeGreaterThan(-1);
+    });
+
+    it("S6 a DIAGNOSTIC-only subtree difference does NOT advance finality", async () => {
+        surface(area("attendance", `<div class="row" data-render-id="a1">Present 4</div>`));
+        const host = document.getElementById("attendance")!;
+        installVisibleCompletionProbe();
+
+        splitReplace(host, () => {
+            const d = document.createElement("div");
+            d.className = "row";
+            d.setAttribute("data-render-id", "a2"); // inert stamp, nothing styles it
+            d.textContent = "Present 4";
+            return d;
+        });
+        await settle();
+
+        expect(v2().perSection.attendance.identicalRerenders).toBeGreaterThan(0);
+        expect(v2().perSection.attendance.finalAuthMs).toBe(-1);
+    });
+
+    it("S7 an exchange for a DIFFERENT subtree is not excused by the batch rule", async () => {
+        /*
+         * The batch rule groups by PARENT, so a parent that lost one child and gained a different
+         * one is the case most at risk of being wrongly excused. Fingerprints differ, so it counts.
+         */
+        surface(area("financials", `<div class="row">Balance $420.00</div>`));
+        const host = document.getElementById("financials")!;
+        installVisibleCompletionProbe();
+
+        splitReplace(host, () => {
+            const d = document.createElement("div");
+            d.className = "row";
+            d.textContent = "Balance $0.00";
+            return d;
+        });
+        await settle();
+
+        expect(v2().perSection.financials.finalAuthMs).toBeGreaterThan(-1);
+    });
+});
