@@ -190,7 +190,42 @@ async function insertTerm(
             && live.amount_cents === option.amount.amountCents
             && live.state === args.state
             && t(live.override_reason) === t(args.overrideReason);
-        if (equivalent) return { ok: true, term: live, idempotent: true, resolution };
+        if (equivalent) {
+            /*
+             * THE AGREEMENT IS LEARNED LATER, AND A NULL IS NOT A POINTER.
+             *
+             * `enrollment_agreement_id` is stamped from the assignment at accept time, and this
+             * action exists "from the moment an assignment is proposed — long before any enrollment
+             * agreement". So the ordinary order is: price the child, then enrol them. Every term
+             * accepted in that order was written with a null agreement, and this retry branch
+             * returned the row untouched, so it could never acquire one — while
+             * `generateTuitionCharges` refuses a term with no agreement as `assignment_not_enrolled`.
+             *
+             * A child priced before enrolment could therefore never be billed, and no operator
+             * gesture could fix it: re-accepting is idempotent and there is no re-stamp.
+             *
+             * Measured: two assignments, both enrolled through the enrollment-decision authority
+             * AFTER acceptance, both still reported `assignment_not_enrolled` by the generator, and
+             * re-accepting returned `idempotent: true` with the same null.
+             *
+             * Filling a null is not re-pointing — the row said nothing, and now it says what the
+             * assignment says. A term that already names an agreement is never moved.
+             */
+            if (!t(live.enrollment_agreement_id) && t(read.subject.enrollmentAgreementId)) {
+                const { data: stamped } = await supabase
+                    .from("enrollment_pricing_terms")
+                    .update({ enrollment_agreement_id: read.subject.enrollmentAgreementId })
+                    .eq("id", live.id)
+                    .eq("org_id", args.orgId)
+                    .is("enrollment_agreement_id", null)
+                    .select("*")
+                    .maybeSingle();
+                if (stamped) {
+                    return { ok: true, term: stamped as EnrollmentPricingTermRow, idempotent: true, resolution };
+                }
+            }
+            return { ok: true, term: live, idempotent: true, resolution };
+        }
         if (!args.supersede) {
             return {
                 ok: false,

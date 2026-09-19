@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
-import { loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
+import {
+    invalidateFinancialConfig,
+    loadFinancialConfig,
+} from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
 import { readFinancialNestedSurfaceGroupsFromDoc } from "@/lib/adminV2/runtime/focusPanel/billingPreview/financialNestedSurfaceRuntime";
 import { resolveFocusPanelMutationOpportunityId } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
@@ -256,11 +259,23 @@ export default function AssignmentTuitionCard({
                 setCommandError("The request could not be sent.");
             } finally {
                 setRunning(false);
+                /*
+                 * THE REFETCH HAS TO OUTRANK THE CACHE, OR IT IS NOT A REFETCH.
+                 *
+                 * `loadFinancialConfig` shares an in-flight promise and holds it for 30 seconds, so
+                 * this call JOINED the pre-commit answer: an operator clicked Accept, the term was
+                 * written, and the card kept saying "0 of 2 agreed" until the TTL expired. Measured
+                 * on the running app — both accepts returned 200 with a term id while the card
+                 * showed neither, and a fresh navigation showed both.
+                 *
+                 * `invalidateFinancialConfig` exists for exactly this and was never called.
+                 */
+                if (opportunityId) invalidateFinancialConfig(opportunityId);
                 // Refetch rather than patch: the pricing terms are the answer, not this component.
                 await load();
             }
         },
-        [load, running],
+        [load, opportunityId, running],
     );
 
     const withTuition = assignments.filter((a) => a.recommended || a.accepted || a.state !== "no_match");

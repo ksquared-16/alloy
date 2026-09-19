@@ -23,6 +23,8 @@
  * the resolver's fallback to the subject id is refused rather than passed on.
  */
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { resolveAssignmentTuitionOpportunityId } from "@/components/admin/focusPanel/cards/AssignmentTuitionCard";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
@@ -85,5 +87,38 @@ describe("THE GATE — a wrong id is worse than no id", () => {
         for (const truth of [{}, { id: CHILD }, { id: "" }]) {
             expect(resolveAssignmentTuitionOpportunityId(ctx({ truth }))).not.toBe(CHILD);
         }
+    });
+});
+
+describe("THE GATE — the post-commit refetch outranks the cache", () => {
+    const src = readFileSync(
+        join(process.cwd(), "components/admin/focusPanel/cards/AssignmentTuitionCard.tsx"),
+        "utf8",
+    );
+
+    /*
+     * `loadFinancialConfig` shares an in-flight promise and holds it for 30 seconds, so the card's
+     * post-commit `load()` JOINED the pre-commit answer: both accepts returned 200 with a term id
+     * while the card still read "0 of 2 agreed", and a fresh navigation showed both terms. The
+     * resource exports `invalidateFinancialConfig` for exactly this, and the card never called it.
+     *
+     * SCOPED TO THE COMMIT, deliberately: an invalidation anywhere in the file would satisfy a
+     * repo-wide search while leaving the commit path unchanged.
+     */
+    it("invalidates the shared resource before refetching, inside the commit", () => {
+        const start = src.indexOf("const commit = useCallback(");
+        expect(start, "the commit callback is findable").toBeGreaterThan(0);
+        const body = src.slice(start, src.indexOf("\n    );", start));
+        const invalidatedAt = body.indexOf("invalidateFinancialConfig(");
+        const reloadedAt = body.indexOf("await load()");
+        expect(invalidatedAt, "the commit invalidates the cache").toBeGreaterThan(0);
+        expect(reloadedAt, "the commit refetches").toBeGreaterThan(0);
+        expect(invalidatedAt, "and it invalidates BEFORE it refetches").toBeLessThan(reloadedAt);
+    });
+
+    it("imports the invalidation from the one resource that owns the cache", () => {
+        expect(src).toMatch(
+            /import \{[\s\S]{0,120}invalidateFinancialConfig[\s\S]{0,120}\} from "@\/lib\/adminV2\/runtime\/focusPanel\/financialConfig\/financialConfigResource"/,
+        );
     });
 });
