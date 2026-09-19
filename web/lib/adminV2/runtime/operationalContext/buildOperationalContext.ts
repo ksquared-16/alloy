@@ -342,7 +342,7 @@ function buildCommunicationsSignal(
  * Participation candidates, read from the case's own children rows. Identity only — this decides
  * nothing about a child beyond "is this who the selection names".
  */
-export function participantCandidatesFromTruth(truth: Record<string, unknown>): ParticipantScopeCandidate[] {
+function participantCandidatesFromTruth(truth: Record<string, unknown>): ParticipantScopeCandidate[] {
     const rows = Array.isArray((truth as { _inquiry_children?: unknown })._inquiry_children)
         ? ((truth as { _inquiry_children: unknown[] })._inquiry_children as Array<Record<string, unknown>>)
         : [];
