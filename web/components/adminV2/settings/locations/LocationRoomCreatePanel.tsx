@@ -14,27 +14,59 @@ import { effectiveLocationProgramLabel } from "@/lib/locations/locationProgramCa
 import { writeRoomProgramsAndScheduleMetadata } from "@/lib/locations/roomOfferingMetadata";
 import type { SchedulePatternRow } from "@/lib/childcareOperational/fetchOperationalEnrollment";
 import type { LocationRoomCreateInput } from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
+import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
+import {
+    DEFAULT_ROOM_TYPE,
+    ROOM_TYPE_OPTIONS,
+    roleAcceptsInside,
+    roleUsesProgramFields,
+    roomTypeHint,
+    type InsideOption,
+} from "@/lib/locations/roomTypeVocabulary";
+import { topologyRefusalCopy } from "@/lib/locations/topologyRefusalCopy";
+import { topologyRefusalCodeOf } from "@/lib/locations/topologyRefusalError";
 
 export default function LocationRoomCreatePanel({
     siteLabel,
     programOptions,
     schedulePatterns,
+    insideOptions,
     onCancel,
     onCreate,
 }: {
     siteLabel: string;
     programOptions: LocationProgramCategoryRow[];
     schedulePatterns: SchedulePatternRow[];
+    /** Physical rooms at this site a classroom may be created inside. */
+    insideOptions: InsideOption[];
     onCancel: () => void;
     onCreate: (input: LocationRoomCreateInput) => Promise<void>;
 }) {
     const [label, setLabel] = useState("");
+    const [roomType, setRoomType] = useState<CanonicalUnitRole>(DEFAULT_ROOM_TYPE);
+    const [insideId, setInsideId] = useState("");
     const [supportedKeys, setSupportedKeys] = useState<string[]>([]);
     const [capacity, setCapacity] = useState("");
     const [schedulePatternId, setSchedulePatternId] = useState("");
     const [active, setActive] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const showsInside = roleAcceptsInside(roomType) && insideOptions.length > 0;
+    const showsProgramFields = roleUsesProgramFields(roomType);
+
+    // Only a classroom can sit inside a physical room, so a Type change away from
+    // Classroom drops a selection that would no longer be meaningful — the payload
+    // must never carry an Inside the chosen Type cannot have.
+    const changeRoomType = (next: CanonicalUnitRole) => {
+        setRoomType(next);
+        if (!roleAcceptsInside(next)) setInsideId("");
+        if (!roleUsesProgramFields(next)) {
+            setSupportedKeys([]);
+            setSchedulePatternId("");
+        }
+        setError(null);
+    };
 
     const toggleProgram = (key: string) => {
         setSupportedKeys((current) =>
@@ -74,6 +106,44 @@ export default function LocationRoomCreatePanel({
                             data-testid="locations-room-create-name"
                         />
                     </label>
+                    <label className="block max-w-md space-y-1">
+                        <span className="config-typo-field-label">Type</span>
+                        <select
+                            value={roomType}
+                            onChange={(event) => changeRoomType(event.target.value as CanonicalUnitRole)}
+                            className="config-runtime-select"
+                            data-testid="locations-room-create-type"
+                        >
+                            {ROOM_TYPE_OPTIONS.map((option) => (
+                                <option key={option.role} value={option.role}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                        <p className="config-typo-sublabel" data-testid="locations-room-create-type-hint">
+                            {roomTypeHint(roomType)}
+                        </p>
+                    </label>
+
+                    {showsInside ?
+                        <label className="block max-w-md space-y-1">
+                            <span className="config-typo-field-label">Inside</span>
+                            <select
+                                value={insideId}
+                                onChange={(event) => setInsideId(event.target.value)}
+                                className="config-runtime-select"
+                                data-testid="locations-room-create-inside"
+                            >
+                                <option value="">{siteLabel ? `${siteLabel} (no physical room)` : "No physical room"}</option>
+                                {insideOptions.map((option) => (
+                                    <option key={option.id} value={option.id}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    :   null}
+
                     <label className="block max-w-36 space-y-1">
                         <span className="config-typo-field-label">Capacity</span>
                         <input
@@ -97,6 +167,8 @@ export default function LocationRoomCreatePanel({
                     </label>
                 </ConfigEditorSection>
 
+                {showsProgramFields ?
+                <>
                 <ConfigEditorSection
                     title="Programs supported"
                     description="Programs offered at this location that this room can serve."
@@ -148,6 +220,8 @@ export default function LocationRoomCreatePanel({
                         </select>
                     </label>
                 </ConfigEditorSection>
+                </>
+                :   null}
 
                 {error ?
                     <p className="text-sm text-red-800" role="alert">
@@ -166,17 +240,27 @@ export default function LocationRoomCreatePanel({
                                 try {
                                     const metadata = writeRoomProgramsAndScheduleMetadata({
                                         existing: {},
-                                        supportedProgramKeys: supportedKeys,
-                                        schedulePatternId: schedulePatternId || null,
+                                        supportedProgramKeys: showsProgramFields ? supportedKeys : [],
+                                        schedulePatternId: showsProgramFields ? schedulePatternId || null : null,
                                         capacity: capacity.trim() || null,
                                     });
                                     await onCreate({
                                         label: label.trim(),
                                         is_active: active,
                                         metadata,
+                                        unit_role: roomType,
+                                        // Only a classroom can carry one, and `showsInside`
+                                        // is false for every other type, so this is already
+                                        // empty — spelling it out keeps an impossible
+                                        // payload impossible rather than merely unlikely.
+                                        inside_location_id: roleAcceptsInside(roomType) ? insideId || null : null,
                                     });
                                 } catch (cause) {
-                                    setError(cause instanceof Error ? cause.message : "Room could not be created.");
+                                    // Explain the refusal from the server's NAMED code, never
+                                    // from its sentence.
+                                    const fallback =
+                                        cause instanceof Error ? cause.message : "Room could not be created.";
+                                    setError(topologyRefusalCopy(topologyRefusalCodeOf(cause), fallback));
                                 } finally {
                                     setSaving(false);
                                 }

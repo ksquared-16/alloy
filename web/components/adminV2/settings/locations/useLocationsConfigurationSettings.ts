@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
+import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
+import { TopologyRefusalError } from "@/lib/locations/topologyRefusalError";
 import {
     fetchOptionSetItemsBySetKey,
     mapOptionItemsToSelectOptions,
@@ -51,6 +53,14 @@ export type LocationRoomCreateInput = {
     label: string;
     is_active: boolean;
     metadata: Record<string, unknown>;
+    /** Canonical topology role the operator chose through the Type control. */
+    unit_role: CanonicalUnitRole;
+    /**
+     * The physical room the operator chose through Inside, or null for "directly
+     * at the site". The hook turns this into `parent_location_id`; the form never
+     * handles a raw parent id.
+     */
+    inside_location_id: string | null;
 };
 
 export type LocationProgramCreateInput = {
@@ -58,6 +68,31 @@ export type LocationProgramCreateInput = {
     is_active: boolean;
     metadata: Record<string, unknown>;
 };
+
+/**
+ * The POST body for a new room, from the operator's Type + Inside choices.
+ *
+ * Exported because this IS the create contract: the form expresses intent, this
+ * turns it into canonical topology, and the server decides legality. Keeping it
+ * a pure function lets the contract be proven against the real route rather than
+ * asserted about in prose.
+ *
+ * Role-aware parent, not a hard-coded site: a classroom the operator placed
+ * Inside a physical room is parented to THAT room.
+ */
+export function buildRoomCreatePayload(
+    siteId: string,
+    input: LocationRoomCreateInput
+): Record<string, unknown> {
+    return {
+        location_type: "unit",
+        unit_role: input.unit_role,
+        parent_location_id: input.inside_location_id ?? siteId,
+        label: input.label.trim() || "New room",
+        is_active: input.is_active,
+        metadata: input.metadata,
+    };
+}
 
 function isSite(row: LocationHierarchyRow): boolean {
     return String(row.location_type ?? "").trim() === "site";
@@ -350,21 +385,22 @@ export function useLocationsConfigurationSettings(options?: {
 
     const createRoomUnit = useCallback(
         async (siteId: string, input: LocationRoomCreateInput): Promise<string> => {
-            const payload = {
-                location_type: "unit",
-                parent_location_id: siteId,
-                label: input.label.trim() || "New room",
-                is_active: input.is_active,
-                metadata: input.metadata,
-            };
+            const payload = buildRoomCreatePayload(siteId, input);
             const res = await fetch("/api/admin/locations", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
                 body: JSON.stringify(payload),
             });
-            const json = (await res.json().catch(() => ({}))) as LocationHierarchyRow & { error?: string };
-            if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
+            const json = (await res.json().catch(() => ({}))) as LocationHierarchyRow & {
+                error?: string;
+                code?: string;
+            };
+            if (!res.ok) {
+                // Carry the NAMED code to the form. The form explains the refusal from
+                // the code; nothing downstream reads the server's English.
+                throw new TopologyRefusalError(json.error ?? `Failed (${res.status})`, json.code ?? null);
+            }
             const newId = String(json.id ?? "").trim();
             if (!newId || !mutationResponseContainsPatch(json as Record<string, unknown>, payload)) {
                 throw new Error("Room creation was not confirmed by the authoritative response.");

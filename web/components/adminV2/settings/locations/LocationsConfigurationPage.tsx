@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
+import { eligibleInsideOptions } from "@/lib/locations/roomTypeVocabulary";
 import { CalendarDays, MapPin } from "lucide-react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
@@ -643,6 +644,7 @@ export default function LocationsConfigurationPage({
                                 siteLabel={model?.displayName ?? ""}
                                 programOptions={programOptionsForSite(selectedSite.id)}
                                 schedulePatterns={selectedSchedules}
+                                insideOptions={eligibleInsideOptions(roomRows, selectedSite.id)}
                                 onCancel={() => setCreatingRoom(false)}
                                 onCreate={async (input) => {
                                     const newId = await createRoomUnit(selectedSite.id, input);
