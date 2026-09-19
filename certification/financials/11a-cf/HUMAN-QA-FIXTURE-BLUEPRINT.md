@@ -278,3 +278,56 @@ Nothing in §N of the previous addendum stands: `RECURRING_DISCOUNT_NOT_APPLIED_
 never real. A Human-QA scenario saying "a sibling discount reduces this month's tuition" **can** be
 built, and is now proven mounted: Gross $185.00 → Discount −$18.50 → Net $166.50, provenance
 "10% of $185.00 · Ongoing".
+
+---
+
+# Addendum 5 — FINAL, at the Core freeze (candidate to be reconciled)
+
+Kelly intends to build **Payments before the integrated Financials Human QA**. The fixture must
+therefore survive that gap: **one destructive rebuild, not two.** So the blueprint is now split
+three ways rather than two.
+
+## S · CORE COMMERCIAL CONFIGURATION TO REBUILD
+
+Durable. Rebuild once, and leave standing through the Payments program.
+
+| Item | Detail |
+|---|---|
+| v161-shape Focus Panel layout | both projections — a `sections` entry alone is not a placement, and publication now refuses the contradiction |
+| Two child assignments (OCM) + two enrolment agreements | agreement before pricing, or re-accept after |
+| Weekly billing frequency | present already |
+| Weekly authored rate | $185.00 on a **no-quantity** variant |
+| Monthly authored rate | $1,450.00 on a no-quantity variant, dated earlier than the day-variant rates |
+| Accepted Weekly terms | through the mounted Tuition card |
+| Accepted Monthly terms | through the mounted Tuition card |
+| Due Date policy | **effective before the period it bills** — net 10 from 2026-08-01 |
+| Recurring discount policy | the sibling discount, 10%, `applies_to: all`, effective 2026-01-01 |
+| Discount eligibility configuration | two concurrently enrolled children of one household |
+| Tuition charge template | may stay **`fixed`** — the platform holds the price precedence, and a fixed template is the better fixture because it proves it |
+| Responsibility arrangements · subject-grain configuration | as recorded in §C |
+
+## T · CORE CERTIFICATION TRANSACTION RESIDUE TO REMOVE
+
+Transaction history written purely for engineering proof. None of it is configuration.
+
+- the six generated tuition drafts (5 × $185.00 Certa, 1 × $1,450.00 Certb)
+- the six reduction drafts and their `financial_reduction_applications` rows
+- the earlier certification reductions, reversals, adjustments and prepaid allocations (§C, §J)
+- the accepted terms, agreements and OCM rows **only if** the reseed rebuilds them from §S
+
+## U · PAYMENTS CONFIGURATION TO BE ADDED LATER
+
+Not built, not reseeded, and listed so the eventual integrated fixture is planned once:
+
+- provider connection (Stripe, Provider V1) and merchant account association
+- payment methods on file for at least one payer
+- an autopay enrolment
+- a held deposit, so the deposit lifecycle has a specimen
+- a failed and a returned payment, so the provider paths are exercisable
+- a provider reconciliation linkage
+
+## V · The sequencing rule
+
+The Core configuration in §S is **not** to be torn down when Payments lands. The integrated
+Human-QA fixture is §S **plus** §U, with §T removed once. A reseed that rebuilds §S a second time
+because Payments arrived is the second destructive cycle this split exists to avoid.

@@ -1,13 +1,14 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-09-18
+last_reviewed: 2026-09-19
 supersedes: []
 ---
 
 # Financials — the canonical authorities
 
-**Status:** current as of `agent/financials-11a-repair2`, Thread 11A.
+**Status:** current as of the Thread 11A **Core freeze**. Section 7 is mounted-certified;
+Core Financials feature work is complete and Payments is the next program.
 **Purpose:** name the single owner of every core financial concept, so a lane that needs one
 **finds it instead of building a second one.**
 
@@ -18,6 +19,43 @@ model would each be a defensible-looking local decision and a platform-level def
 
 > If you cannot express the behaviour through the authority named here, report the smallest
 > compatible extension to it. Do not build a parallel mechanism.
+
+---
+
+## 0. The Core financial lifecycle — four layers, four owners
+
+Everything else in this document is a detail of this shape. The layers are **separate acts with
+separate owners**, and collapsing any two is the mistake that cannot be undone later.
+
+```
+ACCEPTED COMMERCIAL TERM   →  GROSS OBLIGATION
+        owner: enrollment_pricing_terms (accepted via enrollment.pricing.accept)
+
+COMMERCIAL REDUCTION POLICY →  REDUCTIONS  →  NET OBLIGATION
+        owner: commercial_policies → applyFinancialReductions → financial_reduction_applications
+
+RESPONSIBILITY              →  WHO OWES THE OBLIGATION
+        owner: financial_responsibility_arrangements + _shares
+
+PAYMENT / ALLOCATION        →  HOW MONEY SETTLES IT
+        owner: payments + payment_allocations
+```
+
+**Recurring generation and commercial reductions are two governed acts over the same Billing
+Period**, not one chained operation. `billing.generate_tuition` produces the gross;
+`billing.apply_discounts` reduces whatever gross that period holds. Do not chain them merely because
+a human exercises them in sequence — chaining would make the reduction a property of generation, and
+a manually added tuition charge would then be discounted by a different path than a generated one.
+
+Each layer may be run, previewed and audited on its own, and each answers a question the others do
+not:
+
+| Layer | Answers | Does NOT answer |
+|---|---|---|
+| Accepted term | what was agreed | who owes it |
+| Reduction | what the organisation's rules take off | who owes it, who paid |
+| Responsibility | who owes it | who paid, what it is for |
+| Payment | how it was settled | who owes it |
 
 ---
 
@@ -326,6 +364,59 @@ catalog edit change what an already-agreed family owes.
 period with no configured proration policy → `proration_policy_required`. Billing a whole month for
 a fortnight is not a default; it is a guess with somebody's money.
 
+### The accepted price outranks the charge template
+
+`resolveAmount` in `resolveChargeFromTemplate` returns the **accepted** amount when one is present,
+before it consults `amount_strategy` at all.
+
+This is not a tidy-up. A charge template says HOW tuition posts — its category, its GL mapping, when
+it occurs, when it becomes billable, whether it needs review. It has no second opinion about WHAT
+THIS CHILD AGREED TO PAY. A tenant whose tuition template was `fixed` at $400.00 billed **every**
+generated obligation $400.00 while the families had accepted $185.00 a week and $1,450.00 a month —
+silently, on every charge, because the accepted price arrived as `resolvedAmountCents`,
+indistinguishable from a catalog rate hint.
+
+**A number cannot carry its own authority.** `acceptedAmountCents` is the authority: present means a
+commercial contract already decided this. It is threaded through the draft WRITE as well as the
+resolution, because the write re-resolves the template and a fixed amount would otherwise reinstate
+itself on the second pass.
+
+**Do not "fix" this in a tenant's configuration.** Setting a template to `rate_derived` makes one
+tenant correct and leaves the platform able to bill every other tenant a number nobody agreed to.
+
+### Cadence is operator intent, and preview is a promise
+
+One account can legitimately hold a weekly term for one child and a monthly term for another, so a
+service period alone is **not an instruction**. The Generate Tuition surface asks for a Billing
+frequency, and changing it clears a standing preview, because that preview described a different
+operation.
+
+`generationCadenceFrom` is read by **both** `buildPreview` and `execute`. They previously disagreed:
+preview defaulted to monthly while execute honoured the payload, so previewing a weekly run reported
+the monthly answer and Confirm then generated five weekly obligations. **Do not return to a
+month-only preview that can execute another cadence.**
+
+The preview echoes `cadence_key` and `service_period` in its `after` block so a caller can check
+Confirm against what was previewed.
+
+### Generated, recalculated, unchanged
+
+`writeTemplateDraftCharge` answers `created` / `recalculated` / `unchanged` / `skipped_posted`, and
+the generation result reports them as such:
+
+- **generated** — created, or an existing draft moved to a new amount or date
+- **unchanged** — a draft that already stood and still agrees; converged, *not billed again*
+- **alreadyPosted** — settled money, reported and not entered
+
+A rerun reporting its converged drafts as `generated` tells an operator they have charged a family
+twice. The ledger was right and the sentence was not, and the sentence is what an operator reads.
+
+### Effective lifecycle
+
+`resolveTuitionRecurrence` distinguishes **`term_not_yet_effective`** from **`term_already_ended`**,
+because "not yet" and "no longer" send an operator to two different places. A partial period with no
+configured proration is **refused**, not billed whole.
+
 ### Idempotency — three layers, all database-enforced
 
 For each `assignment × charge rule × billing period × child`, the same obligation cannot be created
@@ -352,6 +443,29 @@ These are **not** interchangeable merely because each can reduce what is current
 | **Credit / adjustment** | changes an established financial position | `charges` with category `credit` / `adjustment` |
 | **Payment** | settles an obligation | `payments` + `payment_allocations` |
 | **Prepaid / deposit** | money held for future application | unapplied posted payment (§6) |
+
+### Commercial reduction is producer-independent
+
+`applyFinancialReductions` reads the gross `tuition` charges a period produced — **whatever produced
+them** — and `resolveFinancialReductions` never learns where a charge came from. A manually added
+eligible tuition charge and a generated one therefore use the same authority and the same rules, and
+the same policy means the same thing for both.
+
+**Attachment grain**: the household's eligibility facts (sibling rank and count, employee household,
+read server-side and never asserted by a caller), the charge's CATEGORY, and the policy's own
+`applies_to` and effective window. No cadence, no assignment, no generator.
+
+**The Billing Period owns effective policy selection.** Policies are filtered to those effective
+across the period's bounds, and gross is selected by `service_date` inside them. Not `created_at`,
+and not one date for manual and another for recurring.
+
+**Draft reductions converge; posted reductions are immutable.** The already-posted check runs BEFORE
+anything is written; a draft reduction reconciles in place; a posted one is reported and left alone,
+and a later policy edit corrects it only by appending through the correction authority. Each
+application carries a `policy_snapshot`, so editing a policy cannot rewrite what it already reduced.
+
+**Provenance lives in `financial_reduction_applications`** — the policy, its kind, the basis, the
+base it was taken on, whether a cap bound it, the period, the child and the gross charge it reduces.
 
 ### Gross stays gross
 
@@ -570,22 +684,68 @@ truth, not configuration. Configuration says *what the rules are*; the ledger sa
 
 ---
 
-## 11. Surface boundary
+## 11. Surface ownership
 
-**Compact** — understand the current financial position, initiate common actions, navigate to
-Details. It must not grow: no responsibility management, no discount administration, no deposit
-administration, no payer setup, no payment methods, no allocation management. If prepaid funds
-materially affect the position, surface the **minimum financially necessary indicator**, not an
-administration interface.
+Five surfaces, one set of authorities. **There are no host-specific financial writers**: every one
+of these reads through the canonical readers and writes through the registered actions, and a
+surface that needed its own writer would be a second financial authority wearing a screen.
 
-**Details** — administer the financial relationship. This is where responsibility, discounts,
-deposits, allocation and payer administration live.
+| Surface | Owns the question | Must not grow into |
+|---|---|---|
+| **Focus Panel Summary** (`financials` card) | What is this family's position, and what are the common next acts? | responsibility administration, discount administration, deposit administration, payer setup, payment methods, allocation management |
+| **Focus Panel Details** | Deep account truth and charge-grain administration — the ledger, lenses, filters, responsibility, reductions, corrections | a second account workspace |
+| **Financials Workspace → Accounts** | The wider operational account workspace, across households | a second ledger, a second charge writer |
+| **/organization/financials** | Financial and commercial CONFIGURATION — tuition plans, billing frequencies, catalog, policies, accounting calendar, GL | transactional money |
+| **Assignment Tuition card** (`billing_preview`) | What this child's assignment costs, and the acceptance of recurring commercial terms | pricing. It renders Commercial Execution's answer and records a decision; it computes no amount |
+
+**Shared command authority.** Every financial mutation on every one of these surfaces goes through
+`FINANCIAL_TRANSACTION_ACTIONS` → one executor → `/api/admin/actions/execute`. The workspace
+REQUESTS and the card PERFORMS; neither writes directly.
+
+**Shared filtering.** Subject scope is `financialsRowScope` and nothing else (§2). A surface with
+its own child filter is a second subject model.
 
 ---
 
-## 12. Deferred — the next phase, deliberately not started
+## 12. Focus panel publication integrity — the v160/v161 finding
 
-Payment method / autopay / provider / collection productization is the next major phase and is **out
-of scope** for the core-financials work this document describes. Provider, merchant, collection
-attempt and refund authorities already exist (`lib/financials/payments/*`); productizing them is a
-separate pass.
+Recorded here so no future lane repeats a seven-hypothesis investigation.
+
+A published Focus Panel Summary document carries **two independent card lists**:
+
+- `doc.sections` — the authored cards: key, tier, span, density, visibility
+- `doc.metadata.focusPanelLayout` — `{ grid: { areas, columns }, rows }`, the operator-published
+  explicit layout
+
+**The runtime renders the explicit layout.** `readFocusPanelPublishedLayout` reads the metadata one,
+and when it is present the runtime draws exactly those rows and widths.
+
+For two published versions, `billing_preview` was authored into `sections` and made visible there
+while the metadata layout continued to name six other cards. The published document said the card
+existed; the panel drew six; nothing anywhere reported an error. Every surface an investigator can
+read said the card was placed.
+
+**Publication now refuses a document whose two lists disagree.** A card authored visible and absent
+from the explicit layout, or placed by the layout and authored nowhere, is a `400` at
+`/api/admin/entity-layouts/{id}/publish` — see `focusPanelPublicationIntegrity.ts`. The rule names
+no card and protects every Focus Panel card, including ones added later.
+
+**If you republish a layout, write both projections.** A `sections` entry alone is not a placement.
+
+---
+
+## 13. Deferred — Payments is the next program
+
+Payment method, autopay, provider, collection and deposit-lifecycle productization is the next major
+program. See **`docs/platform/modules/core-payments-contract.md`** for the boundary: what Payments
+inherits, what it must not rebuild, and where provider-specific objects belong.
+
+The three accepted Core deferrals are stated in full in the Director QA catalog
+(`CORE_DEFERRALS` in `lib/qa/financialsDirectorQa/scenarioCatalog.ts`) and are **not** Core defects:
+
+- `SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED` — fixed shares are operator-authorable; percentage
+  and remainder exist in the arrangement authority with no Core authoring surface.
+- `LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED` — canonical provenance exists and the ledger states a
+  concise preview of it; there is no deep row-inspection surface in Core.
+- `DEPOSIT_OPERATOR_PRODUCTIZATION_GAP` — the deposit policy and model foundation exist; the held
+  deposit lifecycle belongs to Payments.
