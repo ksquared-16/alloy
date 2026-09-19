@@ -107,6 +107,19 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
      * it is a timestamp of something that happened, not of the observer giving up. Running this
      * spec at two windows is therefore a falsifiable test of the metric itself.
      */
+    const apiTimingBrowserClock = await page.evaluate(() =>
+        performance.getEntriesByType("resource")
+            .filter((e) => /\/api\//.test(e.name))
+            .map((e) => {
+                const r = e as PerformanceResourceTiming;
+                return {
+                    url: r.name.replace(/^https?:\/\/[^/]+/, ""),
+                    startMs: Math.round(r.startTime),
+                    endMs: Math.round(r.responseEnd),
+                };
+            })
+            .sort((a, b) => a.endMs - b.endMs));
+
     const v2 = await page.evaluate(() => {
         const V2 = window as unknown as {
             __p076v2?: {
@@ -242,6 +255,17 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         apiRequestCount: requests.length,
         apiRequests: requests,
         apiResponses: responses,
+        /*
+         * THE SAME CLOCK AS EVERYTHING ELSE.
+         *
+         * `apiRequests`/`apiResponses` above are stamped with Date.now() in the NODE driver, from a
+         * t0 taken before page.goto. The probe and the readiness chain stamp performance.now() in
+         * the PAGE, whose origin is navigationStart. Comparing them made the drawer VM response
+         * look like it landed AFTER the completion it causes — an origin offset reported as a
+         * causal contradiction. Resource timing answers on the page's own clock, so these entries
+         * are the ones any causal claim must be built from.
+         */
+        apiTimingBrowserClock,
         lateMutations,
         focusChain,
         drawerVmTiming,

@@ -16,7 +16,18 @@
  */
 export function installVisibleCompletionProbe(): void {
     const w = window as unknown as { __p076?: { t0: number; last: number; count: number } };
-    w.__p076 = { t0: Date.now(), last: Date.now(), count: 0 };
+    /*
+     * ONE CLOCK: performance.now().
+     *
+     * This used to be Date.now() minus a t0 captured when the init script ran — which is AFTER
+     * navigation starts. The readiness chain stamps performance.now() (origin: navigationStart)
+     * and the Playwright driver stamped Date.now() in NODE before page.goto. Three origins, freely
+     * compared, and the comparison produced a headline contradiction: the drawer VM response
+     * appeared to land ~563-949ms AFTER the completion it causes. That was the offset between the
+     * origins, not a fact about the product. Everything here is now on the page's performance
+     * clock, so a probe timestamp and a chain timestamp are the same instant when they are equal.
+     */
+    w.__p076 = { t0: 0, last: performance.now(), count: 0 };
     /*
      * PER-REGION ATTRIBUTION, not DOM-wide quiescence.
      *
@@ -454,7 +465,7 @@ export function installVisibleCompletionProbe(): void {
     };
 
     const mark = (recs?: MutationRecord[]) => {
-        const now = Date.now();
+        const now = performance.now();
         w.__p076!.last = now; w.__p076!.count++;
         for (const r of recs ?? []) {
             const key = attribute(r.target);
@@ -626,7 +637,7 @@ export function installVisibleCompletionProbe(): void {
         if (!host) return;
         const store = V2.__p076v2;
         if (!store) return;
-        const t = Date.now() - w.__p076!.t0;
+        const t = performance.now();
         const ps = store.perSection[host] ?? {
             firstMs: t, lastMs: -1, lastVisibleMs: t,
             data: 0, structure: 0, anim: 0,
