@@ -16,8 +16,21 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
  * Legacy alias:   /api/admin/v2/view-models/drawer/opportunity/[id] (next.config rewrite)
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+    /*
+     * THE ROUTE'S OWN PHASES.
+     *
+     * compose_ms covers a median 2,288ms of a 3,698ms endpoint wall. Network accounts for ~384ms,
+     * leaving ~935ms — 25% of the endpoint — inside this handler but outside the composer, and
+     * that block carries most of the run-to-run variance. Everything in it is here: the gate, the
+     * org assertion, the participant resolve and the card producers, which run AFTER compose and
+     * are first-order for Attendance and Health. Without this split the largest unexplained cost
+     * on the settlement path can only be guessed at, and this programme has already spent slices
+     * on a guess. Four Date.now() reads and three headers; no new timing framework.
+     */
     const routeT0 = Date.now();
+    const routePhases: Record<string, number> = {};
     const gate = await loadAdminRouteGate();
+    routePhases.gate_ms = Date.now() - routeT0;
     if (!gate.ok) return adminRouteGateFailureResponse(gate);
 
     const { id: opportunityId } = await context.params;
@@ -26,7 +39,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     const supabase = createAdminClient();
+    const tAssert = Date.now();
     const oppOrg = await assertRowOrg(supabase, "opportunities", opportunityId, gate.orgId);
+    routePhases.assert_row_org_ms = Date.now() - tAssert;
     if (!oppOrg.ok) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -90,12 +105,17 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
              * It runs HERE rather than inside the composer because it queries the database and the
              * composer is reachable from a client component, exactly as the producers below are.
              */
-            resolvedParticipant: await resolveParticipationSubjectForOpportunity({
-                supabase,
-                orgId: gate.orgId,
-                opportunityId: opportunityId.trim(),
-                participationId: attentionSubjectId,
-            }),
+            resolvedParticipant: await (async () => {
+                const t = Date.now();
+                const r = await resolveParticipationSubjectForOpportunity({
+                    supabase,
+                    orgId: gate.orgId,
+                    opportunityId: opportunityId.trim(),
+                    participationId: attentionSubjectId,
+                });
+                routePhases.participant_resolve_ms = Date.now() - t;
+                return r;
+            })(),
         });
 
         if (!result.ok) {
@@ -138,6 +158,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
          * disagree about the subject. Producer failure is bounded by `Promise.allSettled` inside the
          * producer module: an Attendance outage costs the operator Attendance, not the drawer.
          */
+        const tProducers = Date.now();
         const settledContext = result.operationalContext ?? null;
         const projection = result.viewModel.workspace.operational_projection ?? null;
         const viewModel =
@@ -160,12 +181,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                       },
                   }
                 : result.viewModel;
+        routePhases.card_producers_ms = Date.now() - tProducers;
 
         return NextResponse.json(viewModel, {
             headers: {
                 "X-Alloy-Drawer-VM-Structure-Settled": "true",
                 "X-Alloy-Drawer-VM-Generation": result.viewModel.generation,
                 "X-Alloy-Drawer-VM-Compose-Ms": String(result.viewModel.timing.compose_ms),
+                "X-Alloy-Drawer-VM-Route-Phases": JSON.stringify(routePhases),
                 "X-Alloy-Server-Duration": String(Date.now() - routeT0),
             },
         });

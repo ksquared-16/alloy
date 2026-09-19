@@ -46,9 +46,28 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
      * need to add a parallel timing system to discover what is already measured and shipped.
      */
     let drawerVmTiming: unknown = null;
+    /*
+     * THE ROUTE'S OWN TOTAL, WHICH THE COMPOSER'S PHASES DO NOT COVER.
+     *
+     * compose_ms accounts for a median 2,203ms of a 3,685ms wall — 41% of the endpoint is spent
+     * OUTSIDE the composer and that is where all the run-to-run variance lives. The route already
+     * ships X-Alloy-Server-Duration (whole handler) beside X-Alloy-Drawer-VM-Compose-Ms, so the
+     * split into route overhead and network transfer needs no new server instrumentation at all:
+     *   wall - serverDuration  = network + queueing
+     *   serverDuration - compose = gate + assertRowOrg + participant resolve + card producers
+     *                              + JSON serialization
+     */
+    let drawerVmServerHeaders: Record<string, string | null> = {};
     page.on("response", (r) => {
         const u = r.url();
         if (/\/api\/admin\/view-models\/drawer\/opportunity\//.test(u) && r.status() === 200) {
+            const h = r.headers();
+            drawerVmServerHeaders = {
+                serverDurationMs: h["x-alloy-server-duration"] ?? null,
+                composeMs: h["x-alloy-drawer-vm-compose-ms"] ?? null,
+                structureSettled: h["x-alloy-drawer-vm-structure-settled"] ?? null,
+                routePhases: h["x-alloy-drawer-vm-route-phases"] ?? null,
+            };
             void r
                 .json()
                 .then((j: { timing?: unknown }) => {
@@ -107,6 +126,19 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
      * it is a timestamp of something that happened, not of the observer giving up. Running this
      * spec at two windows is therefore a falsifiable test of the metric itself.
      */
+    const apiTimingBrowserClock = await page.evaluate(() =>
+        performance.getEntriesByType("resource")
+            .filter((e) => /\/api\//.test(e.name))
+            .map((e) => {
+                const r = e as PerformanceResourceTiming;
+                return {
+                    url: r.name.replace(/^https?:\/\/[^/]+/, ""),
+                    startMs: Math.round(r.startTime),
+                    endMs: Math.round(r.responseEnd),
+                };
+            })
+            .sort((a, b) => a.endMs - b.endMs));
+
     const v2 = await page.evaluate(() => {
         const V2 = window as unknown as {
             __p076v2?: {
@@ -199,11 +231,14 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         };
     });
 
-    /* The fingerprints of what actually mutated late — the evidence for the long pole. */
-    const lateMutations = await page.evaluate(() => {
-        const L = window as unknown as { __p076late?: unknown[] };
-        return (L.__p076late ?? []).slice(-40);
-    });
+    /*
+     * ONE LATE-MUTATION AUTHORITY.
+     *
+     * A second read used to publish `.slice(-40)` of the SAME buffer at the top level. Being the
+     * LAST 40 it began after the completion burst on every sample, so the two arrays disagreed
+     * about whether the completing mutations existed at all — and the truncated one was the one
+     * read first. `regions.lateMutations` carries the whole buffer and is now the only copy.
+     */
 
     /*
      * The Summary readiness chain — the direct causal evidence. Recorded by the product's OWN
@@ -242,9 +277,20 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         apiRequestCount: requests.length,
         apiRequests: requests,
         apiResponses: responses,
-        lateMutations,
+        /*
+         * THE SAME CLOCK AS EVERYTHING ELSE.
+         *
+         * `apiRequests`/`apiResponses` above are stamped with Date.now() in the NODE driver, from a
+         * t0 taken before page.goto. The probe and the readiness chain stamp performance.now() in
+         * the PAGE, whose origin is navigationStart. Comparing them made the drawer VM response
+         * look like it landed AFTER the completion it causes — an origin offset reported as a
+         * causal contradiction. Resource timing answers on the page's own clock, so these entries
+         * are the ones any causal claim must be built from.
+         */
+        apiTimingBrowserClock,
         focusChain,
         drawerVmTiming,
+        drawerVmServerHeaders,
         retiredReadProbe: {
             eppEnrichmentHttp: requests.filter((r) => /effective-enrollment|epp/i.test(r.url)).length,
             tourEnrichmentHttp: requests.filter((r) => /tour-bookings|active-tour/i.test(r.url)).length,
