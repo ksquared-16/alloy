@@ -77,8 +77,8 @@ import {
     type OperationalPresentation,
 } from "./operationalPresentation";
 import { resolveQueueRowLayoutServer } from "@/lib/layout/runtime/queueRowLayoutServer";
-import { attachEffectiveEnrollmentStagesToOpportunityRows } from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
-import { attachActiveTourFactsToOpportunityRows } from "@/lib/tours/queue/attachActiveTourFactsToOpportunityRows";
+import { attachEffectiveStagesFromMaintainedFacts } from "@/lib/process/definitions/enrollment/maintainedParticipantFacts";
+import { attachActiveTourFactsFromMaintainedFacts } from "@/lib/tours/queue/attachActiveTourFactsToOpportunityRows";
 import {
     effectiveParticipantStageKeysFromRow,
     resolveContextMissionStages,
@@ -156,6 +156,8 @@ import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/f
  */
 import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
+import { resolveParticipantScope } from "@/lib/adminV2/runtime/operationalContext/resolveParticipantScope";
+import { participantCandidatesFromTruth } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
 export const PROVISIONING_ROW_PAGE_CAP = 100;
@@ -710,6 +712,41 @@ export function resolveLensRowGrain(
 }
 
 /** THE BOUNDED PROVISIONING ANSWER. */
+
+/**
+ * THE SOLE PARTICIPANT, STATED AT COMMIT BECAUSE THE ANSWER ALREADY HOLDS IT.
+ *
+ * Same declaration-not-a-read pattern as `customer.id` above, for the other identity. Measured on
+ * deployed staging: Attendance, Health & Safety and Children could not MOUNT at commit because
+ * commit truth never said WHICH child the panel was about. They mounted ~3.3s later, and that late
+ * mount re-rendered the shared Summary grid — giving all six visible areas one final timestamp
+ * despite first paints spread over 3.3s. This removes that wait by stating the identity, not by
+ * loosening any readiness rule.
+ *
+ * No query is added and no participant is exposed that the operator was not already sent: the
+ * candidates are the `_inquiry_children` this very binding already carries.
+ *
+ * Nothing is guessed. The decision is `resolveParticipantScope` — the one existing authority, which
+ * returns a scope only for an explicit selection or a SOLE participant and refuses `ambiguous`
+ * outright — over `participantCandidatesFromTruth`, the one existing mapper. A family with several
+ * children still states nothing and its participant cards still reserve, which is the truthful
+ * answer when the panel genuinely cannot say which child it is about.
+ */
+export function soleParticipantIdentityBindings(inquiryChildren: unknown): Record<string, string> {
+    if (!Array.isArray(inquiryChildren) || inquiryChildren.length === 0) return {};
+    const resolved = resolveParticipantScope({
+        participants: participantCandidatesFromTruth({ _inquiry_children: inquiryChildren }),
+    });
+    const scope = resolved.scope;
+    // Both keys or neither: `participantScopeFromChildSubjectTruth` requires the participation id
+    // too, and a member id without one is not a participation it will accept.
+    if (!scope?.customerMemberId || !scope.participationId) return {};
+    return {
+        "child.customer_member_id": scope.customerMemberId,
+        "child.process_instance_id": scope.participationId,
+    };
+}
+
 export async function composeWorkUnitProvisioningAnswer(
     req: ProvisioningRequest,
 ): Promise<ProvisioningAnswer> {
@@ -1196,20 +1233,25 @@ export async function composeWorkUnitProvisioningAnswer(
         // opportunity_stage predicates use `_effective_participant_stage_keys`, not raw
         // `opportunities.stage_key`. Without this, families remain in Lead after every
         // child has diverged to Waitlist.
-        const baseWithEpp = await attachEffectiveEnrollmentStagesToOpportunityRows({
-            supabase: req.supabase,
-            orgId: req.orgId,
-            rows: (baseRows ?? []) as Array<Record<string, unknown>>,
-            logLabel: "provisioning",
-        });
-        // Active Tour facts before Work View predicates — family-grain Tours lenses filter on
-        // operational booking truth (`has_active_tour`), not stage_key alone.
-        const baseWithTourFacts = await attachActiveTourFactsToOpportunityRows({
-            supabase: req.supabase,
-            orgId: req.orgId,
-            rows: baseWithEpp,
-            logLabel: "provisioning",
-        });
+        /*
+         * ── TWO ROUND TRIPS RETIRED, NOT HIDDEN ──
+         *
+         * These were two awaited database enrichments between the records read and the evaluator, so
+         * the evaluated page cost THREE serial round trips for one page of rows. Both were already
+         * PURE derivations that simply had nowhere to get their rows from.
+         *
+         * The rows now arrive WITH the opportunity — `maintained_operational_facts`, maintained
+         * transactionally by the authority that changes each fact — so the derivations stay exactly
+         * where they were and the reads are gone. Not cached, not prefetched, not parallelised: gone.
+         *
+         * Both calls are SYNCHRONOUS, and that is the enforcement. An async signature is what let a
+         * round trip hide in the middle of this path; a pure function cannot grow one without
+         * changing shape.
+         */
+        const baseWithEpp = attachEffectiveStagesFromMaintainedFacts(
+            (baseRows ?? []) as Array<Record<string, unknown>>,
+        );
+        const baseWithTourFacts = attachActiveTourFactsFromMaintainedFacts(baseWithEpp);
         const projection = computeOperationalProjection({
             baseRows: baseWithTourFacts as OperationalProjectionRow[],
             workViews: [activeView], // only the active lens — no count fan-out, no second evaluation
@@ -1919,6 +1961,8 @@ export async function composeWorkUnitProvisioningAnswer(
         ...(primaryContactPhone ? { "person.primary_phone": primaryContactPhone } : {}),
         ...(primaryContactEmail ? { "person.primary_email": primaryContactEmail } : {}),
         ...(inquiryChildren != null ? { _inquiry_children: inquiryChildren } : {}),
+        // The scoped participant, when the case has exactly one. See the helper: refuses ambiguity.
+        ...(childComposition ? {} : soleParticipantIdentityBindings(inquiryChildren)),
         // Context Mission metadata (family grain) — presentation may aggregate participant count;
         // never invents stage labels (keys only; labels come from stage records / runtime).
         ...(!childComposition && familyMissionStageKeys.length

@@ -1,0 +1,398 @@
+/**
+ * THE VISIBLE-COMPLETION PROBE — one implementation, used twice.
+ *
+ * Playwright serializes this function and runs it in the page, so it must be entirely
+ * self-contained: no imports, no closure over module scope. That constraint is also what makes it
+ * TESTABLE — the same function runs under jsdom, where a unit test can build a DOM, mutate it and
+ * assert what the probe concluded.
+ *
+ * That matters because this logic has already been wrong twice in ways a deployed sample caught only
+ * by accident: attributing to the nearest BLOCKING ancestor made the shell own the whole page, and
+ * memoizing containment in both directions pinned the shell as a leaf before its children existed.
+ * Neither is reachable by reading the code; both are trivial to state as a test. A probe that lives
+ * only inside an init script cannot be certified, so it moved out here rather than being copied.
+ *
+ * Everything it records is hung off `window` under `__p076*` for the harness to read back.
+ */
+export function installVisibleCompletionProbe(): void {
+    const w = window as unknown as { __p076?: { t0: number; last: number; count: number } };
+    w.__p076 = { t0: Date.now(), last: Date.now(), count: 0 };
+    /*
+     * PER-REGION ATTRIBUTION, not DOM-wide quiescence.
+     *
+     * Every visible region carries data-alloy-section-id from the canonical section registry, so
+     * each mutation can be attributed to the region that owns it. DOM-wide quiescence answers
+     * WHEN the page stopped changing; it cannot say WHICH visible region changed last, and the
+     * communications finding showed that distinction decides the whole programme.
+     *
+     * Mutations outside any registered section are recorded as "__unattributed" rather than
+     * dropped — if completion is being set by unattributed churn, that is the finding.
+     */
+    const R = (window as unknown as { __p076r?: Record<string, {first:number;last:number;count:number}> });
+    R.__p076r = {};
+    const attribute = (n: Node | null): string => {
+        let el: Node | null = n;
+        while (el && el.nodeType !== 1) el = el.parentNode;
+        let cur = el as Element | null;
+        while (cur) {
+            const id = cur.getAttribute?.("data-alloy-section-id");
+            if (id) return id;
+            cur = cur.parentElement;
+        }
+        return "__unattributed";
+    };
+    /*
+     * ── METRIC V2: WHAT KIND OF CHANGE WAS THAT? ──
+     *
+     * V1 answered "when did the DOM stop changing for N ms". That is not a property of the
+     * product: the same page measured 4,697ms at N=3s and 7,155ms at N=8s. The number tracked
+     * the window, because a surface that animates, prewarms and polls NEVER goes quiet — so the
+     * answer was always "the last background twitch", whenever the observer happened to give up.
+     *
+     * V2 asks a question the page can actually answer: WHEN DID THE LAST CHANGE THAT AN OPERATOR
+     * WOULD CALL "STILL LOADING" HAPPEN, INSIDE A REGION THAT BLOCKS THE SURFACE?
+     *
+     * Two independent narrowings, and both are needed:
+     *
+     *   1. BLOCKING, read from `data-alloy-section-blocking`, which alloySectionMap emits. The
+     *      registry is the one place that says what blocks; this file does not keep a second
+     *      list to drift against it. Communications proved why: it churns for seconds after the
+     *      surface is usable, and it is not first-paint — counting it was the whole error.
+     *
+     *   2. AUTHORITATIVE, not presentational. A fade settling is not the surface still arriving.
+     */
+    type Kind = "AUTHORITATIVE_DATA" | "AUTHORITATIVE_STRUCTURE" | "PRESENTATIONAL_ANIMATION";
+    const ANIMATION_ATTRS = new Set(["class", "style", "aria-busy", "aria-hidden"]);
+    const classify = (r: MutationRecord): Kind => {
+        if (r.type === "attributes") {
+            const n = r.attributeName ?? "";
+            // class/style/aria-busy carry the transitions, skeleton swaps and busy flags. They
+            // change constantly and none of them means "data is still arriving".
+            if (ANIMATION_ATTRS.has(n) || /^data-(motion|anim|transition|framer)/.test(n)) {
+                return "PRESENTATIONAL_ANIMATION";
+            }
+            return "AUTHORITATIVE_DATA";
+        }
+        if (r.type === "characterData") return "AUTHORITATIVE_DATA";
+        // childList: an element appearing or leaving is structure; text-only churn is data.
+        const els = [...Array.from(r.addedNodes), ...Array.from(r.removedNodes)]
+            .filter((n) => n.nodeType === 1).length;
+        return els > 0 ? "AUTHORITATIVE_STRUCTURE" : "AUTHORITATIVE_DATA";
+    };
+
+    /*
+     * RESERVED GEOMETRY IS NOT DATA (Track-A finality).
+     *
+     * Track-A reserves the card's space first and fills it when the answer resolves. Both are
+     * structural mutations, so a rule counting "any authoritative mutation" marks the section final
+     * the moment the EMPTY BOX appears — the one moment an operator would certainly not call it
+     * done. The product already says which state it is in; these are its own markers, not invented
+     * ones: data-settlement-reserved, *-skeleton, data-*-pending, data-placeholder.
+     */
+    const PLACEHOLDER_ATTR = /(^data-placeholder$)|(-skeleton(-[a-z]+)?$)|(-reserved$)|(-pending$)/;
+    const isPlaceholderNode = (n: Node | null): boolean => {
+        let el: Node | null = n;
+        while (el && el.nodeType !== 1) el = el.parentNode;
+        let cur = el as Element | null;
+        let hops = 0;
+        while (cur && hops < 6) {
+            const attrs = cur.attributes;
+            for (let i = 0; i < attrs.length; i++) {
+                const a = attrs[i];
+                if (PLACEHOLDER_ATTR.test(a.name) && a.value !== "false") return true;
+            }
+            if (cur.getAttribute("data-alloy-section-id")) break;
+            cur = cur.parentElement;
+            hops++;
+        }
+        return false;
+    };
+
+    /*
+     * DESTINATION GENERATION.
+     *
+     * On A -> B -> C the earlier subjects' requests are still in flight and their answers still
+     * mutate the DOM. Counting them lets a stale subject's late data declare the CURRENT
+     * destination complete — "finished" while showing a record the operator already left. The panel
+     * stamps its own subject; that stamp is the generation.
+     */
+    /** The destination the surface is settling on RIGHT NOW, read from the live DOM. */
+    const currentGeneration = (): string | null =>
+        document.querySelector("[data-inline-focus-panel-subject]")
+            ?.getAttribute("data-inline-focus-panel-subject") ?? null;
+
+    const generationOf = (n: Node | null): string | null => {
+        let el: Node | null = n;
+        while (el && el.nodeType !== 1) el = el.parentNode;
+        let cur = el as Element | null;
+        while (cur) {
+            const g = cur.getAttribute?.("data-inline-focus-panel-subject");
+            if (g) return g;
+            cur = cur.parentElement;
+        }
+        return null;
+    };
+
+    /*
+     * THE OWNING SECTION, AND WHY "NEAREST BLOCKING ANCESTOR" WAS THE WRONG QUESTION.
+     *
+     * First cut walked up to the nearest ancestor marked blocking. Measured against deployed
+     * staging that produced V2 == V1 to the millisecond on both windows (9306/9306, 9086/9086),
+     * with every sample blaming WU-00 — because WU-00 is the persistent OS shell, an ancestor of
+     * the entire page. "Inside a blocking section" was true of every mutation on the surface, so
+     * the narrowing narrowed nothing and V2 was V1 wearing a different name.
+     *
+     * A section that CONTAINS another registered section is a container, not a region that
+     * paints. So attribute each mutation to its LEAF-MOST section and ignore containers: churn
+     * whose closest owner is the shell is, by construction, outside every content region.
+     *
+     * Derived live from the DOM — no id is named here, so this cannot drift from the registry
+     * and needs no second list of "things that do not count".
+     */
+    /*
+     * Memoize only the POSITIVE. "Is a container" is time-varying in one direction: the shell
+     * exists before the regions inside it do, so the first mutation on WU-00 sees no descendant
+     * section and a two-sided cache pins it as a leaf for the rest of the run — which is exactly
+     * what happened, and left WU-00 driving completion again after the rule was added.
+     * Once a section has contained another, it never stops having done so.
+     */
+    const knownContainer = new WeakSet<Element>();
+    const isContainer = (el: Element): boolean => {
+        // DECLARED by the registry. The structural test below cannot see that the persistent shell
+        // is a wrapper while it happens to contain no identified section — which is exactly the
+        // state a coverage regression produces, and it handed the whole surface back to WU-00.
+        if (el.getAttribute("data-alloy-section-container") === "true") return true;
+        if (knownContainer.has(el)) return true;
+        if (el.querySelector("[data-alloy-section-id]")) {
+            knownContainer.add(el);
+            return true;
+        }
+        return false;
+    };
+    const blockingHost = (n: Node | null): string | null => {
+        let el: Node | null = n;
+        while (el && el.nodeType !== 1) el = el.parentNode;
+        let cur = el as Element | null;
+        while (cur) {
+            const id = cur.getAttribute?.("data-alloy-section-id");
+            if (id) {
+                // Leaf-most section owns it. A container owns nothing it does not paint itself.
+                if (isContainer(cur)) return null;
+                return cur.getAttribute("data-alloy-section-blocking") === "true" ? id : null;
+            }
+            cur = cur.parentElement;
+        }
+        return null;
+    };
+
+    /*
+     * PER-AREA ATTRIBUTION, using identity the product already emits.
+     *
+     * FocusPanelCardRenderer stamps data-universal-card-key on every MOUNTED card; reserved cells
+     * carry none. So this attributes only cards that actually mounted — the distinction that
+     * matters here, because a card is not mounted at all until its readiness is "ready" or
+     * "self_loading", and the three self-loading areas own their own reads. No parallel card list
+     * is introduced: the DOM is asked.
+     */
+    const cardKeysFor = (n: Node | null): string[] => {
+        let el: Node | null = n;
+        while (el && el.nodeType !== 1) el = el.parentNode;
+        const start = el as Element | null;
+        if (!start) return [];
+        // 1) The mutation happened INSIDE a card.
+        let cur: Element | null = start;
+        while (cur) {
+            const k = cur.getAttribute?.("data-universal-card-key");
+            if (k) return [k];
+            cur = cur.parentElement;
+        }
+        /*
+         * 2) The mutation ADDED a subtree CONTAINING cards.
+         *
+         * This is the case that matters and the one an upward-only walk silently drops: the Summary
+         * burst attaches a whole grid subtree in one record, so the added node is an ANCESTOR of the
+         * cards. Walking up from it finds no key, and only cards that later mutate individually get
+         * attributed — which reported 2 areas out of the five visibly painting, while the
+         * max-per-area reconciliation still passed because those two happened to land in the same
+         * batch. Coverage has to be asked for downward as well.
+         */
+        const found = start.querySelectorAll?.("[data-universal-card-key]");
+        if (!found || found.length === 0) return [];
+        const keys: string[] = [];
+        found.forEach((e) => {
+            const k = e.getAttribute("data-universal-card-key");
+            if (k && !keys.includes(k)) keys.push(k);
+        });
+        return keys;
+    };
+
+    const V2 = window as unknown as {
+        __p076v2?: {
+            lastBlockingAuthoritativeMs: number;
+            perSection: Record<string, {
+                firstMs: number;
+                lastMs: number;
+                lastVisibleMs: number;
+                data: number;
+                structure: number;
+                anim: number;
+                imageExpected: boolean;
+                imageFinalMs: number;
+            }>;
+            kinds: Record<Kind, number>;
+            blockingSeen: string[];
+            latestGeneration: string | null;
+            staleGenerationSuppressed: number;
+            placeholderSuppressed: number;
+            perCard: Record<string, { firstMs: number; lastMs: number; auth: number; anim: number }>;
+        };
+    };
+    V2.__p076v2 = {
+        lastBlockingAuthoritativeMs: -1,
+        perSection: {},
+        kinds: { AUTHORITATIVE_DATA: 0, AUTHORITATIVE_STRUCTURE: 0, PRESENTATIONAL_ANIMATION: 0 },
+        blockingSeen: [],
+        latestGeneration: null,
+        staleGenerationSuppressed: 0,
+        placeholderSuppressed: 0,
+        perCard: {},
+    };
+
+    const mark = (recs?: MutationRecord[]) => {
+        const now = Date.now();
+        w.__p076!.last = now; w.__p076!.count++;
+        for (const r of recs ?? []) {
+            const key = attribute(r.target);
+            const t = now - w.__p076!.t0;
+            const e = R.__p076r![key] ?? { first: t, last: t, count: 0 };
+            e.last = t; e.count++;
+            R.__p076r![key] = e;
+
+            // ── V2 ──
+            const kind = classify(r);
+            const v2 = V2.__p076v2!;
+            v2.kinds[kind]++;
+            /*
+             * A childList record's `target` is the PARENT. Judging the parent asks "where did
+             * something change", when finality is a question about WHAT ARRIVED — the reserved
+             * wrapper and the stale-subject block are the added nodes, and inspecting their
+             * container silently classified both as ordinary content.
+             *
+             * Computed once here because BOTH the section and the per-area paths need the same
+             * answer; deriving it twice would let them disagree.
+             */
+            const arrived = Array.from(r.addedNodes).filter((n) => n.nodeType === 1);
+            const judged: Node[] = arrived.length ? arrived : [r.target];
+
+            const live = currentGeneration();
+            if (live) v2.latestGeneration = live;
+            const genOfMutation = generationOf(judged[0]);
+            const stale = genOfMutation !== null && live !== null && genOfMutation !== live;
+
+            const host = blockingHost(r.target);
+            if (host) {
+                if (!v2.blockingSeen.includes(host)) v2.blockingSeen.push(host);
+                const ps = v2.perSection[host] ?? {
+                    firstMs: t, lastMs: -1, lastVisibleMs: -1,
+                    data: 0, structure: 0, anim: 0,
+                    imageExpected: false, imageFinalMs: -1,
+                };
+                // FINAL_VISIBLE_MS counts every visible change, animation included: the honest
+                // "when did this region stop moving at all". The gap between it and lastMs is the
+                // trailing motion V1 was billing as loading, measured per region not asserted.
+                ps.lastVisibleMs = t;
+
+                if (kind === "PRESENTATIONAL_ANIMATION") {
+                    ps.anim++;
+                } else if (stale) {
+                    v2.staleGenerationSuppressed++;
+                } else if (judged.every(isPlaceholderNode)) {
+                    // Reserved space arrived, not the answer. Activity, never finality.
+                    v2.placeholderSuppressed++;
+                } else {
+                    if (kind === "AUTHORITATIVE_DATA") ps.data++; else ps.structure++;
+                    ps.lastMs = t;
+                    // THE METRIC. Only an authoritative change, only inside a blocking region.
+                    if (t > v2.lastBlockingAuthoritativeMs) v2.lastBlockingAuthoritativeMs = t;
+                }
+                v2.perSection[host] = ps;
+            }
+
+            /*
+             * The SAME mutation, attributed to its AREA. Deliberately outside the blocking-host
+             * branch: a card's paint is worth timing wherever it lands, and the section rules above
+             * have already decided what counts toward completion.
+             */
+            const cards = stale ? [] : judged.flatMap((j) => cardKeysFor(j));
+            for (const card of cards) {
+                const pc = v2.perCard[card] ?? { firstMs: -1, lastMs: -1, auth: 0, anim: 0 };
+                if (kind === "PRESENTATIONAL_ANIMATION") {
+                    pc.anim++;
+                } else if (!judged.every(isPlaceholderNode)) {
+                    pc.auth++;
+                    if (pc.firstMs < 0) pc.firstMs = t;
+                    pc.lastMs = t;
+                }
+                v2.perCard[card] = pc;
+            }
+
+            /*
+             * WHAT mutated, not just where. WU-00 is an outer wrapper, so nearest-ancestor
+             * attribution makes it a catch-all; without the target's identity we cannot tell
+             * genuine late first-order content from shell churn, and that distinction is the
+             * whole question.
+             */
+            const LATE = (window as unknown as { __p076late?: unknown[] });
+            LATE.__p076late = LATE.__p076late || [];
+            if (t > 4000 && (LATE.__p076late as unknown[]).length < 80) {
+                const el = (r.target.nodeType === 1 ? r.target : r.target.parentElement) as Element | null;
+                (LATE.__p076late as unknown[]).push({
+                    t, region: key, kind, blocking: host,
+                    type: r.type,
+                    tag: el?.tagName ?? null,
+                    cls: (el?.getAttribute?.("class") || "").slice(0, 70),
+                    txt: (el?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60),
+                    added: r.addedNodes?.length ?? 0,
+                });
+            }
+        }
+    };
+    // addInitScript runs BEFORE the document is parsed, so documentElement can be null and
+    // observe() then fails silently — which reported visibleComplete=0 on five straight samples.
+    // Observing `document` works from the same point and survives the parse.
+    /*
+     * IMAGE FINALITY. A section whose avatar has not decoded is not final, and a decode lands with
+     * NO DOM mutation — so mutation evidence alone calls it done early, systematically on exactly
+     * the sections that carry images. Captured on the capture phase: load/error do not bubble.
+     * Attributed through the same leaf-most rule as everything else.
+     */
+    const imageSettled = (e: Event) => {
+        const el = e.target as Element | null;
+        if (!el || el.tagName !== "IMG") return;
+        const host = blockingHost(el);
+        if (!host) return;
+        const store = V2.__p076v2;
+        if (!store) return;
+        const t = Date.now() - w.__p076!.t0;
+        const ps = store.perSection[host] ?? {
+            firstMs: t, lastMs: -1, lastVisibleMs: t,
+            data: 0, structure: 0, anim: 0,
+            imageExpected: false, imageFinalMs: -1,
+        };
+        ps.imageExpected = true;
+        if (t > ps.imageFinalMs) ps.imageFinalMs = t;
+        store.perSection[host] = ps;
+    };
+    document.addEventListener("load", imageSettled, true);
+    document.addEventListener("error", imageSettled, true);
+
+    const attach = () => {
+        try {
+            new MutationObserver((recs) => mark(recs)).observe(document, {
+                childList: true, subtree: true, characterData: true, attributes: true,
+            });
+        } catch { /* retried below */ }
+    };
+    attach();
+    document.addEventListener("DOMContentLoaded", attach, { once: true });
+}

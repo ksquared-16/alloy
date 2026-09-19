@@ -16,6 +16,7 @@ import { broadcastWorkspaceMutation } from "@/lib/adminV2/workspaceRefreshBroadc
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import { useCommandRailActionPending } from "@/components/presentation/rightRail/useCommandRailActionPending";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 
 type Props = {
     actions: ResolvedActionForClient[];
@@ -84,6 +85,7 @@ function WorkspaceCommandRailActionsBody({ actions, defaultDepartmentId }: Props
         <section
             className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel adminv2-ws-command-section--primary"
             data-workspace-command-rail-actions="true"
+            {...alloySectionDomAttrs("WS-07")}
             aria-label="Workspace actions"
         >
             <ul className="adminv2-command-rail-executable-actions">
