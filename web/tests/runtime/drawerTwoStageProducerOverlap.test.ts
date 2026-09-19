@@ -57,7 +57,13 @@ describe("the document owns first-order producer truth", () => {
          * businessProcess and currentWork are pure projections of whichever context builds them,
          * and the settled one is legitimately richer. Only `cards` changes hands.
          */
-        expect(CONTEXT).toContain("firstOrderProducerCardsOwned");
+        /*
+         * The CALL SITE, not the symbol. Asserting the helper merely EXISTS passed while the
+         * context had gone back to assigning the drawer's projection directly — the exact defect
+         * this gate is for, sitting green.
+         */
+        const assignment = CONTEXT.slice(CONTEXT.indexOf("operationalProjection:"));
+        expect(assignment.slice(0, 200)).toContain("firstOrderProducerCardsOwned(");
         const fn = CONTEXT.slice(CONTEXT.indexOf("function firstOrderProducerCardsOwned"));
         const body = fn.slice(0, fn.indexOf("\n}"));
         expect(body).toContain("cards: owned");
