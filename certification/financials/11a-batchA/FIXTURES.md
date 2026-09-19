@@ -157,3 +157,14 @@ The weekly one additionally needs a **weekly billing frequency** on a tuition pl
 currently has Monthly and Semi-Annual only. The canonical writer is the registered
 `enrollment.pricing.accept` action (operator surface: `AssignmentTuitionCard`, which is **not**
 mounted on the enrolled-children Focus Panel).
+
+## Core closure run (`erun_136ed6ec4b461461`) — certification residue
+
+| Mutation | Identity |
+|---|---|
+| Payment allocation $75.00 → Registration fee `907d1b64` | allocation `a17f53c4-e4f8-454c-9d34-27f42bea6a7f`, payment `7ca91075-1b80-4584-a722-c769d5241ff8` |
+
+Account now sits at **Balance −$37.13** with **$125.00 available prepaid** — a certification state,
+not a Human-QA starting state. See `11a-cf/HUMAN-QA-FIXTURE-BLUEPRINT.md`.
+
+No commercial configuration was created this run; the four missing pieces are named in the blueprint.
