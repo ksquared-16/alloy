@@ -144,6 +144,12 @@ export default function AssignmentTuitionCard({
     composerPreview,
 }: Props) {
     const [expanded, setExpanded] = useState(false);
+    /*
+     * Read once per mount. "Which period are we in" is a question about now, and a value that
+     * changed on every render would make the line flicker across a midnight boundary for no
+     * operator benefit.
+     */
+    const todayYmd = useMemo(() => new Date().toISOString().slice(0, 10), []);
     useEffect(() => {
         if (composerPreview?.perspective === "expanded") setExpanded(true);
     }, [composerPreview]);
@@ -324,8 +330,16 @@ export default function AssignmentTuitionCard({
                 const accepted = view.accepted;
                 const acceptedOption =
                     view.applicable.find((o) => o.sourceId === accepted?.source.id) ?? null;
-                /* The commercial interval the accepted term implies — derived by its own authority. */
-                const billingPeriods = acceptedTermBillingPeriods(accepted, view.facts.asOf);
+                /*
+                 * The commercial interval the accepted term implies — derived by its own authority.
+                 *
+                 * TODAY, not the resolution date. The first version passed `view.facts.asOf`, which
+                 * is the date the price was RESOLVED — the assignment's start — so a term accepted
+                 * on the 1st reported "Billing period Sep 1–7" on the 19th. That is the period the
+                 * term began in, labelled as the one the assignment is in now, which is a different
+                 * fact and the wrong one.
+                 */
+                const billingPeriods = acceptedTermBillingPeriods(accepted, todayYmd);
                 return (
                     <section
                         key={view.opportunityCustomerMemberId}

@@ -67,6 +67,16 @@ describe("THE GATE — the tuition card states a period it did not calculate", (
         expect(card).not.toMatch(/billingPeriodsBetween|addDays|setUTCDate/);
     });
 
+    /*
+     * THE PERIOD IT IS IN NOW, not the one the term began in. The first version passed the
+     * resolution date — the assignment start — so a term accepted on the 1st reported the first
+     * week of the month on the 19th: the right shape and the wrong fact.
+     */
+    it("asks which period we are in now", () => {
+        expect(card).toMatch(/acceptedTermBillingPeriods\(accepted, todayYmd\)/);
+        expect(card, "and reads today once per mount").toMatch(/const todayYmd = useMemo/);
+    });
+
     /* Generation stays Financials-owned: this surface is READ context, not a command. */
     it("offers no generate control", () => {
         expect(card).not.toMatch(/generate_tuition|Generate tuition/i);
