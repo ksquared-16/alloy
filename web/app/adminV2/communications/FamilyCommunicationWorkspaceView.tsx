@@ -1430,17 +1430,17 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     <div data-cc-thread-header className="flex shrink-0 items-start justify-between gap-2 border-b border-alloy-stone/20 bg-white px-3 py-2">
                         <div className="min-w-0 flex-1">
                         {/*
-                          * "New Message" is not said twice.
+                          * KEPT, though the Focus Panel's own action panel is already titled "Contact
+                          * Family" or "Send enrollment paperwork" and this repeats it.
                           *
-                          * In the Focus Panel the surrounding action panel is already titled — "Contact
-                          * Family", "Send enrollment paperwork" — so this bar repeated it 37px above the
-                          * body, in a host where the body had 31% of the height. The full-height
-                          * Communications workspace has no such title and keeps it.
+                          * Removing it was tried and measured: the row's height is set by the "+ New"
+                          * chip beside it, so the composer gained nothing, and
+                          * `familyWorkspaceActivityEmbed.threadSwitch` reads these words as the proof
+                          * that the surface entered New Message mode. Zero pixels is not worth a
+                          * certified guard.
                           */}
                         {isNewMessageMode ? (
-                            isActivityEmbed ? null : (
-                                <div className="text-[12px] font-semibold text-alloy-juniper">New Message</div>
-                            )
+                            <div className="text-[12px] font-semibold text-alloy-juniper">New Message</div>
                         ) : activeThread ? (
                             (() => {
                                 const headerTitle = threadDisplayTitle(activeThread, timelineMessages);

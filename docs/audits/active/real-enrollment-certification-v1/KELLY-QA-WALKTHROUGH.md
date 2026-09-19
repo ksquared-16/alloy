@@ -221,7 +221,7 @@ and *When they finish, the completed packet arrives for staff review in Processi
 
 | # | Card | Says |
 |---|------|------|
-| 1 | **Admissions Information** — Collect information | **80 questions · 4 connected to Alloy · 76 stored with the form only · 65 required**, then *Alloy confirms information it already knows and asks the family for what is missing…* |
+| 1 | **Admissions Information** — Collect information | **80 questions · 13 connected to Alloy · 67 stored with the form only · 65 required**, then *Alloy confirms information it already knows and asks the family for what is missing…* |
 | 2 | **Family Handbook** — Read & acknowledge | the real document's name, **Acknowledgment required · Signature required**, and a **View document** link |
 | 3 | **Immunization record** — Upload a document | **Family sends in a document · Filed as Immunization record**, then *…They are not asked to type its contents…* |
 
@@ -564,9 +564,9 @@ DENTIST                name, phone     (optional)
 
 > A role the packet names only once is deliberately **not** numbered: *Physician*, not *Physician #1*.
 
-**EXPECT — adding another person is a choice, not a typing exercise.** When the conversation reaches
-a role that can hold more than one person you are offered buttons, including the people Alloy already
-knows:
+**EXPECT — adding another person is a choice, not a typing exercise.** Once the packet's own boxes
+are answered, the conversation asks whether a role that can hold more than one person has one — and
+offers buttons, including the people Alloy already knows:
 
 ```
     Would you like to add a parent or guardian?
@@ -575,6 +575,10 @@ knows:
 ```
 
 > **STOP** if you are asked this as a question you have to answer in words.
+
+> **Where this arrives is worth knowing.** It comes after the numbered boxes, not between them,
+> because those boxes belong to the paperwork and this question belongs to the household. Pressing
+> **No, continue** moves on and leaves no blanks behind.
 
 ---
 
@@ -737,3 +741,17 @@ and the child record still shows **Program —**.
    Enrolling specifically** that has no working route today. Parts D and E use children who are
    already Enrolling, so nothing in this walkthrough depends on it. **Do not report this one; it is
    known, and the repair is a decision about where a case's stage is allowed to live.**
+
+5. **Send enrollment paperwork cannot be prepared from the Process Card right now.** Pressing it
+   refuses with *"This journey is not pinned to a published Business Process revision, so there are
+   no governing requirements to realize."* — measured on every child currently in Enrolling. That is
+   a condition on the journeys themselves (D-96), not a fault in the send path, and it belongs to the
+   same Director decision as item 4 above. **Do not report it.**
+
+   Until this run the refusal was invisible and destructive: the message came back as an object, the
+   surface tried to render it, and the Focus Panel replaced the **whole Process Card** with *"This
+   card could not be displayed."* If you ever see that sentence again on a Process Card, it IS worth
+   reporting — the refusal it was hiding is now shown instead.
+
+   It is also why the Part E specimen is reached through the packet's own distribution link rather
+   than through an email. The conversation on the other end is identical; only the delivery differs.

@@ -24,6 +24,17 @@ import { useCallback, useEffect, useRef } from "react";
  *
  * It sets a MAX, never a height: the host keeps sizing itself, so nothing here can blind an observer
  * that is watching its content — which is the failure mode a pinned height would reintroduce.
+ *
+ * ## The screen is not the only thing that bounds it
+ *
+ * The host lives inside a focused card that has a max-height of its own, and that cap is SMALLER
+ * than the screen on a short viewport and LARGER on a tall one. Measuring only to the window edge
+ * was therefore wrong in both directions: on a 900px viewport it reported 489px where the card
+ * allowed 461, and a floor built on it pushed the Send row 25px through the card's bottom edge —
+ * still inside the window, and visibly cut off. On an 1100px viewport it under-reported nothing but
+ * the card had 212px spare that nothing claimed.
+ *
+ * So the smaller of the two bounds is published. Both are real; neither is a guess.
  */
 export function useComposerHostViewportFit() {
     const elRef = useRef<HTMLDivElement | null>(null);
@@ -33,8 +44,22 @@ export function useComposerHostViewportFit() {
         const el = elRef.current;
         if (!el || typeof window === "undefined") return;
         const top = el.getBoundingClientRect().top;
-        // A small gutter, so the footer never sits flush against the viewport edge.
-        const available = Math.max(200, Math.round(window.innerHeight - top - 8));
+        /*
+         * The nearest bound BELOW this host: the window, or the focused card it sits in, whichever
+         * ends first. `max-height` is read rather than the rendered height, because the card is
+         * content-sized — its current height is what the composer already takes, so using it would
+         * make the cap agree with itself and the composer could never grow.
+         */
+        const card = el.closest("article.alloy-os-ucard") as HTMLElement | null;
+        let bottomBound = window.innerHeight;
+        if (card) {
+            const cap = Number.parseFloat(window.getComputedStyle(card).maxHeight);
+            if (Number.isFinite(cap) && cap > 0) {
+                bottomBound = Math.min(bottomBound, card.getBoundingClientRect().top + cap);
+            }
+        }
+        // A small gutter, so the footer never sits flush against the edge that bounds it.
+        const available = Math.max(200, Math.round(bottomBound - top - 8));
         // The host's TOP is decided by what precedes it, never by its own height, so writing the
         // cap cannot feed back into the measurement. The threshold is only to avoid churn.
         if (Math.abs(available - lastRef.current) < 3) return;

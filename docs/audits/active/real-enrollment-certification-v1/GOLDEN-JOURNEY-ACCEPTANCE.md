@@ -175,3 +175,67 @@ needs?"* — 68 characters, and one of the two questions this slice was asked ab
 does not merely lose its type; it never becomes a field at all. Since the published packet DOES
 contain that question, the real import did not take this path, and widening the cap blind would
 change what every other document produces. It is recorded here and left alone.
+
+---
+
+# Status against this specification — 19 September 2026
+
+The specification above is unchanged; this section records how much of it the product now meets, and
+what it took. Every line was driven in Chromium against a clean v9-backed conversation for **Lennon
+Kurzman** — a real child with a real date of birth in a real household, reached through the packet's
+own distribution link, carrying **no** `QA probe answer` and no `Not applicable`.
+
+| Acceptance rule | Status |
+|---|---|
+| 1 · A yes/no question offers Yes and No | **met** — 14 questions, authored as booleans in Admissions v9 |
+| 2 · A follow-up to a No is never asked | **met** — all four pairs driven, both directions |
+| 3 · What Alloy has is grouped by person and fits a screen | **met** — 2 blocks, 5 facts, no Show-more |
+| 4 · What the family told us is grouped the same way, still correctable | **met** — 30 answers, 6 chapter lines, every Edit reachable behind *Review all answers* |
+| 5 · "What you told us" contains only what this family supplied | **met** |
+| 6 · No engineering value visible | **met** — the specimen contains none |
+| 7 · One question at a time, with the chapter named | **met** |
+
+## What the packet now says about itself
+
+```
+             v8            v9
+questions    80            80
+required     65            65
+text         79            65
+boolean       0            14
+conditional   0             4
+multiline     0            25
+```
+
+Nothing else moved: order, labels, sections, the thirteen canonical bindings, the four read-only
+destinations and the signature are byte-identical, verified from the product's own read-back.
+
+## The two losses that had to be repaired before v9 could be published at all
+
+Publishing v9 against the pre-change runtime was measured, and it was **worse** than v8: all
+fourteen new questions vanished from the conversation and all four follow-ups were asked regardless
+of the answer above them.
+
+**An unbound required boolean was always an attestation.** The rule separating "a statement the
+family accepts" from "a question the family answers" was structural — unbound, boolean, required —
+which is the exact shape of every one of the fourteen. They were classified as things to show beside
+a document and dropped, with the packet still reporting them complete. The separating property is
+grammar: an acknowledgement is a statement.
+
+**The participant projection never read `visibility`.** The Form schema has carried it since v1; the
+public renderer honours it and `validateSubmission` will not demand a hidden required field. The
+participant projection was the one reader that never asked.
+
+## What this specification still does not cover, and what is not yet met
+
+- **Chapters 0–6 are certified; chapter 7 is not.** Review, Handbook, Immunisation and completion
+  remain out of scope by the specification's own terms.
+- **The Process Card send path could not be used to make this specimen.** Preparing enrolment
+  paperwork for any child in this tenant refuses with *"This journey is not pinned to a published
+  Business Process revision"* (D-96). The specimen was made through the packet's own distribution
+  link, which is a supported product path and pins the current published version. The refusal itself
+  is a data condition on the journey, not a defect in the send path, and it belongs to the same
+  Director decision as `ENROLLING-ENTRY-DECISION.md`.
+- **One question cannot be expressed.** *"Does your child have any allergies? If so, please list."*
+  is a yes/no carrying its own detail, and the Form model has no single-destination primitive for
+  that. Recorded in `ADMISSIONS-V9-INTERACTION-SEMANTICS.md`.

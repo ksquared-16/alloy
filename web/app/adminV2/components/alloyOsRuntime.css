@@ -6596,6 +6596,36 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   max-height: min(70vh, 640px, var(--alloy-os-composer-available, 70vh));
 }
 
+/*
+ * CLAIM THE ROOM — but only on a screen that HAS room to claim.
+ *
+ * With a ceiling alone the composer was sized by its contents and stopped short of what it was
+ * allowed: measured at 900px it stood 448px tall with 465px available, and at 1100px it stood
+ * 448px tall with 663px available — a taller screen bought the message nothing at all. Adding the
+ * same expression as a floor fixes that, and on a short screen it breaks something worse.
+ *
+ * The arithmetic, measured rather than assumed. This composer's stack is 248px of header — channel,
+ * recipients, subject, formatting — plus a 45px footer, so it needs ~487px before the message body
+ * has any height of its own, and the host begins ~405px down because the record above it is real.
+ * Below roughly 890px of viewport there is nothing to claim, and a floor asserted anyway pushes the
+ * Send row through the bottom of the card. That is exactly what happened: measured at 900px the
+ * button sat at y=854-890 — inside the WINDOW, outside its own host, and visibly cut off. Three
+ * different bounds, and the assertion tested the one that was never the problem.
+ *
+ * So the floor applies from 1000px, the first round threshold safely above break-even; measured
+ * there, the body grows from 143px to 335px and the footer stays inside both host and card. Shorter
+ * screens keep today's behaviour exactly. Making it apply everywhere means making that 248px header
+ * smaller, which is a density change and a different slice.
+ *
+ * `height: 100%` was tried first and does nothing: every ancestor up to the card is content-sized,
+ * so the percentage has no definite height to resolve against.
+ */
+@media (min-height: 1000px) {
+  .alloy-os-currentwork__composer-host > .alloy-os-activity-cockpit__comms {
+    min-height: min(70vh, 640px, var(--alloy-os-composer-available, 70vh));
+  }
+}
+
 /* What's Next → Contact Family / Send Message / Tour Invitation: New Message focused.
  * History rail stays hidden while composing; composer body gets usable height. */
 .alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] {
@@ -6612,12 +6642,30 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   min-height: 0;
   overflow-y: auto;
 }
+/*
+ * THE COLUMN MUST BE ABLE TO SHRINK, or the floor above it has nowhere to land.
+ *
+ * `min-height: 12rem` was a guarantee that the composer had usable space, written when the host was
+ * sized by its contents and nothing else protected it. With the host now claiming exactly the space
+ * that exists, the same 12rem became the reason the stack could not FIT: measured at a 900px
+ * viewport the header, a 192px column floor and the footer summed to 485px inside a 465px host, and
+ * the Send row was pushed through the card's bottom edge. The guarantee it was making now lives on
+ * the editor itself (8.5rem), which is the thing it was actually protecting.
+ */
 .alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="composer"] {
   flex: 1 1 auto;
-  min-height: 12rem;
+  min-height: 0;
 }
+/*
+ * THE MESSAGE TAKES THE SPACE THE HOST GAINED.
+ *
+ * `min-height` alone made the body a fixed 143px however much room the host had, so every pixel the
+ * header stack gave back went to whitespace beneath the Send row rather than to the message. It
+ * grows and shrinks with the host now, and keeps the same floor it always had.
+ */
 .alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="composer"] [contenteditable="true"],
 .alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="composer"] textarea {
+  flex: 1 1 auto;
   min-height: 8.5rem;
 }
 .alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="threadlist"],
