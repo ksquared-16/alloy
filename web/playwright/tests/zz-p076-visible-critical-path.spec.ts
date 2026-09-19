@@ -92,6 +92,34 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
      */
     await page.addInitScript(installVisibleCompletionProbe);
 
+    /*
+     * OPTIONAL WARM-UP NAVIGATION — the normal operator path, not a manufactured cache hit.
+     *
+     * The product warms the drawer VM from exactly two events: a lens/pill switch, and a
+     * /workspace-surface load. A direct navigation to a work-unit URL performs NEITHER, which is
+     * why every cold sample missed the cache — NOT_STARTED, not eviction. An operator who lands on
+     * /workspace and then opens a Work Unit takes a different path, and this measures that path
+     * WITHOUT touching the product: visit the warm-up URL, let its idle prewarm run, then navigate
+     * and measure the second navigation exactly as before.
+     *
+     * The probe re-installs per document, so every timestamp below is relative to the MEASURED
+     * navigation, not the warm-up.
+     */
+    const WARM_URL = process.env.P076_WARM_URL || "";
+    let warmRequests = 0;
+    if (WARM_URL) {
+        const seen = (r: { url(): string }) => {
+            if (/\/api\/admin\/view-models\/drawer\/opportunity\//.test(r.url())) warmRequests++;
+        };
+        page.on("request", seen);
+        await page.goto(WARM_URL, { waitUntil: "domcontentloaded", timeout: 120_000 });
+        // The workspace prewarm fires on an idle callback (up to ~2.5s), so give it room to finish
+        // rather than racing it — a warm sample that did not warm proves nothing.
+        await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
+        await page.waitForTimeout(Number(process.env.P076_WARM_SETTLE_MS || 6000));
+        page.off("request", seen);
+    }
+
     const nav0 = Date.now();
     await page.goto(URL_PATH, { waitUntil: "domcontentloaded", timeout: 120_000 });
     const domMs = Date.now() - nav0;
@@ -275,6 +303,8 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         regions,
         valid: dataProbe.rows > 0 && !dataProbe.signedOut,
         apiRequestCount: requests.length,
+        warmUpUrl: WARM_URL || null,
+        warmUpDrawerVmRequests: warmRequests,
         apiRequests: requests,
         apiResponses: responses,
         /*

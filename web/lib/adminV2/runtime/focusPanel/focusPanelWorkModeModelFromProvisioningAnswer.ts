@@ -22,6 +22,7 @@ import {
 } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 import { participantScopeFromChildSubjectTruth } from "@/lib/adminV2/runtime/operationalContext/resolveParticipantScope";
+import type { OperationalParticipantScope } from "@/lib/adminV2/runtime/operationalContext/types";
 import { COMMIT_CRITICAL_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalCards";
 import { MOUNTABLE_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelMountableCards";
 import type { SubjectIdentityTruth } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
@@ -69,6 +70,18 @@ export type FocusPanelWorkModeFromAnswerInput = {
      */
     subjectIdentityTruth: SubjectIdentityTruth | null;
     /**
+     * THE AUTHORITATIVE PARTICIPATION, resolved by the caller from `process_instances`.
+     *
+     * The commit frame could only ever learn its child from `child.*` keys in
+     * `subjectIdentityTruth`, which a FAMILY-grain opportunity does not carry. So participantScope
+     * was null there, and the two participant-keyed producers reported `unavailable` on every
+     * measured sample while the drawer round trip re-learned the same fact. Passed in rather than
+     * resolved here because the resolver queries the database and this module is reachable from a
+     * client component — the same rule the drawer route already follows. Absent leaves every prior
+     * path untouched.
+     */
+    resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
+    /**
      * R2 — the SUBJECT GRAIN as resolved ONCE by the provisioning answer. Never re-derived here.
      *
      * This replaces two literals below (`grain: "case"`, `subject.type: "opportunity"`) that were simply
@@ -83,6 +96,29 @@ export type FocusPanelWorkModeFromAnswerInput = {
 };
 
 /** A real, authoritative-fields-only OperationalContext from the committed answer. No placeholder data. */
+/**
+ * The authoritative participation as a commit-frame scope.
+ *
+ * Identity only: the commit frame holds no candidate rows to borrow a name or photo from, and
+ * inventing either would put one child's presentation on another's card. The two producers this
+ * unblocks — Attendance and Health — read `customerMemberId` and nothing else, so identity is the
+ * whole requirement.
+ */
+function scopeFromResolvedParticipantForCommit(
+    resolved: { participationId: string; customerMemberId: string } | null,
+): OperationalParticipantScope | null {
+    if (!resolved) return null;
+    return {
+        participationId: resolved.participationId,
+        customerMemberId: resolved.customerMemberId,
+        personId: null,
+        displayName: null,
+        imageUrl: null,
+        stageKey: null,
+        stageLabel: null,
+    };
+}
+
 export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeFromAnswerInput): OperationalContext {
     const nextActionLabel = input.primaryAction?.label ?? null;
     return {
@@ -116,9 +152,17 @@ export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeF
          * `child.process_instance_id` are present — a scope that cannot be identified is not returned.
          * On any other grain it yields null and the card reserves exactly as before.
          */
-        participantScope: participantScopeFromChildSubjectTruth({
-            ...(input.subjectIdentityTruth ?? {}),
-        }),
+        /*
+         * A STATED CHILD SUBJECT STILL WINS. A child-grain frame has been told its subject
+         * directly and needs no resolution; only when it has not is the authoritative
+         * single-participant answer consulted. Same precedence as the settled context, so the two
+         * frames cannot disagree about which child the panel is about.
+         */
+        participantScope:
+            participantScopeFromChildSubjectTruth({
+                ...(input.subjectIdentityTruth ?? {}),
+            })
+            ?? scopeFromResolvedParticipantForCommit(input.resolvedParticipant ?? null),
         truth: {
             id: input.subjectId,
             ...(input.statusKey ? { status_key: input.statusKey } : {}),

@@ -23,6 +23,7 @@ import { resolveWorkUnitRouteIdentity } from "@/lib/admin/resolveWorkUnitRouteId
 import { parseCardFocusAspect } from "@/lib/runtime/kernel/attentionCardFocus";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
 import { resolveFinancialSubjectId } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
+import { resolveSoleEnrollmentParticipantForOpportunity } from "@/lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity";
 import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 import { collectedRouteTiming, recordRouteTiming, routeTimingEnabled } from "@/lib/perf/routeTimingDiagnostic";
@@ -151,6 +152,26 @@ export async function composeProvisioningAnswerForRoute(input: {
      */
     const tProducers = mark();
     if (answer.terminal === "operational" && answer.focusPanelOperationalProjection) {
+        /*
+         * THE PARTICIPANT, RESOLVED HERE SO THE PRODUCERS BELOW CAN ANSWER.
+         *
+         * These producers already ran on this path; measured on deployed 50f2601be they cost 674ms
+         * and produced Financials ONLY, because `attendance_ms` and `health_ms` were null on every
+         * sample — no authoritative participantScope existed at commit, so both returned
+         * `unavailable` and the browser had to wait for a second round trip to learn a fact the
+         * database already held.
+         *
+         * One read, through the existing owner, scoped to this org and this opportunity. It
+         * refuses to guess: two enrolled children resolve to nothing rather than to the first.
+         */
+        const resolvedParticipant =
+            answer.recordOfAttention?.id
+                ? await resolveSoleEnrollmentParticipantForOpportunity({
+                      supabase,
+                      orgId: gate.orgId,
+                      opportunityId: String(answer.recordOfAttention.id),
+                  })
+                : null;
         const commitContext = buildCommitCriticalOperationalContext({
                     mode: "work",
                     subjectId: answer.recordOfAttention?.id ?? "",
@@ -172,6 +193,7 @@ export async function composeProvisioningAnswerForRoute(input: {
                         : null,
                     subjectIdentityTruth: answer.subjectIdentityTruth ?? null,
                     subjectGrain: answer.subjectGrain,
+                    resolvedParticipant,
         });
         answer.focusPanelOperationalProjection = {
             ...answer.focusPanelOperationalProjection,
