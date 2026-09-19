@@ -377,6 +377,20 @@ export type ProvisioningAnswer =
           focusPanelOperationalProjection: FocusPanelOperationalProjection | null;
           /** A — commit-critical subject identity truth bindings, domain-declared + opaque to the platform (see {@link SubjectIdentityTruth}). */
           subjectIdentityTruth: SubjectIdentityTruth | null;
+      /**
+       * THE AUTHORITATIVE PARTICIPATION, resolved once on the server and carried to the browser.
+       *
+       * IDENTITY, NOT PERMISSION. It is the member id and the OCM row that names it, and nothing else —
+       * no profile, no photo, no health facts, no authorization answer. Every producer that consumes it
+       * still resolves its own grants at request time.
+       *
+       * It exists because the server already knew this and the browser did not. Measured on deployed
+       * 41c67ec17: the document's producers ran Attendance (141ms) and Health (470ms) and put their
+       * answers in `operationalProjection`, but the browser decides card readiness from its OWN context,
+       * which had no participantScope — so those cards stayed reserved and remounted only when the
+       * drawer settled, ~3.5s later, to learn what the answer already carried.
+       */
+      resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
           /** A — the published Summary composition for the committed scope (see {@link FocusPanelSummaryDocProjection}). */
           focusPanelSummaryDoc: FocusPanelSummaryDocProjection | null;
           /**

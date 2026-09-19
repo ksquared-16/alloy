@@ -249,6 +249,12 @@ export default function OpportunityFocusPanelBody({
                 situation: commitCritical.situation,
                 primaryAction: commitCritical.primaryAction,
                 subjectIdentityTruth: commitCritical.subjectIdentityTruth,
+                /*
+                 * The answer's own resolved participation. Without it the builder cannot admit
+                 * Attendance, Health or Children at commit, and they wait for the drawer to name a
+                 * child the answer already named.
+                 */
+                resolvedParticipant: commitCritical.resolvedParticipant ?? null,
                 // R2 — forwarded, not decided. The builder reads this instead of hardcoding
                 // `grain: "case"` / `subject.type: "opportunity"`.
                 subjectGrain: commitCritical.subjectGrain,

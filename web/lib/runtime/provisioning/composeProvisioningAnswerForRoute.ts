@@ -172,6 +172,12 @@ export async function composeProvisioningAnswerForRoute(input: {
                       opportunityId: String(answer.recordOfAttention.id),
                   })
                 : null;
+        /*
+         * CARRIED TO THE BROWSER. The producers below consume this server-side; the browser needs
+         * the same identity to decide that Attendance, Health and Children are mountable at all.
+         * Without it the answer ships their CONTENT and the client still reserves their cells.
+         */
+        answer.resolvedParticipant = resolvedParticipant;
         const commitContext = buildCommitCriticalOperationalContext({
                     mode: "work",
                     subjectId: answer.recordOfAttention?.id ?? "",
