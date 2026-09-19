@@ -571,7 +571,17 @@ export function installVisibleCompletionProbe(): void {
              */
             const LATE = (window as unknown as { __p076late?: unknown[] });
             LATE.__p076late = LATE.__p076late || [];
-            if (t > 4000 && (LATE.__p076late as unknown[]).length < 80) {
+            /*
+             * A RING, NOT A PREFIX. Keeping the FIRST 80 records means the buffer fills during an
+             * early burst and every later mutation is invisible — including, twice now, the one
+             * that actually set completion: the sample then shows activity stopping at 4,909ms
+             * while the metric says 10,123ms, and the difference is unexplainable rather than
+             * absent. The interesting mutations are the LAST ones, so drop from the front.
+             */
+            if (t > 4000) {
+                if ((LATE.__p076late as unknown[]).length >= 200) {
+                    (LATE.__p076late as unknown[]).shift();
+                }
                 const el = (r.target.nodeType === 1 ? r.target : r.target.parentElement) as Element | null;
                 (LATE.__p076late as unknown[]).push({
                     t, region: key, kind, kind21, blocking: host,
