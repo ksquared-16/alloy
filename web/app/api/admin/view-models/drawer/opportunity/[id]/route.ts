@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
-import { startOpportunityDrawerViewModelCompose } from "@/lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel";
-import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
+import { composeOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel";
 import { resolveParticipationSubjectForOpportunity } from "@/lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity";
 import { logDrawerVmRuntimeServer } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 import { logOpportunityDrawerViewModelComposeFailureShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
@@ -65,7 +64,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
          * producers start, and the remaining composition runs alongside them; both are joined
          * before the response is assembled, so the response itself is unchanged.
          */
-        const staged = startOpportunityDrawerViewModelCompose({
+        const result = await composeOpportunityDrawerViewModel({
             supabase,
             gate,
             opportunityId: opportunityId.trim(),
@@ -135,29 +134,27 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
          * resolved authority, exactly as before — the grants come from `loadAdminRouteGate` at the
          * top of this handler, so starting earlier cannot outrun authorization.
          */
-        const participantForProducers = await staged.participantForCardProducers;
+        /*
+         * THE DRAWER NO LONGER PRODUCES FIRST-ORDER CARD TRUTH.
+         *
+         * These producers ran here AND in the document, with the same authority against the same
+         * subject, and measured on f67114ca4 the second run owned nothing: Financials arrived as
+         * an identical rerender and Attendance/Health as recomputations of answers the document
+         * had already made. The duplicate cost a median 772ms on the settlement path.
+         *
+         * It could not simply be deleted before now. The settled operational context substituted
+         * its own `operational_projection` wholesale, so removing this run would have left
+         * `cards` absent at settlement — which the contract defines as "provisioning", not "no
+         * attendance" — and the cards would have blanked. The browser now states that the
+         * DOCUMENT owns first-order producer truth for the navigation
+         * (`firstOrderProducerCards`), so there is nothing left for this run to be the source of.
+         *
+         * The endpoint keeps everything else: the view model, `businessProcess` and `currentWork`
+         * projections, and all second-order enrichment. Only the duplicate first-order producer
+         * execution is retired.
+         */
         routePhases.participant_contract_ready_ms = Date.now() - routeT0;
-        const tProducers = Date.now();
-        const producedCardsP = participantForProducers
-            ? projectFocusPanelCardProducers({
-                  supabase,
-                  orgId: gate.orgId,
-                  // The contract itself — no synthetic scope, no fabricated participationId.
-                  context: { participantScope: participantForProducers },
-                  financialSubjectId: participantForProducers.financialSubjectId,
-                  // The route's OWN resolved authority — the same canonical bundle the health
-                  // endpoint reads, never anything the browser sent.
-                  access: gate.access,
-              }).then((cards) => {
-                  routePhases.card_producers_ms = Date.now() - tProducers;
-                  return cards;
-              })
-            : null;
-        // A producer rejection must never become an unhandled rejection on a skip/throw path; the
-        // join below is still the only place its VALUE is read.
-        void producedCardsP?.catch(() => {});
 
-        const result = await staged.result;
         routePhases.full_compose_end_ms = Date.now() - routeT0;
 
         if (!result.ok) {
@@ -208,20 +205,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
          * `tProducers` is NOT declared here any more: it is stamped where the producers actually
          * start, above. Keeping staging's declaration would have measured the join, not the work.
          */
-        const settledContext = result.operationalContext ?? null;
-        const projection = result.viewModel.workspace.operational_projection ?? null;
-        const producedCards = producedCardsP ? await producedCardsP : null;
-        const viewModel =
-            settledContext && projection && producedCards
-                ? {
-                      ...result.viewModel,
-                      workspace: {
-                          ...result.viewModel.workspace,
-                          operational_projection: { ...projection, cards: producedCards },
-                      },
-                  }
-                : result.viewModel;
-        routePhases.card_producers_ms = Date.now() - tProducers;
+        /*
+         * No producer join: the document owns first-order card truth for this navigation, so the
+         * settled projection ships WITHOUT `cards` and the browser keeps the document's.
+         */
+        const viewModel = result.viewModel;
+        // `card_producers_ms` is deliberately NOT reported any more: this route runs no producers,
+        // and emitting a zero would read as "they were free" rather than "they are gone".
+        routePhases.full_compose_end_ms = Date.now() - routeT0;
 
         return NextResponse.json(viewModel, {
             headers: {

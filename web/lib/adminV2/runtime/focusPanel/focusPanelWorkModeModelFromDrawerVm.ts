@@ -16,6 +16,7 @@ import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/f
 import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
 import { focusPanelDefaultCompositionForGrain } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
 import { isOperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
+import type { FocusPanelCardProducerResults } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -38,6 +39,11 @@ export type FocusPanelWorkModeFromDrawerVmInput = {
     perspective: RuntimePerspective | null;
     statusLabel: string | null;
     canMutate: boolean;
+    /**
+     * The document's first-order producer cards, when the caller states that the document owns
+     * them for this navigation. Forwarded verbatim; this module decides nothing about ownership.
+     */
+    firstOrderProducerCards?: FocusPanelCardProducerResults | null;
 };
 
 export function focusPanelWorkModeModelFromDrawerVm(
@@ -63,6 +69,11 @@ export function focusPanelWorkModeModelFromDrawerVm(
         statusLabel,
         canMutate,
         selectedParticipationId: input.selectedParticipationId ?? null,
+        // Passed straight through, INCLUDING the absent case: `undefined` means the caller stated
+        // no owner, and the settled projection keeps its own cards exactly as before.
+        ...("firstOrderProducerCards" in input
+            ? { firstOrderProducerCards: input.firstOrderProducerCards }
+            : {}),
     });
 
     /*
