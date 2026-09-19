@@ -184,3 +184,41 @@ and the v161 layout.
 `WEEKLY_RUN_HAS_NO_OPERATOR_CADENCE` · `RERUN_COUNT_DOES_NOT_DISTINGUISH_EXISTING`
 
 `RECURRING_TERMS_OPERATOR_REACHABILITY_GAP` and `RECURRING_TERMS_ASSIGNMENT_ABSENT` are **CLOSED**.
+
+---
+
+# Addendum 3 — recurring correctness (candidate `e98ff76de`)
+
+## L · KEEP / REBUILD — corrected again
+
+| Item | Note |
+|---|---|
+| v161 valid Focus Panel layout | both projections, or the card does not render |
+| Two OCM assignments + two enrolment agreements | agreement BEFORE pricing, or re-accept after |
+| Weekly billing frequency | already present |
+| Weekly rate $185.00 · Monthly rate $1,450.00 | on **no-quantity** variants, so each resolves to exactly one option |
+| Accepted weekly + monthly terms | accepted through the mounted card |
+| **Due Date policy effective before the period bills** | the terms in place began 2026-09-18 while September invoices on 2026-09-01. A policy authored effective **2026-08-01, net 10, org-wide** is what makes Invoice → Due resolve |
+| **Tuition charge template** | **may stay `fixed`.** It no longer decides the price — an accepted term outranks it. Leaving it fixed is now a legitimate configuration, and the fixture should keep it that way precisely because it proves the precedence |
+| Responsibility arrangements · subject-grain configuration | unchanged |
+| Recurring discount specimen | **cannot yet be built** — see below |
+
+The earlier addendum told the reseed to author the template as `rate_derived`. That instruction is
+**withdrawn**: it would have made this tenant pass while leaving every other tenant able to bill a
+number nobody agreed to. The platform holds the precedence now.
+
+## M · REMOVE / RESET
+
+- the six recurring tuition drafts — now 5 × $185.00 (Certa) and 1 × $1,450.00 (Certb), all Draft
+- the certification reductions, reversals and prepaid allocations recorded in §C and §J
+- the two accepted terms, two agreements and two OCM rows, if the reseed rebuilds them
+
+The **configuration** created across these runs is not residue: the two authored rates, the net-10
+due-date policy, and the v161 layout.
+
+## N · The one thing the blueprint cannot yet contain
+
+`RECURRING_DISCOUNT_NOT_APPLIED_BY_GENERATION`. The sibling discount policy is real and active, and
+`materializeCurrentFinancialConsequences` handles only `vacation_credit`, so no authored commercial
+discount reaches a generated tuition obligation. Until that is wired, a Human-QA scenario that says
+"a sibling discount reduces this month's tuition" cannot be built honestly.

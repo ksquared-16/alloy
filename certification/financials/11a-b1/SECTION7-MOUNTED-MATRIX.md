@@ -256,6 +256,56 @@ again with `alreadyPosted: 0`, because the existing rows are drafts. The DATA is
 duplicates, counted in the ledger — but an operator rerunning would believe they had billed twice.
 
 
+## J · Recurring billing correctness (candidate `e98ff76de`)
+
+| Capability | Authority | Actual | Verdict |
+|---|---|---|---|
+| J1 **accepted price outranks a fixed template** | `resolveChargeFromTemplate` | `acceptedAmountCents` is the amount whatever the strategy says; the tenant's `fixed` $400.00 tuition template no longer decides | **PASS** |
+| J2 template keeps its own job | same | category `tuition`, GL `4000`, responsibility `household`, occurrence and billable dates all still the template's | **PASS** |
+| J3 non-recurring behaviour unchanged | same | a fixed template with NO accepted term still prices itself; a bare rate hint still loses to it | **PASS** |
+| J4 the authority survives the write | `writeTemplateDraftCharge` | threaded through the second pass, where a fixed amount would otherwise reinstate itself | **PASS** |
+| J5 wrong-price drafts converge | canonical draft recalculation | the six $400.00 drafts **recalculated in place** — `generated: 5` weekly + `generated: 1` monthly, still 15 awaiting posting, zero duplicates, nothing hand-edited | **PASS** |
+| J6 **weekly preview states the weekly operation** | `billing.generate_tuition` preview | `5 to bill, 5 not due, 0 refused for weekly 2026-09` · **total 92500¢ = 5 × $185.00** · five named periods incl. **Sep 29–Oct 5** kept as ONE commercial period | **PASS** |
+| J7 **weekly generated gross = $185.00** | mounted charge detail | `Gross charge $185.00` · `Net obligation $185.00` · Certa Certhouse · Billing period September 2026 | **PASS** |
+| J8 weekly rerun | same | **`generated: 0, unchanged: 5`** — ledger still 5 × $185.00, zero duplicates | **PASS** |
+| J9 **monthly preview** | preview | `1 to bill … 1450.00 USD for monthly 2026-09` · total 145000¢ | **PASS** |
+| J10 **monthly generated gross = $1,450.00** | mounted charge detail | `Gross charge $1,450.00` · Certb Certhouse · September 2026 | **PASS** |
+| J11 monthly rerun | same | **`generated: 0, unchanged: 1`** | **PASS** |
+| J12 preview cadence = execute cadence | `generationCadenceFrom` | one reader for both entry points; the preview echoes `cadence_key` so Confirm can be checked against it | **PASS** |
+| J13 operator cadence intent | Generate Tuition surface | a **Billing frequency** control (Monthly · Weekly · Bi-weekly); changing it clears a preview that described another operation | **PASS** |
+| J14 rerun counts | `tallyTuitionOutcomes` | `generated` / `unchanged` / `alreadyPosted` / `refused` / `errors` — an existing draft is never called generated again | **PASS** |
+| J15 **recurring Due Date** | `due_date` policy | terms authored org-wide effective 2026-08-01, net 10 → **Invoice Sep 1, 2026 → Due Sep 11, 2026** on BOTH generated obligations, mounted | **PASS** |
+| J16 due date reaches standing drafts | convergence rule | the comparison now includes the resolved due date, so authored terms reach drafts that already stood | **PASS** |
+| J17 **lifecycle · not yet effective** | real accepted terms | previewing **August** → `term_not_yet_effective` ×5 weekly and ×1 monthly, `generated: 0`. No dates rewritten | **PASS** |
+| J18 lifecycle · active | same | September generates, both cadences | **PASS** |
+| J19 lifecycle · ended | `resolveTuitionRecurrence` | `term_already_ended` is distinct from `term_not_yet_effective`; a partial period is **refused**, not billed whole | **PASS** |
+| J20 Accounting Period retained | charge detail | `Billing period September 2026` beside `Accounting period Not posted to a period yet` | **PASS** |
+| J21 recurring discount | commercial discount policy | the sibling discount (10%, `applies_to: all`, active from 2026-01-01) does NOT attach to a generated tuition obligation — Gross = Net on both | **NOT PROVEN** |
+
+### J15 — why the due date was absent, and why that was not a defect
+
+`resolveDueDate` reads the `due_date` policy **as of the invoice date**. The tenant's two policies
+begin 2026-09-18 and 2026-09-19; a September obligation invoices on **2026-09-01**. Neither was in
+force, so `No configured terms` was the truthful answer. The fixture needed terms in force during
+the period it bills, and now has them. Nothing about recurring tuition was special-cased.
+
+Its companion repair is J16: convergence compared only amount and billable date, so terms authored
+after a draft already stood could never reach it.
+
+### J21 — the one row that stays open, with its cause
+
+`materializeCurrentFinancialConsequences` iterates the resolved obligations and handles exactly one
+kind: `vacation_credit`. There is no path on the recurring generation route by which an authored
+commercial discount policy becomes a reduction against a generated tuition obligation. The policy is
+real, active and org-wide; the engine that would apply it is not wired to this path.
+
+`RECURRING_DISCOUNT_NOT_APPLIED_BY_GENERATION` — new, and the last recurring row.
+
+It is NOT closed by pointing at the account's existing `Discount −$40.00`: that reduction was
+applied to a manually added charge by a different authority, and calling it recurring proof would be
+the kind of substitution this matrix exists to prevent.
+
+
 ## Deferred boundaries — behaving honestly, not reopened
 
 `SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED` · `LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED` ·
@@ -263,31 +313,33 @@ duplicates, counted in the ledger — but an operator rerunning would believe th
 
 ## Tally
 
-**PASS 103 · FAIL 1 · BLOCKED 0 · NOT PROVEN 3 · NOT RUN 0 · CARRIED 0 · DEFERRED 3.**
+**PASS 123 · FAIL 0 · BLOCKED 0 · NOT PROVEN 1 · NOT RUN 0 · CARRIED 0 · DEFERRED 3.**
 
-44 from the surfaces and the three named repairs · 7 weekly-boundary checks · 10 multi-child checks ·
-5 prepaid checks · 4 earlier E/E4 checks · 8 recurring-reachability checks (H1–H8) · **17 recurring
-billing checks (I1–I17)**.
+44 surfaces and named repairs · 7 weekly-boundary · 10 multi-child · 5 prepaid · 4 earlier E/E4 ·
+8 recurring-reachability (H1–H8) · 17 recurring billing (I1–I17) · **20 recurring correctness
+(J1–J20)**.
 
-**The five BLOCKED rows are gone.** Recurring tuition is now generated, from accepted terms, on both
-cadences, idempotently, with Billing Period and Accounting Period visibly independent — E2, E3 and
-E7 close as I13/I14/I15/I16/I17.
+**FAIL 0.** I18's silent $400.00 is gone: an accepted commercial term now outranks a fixed charge
+template, threaded through the write as well as the resolution, and the six wrong drafts converged
+in place through the canonical recalculation authority rather than by anyone editing money.
 
-They are replaced by **one FAIL and three NOT PROVEN**, which is a better position and a truer one:
+**BLOCKED 0 · NOT RUN 0 · CARRIED 0.**
 
-- **FAIL I18** — every generated charge bills the template's fixed $400.00 instead of the accepted
-  price. Money is wrong, and it is wrong silently.
-- **NOT PROVEN I19** — the Due Date policy does not resolve for generated tuition (E6).
-- **NOT PROVEN I20** — no recurring discount legitimately applied, and none was manufactured (E5).
-- **NOT PROVEN I21** — the not-yet-effective and ended lifecycle states were not exercised against
-  real terms.
+**NOT PROVEN 1 — J21, recurring discount.** The authored sibling discount does not reach a generated
+tuition obligation because the recurring path materializes only `vacation_credit` consequences. That
+is a wiring gap with a name, not an unknown.
 
-**SECTION 7 IS NOT FULLY MOUNTED-CERTIFIED**, and must not be reported as such while a generated
-obligation carries a number nobody agreed to.
+**SECTION 7 IS NOT FULLY MOUNTED-CERTIFIED.** One row remains, and it is the honest one to leave
+open: closing it would require either wiring the discount engine into recurring generation — a
+change with its own design decision behind it — or accepting a manual charge's reduction as proof of
+a recurring one, which it is not.
 
-`RECURRING_TERMS_OPERATOR_REACHABILITY_GAP` — **CLOSED.** An operator reached the mounted card,
-chose nothing they were not offered, clicked Accept, and the term was written and read back. That is
-what the gap asked for.
+`RECURRING_TERMS_OPERATOR_REACHABILITY_GAP` · `RECURRING_TERMS_ASSIGNMENT_ABSENT` ·
+`RECURRING_GENERATED_AMOUNT_IGNORES_ACCEPTED_TERM` · `RECURRING_PREVIEW_IGNORES_CADENCE` ·
+`WEEKLY_RUN_HAS_NO_OPERATOR_CADENCE` · `RERUN_COUNT_DOES_NOT_DISTINGUISH_EXISTING` — all **CLOSED**.
 
-Four probe artifacts have been recorded across this thread and a fifth joined them this run: a mount
-probe that counted `billing_preview` when the component's own host key is `assignment_tuition`.
+Five probe artifacts are recorded across this thread. A sixth is mine from this run and is recorded
+because it corrected me rather than the code: I expected a term beginning mid-period to bill that
+period, and the resolver refuses it instead. The resolver is right — billing a family for September
+when they started on the 15th, because nobody configured proration, is the same silent wrong number
+this run exists to end.
