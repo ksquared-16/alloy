@@ -1,0 +1,129 @@
+{
+  "freqTable": [
+    "NAME | DESCRIPTION | CADENCE | ACTIVE | PLANS USING | MORE",
+    "Semi-Annual | Semi-Annual | Semi-Annual | Active | 0 |",
+    "Weekly | — | Weekly | Active | 1 |",
+    "Bi-weekly | — | Bi-weekly | Active | 0 |",
+    "Monthly | — | Monthly | Active | 6 |",
+    "Annual | — | Annual | Active | 0 |",
+    "Daily | — | Daily | Active | 0 |",
+    "Hourly | — | Hourly | Active | 0 |",
+    "Per Session | — | Per Session | Active | 0 |"
+  ],
+  "plans": [
+    "Infant Active Infant · Full Time Monthly · $525–$1,850",
+    "Part Time Active Infant · Part Time Semi-Annual · Needs GL · No prices",
+    "Preschool Active Preschool · Full Time Monthly · $425–$1,550",
+    "After School Active School Age · Full Time Monthly · $175–$650",
+    "Before & After Active School Age · Custom Monthly · $250–$900",
+    "Before School Active School Age · Before School Monthly · $125–$450",
+    "Full Day Active Toddler · Full Time Monthly · $475–$1,700"
+  ],
+  "catalog": {
+    "status": 200,
+    "keys": [
+      "rates"
+    ],
+    "count": 36,
+    "byCadence": {
+      "monthly": 31,
+      "weekly": 5
+    },
+    "weekly": [
+      {
+        "id": "b73019cc-4c37-4a94-9447-222aa4f095c7",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "location_id": null,
+        "variant_id": "796c7633-ee90-473d-ad31-05cffbd65973",
+        "cadence_key": "weekly",
+        "payer_type": "private_pay",
+        "rate_cents": 22500,
+        "is_active": true,
+        "not_offered": false,
+        "effective_start": "2026-07-22",
+        "effective_end": null,
+        "revenue_category_id": null,
+        "metadata": {},
+        "created_at": "2026-07-22T23:28:33.90383+00:00",
+        "updated_at": "2026-07-22T23:28:33.368+00:00"
+      },
+      {
+        "id": "df4fd2e9-1247-4b3d-87de-638fd154dea8",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "location_id": null,
+        "variant_id": "90404c9c-2b75-4cd6-8da6-c61a4d436da7",
+        "cadence_key": "weekly",
+        "payer_type": "private_pay",
+        "rate_cents": 21500,
+        "is_active": true,
+        "not_offered": false,
+        "effective_start": "2026-07-22",
+        "effective_end": null,
+        "revenue_category_id": null,
+        "metadata": {},
+        "created_at": "2026-07-22T23:28:35.41825+00:00",
+        "updated_at": "2026-07-22T23:28:34.921+00:00"
+      },
+      {
+        "id": "88e822c2-d00b-4dcf-8f31-493ba8fe0634",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "location_id": null,
+        "variant_id": "d6d7e795-19f2-4796-b1fc-05e62fc03a1a",
+        "cadence_key": "weekly",
+        "payer_type": "private_pay",
+        "rate_cents": 20000,
+        "is_active": true,
+        "not_offered": false,
+        "effective_start": "2026-07-22",
+        "effective_end": null,
+        "revenue_category_id": null,
+        "metadata": {},
+        "created_at": "2026-07-22T23:28:36.81075+00:00",
+        "updated_at": "2026-07-22T23:28:36.315+00:00"
+      },
+      {
+        "id": "e1e60507-be43-4360-a7a6-ce3be955e909",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "variant_id": "e1b5e8e5-2284-4390-889b-beba3d013799",
+        "cadence_key": "weekly",
+        "payer_type": "private_pay",
+        "rate_cents": 10000,
+        "is_active": true,
+        "not_offered": false,
+        "effective_start": null,
+        "effective_end": null,
+        "revenue_category_id": null,
+        "metadata": {},
+        "created_at": "2026-07-01T21:31:17.527172+00:00",
+        "updated_at": "2026-07-01T21:31:17.328+00:00"
+      },
+      {
+        "id": "caa0f919-c66e-43a2-9067-ab2f26a66529",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "location_id": null,
+        "variant_id": "e1b5e8e5-2284-4390-889b-beba3d013799",
+        "cadence_key": "weekly",
+        "payer_type": "private_pay",
+        "rate_cents": 25000,
+        "is_active": true,
+        "not_offered": false,
+        "effective_start": "2026-07-22",
+        "effective_end": null,
+        "revenue_category_id": null,
+        "metadata": {
+          "priceHistory": [
+            {
+              "rate_cents": 25000,
+              "recorded_at": "2026-07-22T23:28:28.955Z",
+              "effective_end": "2026-07-22",
+              "effective_start": null
+            }
+          ]
+        },
+        "created_at": "2026-07-01T21:28:43.118508+00:00",
+        "updated_at": "2026-07-22T23:28:31.521+00:00"
+      }
+    ]
+  }
+}

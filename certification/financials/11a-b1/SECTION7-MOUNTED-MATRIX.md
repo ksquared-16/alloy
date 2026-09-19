@@ -151,6 +151,39 @@ and the plural intent reached the command. **No product source was changed.**
 Settlement and obligation ownership stay distinct: $75.00 of somebody else's money settled the
 charge and did not move one cent of who owes it.
 
+## H · Recurring reachability — v161 (candidate `b93e3cf8d`)
+
+| Capability | Authority | Expected | Actual | Verdict |
+|---|---|---|---|---|
+| H1 published layout repaired | `/api/admin/entity-layouts/{id}/publish` | append-only next version placing the card in the metadata layout | v160 `3bc7f601…` → **v161 `cd3edf93…`**, create 201 / publish 200, BOTH projections, six existing areas unchanged, `scheduling` untouched | **PASS** |
+| H2 publication integrity | `focusPanelPublicationIntegrity` | a self-contradictory doc is refused, not stored | v160 planted verbatim → route **400** `Cannot publish a self-contradictory layout`; `publishLayout` never called; the plant still passes `parseLayoutDoc` | **PASS** |
+| H3 the card mounts | published layout → runtime | present exactly once, with its own body | panel received **v161**; mounted keys include `assignment_tuition`; `duplicates = []`; `data-assignment-tuition` inside the host | **PASS** |
+| H4 nothing else moved | — | the other six cards unchanged | Financials renders its full rich anatomy; Process unchanged; six prior areas at original coordinates | **PASS** |
+| H5 no serialization dependency | — | unrelated cards do not wait on the pricing read | first card commit **17 ms**; pricing read **6331 → 6549 ms** (218 ms). No producer added | **PASS** |
+| H6 child-grain opportunity reach | `resolveFocusPanelMutationOpportunityId` | the card names the family opportunity from a child subject | before: **zero** `/api/admin/financial-config` requests; after the repair the read is issued for `e56e72d5…` | **PASS** |
+| H7 weekly billing frequency | Billing Frequencies chapter | exists, active, persists | `Weekly · Weekly · Active · 1 plan using`, read back after a fresh navigation. **Already present — not created** | **PASS** |
+| H8 weekly tuition rate authored | commercial catalog | a legitimate weekly rate exists | 36 rates, `{monthly: 31, weekly: 5}`; five active `private_pay` weekly rates $200–$250, effective 2026-07-22. **Already present — not created** | **PASS** |
+| H9 acceptance through the mounted card | `enrollment.pricing.accept` | weekly + monthly terms accepted on the child | **no assignment exists to accept against** — see below | **BLOCKED** |
+
+### Why H9 blocks, measured
+
+`/api/admin/financial-config/opportunity/e56e72d5…` answers `{"enrollments": [], "assignments": []}`.
+`buildOpportunityTuitionViews` returns `[]` only when the opportunity has no
+`opportunity_customer_members` rows, and the Children card independently renders both enrolled
+children as `unlinked:…` — the prefix for a household child member not represented in any OCM-linked
+inquiry row. `enrollment.pricing.accept` writes an effective-dated `enrollment_pricing_terms` row
+**against an assignment**; there is none, and no Focus Panel control creates one.
+
+`RECURRING_TERMS_ASSIGNMENT_ABSENT` — new, and now the sole cause of all five BLOCKED rows.
+
+### A configuration hazard recorded, not repaired
+
+Variant `e1b5e8e5…` carries two active weekly rates — $250.00 effective 2026-07-22 and $100.00 with
+**no** `effective_start`. Two applicable options on one variant resolve as **ambiguous**, which the
+card renders honestly but which is unlikely to be intended. Settle it before a human QA fixture
+depends on weekly pricing.
+
+
 ## Deferred boundaries — behaving honestly, not reopened
 
 `SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED` · `LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED` ·
@@ -158,24 +191,30 @@ charge and did not move one cent of who owes it.
 
 ## Tally
 
-**PASS 78 · FAIL 0 · BLOCKED 5 · NOT PROVEN 0 · NOT RUN 0 · CARRIED 0 · DEFERRED 3.**
+**PASS 86 · FAIL 0 · BLOCKED 5 · NOT PROVEN 0 · NOT RUN 0 · CARRIED 0 · DEFERRED 3.**
 
 44 from the surfaces and the three named repairs · 7 weekly-boundary checks · 10 multi-child checks
-(all PASS, CASE D) · 5 prepaid checks (G1–G5) · 4 earlier E/E4 checks.
+(all PASS, CASE D) · 5 prepaid checks (G1–G5) · 4 earlier E/E4 checks · **8 recurring-reachability
+checks (H1–H8)**.
 
-**BLOCKED 5** — every one the same single cause: no accepted `enrollment_pricing_terms` exists, so
-recurring generation has nothing to bill (E2 weekly generation, E3 monthly generation, E5 recurring
-discount, E6 recurring due date, E7 accounting attribution on a generated charge).
-**NOT RUN 0 · CARRIED 0** — both prepaid rows closed this run: the allocation was executed end to
-end, and the unavailable-money rule is certified on its own predicate with a planted regression.
+**BLOCKED 5** — still one cause, and this run named it correctly for the first time. It is NOT a
+missing weekly frequency and NOT a missing weekly rate: both already exist and were verified (H7,
+H8). It is that this family has **no assignment** — no `opportunity_customer_members` row — so
+`enrollment.pricing.accept` has nothing to bind to, so no `enrollment_pricing_terms` row can exist,
+so `billing.generate_tuition` still answers `Generate 0 · $0.00` (E2 weekly generation, E3 monthly
+generation, E5 recurring discount, E6 recurring due date, E7 accounting attribution).
 
-**SECTION 7 IS NOT FULLY MOUNTED-CERTIFIED.** Everything except recurring billing is closed.
-The five BLOCKED rows are one missing fixture, not five problems — and the chain that would build it
-is now mapped end to end (see the blueprint). What is missing is a weekly billing frequency, an
-authored weekly rate, and two accepted terms; none of it is a defect in the billing engine, whose
-boundary arithmetic is separately proven.
+**SECTION 7 IS NOT FULLY MOUNTED-CERTIFIED.** Everything except recurring billing is closed, and the
+mount gate that held this thread for several runs is now closed too: the card is published, placed,
+mounted once, wired to the right family, and does not serialize the panel. What remains is a single
+fixture fact.
+
+`RECURRING_TERMS_OPERATOR_REACHABILITY_GAP` — **narrowed, not closed.** The surface is reachable and
+functional; acceptance has not been exercised because there is nothing to accept against. It must not
+be closed on the mount alone.
 
 Three rows failed on first execution and all three were probe artifacts, corrected and re-run: a
 1100-character text capture that cut off the resolved-policy panel, a 6-second wait that read the
 workspace shell instead of the account queue, and a search for a policy's label on a panel that
-lists by type.
+lists by type. A fourth joined them this run: a mount probe that counted `billing_preview` when the
+component's own host key is `assignment_tuition`, and read zero while the card was on screen.
