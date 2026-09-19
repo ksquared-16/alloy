@@ -510,15 +510,17 @@ export function installVisibleCompletionProbe(): void {
                  * geometry) still apply, and then the semantic question is asked on top: did this
                  * mutation change anything the operator can see?
                  */
-                if (kind21 === "PRESENTATIONAL_ANIMATION") {
-                    /* counted in ps.anim by the legacy arm above */
-                } else if (stale || judged.every(isPlaceholderNode)) {
-                    /* counted by the legacy arm's suppression counters */
-                } else if (kind21 === "IDENTICAL_RERENDER") {
-                    ps.identicalRerenders++;
-                } else if (kind21 === "DIAGNOSTIC_ATTRIBUTE_CHANGE") {
-                    ps.diagnosticWrites++;
-                } else {
+                if (kind21 === "IDENTICAL_RERENDER") ps.identicalRerenders++;
+                else if (kind21 === "DIAGNOSTIC_ATTRIBUTE_CHANGE") ps.diagnosticWrites++;
+
+                /*
+                 * ONE TABLE DECIDES. An earlier draft short-circuited animations before consulting
+                 * ADVANCES_FINALITY, which left the table's PRESENTATIONAL_ANIMATION entry dead —
+                 * flipping it to `true` changed nothing and the gate that should have caught that
+                 * passed. A rule with two authorities has one that is never tested.
+                 */
+                const suppressed = stale || judged.every(isPlaceholderNode);
+                if (ADVANCES_FINALITY[kind21] && !suppressed) {
                     if (kind21 === "AUTHORITATIVE_CONTENT_CHANGE") ps.contentMs = t;
                     else if (kind21 === "AUTHORITATIVE_STRUCTURE_CHANGE") ps.structureMs = t;
                     else ps.visibleStateMs = t;
@@ -526,9 +528,7 @@ export function installVisibleCompletionProbe(): void {
                     // rerender cannot reset an area whose visible truth did not move.
                     ps.finalAuthMs = t;
                     // THE METRIC (V2.1).
-                    if (ADVANCES_FINALITY[kind21] && t > v2.finalAuthoritativeMs) {
-                        v2.finalAuthoritativeMs = t;
-                    }
+                    if (t > v2.finalAuthoritativeMs) v2.finalAuthoritativeMs = t;
                 }
                 v2.perSection[host] = ps;
             }
