@@ -49,6 +49,7 @@ import {
     type PivotBuilderDraft,
 } from "@/lib/organizationCalculations/pivotBuilder";
 import {
+import { buildRoomPickerOptions } from "@/lib/locations/roomPickerOptions";
     filterOperatorCalculations,
     isDeveloperCollectionMode,
 } from "@/lib/organizationCalculations/operatorCollectionFilter";
@@ -320,18 +321,7 @@ export default function OrganizationCalculationsWorkspace({
                     }>;
                 };
                 if (!res.ok) return;
-                const locs = json.locations ?? [];
-                const byId = new Map(locs.map((l) => [l.id, l]));
-                const roomOpts = locs
-                    .filter((l) => String(l.location_type ?? "").toLowerCase() === "unit")
-                    .map((l) => {
-                        const site = l.parent_location_id ? byId.get(l.parent_location_id) : null;
-                        return {
-                            id: l.id,
-                            label: String(l.label ?? "").trim() || "Untitled room",
-                            siteLabel: String(site?.label ?? "").trim() || "Site",
-                        };
-                    });
+                const roomOpts = buildRoomPickerOptions(json.locations ?? []);
                 setRooms(roomOpts);
                 if (roomOpts[0]) setRoomId(roomOpts[0].id);
             } catch {

@@ -280,10 +280,16 @@ describe("17-21. one authority, no heuristics, debt preserved", () => {
         expect(hook).not.toContain("assignableClassrooms");
     });
 
-    it("21. OI is untouched — its nested-Site defect is still there, on purpose", () => {
+    it("21. OI is untouched BY THIS SLICE", () => {
+        // Slice 7 pinned the OI nested-Site defect as still present, to prove it
+        // had not been swept in. Slice 8 repaired it deliberately, so pinning the
+        // defect is no longer the right assertion — what Slice 7 must still own is
+        // that the CLASSROOM narrowing never leaked into OI, which is a different
+        // question and is asserted directly.
         const src = read("components/adminV2/settings/organizationCalculations/OrganizationCalculationsWorkspace.tsx");
-        expect(src).toContain("const site = l.parent_location_id ? byId.get(l.parent_location_id) : null;");
         expect(src).not.toContain("assignableClassrooms");
+        expect(src).not.toContain("operationalGroupRooms");
+        expect(src).not.toContain("placeableRooms");
     });
 });
 
