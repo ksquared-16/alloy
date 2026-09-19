@@ -37,8 +37,25 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
      * long pole cannot honestly be traced to anything.
      */
     const responses: Array<{ url: string; at: number; status: number }> = [];
+    /*
+     * The drawer VM's OWN compose phases, read from the response body.
+     *
+     * `composeOpportunityDrawerViewModel` already records `timing.compose_ms` and a `phases_ms` map
+     * covering every compose phase, and the route returns them. Settlement is written when that
+     * view model reaches the panel, so these phases ARE the settlement server DAG — there is no
+     * need to add a parallel timing system to discover what is already measured and shipped.
+     */
+    let drawerVmTiming: unknown = null;
     page.on("response", (r) => {
         const u = r.url();
+        if (/\/api\/admin\/view-models\/drawer\/opportunity\//.test(u) && r.status() === 200) {
+            void r
+                .json()
+                .then((j: { timing?: unknown }) => {
+                    if (j && typeof j === "object" && j.timing) drawerVmTiming = j.timing;
+                })
+                .catch(() => {});
+        }
         if (/\/api\//.test(u)) responses.push({ url: u.replace(/^https?:\/\/[^/]+/, ""), at: Date.now() - t0, status: r.status() });
     });
 
@@ -204,6 +221,7 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         apiResponses: responses,
         lateMutations,
         focusChain,
+        drawerVmTiming,
         retiredReadProbe: {
             eppEnrichmentHttp: requests.filter((r) => /effective-enrollment|epp/i.test(r.url)).length,
             tourEnrichmentHttp: requests.filter((r) => /tour-bookings|active-tour/i.test(r.url)).length,
