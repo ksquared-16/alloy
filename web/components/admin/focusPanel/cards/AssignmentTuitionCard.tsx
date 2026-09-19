@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
 import { readFinancialNestedSurfaceGroupsFromDoc } from "@/lib/adminV2/runtime/focusPanel/billingPreview/financialNestedSurfaceRuntime";
+import { resolveFocusPanelMutationOpportunityId } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import type { FinancialConfigApiResponse } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigTypes";
 import type { AssignmentTuitionView, TuitionOptionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
@@ -99,6 +100,38 @@ function OptionRow({
     );
 }
 
+/**
+ * WHICH OPPORTUNITY'S ASSIGNMENTS THIS CARD IS ABOUT.
+ *
+ * The card read `context.subject.type === "opportunity" ? context.subject.id : null`, which is true
+ * only on a case-grain panel. On the enrolment Work Unit the subject is the CHILD — the lens sets
+ * `grain: "child"` and a child subject while carrying the family opportunity's truth beside it,
+ * because Record of Attention is the child and Record of Truth is the family. So the card named no
+ * opportunity, never issued its pricing read, and rendered "No assignment on this record to price."
+ * — a sentence indistinguishable from the honest one, on the exact surface where recurring tuition
+ * terms are accepted.
+ *
+ * `resolveFocusPanelMutationOpportunityId` is the panel's own answer to this question (it is how
+ * child-grain saves reach the family record), so this asks it rather than inventing a second rule.
+ * It falls back to the subject id when nothing names a family opportunity; that fallback is refused
+ * here, because a child id in an opportunity route is a wrong answer and no answer is the right one.
+ *
+ * Exported for the lock: the defect is a resolution decision, and a decision is testable without a
+ * DOM.
+ */
+export function resolveAssignmentTuitionOpportunityId(
+    context: Pick<OperationalContext, "subject" | "grain" | "truth">,
+): string | null {
+    const subjectId = context.subject.id?.trim() ?? "";
+    if (context.subject.type === "opportunity") return subjectId || null;
+    const resolved = resolveFocusPanelMutationOpportunityId({
+        subjectId,
+        grain: context.grain,
+        truth: context.truth,
+    }).trim();
+    return resolved && resolved !== subjectId ? resolved : null;
+}
+
 export default function AssignmentTuitionCard({
     model,
     context,
@@ -111,7 +144,7 @@ export default function AssignmentTuitionCard({
         if (composerPreview?.perspective === "expanded") setExpanded(true);
     }, [composerPreview]);
 
-    const opportunityId = context.subject.type === "opportunity" ? context.subject.id : null;
+    const opportunityId = resolveAssignmentTuitionOpportunityId(context);
     const [data, setData] = useState<FinancialConfigApiResponse | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
