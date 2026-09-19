@@ -78,6 +78,13 @@ describe("the Assignment tuition control offers this assignment's options", () =
         expect(code).not.toContain("idx === 0 ? `Best match");
     });
 
+    it("does not render a dangling separator when the option has no variant name", () => {
+        /* Measured: the sole applicable option had an empty variantLabel — "Recommended — : $185.00/weekly". */
+        const effect = optionEffect();
+        expect(effect).toContain("variant ?");
+        expect(effect, "the money always stands alone").toContain("o.amountLabel");
+    });
+
     it("states which child is being priced", () => {
         expect(src(CARD)).toContain("Tuition — {child.name}");
     });

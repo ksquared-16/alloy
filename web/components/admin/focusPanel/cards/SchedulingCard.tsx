@@ -1732,13 +1732,21 @@ function ScheduleEditor({
                     .sort((a, b) =>
                         (a.sourceId === recommendedId ? 0 : 1) - (b.sourceId === recommendedId ? 0 : 1),
                     )
-                    .map((o) => ({
-                        id: o.sourceId,
-                        label:
-                            o.sourceId === recommendedId ?
-                                `Recommended — ${o.variantLabel}: ${o.amountLabel}`
-                            :   `${o.variantLabel}: ${o.amountLabel}`,
-                    }));
+                    .map((o) => {
+                        /*
+                         * The variant names the commitment ("Full time"), and an option can have
+                         * none — measured: the sole applicable option here carried an empty
+                         * `variantLabel`, which rendered "Recommended — : $185.00/weekly". The
+                         * money is the part that is always there, so the name qualifies it only
+                         * when there is a name.
+                         */
+                        const variant = (o.variantLabel ?? "").trim();
+                        const what = variant ? `${variant}: ${o.amountLabel}` : o.amountLabel;
+                        return {
+                            id: o.sourceId,
+                            label: o.sourceId === recommendedId ? `Recommended — ${what}` : what,
+                        };
+                    });
                 if (opts.length) setRateOptions(opts);
             })
             .catch(() => {
