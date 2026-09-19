@@ -18,28 +18,70 @@
             "requiredInputs": []
           },
           "preview": {
-            "summary": "1 to bill, 1 not due, 0 refused for 2026-09",
+            "summary": "5 to bill, 5 not due, 0 refused for weekly 2026-09",
             "changes": [
-              "79f8011d-a236-4054-bee7-af10f1dbc632 · cadence_not_billed_by_this_run",
-              "cf044308-3ee4-47ab-a8fb-205eb172aa48 · 1450.00 USD"
+              "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD",
+              "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD",
+              "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD",
+              "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD",
+              "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD",
+              "cf044308-3ee4-47ab-a8fb-205eb172aa48 · cadence_not_billed_by_this_run",
+              "cf044308-3ee4-47ab-a8fb-205eb172aa48 · cadence_not_billed_by_this_run",
+              "cf044308-3ee4-47ab-a8fb-205eb172aa48 · cadence_not_billed_by_this_run",
+              "cf044308-3ee4-47ab-a8fb-205eb172aa48 · cadence_not_billed_by_this_run",
+              "cf044308-3ee4-47ab-a8fb-205eb172aa48 · cadence_not_billed_by_this_run"
             ],
             "after": {
               "period_key": "2026-09",
+              "cadence_key": "weekly",
+              "service_period": {
+                "start": "2026-09-01",
+                "end": "2026-09-30"
+              },
               "counts": {
-                "generated": 1,
-                "notDue": 1,
+                "generated": 5,
+                "unchanged": 0,
+                "notDue": 5,
                 "refused": 0,
                 "alreadyPosted": 0,
                 "errors": 0
               },
-              "total_amount_cents": 145000,
+              "total_amount_cents": 92500,
               "refused_outcomes": [],
               "not_due_outcomes": [
                 {
                   "kind": "not_due",
-                  "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
-                  "periodKey": "2026-09",
-                  "periodLabel": "September 2026",
+                  "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+                  "periodKey": "2026-09-01~2026-09-07",
+                  "periodLabel": "Sep 1–7, 2026",
+                  "reason": "cadence_not_billed_by_this_run"
+                },
+                {
+                  "kind": "not_due",
+                  "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+                  "periodKey": "2026-09-08~2026-09-14",
+                  "periodLabel": "Sep 8–14, 2026",
+                  "reason": "cadence_not_billed_by_this_run"
+                },
+                {
+                  "kind": "not_due",
+                  "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+                  "periodKey": "2026-09-15~2026-09-21",
+                  "periodLabel": "Sep 15–21, 2026",
+                  "reason": "cadence_not_billed_by_this_run"
+                },
+                {
+                  "kind": "not_due",
+                  "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+                  "periodKey": "2026-09-22~2026-09-28",
+                  "periodLabel": "Sep 22–28, 2026",
+                  "reason": "cadence_not_billed_by_this_run"
+                },
+                {
+                  "kind": "not_due",
+                  "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+                  "periodKey": "2026-09-29~2026-10-05",
+                  "periodLabel": "Sep 29–Oct 5, 2026",
                   "reason": "cadence_not_billed_by_this_run"
                 }
               ],
@@ -50,7 +92,7 @@
         },
         "affected_id": null
       },
-      "correlation_id": "7719cad4-974b-412d-b78b-9f98823650cd"
+      "correlation_id": "536d86c2-dee7-4803-8919-2bbec0c3daed"
     }
   },
   "weekly1": {
@@ -65,11 +107,13 @@
       "data": {
         "execution_result": {
           "period_key": "2026-09",
+          "cadence_key": "weekly",
           "service_period": {
             "start": "2026-09-01",
             "end": "2026-09-30"
           },
           "generated": 5,
+          "unchanged": 0,
           "alreadyPosted": 0,
           "notDue": 5,
           "refused": 0,
@@ -79,7 +123,7 @@
         },
         "affected_id": "79f8011d-a236-4054-bee7-af10f1dbc632"
       },
-      "correlation_id": "d425aba4-b656-48ec-9697-fcd5d47a81be"
+      "correlation_id": "79226631-8bcb-4f4e-a587-663d3d0c45a2"
     }
   },
   "weekly2": {
@@ -94,11 +138,13 @@
       "data": {
         "execution_result": {
           "period_key": "2026-09",
+          "cadence_key": "weekly",
           "service_period": {
             "start": "2026-09-01",
             "end": "2026-09-30"
           },
-          "generated": 5,
+          "generated": 0,
+          "unchanged": 5,
           "alreadyPosted": 0,
           "notDue": 5,
           "refused": 0,
@@ -106,9 +152,9 @@
           "refused_outcomes": [],
           "error_outcomes": []
         },
-        "affected_id": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        "affected_id": null
       },
-      "correlation_id": "fb78d222-c9ba-4346-83ae-f89f37588234"
+      "correlation_id": "6a17085e-1e09-406f-9b0e-033cf0aa0653"
     }
   }
 }

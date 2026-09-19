@@ -7,7 +7,7 @@ import { test } from "@playwright/test";
 import { writeFileSync, mkdirSync } from "node:fs";
 
 const STORAGE = "/Users/vacilando/.local/state/alloy-dev/gateway/auth/slot2/storage-state.json";
-const OUT = "../certification/financials/11a-fx";
+const OUT = "../certification/financials/11a-cx";
 test.use({ storageState: STORAGE, baseURL: process.env.QA_BASE_URL || "http://127.0.0.1:3012", viewport: { width: 1680, height: 1050 } });
 test.setTimeout(400_000);
 const log = (s: string) => console.log(s); // eslint-disable-line no-console
