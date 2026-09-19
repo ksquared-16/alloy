@@ -1,0 +1,76 @@
+{
+  "preview": {
+    "mode": "preview",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "1 discount policy in force for 2026-09.",
+            "changes": [
+              "discount · {\"basis\":\"percentage\",\"value\":10,\"applies_to\":\"all\"}"
+            ]
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "08aa5445-8525-43cf-8328-b5dab7e85985"
+    }
+  },
+  "run1": {
+    "mode": "execute",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "period_key": "2026-09",
+          "service_period": {
+            "start": "2026-09-01",
+            "end": "2026-09-30"
+          },
+          "applied": 6,
+          "unchanged": 1,
+          "alreadyPosted": 0,
+          "notEligible": 0,
+          "refused": 0,
+          "refused_outcomes": []
+        },
+        "affected_id": "ef44f450-277d-478d-9ef5-be6fd10c7d90"
+      },
+      "correlation_id": "30b52564-ec01-4232-a938-b922ca3c1f38"
+    }
+  },
+  "run2": {
+    "mode": "execute",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "period_key": "2026-09",
+          "service_period": {
+            "start": "2026-09-01",
+            "end": "2026-09-30"
+          },
+          "applied": 0,
+          "unchanged": 7,
+          "alreadyPosted": 0,
+          "notEligible": 0,
+          "refused": 0,
+          "refused_outcomes": []
+        },
+        "affected_id": null
+      },
+      "correlation_id": "1f1d8e60-ce68-4f13-949e-fae702ff6f74"
+    }
+  }
+}
