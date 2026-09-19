@@ -150,6 +150,47 @@ that bills it.
 
 **Owner:** `lib/financials/billingPeriod.ts`.
 
+### 3.1.0 Two levels, and the string that joins them
+
+This document previously described the billing period as simply *derived*, which is true of the
+**instances** and wrong about the **rule**. There are two levels and a product that conflates them
+cannot be configured coherently.
+
+| Level | What it is | Where it lives | Who authors it |
+|---|---|---|---|
+| **Billing frequency** | the recurrence RULE — Weekly, Monthly, and whatever else an organisation authors | `billing_cadences` option set; surfaced by `TuitionBillingFrequenciesPanel` | **configured** by the organisation |
+| **Billing period** | the resulting commercial INTERVAL — `Sep 15–21`, `September 2026` | `lib/financials/billingPeriod.ts` | **derived**, never authored |
+
+The chain is:
+
+```
+configured billing frequency        Weekly
+  ↓ selected by
+accepted commercial term            $185 / week   (enrollment_pricing_terms.cadence_key)
+  ↓ anchored at
+agreement anchor                    the earliest accepted term's effective_start — Sep 1
+  ↓ derives
+billing period instances            Sep 1–7 · Sep 8–14 · Sep 15–21 · …
+```
+
+Nobody authors `Sep 15–21`. Asking an operator to do so would be asking them to maintain by hand
+what the anchor and the cadence already determine, and the first hand-entered period that
+disagreed with the tiling would be a period nobody signed.
+
+**The join is a string, and it is not validated.** `billingFrequencyItemKeyFromLabel` mints the
+cadence key from whatever label was typed, so an organisation can author `fortnightly`, attach it
+to a tuition plan and have an assignment accept a term on it. `billingPeriodFor` knows five
+cadences; `fortnightly` is not one. The money stays safe — `previewTuitionGeneration` and
+`generateTuitionCharges` both gate on `isPeriodBillableCadence` and refuse rather than invent an
+interval — but the configuration surface used to say nothing, so the operator met silence.
+
+`billingRecurrenceFor` closes that: the Billing Frequencies screen states the recurrence the
+**derivation authority** will actually produce for each configured frequency, and says plainly when
+it will produce none. It is a report of `billingPeriodFor`'s behaviour, not a second opinion about
+it, so configuration cannot drift from the periods the platform derives.
+
+### 3.1.1 Period identity
+
 A billing period is a **commercial interval**. Its identity carries its boundaries:
 
 | Cadence | Key | Label |
@@ -176,6 +217,23 @@ groups by calendar month and a ledger that silently regrouped would restate hist
 
 One tiling, called twice: `assignmentBillingPeriods` is shared by generation **and preview**, so a
 preview cannot show four weeks and then create five.
+
+### 3.1.2 Billing period is not accounting period
+
+Two configured period systems, two instance levels, and they are allowed to disagree:
+
+| | Configuration | Instance |
+|---|---|---|
+| **Commercial** | billing frequency (`billing_cadences`) | billing period — `Sep 29–Oct 5` |
+| **Accounting** | accounting calendar (`financial_accounting_calendars`, style `calendar_month` / `four_four_five` / `custom`) | accounting period (`financial_accounting_periods`) — `October 2026` |
+
+A weekly billing period of `Sep 29–Oct 5`, invoiced Sep 29, due Oct 9, paid Oct 3 and attributed to
+accounting period `October 2026` is an ordinary arrangement, not a contradiction. Deriving one from
+the other collapses two identities a 4/4/5 calendar exists to keep apart.
+
+Attribution is decided by the `attribute_financial_journal_entry` BEFORE INSERT trigger, never by a
+service — a rule the service owns is a rule a second writer can skip. A **draft** obligation has no
+accounting period yet and says so rather than displaying one it has not reached.
 
 ## 3.2 Invoice date and due date
 

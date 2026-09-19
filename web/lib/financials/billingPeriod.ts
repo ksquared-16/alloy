@@ -78,6 +78,52 @@ export function isPeriodBillableCadence(cadence: string): cadence is BillingCade
         || cadence === "monthly" || cadence === "annual";
 }
 
+/**
+ * ── WHAT A CONFIGURED BILLING FREQUENCY ACTUALLY RECURS AS ─────────────────────────────────────
+ *
+ * There are two levels and they are joined by a string. LEVEL 1 is CONFIGURATION: an organisation
+ * authors billing frequencies in the `billing_cadences` option set, and the authoring surface mints
+ * the key from whatever label was typed. LEVEL 2 is DERIVATION: this module turns an accepted term's
+ * cadence key plus the agreement anchor into actual period INSTANCES — and it only knows the five
+ * cadences above.
+ *
+ * Nothing validates the join. An organisation can author "Fortnightly", attach it to a tuition
+ * plan, have an assignment accept a term on it, and then get silence: no billing period on the
+ * assignment, and a generation run that correctly refuses — `isPeriodBillableCadence` is false — but
+ * says so only in a run outcome nobody was watching. The money is safe; the configuration surface
+ * was the thing that never mentioned it.
+ *
+ * This states, from the derivation authority itself, what the configured frequency will produce.
+ * It invents no cadence and decides no policy: it reports what `billingPeriodFor` already does, so
+ * the configuration screen cannot drift from the periods the platform actually derives.
+ */
+export type BillingRecurrence = {
+    /** True when this cadence has an interval the platform can derive periods for. */
+    billable: boolean;
+    /** How it recurs, in operator words — or why it produces no periods. */
+    recurrence: string;
+};
+
+export function billingRecurrenceFor(cadenceKey: string): BillingRecurrence {
+    const cadence = (cadenceKey ?? "").trim();
+    if (!isPeriodBillableCadence(cadence)) {
+        return {
+            billable: false,
+            recurrence: "No recurring periods — nothing is billed on a schedule for this frequency",
+        };
+    }
+    if (cadence === "monthly") return { billable: true, recurrence: "Each calendar month" };
+    if (cadence === "annual") return { billable: true, recurrence: "Each year from the agreement anchor" };
+    const stride = CADENCE_STRIDE_DAYS[cadence] ?? 7;
+    return {
+        billable: true,
+        recurrence:
+            stride === 1 ?
+                "Every day from the agreement anchor"
+            :   `Every ${stride} days from the agreement anchor`,
+    };
+}
+
 export type BillingPeriod = {
     key: BillingPeriodKey;
     /** Inclusive first day, `YYYY-MM-DD`. */
