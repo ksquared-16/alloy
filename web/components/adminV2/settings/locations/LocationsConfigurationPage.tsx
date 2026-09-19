@@ -122,6 +122,7 @@ export default function LocationsConfigurationPage({
         roomRows,
         programCategories,
         schedulePatterns,
+        rows: topologyRows,
         siteLabelById,
         selectedSite,
         createSiteLocation,
@@ -627,6 +628,7 @@ export default function LocationsConfigurationPage({
                 <LocationRoomDetailPanel
                     room={selectedRoom}
                     siteLabel={model?.displayName ?? ""}
+                    topologyRows={topologyRows}
                     programOptions={programOptionsForSite(selectedSite.id)}
                     schedulePatterns={selectedSchedules}
                     canMutate={canMutate}

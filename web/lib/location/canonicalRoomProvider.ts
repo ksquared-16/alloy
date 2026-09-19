@@ -74,6 +74,8 @@ export function toCanonicalRoom(
 export type LocationAncestryRow = {
     id: string;
     parent_location_id?: string | null;
+    /** Needed only to answer WHICH site; `rowBelongsToSite` does not read it. */
+    location_type?: string | null;
 };
 
 /**
@@ -110,6 +112,40 @@ export function rowBelongsToSite(
         hops += 1;
     }
     return false;
+}
+
+/**
+ * WHICH site does `row` resolve to?
+ *
+ * The sibling question to `rowBelongsToSite`, and deliberately a separate
+ * function rather than a refactor of it: that one answers "is it under THIS
+ * site" and needs only the site's id, so it works for a caller holding nothing
+ * but the room list. This one needs the site ROW present, because it recognises
+ * a site by its `location_type`. Same bound, same revisit guard, same refusal to
+ * guess — both mirror `public.location_site_id()`.
+ *
+ * Presentation asks this question: a nested classroom's parent is a physical
+ * room, so "the parent is the site" answers a plausible-looking id that is not a
+ * site at all, and every surface that believed it printed the wrong thing or
+ * nothing.
+ */
+export function resolveRowSiteId(
+    row: LocationAncestryRow,
+    byId: ReadonlyMap<string, LocationAncestryRow>
+): string | null {
+    let current: LocationAncestryRow | undefined = row;
+    const seen = new Set<string>();
+    let hops = 0;
+    while (current && hops < 8) {
+        if (seen.has(current.id)) return null; // cycle
+        seen.add(current.id);
+        if (String(current.location_type ?? "").trim() === "site") return current.id;
+        const parentId = current.parent_location_id ?? null;
+        if (!parentId) return null;
+        current = byId.get(parentId);
+        hops += 1;
+    }
+    return null;
 }
 
 /** Every row in `rows` that belongs to `siteId` by ancestry. */

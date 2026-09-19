@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchLocationProgramCategories } from "@/lib/admin/location/fetchLocationProgramCategories";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
+import { scopeOptionLabel } from "@/lib/locations/topologyPresentation";
 import type { ScopeOptions } from "@/components/adminV2/settings/configurationRuntime/ScopePicker";
 
 /**
@@ -82,11 +83,13 @@ export function useScopeOptions(): ScopeOptionsState {
                 label: `${p.label} · ${siteLabelById.get(p.location_id) ?? "—"}`,
             }))
             .sort((a, b) => a.label.localeCompare(b.label));
+        // Site by canonical ancestry, not by "the parent is the site". A nested
+        // classroom used to render `Toddler 1 · —` here, because its parent is a
+        // physical room and the map only holds sites. This surface keeps its own
+        // smaller `name · site` grammar on purpose — the repair is the resolution,
+        // not the shape.
         const roomOpts = rooms
-            .map((r) => ({
-                id: r.id,
-                label: `${(r.label ?? "").trim() || "Untitled room"} · ${r.parent_location_id ? siteLabelById.get(r.parent_location_id) ?? "—" : "—"}`,
-            }))
+            .map((r) => ({ id: r.id, label: scopeOptionLabel(r, [...sites, ...rooms]) }))
             .sort((a, b) => a.label.localeCompare(b.label));
         return { sites: siteOpts, programs: programOpts, rooms: roomOpts };
     }, [sites, programs, rooms, siteLabelById]);

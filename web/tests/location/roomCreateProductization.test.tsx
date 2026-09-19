@@ -331,7 +331,14 @@ describe("classroom-only fields are offered only for a Classroom", () => {
 // 15 — no existing-location topology control was introduced.
 // ---------------------------------------------------------------------------
 describe("15. editing an existing location gained no topology control", () => {
-    it("the room detail/edit panel offers neither Type nor Inside", async () => {
+    it("the room detail/edit panel offers no Type or Inside CONTROL", async () => {
+        // Slice 5 added read-only Type / Site / Inside to this panel, so the
+        // original proxy — "the file never mentions a topology field name" — no
+        // longer distinguishes displaying topology from editing it. The real
+        // invariant is the absence of a control and of a topology write, and that
+        // is proven by rendering in
+        // tests/location/roomDetailTopologyPresentation.test.tsx. What stays here
+        // is the narrow structural fact: no edit-mode topology control exists.
         const { readFileSync } = await import("node:fs");
         const { resolve } = await import("node:path");
         const src = readFileSync(
@@ -340,7 +347,9 @@ describe("15. editing an existing location gained no topology control", () => {
         );
         expect(src).not.toContain("locations-room-edit-type");
         expect(src).not.toContain("locations-room-edit-inside");
-        expect(src).not.toContain("unit_role");
-        expect(src).not.toContain("parent_location_id");
+        // The save body shape itself is asserted by rendering, in the detail
+        // presentation suite — a source scan cannot tell a display value from a
+        // written one, which is exactly how the original version of this
+        // assertion went stale.
     });
 });

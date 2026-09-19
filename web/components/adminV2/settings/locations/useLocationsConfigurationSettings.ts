@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
 import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
 import { TopologyRefusalError } from "@/lib/locations/topologyRefusalError";
+import { presentRoomTopology } from "@/lib/locations/topologyPresentation";
 import {
     fetchOptionSetItemsBySetKey,
     mapOptionItemsToSelectOptions,
@@ -275,13 +276,22 @@ export function useLocationsConfigurationSettings(options?: {
             return [];
         }
         if (section === "rooms") {
+            // Topology through the ONE presentation authority. The old expression
+            // looked the room's PARENT up in a sites-only map, which is right only
+            // for a room hanging straight off the site — a nested classroom's parent
+            // is a physical room, so it missed and the row rendered with no subtitle
+            // at all. Sorting used the same broken lookup, so those rooms also sorted
+            // under an empty key.
             return roomRows
-                .map((room) => ({
-                    id: room.id,
-                    title: (room.label ?? "").trim() || "Untitled room",
-                    subtitle: room.parent_location_id ? siteLabelById.get(room.parent_location_id) : undefined,
-                    sortSite: room.parent_location_id ? siteLabelById.get(room.parent_location_id) ?? "" : "",
-                }))
+                .map((room) => {
+                    const topology = presentRoomTopology(room, rows);
+                    return {
+                        id: room.id,
+                        title: (room.label ?? "").trim() || "Untitled room",
+                        subtitle: topology.subtitle || undefined,
+                        sortSite: topology.siteLabel ?? "",
+                    };
+                })
                 .sort((a, b) => a.sortSite.localeCompare(b.sortSite) || a.title.localeCompare(b.title));
         }
         return schedulePatterns
@@ -292,7 +302,7 @@ export function useLocationsConfigurationSettings(options?: {
                 sortSite: siteLabelById.get(pattern.site_location_id) ?? "",
             }))
             .sort((a, b) => a.sortSite.localeCompare(b.sortSite) || a.title.localeCompare(b.title));
-    }, [section, siteRows, programCategories, roomRows, schedulePatterns, siteLabelById]);
+    }, [section, siteRows, programCategories, roomRows, rows, schedulePatterns, siteLabelById]);
 
     // Deterministic selection projection (route → retained → none).
     // Locations landing: never auto-open the first location. Do not invent a default.
@@ -556,6 +566,8 @@ export function useLocationsConfigurationSettings(options?: {
         error,
         setError,
         listItems,
+        /** Every site + room row, for surfaces that must resolve topology context. */
+        rows,
         siteRows,
         roomRows,
         programCategories,

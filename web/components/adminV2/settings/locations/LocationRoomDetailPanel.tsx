@@ -28,10 +28,15 @@ import {
     ConfigObjectHeader,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import RoomOrganizationCalculationPanel from "@/components/adminV2/settings/locations/RoomOrganizationCalculationPanel";
+import {
+    presentRoomTopology,
+    roomRailTopologySegments,
+} from "@/lib/locations/topologyPresentation";
 
 export default function LocationRoomDetailPanel({
     room,
     siteLabel,
+    topologyRows,
     programOptions,
     schedulePatterns,
     canMutate,
@@ -44,6 +49,8 @@ export default function LocationRoomDetailPanel({
 }: {
     room: LocationHierarchyRow | null;
     siteLabel: string;
+    /** Sites + rooms, so topology context resolves through canonical ancestry. */
+    topologyRows: readonly LocationHierarchyRow[];
     programOptions: LocationProgramCategoryRow[];
     schedulePatterns: SchedulePatternRow[];
     canMutate: boolean;
@@ -97,6 +104,10 @@ export default function LocationRoomDetailPanel({
             })
         :   null;
     const statusLabel = active ? "Active" : "Inactive";
+    // Read-only topology context. There is no Type or Inside control anywhere in
+    // this panel: the server can safely refuse an unsafe change, but adopting an
+    // existing location is its own product slice.
+    const topology = room ? presentRoomTopology(room, topologyRows) : null;
 
     const beginEdit = () => setEditing(true);
     const cancelEdit = () => {
@@ -317,6 +328,22 @@ export default function LocationRoomDetailPanel({
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" data-testid="locations-room-ops">
                     {[
                         {
+                            key: "type",
+                            label: "Type",
+                            value: topology!.typeLabel,
+                        },
+                        {
+                            key: "site",
+                            label: "Site",
+                            value: topology!.siteLabel ?? siteLabel ?? "Not set",
+                        },
+                        // Omitted entirely when the room hangs off the site — the detail
+                        // grid shows properties that apply, rather than an em dash for
+                        // one that cannot.
+                        ...(topology!.containingSpaceLabel ?
+                            [{ key: "inside", label: "Inside", value: topology!.containingSpaceLabel }]
+                        :   []),
+                        {
                             key: "capacity",
                             label: "Capacity",
                             value: capacity.trim() || "Not set",
@@ -384,7 +411,11 @@ export default function LocationRoomDetailPanel({
                         const inactive = entry.is_active === false;
                         const selected = entry.id === selectedRoomId;
                         const keys = readRoomSupportedProgramKeys(md);
+                        // Type first, then the physical room containing it. The campus is
+                        // the page you are already standing on, so repeating it in every
+                        // row would be noise.
                         const subtitleParts = [
+                            ...roomRailTopologySegments(entry, topologyRows),
                             inactive ? "Inactive" : "Active",
                             capacityMd.capacity ? `${capacityMd.capacity} capacity` : null,
                             keys.length > 0 ? `${keys.length} program${keys.length === 1 ? "" : "s"}` : null,

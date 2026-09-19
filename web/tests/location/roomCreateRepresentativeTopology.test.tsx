@@ -25,6 +25,7 @@ import {
 import { eligibleInsideOptions } from "@/lib/locations/roomTypeVocabulary";
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import { canonicalUnitRoleFromStorage } from "@/lib/location/canonicalLocationModel";
+import { presentRoomTopology } from "@/lib/locations/topologyPresentation";
 import { placeableRooms, toCanonicalRoom, rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
 import { isAttendanceLocatableRole } from "@/lib/location/canonicalLocationModel";
 
@@ -309,35 +310,47 @@ describe("17. downstream consumers read the created topology correctly", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 14 — the presentation gap, RECORDED not repaired.
+// 13 — create → presentation continuity.
 //
-// Slice 1 measured a sites-only label map in the Settings rooms list. Now that
-// the product can actually create a nested classroom, that gap is reachable, so
-// the exact effect is pinned here as evidence for the presentation slice. This
-// test asserts the CURRENT (wrong) behaviour on purpose: when the subtitle is
-// repaired it will fail, which is the signal that the repair landed.
+// Slice 4 pinned the blank nested subtitle here as evidence, deliberately
+// asserting the wrong behaviour so that repairing it would fail the test. Slice 5
+// repaired it, that test failed as designed, and this is what replaced it: what
+// the operator CREATED is now what the presentation EXPLAINS.
 // ---------------------------------------------------------------------------
-describe("14. list subtitle for a newly created nested Classroom (recorded gap)", () => {
-    it("renders no containing-space or site context — the known presentation defect", async () => {
+describe("13. what was created is what the list explains", () => {
+    it("renders the full representative topology in operator grammar", async () => {
         await addRoomThroughTheProduct({ name: "Room 1", type: "physical_space" });
         const room1 = byLabel("Room 1");
         await addRoomThroughTheProduct({ name: "Toddler 1", inside: String(room1.id) });
+        await addRoomThroughTheProduct({ name: "Toddler 2", inside: String(room1.id) });
+        await addRoomThroughTheProduct({ name: "Infant Room" });
+        await addRoomThroughTheProduct({ name: "Playground", type: "shared_space" });
 
         const rows = asHierarchyRows();
-        const siteLabelById = new Map(
-            rows.filter((r) => r.location_type === "site").map((r) => [r.id, (r.label ?? "").trim()]),
-        );
-        // This is the exact expression in useLocationsConfigurationSettings listItems.
-        const nested = rows.find((r) => r.label === "Toddler 1")!;
-        const subtitle = nested.parent_location_id
-            ? siteLabelById.get(nested.parent_location_id)
-            : undefined;
+        const subtitleOf = (label: string) =>
+            presentRoomTopology(rows.find((r) => r.label === label)!, rows).subtitle;
 
-        // The parent is a physical room, which is absent from a sites-only map.
-        expect(subtitle).toBeUndefined();
+        expect(subtitleOf("Room 1")).toBe("Physical room · North Campus");
+        expect(subtitleOf("Toddler 1")).toBe("Classroom · Room 1 · North Campus");
+        expect(subtitleOf("Toddler 2")).toBe("Classroom · Room 1 · North Campus");
+        expect(subtitleOf("Infant Room")).toBe("Classroom · North Campus");
+        expect(subtitleOf("Playground")).toBe("Shared space · North Campus");
+    });
 
-        // A site-parented room is unaffected, which is why the gap stayed hidden.
-        const flat = rows.find((r) => r.label === "Room 1")!;
-        expect(siteLabelById.get(flat.parent_location_id!)).toBe("North Campus");
+    it("leaves no blank subtitle, no em dash, and no unit called Room", async () => {
+        await addRoomThroughTheProduct({ name: "Room 1", type: "physical_space" });
+        await addRoomThroughTheProduct({ name: "Toddler 1", inside: String(byLabel("Room 1").id) });
+        await addRoomThroughTheProduct({ name: "Playground", type: "shared_space" });
+
+        const rows = asHierarchyRows();
+        for (const r of rows.filter((x) => x.location_type === "unit")) {
+            const s = presentRoomTopology(r, rows).subtitle;
+            expect(s.length).toBeGreaterThan(0);
+            expect(s).not.toContain("—");
+            expect(s).not.toContain("undefined");
+        }
+        // The distinction the topology model exists for: not every unit is a Classroom.
+        expect(presentRoomTopology(rows.find((r) => r.label === "Room 1")!, rows).typeLabel).toBe("Physical room");
+        expect(presentRoomTopology(rows.find((r) => r.label === "Playground")!, rows).typeLabel).toBe("Shared space");
     });
 });
