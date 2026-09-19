@@ -132,12 +132,26 @@ describe("one instrumentation authority", () => {
 });
 
 describe("the compose's own semantics are untouched", () => {
-    it("THE GATE: no await was added, removed or reordered", () => {
-        // Timing must observe the route, never change it. Exactly three awaits, in this order.
+    it("THE GATE: the await list is exactly this, in this order", () => {
+        /*
+         * This began as "timing must observe the route, never change it" and caught exactly that:
+         * it failed the moment Option A added a fourth await, which is what it is for.
+         *
+         * The fourth is deliberate and architectural, not instrumentation. The document resolves
+         * the authoritative participation so the producers BELOW IT can answer Attendance and
+         * Health — measured, both returned `unavailable` on every sample without it, and the
+         * browser paid a second ~3,700ms round trip to learn what one indexed read already knew.
+         * It cannot start earlier: `recordOfAttention` is CHOSEN by the compose, so the subject
+         * does not exist until the compose returns. It is therefore one serial indexed read on
+         * `process_instances`, knowingly added, in exchange for retiring the second trip.
+         *
+         * The list stays exact so the next addition has to argue for itself too.
+         */
         const awaits = [...ROUTE_CODE.matchAll(/await (\w+)/g)].map((m) => m[1]);
         expect(awaits).toEqual([
             "resolveWorkUnitRouteIdentity",
             "composeWorkUnitProvisioningAnswer",
+            "resolveSoleEnrollmentParticipantForOpportunity",
             "projectFocusPanelCardProducers",
         ]);
     });

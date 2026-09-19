@@ -2,6 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { listEnrollmentInstancesForLead } from "@/lib/process/processInstances";
+
 /**
  * RESOLVE THE ATTENTION PARTICIPATION TO ITS AUTHORITATIVE MEMBER — scoped to one opportunity.
  *
@@ -78,5 +80,55 @@ export async function resolveParticipationSubjectForOpportunity(args: {
     const customerMemberId = String((data as { subject_id?: unknown }).subject_id ?? "").trim();
     if (!customerMemberId) return null;
 
+    return { participationId, customerMemberId };
+}
+
+/**
+ * THE SOLE ENROLLED CHILD OF ONE OPPORTUNITY — for the frame that has no participation to name.
+ *
+ * ── WHY THIS EXISTS ──
+ *
+ * The resolver above answers "which member is THIS participation?" and needs the caller to name
+ * one. The document/commit frame cannot: on a family-grain opportunity nothing has selected a
+ * child yet, so `attentionSubjectId` is absent and that resolver correctly returns null. The
+ * consequence was measured — the document's card producers run, but Attendance and Health report
+ * `unavailable` on every sample because `participantScope` is null, and the panel has to wait for
+ * a second round trip to learn something the database already knew.
+ *
+ * So this asks the other question: does this opportunity have exactly ONE enrolled child? It reads
+ * the same table, through the same owner (`listEnrollmentInstancesForLead`), scoped to the same
+ * org and the same opportunity as the resolver above — one read, no new authority.
+ *
+ * ── REFUSES TO GUESS ──
+ *
+ * Exactly one child participation resolves. Two or more is AMBIGUOUS and resolves to nothing:
+ * picking the first would attribute one child's attendance and health to another, and those are
+ * the two cards where that is least acceptable. Zero resolves to nothing. This is the same
+ * precedence `resolveParticipantScope` applies to candidates from truth — stated here against the
+ * authoritative table instead of against intake metadata, which is exactly where #1075 went wrong.
+ */
+export async function resolveSoleEnrollmentParticipantForOpportunity(args: {
+    supabase: SupabaseClient;
+    orgId: string;
+    opportunityId: string;
+}): Promise<{ participationId: string; customerMemberId: string } | null> {
+    const orgId = args.orgId?.trim() ?? "";
+    const opportunityId = args.opportunityId?.trim() ?? "";
+    if (!orgId || !opportunityId) return null;
+
+    const rows = await listEnrollmentInstancesForLead(args.supabase, { orgId, opportunityId });
+    const children = rows.filter((r) => {
+        const subjectType = String((r as { subject_type?: unknown }).subject_type ?? "").trim();
+        // An unset subject_type is not a refusal — the org + opportunity + process-key scope has
+        // already authorized the row — but a DIFFERENT named type is.
+        if (subjectType && subjectType !== "child") return false;
+        return String((r as { subject_id?: unknown }).subject_id ?? "").trim() !== "";
+    });
+    if (children.length !== 1) return null;
+
+    const only = children[0] as { id?: unknown; subject_id?: unknown };
+    const participationId = String(only.id ?? "").trim();
+    const customerMemberId = String(only.subject_id ?? "").trim();
+    if (!participationId || !customerMemberId) return null;
     return { participationId, customerMemberId };
 }
