@@ -404,8 +404,27 @@ export default function FinancialsAccountWorkspaceDetail({
                   * from "this charge's child" into account administration; the writer, the
                   * preview and the refusal path are unchanged.
                   */}
+                {/*
+                  * ── ESCAPE DISMISSES THE CARD, NOT THE ACCOUNT ─────────────────────────────
+                  *
+                  * MEASURED: Escape closed the whole Financials surface. The workspace modal
+                  * listens for it, and a depth card that does not answer first hands its own
+                  * dismissal to its host — so an operator closing a panel lost the account, the
+                  * lens, the filters and their place in the ledger.
+                  *
+                  * The card is the innermost open thing, so it answers and stops there.
+                  */}
                 {manageOpen ? (
-                    <div className="px-0.5 pt-2" data-financials-manage-responsibility="depth-card">
+                    <div
+                        className="px-0.5 pt-2"
+                        data-financials-manage-responsibility="depth-card"
+                        onKeyDown={(e) => {
+                            if (e.key !== "Escape") return;
+                            e.stopPropagation();
+                            e.preventDefault();
+                            setManageOpen(false);
+                        }}
+                    >
                         <FinancialsResponsibilityPanel
                             customerId={customerId}
                             customerMemberId={null}

@@ -71,6 +71,23 @@ describe("dismissal returns to the same Details state", () => {
         expect(commit.slice(0, 300)).toContain("await reload()");
     });
 
+    it("Escape dismisses the card and not the account", () => {
+        /*
+         * MEASURED before this lock: Escape closed the whole Financials surface — the workspace
+         * modal listens for it, and a depth card that does not answer first hands its own
+         * dismissal to its host. The operator lost the account, the lens, the filters and their
+         * place in the ledger by closing a panel.
+         */
+        const detail = src(DETAIL);
+        const card = detail.slice(detail.indexOf('data-financials-manage-responsibility="depth-card"'));
+        const handler = card.slice(0, card.indexOf("<FinancialsResponsibilityPanel"));
+        expect(handler).toContain('e.key !== "Escape"');
+        expect(handler, "and it stops there").toContain("e.stopPropagation()");
+        expect(handler).toContain("setManageOpen(false)");
+        /* It can only receive the key if focus is inside it. */
+        expect(src(PANEL)).toContain("tabIndex={-1}");
+    });
+
     it("the depth card is rendered inside Details, above the activity", () => {
         expect(detail.indexOf('data-financials-manage-responsibility="depth-card"')).toBeLessThan(
             detail.indexOf("THE SCROLL REGION BEGINS HERE"),

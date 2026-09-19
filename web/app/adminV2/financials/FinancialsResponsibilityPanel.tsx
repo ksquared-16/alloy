@@ -483,10 +483,17 @@ export default function FinancialsResponsibilityPanel({
         );
     }
 
+    /*
+     * The card is focusable (-1) so that IT, not the workspace behind it, is what Escape reaches,
+     * and so a keyboard operator who opened it with Enter is already inside it. -1 keeps it
+     * reachable by script and click without adding a stop to the tab order.
+     */
     return (
         <section
             className="mb-3 rounded-md border border-alloy-stone/15 bg-white/60 p-3"
             data-financials-manage-responsibility="open-panel"
+            tabIndex={-1}
+            ref={(el) => el?.focus({ preventScroll: true })}
         >
             <p className="text-sm font-semibold text-alloy-midnight">Manage responsibility</p>
             <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
