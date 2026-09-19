@@ -353,6 +353,18 @@ export function installVisibleCompletionProbe(): void {
                     cls: (el?.getAttribute?.("class") || "").slice(0, 70),
                     txt: (el?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60),
                     added: r.addedNodes?.length ?? 0,
+                    /*
+                     * WHICH attribute, whether nodes LEFT, and which card owns it.
+                     *
+                     * The classifier already reads attributeName to separate animation from data,
+                     * but the fingerprint dropped it — so an `attributes` mutation on an
+                     * already-final card looks identical to real content arriving, which is exactly
+                     * the question at the binding render. `removed` likewise: `added: 0` cannot
+                     * currently be told apart from a removal.
+                     */
+                    attr: r.attributeName ?? null,
+                    removed: r.removedNodes?.length ?? 0,
+                    card: cardKeysFor(judged[0])[0] ?? null,
                 });
             }
         }
