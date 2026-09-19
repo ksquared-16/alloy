@@ -1,0 +1,14 @@
+{
+  "vmStatus": 200,
+  "entityType": "opportunity",
+  "hasFamilyOpportunityId": false,
+  "familyOppMatches": [],
+  "recordKeys": [],
+  "cfgStatus": 200,
+  "cfgKeys": [
+    "enrollments",
+    "assignments"
+  ],
+  "assignmentCount": 0,
+  "assignments": []
+}
