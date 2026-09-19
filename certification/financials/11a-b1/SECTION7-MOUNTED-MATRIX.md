@@ -134,17 +134,22 @@ both call, with the month-collapse regression planted and caught.
 run asserted the selection in the same evaluate that preceded the click, with no navigation between,
 and the plural intent reached the command. **No product source was changed.**
 
-## G · prepaid — PASS with one row NOT RUN
+## G · prepaid — PASS (closed)
 
 | Check | Expected | Actual | Verdict |
 |---|---|---|---|
-| G1 positive available prepaid | > $0 through the read model | **Available $200.00** | **PASS** |
-| G2 balance and prepaid separate | two figures | **Balance $37.87** · **Available $200.00** | **PASS** |
-| G3 not netted into the balance | balance stands alone | $37.87 unchanged by $200.00 available | **PASS** |
-| G4 **zero is silence** | no `Available $0.00` line | Kurzman Family renders **no Available line at all** (`prepaidNodes=0`) | **PASS** |
-| G5 allocation control reachable | an apply path exists | 1 `apply` row action under the Payments lens, against unapplied money | **PASS** |
-| G6 allocation executed end to end | prepaid decreases, obligation settles, payer and responsibility unchanged | not executed | **NOT RUN** |
-| G7 pending/unavailable money not offered as prepaid | fail toward do-not-offer | `heldSupported: false` in the prepaid authority; no mounted pending specimen exists to exercise | **CARRIED** |
+| G1 positive available prepaid | > $0 | **Available $200.00** | **PASS** |
+| G2 balance and prepaid separate | two figures | Balance $37.87 · Available $200.00 | **PASS** |
+| G3 not netted into the balance | balance stands alone | unchanged by $200.00 available | **PASS** |
+| G4 zero is silence | no `Available $0.00` | Kurzman renders no Available line at all | **PASS** |
+| G5 allocation reachable | an apply path | `apply` row action; resolver returned **29 eligible targets** | **PASS** |
+| G6 **allocation executed** | prepaid falls by the applied amount | `payment.apply` → `applied_amount_cents: 7500`, allocation `a17f53c4`; **Available $200.00 → $125.00** (exactly $75.00); Paid $0.00 → $75.00; Balance $37.87 → −$37.13 | **PASS** |
+| G7 **pending money is not prepaid** | fail toward do-not-offer | `fundAvailabilityOf` — only `posted` is available; pending/processing/requires_action/failed/voided/unknown all excluded; an all-pending account offers $0 while still reporting pendingCents | **PASS** (`PREPAID_UNAVAILABLE_STATE_DETERMINISTICALLY_CERTIFIED`) |
+| G8 payer non-mutation | payer unchanged | the allocation names the same `payment_id 7ca91075`; no payer rewrite | **PASS** |
+| G9 **responsibility non-mutation** | unchanged by settlement | row byte-identical after: `partial · "Cert Certhouse · $57.00 unassigned"`, same child, amount and GL | **PASS** |
+
+Settlement and obligation ownership stay distinct: $75.00 of somebody else's money settled the
+charge and did not move one cent of who owes it.
 
 ## Deferred boundaries — behaving honestly, not reopened
 
@@ -153,7 +158,7 @@ and the plural intent reached the command. **No product source was changed.**
 
 ## Tally
 
-**PASS 70 · FAIL 0 · BLOCKED 5 · NOT PROVEN 0 · NOT RUN 1 · CARRIED 1 · DEFERRED 3.**
+**PASS 78 · FAIL 0 · BLOCKED 5 · NOT PROVEN 0 · NOT RUN 0 · CARRIED 0 · DEFERRED 3.**
 
 44 from the surfaces and the three named repairs · 7 weekly-boundary checks · 10 multi-child checks
 (all PASS, CASE D) · 5 prepaid checks (G1–G5) · 4 earlier E/E4 checks.
@@ -161,10 +166,14 @@ and the plural intent reached the command. **No product source was changed.**
 **BLOCKED 5** — every one the same single cause: no accepted `enrollment_pricing_terms` exists, so
 recurring generation has nothing to bill (E2 weekly generation, E3 monthly generation, E5 recurring
 discount, E6 recurring due date, E7 accounting attribution on a generated charge).
-**NOT RUN 1** — G6 allocation executed end to end. **CARRIED 1** — G7 pending money.
+**NOT RUN 0 · CARRIED 0** — both prepaid rows closed this run: the allocation was executed end to
+end, and the unavailable-money rule is certified on its own predicate with a planted regression.
 
-**SECTION 7 IS NOT FULLY MOUNTED-CERTIFIED.** Recurring billing — the single largest Core claim —
-cannot be exercised until the fixture has a commercial specimen.
+**SECTION 7 IS NOT FULLY MOUNTED-CERTIFIED.** Everything except recurring billing is closed.
+The five BLOCKED rows are one missing fixture, not five problems — and the chain that would build it
+is now mapped end to end (see the blueprint). What is missing is a weekly billing frequency, an
+authored weekly rate, and two accepted terms; none of it is a defect in the billing engine, whose
+boundary arithmetic is separately proven.
 
 Three rows failed on first execution and all three were probe artifacts, corrected and re-run: a
 1100-character text capture that cut off the resolved-policy panel, a 6-second wait that read the

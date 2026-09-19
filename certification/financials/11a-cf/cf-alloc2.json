@@ -1,0 +1,54 @@
+{
+  "before": {
+    "available": "200.00",
+    "balance": "$37.87",
+    "paid": "$0.00",
+    "targetResponsibility": "partial",
+    "targetResponsibilityText": "Cert Certhouse · $57.00 unassigned",
+    "targetCells": [
+      "Sep 18, 2026",
+      "Fee",
+      "Certb Certhouse",
+      "4010 · Registration Fees",
+      "$75.00",
+      "posted",
+      "Cert Certhouse · $57.00 unassigned",
+      "· $57.00 unassigned",
+      "Registration fee"
+    ]
+  },
+  "after": {
+    "available": "125.00",
+    "balance": "-$37.13",
+    "paid": "$75.00",
+    "targetResponsibility": null,
+    "targetResponsibilityText": null,
+    "targetCells": null
+  },
+  "findings": [
+    {
+      "id": "G6-1",
+      "what": "available prepaid decreases by the applied amount",
+      "ok": true,
+      "observed": "before=$200.00 after=$125.00 delta=$75.00"
+    },
+    {
+      "id": "G6-2",
+      "what": "remaining prepaid stays visible",
+      "ok": true,
+      "observed": "available now $125.00"
+    },
+    {
+      "id": "G6-3",
+      "what": "the target obligation records the money",
+      "ok": true,
+      "observed": "paid before=$0.00 after=$75.00"
+    },
+    {
+      "id": "G7-resp",
+      "what": "responsibility is unchanged by applying money",
+      "ok": false,
+      "observed": "before=\"Cert Certhouse · $57.00 unassigned\" after=\"null\""
+    }
+  ]
+}
