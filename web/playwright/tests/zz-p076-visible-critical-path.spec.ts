@@ -46,9 +46,27 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
      * need to add a parallel timing system to discover what is already measured and shipped.
      */
     let drawerVmTiming: unknown = null;
+    /*
+     * THE ROUTE'S OWN TOTAL, WHICH THE COMPOSER'S PHASES DO NOT COVER.
+     *
+     * compose_ms accounts for a median 2,203ms of a 3,685ms wall — 41% of the endpoint is spent
+     * OUTSIDE the composer and that is where all the run-to-run variance lives. The route already
+     * ships X-Alloy-Server-Duration (whole handler) beside X-Alloy-Drawer-VM-Compose-Ms, so the
+     * split into route overhead and network transfer needs no new server instrumentation at all:
+     *   wall - serverDuration  = network + queueing
+     *   serverDuration - compose = gate + assertRowOrg + participant resolve + card producers
+     *                              + JSON serialization
+     */
+    let drawerVmServerHeaders: Record<string, string | null> = {};
     page.on("response", (r) => {
         const u = r.url();
         if (/\/api\/admin\/view-models\/drawer\/opportunity\//.test(u) && r.status() === 200) {
+            const h = r.headers();
+            drawerVmServerHeaders = {
+                serverDurationMs: h["x-alloy-server-duration"] ?? null,
+                composeMs: h["x-alloy-drawer-vm-compose-ms"] ?? null,
+                structureSettled: h["x-alloy-drawer-vm-structure-settled"] ?? null,
+            };
             void r
                 .json()
                 .then((j: { timing?: unknown }) => {
@@ -271,6 +289,7 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         apiTimingBrowserClock,
         focusChain,
         drawerVmTiming,
+        drawerVmServerHeaders,
         retiredReadProbe: {
             eppEnrichmentHttp: requests.filter((r) => /effective-enrollment|epp/i.test(r.url)).length,
             tourEnrichmentHttp: requests.filter((r) => /tour-bookings|active-tour/i.test(r.url)).length,
