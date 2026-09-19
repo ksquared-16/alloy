@@ -12,9 +12,9 @@
     "start_date": "2026-09-01",
     "outcome_status_key": null,
     "notes": "11A recurring certification assignment",
-    "updated_at": "2026-09-19T02:03:30.421814+00:00"
+    "updated_at": "2026-09-19T02:07:44.600429+00:00"
   },
-  "cfgStatus": 200,
-  "cfgAssignments": 0,
+  "cfgStatus": 500,
+  "cfgAssignments": null,
   "cfgBody": null
 }
