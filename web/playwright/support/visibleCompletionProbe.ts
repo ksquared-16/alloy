@@ -81,6 +81,173 @@ export function installVisibleCompletionProbe(): void {
     };
 
     /*
+     * ── METRIC V2.1: "REACT WROTE AN ATTRIBUTE" IS NOT "NEW TRUTH ARRIVED" ──
+     *
+     * V2 above classifies every attribute outside the small animation set as AUTHORITATIVE_DATA.
+     * Deployed evidence shows what that costs: at the render that mounts the participant cards,
+     * business_process receives only a data-focus-panel-settlement rewrite and financials only a
+     * data-financials-subject rewrite. Neither area's visible truth changes, and both had their
+     * final-authoritative time reset to that moment. The metric was reporting the last React write,
+     * not the last arrival of operator-visible truth.
+     *
+     * The correction needs a rule, not an exclusion list for the two attributes we caught. The
+     * question an attribute has to answer is: DOES ANYTHING RENDER YOU? There are exactly two ways
+     * to say yes, and the page can be asked both:
+     *
+     *   1. The browser itself renders it, or exposes it as state to the accessibility tree —
+     *      disabled, open, value, src, aria-expanded and friends.
+     *   2. A stylesheet SELECTS on it, so its value decides how the element paints.
+     *
+     * An attribute that is neither is a passive stamp: nothing reads it to draw anything. That is
+     * what "diagnostic" means, and it covers identity stamps, routing attributes, section ids,
+     * generation markers and settlement flags without naming any of them here. The set is read
+     * from the product's own stylesheets for the same reason `blocking` is read from the registry:
+     * a second hardcoded list in this file would drift, and drift is how the first two defects got
+     * in.
+     */
+    const STYLED_ATTRS: { set: Set<string> | null } = { set: null };
+    const styledAttributes = (): Set<string> => {
+        // Rebuilt while empty: this probe installs before any stylesheet exists, so the first
+        // caller would otherwise cache "nothing is styled" for the whole run.
+        if (STYLED_ATTRS.set && STYLED_ATTRS.set.size > 0) return STYLED_ATTRS.set;
+        const out = new Set<string>();
+        const walk = (rules: CSSRuleList | undefined, depth: number) => {
+            if (!rules || depth > 4) return;
+            for (let i = 0; i < rules.length; i++) {
+                const rule = rules[i] as CSSStyleRule & { cssRules?: CSSRuleList };
+                const sel = typeof rule.selectorText === "string" ? rule.selectorText : "";
+                const re = /\[\s*([A-Za-z_:][-\w:.]*)/g;
+                let m: RegExpExecArray | null = re.exec(sel);
+                while (m !== null) { out.add(m[1].toLowerCase()); m = re.exec(sel); }
+                if (rule.cssRules) walk(rule.cssRules, depth + 1); // @media, @supports, @layer
+            }
+        };
+        for (let i = 0; i < document.styleSheets.length; i++) {
+            try { walk((document.styleSheets[i] as CSSStyleSheet).cssRules, 0); }
+            catch { /* cross-origin sheet: unreadable, and not one of ours */ }
+        }
+        STYLED_ATTRS.set = out;
+        return out;
+    };
+
+    /** Attributes the browser renders or publishes as state without anyone styling them. */
+    const NATIVE_VISIBLE_STATE = new Set([
+        "disabled", "checked", "selected", "open", "hidden", "readonly", "required", "multiple",
+        "value", "placeholder", "src", "srcset", "href", "alt", "title", "label", "for",
+        "colspan", "rowspan", "role", "contenteditable",
+    ]);
+    const isVisibleStateAttr = (name: string): boolean => {
+        // aria-busy and aria-hidden stay with the animation set: they are the busy flag and the
+        // fade, and V2 already established that neither means data is still arriving.
+        if (ANIMATION_ATTRS.has(name)) return false;
+        if (name.startsWith("aria-")) return true;
+        if (NATIVE_VISIBLE_STATE.has(name)) return true;
+        return styledAttributes().has(name);
+    };
+
+    /*
+     * SEMANTIC FINGERPRINT — what the operator sees, and nothing else.
+     *
+     * Used for one question only: when React replaces a subtree, did anything VISIBLE differ
+     * between what left and what arrived? So it carries visible text, the visible child shape, and
+     * the visible-state attributes of the node and its descendants. It deliberately excludes
+     * class, style, every inert stamp and React node identity — including any of those would make
+     * an identical rerender look like new truth again, which is the defect being repaired.
+     *
+     * It is not a second truth model and it is not a DOM hash: bounded, observation-only, and it
+     * never decides anything except "same or different".
+     */
+    const fingerprint = (n: Node | null): string => {
+        if (!n) return "";
+        if (n.nodeType === 3) return (n.nodeValue || "").replace(/\s+/g, " ").trim();
+        if (n.nodeType !== 1) return "";
+        const el = n as Element;
+        const state: string[] = [];
+        const collect = (e: Element) => {
+            const attrs = e.attributes;
+            for (let i = 0; i < attrs.length; i++) {
+                const a = attrs[i];
+                if (isVisibleStateAttr(a.name)) state.push(e.tagName + "/" + a.name + "=" + a.value);
+            }
+        };
+        collect(el);
+        // Descendants too: an <input value> or an aria-expanded one level down is visible truth,
+        // and a top-level-only fingerprint would call its change an identical rerender.
+        const deep = el.querySelectorAll ? el.querySelectorAll("*") : null;
+        if (deep) for (let i = 0; i < deep.length && i < 60; i++) collect(deep[i]);
+        state.sort();
+        const kids = el.children;
+        const shape: string[] = [];
+        for (let i = 0; i < kids.length && i < 40; i++) shape.push(kids[i].tagName);
+        return [
+            el.tagName,
+            (el.textContent || "").replace(/\s+/g, " ").trim(),
+            shape.join(">"),
+            state.join(","),
+        ].join("|");
+    };
+    const fingerprintList = (nodes: NodeList | Node[]): string =>
+        Array.from(nodes as ArrayLike<Node>).map(fingerprint).filter((x) => x !== "").join("~");
+
+    type Kind21 =
+        | "AUTHORITATIVE_CONTENT_CHANGE"
+        | "AUTHORITATIVE_STRUCTURE_CHANGE"
+        | "AUTHORITATIVE_VISIBLE_STATE_CHANGE"
+        | "IDENTICAL_RERENDER"
+        | "DIAGNOSTIC_ATTRIBUTE_CHANGE"
+        | "PRESENTATIONAL_ANIMATION";
+    /** Only a change in operator-visible authoritative truth may move FINAL_AUTHORITATIVE_MS. */
+    const ADVANCES_FINALITY: Record<Kind21, boolean> = {
+        AUTHORITATIVE_CONTENT_CHANGE: true,
+        AUTHORITATIVE_STRUCTURE_CHANGE: true,
+        AUTHORITATIVE_VISIBLE_STATE_CHANGE: true,
+        IDENTICAL_RERENDER: false,
+        DIAGNOSTIC_ATTRIBUTE_CHANGE: false,
+        PRESENTATIONAL_ANIMATION: false,
+    };
+    const classify21 = (r: MutationRecord): Kind21 => {
+        if (r.type === "attributes") {
+            const raw = r.attributeName ?? "";
+            const name = raw.toLowerCase();
+            const el = r.target.nodeType === 1 ? (r.target as Element) : null;
+            const next = el ? el.getAttribute(raw) : null;
+            /*
+             * SAME VALUE IN, SAME VALUE OUT. Asked before anything else, because the answer can
+             * never depend on which attribute it was: a write that did not change the value cannot
+             * represent newly arrived truth, whatever the attribute means.
+             *
+             * If attributeOldValue was not enabled, oldValue is always null and this degrades to
+             * V2's behaviour rather than to a false "nothing changed".
+             */
+            if (r.oldValue === next) return "IDENTICAL_RERENDER";
+            if (ANIMATION_ATTRS.has(name) || /^data-(motion|anim|transition|framer)/.test(name)) {
+                return "PRESENTATIONAL_ANIMATION";
+            }
+            return isVisibleStateAttr(name)
+                ? "AUTHORITATIVE_VISIBLE_STATE_CHANGE"
+                : "DIAGNOSTIC_ATTRIBUTE_CHANGE";
+        }
+        if (r.type === "characterData") {
+            const now = (r.target.nodeValue || "").replace(/\s+/g, " ").trim();
+            const was = (r.oldValue || "").replace(/\s+/g, " ").trim();
+            return now === was ? "IDENTICAL_RERENDER" : "AUTHORITATIVE_CONTENT_CHANGE";
+        }
+        const added = Array.from(r.addedNodes);
+        const removed = Array.from(r.removedNodes);
+        /*
+         * A REPLACEMENT THAT REPLACES LIKE WITH LIKE is a rerender, not an arrival. This is the
+         * parent-rerender case from section 9: React discards a subtree and rebuilds an identical
+         * one, and counting it reset the finality of every area underneath.
+         */
+        if (added.length > 0 && removed.length > 0 &&
+            fingerprintList(added) === fingerprintList(removed)) {
+            return "IDENTICAL_RERENDER";
+        }
+        const els = [...added, ...removed].filter((n) => n.nodeType === 1).length;
+        return els > 0 ? "AUTHORITATIVE_STRUCTURE_CHANGE" : "AUTHORITATIVE_CONTENT_CHANGE";
+    };
+
+    /*
      * RESERVED GEOMETRY IS NOT DATA (Track-A finality).
      *
      * Track-A reserves the card's space first and fills it when the answer resolves. Both are
@@ -228,7 +395,10 @@ export function installVisibleCompletionProbe(): void {
 
     const V2 = window as unknown as {
         __p076v2?: {
+            /** OLD V2, kept computing unchanged so one sample yields both numbers (section 15). */
             lastBlockingAuthoritativeMs: number;
+            /** METRIC V2.1 — semantic authoritative finality. */
+            finalAuthoritativeMs: number;
             perSection: Record<string, {
                 firstMs: number;
                 lastMs: number;
@@ -238,8 +408,16 @@ export function installVisibleCompletionProbe(): void {
                 anim: number;
                 imageExpected: boolean;
                 imageFinalMs: number;
+                // ── V2.1, per area ──
+                contentMs: number;
+                structureMs: number;
+                visibleStateMs: number;
+                finalAuthMs: number;
+                identicalRerenders: number;
+                diagnosticWrites: number;
             }>;
             kinds: Record<Kind, number>;
+            kinds21: Record<Kind21, number>;
             blockingSeen: string[];
             latestGeneration: string | null;
             staleGenerationSuppressed: number;
@@ -249,8 +427,14 @@ export function installVisibleCompletionProbe(): void {
     };
     V2.__p076v2 = {
         lastBlockingAuthoritativeMs: -1,
+        finalAuthoritativeMs: -1,
         perSection: {},
         kinds: { AUTHORITATIVE_DATA: 0, AUTHORITATIVE_STRUCTURE: 0, PRESENTATIONAL_ANIMATION: 0 },
+        kinds21: {
+            AUTHORITATIVE_CONTENT_CHANGE: 0, AUTHORITATIVE_STRUCTURE_CHANGE: 0,
+            AUTHORITATIVE_VISIBLE_STATE_CHANGE: 0, IDENTICAL_RERENDER: 0,
+            DIAGNOSTIC_ATTRIBUTE_CHANGE: 0, PRESENTATIONAL_ANIMATION: 0,
+        },
         blockingSeen: [],
         latestGeneration: null,
         staleGenerationSuppressed: 0,
@@ -270,8 +454,10 @@ export function installVisibleCompletionProbe(): void {
 
             // ── V2 ──
             const kind = classify(r);
+            const kind21 = classify21(r);
             const v2 = V2.__p076v2!;
             v2.kinds[kind]++;
+            v2.kinds21[kind21]++;
             /*
              * A childList record's `target` is the PARENT. Judging the parent asks "where did
              * something change", when finality is a question about WHAT ARRIVED — the reserved
@@ -296,6 +482,8 @@ export function installVisibleCompletionProbe(): void {
                     firstMs: t, lastMs: -1, lastVisibleMs: -1,
                     data: 0, structure: 0, anim: 0,
                     imageExpected: false, imageFinalMs: -1,
+                    contentMs: -1, structureMs: -1, visibleStateMs: -1,
+                    finalAuthMs: -1, identicalRerenders: 0, diagnosticWrites: 0,
                 };
                 // FINAL_VISIBLE_MS counts every visible change, animation included: the honest
                 // "when did this region stop moving at all". The gap between it and lastMs is the
@@ -312,8 +500,35 @@ export function installVisibleCompletionProbe(): void {
                 } else {
                     if (kind === "AUTHORITATIVE_DATA") ps.data++; else ps.structure++;
                     ps.lastMs = t;
-                    // THE METRIC. Only an authoritative change, only inside a blocking region.
+                    // OLD V2. Only an authoritative change, only inside a blocking region — but
+                    // "authoritative" here still means "was not an animation", which is the defect.
                     if (t > v2.lastBlockingAuthoritativeMs) v2.lastBlockingAuthoritativeMs = t;
+                }
+
+                /*
+                 * ── V2.1 ── The same suppressions (animation, stale generation, reserved
+                 * geometry) still apply, and then the semantic question is asked on top: did this
+                 * mutation change anything the operator can see?
+                 */
+                if (kind21 === "PRESENTATIONAL_ANIMATION") {
+                    /* counted in ps.anim by the legacy arm above */
+                } else if (stale || judged.every(isPlaceholderNode)) {
+                    /* counted by the legacy arm's suppression counters */
+                } else if (kind21 === "IDENTICAL_RERENDER") {
+                    ps.identicalRerenders++;
+                } else if (kind21 === "DIAGNOSTIC_ATTRIBUTE_CHANGE") {
+                    ps.diagnosticWrites++;
+                } else {
+                    if (kind21 === "AUTHORITATIVE_CONTENT_CHANGE") ps.contentMs = t;
+                    else if (kind21 === "AUTHORITATIVE_STRUCTURE_CHANGE") ps.structureMs = t;
+                    else ps.visibleStateMs = t;
+                    // AREA FINALITY. Belongs to this area's own semantic change, so a parent
+                    // rerender cannot reset an area whose visible truth did not move.
+                    ps.finalAuthMs = t;
+                    // THE METRIC (V2.1).
+                    if (ADVANCES_FINALITY[kind21] && t > v2.finalAuthoritativeMs) {
+                        v2.finalAuthoritativeMs = t;
+                    }
                 }
                 v2.perSection[host] = ps;
             }
@@ -347,7 +562,7 @@ export function installVisibleCompletionProbe(): void {
             if (t > 4000 && (LATE.__p076late as unknown[]).length < 80) {
                 const el = (r.target.nodeType === 1 ? r.target : r.target.parentElement) as Element | null;
                 (LATE.__p076late as unknown[]).push({
-                    t, region: key, kind, blocking: host,
+                    t, region: key, kind, kind21, blocking: host,
                     type: r.type,
                     tag: el?.tagName ?? null,
                     cls: (el?.getAttribute?.("class") || "").slice(0, 70),
@@ -363,6 +578,10 @@ export function installVisibleCompletionProbe(): void {
                      * currently be told apart from a removal.
                      */
                     attr: r.attributeName ?? null,
+                    oldV: r.oldValue === null ? null : String(r.oldValue).slice(0, 40),
+                    newV: r.attributeName && el
+                        ? (el.getAttribute(r.attributeName) ?? null)?.slice?.(0, 40) ?? null
+                        : null,
                     removed: r.removedNodes?.length ?? 0,
                     card: cardKeysFor(judged[0])[0] ?? null,
                 });
@@ -390,6 +609,8 @@ export function installVisibleCompletionProbe(): void {
             firstMs: t, lastMs: -1, lastVisibleMs: t,
             data: 0, structure: 0, anim: 0,
             imageExpected: false, imageFinalMs: -1,
+            contentMs: -1, structureMs: -1, visibleStateMs: -1,
+            finalAuthMs: -1, identicalRerenders: 0, diagnosticWrites: 0,
         };
         ps.imageExpected = true;
         if (t > ps.imageFinalMs) ps.imageFinalMs = t;
@@ -402,6 +623,9 @@ export function installVisibleCompletionProbe(): void {
         try {
             new MutationObserver((recs) => mark(recs)).observe(document, {
                 childList: true, subtree: true, characterData: true, attributes: true,
+                // V2.1 needs the PREVIOUS value: without these, "React rewrote the same string"
+                // is indistinguishable from "new truth arrived", which is the defect being fixed.
+                attributeOldValue: true, characterDataOldValue: true,
             });
         } catch { /* retried below */ }
     };
