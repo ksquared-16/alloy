@@ -1,0 +1,54 @@
+{
+  "a": {
+    "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+    "status": 400,
+    "body": {
+      "ok": false,
+      "error": {
+        "code": "ACTION_BLOCKED",
+        "message": "Resolve tuition before committing it.",
+        "details": {
+          "blockers": [
+            {
+              "code": "missing_resolution",
+              "message": "Resolve tuition before committing it.",
+              "field": "resolution_key"
+            },
+            {
+              "code": "missing_option",
+              "message": "Choose a tuition option.",
+              "field": "selected_source_id"
+            }
+          ]
+        }
+      },
+      "correlation_id": "28a7dd6f-f7fc-4ec2-83c0-4c9f2f8cfe6d"
+    }
+  },
+  "b": {
+    "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+    "status": 400,
+    "body": {
+      "ok": false,
+      "error": {
+        "code": "ACTION_BLOCKED",
+        "message": "Resolve tuition before committing it.",
+        "details": {
+          "blockers": [
+            {
+              "code": "missing_resolution",
+              "message": "Resolve tuition before committing it.",
+              "field": "resolution_key"
+            },
+            {
+              "code": "missing_option",
+              "message": "Choose a tuition option.",
+              "field": "selected_source_id"
+            }
+          ]
+        }
+      },
+      "correlation_id": "69ef4da1-0208-472e-8c6c-092e5b7fd2c7"
+    }
+  }
+}

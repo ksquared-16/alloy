@@ -1,0 +1,18 @@
+{
+  "patchA": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "patchB": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "cfgStatus": 200,
+  "enrollments": 0,
+  "assignmentCount": 0,
+  "assignments": []
+}
