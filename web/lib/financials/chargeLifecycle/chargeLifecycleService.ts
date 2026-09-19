@@ -72,6 +72,11 @@ export type SimulateArgs = {
      * existing resolver prices the charge — Consumption never reimplements pricing.
      */
     resolvedAmountCents?: number | null;
+    /**
+     * The AGREED commercial amount (cents) from an accepted `enrollment_pricing_terms` row.
+     * Authoritative over the template's `amount_strategy`; see `ChargeResolutionContext`.
+     */
+    acceptedAmountCents?: number | null;
     today: string;
 };
 
@@ -185,6 +190,7 @@ export async function previewTemplateCharge(
         eventDate: args.eventDate,
         servicePeriodStart: args.servicePeriodStart,
         resolvedAmountCents: args.resolvedAmountCents,
+        acceptedAmountCents: args.acceptedAmountCents,
         quantity: args.quantity,
         unitAmountCents: args.unitAmountCents,
         reviewRequiredByPolicy: reviewByPolicy,

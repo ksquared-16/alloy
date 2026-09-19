@@ -40,6 +40,22 @@ function t(v: unknown): string {
 
 const PRICE_FIELDS = ["amount_cents", "amount", "currency", "currency_code", "cadence_key", "rate_cents"];
 
+/**
+ * THE RUN'S CADENCE — read ONCE, by both preview and execute.
+ *
+ * `buildPreview` used to pass no cadence at all, so `previewTuitionGeneration` defaulted to monthly
+ * while `execute` honoured `payload.cadence`. Measured on the running app: previewing a weekly run
+ * reported the MONTHLY answer — "1 to bill · $1,450.00" — and confirming it then generated FIVE
+ * weekly obligations. The operator confirmed one operation and got another.
+ *
+ * A shared reader is the fix, not a second default: there is now one place that decides what the
+ * operator asked for, and preview and execute cannot disagree about it because neither of them
+ * decides it.
+ */
+export function generationCadenceFrom(payload: Record<string, unknown> | undefined): string {
+    return t(payload?.cadence) || "monthly";
+}
+
 const generateTuition: RegisteredAction = {
     actionKey: BILLING_GENERATE_TUITION_ACTION_KEY,
     defaultLabel: "Generate tuition",
@@ -103,6 +119,7 @@ const generateTuition: RegisteredAction = {
     /** What the run WOULD do, without writing: the same resolution, reported. */
     async buildPreview({ supabase, ctx, payload, invocation }) {
         const periodKey = t(payload?.period_key);
+        const cadenceKey = generationCadenceFrom(payload);
         const scope = scopeFrom(payload, invocation?.entityId);
         const { previewTuitionGeneration } = await import(
             "@/lib/financials/tuitionGeneration/previewTuitionGeneration"
@@ -111,11 +128,12 @@ const generateTuition: RegisteredAction = {
             orgId: ctx.orgId,
             periodKey,
             opportunityCustomerMemberIds: scope,
+            cadenceKey,
         });
         return {
             summary:
                 `${result.counts.generated} to bill, ${result.counts.notDue} not due, `
-                + `${result.counts.refused} refused for ${periodKey}`,
+                + `${result.counts.refused} refused for ${cadenceKey} ${periodKey}`,
             changes: result.outcomes
                 .slice(0, 20)
                 .map((o) =>
@@ -134,6 +152,9 @@ const generateTuition: RegisteredAction = {
              */
             after: {
                 period_key: periodKey,
+                // The plan the operator is confirming, echoed so Confirm can be checked against it.
+                cadence_key: result.cadenceKey,
+                service_period: result.servicePeriod,
                 counts: result.counts,
                 total_amount_cents: result.outcomes.reduce(
                     (sum, o) => sum + (o.kind === "generated" ? o.amountCents : 0),
@@ -165,7 +186,7 @@ const generateTuition: RegisteredAction = {
                 periodKey: t(payload?.period_key),
                 actorUserId: ctx.userId ?? null,
                 opportunityCustomerMemberIds: scopeFrom(payload, invocation.entityId),
-                cadenceKey: t(payload?.cadence) || undefined,
+                cadenceKey: generationCadenceFrom(payload),
                 today: t(payload?.today) || null,
             });
             return {
@@ -178,6 +199,7 @@ const generateTuition: RegisteredAction = {
                     affectedId: result.outcomes.find((o) => o.kind === "generated")?.assignmentId ?? null,
                     detail: {
                         period_key: result.periodKey,
+                        cadence_key: result.cadenceKey,
                         service_period: result.servicePeriod,
                         /*
                          * COUNTS STAY COUNTS. `refused` and `errors` were both a number and a list
