@@ -66,6 +66,7 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
                 serverDurationMs: h["x-alloy-server-duration"] ?? null,
                 composeMs: h["x-alloy-drawer-vm-compose-ms"] ?? null,
                 structureSettled: h["x-alloy-drawer-vm-structure-settled"] ?? null,
+                routePhases: h["x-alloy-drawer-vm-route-phases"] ?? null,
             };
             void r
                 .json()
