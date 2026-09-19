@@ -52,6 +52,8 @@ type ChargeDetail = {
     currencyCode: string;
     status: string;
     serviceDate: string | null;
+    invoiceDate: string | null;
+    dueDate: string | null;
     postedAt: string | null;
     customerId: string | null;
     customerMemberId: string | null;
@@ -265,6 +267,24 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                 value={detail.billingPeriodLabel ?? "Unplaced"}
                 testId="billing-period"
             />
+            {/*
+              * INVOICE AND DUE, BESIDE THE PERIODS AND NEVER FOLDED INTO THEM. The invoice date is
+              * when the obligation was issued; the due date is when payment is expected and is
+              * blank for an organisation that has configured no terms — which is a real answer,
+              * not a missing one, so it is stated rather than hidden.
+              */}
+            <Row
+                label="Invoice date"
+                value={formatDisplayDate(detail.invoiceDate) || "—"}
+                muted={!detail.invoiceDate}
+                testId="invoice-date"
+            />
+            <Row
+                label="Due date"
+                value={detail.dueDate ? formatDisplayDate(detail.dueDate) : "No configured terms"}
+                muted={!detail.dueDate}
+                testId="due-date"
+            />
             <Row
                 label="Accounting period"
                 value={
@@ -317,6 +337,8 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                     customerId={detail.customerId}
                     customerMemberId={detail.customerMemberId}
                     chargeId={detail.chargeId}
+                    chargeStatus={detail.status}
+                    subjectLabel={detail.childName}
                     arrangement={detail.accountArrangement}
                     parties={detail.responsibility.parties}
                     onCommitted={reload}

@@ -1,0 +1,1457 @@
+[
+  {
+    "chargeId": "32fc1712-661d-4270-8309-306ac549c7bb",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "Sep 14, 2026",
+      "Late pickup",
+      "Certa Certhouse",
+      "4040 · Late Pickup Fees",
+      "$25.00",
+      "posted",
+      "Not allocated",
+      "Late pickup"
+    ]
+  },
+  {
+    "chargeId": "04fe2205-dd53-4ce2-a077-adbad350b969",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "Sep 2, 2026",
+      "Consumable fee",
+      "Certb Certhouse",
+      "4030 · Supply Fees",
+      "$18.00",
+      "posted",
+      "Not allocated",
+      "Materials"
+    ]
+  },
+  {
+    "chargeId": "f089a3f4-85a1-44b6-bb94-50588a581b00",
+    "responsibility": "unassigned",
+    "responsibilityText": "Unassigned",
+    "cells": [
+      "Sep 2, 2026",
+      "Consumable fee",
+      "Certa Certhouse",
+      "4030 · Supply Fees",
+      "$18.00",
+      "posted",
+      "Unassigned",
+      "Materials"
+    ]
+  },
+  {
+    "chargeId": "afe85059-1e5a-48c6-b527-4a2183e0c2ca",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "Sep 1, 2026",
+      "Tuition",
+      "Certa Certhouse",
+      "4000 · Tuition Revenue",
+      "$400.00",
+      "posted",
+      "Not allocated",
+      "Monthly tuition"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "reversed",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Reversal",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$12.34",
+      "reversed",
+      "Not allocated",
+      "adjustment · One-time · certification cleanup: restoring the household to where it was found"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$12.34",
+      "reversed",
+      "Not allocated",
+      "One-time · Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$12.34",
+      "reversed",
+      "Not allocated",
+      "One-time · Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": "1c719952-ea0c-4466-a9ec-f80e6a5c0451",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Reversal",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$12.34",
+      "posted",
+      "Not allocated",
+      "adjustment · One-time · Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": "26947342-a2f5-4711-9714-52087be488ae",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "posted",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": "26b91a27-9ced-42f9-a1aa-7a19cba04c09",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "draft",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": "28f933c1-6716-4d7d-aa34-3416af7dab47",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$12.34",
+      "draft",
+      "Not allocated",
+      "One-time · Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": "2b9b90ea-32ce-4b0a-ae3b-a2e073b7d35c",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Discount",
+      "Certa Certhouse",
+      "4060 · Discounts & Credits",
+      "-$40.00",
+      "draft",
+      "Not allocated",
+      "10% of $400.00 · Ongoing"
+    ]
+  },
+  {
+    "chargeId": "2e2cfce4-c070-472f-8850-802878b0ac89",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "posted",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": "33f906d1-f770-493f-958e-3bc8c2a99d8c",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "posted",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": "3e7d5cc9-d118-4c47-8e4e-1be59b703e20",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "posted",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$7.77",
+      "posted",
+      "Not allocated",
+      "reversal of charge 00ca85be-2e0d-4155-9405-4ab85a7c022d"
+    ]
+  },
+  {
+    "chargeId": "462d8dfb-3b38-459b-a45f-caf50dc510f6",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certa Certhouse",
+      "4060 · Discounts & Credits",
+      "-$0.01",
+      "draft",
+      "Not allocated",
+      "One-time · certification: control that this seam accepts a valid payload"
+    ]
+  },
+  {
+    "chargeId": "504fc966-0ae4-42a6-97a3-3c41d053e084",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Reversal",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$12.34",
+      "posted",
+      "Not allocated",
+      "adjustment · One-time · Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": "51110530-e69e-46da-a003-3b9cba8668ee",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$12.34",
+      "posted",
+      "Not allocated",
+      "One-time · Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": "5882e81b-053b-4869-91a9-e9ddbe91dce9",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "posted",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": "5f8bb088-a90d-4dc7-a3de-48cd3eced4dc",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "posted",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": "617d6a9b-92d2-4504-ab33-d751e7934352",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certa Certhouse",
+      "4060 · Discounts & Credits",
+      "-$0.01",
+      "draft",
+      "Not allocated",
+      "One-time · certification: control that this seam accepts a valid payload"
+    ]
+  },
+  {
+    "chargeId": "61c31166-ab88-4246-902a-caa7adf00089",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Reversal",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$12.34",
+      "posted",
+      "Not allocated",
+      "adjustment · One-time · Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": "6b8d2ece-248c-4067-8017-124700d27766",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Reversal",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$12.34",
+      "posted",
+      "Not allocated",
+      "adjustment · One-time · Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": "6fe4f79e-23ac-4c43-85fb-770b0f6a0ce6",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$12.34",
+      "posted",
+      "Not allocated",
+      "One-time · Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": "70140abb-d4f2-4600-865c-253256741bb9",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Reversal",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$7.77",
+      "posted",
+      "Not allocated",
+      "adjustment · One-time · Oracle: undoing the goodwill"
+    ]
+  },
+  {
+    "chargeId": "790a0f87-75aa-4700-bd6f-4fee8a5890c6",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "posted",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": "7bcc1474-eaa3-4ce8-aeeb-873c6aed019b",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Reversal",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$7.77",
+      "posted",
+      "Not allocated",
+      "adjustment · One-time · Oracle: undoing the goodwill"
+    ]
+  },
+  {
+    "chargeId": "7f6d65d4-9d19-4861-b949-54720a472686",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Reversal",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$7.77",
+      "posted",
+      "Not allocated",
+      "adjustment · One-time · Oracle: undoing the goodwill"
+    ]
+  },
+  {
+    "chargeId": "7ff924ba-c2de-4b2a-9658-73bd67ae1d27",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$12.34",
+      "posted",
+      "Not allocated",
+      "One-time · Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": "81aac23f-8325-490d-bf32-589e1be3f605",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "posted",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": "82a4c6b6-3d5d-4ae7-88e7-ec6a2d3d0b72",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$12.34",
+      "posted",
+      "Not allocated",
+      "One-time · Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": "888eefa9-c971-4746-a663-496c264f0a84",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Reversal",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$12.34",
+      "posted",
+      "Not allocated",
+      "adjustment · One-time · Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": "91cffb5f-58d0-45bc-9c42-bae510aeebce",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "posted",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": "920d0db5-6a5a-450d-ac1c-36b2deaf666a",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "posted",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$12.34",
+      "posted",
+      "Not allocated",
+      "reversal of charge 05e433e2-c848-454f-b2a7-de0c3db7797a"
+    ]
+  },
+  {
+    "chargeId": "9752d248-9dee-4cca-af1c-430e54e045f0",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Reversal",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$12.34",
+      "posted",
+      "Not allocated",
+      "adjustment · One-time · Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": "9984d627-3ee9-4329-805f-30617e86f32f",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Reversal",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$12.34",
+      "posted",
+      "Not allocated",
+      "adjustment · One-time · Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": "9a83be9f-e69b-4eeb-b0ee-f53b4d8e3138",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "posted",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": "9a882511-7bf6-40ed-82f6-3513c1801bd7",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "draft",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": "9f21ca82-0643-4b20-a51a-3b94ecd2b0e1",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$12.34",
+      "posted",
+      "Not allocated",
+      "One-time · Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": "a3c05b21-1288-4df7-b8e5-5fe4937f69de",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "posted",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$12.34",
+      "posted",
+      "Not allocated",
+      "reversal of charge 029fe538-5cca-421d-9b23-cb3a4d37858c"
+    ]
+  },
+  {
+    "chargeId": "aefa5069-85da-4d4e-801d-7572c781f1cf",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "posted",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": "b0e60126-a64d-478a-9e6c-acfd844b476f",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$12.34",
+      "posted",
+      "Not allocated",
+      "One-time · Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": "b2f3de78-831d-4903-a714-d73dc573da9a",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$12.34",
+      "draft",
+      "Not allocated",
+      "One-time · Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": "c03df42e-0a19-4ef8-9ff4-b5b04a4bf0de",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Reversal",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$12.34",
+      "posted",
+      "Not allocated",
+      "adjustment · One-time · Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": "caf07f67-ec16-4f45-8ebb-d37d3520c6a3",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$12.34",
+      "posted",
+      "Not allocated",
+      "One-time · Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": "d4cbfd7d-b0fd-4b8b-850c-57a7bd5f92db",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$12.34",
+      "posted",
+      "Not allocated",
+      "One-time · Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": "e9a2f2a6-84af-47e9-a132-583c5bbcb42c",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Reversal",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$12.34",
+      "posted",
+      "Not allocated",
+      "adjustment · One-time · Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": "eca09a0b-19b7-424d-a5ef-a2a00ba37140",
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "-$7.77",
+      "posted",
+      "Not allocated",
+      "One-time · Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-allocated",
+    "responsibilityText": "Not allocated",
+    "cells": [
+      "—",
+      "Credit",
+      "Certb Certhouse",
+      "4060 · Discounts & Credits",
+      "$12.34",
+      "posted",
+      "Not allocated",
+      "reversal of charge 0f9a367f-f01f-4eca-8bc9-dbb58bc80150"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Adjustment",
+      "Household",
+      "—",
+      "$12.34",
+      "reversal",
+      "—",
+      "Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$12.34",
+      "reversed",
+      "—",
+      "Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Adjustment",
+      "Household",
+      "—",
+      "$7.77",
+      "reversal",
+      "—",
+      "Oracle: undoing the goodwill"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "reversed",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Adjustment",
+      "Household",
+      "—",
+      "$12.34",
+      "reversal",
+      "—",
+      "Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$12.34",
+      "reversed",
+      "—",
+      "Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Adjustment",
+      "Household",
+      "—",
+      "$7.77",
+      "reversal",
+      "—",
+      "Oracle: undoing the goodwill"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "reversed",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Adjustment",
+      "Household",
+      "—",
+      "$7.77",
+      "reversal",
+      "—",
+      "Oracle: undoing the goodwill"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "reversed",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "posted",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "posted",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "posted",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "posted",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "posted",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "posted",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "posted",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "posted",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "posted",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "posted",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "posted",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "draft",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "draft",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$7.77",
+      "posted",
+      "—",
+      "Oracle: goodwill against this obligation"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Adjustment",
+      "Household",
+      "—",
+      "$12.34",
+      "reversal",
+      "—",
+      "Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 14, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$12.34",
+      "reversed",
+      "—",
+      "Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Adjustment",
+      "Household",
+      "—",
+      "$12.34",
+      "reversal",
+      "—",
+      "Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$12.34",
+      "reversed",
+      "—",
+      "Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Adjustment",
+      "Household",
+      "—",
+      "$12.34",
+      "reversal",
+      "—",
+      "Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$12.34",
+      "reversed",
+      "—",
+      "Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Adjustment",
+      "Household",
+      "—",
+      "$12.34",
+      "reversal",
+      "—",
+      "Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$12.34",
+      "reversed",
+      "—",
+      "Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Adjustment",
+      "Household",
+      "—",
+      "$12.34",
+      "reversal",
+      "—",
+      "certification cleanup: restoring the household to where it was found"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$0.01",
+      "draft",
+      "—",
+      "certification: control that this seam accepts a valid payload"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Adjustment",
+      "Household",
+      "—",
+      "$12.34",
+      "reversal",
+      "—",
+      "Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$12.34",
+      "reversed",
+      "—",
+      "Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$0.01",
+      "draft",
+      "—",
+      "certification: control that this seam accepts a valid payload"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Adjustment",
+      "Household",
+      "—",
+      "$12.34",
+      "reversal",
+      "—",
+      "Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$12.34",
+      "reversed",
+      "—",
+      "Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Adjustment",
+      "Household",
+      "—",
+      "$12.34",
+      "reversal",
+      "—",
+      "Certification: recorded against the wrong enrolment"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$12.34",
+      "reversed",
+      "—",
+      "Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$12.34",
+      "reversed",
+      "—",
+      "Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$12.34",
+      "draft",
+      "—",
+      "Certification: goodwill for a closure day"
+    ]
+  },
+  {
+    "chargeId": null,
+    "responsibility": "not-applicable",
+    "responsibilityText": "—",
+    "cells": [
+      "Sep 13, 2026",
+      "Credit",
+      "Household",
+      "—",
+      "-$12.34",
+      "draft",
+      "—",
+      "Certification: goodwill for a closure day"
+    ]
+  }
+]

@@ -8,7 +8,10 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+    CATALOG_VERSION,
+    CORE_DEFERRALS,
     SCENARIOS,
+    SCENARIO_PROGRAM,
     WALKTHROUGH_SCENARIOS,
     scenarioByKey,
     MONEY_INVARIANTS,
@@ -139,5 +142,91 @@ describe("the Director QA scenario catalog", () => {
                 /takePaymentCard|takePaymentAch|achAvailable|merchant|provider configuration/i,
             );
         }
+    });
+});
+
+/**
+ * THE PROGRAM AXIS — added at the Core freeze, and locked for the same reason the keys are.
+ *
+ * A Core catalog whose Payments scenarios look runnable will be planned against, and the plan will
+ * be wrong. A scenario with no classification at all is worse: it is neither in Core's scope nor
+ * out of it, and nobody notices until someone tries to run it.
+ */
+describe("the program each scenario belongs to", () => {
+    it("classifies every scenario, and classifies nothing that does not exist", () => {
+        for (const s of SCENARIOS) {
+            expect(SCENARIO_PROGRAM[s.key], `${s.key} has no program classification`).toBeTruthy();
+        }
+        for (const key of Object.keys(SCENARIO_PROGRAM)) {
+            expect(scenarioByKey(key), `SCENARIO_PROGRAM names ${key}, which is not a scenario`).toBeTruthy();
+        }
+    });
+
+    /*
+     * THE PAYMENT PRIMITIVES STAY CORE. Payments EXTENDS them; it does not replace them, and moving
+     * them out would leave the next program with no foundation to build on and this catalog with no
+     * proof the foundation works.
+     */
+    it("keeps the payment foundation in Core", () => {
+        for (const key of [
+            "payment_receipt",
+            "actual_payer_is_not_responsibility",
+            "apply_payment",
+            "partial_unapplied",
+            "prepaid_available_and_applied",
+        ]) {
+            expect(SCENARIO_PROGRAM[key], `${key} is Core, not Payments`).toBe("CORE_RUNNABLE");
+        }
+    });
+
+    /* And the provider-dependent ones are not pretending to be runnable Core QA. */
+    it("moves provider-dependent scenarios to the Payments phase", () => {
+        for (const key of ["card_collection", "ach_processing", "provider_return", "refund"]) {
+            expect(SCENARIO_PROGRAM[key], `${key} needs Payments`).toBe("PAYMENTS_PHASE");
+        }
+    });
+
+    /*
+     * THE RECURRING CHAIN IS THE POINT OF THIS FREEZE. Section 7 certified it; if the catalog does
+     * not ASK a human to drive it, the certification is the only thing that ever will.
+     */
+    it("asks a human to drive the recurring billing chain Section 7 certified", () => {
+        for (const key of [
+            "billing_preview_reachable",
+            "accept_recurring_terms",
+            "recurring_preview_is_the_run",
+            "recurring_generation_bills_the_accepted_price",
+            "recurring_rerun_is_honest",
+            "recurring_term_lifecycle",
+            "recurring_discount_reduces_net",
+            "discount_rerun_and_veto",
+            "recurring_due_date",
+        ]) {
+            const s = scenarioByKey(key);
+            expect(s, `${key} is missing from the catalog`).toBeTruthy();
+            expect(s!.disposition, `${key} must be walked through by a human`).toBe("HUMAN_WALKTHROUGH");
+            expect(SCENARIO_PROGRAM[key]).toBe("CORE_RUNNABLE");
+        }
+    });
+
+    /* The three deferrals are stated in the catalog, not only in a certification document. */
+    it("states the three accepted Core deferrals in full", () => {
+        expect(CORE_DEFERRALS.map((d) => d.key)).toEqual([
+            "SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED",
+            "LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED",
+            "DEPOSIT_OPERATOR_PRODUCTIZATION_GAP",
+        ]);
+        for (const d of CORE_DEFERRALS) {
+            expect(d.statement.length, `${d.key} is too thin to weigh`).toBeGreaterThan(120);
+        }
+    });
+
+    /*
+     * A REWRITTEN QUESTION IS A NEW QUESTION. Results are persisted against the version they were
+     * given under, so a catalog that gained twelve scenarios must not still claim the old version.
+     */
+    it("carries a version later than the one the previous catalog published", () => {
+        expect(CATALOG_VERSION).not.toBe("2026-09-16.3");
+        expect(CATALOG_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}\.\d+$/);
     });
 });

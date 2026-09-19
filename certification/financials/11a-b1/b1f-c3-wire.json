@@ -1,0 +1,99 @@
+[
+  {
+    "url": "/api/admin/queue-view-totals",
+    "request": {
+      "targets": [
+        {
+          "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+          "queueKey": "lifecycle_lead",
+          "workViewId": "new_leads"
+        },
+        {
+          "workUnitId": "a428520f-b6a1-4913-8209-2d45a9affcd9",
+          "queueKey": "lifecycle_qualification",
+          "workViewId": "new_work_view_2"
+        },
+        {
+          "workUnitId": "5c0d15fc-6545-411c-9a73-8df3df772f62",
+          "queueKey": "lifecycle_tour",
+          "workViewId": "new_work_view_3"
+        },
+        {
+          "workUnitId": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+          "queueKey": "lifecycle_waitlist",
+          "workViewId": "new_work_view_4"
+        },
+        {
+          "workUnitId": "dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+          "queueKey": "lifecycle_enrolled",
+          "workViewId": "new_work_view_5"
+        },
+        {
+          "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+          "queueKey": "lifecycle_lead",
+          "workViewId": "new_work_view_6"
+        },
+        {
+          "workUnitId": "dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+          "queueKey": "lifecycle_enrolled",
+          "workViewId": "new_work_view_7"
+        }
+      ],
+      "selectedSiteId": null
+    },
+    "response": {
+      "generatedAt": "2026-09-18T23:54:52.221Z",
+      "totals": [
+        {
+          "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+          "queueKey": "lifecycle_lead",
+          "workViewId": "new_leads",
+          "count": 3,
+          "known": true
+        },
+        {
+          "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+          "queueKey": "lifecycle_lead",
+          "workViewId": "new_work_view_6",
+          "count": 7,
+          "known": true
+        },
+        {
+          "workUnitId": "a428520f-b6a1-4913-8209-2d45a9affcd9",
+          "queueKey": "lifecycle_qualification",
+          "workViewId": "new_work_view_2",
+          "count": 0,
+          "known": true
+        },
+        {
+          "workUnitId": "5c0d15fc-6545-411c-9a73-8df3df772f62",
+          "queueKey": "lifecycle_tour",
+          "workViewId": "new_work_view_3",
+          "count": 3,
+          "known": true
+        },
+        {
+          "workUnitId": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+          "queueKey": "lifecycle_waitlist",
+          "workViewId": "new_work_view_4",
+          "count": 16,
+          "known": true
+        },
+        {
+          "workUnitId": "dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+          "queueKey": "lifecycle_enrolled",
+          "workViewId": "new_work_view_5",
+          "count": 0,
+          "known": true
+        },
+        {
+          "workUnitId": "dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+          "queueKey": "lifecycle_enrolled",
+          "workViewId": "new_work_view_7",
+          "count": 2,
+          "known": true
+        }
+      ]
+    }
+  }
+]

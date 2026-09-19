@@ -51,6 +51,11 @@ import { financialsClock, recordFinancialsSpans } from "@/lib/perf/routeTimingDi
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import { readAccountReductions, type AccountReduction } from "@/lib/financials/reductions/readAccountReductions";
 import {
+    reductionProvenanceByChargeId,
+    type ReductionPolicyWindow,
+    type ReductionProvenance,
+} from "@/lib/financials/reductions/reductionProvenance";
+import {
     resolvePayerCandidates,
     resolvePaymentSetup,
     type PayerCandidate,
@@ -250,8 +255,23 @@ export type FinancialsLedgerRow = {
     responsiblePartyName: string | null;
     /** An allocation exists for this charge and deliberately names no party. */
     responsibilityUnassigned: boolean;
+    /*
+     * Owed by a named party on this obligation, and owed by nobody yet — both are true at once.
+     * Optional because a row that has never been through allocation simply has neither; the
+     * projection always supplies them, and absent reads as zero everywhere they are used.
+     */
+    responsibilityAssignedCents?: number;
+    responsibilityUnassignedCents?: number;
     /** Where the row came from — template key, or the manual service. */
     source: string | null;
+    /**
+     * WHY THIS REDUCTION EXISTS, where the row IS one.
+     *
+     * Null on an ordinary charge. Present on a discount, credit, adjustment or reversal, carrying
+     * the decision behind the money — which policy, on what basis, one-time or ongoing, and what it
+     * reverses. Derived once by `reductionProvenance` so both deep surfaces state the same meaning.
+     */
+    reduction: ReductionProvenance | null;
 };
 
 export type FinancialsReconciliation = {
@@ -589,14 +609,18 @@ export async function readResponsibility(
     payers: FinancialsCardVM["payers"];
     expectedFunding: FinancialsCardVM["expectedFunding"];
     /** The same allocations, indexed by charge, so a ledger row can name who owes it. */
-    responsibilityByCharge: Map<string, { name: string | null; unassigned: boolean }>;
+    responsibilityByCharge: Map<string, {
+        name: string | null; unassigned: boolean; assignedCents: number; unassignedCents: number;
+    }>;
 }> {
     const empty = {
         responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
         payers: [],
         expectedFunding: [],
         /* No allocations read means no row can name a responsible party. It never means nobody owes. */
-        responsibilityByCharge: new Map<string, { name: string | null; unassigned: boolean }>(),
+        responsibilityByCharge: new Map<string, {
+            name: string | null; unassigned: boolean; assignedCents: number; unassignedCents: number;
+        }>(),
     };
     if (chargeIds.length === 0) return empty;
 
@@ -697,14 +721,37 @@ export async function readResponsibility(
      * SPLIT rather than as one of them — picking a winner would be this projection deciding a
      * responsibility question the allocations deliberately left as two.
      */
-    const byCharge = new Map<string, { names: Set<string>; unassigned: boolean }>();
+    const byCharge = new Map<string, {
+        names: Set<string>; unassigned: boolean; assignedCents: number; unassignedCents: number;
+    }>();
     for (const a of allocations) {
-        const entry = byCharge.get(a.charge_id) ?? { names: new Set<string>(), unassigned: false };
-        if (a.is_unassigned || !a.responsible_party_id) entry.unassigned = true;
-        else entry.names.add(nameById.get(a.responsible_party_id) ?? "Responsible party");
+        const entry = byCharge.get(a.charge_id)
+            ?? { names: new Set<string>(), unassigned: false, assignedCents: 0, unassignedCents: 0 };
+        const amount = Number(a.assigned_amount_cents) || 0;
+        if (a.is_unassigned || !a.responsible_party_id) {
+            entry.unassigned = true;
+            entry.unassignedCents += amount;
+        } else {
+            entry.names.add(nameById.get(a.responsible_party_id) ?? "Responsible party");
+            entry.assignedCents += amount;
+        }
         byCharge.set(a.charge_id, entry);
     }
-    const responsibilityByCharge = new Map<string, { name: string | null; unassigned: boolean }>(
+    /*
+     * ── A NAME AND A REMAINDER ARE BOTH TRUE AT ONCE ───────────────────────────────────────────
+     *
+     * A $75.00 obligation resolved under an arrangement naming one $18.00 fixed share produces TWO
+     * allocations: $18.00 owed by a person and $57.00 owed by nobody. This map carried only
+     * `{name, unassigned}`, the surfaces rendered the name, and an operator read a partially
+     * allocated obligation as fully owned by the person named. The $57.00 was invisible.
+     *
+     * The amounts travel with the name so a surface can say PARTIAL without recomputing anything.
+     * They are sums of the allocations already in hand — no second read, and no second opinion
+     * about what is owed.
+     */
+    const responsibilityByCharge = new Map<string, {
+        name: string | null; unassigned: boolean; assignedCents: number; unassignedCents: number;
+    }>(
         [...byCharge].map(([chargeId, entry]) => [
             chargeId,
             {
@@ -713,6 +760,8 @@ export async function readResponsibility(
                     : entry.names.size > 1 ? "Split"
                     : null,
                 unassigned: entry.unassigned,
+                assignedCents: entry.assignedCents,
+                unassignedCents: entry.unassignedCents,
             },
         ]),
     );
@@ -1121,6 +1170,48 @@ async function buildFinancialsCardVMInner(
     const memberRows = (memberResult as { data: unknown }).data;
     const [glMappingResult, glAccountResult, templateResult] = configResult as Array<{ data: unknown }>;
     vm.reductions = reductions;
+
+    /*
+     * ── THE POLICIES THOSE REDUCTIONS NAME ────────────────────────────────────────────────────
+     *
+     * Read ONLY for the ids the applications actually carry, so an account with no policy-produced
+     * reductions asks nothing. The window is what makes "ongoing" a fact rather than a guess: a
+     * policy still active with an open end recurs, one whose window closed does not, and an
+     * application whose policy cannot be found reports `unknown` rather than inventing "one-time".
+     */
+    const policyIds = [...new Set(reductions.map((r) => r.commercialPolicyId).filter((v): v is string => !!v))];
+    const policyWindows = new Map<string, ReductionPolicyWindow>();
+    if (policyIds.length) {
+        const { data: policyRows } = await supabase
+            .from("commercial_policies")
+            .select("id, effective_start, effective_end, is_active")
+            .eq("org_id", args.orgId)
+            .in("id", policyIds);
+        for (const p of (policyRows ?? []) as unknown as Array<Record<string, unknown>>) {
+            policyWindows.set(t(p.id), {
+                id: t(p.id),
+                effectiveStart: t(p.effective_start) || null,
+                effectiveEnd: t(p.effective_end) || null,
+                isActive: p.is_active !== false,
+            });
+        }
+    }
+    const provenanceByCharge = reductionProvenanceByChargeId(
+        reductions,
+        policyWindows,
+        today,
+        /*
+         * The basis phrase needs a formatted figure and the VM has no formatter — `money` belongs to
+         * the adapter, which runs later. A local one here keeps the layers where they are; it states
+         * cents in the account's currency and decides nothing about the amount.
+         */
+        (cents) =>
+            (cents / 100).toLocaleString(undefined, {
+                style: "currency",
+                // The reductions' own currency; they are stored with one and it is the row's.
+                currency: reductions[0]?.currencyCode || "USD",
+            }),
+    );
     const nameByMember = new Map(
         ((memberRows ?? []) as unknown as Array<Record<string, unknown>>).map((m) => [
             t(m.id),
@@ -1264,12 +1355,21 @@ async function buildFinancialsCardVMInner(
             /* Filled in below, once the responsibility read has answered. Absent until then. */
             responsiblePartyName: null,
             responsibilityUnassigned: false,
+            responsibilityAssignedCents: 0,
+            responsibilityUnassignedCents: 0,
             /*
              * PROVENANCE, not a key. `metadata.charge_template_key` is `field_trip`; the operator
              * configured that template and already sees its LABEL in the description, so this column
              * says HOW the row came to exist rather than repeating an identifier.
              */
             source: t(metadata.source) === "charge_template" ? "Template" : t(metadata.source) ? "Import" : "Manual",
+            /*
+             * The decision behind this row, when the row is a reduction. Looked up by the charge the
+             * application wrote, which is exactly how a reduction reaches the ledger in the first
+             * place. Null for an ordinary charge, and null for a reduction with no application
+             * record — an absence stated rather than a shape invented.
+             */
+            reduction: provenanceByCharge.get(t(c.id)) ?? null,
         };
     });
     // Newest first inside a period; the ledger reads downward through time.
@@ -1370,6 +1470,9 @@ async function buildFinancialsCardVMInner(
         const owned = responsibilityRead.responsibilityByCharge.get(row.chargeId);
         row.responsiblePartyName = owned?.name ?? null;
         row.responsibilityUnassigned = owned?.unassigned ?? false;
+        /* Both halves, so a surface can state PARTIAL from canonical truth rather than infer it. */
+        row.responsibilityAssignedCents = owned?.assignedCents ?? 0;
+        row.responsibilityUnassignedCents = owned?.unassignedCents ?? 0;
     }
 
     /*

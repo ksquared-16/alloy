@@ -1,0 +1,35 @@
+{
+  "present": true,
+  "mode": "charge",
+  "subjectLine": [],
+  "childBoxes": [
+    {
+      "id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "checked": false
+    }
+  ],
+  "childSum": null,
+  "selects": [
+    {
+      "testid": null,
+      "value": "e6f64079-681d-4d60-8be3-fac451edadb1",
+      "options": [
+        "Field trip",
+        "Late pickup",
+        "Materials",
+        "Monthly tuition",
+        "Registration fee"
+      ]
+    },
+    {
+      "testid": null,
+      "value": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "options": [
+        "Household",
+        "Certa Certhouse",
+        "Certb Certhouse"
+      ]
+    }
+  ],
+  "text": "ADD\nCharge\nAdjustment\nCHARGE TYPEREQUIRED\nField trip\nLate pickup\nMaterials\nMonthly tuition\nRegistration fee\n5 configured types\nHousehold · dated by the event · billed next cycle · fixed amount\nCHARGE\nAPPLIES TOREQUIRED\nHousehold\nCerta Certhouse\nCertb Certhouse\nALSO BILL\nCerta Certhouse\nAMOUNT\n$40.00\nNOTE\nDATES\nSERVICE DATEREQUIRED\nBILLING PERIOD\nSeptember 2026\nDUE\nConfigured policy\nPOSTING\nPosts on confirm — owed immediately\nCHARGE TO\nRESPONSIBILITY\nHousehold\nPREVIEW\nField trip\n+$40.00\nPosts on confirm — this is what the family will owe.\nCurrent balance\n-$55.13\nAFTER POSTING\n-$55.13\nAdd charge\nCancel"
+}

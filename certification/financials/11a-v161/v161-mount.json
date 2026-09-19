@@ -1,0 +1,39 @@
+{
+  "layoutCalls": [
+    {
+      "status": 200,
+      "version": 161,
+      "id": "cd3edf93-d224-4009-9c00-fa1798d544a8"
+    }
+  ],
+  "firstCardMs": 17,
+  "mountedCardKeys": [
+    "business_process",
+    "financials",
+    "children",
+    "household",
+    "attendance",
+    "health_safety",
+    "assignment_tuition"
+  ],
+  "duplicateCards": [],
+  "billingPreviewCount": 0,
+  "billingPreviewHasTuitionBody": false,
+  "tuitionCount": "0",
+  "tuitionError": null,
+  "emptyLine": [
+    "No assignment on this record to price."
+  ],
+  "assignments": [],
+  "billingPreviewText": null,
+  "financialsText": "FINANCIALS\n\nCURRENT PERIOD\n\nSeptember 2026\n\nCHARGES\n\nFee\n$150.00\nConsumable fee\n$36.00\n\nDISCOUNTS & CREDITS\n\nCredit\n-$260.06\nAdjustment\n$146.71\nNET OBLIGATION\n$37.87\nAdd\n\nDUE\n\n$607.00\n\nNothing past due\n\nBalance\n-$37.13\nPaid\n$75.00\nUnassigned\n$132.00\nAvailable\n$125.00\nPayment\nDetails\n→",
+  "processText": "ENROLLMENT\n\nLead\n\nAug 26\n\nTour\n\nDecision\n\nSep 18\n\nWaitlist\n\nEnrolling\n\nEnrolled\n\nSep 18\n\nCC\nCerta\nCC\nCertb\n\nLEAD\n\nNo current work configured · Post-enrollment follow-up.\n\nRecent activity\n4\n▾",
+  "pricingReads": [
+    {
+      "name": "/api/admin/financial-config/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+      "start": 6331,
+      "end": 6549
+    }
+  ],
+  "domContentLoaded": 3106
+}

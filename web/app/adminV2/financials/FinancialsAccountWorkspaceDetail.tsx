@@ -9,7 +9,8 @@ import {
     RowAction,
     type FinancialsLedgerRowView,
 } from "@/components/operationalCards/FinancialsLedger";
-import { financialTransactionEligibility } from "@/lib/financials/commands/financialTransactionCommands";
+import { financialRowConceptLabel } from "@/lib/financials/reductions/reductionProvenance";
+import { financialResponsibilityEligibility, financialTransactionEligibility } from "@/lib/financials/commands/financialTransactionCommands";
 import { useFinancialCommandChannel } from "@/components/financials/FinancialCommandChannel";
 import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 import {
@@ -21,6 +22,7 @@ import {
     hasChoice,
     lensCounts,
     payerOptions,
+    responsiblePartyOptions,
     periodOptions,
     subjectOptions,
     type AccountLens,
@@ -109,6 +111,7 @@ export default function FinancialsAccountWorkspaceDetail({
     const [subject, setSubject] = useState<string | null>(null);
     const [periodKey, setPeriodKey] = useState<string | null>(null);
     const [payer, setPayer] = useState<string | null>(null);
+    const [responsibleParty, setResponsibleParty] = useState<string | null>(null);
 
     /* The account still selected. Every response is checked against it before it is allowed to land. */
     const wantedRef = useRef(customerId);
@@ -148,17 +151,19 @@ export default function FinancialsAccountWorkspaceDetail({
     const subjects = useMemo(() => subjectOptions(rows as never), [rows]);
     const periods = useMemo(() => periodOptions(rows as never), [rows]);
     const payers = useMemo(() => payerOptions(payments as never), [payments]);
+    /* Who is OBLIGATED — a different question from whose child it is, and from who paid. */
+    const responsibleParties = useMemo(() => responsiblePartyOptions(rows as never), [rows]);
     const counts = useMemo(
-        () => lensCounts(rows as never, payments as never, { subject, periodKey }),
-        [rows, payments, subject, periodKey],
+        () => lensCounts(rows as never, payments as never, { subject, periodKey, responsibleParty }),
+        [rows, payments, subject, periodKey, responsibleParty],
     );
 
     const ledger = useMemo(
         () =>
-            filterLedger(rows as never, { ...NO_FILTER, lens, subject, periodKey })
+            filterLedger(rows as never, { ...NO_FILTER, lens, subject, periodKey, responsibleParty })
                 .slice()
                 .sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? ""))),
-        [rows, lens, subject, periodKey],
+        [rows, lens, subject, periodKey, responsibleParty],
     );
     const visiblePayments = useMemo(
         () => filterPayments(payments as never, { payerLabel: payer }) as unknown as Row[],
@@ -290,6 +295,24 @@ export default function FinancialsAccountWorkspaceDetail({
                                 options={periods}
                             />
                         ) : null}
+                        {/*
+                          * WHO OWES IT — offered beside the subject, never instead of it. A row can
+                          * concern Ana while responsibility belongs to a parent; those are two
+                          * questions and the ledger answers them from two authorities.
+                          *
+                          * Hidden under the Payments lens for the same reason the subject filter is:
+                          * a receipt is not an obligation, and responsibility is a fact about the
+                          * obligation. Payer is the question there, and it already has the control.
+                          */}
+                        {!loading && lens !== "payments" && hasChoice(responsibleParties) ? (
+                            <Filter
+                                testId="responsible-party"
+                                value={responsibleParty ?? ""}
+                                onChange={(v) => setResponsibleParty(v || null)}
+                                placeholder="Anyone responsible"
+                                options={responsibleParties}
+                            />
+                        ) : null}
                         {!loading && lens === "payments" && hasChoice(payers) ? (
                             <Filter
                                 testId="payer"
@@ -408,6 +431,44 @@ export default function FinancialsAccountWorkspaceDetail({
  * about money — the exact thing `accountLenses` refuses to do. A number on screen is either
  * canonical or it is a row count, never a subtotal invented by a presentation layer.
  */
+/*
+ * ── PROVENANCE, READ THE SAME WAY ON BOTH SURFACES ─────────────────────────────────────────────
+ *
+ * The projection already decided what this reduction is and how its number was reached; these only
+ * reach into the row for it. The preview is the same short line the Focus Panel's detail card
+ * builds — basis, recurrence, and the sentence somebody wrote — because a row that meant one thing
+ * here and another there would be exactly the semantic fork the convergence forbids.
+ */
+type RowReduction = {
+    conceptLabel?: string;
+    basisSummary?: string | null;
+    recurrenceLabel?: string;
+    explanation?: string | null;
+};
+
+function reductionOf(row: Record<string, unknown>): RowReduction | null {
+    const r = row.reduction as RowReduction | null | undefined;
+    return r ?? null;
+}
+
+function reductionPreviewOf(row: Record<string, unknown>): string | null {
+    const r = reductionOf(row);
+    if (!r) return null;
+    const label = row.description == null ? "" : String(row.description);
+    /* Same rule as the Focus Panel: an explanation that already carries the basis is not repeated. */
+    const basis = r.basisSummary ?? null;
+    const explanation =
+        basis && r.explanation && String(r.explanation).includes(basis) ? null : r.explanation;
+    const parts = [basis, r.recurrenceLabel || null, explanation].filter(
+        (v): v is string => Boolean(v && String(v).trim()),
+    );
+    if (!parts.length) return label || null;
+    /* Same rule as the Focus Panel: the TYPE column already states the concept. */
+    const concept = String(r.conceptLabel ?? "");
+    const redundant = label.toLowerCase() === concept.toLowerCase();
+    return (redundant ? parts : [label, ...parts]).filter(Boolean).join(" · ");
+}
+
 function LedgerPeriods({
     rows,
     cur,
@@ -480,7 +541,10 @@ function LedgerPeriods({
  */
 function workspaceRowActions(
     row: Row,
-    request: ((r: { kind: "adjust" | "reverse" | "post"; chargeId: string; label: string }) => void) | null,
+    request: ((r: {
+        kind: "adjust" | "reverse" | "post" | "resolveResponsibility" | "reallocateResponsibility";
+        chargeId: string; label: string;
+    }) => void) | null,
 ) {
     const chargeId = row.chargeId ? String(row.chargeId) : null;
     if (!request || !chargeId) return undefined;
@@ -490,7 +554,24 @@ function workspaceRowActions(
         offersPost: Boolean(row.offersPost),
         offersReverse: Boolean(row.offersReverse),
     });
-    if (!eligible.post && !eligible.reverse && !eligible.adjust) return undefined;
+    /*
+     * WHO OWES IT — the same shared rule the Focus Panel applies, read from the same row fields.
+     * The workspace does not decide this and does not perform it: it asks on the channel, and the
+     * account card raises the canonical command. A workspace-only resolve would be the second
+     * writer this whole architecture exists to prevent.
+     */
+    const responsibility = financialResponsibilityEligibility({
+        chargeId,
+        /*
+         * A reduction is not an obligation — its responsibility belongs to the charge it reduces.
+         * The Focus Panel derives this the same way, from the same reduction fact, so neither host
+         * can end up offering to divide a discount while the other refuses.
+         */
+        responsibilityApplies: !reductionOf(row),
+        responsibleParty: row.responsiblePartyName ? String(row.responsiblePartyName) : null,
+    });
+    if (!eligible.post && !eligible.reverse && !eligible.adjust
+        && !responsibility.resolve && !responsibility.reallocate) return undefined;
     return (
         <>
             {eligible.post ? (
@@ -520,6 +601,24 @@ function workspaceRowActions(
                     onClick={() => request({ kind: "adjust", chargeId, label })}
                 />
             ) : null}
+            {responsibility.resolve ? (
+                <RowAction
+                    kind="resolveResponsibility"
+                    command="billing.resolve_responsibility"
+                    chargeId={chargeId}
+                    title={`Resolve who owes ${label} — divide it under the arrangement in force`}
+                    onClick={() => request({ kind: "resolveResponsibility", chargeId, label })}
+                />
+            ) : null}
+            {responsibility.reallocate ? (
+                <RowAction
+                    kind="reallocateResponsibility"
+                    command="billing.reallocate_responsibility"
+                    chargeId={chargeId}
+                    title={`Reallocate ${label} — move what one party owes to another`}
+                    onClick={() => request({ kind: "reallocateResponsibility", chargeId, label })}
+                />
+            ) : null}
         </>
     );
 }
@@ -534,9 +633,20 @@ function ledgerRowFromWorkspaceRow(row: Row, cur: string): FinancialsLedgerRowVi
     return {
         key: String(row.chargeId),
         when: shortDate(row.date as string | null),
-        type: String(row.categoryLabel ?? row.categoryKey ?? "—"),
+        /*
+         * THE SAME MEANING THE FOCUS PANEL STATES. `reduction.conceptLabel` is the canonical answer
+         * to what this row IS — Discount, Credit, Adjustment or Reversal — and the category is only
+         * how the money posts. Two surfaces showing one account must not disagree about whether a
+         * row is a discount, so both read the same projected field.
+         */
+        /* Same order as the Focus Panel, from the same shared rule: a reversal is a Reversal. */
+        type: financialRowConceptLabel({
+            correctionKind: row.correctionKind ? String(row.correctionKind) : null,
+            reductionConceptLabel: reductionOf(row)?.conceptLabel ?? null,
+            categoryLabel: String(row.categoryLabel ?? row.categoryKey ?? "—"),
+        }),
         child: String(row.subjectName ?? "Household"),
-        description: String(row.description ?? "—"),
+        description: reductionPreviewOf(row) ?? String(row.description ?? "—"),
         glLabel: glCode ? (glName ? `${glCode} · ${glName}` : glCode) : null,
         amount: moneyExact(n(row.amountCents), cur),
         amountNote:
@@ -546,6 +656,9 @@ function ledgerRowFromWorkspaceRow(row: Row, cur: string): FinancialsLedgerRowVi
         status: String(row.lifecycleStatus ?? row.status ?? "—"),
         responsibleParty: row.responsiblePartyName ? String(row.responsiblePartyName) : null,
         responsibilityUnassigned: Boolean(row.responsibilityUnassigned),
+        /* Same projection, same two halves — neither host infers PARTIAL for itself. */
+        responsibilityAssignedCents: Number(row.responsibilityAssignedCents ?? 0),
+        responsibilityUnassignedCents: Number(row.responsibilityUnassignedCents ?? 0),
         /* History that no longer counts — a business state, never the amount's sign. */
         tone: row.lifecycleStatus === "reversed" ? "muted" : undefined,
         title: corrected ?? undefined,

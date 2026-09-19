@@ -59,6 +59,36 @@ export type AccountReduction = {
     reversedByApplicationId: string | null;
     /** Set on a reversal, naming the reduction it undoes. */
     reversesApplicationId: string | null;
+
+    /*
+     * ── THE PROVENANCE THE TABLE ALWAYS STORED AND THIS READER USED TO DROP ────────────────────
+     *
+     * `financial_reduction_applications` exists precisely so a reduction is not money without a
+     * reason: it records which authored policy produced the number, what the number was calculated
+     * on, whether a cap bound it, and the policy AS IT WAS at the moment of application. The select
+     * asked for none of it, so an operator looking at -$260.06 in the ledger could see the money and
+     * not the decision — which is the question the table was created to answer.
+     *
+     * Nothing here is inferred. Every field below is a column, read as stored.
+     */
+
+    /** The authored `commercial_policies` row that produced this, when a policy did. */
+    commercialPolicyId: string | null;
+    /** `discount` | `sibling_discount` | `waiver` — what KIND of reduction the policy is. */
+    policyKind: string | null;
+    /** `percentage` | `amount` — how the number was reached. */
+    basis: string | null;
+    /** The authored value: 10 for 10%, or cents for a fixed amount. */
+    basisValue: number | null;
+    /** What the percentage was taken ON, in cents. */
+    basisAmountCents: number | null;
+    /** True when a configured cap bound the result below what the basis would have given. */
+    capped: boolean;
+    /** The human sentence the applier wrote, where it wrote one. */
+    explanation: string | null;
+    /** The service period the reduction belongs to, where it names one. */
+    periodStart: string | null;
+    periodEnd: string | null;
 };
 
 type Row = Record<string, unknown>;
@@ -88,7 +118,10 @@ export async function readAccountReductions(
         .select(
             "id, reduction_kind, enrollment_agreement_id, customer_member_id, charge_id, "
             + "source_charge_id, amount_cents, currency_code, reason, period_key, created_at, "
-            + "reversed_by_id, reverses_id",
+            + "reversed_by_id, reverses_id, "
+            // The decision behind the money — see the provenance note on the type.
+            + "commercial_policy_id, policy_kind, basis, basis_value, basis_amount_cents, "
+            + "capped, explanation, period_start, period_end",
         )
         .eq("org_id", input.orgId)
         .in("enrollment_agreement_id", ids);
@@ -130,6 +163,15 @@ export async function readAccountReductions(
             reason: nullable(r.reason),
             periodKey: nullable(r.period_key),
             createdAt: nullable(r.created_at),
+            commercialPolicyId: nullable(r.commercial_policy_id),
+            policyKind: nullable(r.policy_kind),
+            basis: nullable(r.basis),
+            basisValue: r.basis_value == null ? null : Number(r.basis_value),
+            basisAmountCents: r.basis_amount_cents == null ? null : Number(r.basis_amount_cents),
+            capped: r.capped === true,
+            explanation: nullable(r.explanation),
+            periodStart: nullable(r.period_start),
+            periodEnd: nullable(r.period_end),
             chargeId: nullable(r.charge_id),
             chargeStatus: statusByCharge.get(t(r.charge_id)) ?? null,
             sourceChargeId: nullable(r.source_charge_id),

@@ -1,7 +1,9 @@
 "use client";
 
+import { financialRowConceptLabel } from "@/lib/financials/reductions/reductionProvenance";
+import { financialResponsibilityEligibility } from "@/lib/financials/commands/financialTransactionCommands";
 import clsx from "clsx";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
@@ -40,6 +42,9 @@ import type { FinancialsEvidence, FinancialsLedgerPeriod } from "@/lib/cardLab/c
  * No running balance column: `ledger_transactions` has no authoritative running balance, and
  * computing one in the card would invent an ordering the backend does not guarantee.
  */
+/** An obligation nobody has been made answerable for. A state, not a person — so it sorts last. */
+const UNASSIGNED_LABEL = "Unassigned";
+
 export default function FinancialsDetailCard({
     evidence,
     periods,
@@ -52,9 +57,12 @@ export default function FinancialsDetailCard({
     onPostCharge,
     onReverseCharge,
     onAdjustCharge,
+    onResolveResponsibility,
+    onReallocateResponsibility,
     onApplyPayment,
     hydrating = false,
     ledgerPending = false,
+    paymentBand,
     lens: lensProp,
     onLensChange,
     expandedPeriods,
@@ -81,6 +89,22 @@ export default function FinancialsDetailCard({
      * changes what is owed and stays its peer. Absent in the lab, where the controls are inert.
      */
     onPayment?: () => void;
+    /**
+     * THE PAYMENT BAND, RENDERED INSIDE THIS CARD.
+     *
+     * It used to be a SIBLING of this component — the host rendered `<FinancialsDetailCard/>` and
+     * then the band next to it, inside the surface wrapper. So the band sat outside the card's own
+     * box, at the wrapper's left edge, and once Details was focused an operator saw a stray
+     * `Record payment →` floating beside the focused surface with no card around it. Measured
+     * mounted: a visible leaf at 509,522 whose nearest `data-universal-card-key` ancestor was null,
+     * while the Details card itself began at x≈528.
+     *
+     * The content was always legitimate — a ledger that cannot show what was received is half a
+     * ledger. What was wrong was OWNERSHIP: a focused surface owns everything it presents. Passing
+     * it in as a slot puts it inside the card that owns the interaction, and costs no depth
+     * mechanism, no z-index exception and no second scrim.
+     */
+    paymentBand?: ReactNode;
     onAddCharge?: () => void;
     onManagePayment?: () => void;
     /** Correct WHICH obligation a receipt answered. Absent in the lab, where controls are inert. */
@@ -98,6 +122,12 @@ export default function FinancialsDetailCard({
      * card neither writes nor composes an adjustment of its own.
      */
     onAdjustCharge?: (args: { chargeId: string }) => void;
+    /*
+     * WHO OWES AN OBLIGATION — the charge-grain responsibility commands. Details ADMINISTERS
+     * responsibility; Summary only reports it, so these never travel to the compact card.
+     */
+    onResolveResponsibility?: (args: { chargeId: string; label: string }) => void;
+    onReallocateResponsibility?: (args: { chargeId: string; label: string }) => void;
     /** Put already-received money against an obligation. */
     onApplyPayment?: (args: { paymentId: string }) => void;
     /**
@@ -162,14 +192,29 @@ export default function FinancialsDetailCard({
     const [subject, setSubject] = useState<string | null>(null);
     const [periodLabel, setPeriodLabel] = useState<string | null>(null);
     const [payer, setPayer] = useState<string | null>(null);
+    /* WHO OWES IT — distinct from whose child the row is, and from who paid. */
+    const [responsibleParty, setResponsibleParty] = useState<string | null>(null);
 
     const allEntries = useMemo(() => periods.flatMap((p) => p.entries), [periods]);
 
     /* Counts of ROWS, never sums of cents — the same rule `accountLenses` keeps. */
+    /*
+     * ONE PREDICATE FOR THE COUNTS AND THE ROWS. A badge derived from a different rule than the
+     * ledger it labels promises rows the operator will not find — the exact defect the subject
+     * convergence repaired once already.
+     */
+    const inResponsibleScope = useCallback(
+        (e: { responsibleParty?: string | null }) =>
+            !responsibleParty
+            || ((e.responsibleParty ?? "").trim() || UNASSIGNED_LABEL) === responsibleParty,
+        [responsibleParty],
+    );
+
     const counts = useMemo(() => {
         const scoped = allEntries.filter(
             (e) =>
                 (!subject || e.subject === subject)
+                && inResponsibleScope(e)
                 && (!periodLabel || periods.some((p) => p.label === periodLabel && p.entries.includes(e))),
         );
         const out: Record<AccountLens, number> = {
@@ -192,6 +237,20 @@ export default function FinancialsDetailCard({
         [allEntries],
     );
     const periodChoices = useMemo(() => periods.map((p) => p.label), [periods]);
+    /*
+     * Derived from the ROWS, never from household membership: a parent made responsible for nothing
+     * is not a filter an operator needs, and offering them implies an arrangement that does not
+     * exist. An obligation with no named party files under "Unassigned", which is a real and
+     * frequently the most actionable choice.
+     */
+    const responsiblePartyChoices = useMemo(
+        () =>
+            [...new Set(allEntries.map((e) => (e.responsibleParty ?? "").trim() || UNASSIGNED_LABEL))].sort(
+                (a, b) =>
+                    a === UNASSIGNED_LABEL ? 1 : b === UNASSIGNED_LABEL ? -1 : a.localeCompare(b),
+            ),
+        [allEntries],
+    );
     const payerChoices = useMemo(
         () =>
             [...new Set(evidence.payments.map((p) => p.payerLabel ?? "").filter(Boolean))].sort((a, b) =>
@@ -208,11 +267,14 @@ export default function FinancialsDetailCard({
             .map((p) => ({
                 ...p,
                 entries: p.entries.filter(
-                    (e) => (lens === "all" || e.lens === lens) && (!subject || e.subject === subject),
+                    (e) =>
+                        (lens === "all" || e.lens === lens)
+                        && (!subject || e.subject === subject)
+                        && inResponsibleScope(e),
                 ),
             }))
             .filter((p) => p.entries.length > 0);
-    }, [periods, lens, subject, periodLabel]);
+    }, [periods, lens, subject, periodLabel, inResponsibleScope]);
 
     const visiblePayments = useMemo(
         () => (payer ? evidence.payments.filter((p) => (p.payerLabel ?? "") === payer) : evidence.payments),
@@ -408,6 +470,20 @@ export default function FinancialsDetailCard({
                                 options={periodChoices}
                             />
                         ) : null}
+                        {/*
+                          * WHO OWES IT — the second question the ledger answers about an obligation,
+                          * and a different one from whose child it is. Absent under the Payments
+                          * lens, where the question is who actually paid and Payer owns it.
+                          */}
+                        {lens !== "payments" && responsiblePartyChoices.length > 1 ? (
+                            <LensFilter
+                                testId="responsible-party"
+                                value={responsibleParty ?? ""}
+                                onChange={(v) => setResponsibleParty(v || null)}
+                                placeholder="Anyone responsible"
+                                options={responsiblePartyChoices}
+                            />
+                        ) : null}
                         {lens === "payments" && payerChoices.length > 1 ? (
                             <LensFilter
                                 testId="payer"
@@ -493,7 +569,10 @@ export default function FinancialsDetailCard({
                             expandedOverride={expandedPeriods?.[per.label]}
                             onToggle={onPeriodToggle}
                             rows={per.entries.map((e, i) =>
-                                ledgerRowFromEntry(e, i, { onPostCharge, onReverseCharge, onAdjustCharge }),
+                                ledgerRowFromEntry(e, i, {
+                                    onPostCharge, onReverseCharge, onAdjustCharge,
+                                    onResolveResponsibility, onReallocateResponsibility,
+                                }),
                             )}
                         />
                     ))}
@@ -646,6 +725,13 @@ export default function FinancialsDetailCard({
                     </div>
                 ) : null}
 
+                {/* Inside the card, because the focused surface owns what it presents. */}
+                {paymentBand ? (
+                    <div className="alloy-os-fdetail__paymentband" data-financials-payment-band="detail">
+                        {paymentBand}
+                    </div>
+                ) : null}
+
                 </div>
 
                             </UniversalCard>
@@ -664,6 +750,47 @@ export default function FinancialsDetailCard({
  * Nothing here computes. Every label, sign and status arrives already decided by the adapter that
  * owns it.
  */
+/**
+ * The provenance an operator needs at a glance, joined into one short line.
+ *
+ * Deliberately bounded: basis, recurrence and the human sentence. Ids, timestamps and the policy
+ * snapshot are real provenance and belong at depth, not in a ledger row — this file's whole
+ * argument is that a row states a fact and does not become a paragraph.
+ */
+function reductionPreview(e: FinancialsEvidence["ledger"][number]): string | null {
+    const r = e.reduction;
+    if (!r) return null;
+    /*
+     * THE EXPLANATION SOMETIMES IS THE BASIS. `applyFinancialReductions` writes an explanation like
+     * "discount · 10% of $400.00", so stating both produced
+     * "10% of $400.00 · Ongoing · discount · 10% of $400.00" — the row saying one fact twice in its
+     * narrowest column. Where the explanation already carries the basis, the basis alone is kept.
+     */
+    const basis = r.basisSummary;
+    const explanation =
+        basis && r.explanation && r.explanation.includes(basis) ? null : r.explanation;
+    const parts = [basis, r.recurrenceLabel || null, explanation].filter(
+        (v): v is string => Boolean(v && v.trim()),
+    );
+    if (!parts.length) return e.label || null;
+
+    /*
+     * ── THE TYPE COLUMN ALREADY SAID IT ──────────────────────────────────────────────────────
+     *
+     * The label led here at first, and measured at 1680 the cell renders "discount · 10% of …" in
+     * 103px — the row spent its scarcest column repeating the word already printed one column to
+     * the left, and truncated the only part an operator could not get elsewhere.
+     *
+     * So where the label merely restates the concept, it is dropped and the BASIS leads. Where it
+     * says something the concept does not — a real description — it is kept. The column is not
+     * widened and the ledger keeps its density; the row simply stops saying the same thing twice.
+     */
+    const label = (e.label ?? "").trim();
+    const redundant = label.toLowerCase() === r.conceptLabel.toLowerCase()
+        || label.toLowerCase() === r.concept.toLowerCase();
+    return (redundant ? parts : [label, ...parts]).filter(Boolean).join(" · ");
+}
+
 function ledgerRowFromEntry(
     e: FinancialsEvidence["ledger"][number],
     index: number,
@@ -671,6 +798,9 @@ function ledgerRowFromEntry(
         onPostCharge?: (args: { chargeId: string; label: string }) => void;
         onReverseCharge?: (args: { chargeId: string; label: string }) => void;
         onAdjustCharge?: (args: { chargeId: string }) => void;
+        /* Who owes this obligation. Charge-grain, and a different question from the arrangement. */
+        onResolveResponsibility?: (args: { chargeId: string; label: string }) => void;
+        onReallocateResponsibility?: (args: { chargeId: string; label: string }) => void;
     },
 ): FinancialsLedgerRowView {
     const post = e.chargeId && e.offersPost && actions.onPostCharge;
@@ -682,19 +812,57 @@ function ledgerRowFromEntry(
      * is why it gates both — Reverse and Adjust are two readings of one eligibility, not two.
      */
     const adjust = e.chargeId && e.offersReverse && actions.onAdjustCharge;
+    /*
+     * WHO OWES IT — offered from the state this very row is already showing, through the shared
+     * eligibility rule rather than a second reading of it here. A reduction offers neither: its
+     * responsibility belongs to the charge it reduces.
+     */
+    const responsibility = financialResponsibilityEligibility({
+        chargeId: e.chargeId ?? null,
+        /* A reduction is not an obligation: its responsibility belongs to the charge it reduces. */
+        responsibilityApplies: !e.reduction,
+        responsibleParty: e.responsibleParty,
+    });
+    const resolveResp = responsibility.resolve && actions.onResolveResponsibility;
+    const reallocateResp = responsibility.reallocate && actions.onReallocateResponsibility;
     return {
         key: e.chargeId || `${e.when}-${index}`,
         when: e.when,
-        type: chargeCategoryLabel(e.type),
+        /*
+         * ── THE OPERATOR'S WORD FOR THIS ROW ─────────────────────────────────────────────────
+         *
+         * A reduction produced by an authored discount policy said "Credit", because the CATEGORY
+         * it is written under is the contra-revenue one it shares with every other reduction. The
+         * category is how the money posts; it is not what the row IS. `reduction.conceptLabel` is
+         * the canonical answer — Discount, Credit, Adjustment or Reversal — and a reversal says so
+         * rather than appearing as a second unrelated discount.
+         *
+         * Falls back to the category label wherever the row is not a reduction, which is every
+         * ordinary charge.
+         */
+        /* Correction lineage first, then reduction provenance, then the category. */
+        type: financialRowConceptLabel({
+            correctionKind: e.correctionKind,
+            reductionConceptLabel: e.reduction?.conceptLabel ?? null,
+            categoryLabel: chargeCategoryLabel(e.type),
+        }),
         child: e.subject,
-        description: e.label,
+        /*
+         * A CONCISE PREVIEW, NOT A PARAGRAPH. The decision behind the money, in the words an
+         * operator would use to answer "why is my bill this number" — the policy's basis, whether
+         * it recurs, and the sentence somebody wrote if they wrote one. Each part is omitted when
+         * the model does not know it, so nothing here is padding and the ledger stays dense.
+         */
+        description: reductionPreview(e) || e.label,
         glLabel: e.glCode,
         amount: e.amount,
         status: e.status ?? "—",
         responsibleParty: e.responsibleParty,
         responsibilityUnassigned: e.responsibilityUnassigned,
+        responsibilityAssignedCents: e.responsibilityAssignedCents,
+        responsibilityUnassignedCents: e.responsibilityUnassignedCents,
         actions:
-            post || reverse || adjust ? (
+            post || reverse || adjust || resolveResp || reallocateResp ? (
                 <>
                     {/*
                      * POST IS OFFERED ONLY WHERE A LEGITIMATE DRAFT EXISTS. `offersPost` is the read
@@ -727,6 +895,33 @@ function ledgerRowFromEntry(
                             chargeId={e.chargeId!}
                             title={`Adjust ${e.label} — it stands, and something reduces it`}
                             onClick={() => actions.onAdjustCharge!({ chargeId: e.chargeId! })}
+                        />
+                    ) : null}
+                    {/*
+                     * RESOLVE AND REALLOCATE ARE NEVER BOTH OFFERED. A row either names a party or
+                     * it does not, and the operator reads which question this obligation is asking
+                     * from which control is there.
+                     */}
+                    {resolveResp ? (
+                        <RowAction
+                            kind="resolveResponsibility"
+                            command="billing.resolve_responsibility"
+                            chargeId={e.chargeId!}
+                            title={`Resolve who owes ${e.label} — divide it under the arrangement in force`}
+                            onClick={() =>
+                                actions.onResolveResponsibility!({ chargeId: e.chargeId!, label: e.label })
+                            }
+                        />
+                    ) : null}
+                    {reallocateResp ? (
+                        <RowAction
+                            kind="reallocateResponsibility"
+                            command="billing.reallocate_responsibility"
+                            chargeId={e.chargeId!}
+                            title={`Reallocate ${e.label} — move what one party owes to another`}
+                            onClick={() =>
+                                actions.onReallocateResponsibility!({ chargeId: e.chargeId!, label: e.label })
+                            }
                         />
                     ) : null}
                 </>

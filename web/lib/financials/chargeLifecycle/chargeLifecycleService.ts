@@ -20,6 +20,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
+import { resolveDueDate } from "@/lib/financials/policies/resolveDueDate";
+import type { FinancialPolicyRow } from "@/lib/financials/policies/financialPolicyTypes";
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 import {
     resolveChargeFromTemplate,
@@ -40,6 +42,7 @@ type ChargeLifecycleRow = {
     amount_cents: number;
     occurs_on: string | null;
     billable_on: string | null;
+    due_date: string | null;
     charge_template_id: string | null;
     metadata: Record<string, unknown> | null;
 };
@@ -70,6 +73,11 @@ export type SimulateArgs = {
      * existing resolver prices the charge — Consumption never reimplements pricing.
      */
     resolvedAmountCents?: number | null;
+    /**
+     * The AGREED commercial amount (cents) from an accepted `enrollment_pricing_terms` row.
+     * Authoritative over the template's `amount_strategy`; see `ChargeResolutionContext`.
+     */
+    acceptedAmountCents?: number | null;
     today: string;
 };
 
@@ -89,16 +97,52 @@ async function loadTemplate(supabase: SupabaseClient, orgId: string, templateId:
     return t;
 }
 
-/** Resolve posting-review policy for a template's context (real policy consumption). */
-async function resolveReviewPolicy(
+/**
+ * THE ORGANISATION'S FINANCIAL POLICIES, READ ONCE PER RESOLUTION.
+ *
+ * Posting review and the due date are two questions for the same set of rows, and loading them
+ * twice would be two reads and two chances to disagree about the effective window.
+ */
+async function resolveChargePolicies(
     supabase: SupabaseClient,
     orgId: string,
     serviceId: string | null,
     today: string,
-): Promise<boolean> {
+): Promise<{ reviewRequired: boolean; policies: readonly FinancialPolicyRow[] }> {
     const policies = await listFinancialPolicies(supabase, orgId);
     const r = resolveFinancialPolicy(policies, "posting_review", { serviceId: serviceId ?? undefined }, today);
-    return r.resolved ? r.policy.value.required === true : false;
+    return { reviewRequired: r.resolved ? r.policy.value.required === true : false, policies };
+}
+
+/**
+ * ── WHEN THIS OBLIGATION IS DUE, FROM THE ORGANISATION'S OWN TERMS ───────────────────────────
+ *
+ * `resolveDueDate` has existed since the due-date policy work, with four strategies and a
+ * deliberate `null` for "no rule configured". It had NO CALLER: `ChargeResolutionContext.dueDate`
+ * was declared and never supplied, so every charge recorded `due_date: null` and a tenant could
+ * configure terms that nothing in the product consumed.
+ *
+ * It runs AFTER the intent, not inside it, because it needs the two dates the intent computes —
+ * the invoice date (`billable_on`) and the period this obligation belongs to. Resolving it earlier
+ * would mean guessing them, and the whole point of the five-date model is that they are separate
+ * facts rather than one fact wearing different names.
+ *
+ * `null` still means LEAVE IT ALONE. An organisation that has stated no terms keeps exactly the
+ * behaviour it has today; nothing here defaults to "due on the invoice date" or to "due today",
+ * because a collections deadline nobody configured is a consequence nobody chose.
+ */
+function dueDateForIntent(
+    policies: readonly FinancialPolicyRow[],
+    template: { service_id: string | null },
+    intent: { billableOn: string | null; occursOn: string | null },
+    servicePeriodStart: string | null,
+): string | null {
+    return resolveDueDate(policies, {
+        invoiceDate: intent.billableOn,
+        /* The commercial period this obligation sits in — the caller's when it named one. */
+        periodStart: servicePeriodStart ?? intent.occursOn ?? null,
+        serviceId: template.service_id,
+    }).dueDate;
 }
 
 /**
@@ -117,7 +161,7 @@ async function findExistingByResolutionKey(
 ): Promise<ChargeLifecycleRow | null> {
     const { data, error } = await supabase
         .from(TABLE)
-        .select("id, status, amount_cents, occurs_on, billable_on, charge_template_id, metadata")
+        .select("id, status, amount_cents, occurs_on, billable_on, due_date, charge_template_id, metadata")
         .eq("org_id", orgId)
         .eq("billable_source_type", source.type)
         .eq("billable_source_id", source.id);
@@ -138,13 +182,16 @@ export async function previewTemplateCharge(
     args: SimulateArgs,
 ): Promise<ChargePreviewResult> {
     const template = await loadTemplate(supabase, orgId, args.templateId);
-    const reviewByPolicy = await resolveReviewPolicy(supabase, orgId, template.service_id, args.today);
+    const { reviewRequired: reviewByPolicy, policies } = await resolveChargePolicies(
+        supabase, orgId, template.service_id, args.today,
+    );
     const source = billableSourceFor(args);
     const intent = resolveChargeFromTemplate(template, {
         today: args.today,
         eventDate: args.eventDate,
         servicePeriodStart: args.servicePeriodStart,
         resolvedAmountCents: args.resolvedAmountCents,
+        acceptedAmountCents: args.acceptedAmountCents,
         quantity: args.quantity,
         unitAmountCents: args.unitAmountCents,
         reviewRequiredByPolicy: reviewByPolicy,
@@ -158,6 +205,14 @@ export async function previewTemplateCharge(
          */
         scopeKey: source?.id ?? "org",
     });
+    /*
+     * The organisation's due-date terms, applied to the dates this intent just produced. Only ever
+     * narrows from null to a real date — an unconfigured tenant keeps today's behaviour exactly.
+     */
+    if (intent.eligible) {
+        const due = dueDateForIntent(policies, template, intent, args.servicePeriodStart ?? null);
+        if (due) intent.dueDate = due;
+    }
 
     let existing: ChargeLifecycleRow | null = null;
     if (intent.eligible && source) {
@@ -171,7 +226,23 @@ export async function previewTemplateCharge(
         wouldWrite = "create";
     } else if (existing.status !== "draft") {
         wouldWrite = "skipped_posted";
-    } else if (existing.amount_cents !== intent.amountCents || existing.billable_on !== intent.billableOn) {
+    } else if (
+        existing.amount_cents !== intent.amountCents
+        || existing.billable_on !== intent.billableOn
+        /*
+         * THE DUE DATE IS PART OF THE INTENT, SO IT IS PART OF CONVERGENCE.
+         *
+         * Only amount and billable date were compared, so a tenant who authored due-date terms
+         * after a draft already stood never saw them reach it: the rerun answered `unchanged` and
+         * the charge kept reading "No configured terms" forever. Measured on the certification
+         * tenant, whose due-date policies begin 2026-09-18 while the September obligations invoice
+         * on 2026-09-01.
+         *
+         * Guarded on a resolved date so an organisation with NO due-date policy keeps today's
+         * behaviour exactly — a null intent never rewrites a date a charge already carries.
+         */
+        || (intent.dueDate != null && existing.due_date !== intent.dueDate)
+    ) {
         wouldWrite = "recalculate";
     } else {
         wouldWrite = "unchanged";
@@ -276,6 +347,8 @@ export async function writeTemplateDraftCharge(
                 amount_cents: intent.amountCents,
                 occurs_on: intent.occursOn,
                 billable_on: intent.billableOn,
+                /* A recalculated draft re-dates its due date from the same terms. */
+                due_date: intent.dueDate,
                 service_id: intent.serviceId,
                 metadata,
                 updated_by: args.actorUserId ?? null,
@@ -312,6 +385,12 @@ export async function writeTemplateDraftCharge(
             service_date: intent.occursOn,
             occurs_on: intent.occursOn,
             billable_on: intent.billableOn,
+            /*
+             * WHEN PAYMENT IS EXPECTED — separate from the invoice date beside it, and written only
+             * where the organisation configured terms. `null` is the unconfigured tenant keeping
+             * exactly the behaviour it has today, not "due on the invoice date".
+             */
+            due_date: intent.dueDate,
             charge_template_id: intent.templateId,
             service_id: intent.serviceId,
             description: intent.templateKey,

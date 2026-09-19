@@ -70,8 +70,22 @@ export async function applyFinancialReductions(
         actorUserId?: string | null;
         /** Narrow the run to one household. Absent, every household with gross tuition in the period. */
         customerIds?: readonly string[] | null;
+        /**
+         * PREVIEW RUNS THE SAME PLAN AND WRITES NOTHING.
+         *
+         * `billing.apply_discounts` used to preview by listing the policies IN FORCE — "1 discount
+         * policy in force for 2026-09" — and say nothing about money. An operator confirmed a run
+         * that then created six reductions worth $237.50 without having been told the figure.
+         *
+         * The fix is a mode on THIS function rather than a second planner beside it. Every read,
+         * every eligibility fact, every policy evaluation and every already-posted check is the same
+         * code in both modes; only the writes are skipped. A preview computed by a different
+         * function is a promise about someone else's work.
+         */
+        mode?: "preview" | "execute";
     },
 ): Promise<ReductionRunResult> {
+    const dryRun = args.mode === "preview";
     const periodKey = args.periodKey.trim();
     const period = billingPeriodBounds(periodKey);
 
@@ -177,6 +191,7 @@ export async function applyFinancialReductions(
         }
 
         const written = await persistReductions(supabase, {
+            dryRun,
             orgId: args.orgId,
             actorUserId: args.actorUserId ?? null,
             charge,
@@ -214,6 +229,8 @@ export async function applyFinancialReductions(
 async function persistReductions(
     supabase: SupabaseClient,
     args: {
+        /** True → resolve and report exactly as the run would, and write nothing. */
+        dryRun: boolean;
         orgId: string;
         actorUserId: string | null;
         charge: GrossChargeRow;
@@ -264,6 +281,16 @@ async function persistReductions(
         }
         // A DRAFT reduction reconciles in place — the same rule Charge Resolution already applies
         // to a draft whose inputs moved.
+        if (args.dryRun) {
+            return {
+                kind: "applied",
+                chargeId: row.id,
+                sourceChargeId: args.charge.id,
+                customerMemberId: args.customerMemberId,
+                amountCents: total,
+                policyIds: args.reductions.map((r) => r.policyId),
+            };
+        }
         await recalculateDraftCharge(supabase, {
             orgId: args.orgId,
             chargeId: row.id,
@@ -278,6 +305,19 @@ async function persistReductions(
         return {
             kind: "applied",
             chargeId: row.id,
+            sourceChargeId: args.charge.id,
+            customerMemberId: args.customerMemberId,
+            amountCents: total,
+            policyIds: args.reductions.map((r) => r.policyId),
+        };
+    }
+
+    if (args.dryRun) {
+        // No charge exists yet, so there is no id to report — the money and the policies are the
+        // answer a confirmation needs.
+        return {
+            kind: "applied",
+            chargeId: "",
             sourceChargeId: args.charge.id,
             customerMemberId: args.customerMemberId,
             amountCents: total,

@@ -228,6 +228,9 @@ export type LedgerEntry = {
     responsibleParty: string | null;
     /** An allocation exists and deliberately names no party. Rendered as a state, not as a blank. */
     responsibilityUnassigned: boolean;
+    /** Owed by the named party, and owed by nobody yet — a partially allocated obligation is both. */
+    responsibilityAssignedCents?: number;
+    responsibilityUnassignedCents?: number;
     label: string;
     /** Signed and formatted upstream. Account-balance direction: charge +, payment/credit −. */
     amount: string;
@@ -240,6 +243,36 @@ export type LedgerEntry = {
      * Carried rather than displayed. Without it the ledger can describe a posted charge and cannot
      * act on it, which is how `charge.reverse` ended up with no reachable operator path at all.
      */
+    /**
+     * ── WHY THIS REDUCTION EXISTS ────────────────────────────────────────────────────────────
+     *
+     * Present only where the row IS a reduction. The ledger could always show that money moved and
+     * not what decided it: a row read `Credit −$260.06` while the table that records the decision —
+     * which policy, on what basis, capped or not — was never read.
+     *
+     * `concept` is the operator's word for the row and is deliberately one of FOUR: a discount is a
+     * price decision under a policy, a credit is money owed back, an adjustment corrects an
+     * established position, and a reversal undoes a specific earlier one. They share infrastructure;
+     * they are not the same thing.
+     *
+     * Every field is a stored fact or an explicit absence. `recurrenceLabel` is empty when the model
+     * genuinely cannot say, rather than claiming "one-time".
+     */
+    /** `reversal` | `credit` | `replacement` — the correction's own record of what it is. */
+    correctionKind?: string | null;
+    reduction?: {
+        applicationId: string;
+        concept: "discount" | "credit" | "adjustment" | "reversal";
+        conceptLabel: string;
+        recurrenceLabel: string;
+        decidedBy: string;
+        basisSummary: string | null;
+        explanation: string | null;
+        sourceChargeId: string | null;
+        periodLabel: string | null;
+        reversesApplicationId: string | null;
+        reversedByApplicationId: string | null;
+    } | null;
     chargeId?: string | null;
     /**
      * WHICH LENS THIS ROW ANSWERS TO — decided by `ledgerLensOf` where the canonical row still

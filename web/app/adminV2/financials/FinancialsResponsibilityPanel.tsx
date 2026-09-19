@@ -29,6 +29,7 @@ import { useCallback, useState } from "react";
 
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
+import { isPostedStatus } from "@/lib/financials/billableSource";
 
 export const CONFIGURE_RESPONSIBILITY_ACTION_KEY = "billing.configure_responsibility";
 
@@ -45,7 +46,14 @@ type PreviewPayload = { summary?: string; changes?: string[] } | null;
 
 async function callAction(
     mode: "preview" | "execute",
-    args: { customerId: string | null; customerMemberId: string | null; effectiveStart: string; shares: ShareDraft[] },
+    args: {
+        customerId: string | null;
+        customerMemberId: string | null;
+        /** Null for the account, a child id for a child-scoped arrangement. */
+        arrangementMemberId: string | null;
+        effectiveStart: string;
+        shares: ShareDraft[];
+    },
 ): Promise<{ ok: boolean; preview?: PreviewPayload; error?: string }> {
     const res = await fetch("/api/admin/actions/execute", {
         method: "POST",
@@ -71,7 +79,7 @@ async function callAction(
                  * The child still travels as the action's entity — that is which subject the
                  * operator is acting from — but the arrangement is about the household.
                  */
-                customer_member_id: null,
+                customer_member_id: args.arrangementMemberId,
                 effective_start: args.effectiveStart,
                 /*
                  * FIXED CENTS, because that is what the operator typed. The action also accepts
@@ -170,6 +178,8 @@ export default function FinancialsResponsibilityPanel({
     customerId,
     customerMemberId,
     chargeId,
+    chargeStatus,
+    subjectLabel,
     arrangement,
     parties,
     onCommitted,
@@ -178,6 +188,18 @@ export default function FinancialsResponsibilityPanel({
     customerMemberId: string | null;
     /** The obligation being looked at — carried so an arrangement in force can still be edited. */
     chargeId?: string | null;
+    /**
+     * WHETHER THIS CHARGE HAS POSTED, because the sentence below used to assert that it had.
+     *
+     * The undivided-charge note read "This posted charge is not divided under it" on every charge
+     * the arrangement had not allocated — including DRAFTS, which the same screen was labelling
+     * "Draft" two lines above. The reason it gives is only true of posted money: Thread 6 refuses
+     * to move money that has already posted. A draft is not protected by that rule, it simply has
+     * no allocation yet, and telling an operator otherwise explains a restriction that is not there.
+     */
+    chargeStatus?: string | null;
+    /** The child this obligation is for, so a child-scoped arrangement can be named out loud. */
+    subjectLabel?: string | null;
     /*
      * THE ACCOUNT'S ARRANGEMENT, which is not the same fact as this charge's allocation. Without it
      * the panel went on inviting the operator to create an arrangement they had just created.
@@ -190,6 +212,16 @@ export default function FinancialsResponsibilityPanel({
     const [open, setOpen] = useState(false);
     const [effectiveStart, setEffectiveStart] = useState(() => new Date().toISOString().slice(0, 10));
     const [shares, setShares] = useState<ShareDraft[]>([]);
+    /*
+     * ── WHICH SCOPE THIS ARRANGEMENT GOVERNS ──────────────────────────────────────────────────
+     *
+     * The runtime has always preferred the MOST SPECIFIC arrangement — a child-scoped one beats an
+     * account-wide one — and this panel could author only the account-wide kind. So a child-grain
+     * arrangement could exist in canonical data, decide who owed a child's charges, and be
+     * impossible for an operator to create or supersede. Household stays the default because it is
+     * the common case and the one this panel has always written.
+     */
+    const [scope, setScope] = useState<"household" | "child">("household");
     const [busy, setBusy] = useState<"preview" | "execute" | null>(null);
     const [preview, setPreview] = useState<PreviewPayload>(null);
     const [error, setError] = useState<string | null>(null);
@@ -215,7 +247,14 @@ export default function FinancialsResponsibilityPanel({
             setBusy(mode);
             setError(null);
             try {
-                const out = await callAction(mode, { customerId, customerMemberId, effectiveStart, shares });
+                const out = await callAction(mode, {
+                    customerId,
+                    customerMemberId,
+                    /* The arrangement's own grain — not the charge's, which never changes here. */
+                    arrangementMemberId: scope === "child" ? customerMemberId : null,
+                    effectiveStart,
+                    shares,
+                });
                 if (!out.ok) {
                     setError(out.error ?? "Refused.");
                     setPreview(null);
@@ -245,7 +284,7 @@ export default function FinancialsResponsibilityPanel({
                 setBusy(null);
             }
         },
-        [customerId, customerMemberId, effectiveStart, onCommitted, shares],
+        [customerId, customerMemberId, scope, effectiveStart, onCommitted, shares],
     );
 
     if (!open) {
@@ -280,7 +319,10 @@ export default function FinancialsResponsibilityPanel({
                                 ledger cell. Through the platform's formatter like every other date. */}
                             {arrangement.effectiveStart
                                 ? ` from ${formatDisplayDate(arrangement.effectiveStart)}`
-                                : ""}. This posted charge is not divided under it.
+                                : ""}.{" "}
+                            {chargeStatus == null || isPostedStatus(chargeStatus)
+                                ? "This posted charge is not divided under it."
+                                : "This charge is not divided under it yet."}
                         </p>
                     ) : (
                         /* A statement of fact and an invitation — not a reason the control is unusable. */
@@ -308,6 +350,30 @@ export default function FinancialsResponsibilityPanel({
                 {/* The law this intent obeys, said where the operator is about to act on it. */}
                 Who contractually owes this account, from a date. Changing it does not change who has already paid.
             </p>
+
+            {/*
+              * APPLIES TO — the arrangement's scope, stated before the date it takes effect.
+              * Offered only where a child is actually in view; on an account-wide charge there is
+              * no second scope to choose and a control with one option divides nothing.
+              */}
+            {customerMemberId ? (
+                <label className="mt-2 block text-[11px] text-alloy-midnight/60" data-financials-arrangement-scope={scope}>
+                    Applies to
+                    <select
+                        className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-[12px] text-alloy-midnight"
+                        data-testid="responsibility-scope"
+                        value={scope}
+                        onChange={(e) => {
+                            setScope(e.target.value === "child" ? "child" : "household");
+                            /* A different scope is a different arrangement; its preview is not this one's. */
+                            setPreview(null);
+                        }}
+                    >
+                        <option value="household">Household — the whole account</option>
+                        <option value="child">{subjectLabel ? `${subjectLabel} only` : "This child only"}</option>
+                    </select>
+                </label>
+            ) : null}
 
             <label className="mt-2 block text-[11px] text-alloy-midnight/60">
                 Effective from

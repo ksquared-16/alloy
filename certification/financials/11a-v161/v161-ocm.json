@@ -1,0 +1,24 @@
+{
+  "relatedStatus": 200,
+  "relatedKeys": [
+    "jobs",
+    "schedules",
+    "documents",
+    "discount_redemptions",
+    "quotes",
+    "messages",
+    "opportunity_tags"
+  ],
+  "relatedMentionsAttn": false,
+  "relatedMentionsChildB": false,
+  "ocmIdsInRelated": [],
+  "relatedSample": "{\"jobs\":[],\"schedules\":[],\"documents\":[],\"discount_redemptions\":[],\"quotes\":[],\"messages\":[],\"opportunity_tags\":[]}",
+  "asAssignment": {
+    "url": "/api/admin/financial-config/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+    "status": 200,
+    "body": {
+      "enrollments": [],
+      "assignments": []
+    }
+  }
+}

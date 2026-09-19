@@ -257,6 +257,15 @@ export type ResolvedObligationIntent = {
     chargeTemplateId: string | null;
     serviceId: string | null;
     amountCents: number | null;
+    /**
+     * THE AGREED COMMERCIAL AMOUNT, when an accepted pricing term decided this obligation.
+     *
+     * Carried separately from `amountCents` because the WRITE re-resolves the template, and a plain
+     * number arriving as `resolvedAmountCents` is a rate hint a `fixed` template is entitled to
+     * ignore. This field is the authority, and it has to survive the trip from resolution to the
+     * draft write or the second pass quietly restores the template's figure.
+     */
+    acceptedAmountCents?: number | null;
     currencyCode: string;
     responsibilityKey: string | null;
     occursOn: string | null;

@@ -69,6 +69,42 @@ export const FINANCIAL_POLICY_TYPES = [
 export type FinancialPolicyType = (typeof FINANCIAL_POLICY_TYPES)[number];
 
 /**
+ * ── WHAT AN OPERATOR MAY AUTHOR TODAY — the types something actually CONSUMES ────────────────
+ *
+ * CONFIGURABLE IS NOT CAPABILITY. Four of the types above are resolvable, storable and offered by
+ * the configuration surface, and NOTHING in the runtime reads them: `late_fee`, `nsf_fee`,
+ * `refund` and `deposit` have no `resolveFinancialPolicy` call site anywhere. An operator
+ * configuring one is being invited to state terms the product will ignore — worse than an absent
+ * control, because it looks like a capability and will be believed.
+ *
+ * Every type here was traced to a real consumer:
+ *   proration        → generateTuitionCharges, previewTuitionGeneration, consumptionService
+ *   billing_cadence  → consumptionService
+ *   grace_period     → consumptionService
+ *   posting_review   → chargeLifecycleService (the write path), buildFinancialsCardVM
+ *   vacation_credit  → policyReductionService
+ *   due_date         → chargeLifecycleService, since the wiring that made it real
+ *
+ * The full list above is UNTOUCHED: the schema still permits every type, the registry still
+ * describes them, the validator still accepts them, and historical rows still resolve. This governs
+ * only what the authoring surface OFFERS, so the four can be restored the day they gain a consumer.
+ */
+export const OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES = [
+    "proration",
+    "billing_cadence",
+    "grace_period",
+    "posting_review",
+    "vacation_credit",
+    "due_date",
+] as const satisfies readonly FinancialPolicyType[];
+
+/** Offered by the configuration surface, or held back until a runtime consumer exists. */
+export function isOperatorAuthorablePolicyType(value: string): boolean {
+    return (OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES as readonly string[]).includes(value);
+}
+
+
+/**
  * The closed commercial positions on a vacation absence. `no_credit` is stated
  * explicitly rather than left to absence, so an organisation that has decided
  * "tuition is flat regardless" can say so and have that survive a later default

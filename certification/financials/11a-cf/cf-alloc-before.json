@@ -1,0 +1,43 @@
+{
+  "before": {
+    "text": "FINANCIALS / CURRENT PERIOD / September 2026 / CHARGES / Fee / $150.00 / Consumable fee / $36.00 / DISCOUNTS & CREDITS / Credit / -$260.06 / Adjustment / $146.71 / NET OBLIGATION / $37.87 / Add / DUE / $682.00 / Nothing past due / Balance / $37.87 / Paid / $0.00 / Unassigned / $132.00 / Available / $200.00 / Payment / Details / →",
+    "available": "200.00",
+    "balance": "$37.87",
+    "paid": "$0.00"
+  },
+  "payRows": [
+    {
+      "cells": [
+        "Sep 18, 2026",
+        "Payment",
+        "—",
+        "—",
+        "$240.00\n$200.00 unapplied",
+        "$200.00 unapplied",
+        "Part applied",
+        "—",
+        "cash"
+      ],
+      "actions": [
+        "apply",
+        "move"
+      ]
+    },
+    {
+      "cells": [
+        "Sep 13, 2026",
+        "Payment",
+        "—",
+        "—",
+        "$25.00\n$25.00 applied",
+        "$25.00 applied",
+        "Applied",
+        "—",
+        "check"
+      ],
+      "actions": [
+        "move"
+      ]
+    }
+  ]
+}

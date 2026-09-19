@@ -50,7 +50,7 @@ export async function previewTuitionGeneration(
             servicePeriod: { start: span.start, end: span.end },
             cadenceKey,
             periodsBilled: [],
-            counts: { generated: 0, notDue: 0, refused: 0, alreadyPosted: 0, errors: 0 },
+            counts: { generated: 0, unchanged: 0, notDue: 0, refused: 0, alreadyPosted: 0, errors: 0 },
             outcomes: [],
         };
     }
@@ -113,6 +113,8 @@ export async function previewTuitionGeneration(
         periodsBilled: [...billed.values()].sort((a, b) => a.start.localeCompare(b.start)),
         counts: {
             generated: outcomes.filter((o) => o.kind === "generated").length,
+            // A preview writes nothing, so it has no converged drafts of its own to report.
+            unchanged: 0,
             notDue: outcomes.filter((o) => o.kind === "not_due").length,
             refused: outcomes.filter((o) => o.kind === "refused").length,
             alreadyPosted: 0,

@@ -1,0 +1,20 @@
+{
+  "patchStatus": 200,
+  "row": {
+    "id": "79f8011d-a236-4054-bee7-af10f1dbc632",
+    "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+    "opportunity_id": "e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+    "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+    "location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+    "program_room_cohort_key": null,
+    "program_category_id": "5e9e715a-eb8f-4534-bcfe-a8a74ed883d9",
+    "schedule_type": "custom",
+    "start_date": "2026-09-01",
+    "outcome_status_key": null,
+    "notes": "11A recurring certification assignment",
+    "updated_at": "2026-09-19T02:07:44.600429+00:00"
+  },
+  "cfgStatus": 500,
+  "cfgAssignments": null,
+  "cfgBody": null
+}

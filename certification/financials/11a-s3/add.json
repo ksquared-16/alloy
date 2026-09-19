@@ -1,0 +1,44 @@
+[
+  {
+    "id": "M0",
+    "what": "charge types offered",
+    "ok": true,
+    "observed": "Field trip | Late pickup | Materials | Monthly tuition | Registration fee"
+  },
+  {
+    "id": "M1",
+    "what": "sibling selection reachable",
+    "ok": true,
+    "observed": "1 sibling checkbox(es)"
+  },
+  {
+    "id": "M2",
+    "what": "per-child economics stated",
+    "ok": true,
+    "observed": "$40.00 per child · 2 children · each receives their own charge"
+  },
+  {
+    "id": "M3",
+    "what": "amount is PER CHILD, not a divided total",
+    "ok": true,
+    "observed": "$40.00 per child · 2 children · each receives their own charge"
+  },
+  {
+    "id": "G1",
+    "what": "Adjustment mode opens on the SAME command surface",
+    "ok": true,
+    "observed": "{\"mode\":\"adjustment\",\"panel\":true,\"agreement\":\"6f409c2d-2227-48e7-a365-f2c12fc2d929\",\"sourceCharge\":\"\",\"sourceOptions\":13}"
+  },
+  {
+    "id": "G2",
+    "what": "generic Adjustment demands explicit context",
+    "ok": true,
+    "observed": "sourceCharge=\"\" options=13"
+  },
+  {
+    "id": "G3",
+    "what": "switching modes leaves no empty intermediate surface",
+    "ok": true,
+    "observed": "mode=charge"
+  }
+]

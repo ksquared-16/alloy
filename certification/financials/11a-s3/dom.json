@@ -1,0 +1,16 @@
+{
+  "rowActions": {
+    "rowClass": "alloy-os-billingdetail__rowactions-head",
+    "buttons": []
+  },
+  "scrim": {
+    "scrimPresent": true,
+    "scrimBox": "1150x1003@493,283",
+    "cardBox": "1118x304@509,293",
+    "scrimPoint": {
+      "x": 549,
+      "y": 657,
+      "owner": "alloy-os-fp-depth-scrim"
+    }
+  }
+}

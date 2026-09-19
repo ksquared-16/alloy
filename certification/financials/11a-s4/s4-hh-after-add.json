@@ -1,0 +1,140 @@
+[
+  {
+    "request": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "mode": "preview",
+      "payload": {
+        "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+        "child_label": "Certb Certhouse"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "missing_event_date",
+            "changes": []
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "5294bbc5-5be2-4847-9b7c-f12f388ebf53"
+    }
+  },
+  {
+    "request": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "mode": "preview",
+      "payload": {
+        "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "c03e638e-0f3e-49f0-9d41-696276c8fa21",
+        "child_label": "Certb Certhouse"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "registration_fee $75.00",
+            "changes": [
+              "Applies to · Certb Certhouse",
+              "Occurs 2026-09-18",
+              "Billable 2026-09-18"
+            ]
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "4f497a15-769a-487c-b396-d63e9902b974"
+    }
+  },
+  {
+    "request": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "mode": "preview",
+      "payload": {
+        "subject_grain": "household",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "c03e638e-0f3e-49f0-9d41-696276c8fa21"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "registration_fee $75.00",
+            "changes": [
+              "Applies to · this child",
+              "Occurs 2026-09-18",
+              "Billable 2026-09-18"
+            ]
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "aab6ee3e-f13a-4a55-8ebc-6b810e5ec719"
+    }
+  },
+  {
+    "request": {
+      "action_key": "charge.add",
+      "entity_type": "child",
+      "entity_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "mode": "execute",
+      "confirmation": {
+        "confirmed": true
+      },
+      "payload": {
+        "subject_grain": "household",
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "template_id": "c03e638e-0f3e-49f0-9d41-696276c8fa21"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "write_status": "created",
+          "resolution_key": "tpl:registration_fee:2026-09-18:29944d3e-8267-45b7-8dcb-7405060e2573",
+          "review_required": false,
+          "posted": true
+        },
+        "affected_id": "2279460a-0b4e-4d31-9d86-3a00a4d4daf4"
+      },
+      "correlation_id": "c7619706-4581-4039-8fb2-05555057b2d7"
+    }
+  }
+]

@@ -2913,6 +2913,19 @@
   white-space: nowrap;
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
+  /*
+   * ── THE 76px FLOOR IS VESTIGIAL HERE, AND IT WAS STARVING THE LABEL ──────────────────────────
+   *
+   * The base `__line-value` reserves `min-width: 76px` so amounts line up as a column. In THIS zone
+   * the value is `flex: 0 0 auto` and sits at the row's end by `space-between`, so it already
+   * aligns; the floor only takes width away from the label beside it.
+   *
+   * Measured mounted at 1280: zone 91px − 76px value − 8px gap left the label SEVEN PIXELS, so
+   * `Balance`, `Paid`, `Unassigned` and `Available` all ellipsised to "…". At 1680 the label got
+   * 50px and the two longer words still clipped. Releasing the floor gives the label everything the
+   * figure does not need.
+   */
+  min-width: 0;
 }
 .alloy-os-billing__clear,
 .alloy-os-billing__age {
@@ -2999,7 +3012,25 @@
  * obligation story keeps its measure, Due states itself in full, and the command cluster — which
  * already spans the card — is unaffected.
  */
-@container alloy-billing (max-width: 230px) {
+/*
+ * ── THE THRESHOLD WAS SET FOR SHORTER WORDS ───────────────────────────────────────────────────
+ *
+ * Raised from 230px to 340px, measured. The card is 265px at a 1280 viewport and 286px at 1440,
+ * so the collapse never fired and the position column stayed 91px and 100px — narrower than
+ * `Available` plus `$200.00` needs (~108px) at any honest type size. Only at 1680, where the card
+ * is 366px and the column 134px, do both halves fit on one line.
+ *
+ * The first attempt at this stacked the label above its figure INSIDE the two-column layout. It
+ * removed the ellipsis and produced something worse: the taller right column overlapped the
+ * obligation story beside it, so `NET OBLIGATION` collided with `$18.00`. Clipping traded for a
+ * collision is not a repair.
+ *
+ * This rule's own note already had the answer — "below the width where a second column can still
+ * state a figure, there is one column". The width was simply measured for `Balance` and `Paid`,
+ * before `Unassigned` and `Available` existed. One instrument, one threshold, moved to where the
+ * evidence puts it.
+ */
+@container alloy-billing (max-width: 340px) {
   .alloy-os-billing__zones--two {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -3061,4 +3092,30 @@
     font-size: 0.75rem;
     line-height: 1.35;
     color: color-mix(in srgb, currentColor 65%, transparent);
+}
+
+/*
+ * THE DETAIL SURFACE'S OWN PAYMENT BAND.
+ *
+ * It rendered as a sibling of the card and therefore outside its box — an orphan `Record payment →`
+ * beside a focused surface. It is now a slot INSIDE the card, so it needs only to sit apart from
+ * the ledger above it, the way the utility footer does.
+ */
+.alloy-os-fdetail__paymentband {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+}
+
+/*
+ * THE UNOWNED REMAINDER ON A PARTIALLY ALLOCATED OBLIGATION.
+ *
+ * Quieter than the party's name because the name is the answer and this is the qualifier — but
+ * present in the cell rather than hidden behind a hover, because "someone owes this" and "most of
+ * it is still nobody's" are different facts and an operator must not read the first as both.
+ */
+.alloy-os-billingdetail__partial {
+    color: color-mix(in srgb, currentColor 62%, transparent);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }

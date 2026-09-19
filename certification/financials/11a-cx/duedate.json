@@ -1,0 +1,83 @@
+{
+  "created": {
+    "status": 201,
+    "body": {
+      "policy": {
+        "id": "9fd72758-8ba6-4bee-983e-1a7396a83b2d",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "scope_type": "org",
+        "location_id": null,
+        "service_id": null,
+        "rate_plan_id": null,
+        "policy_type": "due_date",
+        "label": "Tuition terms — net 10",
+        "description": null,
+        "value": {
+          "strategy": "days_after_invoice",
+          "offset_days": 10
+        },
+        "is_active": true,
+        "effective_start": "2026-08-01",
+        "effective_end": null,
+        "source_key": "config",
+        "metadata": {},
+        "created_by": "18b7fc4f-cca1-49d8-9f5b-25871bd5bdf3",
+        "updated_by": "18b7fc4f-cca1-49d8-9f5b-25871bd5bdf3",
+        "created_at": "2026-09-19T02:57:15.962067+00:00",
+        "updated_at": "2026-09-19T02:57:15.962067+00:00"
+      }
+    }
+  },
+  "weekly": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "period_key": "2026-09",
+          "cadence_key": "weekly",
+          "service_period": {
+            "start": "2026-09-01",
+            "end": "2026-09-30"
+          },
+          "generated": 3,
+          "unchanged": 2,
+          "alreadyPosted": 0,
+          "notDue": 5,
+          "refused": 0,
+          "errors": 0,
+          "refused_outcomes": [],
+          "error_outcomes": []
+        },
+        "affected_id": "79f8011d-a236-4054-bee7-af10f1dbc632"
+      },
+      "correlation_id": "15f17b78-f77b-41ff-bba6-9eef8f732c6e"
+    }
+  },
+  "monthly": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "period_key": "2026-09",
+          "cadence_key": "monthly",
+          "service_period": {
+            "start": "2026-09-01",
+            "end": "2026-09-30"
+          },
+          "generated": 1,
+          "unchanged": 0,
+          "alreadyPosted": 0,
+          "notDue": 1,
+          "refused": 0,
+          "errors": 0,
+          "refused_outcomes": [],
+          "error_outcomes": []
+        },
+        "affected_id": "cf044308-3ee4-47ab-a8fb-205eb172aa48"
+      },
+      "correlation_id": "4b720fe4-ccfb-4e01-a663-d6375f2a7bd3"
+    }
+  }
+}

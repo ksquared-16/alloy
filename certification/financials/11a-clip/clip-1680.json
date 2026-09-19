@@ -1,0 +1,96 @@
+[
+  {
+    "text": "Consumable fee",
+    "clipped": false,
+    "scrollW": 95,
+    "clientW": 95,
+    "overflow": "visible",
+    "textOverflow": "clip",
+    "whiteSpace": "normal",
+    "parentW": 184,
+    "zoneW": 184
+  },
+  {
+    "text": "Credit",
+    "clipped": false,
+    "scrollW": 35,
+    "clientW": 35,
+    "overflow": "visible",
+    "textOverflow": "clip",
+    "whiteSpace": "normal",
+    "parentW": 184,
+    "zoneW": 184
+  },
+  {
+    "text": "Adjustment",
+    "clipped": false,
+    "scrollW": 66,
+    "clientW": 66,
+    "overflow": "visible",
+    "textOverflow": "clip",
+    "whiteSpace": "normal",
+    "parentW": 184,
+    "zoneW": 184
+  },
+  {
+    "text": "NET OBLIGATION",
+    "clipped": false,
+    "scrollW": 96,
+    "clientW": 96,
+    "overflow": "visible",
+    "textOverflow": "clip",
+    "whiteSpace": "normal",
+    "parentW": 184,
+    "zoneW": 184
+  },
+  {
+    "text": "Balance",
+    "clipped": false,
+    "scrollW": 47,
+    "clientW": 47,
+    "overflow": "hidden",
+    "textOverflow": "ellipsis",
+    "whiteSpace": "nowrap",
+    "parentW": 134,
+    "zoneW": 134
+  },
+  {
+    "text": "Paid",
+    "clipped": false,
+    "scrollW": 25,
+    "clientW": 25,
+    "overflow": "hidden",
+    "textOverflow": "ellipsis",
+    "whiteSpace": "nowrap",
+    "parentW": 134,
+    "zoneW": 134
+  },
+  {
+    "text": "Unassigned",
+    "clipped": false,
+    "scrollW": 68,
+    "clientW": 68,
+    "overflow": "hidden",
+    "textOverflow": "ellipsis",
+    "whiteSpace": "nowrap",
+    "parentW": 134,
+    "zoneW": 134
+  },
+  {
+    "text": "Available",
+    "clipped": false,
+    "scrollW": 53,
+    "clientW": 53,
+    "overflow": "hidden",
+    "textOverflow": "ellipsis",
+    "whiteSpace": "nowrap",
+    "parentW": 134,
+    "zoneW": 134
+  },
+  {
+    "text": "__CARD__",
+    "cardW": 366,
+    "zonesW": 338,
+    "cols": "184.438px 133.562px"
+  }
+]

@@ -218,7 +218,24 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
     { key: "communications", title: "Communications", ownsOperationalTruth: true },
     { key: "documents", title: "Documents", ownsOperationalTruth: true },
     { key: "attention", title: "Why Now" },
-    { key: "billing_preview", title: "Billing Preview", ownsOperationalTruth: true },
+    /*
+     * BILLING PREVIEW — "is this enrolment priced, and on what terms?"
+     *
+     * ── WHY IT NOW DECLARES THE CHILD GRAIN ──────────────────────────────────────────────────
+     *
+     * It declared none, so it fell to the case-only default and was omitted from every child-grain
+     * panel. The consequence was not cosmetic: this card owns acceptance of recurring tuition terms
+     * through `enrollment.pricing.accept`, so an operator working an ENROLLED CHILD — which is
+     * where enrolment pricing is actually decided — had no path to establish or change that child's
+     * recurring terms at all. Recurring billing had no operator entry point.
+     *
+     * It composes truthfully at both grains for the same reason Financials and Assignments do: the
+     * assignments belong to the household's enrolment, and a child-grain panel scopes that same
+     * truth to one subject rather than answering a different question. Where a record has no
+     * assignment it says "No assignment on this record to price." rather than rendering an empty
+     * shell, which is the bar this declaration is held to.
+     */
+    { key: "billing_preview", title: "Billing Preview", ownsOperationalTruth: true, grains: ["opportunity", "child"] },
     { key: "required_information", title: "Required Information" },
     { key: "current_mission", title: "Current Mission" },
     { key: "timeline", title: "Timeline" },

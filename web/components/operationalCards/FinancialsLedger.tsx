@@ -10,6 +10,8 @@ import {
     SlidersHorizontal,
     Undo2,
     type LucideIcon,
+    UserCog,
+    UserPlus,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -82,6 +84,11 @@ export type FinancialsLedgerRowView = {
     /** Who owes it. Null with `responsibilityUnassigned` false means no allocation exists at all. */
     responsibleParty: string | null;
     responsibilityUnassigned?: boolean;
+    /** Owed by the named party, and owed by nobody yet. Both can be non-zero on one obligation. */
+    responsibilityAssignedCents?: number;
+    responsibilityUnassignedCents?: number;
+    /** Formatter, so this component states money without owning an opinion about currency. */
+    money?: (cents: number) => string;
     /**
      * WHETHER RESPONSIBILITY IS A QUESTION THIS ROW TYPE ANSWERS.
      *
@@ -137,7 +144,10 @@ export type FinancialsLedgerRowView = {
  * the markup, and is therefore reachable by keyboard as well as pointer. Nothing here depends on
  * hover.
  */
-export type FinancialsRowActionKind = "adjust" | "reverse" | "post" | "move" | "apply";
+export type FinancialsRowActionKind =
+    | "adjust" | "reverse" | "post" | "move" | "apply"
+    /* Who owes this obligation — resolve it under the arrangement, or move it to another party. */
+    | "resolveResponsibility" | "reallocateResponsibility";
 
 const ROW_ACTION_ICON: Record<FinancialsRowActionKind, LucideIcon> = {
     adjust: SlidersHorizontal,
@@ -145,6 +155,8 @@ const ROW_ACTION_ICON: Record<FinancialsRowActionKind, LucideIcon> = {
     post: CheckCircle2,
     move: ArrowLeftRight,
     apply: CircleDollarSign,
+    resolveResponsibility: UserPlus,
+    reallocateResponsibility: UserCog,
 };
 
 export function RowAction({
@@ -249,21 +261,55 @@ export function FinancialsLedgerRow({ row }: { row: FinancialsLedgerRowView }) {
              * responsible, versus nobody has decided. A dash for either read as missing data, which
              * is the one thing neither of them is.
              */}
-            <span
-                className="alloy-os-billingdetail__source"
-                data-financials-responsible="true"
-                data-financials-responsibility={
+            {(() => {
+                /*
+                 * ── A NAME IS NOT THE SAME AS "FULLY OWED BY THIS PERSON" ────────────────────
+                 *
+                 * A $75.00 obligation resolved under an arrangement naming one $18.00 share leaves
+                 * $57.00 owed by nobody. This cell rendered the name alone, so an operator read a
+                 * partially allocated obligation as fully owned — the most expensive kind of wrong,
+                 * because the unowned remainder is exactly the thing that needs work.
+                 *
+                 * PARTIAL is its own state, marked in the DOM and visible in the cell. The cell
+                 * stays a cell: the name, and a short remainder. The amounts are on the title for
+                 * anyone who wants both numbers.
+                 */
+                const named = Boolean(row.responsibleParty);
+                const remainder = row.responsibilityUnassignedCents ?? 0;
+                const partial = named && remainder > 0;
+                const fmt = row.money ?? ((c: number) => `$${(c / 100).toFixed(2)}`);
+                const state =
                     row.responsibilityApplies === false ? "not-applicable"
-                    : row.responsibleParty ? "named"
+                    : partial ? "partial"
+                    : named ? "named"
                     : row.responsibilityUnassigned ? "unassigned"
-                    : "not-allocated"
-                }
-            >
-                {row.responsibilityApplies === false ? "—"
-                : row.responsibleParty ? row.responsibleParty
-                : row.responsibilityUnassigned ? "Unassigned"
-                : "Not allocated"}
-            </span>
+                    : "not-allocated";
+                const title =
+                    partial
+                        ? `${row.responsibleParty} ${fmt(row.responsibilityAssignedCents ?? 0)} · Unassigned ${fmt(remainder)}`
+                        : undefined;
+                return (
+                    <span
+                        className="alloy-os-billingdetail__source"
+                        data-financials-responsible="true"
+                        data-financials-responsibility={state}
+                        title={title}
+                    >
+                        {row.responsibilityApplies === false ? "—"
+                        : partial ? (
+                            <>
+                                {row.responsibleParty}
+                                <span className="alloy-os-billingdetail__partial" data-financials-responsibility-remainder>
+                                    {` · ${fmt(remainder)} unassigned`}
+                                </span>
+                            </>
+                        )
+                        : named ? row.responsibleParty
+                        : row.responsibilityUnassigned ? "Unassigned"
+                        : "Not allocated"}
+                    </span>
+                );
+            })()}
             {/*
              * DESCRIPTION LAST, AND SMALLEST. It is free text and the least identifying thing on the
              * row; an operator scans Date → Type → Child → GL → Amount → Status → Responsibility and

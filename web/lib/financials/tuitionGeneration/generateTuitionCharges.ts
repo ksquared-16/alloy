@@ -69,8 +69,47 @@ export type TuitionGenerationOutcome =
     | { kind: "generated"; assignmentId: string; periodKey: string; periodLabel: string; termId: string; chargeId: string | null; amountCents: number; currencyCode: string; obligationId: string | null }
     | { kind: "not_due"; assignmentId: string; periodKey: string; periodLabel: string; reason: string }
     | { kind: "refused"; assignmentId: string; periodKey: string; periodLabel: string; reason: string; detail: string }
+    /*
+     * AN OBLIGATION THAT ALREADY STOOD IS NOT ONE THIS RUN GENERATED.
+     *
+     * Rerunning a period reported `generated: 5` a second time while creating nothing: the draft
+     * write already answers `unchanged` for a converged draft, and that answer was being thrown
+     * away. The data was right — the ledger held five rows, not ten — but an operator reading the
+     * result would believe they had billed the family twice.
+     */
+    | { kind: "unchanged"; assignmentId: string; periodKey: string; periodLabel: string; termId: string; chargeId: string; amountCents: number; currencyCode: string; obligationId: string | null }
     | { kind: "already_posted"; assignmentId: string; periodKey: string; periodLabel: string; termId: string; chargeId: string; amountCents: number }
     | { kind: "error"; assignmentId: string; periodKey: string; periodLabel: string; message: string };
+
+/**
+ * WHICH OUTCOME A DRAFT WRITE DESERVES.
+ *
+ * `writeTemplateDraftCharge` has always answered `created` / `recalculated` / `unchanged`, and this
+ * generator threw the answer away and called all three "generated". Rerunning a period therefore
+ * reported `generated: 5` a second time while creating nothing — the ledger was right and the
+ * sentence was not.
+ *
+ * Exported because it is a decision, and a decision is testable without a database.
+ */
+export function tuitionOutcomeKindForDraftStatus(status: string | null | undefined): "generated" | "unchanged" {
+    return status === "unchanged" ? "unchanged" : "generated";
+}
+
+/**
+ * The tally, derived from the outcomes rather than counted alongside them — so a new outcome kind
+ * cannot be added without the counts noticing.
+ */
+export function tallyTuitionOutcomes(outcomes: readonly TuitionGenerationOutcome[]) {
+    return {
+        generated: outcomes.filter((o) => o.kind === "generated").length,
+        /** Drafts that already stood and still agree — converged, not billed again. */
+        unchanged: outcomes.filter((o) => o.kind === "unchanged").length,
+        alreadyPosted: outcomes.filter((o) => o.kind === "already_posted").length,
+        notDue: outcomes.filter((o) => o.kind === "not_due").length,
+        refused: outcomes.filter((o) => o.kind === "refused").length,
+        errors: outcomes.filter((o) => o.kind === "error").length,
+    };
+}
 
 export type TuitionGenerationResult = {
     /** The span the run was asked for — a month key today, from the operator's period control. */
@@ -87,7 +126,7 @@ export type TuitionGenerationResult = {
      */
     periodsBilled: Array<{ key: string; label: string; start: string; end: string }>;
     /** Counts an operator can act on, not a log to read. */
-    counts: { generated: number; alreadyPosted: number; notDue: number; refused: number; errors: number };
+    counts: { generated: number; unchanged: number; alreadyPosted: number; notDue: number; refused: number; errors: number };
     outcomes: TuitionGenerationOutcome[];
 };
 
@@ -189,7 +228,7 @@ export async function generateTuitionCharges(
             servicePeriod: { start: span.start, end: span.end },
             cadenceKey,
             periodsBilled: [],
-            counts: { generated: 0, alreadyPosted: 0, notDue: 0, refused: 0, errors: 0 },
+            counts: { generated: 0, unchanged: 0, alreadyPosted: 0, notDue: 0, refused: 0, errors: 0 },
             outcomes: [],
         };
     }
@@ -370,8 +409,13 @@ export async function generateTuitionCharges(
                 });
                 continue;
             }
+            /*
+             * `created` and `recalculated` are work this run did; `unchanged` is a draft that was
+             * already standing and still agrees. Both are success and neither is an error — they are
+             * simply not the same sentence, and only one of them should be counted as billing.
+             */
             outcomes.push({
-                kind: "generated",
+                kind: tuitionOutcomeKindForDraftStatus(drafted.persisted.draftChargeStatus),
                 assignmentId,
                 periodKey: periodKeyOf,
                 periodLabel: periodLabelOf,
@@ -393,13 +437,7 @@ export async function generateTuitionCharges(
         }
     }
 
-    const counts = {
-        generated: outcomes.filter((o) => o.kind === "generated").length,
-        alreadyPosted: outcomes.filter((o) => o.kind === "already_posted").length,
-        notDue: outcomes.filter((o) => o.kind === "not_due").length,
-        refused: outcomes.filter((o) => o.kind === "refused").length,
-        errors: outcomes.filter((o) => o.kind === "error").length,
-    };
+    const counts = tallyTuitionOutcomes(outcomes);
     const periodsBilled = [...periodsBilledByKey.values()]
         .sort((a, b) => a.start.localeCompare(b.start))
         .map((p) => ({ key: p.key, label: p.label, start: p.start, end: p.end }));

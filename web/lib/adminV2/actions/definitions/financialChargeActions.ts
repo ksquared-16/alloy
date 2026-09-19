@@ -44,6 +44,8 @@ import {
     type CorrectionKind,
 } from "@/lib/financials/childcareChargeService";
 import { isPostedStatus } from "@/lib/financials/billableSource";
+import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
+import { subjectGrainIsLegal } from "@/lib/financials/chargeCategorySemantics";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -172,6 +174,20 @@ function childIdsFrom(
     entityId: string | undefined,
     entityType?: string | undefined,
 ): string[] {
+    /*
+     * ── "DIDN'T SAY" IS NOT "SAID HOUSEHOLD" ─────────────────────────────────────────────────
+     *
+     * `childIdFrom` falls back to the invocation entity, which is right for a caller acting FROM a
+     * child's record and says nothing about grain. But a surface where the operator deliberately
+     * chose Household has said something, and it was being overruled: the payload named no child,
+     * the entity was still the panel's child for ROUTING, and the charge came back attributed to
+     * that child. Measured: "Applies to · Household" produced a Certb-grain registration fee.
+     *
+     * `subjectMemberId: null` IS household grain rather than missing data — that is the doctrine
+     * the whole subject model rests on — so a caller needs a way to state it. Omitting the field
+     * cannot mean it, because omitting is exactly what a caller that has no opinion does.
+     */
+    if (t(payload?.subject_grain) === "household") return [];
     const raw = payload?.customer_member_ids;
     const many = Array.isArray(raw) ? raw.map((v) => t(v)).filter(Boolean) : [];
     if (many.length) return [...new Set(many)];
@@ -432,6 +448,42 @@ async function executeMultiChildAdd(args: {
     };
 }
 
+/**
+ * IS THIS CHARGE'S SUBJECT LEGAL FOR ITS CHARGE TYPE — asked BEFORE any money moves.
+ *
+ * `chargeCategorySemantics` is the code-owned authority on whose money a charge type can be, and
+ * until now nothing on the WRITE path consulted it: the grain rule was honoured only by the Focus
+ * Panel, which withheld the sibling checkboxes. Everything else — the household option in
+ * "Applies to", a governed invocation, a replayed payload — could author `tuition` at household
+ * grain, which the semantics module exists to call a contradiction.
+ *
+ * The check belongs here, beside the subject resolution loop that already runs before the first
+ * write, because a refusal discovered halfway through leaves a family half billed.
+ */
+async function refuseIllegalSubjectGrain(
+    supabase: SupabaseClient,
+    orgId: string,
+    templateId: string,
+    childIds: readonly string[],
+    correlationId: string,
+): Promise<ActionResult | null> {
+    if (!templateId) return null;
+    const template = (await listChargeTemplates(supabase, orgId)).find((x) => x.id === templateId);
+    // An unknown template is not this function's refusal to make; the writer says so with its own voice.
+    if (!template) return null;
+    // No child named IS household grain — the doctrine the whole subject model rests on.
+    if (subjectGrainIsLegal(template.charge_category, childIds[0] ?? null)) return null;
+    const grain = childIds.length ? "a child" : "the household";
+    return {
+        ok: false,
+        correlationId,
+        status: 409,
+        error: `"${template.label}" cannot be charged to ${grain}. This charge type is ${
+            childIds.length ? "household" : "child"
+        }-grained, and changing that would change what the charge means.`,
+    };
+}
+
 const addCharge: RegisteredAction = {
     actionKey: CHARGE_ADD_ACTION_KEY,
     defaultLabel: "Add charge",
@@ -593,6 +645,13 @@ const addCharge: RegisteredAction = {
          * converge. The operator is never lied to about what exists.
          */
         const childIds = childIdsFrom(payload, invocation.entityId, invocation.entityType);
+
+        /* The grain rule is checked BEFORE the first write, never after the second. */
+        const illegalGrain = await refuseIllegalSubjectGrain(
+            supabase as SupabaseClient, ctx.orgId, t(payload?.template_id), childIds, correlationId,
+        );
+        if (illegalGrain) return illegalGrain;
+
         const subjects: Array<{ childId: string; subject: Extract<ChargeSubject, { ok: true }> }> = [];
         try {
             /*

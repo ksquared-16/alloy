@@ -1,0 +1,16 @@
+{
+  "cards": [
+    "business_process",
+    "financials",
+    "children",
+    "household",
+    "attendance",
+    "health_safety"
+  ],
+  "tuitionCard": 0,
+  "assignmentCount": null,
+  "assignments": [],
+  "options": [],
+  "empty": false,
+  "acceptControls": 0
+}
