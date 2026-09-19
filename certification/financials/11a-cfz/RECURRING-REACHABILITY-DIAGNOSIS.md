@@ -103,3 +103,68 @@ After v160 the card still does not render. Candidates not yet eliminated, in the
 
 There is no scheduling producer gap. `scheduling` is deliberately authored **linked**. Nothing to do,
 and no Scheduling work belongs in Thread 11A.
+
+---
+
+# Run `erun_fef4a4b40ce6a05e` — grid-source hypothesis DISPROVEN
+
+Measured under an accepted guard (`d3586bb12`, production, no HMR, fresh server, published v160).
+
+## The Summary grid source, measured
+
+`resolveFocusPanelSummaryActiveDoc` decides it:
+
+```
+published = focusPanelSummaryUsesPublishedDoc(grain, context) ? publishedDoc : null
+return published ?? focusPanelSummaryDefaultDocForGrain(grain, context)
+```
+
+`focusPanelSummaryUsesPublishedDoc` → `opportunity` always; `child` **iff `context.familySettlement === true`**.
+
+So the answer to the §1 multiple choice is **C — merged**: the published doc when the subject speaks
+for the family, the code-owned composition otherwise. Not B, and not a cache.
+
+## Why the hypothesis is FALSE
+
+`billing_preview` is present, authored **`visibility: "visible"`**, in BOTH candidate sources:
+
+| source | line | authored as |
+|---|---|---|
+| `FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION` | 101 | `tier: context`, visible, 6/12 |
+| `FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION` | 321 | `tier: context`, visible, **4/12 beside Financials 8/12** |
+| published doc v160 | — | visible |
+
+Whichever document the panel composes from, the card is in it. A published placement is therefore
+**not** unable to introduce a card, and v159/v160 were not fighting a code-owned grid.
+
+The child-**without**-family composition contains exactly one card (`children`), and the mounted
+panel shows six — so this subject is resolving through the **with-family** path, where the card is
+authored beside Financials by design ("Billing Preview as its real 4/12 companion").
+
+## Also disproven this run
+
+| Hypothesis | Verdict | Evidence |
+|---|---|---|
+| Missing runtime producer | **FALSE** (already retired) | `CARD_CAPABILITY_PROVIDERS` holds only `milestones` |
+| Grid comes from the code default, so publishing cannot add a card | **FALSE** | card is in the code default too, as visible |
+| Stale layout cache in the running server | **FALSE** | fresh qualified build + fresh server + v160 → still absent |
+| Authored `linked` visibility (my v159 error) | **REAL but not sufficient** | corrected in v160; card still absent |
+| Grain admission | **UNLIKELY** | `["opportunity","child"]` declared and shipped in `d3586bb12` |
+| Component mapping | **FALSE** | `FocusPanelCardRenderer` handles `model.key === "billing_preview"` |
+
+## Where it disappears — still unlocated
+
+Mounted card keys under the qualified runtime, unchanged across every attempt:
+
+`business_process · financials · children · household · attendance · health_safety`
+
+That is the with-family composition **minus `billing_preview`**. The card is in the composition and
+handled by the renderer, so it is dropped in the **admission step between the two** — the stage that
+turns a composition entry into an admitted card model. `FOCUS_PANEL_CODE_OWNED_COMPOSITION_CARD_KEYS`
+and `focusPanelCardParticipatesInACodeOwnedComposition` are exported and have **no consumers**, which
+is itself worth understanding.
+
+**Next trace step:** instrument the admitted-card-key list between
+`deriveFocusPanelSummaryCompositionInputs` and `FocusPanelCardRenderer` and find the first stage
+where `billing_preview` is present on one side and absent on the other. Do not attempt another
+repair before that single measurement.
