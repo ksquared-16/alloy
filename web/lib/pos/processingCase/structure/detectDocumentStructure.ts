@@ -186,9 +186,46 @@ function looksLikeBareLabel(line: string): boolean {
     return true;
 }
 
+/**
+ * A question a person answers YES or NO to.
+ *
+ * ## Why this is a grammar rule and not a list of labels
+ *
+ * A document that PRINTS Yes/No boxes is already caught, by `extractYesNoQuestion` and
+ * `isYesNoPair`. A question LIST prints no boxes — which is what a Formsite export is, and what the
+ * certified Admissions packet is — so fifteen of its eighty questions arrived as free text:
+ * "Has your student ever participated in speech, behavioral, play or occupational therapy?" offered
+ * a parent an empty box to type into.
+ *
+ * English marks a closed question by fronting an auxiliary verb. `Has …?` `Does …?` `Is …?` expect
+ * yes or no; `How …?` `What …?` `Why …?` do not. That distinction is a property of the sentence, so
+ * it holds for a boarding kennel's intake and a sailing club's membership form exactly as it holds
+ * here, and it needs no vocabulary of its own. The participant runtime already draws the same line
+ * to decide whether an authored label may be asked as written (`authoredQuestionPrompt`); the
+ * importer simply never did.
+ *
+ * A trailing "?" is required. Without it "Does" can open an ordinary instruction, and a heading that
+ * merely begins with a verb is not a question at all.
+ */
+const CLOSED_QUESTION = /^(has|have|does|do|did|is|are|was|were|can|could|will|would|should|may|must)\b/i;
+
+function looksLikeClosedQuestion(label: string): boolean {
+    const t = label.trim();
+    if (!t.endsWith("?")) return false;
+    return CLOSED_QUESTION.test(t);
+}
+
 function suggestType(label: string): StructureFieldType {
     const l = label.toLowerCase();
     if (/\bsignature|sign here|signed\b/.test(l)) return "signature";
+    /*
+     * Before the keyword rules below, because they would otherwise claim it first: "Does your child
+     * have any fears? (dark, spiders, etc.)" contains none of their words, but "Has your child ever
+     * been stung by a bee or wasp?" would be read as a date by the `birth`/`date` rule the moment a
+     * question mentioned a birthday, and "Is there anything else…" is not a select because it
+     * contains "select". A question's SHAPE outranks the words inside it.
+     */
+    if (looksLikeClosedQuestion(label)) return "checkbox";
     if (/\b(date|dob|date of birth|expiration|start date|end date|d\.o\.b|administered|birth)\b/.test(l)) return "date";
     if (/\b(amount|total|fee|payment|cost|price|balance)\b/.test(l) || /\$/.test(l)) return "number";
     if (/\b(age|height|weight|grade|pulse|temperature|bmi|dose)\b/.test(l)) return "number";
