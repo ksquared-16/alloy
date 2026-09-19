@@ -212,11 +212,14 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         };
     });
 
-    /* The fingerprints of what actually mutated late — the evidence for the long pole. */
-    const lateMutations = await page.evaluate(() => {
-        const L = window as unknown as { __p076late?: unknown[] };
-        return (L.__p076late ?? []).slice(-40);
-    });
+    /*
+     * ONE LATE-MUTATION AUTHORITY.
+     *
+     * A second read used to publish `.slice(-40)` of the SAME buffer at the top level. Being the
+     * LAST 40 it began after the completion burst on every sample, so the two arrays disagreed
+     * about whether the completing mutations existed at all — and the truncated one was the one
+     * read first. `regions.lateMutations` carries the whole buffer and is now the only copy.
+     */
 
     /*
      * The Summary readiness chain — the direct causal evidence. Recorded by the product's OWN
@@ -266,7 +269,6 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
          * are the ones any causal claim must be built from.
          */
         apiTimingBrowserClock,
-        lateMutations,
         focusChain,
         drawerVmTiming,
         retiredReadProbe: {
