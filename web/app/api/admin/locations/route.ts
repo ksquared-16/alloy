@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { canonicalUnitRoleFromStorage } from "@/lib/location/canonicalLocationModel";
 import {
     enrichHierarchyUnitsWithProgramCategories,
     UNIT_PROGRAM_CATEGORY_FIELD_KEYS,
@@ -86,6 +87,22 @@ export async function GET(request: NextRequest) {
             parent_location_id: hierarchy
                 ? ((r.parent_location_id as string | null | undefined) ?? null)
                 : undefined,
+            // The canonical topology role, on the same `hierarchy` gate as the
+            // structural parent it belongs with — a role only means something
+            // alongside the tree, and a flat dropdown has no use for it.
+            //
+            // EFFECTIVE, not raw storage. `canonicalUnitRoleFromStorage` is the
+            // single owner of the NULL-compatibility rule, so a historical unit
+            // answers `operational_group` here exactly as it does in the DB
+            // (`location_unit_role()`), in the provider, and in every predicate.
+            // Handing the surface a raw NULL would make every component that
+            // touches a room rediscover that rule, and they would drift.
+            // A site or an address answers null: they are not role-bearing.
+            //
+            // The PUBLIC API (`/api/v1/locations`) deliberately keeps exposing the
+            // RAW nullable column — an external partner reads storage, not our
+            // compatibility reading of it. These two contracts differ on purpose.
+            unit_role: hierarchy ? canonicalUnitRoleFromStorage(r.location_type, r.unit_role) : undefined,
             metadata: hierarchy
                 ? (r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
                     ? r.metadata

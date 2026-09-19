@@ -3,12 +3,29 @@ import {
     readLocationMetadataPresentation,
 } from "@/lib/admin/location/locationMetadataFields";
 import { formatLocationTypeLabel } from "@/lib/admin/locationListPresentation";
+import {
+    canonicalUnitRoleFromStorage,
+    type CanonicalUnitRole,
+} from "@/lib/location/canonicalLocationModel";
 
 export type LocationHierarchyRow = {
     id: string;
     label: string | null;
     location_type: string | null;
     parent_location_id: string | null;
+    /**
+     * Canonical topology role for a unit row — the SAME vocabulary the schema,
+     * the domain predicates and the room provider use, never a second one. Null
+     * on a site or an address, which have no role.
+     *
+     * Already effective when it arrives: `GET /api/admin/locations?hierarchy=1`
+     * resolves the legacy-NULL compatibility rule once, so a component reading
+     * this never has to spell `?? "operational_group"` itself.
+     *
+     * Optional because only the `hierarchy=1` projection carries it, matching how
+     * `metadata` is gated. A flat dropdown response legitimately omits it.
+     */
+    unit_role?: CanonicalUnitRole | null;
     is_active: boolean;
     status_key?: string | null;
     _status_display?: string | null;
@@ -60,6 +77,26 @@ export const LOCATIONS_EDITOR_TABLE_COLUMN_CLASS: Partial<
     Capacity: "max-w-[80px] w-[80px]",
     "Student:Teacher Ratio": "max-w-[120px] w-[120px]",
 };
+
+/**
+ * Guarantee the read-model invariant: a row held by Settings always carries the
+ * EFFECTIVE topology role.
+ *
+ * `GET ...?hierarchy=1` already resolves it, but the create/update responses do
+ * not — they hand back `select("*")`, which is raw storage, so merging one into
+ * state would flip a legacy room's resolved `operational_group` back to a raw
+ * `null` and make the model disagree with itself depending on whether the row
+ * had been saved this session.
+ *
+ * This is the same owner re-applied, not a second reading of the rule: the fold
+ * is `canonicalUnitRoleFromStorage` either way, and it is idempotent, so a row
+ * that arrived effective passes through unchanged.
+ */
+export function withCanonicalUnitRole<T extends { location_type?: string | null; unit_role?: unknown }>(
+    row: T
+): T & { unit_role: CanonicalUnitRole | null } {
+    return { ...row, unit_role: canonicalUnitRoleFromStorage(row.location_type, row.unit_role) };
+}
 
 export function isDemoLocation(row: LocationHierarchyRow): boolean {
     const label = (row.label ?? "").trim().toLowerCase();

@@ -13,7 +13,10 @@ import {
     type LocationProgramCategoryRow,
 } from "@/lib/locations/locationProgramCategories";
 import type { SchedulePatternRow } from "@/lib/childcareOperational/fetchOperationalEnrollment";
-import { mergeLocationMetadataField } from "@/lib/adminV2/locationsHierarchyTablePresentation";
+import {
+    mergeLocationMetadataField,
+    withCanonicalUnitRole,
+} from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import type { LocationSiteCreateInput } from "@/components/adminV2/settings/locations/LocationSiteCreatePanel";
 import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
 import {
@@ -74,7 +77,7 @@ export function useLocationsConfigurationSettings(options?: {
     const retainedLocationId = String(options?.retainedLocationId ?? "").trim() || null;
     const [section, setSection] = useState<LocationConfigSection>("locations");
     const [rows, setRows] = useState<LocationHierarchyRow[]>(() =>
-        orgId ? (peekLocationsCollection(orgId)?.rows ?? []) : [],
+        orgId ? (peekLocationsCollection(orgId)?.rows ?? []).map(withCanonicalUnitRole) : [],
     );
     const [programCategories, setProgramCategories] = useState<LocationProgramCategoryRow[]>(() =>
         orgId ? (peekLocationsCollection(orgId)?.programCategories ?? []) : [],
@@ -113,7 +116,9 @@ export function useLocationsConfigurationSettings(options?: {
             programCategories: LocationProgramCategoryRow[];
             schedulePatterns: SchedulePatternRow[];
         }) => {
-            setRows(snapshot.rows);
+            // Every row entering the model is folded once, so `unit_role` on a
+            // LocationHierarchyRow means the same thing wherever it came from.
+            setRows(snapshot.rows.map(withCanonicalUnitRole));
             setProgramCategories(snapshot.programCategories);
             setSchedulePatterns(snapshot.schedulePatterns);
             hasDataRef.current = snapshot.rows.length > 0 || snapshot.programCategories.length > 0;
@@ -331,7 +336,9 @@ export function useLocationsConfigurationSettings(options?: {
             if (!newId || !mutationResponseContainsPatch(json as Record<string, unknown>, payload)) {
                 throw new Error("Location creation was not confirmed by the authoritative response.");
             }
-            setRows((prev) => (prev.some((row) => row.id === newId) ? prev : [...prev, json]));
+            setRows((prev) =>
+                prev.some((row) => row.id === newId) ? prev : [...prev, withCanonicalUnitRole(json)],
+            );
             bumpCollectionAfterMutation("location-site-created");
             window.dispatchEvent(
                 new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }),
@@ -362,7 +369,9 @@ export function useLocationsConfigurationSettings(options?: {
             if (!newId || !mutationResponseContainsPatch(json as Record<string, unknown>, payload)) {
                 throw new Error("Room creation was not confirmed by the authoritative response.");
             }
-            setRows((prev) => (prev.some((row) => row.id === newId) ? prev : [...prev, json]));
+            setRows((prev) =>
+                prev.some((row) => row.id === newId) ? prev : [...prev, withCanonicalUnitRole(json)],
+            );
             bumpCollectionAfterMutation("location-room-created");
             window.dispatchEvent(
                 new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }),
@@ -423,7 +432,9 @@ export function useLocationsConfigurationSettings(options?: {
             // Apply the PATCH row into local state. Do not await a full hierarchy GET on the
             // save critical path — that was blocking "Saving…" for the entire org reload.
             setRows((prev) =>
-                prev.map((row) => (row.id === id ? { ...row, ...json, id: row.id } : row)),
+                prev.map((row) =>
+                    row.id === id ? withCanonicalUnitRole({ ...row, ...json, id: row.id }) : row,
+                ),
             );
             bumpCollectionAfterMutation("location-patched");
         },
