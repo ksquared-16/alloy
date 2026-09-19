@@ -105,3 +105,31 @@ describe("THE GATE — the discounts subsection says what it is", () => {
         expect(new Set(forms).size, "the same two panels, not a third").toBeLessThanOrEqual(2);
     });
 });
+
+describe("THE RATE — a discount states what it does where it opens", () => {
+    const page = src("components/adminV2/settings/financials/policies/PoliciesConfigurationPage.tsx");
+
+    /*
+     * MEASURED, 2026-09-19, mounted: selecting "Sibling discount (QA specimen)" opened `overview`,
+     * which stated Category / Type / Status / Applied to / Locations / Effective and NOT the rate.
+     * "10% off everything" lived only on the Rules tab, and the rail row did not carry it either —
+     * so the front page of a discount omitted the only fact that makes it a discount.
+     */
+    it("states the rule on the overview, not only on the Rules tab", () => {
+        const overview = page.slice(page.indexOf('data-testid="policy-overview"'), page.indexOf('data-testid="policy-rules"'));
+        expect(overview, "the overview renders the value summary").toContain("valueSummary");
+        expect(overview).toContain('data-testid="policy-overview-rule"');
+    });
+
+    it("states the rule on the rail row, so the list is scannable unopened", () => {
+        const rail = page.slice(page.indexOf('role="listbox"'), page.indexOf('<main className="min-w-0">'));
+        expect(rail).toContain("commercialPolicyValueSummary");
+    });
+
+    /* ONE formatter. The rate is derived by the helper that already owns it, in both places. */
+    it("derives the rate from the shared helper and formats none of it locally", () => {
+        expect(page).toContain("commercialPolicyValueSummary");
+        expect(page, "no local percent formatting").not.toMatch(/\$\{[^}]*\}\s*%|toFixed\(/);
+        expect(page, "no local basis branching").not.toMatch(/basis\s*===\s*"percentage"/);
+    });
+});
