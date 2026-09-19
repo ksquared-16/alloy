@@ -101,6 +101,9 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
                 }>;
                 kinds: Record<string, number>;
                 blockingSeen: string[];
+                latestGeneration: string | null;
+                staleGenerationSuppressed: number;
+                placeholderSuppressed: number;
             };
         };
         const s = V2.__p076v2;
@@ -113,6 +116,12 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
                 Object.entries(s.perSection).sort((a, b) => b[1].lastMs - a[1].lastMs),
             ),
             mutationKinds: s.kinds,
+            // Did the finality rules actually fire on the real surface, or is this path simply
+            // free of reserved geometry and stale generations? Reporting the counts answers it;
+            // an absent field would have been read as "zero" without ever being measured.
+            placeholderSuppressed: s.placeholderSuppressed,
+            staleGenerationSuppressed: s.staleGenerationSuppressed,
+            latestGeneration: s.latestGeneration,
         };
     });
 
@@ -153,6 +162,18 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         return (L.__p076late ?? []).slice(-40);
     });
 
+    /*
+     * The Summary readiness chain — the direct causal evidence. Recorded by the product's OWN
+     * commit-timing chain, which now records (not logs) whenever the route-timing diagnostic is on.
+     */
+    const focusChain = await page.evaluate(() => {
+        const w = window as unknown as { __alloyFocusChain?: unknown; __alloyPerf?: { marks?: Record<string, number> } };
+        const chainMarks = Object.fromEntries(
+            Object.entries(w.__alloyPerf?.marks ?? {}).filter(([k]) => k.startsWith("focus_panel_chain")),
+        );
+        return { diag: w.__alloyFocusChain ?? null, chainMarks };
+    });
+
     const marks = await page.evaluate(() => {
         const el = document.getElementById("__alloy_route_timing");
         try { return el ? JSON.parse(el.textContent || "null") : null; } catch { return null; }
@@ -179,6 +200,7 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         apiRequests: requests,
         apiResponses: responses,
         lateMutations,
+        focusChain,
         retiredReadProbe: {
             eppEnrichmentHttp: requests.filter((r) => /effective-enrollment|epp/i.test(r.url)).length,
             tourEnrichmentHttp: requests.filter((r) => /tour-bookings|active-tour/i.test(r.url)).length,
@@ -190,7 +212,9 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         `[p076] ${LABEL} sha=${out.deployedSha?.slice(0, 9)} doc=${domMs}ms `
         + `V1(quiet=${QUIET_MS})=${visibleCompleteMs}ms V2=${v2?.visibleCompleteV2Ms}ms `
         + `lastBlocking=${Object.keys(v2?.perSection ?? {})[0] ?? "none"} `
-        + `blockingSeen=${v2?.blockingSectionsSeen.length ?? 0} postMut=${postComplete} `
+        + `blockingSeen=${v2?.blockingSectionsSeen.length ?? 0} `
+        + `chain=${focusChain.diag ? "present" : "ABSENT"} flips=${(focusChain.diag as {flips?:unknown[]} | null)?.flips?.length ?? 0} `
+        + `postMut=${postComplete} `
         + `api=${requests.length} marks=${marks ? "present" : "ABSENT"} rows=${dataProbe.rows} sections=${Object.keys(regions.presentSections).length} `
         + `valid=${out.valid} signedOut=${dataProbe.signedOut}`,
     );
