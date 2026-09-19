@@ -104,6 +104,7 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
                 latestGeneration: string | null;
                 staleGenerationSuppressed: number;
                 placeholderSuppressed: number;
+                perCard: Record<string, { firstMs: number; lastMs: number; auth: number; anim: number }>;
             };
         };
         const s = V2.__p076v2;
@@ -122,6 +123,8 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
             placeholderSuppressed: s.placeholderSuppressed,
             staleGenerationSuppressed: s.staleGenerationSuppressed,
             latestGeneration: s.latestGeneration,
+            // Per-area paint timeline, ordered latest-final first: which area finishes last.
+            perCard: Object.fromEntries(Object.entries(s.perCard).sort((a, b) => b[1].lastMs - a[1].lastMs)),
         };
     });
 

@@ -185,6 +185,47 @@ export function installVisibleCompletionProbe(): void {
         return null;
     };
 
+    /*
+     * PER-AREA ATTRIBUTION, using identity the product already emits.
+     *
+     * FocusPanelCardRenderer stamps data-universal-card-key on every MOUNTED card; reserved cells
+     * carry none. So this attributes only cards that actually mounted — the distinction that
+     * matters here, because a card is not mounted at all until its readiness is "ready" or
+     * "self_loading", and the three self-loading areas own their own reads. No parallel card list
+     * is introduced: the DOM is asked.
+     */
+    const cardKeysFor = (n: Node | null): string[] => {
+        let el: Node | null = n;
+        while (el && el.nodeType !== 1) el = el.parentNode;
+        const start = el as Element | null;
+        if (!start) return [];
+        // 1) The mutation happened INSIDE a card.
+        let cur: Element | null = start;
+        while (cur) {
+            const k = cur.getAttribute?.("data-universal-card-key");
+            if (k) return [k];
+            cur = cur.parentElement;
+        }
+        /*
+         * 2) The mutation ADDED a subtree CONTAINING cards.
+         *
+         * This is the case that matters and the one an upward-only walk silently drops: the Summary
+         * burst attaches a whole grid subtree in one record, so the added node is an ANCESTOR of the
+         * cards. Walking up from it finds no key, and only cards that later mutate individually get
+         * attributed — which reported 2 areas out of the five visibly painting, while the
+         * max-per-area reconciliation still passed because those two happened to land in the same
+         * batch. Coverage has to be asked for downward as well.
+         */
+        const found = start.querySelectorAll?.("[data-universal-card-key]");
+        if (!found || found.length === 0) return [];
+        const keys: string[] = [];
+        found.forEach((e) => {
+            const k = e.getAttribute("data-universal-card-key");
+            if (k && !keys.includes(k)) keys.push(k);
+        });
+        return keys;
+    };
+
     const V2 = window as unknown as {
         __p076v2?: {
             lastBlockingAuthoritativeMs: number;
@@ -203,6 +244,7 @@ export function installVisibleCompletionProbe(): void {
             latestGeneration: string | null;
             staleGenerationSuppressed: number;
             placeholderSuppressed: number;
+            perCard: Record<string, { firstMs: number; lastMs: number; auth: number; anim: number }>;
         };
     };
     V2.__p076v2 = {
@@ -213,6 +255,7 @@ export function installVisibleCompletionProbe(): void {
         latestGeneration: null,
         staleGenerationSuppressed: 0,
         placeholderSuppressed: 0,
+        perCard: {},
     };
 
     const mark = (recs?: MutationRecord[]) => {
@@ -229,6 +272,23 @@ export function installVisibleCompletionProbe(): void {
             const kind = classify(r);
             const v2 = V2.__p076v2!;
             v2.kinds[kind]++;
+            /*
+             * A childList record's `target` is the PARENT. Judging the parent asks "where did
+             * something change", when finality is a question about WHAT ARRIVED — the reserved
+             * wrapper and the stale-subject block are the added nodes, and inspecting their
+             * container silently classified both as ordinary content.
+             *
+             * Computed once here because BOTH the section and the per-area paths need the same
+             * answer; deriving it twice would let them disagree.
+             */
+            const arrived = Array.from(r.addedNodes).filter((n) => n.nodeType === 1);
+            const judged: Node[] = arrived.length ? arrived : [r.target];
+
+            const live = currentGeneration();
+            if (live) v2.latestGeneration = live;
+            const genOfMutation = generationOf(judged[0]);
+            const stale = genOfMutation !== null && live !== null && genOfMutation !== live;
+
             const host = blockingHost(r.target);
             if (host) {
                 if (!v2.blockingSeen.includes(host)) v2.blockingSeen.push(host);
@@ -241,20 +301,6 @@ export function installVisibleCompletionProbe(): void {
                 // "when did this region stop moving at all". The gap between it and lastMs is the
                 // trailing motion V1 was billing as loading, measured per region not asserted.
                 ps.lastVisibleMs = t;
-
-                /*
-                 * A childList record's `target` is the PARENT. Judging the parent asks "where did
-                 * something change", when finality is a question about WHAT ARRIVED — the reserved
-                 * wrapper and the stale-subject block are the added nodes, and inspecting their
-                 * container silently classified both as ordinary content.
-                 */
-                const arrived = Array.from(r.addedNodes).filter((n) => n.nodeType === 1);
-                const judged: Node[] = arrived.length ? arrived : [r.target];
-
-                const live = currentGeneration();
-                if (live) v2.latestGeneration = live;
-                const genOfMutation = generationOf(judged[0]);
-                const stale = genOfMutation !== null && live !== null && genOfMutation !== live;
 
                 if (kind === "PRESENTATIONAL_ANIMATION") {
                     ps.anim++;
@@ -270,6 +316,24 @@ export function installVisibleCompletionProbe(): void {
                     if (t > v2.lastBlockingAuthoritativeMs) v2.lastBlockingAuthoritativeMs = t;
                 }
                 v2.perSection[host] = ps;
+            }
+
+            /*
+             * The SAME mutation, attributed to its AREA. Deliberately outside the blocking-host
+             * branch: a card's paint is worth timing wherever it lands, and the section rules above
+             * have already decided what counts toward completion.
+             */
+            const cards = stale ? [] : judged.flatMap((j) => cardKeysFor(j));
+            for (const card of cards) {
+                const pc = v2.perCard[card] ?? { firstMs: -1, lastMs: -1, auth: 0, anim: 0 };
+                if (kind === "PRESENTATIONAL_ANIMATION") {
+                    pc.anim++;
+                } else if (!judged.every(isPlaceholderNode)) {
+                    pc.auth++;
+                    if (pc.firstMs < 0) pc.firstMs = t;
+                    pc.lastMs = t;
+                }
+                v2.perCard[card] = pc;
             }
 
             /*
