@@ -222,3 +222,59 @@ due-date policy, and the v161 layout.
 `materializeCurrentFinancialConsequences` handles only `vacation_credit`, so no authored commercial
 discount reaches a generated tuition obligation. Until that is wired, a Human-QA scenario that says
 "a sibling discount reduces this month's tuition" cannot be built honestly.
+
+---
+
+# Addendum 4 — recurring commercial discounts (candidate `80b55b25a`)
+
+## O · The discount configuration actually used
+
+| Item | Value | Note |
+|---|---|---|
+| Policy | **Sibling discount (QA specimen)** `5df9fc6c` | already authored; nothing new was created |
+| Kind | `sibling_discount` | |
+| Basis | percentage, **10** | |
+| `applies_to` | `all` | every discountable category |
+| Effective | from **2026-01-01**, open-ended | in force across the billed period |
+| Eligibility | sibling rank ≥ 2 in a household with ≥ 2 concurrently enrolled children | read server-side, never asserted by a caller |
+
+This policy is exactly what the Human-QA fixture wants represented, and it needed no distortion to
+apply: Certa and Certb are two concurrently enrolled children of one household, which is what a
+sibling discount is for.
+
+## P · How the discount reaches a recurring obligation
+
+It is a **separate operator act**, and deliberately so:
+
+1. `billing.generate_tuition` — cadence + period → gross obligations at the accepted price
+2. `billing.apply_discounts` — period → reductions against whatever gross that period holds
+
+The reseed does not need to wire anything: running (2) after (1) for the same period is the whole
+integration. Nothing about recurring generation is special-cased, and the same policy behaves
+identically over a manually added tuition charge.
+
+**The preview of (2) now states the money** — "N obligations would be reduced by $X" — rather than
+listing policies. A QA scenario may rely on that figure.
+
+## Q · KEEP / REBUILD — final list
+
+* v161 Focus Panel layout (both projections)
+* two OCM assignments + two enrolment agreements
+* Weekly billing frequency · Weekly $185.00 rate · Monthly $1,450.00 rate (no-quantity variants)
+* accepted Weekly and Monthly terms, accepted through the mounted card
+* Due Date policy effective **before** the period it bills (net 10, from 2026-08-01)
+* **the sibling discount policy above**
+* the tuition charge template may stay `fixed` — the platform holds the price precedence
+* responsibility arrangements · subject-grain configuration
+
+## R · REMOVE / RESET
+
+* the six generated tuition drafts (5 × $185.00, 1 × $1,450.00)
+* **the six reduction drafts and their `financial_reduction_applications` rows**
+* the earlier certification reductions, reversals and prepaid allocations
+* the accepted terms, agreements and OCM rows, if the reseed rebuilds them
+
+Nothing in §N of the previous addendum stands: `RECURRING_DISCOUNT_NOT_APPLIED_BY_GENERATION` was
+never real. A Human-QA scenario saying "a sibling discount reduces this month's tuition" **can** be
+built, and is now proven mounted: Gross $185.00 → Discount −$18.50 → Net $166.50, provenance
+"10% of $185.00 · Ongoing".

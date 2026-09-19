@@ -14,15 +14,32 @@
             "requiredInputs": []
           },
           "preview": {
-            "summary": "1 discount policy in force for 2026-09.",
+            "summary": "0 obligations would be reduced by $0.00 for 2026-09 · 7 unchanged, 0 already posted, 0 not eligible, 0 refused",
             "changes": [
               "discount · {\"basis\":\"percentage\",\"value\":10,\"applies_to\":\"all\"}"
-            ]
+            ],
+            "after": {
+              "period_key": "2026-09",
+              "service_period": {
+                "start": "2026-09-01",
+                "end": "2026-09-30"
+              },
+              "counts": {
+                "applied": 0,
+                "unchanged": 7,
+                "alreadyPosted": 0,
+                "notEligible": 0,
+                "refused": 0
+              },
+              "total_reduction_cents": 0,
+              "refused_outcomes": [],
+              "not_eligible_outcomes": []
+            }
           }
         },
         "affected_id": null
       },
-      "correlation_id": "08aa5445-8525-43cf-8328-b5dab7e85985"
+      "correlation_id": "f13cac19-f915-49e9-ba37-2bc716fad984"
     }
   },
   "run1": {
@@ -37,16 +54,16 @@
             "start": "2026-09-01",
             "end": "2026-09-30"
           },
-          "applied": 6,
-          "unchanged": 1,
+          "applied": 0,
+          "unchanged": 7,
           "alreadyPosted": 0,
           "notEligible": 0,
           "refused": 0,
           "refused_outcomes": []
         },
-        "affected_id": "ef44f450-277d-478d-9ef5-be6fd10c7d90"
+        "affected_id": null
       },
-      "correlation_id": "30b52564-ec01-4232-a938-b922ca3c1f38"
+      "correlation_id": "77a35f5e-9c59-48fb-af26-08da6973a8f7"
     }
   },
   "run2": {
@@ -70,7 +87,7 @@
         },
         "affected_id": null
       },
-      "correlation_id": "1f1d8e60-ce68-4f13-949e-fae702ff6f74"
+      "correlation_id": "117bdd19-1c31-46d1-9f9f-13fc96f4505a"
     }
   }
 }

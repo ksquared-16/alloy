@@ -306,6 +306,64 @@ applied to a manually added charge by a different authority, and calling it recu
 the kind of substitution this matrix exists to prevent.
 
 
+## K · J21 — recurring commercial discounts (candidate `80b55b25a`)
+
+### The correction this section carries
+
+J21's cause was recorded last run as *"`materializeCurrentFinancialConsequences` handles only
+`vacation_credit`"*. **That was the wrong layer, and it was my error.** A commercial discount is not
+a consumption consequence. `applyFinancialReductions` is the period-level authority — it reads the
+gross `tuition` charges a period produced, *whatever produced them*, resolves what legitimately
+reduces each, and records the answer twice: as a `discount` charge and as a
+`financial_reduction_applications` row. `billing.apply_discounts` already invokes it.
+
+Measured against the recurring gross before any code was changed: **`applied: 6`**, then
+**`applied: 0, unchanged: 7`** on a rerun. The engine was never missing. Recurring generation was
+never a path that bypassed it — nobody had run it.
+
+| Capability | Authority | Actual | Verdict |
+|---|---|---|---|
+| K1 the commercial reduction authority reaches recurring gross | `applyFinancialReductions` | 6 reductions applied to 5 weekly + 1 monthly obligations, with no code change | **PASS** |
+| K2 **weekly gross stays the accepted price** | charge detail | `Gross charge $185.00` — the accepted term, untouched | **PASS** |
+| K3 **weekly reduction** | same | `Reductions -$18.50` (10%) | **PASS** |
+| K4 **weekly net** | same | `Net obligation $166.50` | **PASS** |
+| K5 **monthly** | same | Gross `$1,450.00` · Reductions `-$145.00` · Net `$1,305.00` | **PASS** |
+| K6 concept | Details ledger | **`Discount`** — not Credit, not Adjustment | **PASS** |
+| K7 provenance | same | **"10% of $185.00 · Ongoing"** and **"10% of $1,450.00 · Ongoing"** — policy, basis, and the base it was taken on | **PASS** |
+| K8 subject | same | `Certa Certhouse` on the weekly rows, `Certb Certhouse` on the monthly | **PASS** |
+| K9 GL separation | same | reduction posts `4060 · Discounts & Credits`; gross stays `4000 · Tuition Revenue` | **PASS** |
+| K10 responsibility stays separate | charge detail | `Not allocated` — the reduction changed no allocation | **PASS** |
+| K11 one representation | same | the existing Credits & adjustments ledger. No second discount table | **PASS** |
+| K12 **rerun · reduction duplicates = ZERO** | `financial_reduction_applications` idempotency | `applied: 0, unchanged: 7`; charge duplicates 0; gross, reduction and net all unchanged | **PASS** |
+| K13 eligibility is read, not asserted | `resolveFinancialReductions` | an only child is `not_enough_siblings`; no policy is `no_policy_configured` | **PASS** |
+| K14 **category veto survives** | same | a `discount` or `credit` category answers `category_not_discountable` — recurring generation cannot route around it | **PASS** |
+| K15 posted money is immutable | `persistReductions` | a posted reduction is reported `already_posted` and touched by nothing; a DRAFT reconciles in place | **PASS** |
+| K16 **preview states the money** | `billing.apply_discounts` | was "1 discount policy in force"; now `"0 obligations would be reduced by $0.00 · 7 unchanged…"` with `total_reduction_cents` and the counts | **PASS** |
+| K17 preview and execute share one planner | same | preview runs `applyFinancialReductions` in `mode: "preview"` — same reads, same eligibility, same already-posted check, writes skipped | **PASS** |
+| K18 manual and recurring are one semantics | `resolveFinancialReductions` | the resolver never learns where the gross came from; the same policy means the same thing either way | **PASS** |
+
+### The contract, stated
+
+**ACCEPTED TUITION TERM** determines the GROSS recurring obligation. **COMMERCIAL REDUCTION POLICY**
+determines what reduces it, as a separate consequence written beside it. **RESPONSIBILITY** divides
+the resulting obligation under its own authority. **PAYMENT** settles it later. Four layers, and
+nothing in this run collapsed one into another.
+
+**Attachment grain** — the policy evaluates against the household's eligibility facts (sibling rank
+and count, employee household), the charge's CATEGORY, and the policy's own `applies_to` and
+effective window. It never sees a cadence, an assignment or a generator, which is why the same
+policy means the same thing for a manually added tuition charge and a generated one.
+
+**Effective-date authority** — the run reads policies effective across the BILLING PERIOD's bounds,
+and selects gross by `service_date` inside it. Not `created_at`. The same date for manual and
+recurring, because the resolver does not know the difference.
+
+**Lifecycle** — a DRAFT reduction reconciles in place through the existing draft authority; a POSTED
+one is reported and left alone, and a later policy edit corrects it only by appending through the
+correction authority. The `policy_snapshot` on each application is what makes that possible: editing
+a policy later cannot rewrite what it already reduced.
+
+
 ## Deferred boundaries — behaving honestly, not reopened
 
 `SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED` · `LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED` ·
@@ -313,33 +371,34 @@ the kind of substitution this matrix exists to prevent.
 
 ## Tally
 
-**PASS 123 · FAIL 0 · BLOCKED 0 · NOT PROVEN 1 · NOT RUN 0 · CARRIED 0 · DEFERRED 3.**
+**PASS 141 · FAIL 0 · BLOCKED 0 · NOT PROVEN 0 · NOT RUN 0 · CARRIED 0 · DEFERRED 3.**
 
 44 surfaces and named repairs · 7 weekly-boundary · 10 multi-child · 5 prepaid · 4 earlier E/E4 ·
-8 recurring-reachability (H1–H8) · 17 recurring billing (I1–I17) · **20 recurring correctness
-(J1–J20)**.
+8 recurring-reachability (H) · 17 recurring billing (I) · 20 recurring correctness (J) ·
+**18 recurring commercial discounts (K)**.
 
-**FAIL 0.** I18's silent $400.00 is gone: an accepted commercial term now outranks a fixed charge
-template, threaded through the write as well as the resolution, and the six wrong drafts converged
-in place through the canonical recalculation authority rather than by anyone editing money.
+**SECTION_7_FULLY_MOUNTED_CERTIFIED.**
 
-**BLOCKED 0 · NOT RUN 0 · CARRIED 0.**
+Every Core financial capability in Section 7 is proven on the mounted, qualified production
+candidate: the operator surface, responsibility, prepaid and allocation, corrections and reversals,
+due dates, accounting attribution, and now recurring billing end to end — terms accepted on the
+panel, obligations generated at the accepted price on both cadences, discounted through the
+organisation's own authored policy, idempotent on rerun, with gross, reduction and net each stated
+by the surface that owns it.
 
-**NOT PROVEN 1 — J21, recurring discount.** The authored sibling discount does not reach a generated
-tuition obligation because the recurring path materializes only `vacation_credit` consequences. That
-is a wiring gap with a name, not an unknown.
+Three deferrals are retained deliberately and are NOT part of this certification:
+`SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED` · `LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED` ·
+`DEPOSIT_OPERATOR_PRODUCTIZATION_GAP`.
 
-**SECTION 7 IS NOT FULLY MOUNTED-CERTIFIED.** One row remains, and it is the honest one to leave
-open: closing it would require either wiring the discount engine into recurring generation — a
-change with its own design decision behind it — or accepting a manual charge's reduction as proof of
-a recurring one, which it is not.
+**This is engineering mounted certification. Human QA PASS remains ZERO, and no scenario in this
+matrix may be reported as a Human QA pass.**
 
-`RECURRING_TERMS_OPERATOR_REACHABILITY_GAP` · `RECURRING_TERMS_ASSIGNMENT_ABSENT` ·
-`RECURRING_GENERATED_AMOUNT_IGNORES_ACCEPTED_TERM` · `RECURRING_PREVIEW_IGNORES_CADENCE` ·
-`WEEKLY_RUN_HAS_NO_OPERATOR_CADENCE` · `RERUN_COUNT_DOES_NOT_DISTINGUISH_EXISTING` — all **CLOSED**.
+Seven named gaps closed across this thread: operator reachability · assignment absent · generated
+amount ignoring the accepted term · preview ignoring cadence · weekly having no operator cadence ·
+rerun counts · recurring discount.
 
-Five probe artifacts are recorded across this thread. A sixth is mine from this run and is recorded
-because it corrected me rather than the code: I expected a term beginning mid-period to bill that
-period, and the resolver refuses it instead. The resolver is right — billing a family for September
-when they started on the 15th, because nobody configured proration, is the same silent wrong number
-this run exists to end.
+Six probe artifacts are recorded, and two of this thread's findings were corrections of my own
+reasoning rather than of the code: a term beginning mid-period is refused rather than billed whole,
+and J21's cause was never `materializeCurrentFinancialConsequences` — I had looked at the wrong
+authority and reported a gap that did not exist. Both are recorded where the wrong answer was
+written, not only where the right one was found.
