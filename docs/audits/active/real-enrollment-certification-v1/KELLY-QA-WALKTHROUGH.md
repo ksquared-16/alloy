@@ -445,42 +445,43 @@ QA cycle.**
 
 A participant link **resumes**. That is the product behaving correctly — Part D proved a resend
 reuses the same session rather than starting a second one — but it means **you only get one first
-impression per child**, and E1 is about the first impression. So E1 has its own specimen, below, and
-E2–E6 can be done on any conversation including the one in your Part D email.
+impression per child**, so E1 has its own untouched specimen below and E2–E6 continue in it.
 
-**What changed since you last read this.** Admissions was republished as **version 8**. It connects
-**13 of its 80 questions** to Alloy instead of 4 — the child's full name and date of birth, the
-parent's name, phone and email, the desired start date, and five durable child-profile facts (eating
-habits, special diet, favourite foods, foods refused, temperament). Everything else stays Form-only
-**on purpose**: emergency contacts and a second guardian belong to the relationship model and this
-form numbers its people as flat boxes; allergies, medications and health history belong to Health;
-and an agreement's own questions belong to the agreement. The reasoning for all eighty is in
-`ADMISSIONS-CANONICAL-OWNERSHIP.md` beside this file.
+**What changed since you last read this.** Admissions was republished as **version 9**. It asks the
+same **80 questions**, **65 of them required**, in the same order, with the same 13 connections to
+Alloy — nothing was added, removed or renamed. What changed is that the paperwork now says **how**
+it wants to be answered:
 
-Two visible consequences:
+- **fourteen questions are yes/no** and are asked with two buttons instead of a text box;
+- **four questions only exist if the answer above them is yes** — custody arrangements, a
+  restraining order, siblings, a previous programme. Answer **No** and the follow-up is not asked
+  at all;
+- **twenty-five questions are paragraphs** rather than one-line boxes.
 
-- the packet asks **78** questions rather than 80. "Student Name" appears on page 1 and again under
-  the Tuition agreement, and "Parent Name" is the same person as "Parent/Guardian #1" — so each pair
-  is now **one** question that fills both boxes.
-- a family the school already has records for starts with something on the screen instead of a
-  claim. A family it has nothing for still starts honestly — see the second EXPECT in E1.
+The reasoning for every one of those choices is in `ADMISSIONS-V9-INTERACTION-SEMANTICS.md` beside
+this file. One thing it records that you should know before you start: *"Does your child have any
+allergies? **If so, please list.**"* is deliberately **not** a yes/no question — the school is
+asking for a list and a button cannot give one.
+
+**E1–E6 below were each driven on the real runtime against a fresh v9 conversation.** Every EXPECT
+is a thing that was observed, not a thing that ought to work.
 
 ---
 
-**E1. OPENING — what Alloy already has.**
+**E1. OPENING — what Alloy already has, and how little of it you should have to read.**
 
 **DO** — Open the E1 specimen link:
 
 ```
-https://vacilandos-mac-mini.tail2aa1af.ts.net:3014/forms/embed/azIybfVzU3ug0wg8VfUkAPfpEuVWjph9aGkys0BFW_I
+https://vacilandos-mac-mini.tail2aa1af.ts.net:3014/forms/embed/yqOqme-nx_2r6Ks9HiGeGvK9NhOJnkDWbchJ_Fx1_yA
 ```
 
 That is a fresh, unused conversation for **Lennon Kurzman**, whose record genuinely holds a name, a
-date of birth, and a parent with a name, a phone number and an email address. Nothing about it was
-hand-fed for the demo; it is the household data that was already there.
+date of birth, and a parent with a name, a phone number and an email address. Nothing was hand-fed
+for the demo; it is the household data that was already there.
 
-**EXPECT — the opening** — a line naming the child, and underneath it one block per person, each
-headed by that person's own name:
+**EXPECT — the opening** — a line naming the child, and **one block per person**, each headed by
+that person's own name. Five facts, two blocks. Not a list:
 
 ```
 Let's finish Lennon's enrollment paperwork. Here's what I already have —
@@ -490,28 +491,20 @@ I'll ask you for anything that's missing.
       Full name       ·  Lennon Kurzman
       Birthday        ·  Apr 2, 2024
 
-    YOUR DETAILS         Kelly Kurzman
+    YOUR DETAILS          Kelly Kurzman
       Name            ·  Kelly Kurzman
       Phone number    ·  (602) 290-4816
       Email address   ·  kelly.kurzman@gmail.com
 ```
 
-**EXPECT — the first turn** — not a blank box. Alloy asks you to **check what it already holds**:
-
-```
-    LENNON'S DETAILS
-    Let's make sure I have Lennon's details right.
-    Lennon Kurzman
-    BIRTHDAY   Apr 2, 2024
-    I'll use these everywhere they're needed, so you only tell me once.
-                                          [ Yes, that's right ]  [ Make a change ]
-```
-
-> **STOP** if the first thing you are asked is a question Alloy can already answer — the child's name
-> or birthday as an empty box. A fact on file is confirmed, never collected.
+> **STOP** if there is a **Show N more** control here. What Alloy already holds is a summary, and a
+> summary you have to expand is a list.
 
 > **STOP** if you are told *"I already have most of …'s information"* and are shown nothing. That
-> sentence is only spoken when there is a list under it.
+> sentence is only spoken when there is something under it.
+
+> **STOP** if the first thing you are asked is something Alloy can already answer — the child's name
+> or birthday as an empty box. A fact on file is confirmed, never collected.
 
 > These summary rows carry **no Edit link** before you confirm, on purpose. Nothing there has been
 > verified by you yet, and showing a value is not the same as you agreeing to it.
@@ -522,22 +515,8 @@ I'll ask you for anything that's missing.
 the progress figure moves. Your own details stay in the un-confirmed summary above, because you have
 not been asked about them yet.
 
-**DO** — Press **Edit** beside **Full name**, change it, and **Save**.
-
-**EXPECT** — the row shows the new value with **UPDATED**, and the block's heading follows it.
-
-> **This is the important one.** Correcting it here does **not** rewrite the child's record. The
-> answer belongs to this paperwork until an administrator returns it, which is a separate, governed
-> step. Verified directly: after a correction in the conversation, the child record still read
-> *Wrigley Kurzman* while the paperwork read *Wrigley Jean Kurzman*.
-
-**EXPECT — the first genuinely missing question** — only now, and it is something Alloy has no way to
-know: *Student Age Upon Enrolling?*
-
-> **EXPECT — the honest opposite.** Open the Part D link for **Toureeb** and the same opening says:
-> *"Let's finish Toureeb's enrollment paperwork. I'll ask you one thing at a time and fill the forms
-> in as we go."* — with **no** list. His record holds none of the facts this packet can know. That is
-> the correct behaviour, not a failure.
+**EXPECT — the first genuinely missing question** — only now, and it is something Alloy has no way
+to know: *Student Age Upon Enrolling*.
 
 ---
 
@@ -545,83 +524,147 @@ know: *Student Age Upon Enrolling?*
 
 **DO** — Answer whatever the conversation asks, one turn at a time, until the subject changes.
 
-**EXPECT** — A quiet label above the question reading **`<CHILD'S NAME>'S DETAILS`**, and the child's
-questions in one run: their date of birth, name, age, first day, gender and home address — **the
-ones Alloy stores and the ones it does not, side by side**.
+**EXPECT** — A quiet label above the question reading **`LENNON'S DETAILS`**, and the child's
+questions in one run: name, birthday, age, first day, gender and home address — **the ones Alloy
+stores and the ones it does not, side by side**.
 
-> **STOP** if the child's own name is asked *after* a parent's phone number or email.
-> That was the defect. The child's name has no home in Alloy's records and their date of birth does,
-> and until this slice that difference decided who the question was about — so the name was asked
-> third, after a different person's contact details. **Whether Alloy happens to store a fact must
-> never decide whose question it is.**
+> **STOP** if the child's own name is asked *after* a parent's phone number or email. Whether Alloy
+> happens to store a fact must never decide whose question it is.
 
 ---
 
-**E3. PARENT / GUARDIAN #1 — one person, finished before the next.**
+**E3. THE TWO GUARDIANS — one person finished before the next.**
 
-**EXPECT** — The label changes to **`GUARDIAN #1`**, and you are asked that person's phone, email,
-name, employer and employer address in one run — including the **Parent Name** box that sits on the
-last page of the packet, under the Tuition agreement. It is the same person, so it is asked here.
+**EXPECT** — the label changes to **`GUARDIAN #1`** and you are asked that person's phone, email,
+name, employer and employer address in one run — including the **Parent Name** box on the last page
+of the packet, under the Tuition agreement. It is the same person, so it is asked here. Then the
+label moves to **`GUARDIAN #2`** and asks that person's five.
 
 > **STOP** if the label still says **Contact Information** or another page heading from the form.
 > The label names *whose* questions these are, not which page of the PDF they came from.
 
+> **STOP** if an answer you gave for **Guardian #2** appears against **Guardian #1** anywhere.
+
 ---
 
-**E4. PARENT / GUARDIAN #2, AND THE EMERGENCY CONTACTS.**
+**E4. THE EMERGENCY CONTACTS, AND BEING ASKED WHETHER THERE IS ANOTHER PERSON.**
 
-**EXPECT** — the label moves on, in this order, and each group is finished before the next begins:
+**EXPECT** — the label moves on, in this order, and each person is finished before the next begins:
 
 ```
-GUARDIAN #2            name, phone, email, employer, employer address
 EMERGENCY CONTACT #1   the authorized-adult line, relationship, phone, address
 EMERGENCY CONTACT #2   the same four
-EMERGENCY CONTACT #3   the same four
+EMERGENCY CONTACT #3   the same four   (optional — you may decline all four)
 PHYSICIAN              name, phone
-DENTIST                name, phone
+DENTIST                name, phone     (optional)
 ```
 
-> The **authorized adult** question is not a separate group on this packet — the school wrote it as
-> the emergency contact's own line ("*LOCAL Emergency Contact #1 Authorized adult allowed to pick my
-> student up…*"), so it is asked with that person. That is the form's own structure, not a merge.
+> The **authorized adult** question is not a separate group — the school wrote it as the emergency
+> contact's own line, so it is asked with that person. That is the form's own structure, not a merge.
 
-> **STOP** if a number is missing where there is more than one of a role — *Emergency contact* with
-> no *#2* when there are three of them tells you nothing about which one you are describing. A role
-> the packet names only once is deliberately **not** numbered: *Physician*, not *Physician #1*.
+> A role the packet names only once is deliberately **not** numbered: *Physician*, not *Physician #1*.
 
-> **STOP** if an answer you give for **Guardian #2** appears against **Guardian #1** anywhere.
-> This was checked directly: every one of those answers is stored against its own box, and the three
-> emergency contacts' twelve answers stayed in their own twelve boxes.
+**EXPECT — adding another person is a choice, not a typing exercise.** When the conversation reaches
+a role that can hold more than one person you are offered buttons, including the people Alloy already
+knows:
 
----
+```
+    Would you like to add a parent or guardian?
 
-**E5. QUESTION SAFETY — a question is not an answer.**
+    [ Kristi Kurzman ]  [ Kelly Kurzman · 6022904816 ]  [ Someone else ]  [ No, continue ]
+```
 
-**DO** — When you are asked something, type **`What do I still need to do?`** and send it.
-
-**EXPECT** — A reply telling you where you are, for example *"You have 3 of 3 forms left to
-complete. Right now I need Parent/Guardian #2 Phone Number."* — and **the same question still
-waiting**.
-
-> **STOP** if your question is stored as the answer. Check the **What you told us** list: the words
-> *"What do I still need to do?"* must not appear in it.
+> **STOP** if you are asked this as a question you have to answer in words.
 
 ---
 
-**E6. CORRECTION — change something you already said.**
+**E5. YES / NO — a closed question gets two buttons, and a No is never followed up.**
 
-**DO** — In **What you told us**, click **Edit** beside an answer you gave earlier, type a different
-value, and click **Save**.
+**EXPECT** — when the conversation reaches the health chapter, a question the school wrote as a
+yes/no question is asked as one:
 
-**EXPECT** — The row shows the new value with **UPDATED** beside it, and every other row is
-untouched.
+```
+    EMERGENCY CONTACT INFORMATION & AUTHORIZED ADULTS
+
+    Are there any custody or visiting arrangements we need to be aware of?
+
+                                              [ Yes ]   [ No ]
+```
+
+There are **fourteen** of these. Among them: *"Has your student ever participated in speech,
+behavioral, play or occupational therapy?"*, *"Does your child have siblings?"*, *"Is your child able
+to play alone?"*
+
+> **STOP** if any of them offers a text box as the way to answer. You may still type "no" or "yes,
+> last year" and be understood — the buttons are the obvious path, not the only one.
+
+> **EXPECT, and do not report:** *"Does your child have any allergies? If so, please list."* is a
+> paragraph box, not two buttons. The school is asking for a list.
+
+**DO** — Answer **No** to *"Are there any custody or visiting arrangements we need to be aware of?"*
+
+**EXPECT** — the very next question is *"Is there anyone who has a legal restraining order…"*.
+
+> **STOP** if you are asked *"If yes, please explain arrangements and custody"* — greyed out, skipped
+> past, or in any other form. You have just said there are none. It must not be asked.
+
+**DO** — Keep going until *"Does your child have siblings?"* and answer **Yes**.
+
+**EXPECT** — the very next question is *"If yes, please list siblings name(s) and age(s)"*.
+
+There are four of these pairs — custody, restraining order, siblings, and a previous school or
+daycare. **All four were driven.** Changing a Yes back to a No withdraws the follow-up again: that
+was driven too, and the answer to the follow-up stops being asked for.
+
+---
+
+**E6. WHAT YOU TOLD US — grouped, and every answer still correctable.**
+
+**EXPECT** — below what Alloy already holds, the answers **you** have given, summarised one line per
+chapter rather than listed:
+
+```
+    WHAT YOU TOLD US
+      Lennon's details          ·  6 answers
+      Guardian #2               ·  5 answers
+      Guardian #1               ·  2 answers
+      Emergency contact #1      ·  4 answers
+      Emergency contact #2      ·  4 answers
+      Physician                 ·  2 answers
+
+      Review all answers →
+```
+
+> **STOP** if this is a flat list of every answer you have given with a **Show N more** beneath it.
+> That was the defect. Measured on this specimen: thirty answers, six lines.
+
+> **STOP** if anything Alloy already held — Lennon's name, your email — appears in this list. This
+> section is only what you supplied or confirmed in this sitting.
+
+**DO** — Press **Review all answers →**, then **Edit** beside an answer you gave earlier, type a
+different value, and **Save**.
+
+**EXPECT** — the record opens still grouped by chapter, every answer carrying its own **Edit**. The
+row you changed shows the new value with **UPDATED** beside it, and every other row is untouched.
 
 > Verified at the storage level, not just on screen: correcting the child's name changed that one
 > destination and left both guardians' name boxes exactly as they were.
 
-> **KNOWN WART, not a defect to report.** The transcript echoes your correction underneath whichever
+**DO** — When you are asked something, type **`What do I still need to do?`** and send it.
+
+**EXPECT** — a reply telling you where you are, and **the same question still waiting**.
+
+> **STOP** if your question is stored as the answer. Open **Review all answers** and check: the words
+> *"What do I still need to do?"* must not appear.
+
+> **KNOWN WART, not a defect to report.** The transcript echoes a correction underneath whichever
 > question happens to be open, so it can look as though you answered *that* question with the
-> corrected value. The stored data is correct; only the echo is misplaced. It is on the list.
+> corrected value. The stored data is correct; only the echo is misplaced.
+
+> **KNOWN WART, not a defect to report.** Two of the chapter names in *What you told us* are the
+> form's own section headings — *"Emergency Contact Information & Authorized Adults"* and *"Health
+> Information and Developmental History"* — rather than a person or a topic. Those are the child's
+> own questions that the packet files under a page heading; the name is honest, just wordy.
 
 ---
 
