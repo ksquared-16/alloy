@@ -94,9 +94,9 @@ export async function resolveParticipationSubjectForOpportunity(args: {
  * `unavailable` on every sample because `participantScope` is null, and the panel has to wait for
  * a second round trip to learn something the database already knew.
  *
- * So this asks the other question: does this opportunity have exactly ONE enrolled child? It reads
- * the same table, through the same owner (`listEnrollmentInstancesForLead`), scoped to the same
- * org and the same opportunity as the resolver above — one read, no new authority.
+ * So this asks the other question: does this opportunity have exactly ONE member? One indexed read
+ * on `opportunity_customer_members`, scoped to the same org and the same opportunity as the
+ * resolver above. The body below says why that table and not `process_instances`.
  *
  * ── REFUSES TO GUESS ──
  *
