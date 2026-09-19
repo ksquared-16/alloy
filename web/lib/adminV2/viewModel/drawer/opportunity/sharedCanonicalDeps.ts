@@ -155,7 +155,20 @@ export async function resolveSharedCanonicalDeps(
     const childrenShellPhase = (record as { _children_shell_phase_ms?: Record<string, number> })._children_shell_phase_ms;
     if (childrenShellPhase) {
         for (const [k, v] of Object.entries(childrenShellPhase)) phases_ms[`children_${k}`] = v;
-        phases_ms.children_orientation_ms = Object.values(childrenShellPhase).reduce((a, b) => a + b, 0);
+        /*
+         * A SUM, AND THE NAME NOW SAYS SO.
+         *
+         * This is `reduce(+)` over nested legs that partly OVERLAP, so it can — and does — exceed
+         * the wall of the phase containing it: measured 979ms against a 870ms `shell_children_ms`
+         * parent. Read as a wall it invents ~109ms of work that never happened, and added to a
+         * sibling it invents far more. The `_sum_ms` suffix is the contract: anything ending
+         * `_sum_ms` is nested-inclusive and may never be added to a wall.
+         *
+         * The wall for this work already exists and is `visible_shell_children_ms`. This stays
+         * because the per-leg breakdown it totals is still the fastest way to see where the
+         * children chain spends its time.
+         */
+        phases_ms.children_orientation_sum_ms = Object.values(childrenShellPhase).reduce((a, b) => a + b, 0);
     }
 
     const wuData = wuRes.data as {
