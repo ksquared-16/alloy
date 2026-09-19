@@ -129,7 +129,28 @@ export async function buildAssignmentTuitionView(
         asOf: args.asOf ?? null,
         cadenceKey: args.cadenceKey ?? null,
     });
-    if (!read.ok) return null;
+    if (!read.ok) {
+        /*
+         * A DATABASE FAILURE IS NOT "THIS CHILD HAS NO ASSIGNMENT".
+         *
+         * Returning null for every failure collapsed two unrelated answers into one, and the
+         * callers then collapsed them again: `buildOpportunityTuitionViews` drops a null view, so
+         * an opportunity whose assignments all failed to read answered 200 with `assignments: []`,
+         * and `/enrollment/assignment-quote` answered 404 `no_assignment_for_child` — the same
+         * words it uses for a child who genuinely has none.
+         *
+         * Measured: two assignments created through the registered route, found by that route's own
+         * (org, opportunity, child) filter on a second call, and still reported as absent by every
+         * pricing surface. Nothing in the product said why.
+         *
+         * `assignment_not_found` stays null — that is a real business answer. A `db_error` throws
+         * and carries the database's own message.
+         */
+        if (read.code === "db_error") {
+            throw new Error(`buildAssignmentTuitionView: reading assignment facts failed — ${read.message}`);
+        }
+        return null;
+    }
 
     const exported =
         args.exported

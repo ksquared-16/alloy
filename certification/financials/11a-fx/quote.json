@@ -1,0 +1,16 @@
+{
+  "a": {
+    "member": "e408fa51-7261-43c4-8e60-555d17fc9888",
+    "status": 404,
+    "body": {
+      "error": "no_assignment_for_child"
+    }
+  },
+  "b": {
+    "member": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "status": 404,
+    "body": {
+      "error": "no_assignment_for_child"
+    }
+  }
+}

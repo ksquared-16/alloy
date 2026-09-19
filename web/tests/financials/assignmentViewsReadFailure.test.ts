@@ -21,13 +21,20 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { buildOpportunityTuitionViews } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
+import {
+    buildAssignmentTuitionView,
+    buildOpportunityTuitionViews,
+} from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
 
 /** The two shapes the assignment read can come back as, and nothing else. */
 function clientReturning(result: { data: unknown; error: { message: string } | null }) {
     const chain = {
         select: () => chain,
         eq: () => chain,
+        order: () => chain,
+        is: () => chain,
+        limit: () => chain,
+        maybeSingle: () => Promise.resolve(result),
         then: (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve),
     };
     return { from: () => chain } as never;
@@ -57,5 +64,36 @@ describe("THE GATE — the assignment read speaks when it fails", () => {
     it("still answers empty for an opportunity that truly has no assignments", async () => {
         const supabase = clientReturning({ data: [], error: null });
         await expect(buildOpportunityTuitionViews(supabase, ARGS)).resolves.toEqual([]);
+    });
+});
+
+describe("THE GATE — a database failure is not a child with no assignment", () => {
+    /*
+     * `readAssignmentPricingFacts` distinguishes `assignment_not_found` from `db_error`, and the
+     * view collapsed both into null. Both callers then said the same thing in different words:
+     * `assignments: []` from the opportunity read, `no_assignment_for_child` from the quote route
+     * — the identical sentence a genuinely unassigned child gets.
+     */
+    it("throws when the facts read failed, carrying the database message", async () => {
+        const supabase = clientReturning({ data: null, error: { message: "column x does not exist" } });
+        await expect(
+            buildAssignmentTuitionView(supabase, { orgId: "org-1", opportunityCustomerMemberId: "ocm-1" }),
+        ).rejects.toThrow(/reading assignment facts failed/);
+    });
+
+    /* An assignment that is genuinely absent stays a null view — that is a real business answer. */
+    it("still answers null for an assignment that does not exist", async () => {
+        const supabase = clientReturning({ data: null, error: null });
+        await expect(
+            buildAssignmentTuitionView(supabase, { orgId: "org-1", opportunityCustomerMemberId: "ocm-1" }),
+        ).resolves.toBeNull();
+    });
+
+    /* And an empty id never reaches the database at all. */
+    it("answers null for an unnamed assignment without querying", async () => {
+        const supabase = clientReturning({ data: null, error: { message: "should not be reached" } });
+        await expect(
+            buildAssignmentTuitionView(supabase, { orgId: "org-1", opportunityCustomerMemberId: "  " }),
+        ).resolves.toBeNull();
     });
 });
