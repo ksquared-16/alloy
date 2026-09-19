@@ -2013,18 +2013,63 @@ describe("F46 · Reverse and Adjust use the canonical command shell", () => {
 });
 
 describe("F47 · the compact commands stay inside the card", () => {
+    it("says the past-due judgement once", () => {
+        /*
+         * MEASURED on the mounted card: "$75.00 past due · 1 day past due" — the same verdict
+         * twice on a `white-space: nowrap` line, so the second half rendered as "1 day pas…".
+         * The adapter now states the duration alone and the sentence supplies the words.
+         */
+        const compact = code("components/operationalCards/FinancialsCard.tsx");
+        expect(compact, "one verdict, after the duration").toContain("{pastDue.amount} · {pastDue.age} past due");
+        const adapter = code("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts");
+        const ageLine = adapter.slice(adapter.indexOf("age: `${pastDue.agingDays}"));
+        expect(ageLine.slice(0, ageLine.indexOf("\n")), "the field carries no verdict").not.toMatch(/past due/);
+    });
+
     it("puts each action with the story it belongs to", () => {
         const compact = code("components/operationalCards/FinancialsCard.tsx");
         const left = compact.slice(compact.indexOf('zone-head">Current period'), compact.indexOf("alloy-os-billing__collect"));
         expect(left, "Add sits with the obligation story").toMatch(/<Action onClick=\{onAddCharge\}/);
-        const right = compact.slice(compact.indexOf("alloy-os-billing__collect"), compact.indexOf("alloy-os-billing__nav"));
+        const right = compact.slice(compact.indexOf("alloy-os-billing__collect"));
         expect(right, "Payment sits with the payment position").toMatch(/<Action primary onClick=\{onPayNow\}/);
         expect(compact, "and navigation has the card's own edge").toMatch(
             /alloy-os-billing__nav[\s\S]{0,260}<CardLink onClick=\{onDetails/,
         );
+        /*
+         * NAVIGATION COSTS NO ROW. Details shares the payment command's row and takes the right
+         * edge from `margin-left: auto`; as a full-width grid child it bought a margin, a line box
+         * and a whole row of card height for one quiet link.
+         */
+        const actionRow = right.slice(right.indexOf("alloy-os-billing__zone-action"));
+        expect(actionRow, "Details rides the command row").toMatch(
+            /alloy-os-billing__zone-action[\s\S]{0,700}alloy-os-billing__nav/,
+        );
         const css = read("app/adminV2/components/operationalCardsShared.css");
-        /* Each command is anchored to its column by a rule of that column's width — not a footer. */
-        expect(css).toMatch(/\.alloy-os-billing__zone-action \{[\s\S]{0,700}border-top:/);
+        /*
+         * Each command is anchored to its column by a rule of that column's width — not a footer.
+         * Asserted against the RULE BODY rather than a character window: the window was incidental
+         * to how long the rule's comment happened to be, and two new declarations broke it while
+         * the border it exists to protect was untouched.
+         */
+        const action = css.slice(css.indexOf(".alloy-os-billing__zone-action {"));
+        expect(action.slice(0, action.indexOf("\n}")), "the row carries its own rule").toContain("border-top:");
+        const nav = css.slice(css.indexOf(".alloy-os-billing__nav {"));
+        expect(nav.slice(0, nav.indexOf("}")), "the edge comes from auto margin, not a row").toMatch(
+            /margin-left: auto/,
+        );
+        expect(nav.slice(0, nav.indexOf("}")), "and it is no longer a full-width grid child").not.toMatch(
+            /grid-column/,
+        );
+
+        /*
+         * THE SCHEDULED FOOTER IS GONE. "$370.00 scheduled this period" sat full-width under the
+         * whole card, repeating a period fact the Current period column already explains, and paid
+         * for it with a rule, 9px of margin and a line box. Nothing reads `historyLine` now, so
+         * nothing computes it either.
+         */
+        expect(compact, "no scheduled-this-period footer").not.toContain("alloy-os-billing__history");
+        expect(compact).not.toContain("historyLine");
+        expect(css, "and its rule went with it").not.toContain(".alloy-os-billing__history");
     });
 
     it("keeps the column gap from eating the figure", () => {
