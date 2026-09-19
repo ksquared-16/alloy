@@ -151,6 +151,21 @@ export default function OpportunityFocusPanelBody({
                 perspective,
                 statusLabel,
                 canMutate,
+                /*
+                 * THE DOCUMENT OWNS FIRST-ORDER PRODUCER TRUTH FOR THIS NAVIGATION.
+                 *
+                 * Measured: the drawer recomputed the same Financials answer and it arrived as an
+                 * identical rerender, and Attendance/Health were being recomputed too. The
+                 * producers run with the same authority against the same subject in either frame,
+                 * so the second run owns nothing new — while the settled context substituting its
+                 * own copy is what made the cards re-render at settlement.
+                 *
+                 * Stated only when the answer actually produced cards. If it did not, no opinion
+                 * is passed and the settled frame keeps its own, exactly as before.
+                 */
+                ...(commitCritical?.operationalProjection?.cards
+                    ? { firstOrderProducerCards: commitCritical.operationalProjection.cards }
+                    : {}),
             });
             // Child Attention must keep the child's published stage mission after Settlement
             // loads the family opportunity VM (which carries the family's persisted Lead work).

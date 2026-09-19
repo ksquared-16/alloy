@@ -23,6 +23,10 @@ import {
     resolveParticipantScope,
     type ParticipantScopeCandidate,
 } from "@/lib/adminV2/runtime/operationalContext/resolveParticipantScope";
+import type {
+    FocusPanelCardProducerResults,
+    FocusPanelOperationalProjection,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import type { OperationalSubjectViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
 import type { StageWorkItemProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
@@ -47,6 +51,14 @@ import {
 } from "@/lib/tours/bookings/tourBookingAttendance";
 
 export type BuildOperationalContextInput = {
+    /**
+     * WHO OWNS FIRST-ORDER PRODUCER TRUTH for this navigation.
+     *
+     * State the document's producer cards here and the settled context stops substituting its own
+     * recomputed copy. Omit it entirely (the default) and every prior path is unchanged — this is
+     * `undefined`-sensitive on purpose, so "no opinion" and "explicitly none" stay distinguishable.
+     */
+    firstOrderProducerCards?: FocusPanelCardProducerResults | null;
     subjectId: string;
     /** Operator-facing subject label (record/household title). */
     title: string;
@@ -474,6 +486,22 @@ function scopeFromResolvedParticipant(
     };
 }
 
+/**
+ * Apply the stated first-order producer-card owner to a projection.
+ *
+ * `undefined` means the caller states no owner — every prior path is untouched. A stated owner
+ * replaces `cards` outright; it never merges card-by-card, because a half-owned producer set
+ * cannot say whether a missing card was "not rerun" or "legitimately gone".
+ */
+function firstOrderProducerCardsOwned(
+    projection: FocusPanelOperationalProjection | null,
+    owned: FocusPanelCardProducerResults | null | undefined,
+): FocusPanelOperationalProjection | null {
+    if (owned === undefined) return projection;
+    if (!projection) return projection;
+    return { ...projection, cards: owned };
+}
+
 export function buildOperationalContext(input: BuildOperationalContextInput): OperationalContext {
     const { subjectVm, truth, perspective, statusLabel, canMutate } = input;
 
@@ -574,7 +602,28 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
         publishedStageInputs: subjectVm.workspace.published_stage_inputs ?? null,
         // The settled frame's projection, produced by the same server chokepoint as the commit
         // frame's. Switching transport must not switch authority.
-        operationalProjection: subjectVm.workspace.operational_projection ?? null,
+        /*
+         * ONE OWNER FOR FIRST-ORDER PRODUCER TRUTH, chosen per field rather than per frame.
+         *
+         * `businessProcess` and `currentWork` are PURE PROJECTIONS of whichever context builds
+         * them, and the settled context is genuinely richer — it has the full record and the view
+         * model, so its process evidence and current-work model are legitimate enrichment and the
+         * drawer rightly owns them.
+         *
+         * `cards` is not a projection. It is the OUTPUT OF THE PRODUCERS, run with the same
+         * authority against the same subject in whichever frame ran them. Two frames running them
+         * produce the same first-order answer, so the second run owns nothing new — measured, the
+         * drawer's Financials arrives as an identical rerender. When the caller states the
+         * document's producer cards here, they own this navigation's first-order answer and the
+         * settled frame stops substituting its own copy.
+         *
+         * This is a field-level ownership statement, not a merge: nothing is combined, nothing
+         * prefers non-null, and a caller that states nothing leaves every prior path unchanged.
+         */
+        operationalProjection: firstOrderProducerCardsOwned(
+            subjectVm.workspace.operational_projection ?? null,
+            input.firstOrderProducerCards,
+        ),
         // SETTLEMENT projections for the drill/enrichment cards — built HERE (the adapter is the one
         // sanctioned place that reads the drawer VM), so those cards read the context, not the VM.
         lifecycleRail: buildOpportunityVmLifecycleRailModel({ displayVm: subjectVm, drawerId: input.subjectId }),
