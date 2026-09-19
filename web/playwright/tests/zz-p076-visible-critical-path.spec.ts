@@ -111,12 +111,16 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         const V2 = window as unknown as {
             __p076v2?: {
                 lastBlockingAuthoritativeMs: number;
+                finalAuthoritativeMs: number;
                 perSection: Record<string, {
                     firstMs: number; lastMs: number; lastVisibleMs: number;
                     data: number; structure: number; anim: number;
                     imageExpected: boolean; imageFinalMs: number;
+                    contentMs: number; structureMs: number; visibleStateMs: number;
+                    finalAuthMs: number; identicalRerenders: number; diagnosticWrites: number;
                 }>;
                 kinds: Record<string, number>;
+                kinds21: Record<string, number>;
                 blockingSeen: string[];
                 latestGeneration: string | null;
                 staleGenerationSuppressed: number;
@@ -127,13 +131,28 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         const s = V2.__p076v2;
         if (!s) return null;
         return {
+            /*
+             * BOTH NUMBERS FROM ONE SAMPLE. V2.1 corrects a measurement defect, so the only
+             * honest comparison is the two rules run over the SAME mutations — re-measuring
+             * would fold run-to-run variance into a delta that is not a product change at all.
+             */
             visibleCompleteV2Ms: s.lastBlockingAuthoritativeMs,
+            visibleCompleteV21Ms: s.finalAuthoritativeMs,
+            measurementCorrectionMs: s.lastBlockingAuthoritativeMs - s.finalAuthoritativeMs,
             blockingSectionsSeen: s.blockingSeen.slice().sort(),
             // The visible DAG: which blocking region finished last, and what it was doing.
             perSection: Object.fromEntries(
-                Object.entries(s.perSection).sort((a, b) => b[1].lastMs - a[1].lastMs),
+                Object.entries(s.perSection).sort((a, b) => b[1].finalAuthMs - a[1].finalAuthMs),
             ),
             mutationKinds: s.kinds,
+            mutationKinds21: s.kinds21,
+            // WHO OWNS COMPLETION under each rule. The question section 15 asks directly.
+            completionOwnerV2: Object.entries(s.perSection)
+                .sort((a, b) => b[1].lastMs - a[1].lastMs)[0]?.[0] ?? null,
+            completionOwnerV21: Object.entries(s.perSection)
+                .sort((a, b) => b[1].finalAuthMs - a[1].finalAuthMs)[0]?.[0] ?? null,
+            falseAuthoritativeRemoved: Object.values(s.perSection)
+                .reduce((n, x) => n + x.identicalRerenders + x.diagnosticWrites, 0),
             // Did the finality rules actually fire on the real surface, or is this path simply
             // free of reserved geometry and stale generations? Reporting the counts answers it;
             // an absent field would have been read as "zero" without ever being measured.
@@ -232,6 +251,9 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
     console.log(
         `[p076] ${LABEL} sha=${out.deployedSha?.slice(0, 9)} doc=${domMs}ms `
         + `V1(quiet=${QUIET_MS})=${visibleCompleteMs}ms V2=${v2?.visibleCompleteV2Ms}ms `
+        + `V2.1=${v2?.visibleCompleteV21Ms}ms correction=${v2?.measurementCorrectionMs}ms `
+        + `ownerV2=${v2?.completionOwnerV2} ownerV21=${v2?.completionOwnerV21} `
+        + `falseAuth=${v2?.falseAuthoritativeRemoved} `
         + `lastBlocking=${Object.keys(v2?.perSection ?? {})[0] ?? "none"} `
         + `blockingSeen=${v2?.blockingSectionsSeen.length ?? 0} `
         + `chain=${focusChain.diag ? "present" : "ABSENT"} flips=${(focusChain.diag as {flips?:unknown[]} | null)?.flips?.length ?? 0} `
