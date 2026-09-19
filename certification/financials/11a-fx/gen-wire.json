@@ -1,0 +1,140 @@
+[
+  {
+    "url": "/api/admin/actions/execute",
+    "status": 200,
+    "request": {
+      "action_key": "billing.generate_tuition",
+      "entity_type": "opportunity_customer_member",
+      "entity_id": "",
+      "mode": "preview",
+      "confirmation": {
+        "confirmed": false
+      },
+      "payload": {
+        "period_key": "2026-09"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "0 to bill, 2 not due, 0 refused for 2026-09",
+            "changes": [
+              "79f8011d-a236-4054-bee7-af10f1dbc632 · cadence_not_billed_by_this_run",
+              "cf044308-3ee4-47ab-a8fb-205eb172aa48 · assignment_not_enrolled"
+            ],
+            "after": {
+              "period_key": "2026-09",
+              "counts": {
+                "generated": 0,
+                "notDue": 2,
+                "refused": 0,
+                "alreadyPosted": 0,
+                "errors": 0
+              },
+              "total_amount_cents": 0,
+              "refused_outcomes": [],
+              "not_due_outcomes": [
+                {
+                  "kind": "not_due",
+                  "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+                  "periodKey": "2026-09",
+                  "periodLabel": "September 2026",
+                  "reason": "cadence_not_billed_by_this_run"
+                },
+                {
+                  "kind": "not_due",
+                  "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+                  "periodKey": "2026-09",
+                  "periodLabel": "September 2026",
+                  "reason": "assignment_not_enrolled"
+                }
+              ],
+              "error_outcomes": [],
+              "already_posted_outcomes": []
+            }
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "3a1e7aeb-b363-4227-a030-210b8a85080c"
+    }
+  },
+  {
+    "url": "/api/admin/actions/execute",
+    "status": 200,
+    "request": {
+      "action_key": "billing.generate_tuition",
+      "entity_type": "opportunity_customer_member",
+      "entity_id": "",
+      "mode": "preview",
+      "confirmation": {
+        "confirmed": false
+      },
+      "payload": {
+        "period_key": "2026-09"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "0 to bill, 2 not due, 0 refused for 2026-09",
+            "changes": [
+              "79f8011d-a236-4054-bee7-af10f1dbc632 · cadence_not_billed_by_this_run",
+              "cf044308-3ee4-47ab-a8fb-205eb172aa48 · assignment_not_enrolled"
+            ],
+            "after": {
+              "period_key": "2026-09",
+              "counts": {
+                "generated": 0,
+                "notDue": 2,
+                "refused": 0,
+                "alreadyPosted": 0,
+                "errors": 0
+              },
+              "total_amount_cents": 0,
+              "refused_outcomes": [],
+              "not_due_outcomes": [
+                {
+                  "kind": "not_due",
+                  "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+                  "periodKey": "2026-09",
+                  "periodLabel": "September 2026",
+                  "reason": "cadence_not_billed_by_this_run"
+                },
+                {
+                  "kind": "not_due",
+                  "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+                  "periodKey": "2026-09",
+                  "periodLabel": "September 2026",
+                  "reason": "assignment_not_enrolled"
+                }
+              ],
+              "error_outcomes": [],
+              "already_posted_outcomes": []
+            }
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "e6db4e67-454d-4360-ab27-c32f773c3834"
+    }
+  }
+]
