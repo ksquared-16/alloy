@@ -204,6 +204,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
          * JOIN. The producers ran ONCE, started early; this is where their answer is folded in.
          * The guard is unchanged apart from requiring the producers' own result, so a frame that
          * produced no cards before produces none now.
+         *
+         * `tProducers` is NOT declared here any more: it is stamped where the producers actually
+         * start, above. Keeping staging's declaration would have measured the join, not the work.
          */
         const settledContext = result.operationalContext ?? null;
         const projection = result.viewModel.workspace.operational_projection ?? null;
@@ -218,6 +221,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                       },
                   }
                 : result.viewModel;
+        routePhases.card_producers_ms = Date.now() - tProducers;
 
         return NextResponse.json(viewModel, {
             headers: {
