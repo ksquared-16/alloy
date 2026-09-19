@@ -36,11 +36,7 @@ import type { RecordScopeConstraints } from "@/lib/admin/accessScope";
  * silently disagree on any predicate that reads a missing one.
  */
 export const PROCESS_POPULATION_SELECT =
-    "id, org_id, work_unit_id, status_key, stage_key, stage_entered_at, created_at, updated_at, name, title, metadata, primary_person_id, location_id, customer_id, program_type, schedule_type, maintained_operational_facts";
-// `program_type` and `schedule_type` ride on this read for the children shell, which uses them as
-// the opportunity-level DEFAULTS a child row falls back to when it names no program or schedule of
-// its own. Two columns on a query already being made — not another round trip. Without them the
-// document could not run the canonical children owner and Children would stay drawer-bound.
+    "id, org_id, work_unit_id, status_key, stage_key, stage_entered_at, created_at, updated_at, name, title, metadata, primary_person_id, location_id, customer_id, maintained_operational_facts";
 // `maintained_operational_facts` rides ON this read. It is what retired the EPP and active-tour
 // enrichments: the facts they went to fetch now arrive with the row, so the evaluated page costs
 // ONE round trip instead of three. Dropping it from this list silently empties both.
