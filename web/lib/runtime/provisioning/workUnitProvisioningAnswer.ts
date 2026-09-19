@@ -156,13 +156,17 @@ import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/f
  */
 import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import { attachOpportunityInquiryChildrenShell } from "@/lib/admin/opportunityEntityRecord";
-import {
-    resolveWorkUnitHeaderKpis,
-    workUnitHeaderKpiKeysFromSlots,
-    WORK_UNIT_HEADER_KPI_JOIN_GRACE_MS,
-    type WorkUnitHeaderKpiSeed,
-} from "@/lib/runtime/provisioning/workUnitHeaderKpiResolution";
-import { buildOipWarmScopeKey } from "@/lib/metrics/oipWorkspaceWarmCache";
+/*
+ * TYPE-ONLY, DELIBERATELY. The header KPI resolution runs the analytics authorization gate, which
+ * reaches `next/headers`; this composer is reachable from a client component, so a VALUE import
+ * here puts that module in the browser graph and the production build fails — which it did. The
+ * implementation is injected by the route instead (`req.resolveHeaderKpis`), exactly as the drawer
+ * route owns its producers for the same reason. A type import is erased at build.
+ */
+import type { WorkUnitHeaderKpiSeed } from "@/lib/runtime/provisioning/workUnitHeaderKpiResolution";
+
+/** Mirrors WORK_UNIT_HEADER_KPI_JOIN_GRACE_MS; kept here so the composer imports no value from it. */
+const WORK_UNIT_HEADER_KPI_JOIN_GRACE_MS = 150;
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
@@ -601,6 +605,16 @@ export type ProvisioningRequest = {
      * still valid — its rows simply carry no avatar and present initials.
      */
     documentActor?: DocumentActor | null;
+    /*
+     * INJECTED BY THE ROUTE. Resolves the header KPI values for the published key set during this
+     * composition. Injected rather than imported because its authorization gate reaches
+     * `next/headers` and this module is in a client-reachable graph. Absent (any non-route caller)
+     * simply means the client resolves them as before.
+     */
+    resolveHeaderKpis?: (args: {
+        workUnitId: string;
+        kpiSlots: ReadonlyArray<{ sourceKey?: string | null }>;
+    }) => Promise<WorkUnitHeaderKpiSeed | null>;
     /**
      * The actor's mutate access, resolved ONCE by the caller's route gate.
      *
@@ -1080,25 +1094,9 @@ export async function composeWorkUnitProvisioningAnswer(
      * inline: the join below takes what is ready and never blocks the document behind the rest.
      */
     const tHeaderKpi = now();
-    const headerKpiPromise: Promise<WorkUnitHeaderKpiSeed> = presentationPromise
-        .then(async (p) => {
-            const keys = workUnitHeaderKpiKeysFromSlots(p.header.kpiSlots);
-            const answer = await resolveWorkUnitHeaderKpis({
-                supabase: req.supabase,
-                orgId: req.orgId,
-                workUnitId: workUnit.id,
-                // The composer carries no site filter; the seed therefore states the scope it was
-                // resolved for and the client uses it only on an exact match. A seed resolved
-                // org-wide must never answer for an operator who has a site selected.
-                siteLocationId: null,
-                keys,
-            });
-            return {
-                scopeKey: buildOipWarmScopeKey({ siteId: null, workUnitId: workUnit.id, keys }),
-                ...answer,
-            } as WorkUnitHeaderKpiSeed;
-        })
-        .catch(() => ({ scopeKey: "", status: "unavailable" } as WorkUnitHeaderKpiSeed));
+    const headerKpiPromise: Promise<WorkUnitHeaderKpiSeed | null> = presentationPromise
+        .then((p) => req.resolveHeaderKpis?.({ workUnitId: workUnit.id, kpiSlots: p.header.kpiSlots }) ?? null)
+        .catch(() => null);
     void headerKpiPromise.catch(() => {});
 
     // ── B: COMMIT-CRITICAL ACTIONS PROJECTION — resolve the right-rail action set CONCURRENTLY with the

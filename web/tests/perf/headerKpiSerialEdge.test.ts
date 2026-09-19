@@ -24,15 +24,37 @@ const HOOK = codeOf(read("lib/presentation/runtime/useOperationalAnswers.ts"));
 const SETTLE = codeOf(read("lib/presentation/runtime/useWorkUnitSettlement.ts"));
 const WARM = codeOf(read("lib/metrics/oipWorkspaceWarmCache.ts"));
 const ROUTE = codeOf(read("app/api/admin/metrics/resolve/route.ts"));
+const COMPOSE_ROUTE = codeOf(read("lib/runtime/provisioning/composeProvisioningAnswerForRoute.ts"));
+/** Raw (comments intact) — the import-graph gate must see real import lines only. */
+const ANSWER_RAW = read("lib/runtime/provisioning/workUnitProvisioningAnswer.ts");
 
 describe("A — the work starts before hydration, in the document", () => {
-    it("the composer resolves the header KPIs", () => {
-        expect(ANSWER).toContain("resolveWorkUnitHeaderKpis(");
+    it("the composer resolves the header KPIs through the route-injected resolver", () => {
+        expect(ANSWER).toContain("req.resolveHeaderKpis?.(");
         expect(ANSWER).toContain("headerKpis");
+        expect(COMPOSE_ROUTE).toContain("makeWorkUnitHeaderKpiResolver(");
+    });
+
+    it("the composer VALUE-imports nothing that reaches next/headers", () => {
+        /*
+         * THE DEFECT THE PRODUCTION BUILD CAUGHT. The first implementation imported
+         * `resolveWorkUnitHeaderKpis` directly. Its analytics gate reaches `next/headers`, and this
+         * composer is reachable from a client component, so the build failed with
+         * "You're importing a component that needs next/headers". Typecheck and every unit suite
+         * were green. The resolution module may only be imported here as a TYPE.
+         */
+        const importLines = ANSWER_RAW.split("\n").filter((l) => /^\s*import\s/.test(l));
+        const kpiImports = importLines.filter((l) => l.includes("workUnitHeaderKpiResolution"));
+        expect(kpiImports.length).toBeGreaterThan(0);
+        for (const line of kpiImports) {
+            expect(line, `must be a type-only import: ${line}`).toMatch(/^\s*import type /);
+        }
+        expect(importLines.some((l) => l.includes("canReadAnalytics"))).toBe(false);
+        expect(importLines.some((l) => l.includes("oipWorkspaceWarmCache"))).toBe(false);
     });
 
     it("it chains off the presentation branch, which already reads the key config", () => {
-        expect(ANSWER).toMatch(/headerKpiPromise[\s\S]{0,80}presentationPromise\s*\n?\s*\.then/);
+        expect(ANSWER).toMatch(/headerKpiPromise[\s\S]{0,120}presentationPromise\s*\n?\s*\.then/);
     });
 
     it("the client stops issuing the request when the document answered", () => {
@@ -115,10 +137,13 @@ describe("E — truthful states: absent is not zero", () => {
     it("a failed or late resolution is unavailable, never a fabricated value", () => {
         // Anchored to the composer's failure path. The module only DECLARES the union member;
         // asserting against that type line passes whatever the runtime actually returns.
+        // The composer degrades to null (client fetches as before); the resolver never invents a value.
         const chain = ANSWER.slice(ANSWER.indexOf("const headerKpiPromise"), ANSWER.indexOf("void headerKpiPromise"));
         expect(chain.length).toBeGreaterThan(0);
-        expect(chain).toMatch(/\.catch\(\(\) => \(\{[^}]*status: "unavailable"/);
-        expect(chain).not.toMatch(/\.catch\(\(\) => \(\{[^}]*status: "ok"/);
+        expect(chain).toMatch(/\.catch\(\(\) => null\)/);
+        const factory = KPI.slice(KPI.indexOf("export function makeWorkUnitHeaderKpiResolver"));
+        expect(factory).toMatch(/catch \{\s*return null;/);
+        expect(factory).not.toMatch(/status: "ok", values: \{\}/);
         expect(KPI).not.toMatch(/value:\s*0/);
     });
 
@@ -135,7 +160,7 @@ describe("E — truthful states: absent is not zero", () => {
 describe("F — a seed may only answer the scope it was resolved for", () => {
     it("the seed carries its scope key", () => {
         expect(KPI).toContain("scopeKey");
-        expect(ANSWER).toContain("buildOipWarmScopeKey(");
+        expect(KPI).toContain("buildOipWarmScopeKey(");
     });
 
     it("the hook ignores a seed for a different scope", () => {

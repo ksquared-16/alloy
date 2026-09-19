@@ -5,6 +5,7 @@ import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { resolveMetrics } from "@/lib/metrics/metricEngine";
 import { isKnownOipMetricKey } from "@/lib/metrics/registry";
 import { metricResolveApiItemsFromResolved } from "@/lib/metrics/metricResolveApiItem";
+import { buildOipWarmScopeKey } from "@/lib/metrics/oipWorkspaceWarmCache";
 import type { MetricResolveApiItem } from "@/app/api/admin/metrics/resolve/route";
 import type { OipMetricKey } from "@/lib/metrics/types";
 
@@ -113,4 +114,45 @@ export async function resolveWorkUnitHeaderKpis(args: {
         values[item.metric_key] = item;
     }
     return { status: "ok", values };
+}
+
+/**
+ * THE INJECTABLE THE ROUTE HANDS THE COMPOSER.
+ *
+ * Everything that reaches `next/headers` — the analytics gate above — stays on this side of the
+ * boundary. The composer holds only a type import, so it never drags the auth graph into a
+ * client-reachable module. Returns null rather than throwing: a header KPI that cannot be resolved
+ * must degrade to "the client fetches as before", never to a failed document.
+ */
+export function makeWorkUnitHeaderKpiResolver(args: {
+    supabase: SupabaseClient;
+    orgId: string;
+}): (a: {
+    workUnitId: string;
+    kpiSlots: ReadonlyArray<{ sourceKey?: string | null }>;
+}) => Promise<WorkUnitHeaderKpiSeed | null> {
+    return async ({ workUnitId, kpiSlots }) => {
+        try {
+            const keys = workUnitHeaderKpiKeysFromSlots(kpiSlots);
+            if (!keys.length) return null;
+            const answer = await resolveWorkUnitHeaderKpis({
+                supabase: args.supabase,
+                orgId: args.orgId,
+                workUnitId,
+                /*
+                 * The composer carries no site filter, so the seed states the scope it WAS resolved
+                 * for and the client uses it only on an exact match. An org-wide seed must never
+                 * answer for an operator who has a site selected.
+                 */
+                siteLocationId: null,
+                keys,
+            });
+            return {
+                scopeKey: buildOipWarmScopeKey({ siteId: null, workUnitId, keys }),
+                ...answer,
+            };
+        } catch {
+            return null;
+        }
+    };
 }
