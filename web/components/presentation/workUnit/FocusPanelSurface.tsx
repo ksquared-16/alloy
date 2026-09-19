@@ -84,12 +84,24 @@ export function FocusPanelSurface({
     openRecord,
     prefetchRecord,
     subjectRefusal,
+    queueSwapping = false,
+    recordSwapping = false,
     children,
 }: {
     openRecord: (row: QueueRowModel) => void;
     prefetchRecord: (row: QueueRowModel) => void;
     /** Set only when the answer refused the SELECTED SUBJECT but kept its cohort. */
     subjectRefusal?: { kind: string; message: string } | null;
+    /*
+     * Swap acknowledgement, stamped on the EXISTING region nodes rather than wrapping them. A new
+     * element here would be a new layout box in a flex column, which is exactly the geometry the
+     * transition is forbidden to disturb. Opacity and pointer-events only; see
+     * `.motion-swap-region` in globals.css for why the window is fixed rather than data-driven,
+     * and why the toggle is a CLASS rather than a data attribute (V2.1 treats `class` as
+     * presentational; an attribute a stylesheet selects on would have advanced finality).
+     */
+    queueSwapping?: boolean;
+    recordSwapping?: boolean;
     children: ReactNode;
 }) {
     const { subjectId } = useOperationalSubject();
@@ -164,7 +176,7 @@ export function FocusPanelSurface({
                         <div
                             data-adaptive-queue-column
                             {...adaptiveRegionDomAttrs("selection")}
-                            className="flex min-h-0 min-w-0 shrink-0 flex-col"
+                            className={`motion-swap-region${queueSwapping ? " is-swapping" : ""} flex min-h-0 min-w-0 shrink-0 flex-col`}
                         >
                             {children}
                         </div>
@@ -172,7 +184,7 @@ export function FocusPanelSurface({
 
                     <div
                         {...adaptiveRegionDomAttrs("primary")}
-                        className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-midnight/20 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
+                        className={`motion-swap-region${recordSwapping ? " is-swapping" : ""} flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-midnight/20 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)]`}
                         data-focus-panel-boundary
                         data-component="FocusPanelSurface.boundary"
                         data-build-sha={BUILD_SHA}
