@@ -155,6 +155,7 @@ import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/f
  * sees this; only a real render does.
  */
 import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
+import { attachOpportunityInquiryChildrenShell } from "@/lib/admin/opportunityEntityRecord";
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
@@ -1579,6 +1580,44 @@ export async function composeWorkUnitProvisioningAnswer(
         page.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId) ??
         familyMembership.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId)!;
 
+    /*
+     * THE AUTHORITATIVE CHILDREN ANSWER, STARTED HERE AND AWAITED AT THE END.
+     *
+     * Children was the last blocking area that genuinely required the second round trip. Its card
+     * cannot be served from intake metadata: the headline count is
+     * `rows.filter((r) => r.outcome_status_key !== "declined")`, and `outcome_status_key` exists
+     * only in the OCM join and the enrollment overlay — so a declined child would be counted as
+     * enrolling. That is a WRONG count, not a partial one, which is why the cheap transport was
+     * rejected.
+     *
+     * So the document runs THE SAME owner the drawer runs — `attachOpportunityInquiryChildrenShell`
+     * — against the same org and opportunity. One authority, one row mapping, no second definition
+     * of what a Children row means.
+     *
+     * It starts HERE, as soon as the subject row is known, and is awaited only where the answer is
+     * assembled. Its ~706ms serial chain therefore runs concurrently with the composition below
+     * rather than extending it; the measured incremental wall is what this slice reports.
+     *
+     * Failure is bounded and TRUTHFUL: a rejection leaves the contract absent, which the card
+     * reads as "not loaded" and never as "no children".
+     */
+    const childrenHost: Record<string, unknown> = { ...(subjectRow as Record<string, unknown>) };
+    const documentChildrenP = attachOpportunityInquiryChildrenShell(
+        req.supabase as never,
+        req.orgId,
+        childrenHost,
+        // The SAME actor the answer already uses for row avatars. Photo URLs are documents minted
+        // per actor per request, so without it the children carry no `resolved_photo_url` and fall
+        // back to initials — which is a different visible answer, not a missing one.
+        req.documentActor ?? null,
+    )
+        .then(() =>
+            Array.isArray(childrenHost._inquiry_children)
+                ? (childrenHost._inquiry_children as unknown[])
+                : null,
+        )
+        .catch(() => null);
+
     // Child Waitlist: attach Placement ranking (derived position / wait_since / program) onto rows.
     // Membership stays PI-owned; ranking authority is placement_candidates + overrides.
     if (childRows?.length) {
@@ -2059,7 +2098,37 @@ export async function composeWorkUnitProvisioningAnswer(
             subjectGrain,
     });
 
+    /*
+     * AWAITED HERE, at the assembly point — the latest moment it can be, so everything above ran
+     * alongside it. Absent (null) means the chain failed or there was no subject: the card reads
+     * that as "not loaded" and must never read it as "no children".
+     */
+    const documentChildren = await documentChildrenP;
+
+    /*
+     * INTO THE IDENTITY BAG, BY THE DOMAIN COMPOSER — not named by the platform builder.
+     *
+     * The platform work-mode builder forwards `subjectIdentityTruth` OPAQUELY and may not mention
+     * a domain truth key; the boundary gate says so and caught the first attempt, which put
+     * `_inquiry_children` in the builder directly. The DOMAIN owns which keys exist, so the rows
+     * join the bag here and reach commit truth through the path every other domain binding uses.
+     *
+     * Only when rows actually came back: absent leaves the commit predicate false and the card
+     * reserves exactly as before, so "not loaded" stays distinct from the authoritative `[]`.
+     */
+    const subjectIdentityTruthWithChildren: SubjectIdentityTruth | null =
+        documentChildren
+            ? { ...(subjectIdentityTruth ?? {}), _inquiry_children: documentChildren }
+            : subjectIdentityTruth;
+
     const answer: ProvisioningAnswer = {
+        /*
+         * THE AUTHORITATIVE CHILDREN ROWS, produced by the canonical children-shell owner during
+         * this document's own composition. Named `_inquiry_children` deliberately: that IS the
+         * canonical representation at this boundary — the shell writes exactly that key, the
+         * card's normalizer reads exactly that key, and the commit predicate already tests it. A
+         * different name here would be a second representation of the same truth.
+         */
         terminal: "operational",
         orgId: req.orgId,
         workUnit,
