@@ -73,6 +73,34 @@ function hasAnyTruthKey(context: OperationalContext, keys: readonly string[]): b
     });
 }
 
+
+/** The subject's own id, as the commit-critical context states it (`truth.id`). */
+export const SUBJECT_IDENTITY_TRUTH_KEYS = ["id"] as const;
+
+/**
+ * Billing Preview addresses an OPPORTUNITY, and it is the only thing it needs.
+ *
+ * `AssignmentTuitionCard` reads exactly `context.subject.type` and `context.subject.id`, then issues
+ * its own authenticated `loadFinancialConfig(opportunityId)`. It consumes no children, entity,
+ * shell, scheduling or activity output — so the drawer VM it currently waits for supplies it
+ * nothing. Measured: its dependency on settlement is accidental, caused solely by its absence here.
+ *
+ * THE GRAIN NARROWING IS NOT OPTIONAL. The card resolves `opportunityId` only when the subject IS an
+ * opportunity; on any other grain it holds null, never issues the request, and falls through to
+ * "No assignment on this record to price." Admitting it there would mount a card that cannot load
+ * and would state an authoritative-sounding empty as its first frame. That state exists today at
+ * settlement; mounting earlier must not make it arrive sooner or last longer.
+ *
+ * A context with no subject at all is admitted: the registry guard exercises predicates against a
+ * truth-only fixture by design, and the narrowing is a REFUSAL of a known-wrong grain, not a second
+ * identity requirement.
+ */
+function hasOpportunitySubjectIdentity(context: OperationalContext): boolean {
+    if (!hasAnyTruthKey(context, SUBJECT_IDENTITY_TRUTH_KEYS)) return false;
+    const subjectType = (context as { subject?: { type?: unknown } }).subject?.type;
+    return subjectType == null || subjectType === "opportunity";
+}
+
 export const MOUNTABLE_CARD_SPECS: readonly MountableCardSpec[] = [
     /*
      * Attendance reads a scoped child's day; the case record knows nothing about it, so its content is
@@ -113,5 +141,16 @@ export const MOUNTABLE_CARD_SPECS: readonly MountableCardSpec[] = [
         identityTruthKeys: HOUSEHOLD_IDENTITY_TRUTH_KEYS,
         identityKnowable: hasHouseholdIdentity,
         build: () => buildSelfFetchingCardShell("financials", focusPanelCardCatalogLabel("financials")),
+    },
+    /*
+     * Billing Preview — identity only, exactly like the three above. It mounts as its existing
+     * self-fetching shell and its own request begins; the card stays honestly pending until that
+     * request answers. Nothing about billing content is asserted here.
+     */
+    {
+        key: "billing_preview",
+        identityTruthKeys: SUBJECT_IDENTITY_TRUTH_KEYS,
+        identityKnowable: hasOpportunitySubjectIdentity,
+        build: () => buildSelfFetchingCardShell("billing_preview", focusPanelCardCatalogLabel("billing_preview")),
     },
 ];
