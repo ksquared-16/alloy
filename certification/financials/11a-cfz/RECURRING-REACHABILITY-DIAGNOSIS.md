@@ -27,7 +27,7 @@ section seated beside `scheduling`, so an enrolment and its price read together.
 
 Verified: `placed: true`, `createdStatus 201`, `publishStatus 200`, `newVersion 159`.
 
-## 3 · No card producer — **NOT FIXED, and this is the blocker**
+## 3 · ~~No card producer~~ — **WRONG DIAGNOSIS, corrected below**
 
 After both fixes the card still does not mount. `focusPanelCardProducers.ts` composes exactly two
 cards — `attendance` and `financials`. `billing_preview` has no producer, and neither does
@@ -47,3 +47,59 @@ recurring tuition terms, which is why the QA tenant has no accepted `enrollment_
 why `billing.generate_tuition` answers `Generate 0 · $0.00` for every period.
 
 Section 7's five BLOCKED recurring rows all sit behind this one gap.
+
+
+---
+
+# Correction and deeper trace (run `erun_37c19f1844704dc9`)
+
+## The producer hypothesis was WRONG
+
+`focusPanelCardProducers.ts` is not a mount gate. Its own doctrine: Business Process and Current
+Work **project synchronously** from the operational context; Attendance, Health and Financials each
+need their **own read**, so they joined one shared lifecycle instead of each booting its own. The
+boundary is "initial card truth only".
+
+A card with no producer is not excluded — it simply has no bootstrapped data, which is fine for
+`AssignmentTuitionCard` because it fetches its own.
+
+## The two real exclusion mechanisms
+
+`deriveFocusPanelSummaryCompositionInputs` applies exactly two:
+
+1. **Provider availability** — `isCardProviderUnavailable(key)`. `CARD_CAPABILITY_PROVIDERS`
+   contains **only `milestones: []`**. `billing_preview` requires no provider and is available.
+2. **Authored visibility** — `cardVisibilityFromMeta`. `linked` cards are navigable-only and "must
+   not occupy initial Focus Panel settle geometry". The code names Assignments/`scheduling` as
+   exactly such a card.
+
+## What that made visible — including my own error
+
+Read back from the published doc, before correction:
+
+| card | visibility | mounts |
+|---|---|---|
+| business_process, financials, children, household, health_safety, attendance | `null` (→ visible) | YES |
+| scheduling | **linked** | no — *by design* |
+| milestones | **linked** | no — *and provider-unavailable* |
+| **billing_preview** | **linked** | no — **because I cloned `scheduling`'s section in v159** |
+
+The v159 placement carried `scheduling`'s linked intent onto a card meant to be visible. Corrected
+in **v160**, published through the same append-only path with `visibility: "visible"`.
+
+## Still not mounted — at least one gate remains
+
+After v160 the card still does not render. Candidates not yet eliminated, in the order worth testing:
+
+1. **Grid source.** `resolveFocusPanelModeGrid` returns
+   `deriveFocusPanelGridFromLayoutDoc(FOCUS_PANEL_SUMMARY_DEFAULT_DOC)` — the **code-owned default
+   doc**, not the published one — while its own comment says Summary resolves from the active doc.
+   If the render path takes the grid from the default doc, a published placement can never add a
+   card. (The v158 density fix worked because appearance is card *config*, not grid membership.)
+2. **Grain filtering at the child panel**, despite the now-declared `["opportunity","child"]`.
+3. **Layout caching** in the admin context.
+
+## `SCHEDULING_PRODUCER_GAP` — WITHDRAWN
+
+There is no scheduling producer gap. `scheduling` is deliberately authored **linked**. Nothing to do,
+and no Scheduling work belongs in Thread 11A.
