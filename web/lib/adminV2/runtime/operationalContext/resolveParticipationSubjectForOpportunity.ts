@@ -2,7 +2,6 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { listEnrollmentInstancesForLead } from "@/lib/process/processInstances";
 
 /**
  * RESOLVE THE ATTENTION PARTICIPATION TO ITS AUTHORITATIVE MEMBER — scoped to one opportunity.
@@ -116,19 +115,41 @@ export async function resolveSoleEnrollmentParticipantForOpportunity(args: {
     const opportunityId = args.opportunityId?.trim() ?? "";
     if (!orgId || !opportunityId) return null;
 
-    const rows = await listEnrollmentInstancesForLead(args.supabase, { orgId, opportunityId });
-    const children = rows.filter((r) => {
-        const subjectType = String((r as { subject_type?: unknown }).subject_type ?? "").trim();
-        // An unset subject_type is not a refusal — the org + opportunity + process-key scope has
-        // already authorized the row — but a DIFFERENT named type is.
-        if (subjectType && subjectType !== "child") return false;
-        return String((r as { subject_id?: unknown }).subject_id ?? "").trim() !== "";
-    });
-    if (children.length !== 1) return null;
+    /*
+     * `opportunity_customer_members`, NOT `process_instances` — and the first deployed attempt at
+     * this proved why the distinction is not academic.
+     *
+     * It read `process_instances`, on the reasonable-looking grounds that participation is
+     * authoritative there. On a LEAD there are no process instances at all: the children shell's
+     * own overlay says so in as many words — "No process instances yet (legacy lead) -> OCM remains
+     * the participation source". So the resolver returned null on every sample, Attendance and
+     * Health stayed `unavailable`, and the only measured effect was the read's own cost.
+     *
+     * The OCM join is the source the children shell actually uses for this shape, keyed directly by
+     * org + opportunity, and it carries both halves of the contract: `customer_member_id` is the
+     * member, `id` is the participation candidate. That is the same pair
+     * `participantCandidatesFromTruth` maps out of `_inquiry_children`, read from the table those
+     * rows are built from rather than from intake metadata — which is the part #1075 got wrong.
+     *
+     * One indexed read. The producers this unblocks consume `customerMemberId` and nothing else, so
+     * an enrolled case resolving its participation id through `process_instances` instead changes
+     * nothing they can observe.
+     */
+    const { data, error } = await args.supabase
+        .from("opportunity_customer_members")
+        .select("id, customer_member_id")
+        .eq("org_id", orgId)
+        .eq("opportunity_id", opportunityId);
+    if (error || !Array.isArray(data)) return null;
 
-    const only = children[0] as { id?: unknown; subject_id?: unknown };
-    const participationId = String(only.id ?? "").trim();
-    const customerMemberId = String(only.subject_id ?? "").trim();
-    if (!participationId || !customerMemberId) return null;
-    return { participationId, customerMemberId };
+    const candidates = data
+        .map((r) => ({
+            participationId: String((r as { id?: unknown }).id ?? "").trim(),
+            customerMemberId: String((r as { customer_member_id?: unknown }).customer_member_id ?? "").trim(),
+        }))
+        .filter((c) => c.participationId && c.customerMemberId);
+
+    // Exactly one, or nothing. Two children resolving to the first would attribute one child's
+    // attendance and health to another — the two cards where that is least acceptable.
+    return candidates.length === 1 ? candidates[0]! : null;
 }

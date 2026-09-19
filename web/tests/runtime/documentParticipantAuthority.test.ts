@@ -24,8 +24,14 @@ const DOC = codeOf(read("lib/runtime/provisioning/composeProvisioningAnswerForRo
 const COMMIT_CTX = codeOf(read("lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer.ts"));
 
 describe("gate A — the authoritative source, not intake metadata", () => {
-    it("resolves participation from process_instances", () => {
-        expect(RESOLVER).toContain("listEnrollmentInstancesForLead");
+    it("resolves participation from the OCM join, the source this shape actually has", () => {
+        /*
+         * The first deployed attempt read `process_instances`. On a LEAD there are none — the
+         * children shell's own overlay says "No process instances yet (legacy lead) -> OCM remains
+         * the participation source" — so it resolved null on every sample and cost only its read.
+         */
+        expect(RESOLVER).toContain("opportunity_customer_members");
+        expect(RESOLVER).not.toContain("listEnrollmentInstancesForLead");
     });
 
     it("never reads intake metadata for identity — this is exactly how #1075 failed", () => {
@@ -41,22 +47,26 @@ describe("gate A — the authoritative source, not intake metadata", () => {
 });
 
 describe("gate B — ambiguity is refused, never first-child-wins", () => {
-    const rows = (...r: Array<{ id: string; subject_id: string; subject_type?: string }>) => r;
+    const rows = (...r: Array<{ id: string; customer_member_id: string }>) => r;
 
     async function resolve(instances: ReturnType<typeof rows>) {
         const mod = await import(
             "@/lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity"
         );
-        const proc = await import("@/lib/process/processInstances");
-        const spy = proc.listEnrollmentInstancesForLead as unknown as { mock?: unknown };
-        void spy;
         return mod.resolveSoleEnrollmentParticipantForOpportunity({
+            /*
+             * `eq` returns itself AND carries the result, so the stub does not encode how many
+             * filters the resolver happens to apply. Pinning a fixed chain depth made this fail
+             * when the source table changed from two filters to two — a stub asserting the
+             * query's SHAPE rather than its ANSWER.
+             */
             supabase: {
-                from: () => ({
-                    select: () => ({
-                        eq: () => ({ eq: () => ({ eq: () => ({ data: instances, error: null }) }) }),
-                    }),
-                }),
+                from: () => {
+                    const node: Record<string, unknown> = { data: instances, error: null };
+                    node.eq = () => node;
+                    node.select = () => node;
+                    return node;
+                },
             } as never,
             orgId: "org-1",
             opportunityId: "opp-1",
@@ -64,15 +74,15 @@ describe("gate B — ambiguity is refused, never first-child-wins", () => {
     }
 
     it("one enrolled child resolves", async () => {
-        const got = await resolve(rows({ id: "pi-1", subject_id: "cm-1", subject_type: "child" }));
+        const got = await resolve(rows({ id: "pi-1", customer_member_id: "cm-1" }));
         expect(got).toEqual({ participationId: "pi-1", customerMemberId: "cm-1" });
     });
 
     it("two enrolled children resolve to NOTHING", async () => {
         const got = await resolve(
             rows(
-                { id: "pi-1", subject_id: "cm-1", subject_type: "child" },
-                { id: "pi-2", subject_id: "cm-2", subject_type: "child" },
+                { id: "pi-1", customer_member_id: "cm-1" },
+                { id: "pi-2", customer_member_id: "cm-2" },
             ),
         );
         // Picking the first would attribute one child's attendance and health to another — the two
@@ -84,8 +94,8 @@ describe("gate B — ambiguity is refused, never first-child-wins", () => {
         expect(await resolve(rows())).toBeNull();
     });
 
-    it("a non-child participation is not a participant", async () => {
-        const got = await resolve(rows({ id: "pi-1", subject_id: "cm-1", subject_type: "customer_member" }));
+    it("a row with no member is not a participant", async () => {
+        const got = await resolve(rows({ id: "pi-1", customer_member_id: "" }));
         expect(got).toBeNull();
     });
 });
