@@ -629,6 +629,10 @@ export default function LocationsConfigurationPage({
                     room={selectedRoom}
                     siteLabel={model?.displayName ?? ""}
                     topologyRows={topologyRows}
+                    siteId={selectedSite.id}
+                    insideOptions={eligibleInsideOptions(roomRows, selectedSite.id, {
+                        excludeLocationId: selectedRoom?.id ?? null,
+                    })}
                     programOptions={programOptionsForSite(selectedSite.id)}
                     schedulePatterns={selectedSchedules}
                     canMutate={canMutate}

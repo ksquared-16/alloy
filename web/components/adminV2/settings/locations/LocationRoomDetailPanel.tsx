@@ -32,11 +32,26 @@ import {
     presentRoomTopology,
     roomRailTopologySegments,
 } from "@/lib/locations/topologyPresentation";
+import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
+import {
+    ROOM_TYPE_OPTIONS,
+    roleAcceptsInside,
+    roomTypeHint,
+    type InsideOption,
+} from "@/lib/locations/roomTypeVocabulary";
+import {
+    committedRoomTopology,
+    roomTopologyPatch,
+} from "@/lib/locations/roomTopologyEdit";
+import { topologyRefusalCopy } from "@/lib/locations/topologyRefusalCopy";
+import { topologyRefusalCodeOf } from "@/lib/locations/topologyRefusalError";
 
 export default function LocationRoomDetailPanel({
     room,
     siteLabel,
     topologyRows,
+    siteId,
+    insideOptions,
     programOptions,
     schedulePatterns,
     canMutate,
@@ -51,6 +66,10 @@ export default function LocationRoomDetailPanel({
     siteLabel: string;
     /** Sites + rooms, so topology context resolves through canonical ancestry. */
     topologyRows: readonly LocationHierarchyRow[];
+    /** The site this room belongs to, for "directly at the site" containment. */
+    siteId: string | null;
+    /** Physical rooms this room may be moved inside — the SAME provider create uses. */
+    insideOptions: InsideOption[];
     programOptions: LocationProgramCategoryRow[];
     schedulePatterns: SchedulePatternRow[];
     canMutate: boolean;
@@ -66,6 +85,8 @@ export default function LocationRoomDetailPanel({
     const [supportedKeys, setSupportedKeys] = useState<string[]>([]);
     const [schedulePatternId, setSchedulePatternId] = useState("");
     const [active, setActive] = useState(true);
+    const [roomType, setRoomType] = useState<CanonicalUnitRole>("operational_group");
+    const [insideId, setInsideId] = useState("");
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [editing, setEditing] = useState(false);
@@ -78,6 +99,11 @@ export default function LocationRoomDetailPanel({
         setSupportedKeys(readRoomSupportedProgramKeys(md));
         setSchedulePatternId(readRoomSchedulePatternId(md) ?? "");
         setActive(next.is_active !== false);
+        // Committed topology, effective — a historical NULL hydrates as Classroom,
+        // so the operator never meets a blank or a raw stored value.
+        const committed = committedRoomTopology(next, siteId);
+        setRoomType(committed.roomType);
+        setInsideId(committed.insideId);
         setError(null);
     };
 
@@ -114,6 +140,17 @@ export default function LocationRoomDetailPanel({
         if (!room) return;
         hydrateFromRoom(room);
         setEditing(false);
+    };
+
+    const showsInside = roleAcceptsInside(roomType) && insideOptions.length > 0;
+
+    // Same rule as create: only a Classroom can sit inside a physical room, so a
+    // Type change away from Classroom drops a pending Inside rather than carrying
+    // an impossible pair into the payload.
+    const changeRoomType = (next: CanonicalUnitRole) => {
+        setRoomType(next);
+        if (!roleAcceptsInside(next)) setInsideId("");
+        setError(null);
     };
 
     const toggleProgram = (key: string) => {
@@ -178,6 +215,48 @@ export default function LocationRoomDetailPanel({
                                 data-testid="locations-room-name"
                             />
                         </label>
+                        <label className="block max-w-md space-y-1">
+                            <span className="config-typo-field-label">Type</span>
+                            <select
+                                value={roomType}
+                                disabled={!canMutate}
+                                onChange={(e) => changeRoomType(e.target.value as CanonicalUnitRole)}
+                                className="config-runtime-select"
+                                data-testid="locations-room-type"
+                            >
+                                {ROOM_TYPE_OPTIONS.map((option) => (
+                                    <option key={option.role} value={option.role}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="config-typo-sublabel" data-testid="locations-room-type-hint">
+                                {roomTypeHint(roomType)}
+                            </p>
+                        </label>
+
+                        {showsInside ?
+                            <label className="block max-w-md space-y-1">
+                                <span className="config-typo-field-label">Inside</span>
+                                <select
+                                    value={insideId}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setInsideId(e.target.value)}
+                                    className="config-runtime-select"
+                                    data-testid="locations-room-inside"
+                                >
+                                    <option value="">
+                                        {siteLabel ? `${siteLabel} (no physical room)` : "No physical room"}
+                                    </option>
+                                    {insideOptions.map((option) => (
+                                        <option key={option.id} value={option.id}>
+                                            {option.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        :   null}
+
                         <label className="block max-w-36 space-y-1">
                             <span className="config-typo-field-label">Capacity</span>
                             <input
@@ -287,10 +366,22 @@ export default function LocationRoomDetailPanel({
                                                 label: label.trim() || null,
                                                 is_active: active,
                                                 metadata,
+                                                // Empty unless the operator actually moved
+                                                // topology, so an ordinary rename patches
+                                                // exactly what it always did.
+                                                ...roomTopologyPatch(
+                                                    committedRoomTopology(room, siteId),
+                                                    { roomType, insideId },
+                                                    siteId,
+                                                ),
                                             });
                                             setEditing(false);
                                         } catch (e) {
-                                            setError(e instanceof Error ? e.message : "Save failed");
+                                            // A refusal is a normal product state. Explain it
+                                            // from the named code; stay in edit mode so the
+                                            // rejected topology is never visually committed.
+                                            const fallback = e instanceof Error ? e.message : "Save failed";
+                                            setError(topologyRefusalCopy(topologyRefusalCodeOf(e), fallback));
                                         } finally {
                                             setSaving(false);
                                         }

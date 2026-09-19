@@ -470,8 +470,15 @@ export function useLocationsConfigurationSettings(options?: {
                 credentials: "include",
                 body: JSON.stringify(body),
             });
-            const json = (await res.json().catch(() => ({}))) as LocationHierarchyRow & { error?: string };
-            if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
+            const json = (await res.json().catch(() => ({}))) as LocationHierarchyRow & {
+                error?: string;
+                code?: string;
+            };
+            if (!res.ok) {
+                // Same contract as create: the NAMED code travels to the form, which
+                // explains the refusal from the code rather than the sentence.
+                throw new TopologyRefusalError(json.error ?? `Failed (${res.status})`, json.code ?? null);
+            }
             if (!json.id || !mutationResponseContainsPatch(json as Record<string, unknown>, body)) {
                 throw new Error("Location save was not confirmed by the authoritative response.");
             }

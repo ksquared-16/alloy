@@ -89,10 +89,16 @@ export type InsideOption = { id: string; label: string };
  */
 export function eligibleInsideOptions(
     roomRows: readonly LocationHierarchyRow[],
-    siteId: string
+    siteId: string,
+    options: { excludeLocationId?: string | null } = {}
 ): InsideOption[] {
     if (!siteId) return [];
+    // `excludeLocationId` keeps a room off its own container list while it is
+    // being edited. The server refuses that as `topology_cycle` either way; this
+    // just stops the form offering a choice it knows will be rejected.
+    const excluded = options.excludeLocationId ?? null;
     return rowsBelongingToSite(roomRows, siteId)
+        .filter((row) => row.id !== excluded)
         .filter((row) => row.unit_role === "physical_space" && row.is_active !== false)
         .map((row) => ({ id: row.id, label: (row.label ?? "").trim() || "Untitled room" }))
         .sort((a, b) => a.label.localeCompare(b.label));

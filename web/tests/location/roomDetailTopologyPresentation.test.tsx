@@ -12,6 +12,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { describe, expect, it, afterEach, beforeAll } from "vitest";
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
+import { eligibleInsideOptions } from "@/lib/locations/roomTypeVocabulary";
 
 beforeAll(() => {
     // React 18 wants this flag before it will treat act() as an act scope.
@@ -42,6 +43,8 @@ async function renderDetail(room: LocationHierarchyRow, canMutate = true) {
                 room={room}
                 siteLabel="North Campus"
                 topologyRows={ROWS}
+                siteId="site"
+                insideOptions={eligibleInsideOptions(ROWS, "site", { excludeLocationId: room.id })}
                 programOptions={[]}
                 schedulePatterns={[]}
                 canMutate={canMutate}
@@ -122,18 +125,31 @@ describe("12, 16. topology is read-only here", () => {
         expect(container!.querySelectorAll("select")).toHaveLength(0);
     });
 
-    it("renders no Type or Inside control after entering edit mode either", async () => {
+    it("exposes topology ONLY after the operator deliberately enters edit mode", async () => {
+        // Slice 5 asserted that edit mode had no topology control at all. Slice 6
+        // deliberately moved that boundary: adoption is the whole point of the
+        // edit surface now. What survives unchanged is the rule the original
+        // assertion was really protecting — understanding is ambient, editing is
+        // intentional — so topology becomes editable on the explicit Edit action
+        // and never before it.
         await renderDetail(TOD1);
+        expect(container!.querySelectorAll("select")).toHaveLength(0);
+
         const edit = container!.querySelector('[data-testid="locations-room-toggle-edit"]')!;
         await act(async () => { edit.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
 
-        // Edit mode legitimately has a schedule-pattern select; it must have no
-        // topology select, and the topology cards must not have become inputs.
         const selects = [...container!.querySelectorAll("select")].map((s) => s.getAttribute("data-testid"));
-        expect(selects).toEqual(["locations-room-schedule-pattern"]);
-        for (const testid of ["type", "site", "inside"]) {
-            expect(container!.querySelector(`[data-testid="locations-room-edit-${testid}"]`)).toBeNull();
-        }
+        expect(selects).toContain("locations-room-type");
+        expect(selects).toContain("locations-room-inside");
+        expect(selects).toContain("locations-room-schedule-pattern");
+    });
+
+    it("never exposes a Site as topology-editable", async () => {
+        await renderDetail(ROOM1);
+        const edit = container!.querySelector('[data-testid="locations-room-toggle-edit"]')!;
+        await act(async () => { edit.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+        // A physical room has no container to choose.
+        expect(container!.querySelector('[data-testid="locations-room-inside"]')).toBeNull();
     });
 
     it("the topology cards are text, not form fields", async () => {
@@ -157,6 +173,8 @@ describe("12, 16. topology is read-only here", () => {
                     room={TOD1}
                     siteLabel="North Campus"
                     topologyRows={ROWS}
+                    siteId="site"
+                    insideOptions={eligibleInsideOptions(ROWS, "site", { excludeLocationId: TOD1.id })}
                     programOptions={[]}
                     schedulePatterns={[]}
                     canMutate
@@ -173,6 +191,9 @@ describe("12, 16. topology is read-only here", () => {
         await act(async () => { save.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
         await act(async () => {});
 
+        // Topology untouched in this edit, so the body is exactly what it was
+        // before Slice 6 existed. Adoption only adds keys when the operator
+        // actually moved something — proven in roomTopologyAdoption.test.tsx.
         expect(saved).toHaveLength(1);
         expect(Object.keys(saved[0]).sort()).toEqual(["is_active", "label", "metadata"]);
         expect(saved[0]).not.toHaveProperty("unit_role");
