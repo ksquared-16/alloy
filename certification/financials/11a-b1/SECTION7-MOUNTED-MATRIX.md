@@ -184,6 +184,78 @@ card renders honestly but which is unlikely to be intended. Settle it before a h
 depends on weekly pricing.
 
 
+## I · Recurring billing, end to end (candidate `0e2887ebf`)
+
+The fixture was built through governed authorities only — no direct inserts.
+
+| Capability | Authority | Actual | Verdict |
+|---|---|---|---|
+| I1 assignment creation | `POST /api/admin/opportunity-customer-members` | Certa → OCM `79f8011d…`, Certb → OCM `cf044308…`, both on opportunity `e56e72d5…` | **PASS** |
+| I2 assignment idempotency | same | re-posting both returns the SAME ids from the route's own (org, opportunity, child) filter; no duplicates | **PASS** |
+| I3 participation facts | `PATCH /api/admin/opportunity-customer-members/{id}` | site + program + schedule type + start date; the placement guard correctly refused program-without-site first | **PASS** |
+| I4 enrolment agreements | `POST /api/admin/child-enrollment-agreements` | Certa `43ef5615…`, Certb `fa3767f8…` | **PASS** |
+| I5 weekly rate authored | `POST /api/admin/commercial/tuition-rates` | `5532489d…` — $185.00 weekly, school_age/custom no-quantity variant, effective 2026-09-01 | **PASS** |
+| I6 monthly rate authored | same | `96a67825…` — $1,450.00 monthly, preschool/full_time no-quantity variant, effective 2026-07-01 (earlier than the 5-day rate, so day-stated assignments are unaffected) | **PASS** |
+| I7 Billing Preview reads the assignments | `financial-config/opportunity` | was `{enrollments: [], assignments: []}`; now both children, both `recommended`, one applicable option each, correct child, no duplicate, no wrong-child leakage | **PASS** |
+| I8 **weekly terms accepted through the mounted card** | `enrollment.pricing.accept` | clicked Accept on the panel → 200, term `19baf6ca…`, weekly, 18500¢, effective 2026-09-01, source `5532489d…`, resolution `2f92ec30`, config `ae79d05d` | **PASS** |
+| I9 **monthly terms accepted through the mounted card** | same | 200, term `2a23f980…`, monthly, 145000¢, effective 2026-09-01, source `96a67825…`, resolution `b2e43fd1` | **PASS** |
+| I10 no caller-supplied amount | same | the payload carries resolution key, source id and date only — no amount anywhere on the path | **PASS** |
+| I11 pricing read-back | operator surface, fresh load | "2 of 2 agreed", both terms with amount, cadence, effective date, term id, `stale=false` | **PASS** |
+| I12 recurring preview changes | `billing.generate_tuition` preview | was `Generate 0 · $0.00`; now **`Generate 1 · $1,450.00`** — 1 to bill, 1 not due (`cadence_not_billed_by_this_run`), 0 refused, 0 errored | **PASS** |
+| I13 weekly generation tiles the month | `billing.generate_tuition` execute, `cadence: weekly` | **5 obligations** for Certa across September's five weekly billing periods; service period 2026-09-01 → 2026-09-30; Certb's five weekly periods correctly `not_due` | **PASS** |
+| I14 monthly generation | operator surface, `Generate 1 · $1,450.00` | one obligation for Certb, September 2026 | **PASS** |
+| I15 **weekly rerun · NEW DUPLICATES = ZERO** | same | ledger counted: 9 pre-existing drafts + 1 monthly + 5 weekly = **15 awaiting posting** after TWO monthly runs and TWO weekly runs | **PASS** |
+| I16 **monthly rerun · NEW DUPLICATES = ZERO** | same | same count; rows are 1 × Certb September and 5 × Certa September | **PASS** |
+| I17 Accounting Period independence | charge detail | **Billing period `September 2026`** beside **Accounting period `Not posted to a period yet`** — two fields, and the charge is a draft, so the absence is honest | **PASS** |
+| I18 **the generated amount is the accepted amount** | `resolveChargeFromTemplate` | **$400.00 on every generated charge** — not $1,450.00 monthly and not $185.00 weekly | **FAIL** |
+| I19 recurring Due Date | due-date policy on a generated charge | Invoice date **Sep 1, 2026** and Due date render as distinct fields, but the Due date reads **"No configured terms"** — no policy resolved for generated tuition | **NOT PROVEN** |
+| I20 recurring discount | canonical discount authority | Gross $400.00 = Net $400.00; no discount legitimately applied to either recurring obligation, and none was invented | **NOT PROVEN** |
+| I21 effective lifecycle | `resolveTuitionRecurrence` | `cadence_not_billed_by_this_run` observed live; `term_not_yet_effective` and `term_already_ended` are distinct reasons in the resolver but were NOT exercised against real terms this run | **NOT PROVEN** |
+
+### I18 — the defect, named precisely
+
+`resolveChargeFromTemplate.resolveAmount` returns the TEMPLATE's own `amount_cents` when
+`amount_strategy === "fixed"`, ignoring `ctx.resolvedAmountCents` — which is exactly where the
+accepted term's price arrives. This tenant's `tuition` template is `fixed` at **40000¢**, label
+"Monthly tuition", active from 2026-01-01, and all five of its charge templates are `fixed`.
+
+So the price an operator accepted on the panel is not the price the family is billed, silently.
+
+`consumptionService` states the opposite intent in as many words: when a fact carries an accepted
+term *"the amount is the one the family agreed to and the catalog lookup below is SKIPPED ENTIRELY
+— not consulted and overridden, skipped"*, because *"an accepted term may be an OVERRIDE,
+deliberately not the recommendation, so re-resolving would bill a rate nobody agreed to."* A fixed
+template then does precisely that, one layer further down.
+
+**Two readings, and this run did not choose between them:**
+
+  A. **Configuration** — this tenant's tuition template should be `rate_derived`, and the fixture
+     must set it. One governed change through the charge-template authority.
+  B. **Product** — an accepted pricing term must outrank a fixed template, or the generation must
+     refuse rather than bill a number nobody agreed to.
+
+Changing the template alters every tuition charge this tenant will ever generate, which is a wider
+decision than a fixture tweak, so it is surfaced rather than taken.
+
+`RECURRING_GENERATED_AMOUNT_IGNORES_ACCEPTED_TERM` — new, and the last thing between this thread and
+a closed Section 7.
+
+### Other findings recorded this run
+
+**`RECURRING_PREVIEW_IGNORES_CADENCE`** — `buildPreview` never passes a cadence to
+`previewTuitionGeneration`, while execute does. Previewing the weekly run reported the MONTHLY
+answer (`1 to bill · $1,450.00`) and the run then billed five weekly charges. An operator confirms
+one thing and gets another.
+
+**`WEEKLY_RUN_HAS_NO_OPERATOR_CADENCE`** — the Generate surface offers a month and no billing
+frequency, so a weekly run is not reachable from it at all. The weekly specimen was run through the
+registered action.
+
+**`RERUN_COUNT_DOES_NOT_DISTINGUISH_EXISTING`** — a rerun reports `generated: 5` / `generated: 1`
+again with `alreadyPosted: 0`, because the existing rows are drafts. The DATA is right — zero
+duplicates, counted in the ledger — but an operator rerunning would believe they had billed twice.
+
+
 ## Deferred boundaries — behaving honestly, not reopened
 
 `SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED` · `LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED` ·
@@ -191,30 +263,31 @@ depends on weekly pricing.
 
 ## Tally
 
-**PASS 86 · FAIL 0 · BLOCKED 5 · NOT PROVEN 0 · NOT RUN 0 · CARRIED 0 · DEFERRED 3.**
+**PASS 103 · FAIL 1 · BLOCKED 0 · NOT PROVEN 3 · NOT RUN 0 · CARRIED 0 · DEFERRED 3.**
 
-44 from the surfaces and the three named repairs · 7 weekly-boundary checks · 10 multi-child checks
-(all PASS, CASE D) · 5 prepaid checks (G1–G5) · 4 earlier E/E4 checks · **8 recurring-reachability
-checks (H1–H8)**.
+44 from the surfaces and the three named repairs · 7 weekly-boundary checks · 10 multi-child checks ·
+5 prepaid checks · 4 earlier E/E4 checks · 8 recurring-reachability checks (H1–H8) · **17 recurring
+billing checks (I1–I17)**.
 
-**BLOCKED 5** — still one cause, and this run named it correctly for the first time. It is NOT a
-missing weekly frequency and NOT a missing weekly rate: both already exist and were verified (H7,
-H8). It is that this family has **no assignment** — no `opportunity_customer_members` row — so
-`enrollment.pricing.accept` has nothing to bind to, so no `enrollment_pricing_terms` row can exist,
-so `billing.generate_tuition` still answers `Generate 0 · $0.00` (E2 weekly generation, E3 monthly
-generation, E5 recurring discount, E6 recurring due date, E7 accounting attribution).
+**The five BLOCKED rows are gone.** Recurring tuition is now generated, from accepted terms, on both
+cadences, idempotently, with Billing Period and Accounting Period visibly independent — E2, E3 and
+E7 close as I13/I14/I15/I16/I17.
 
-**SECTION 7 IS NOT FULLY MOUNTED-CERTIFIED.** Everything except recurring billing is closed, and the
-mount gate that held this thread for several runs is now closed too: the card is published, placed,
-mounted once, wired to the right family, and does not serialize the panel. What remains is a single
-fixture fact.
+They are replaced by **one FAIL and three NOT PROVEN**, which is a better position and a truer one:
 
-`RECURRING_TERMS_OPERATOR_REACHABILITY_GAP` — **narrowed, not closed.** The surface is reachable and
-functional; acceptance has not been exercised because there is nothing to accept against. It must not
-be closed on the mount alone.
+- **FAIL I18** — every generated charge bills the template's fixed $400.00 instead of the accepted
+  price. Money is wrong, and it is wrong silently.
+- **NOT PROVEN I19** — the Due Date policy does not resolve for generated tuition (E6).
+- **NOT PROVEN I20** — no recurring discount legitimately applied, and none was manufactured (E5).
+- **NOT PROVEN I21** — the not-yet-effective and ended lifecycle states were not exercised against
+  real terms.
 
-Three rows failed on first execution and all three were probe artifacts, corrected and re-run: a
-1100-character text capture that cut off the resolved-policy panel, a 6-second wait that read the
-workspace shell instead of the account queue, and a search for a policy's label on a panel that
-lists by type. A fourth joined them this run: a mount probe that counted `billing_preview` when the
-component's own host key is `assignment_tuition`, and read zero while the card was on screen.
+**SECTION 7 IS NOT FULLY MOUNTED-CERTIFIED**, and must not be reported as such while a generated
+obligation carries a number nobody agreed to.
+
+`RECURRING_TERMS_OPERATOR_REACHABILITY_GAP` — **CLOSED.** An operator reached the mounted card,
+chose nothing they were not offered, clicked Accept, and the term was written and read back. That is
+what the gap asked for.
+
+Four probe artifacts have been recorded across this thread and a fifth joined them this run: a mount
+probe that counted `billing_preview` when the component's own host key is `assignment_tuition`.

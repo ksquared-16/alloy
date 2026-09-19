@@ -1,13 +1,25 @@
 {
   "agA": {
-    "status": 201,
-    "id": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
-    "err": null
+    "status": 409,
+    "id": null,
+    "err": {
+      "error": "An operational agreement already exists for this child at this site",
+      "code": "conflict",
+      "details": {
+        "agreement_id": "43ef5615-11c8-4ea9-96ce-5002a4664fd1"
+      }
+    }
   },
   "agB": {
-    "status": 201,
-    "id": "fa3767f8-3391-4655-b3a0-b7d461dae574",
-    "err": null
+    "status": 409,
+    "id": null,
+    "err": {
+      "error": "An operational agreement already exists for this child at this site",
+      "code": "conflict",
+      "details": {
+        "agreement_id": "fa3767f8-3391-4655-b3a0-b7d461dae574"
+      }
+    }
   },
   "afterAgreement": [
     {
@@ -164,7 +176,7 @@
         },
         "affected_id": "19baf6ca-aded-4afa-afcf-9a14f4f8273f"
       },
-      "correlation_id": "73487367-9566-4c2b-820a-ee7a6da6a82f"
+      "correlation_id": "b6845598-0340-480c-9118-c8e9347e144d"
     }
   },
   "acceptB": {
@@ -184,7 +196,7 @@
         },
         "affected_id": "2a23f980-26d3-499a-b5bb-394e5c657499"
       },
-      "correlation_id": "8d077ca3-adba-408f-b1fe-5f425bfd1d10"
+      "correlation_id": "0e1c40c5-d2d8-4ac3-8376-7c7524777651"
     }
   },
   "afterAccept": [
@@ -196,7 +208,7 @@
         "termId": "2a23f980-26d3-499a-b5bb-394e5c657499",
         "opportunityCustomerMemberId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
         "customerMemberId": "46105cd4-6030-417d-a7cb-faf409071c0d",
-        "enrollmentAgreementId": null,
+        "enrollmentAgreementId": "fa3767f8-3391-4655-b3a0-b7d461dae574",
         "termKind": "tuition",
         "amountCents": 145000,
         "currencyCode": "USD",
@@ -230,7 +242,7 @@
         "termId": "19baf6ca-aded-4afa-afcf-9a14f4f8273f",
         "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632",
         "customerMemberId": "e408fa51-7261-43c4-8e60-555d17fc9888",
-        "enrollmentAgreementId": null,
+        "enrollmentAgreementId": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
         "termKind": "tuition",
         "amountCents": 18500,
         "currencyCode": "USD",

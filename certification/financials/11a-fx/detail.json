@@ -1,0 +1,30 @@
+[
+  {
+    "who": "Certb",
+    "detail": {
+      "invoiceDate": "Invoice date Sep 1, 2026 Due date No configured term",
+      "dueDate": "Due date No configured terms Accounting period N",
+      "billingPeriod": "Billing period September 2026 Invoice date Sep 1, 2026",
+      "accountingPeriod": "Accounting period Not posted to a period yet GL account 4000 · Tuition Revenu",
+      "gross": "Gross charge $400.00 Net obligation",
+      "discount": "Discount · Certa Certhouse · September",
+      "net": "Net obligation $400.00 Manage res",
+      "serviceDate": null,
+      "panelText": "Tuition\nAccount-wide financial detail\nPost $400.00\nMonthly tuition\nCertb Certhouse · Certhouse Family\nDraft · Service Sep 1, 2026\nPOSTING\nBilling period\nSeptember 2026\nInvoice date\nSep 1, 2026\nDue date\nNo configured terms\nAccounting period\nNot posted to a period yet\nGL account\n4000 · Tuition Revenue\nAMOUNT\nGross charge\n$400.00\nNet obligation\n$400.00\nManage responsibility →\n1 responsible party from Sep 19, 2026. This charge is not divided under it yet.\nRESPONSIBILITY ARRANGEMENT\nCert Certhouse\n$25.00\nExpected funding — none.\nManage expected funding →\nHISTORY\nCharge is for\nSep 1, 2026\nCOLLECTION\nOutstanding\n$0.00\nFINANCIALS\nCURRENT PERIOD\nSeptember 2026\nCHARGES\nTuition\n$400.00\nFee\n$150.00\nConsumable fee\n$36.00\nDISCOUNTS & CREDITS\nCredit\n-$260.06\nAdjustment\n$146.71\nNET OBLIGATION\n$37.87\nAdd\nDUE\n$607.00\nNothing past due\nBalance\n-$37.13\nPaid\n$75.00\nUnassigned\n$132.00\nAvailable\n$125.00\nPayment\nDetails\n→"
+    }
+  },
+  {
+    "who": "Certa",
+    "detail": {
+      "invoiceDate": "Invoice date Sep 1, 2026 Due date No configured term",
+      "dueDate": "Due date No configured terms Accounting period N",
+      "billingPeriod": "Billing period September 2026 Invoice date Sep 1, 2026",
+      "accountingPeriod": "Accounting period Not posted to a period yet GL account 4000 · Tuition Revenu",
+      "gross": "Gross charge $400.00 Net obligation",
+      "discount": "Discount · Certa Certhouse · September",
+      "net": "Net obligation $400.00 Manage res",
+      "serviceDate": null,
+      "panelText": "Tuition\nAccount-wide financial detail\nPost $400.00\nMonthly tuition\nCerta Certhouse · Certhouse Family\nDraft · Service Sep 1, 2026\nPOSTING\nBilling period\nSeptember 2026\nInvoice date\nSep 1, 2026\nDue date\nNo configured terms\nAccounting period\nNot posted to a period yet\nGL account\n4000 · Tuition Revenue\nAMOUNT\nGross charge\n$400.00\nNet obligation\n$400.00\nManage responsibility →\n1 responsible party from Sep 19, 2026. This charge is not divided under it yet.\nRESPONSIBILITY ARRANGEMENT\nCert Certhouse\n$25.00\nExpected funding — none.\nManage expected funding →\nHISTORY\nCharge is for\nSep 1, 2026\nCOLLECTION\nOutstanding\n$0.00\nFINANCIALS\nCURRENT PERIOD\nSeptember 2026\nCHARGES\nTuition\n$2,400.00\nFee\n$150.00\nLate pickup\n$50.00\nConsumable fee\n$36.00\nDISCOUNTS & CREDITS\nDiscount\n-$40.00\nCredit\n-$25.02\nNET OBLIGATION\n$536.00\nAdd\nDUE\n$607.00\n$75.00 past due · 1 day past due\nBalance\n$536.00\nPaid\n$0.00\nUnassigned\n$132.00\nAvailable\n$125.00\nPayment\nDetails\n→\n$800.00 scheduled this period"
+    }
+  }
+]

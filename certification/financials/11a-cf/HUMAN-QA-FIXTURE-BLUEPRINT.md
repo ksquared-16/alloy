@@ -119,3 +119,68 @@ effective-dated `enrollment_pricing_terms` row against an assignment. This famil
 Focus Panel control creates one. Until the fixture carries an assignment for at least two children,
 §7 of the mounted matrix cannot close and `billing.generate_tuition` will keep answering
 `Generate 0 · $0.00` — correctly.
+
+---
+
+# Addendum 2 — after the recurring fixture (candidate `0e2887ebf`)
+
+## I · CONFIGURATION TO REBUILD AFTER FINAL RESEED — now with the exact authorities
+
+Everything below was built this run through registered routes. No table was written directly.
+
+| Item | Authority | Identity |
+|---|---|---|
+| v161-equivalent Focus Panel publication | `POST /api/admin/entity-layouts` + `/{id}/publish` | both projections; a sections-only publish is now REFUSED |
+| Child A assignment (OCM) | `POST /api/admin/opportunity-customer-members` | idempotent on (org, opportunity, child) |
+| Child B assignment (OCM) | same | same |
+| Participation facts | `PATCH /api/admin/opportunity-customer-members/{id}` | **site FIRST** — the placement guard refuses program-without-site |
+| Enrolment agreements | `POST /api/admin/child-enrollment-agreements` | required, or the term carries no agreement and generation refuses `assignment_not_enrolled` |
+| Weekly billing frequency | already present — do not create a second | cadence `Weekly`, Active |
+| ONE unambiguous weekly rate | `POST /api/admin/commercial/tuition-rates` | $185.00 on a **no-quantity** variant, so exactly one option resolves |
+| Monthly rate | same | $1,450.00 on a no-quantity variant, dated EARLIER than the day-variant rates so nothing existing changes price |
+| Weekly accepted terms | `enrollment.pricing.accept`, **through the mounted card** | one option, `recommended`, no override needed |
+| Monthly accepted terms | same | same |
+| **Tuition charge template** | `POST /api/admin/financial/charge-templates` | **`rate_derived`, not `fixed`** — see below |
+| Due Date policies · discount policy · responsibility arrangements · subject-grain config | as recorded above | unchanged |
+
+### The two rules that make the pricing resolve at all
+
+1. **A no-quantity variant, and no stated days-per-week.** `resolveAssignmentPricingOptions` keeps
+   one survivor PER CADENCE and calls two survivors ambiguous, and `acceptEnrollmentPricingTerm`
+   refuses anything that is not `recommended`. Every infant/full_time variant in this catalog carries
+   both a weekly and a monthly rate, so an assignment there can only ever be OVERRIDDEN. A
+   no-quantity variant carrying exactly one rate is the shape that accepts cleanly.
+2. **Enrol before pricing, or re-accept after.** The agreement is stamped onto the term at accept
+   time. Since `811c544d9` a term accepted first can learn its agreement on a later accept; before
+   that commit it never could.
+
+### The template, and why the fixture must set it
+
+`resolveChargeFromTemplate.resolveAmount` returns the TEMPLATE's `amount_cents` when
+`amount_strategy === "fixed"`, ignoring the accepted term's price. This tenant's `tuition` template
+is `fixed` at **$400.00** and all five templates are `fixed`, so every generated tuition charge bills
+$400.00 whatever was agreed.
+
+**The reseed must author the tuition template as `rate_derived`.** Whether the product should also
+refuse a fixed template over an accepted term is `RECURRING_GENERATED_AMOUNT_IGNORES_ACCEPTED_TERM`,
+recorded in the Section 7 matrix and not decided here.
+
+## J · CERTIFICATION RESIDUE TO REMOVE
+
+Everything in §C above, plus this run's:
+
+- **6 generated tuition drafts** — 1 × Certb September 2026 and 5 × Certa September 2026, all at the
+  wrong $400.00, all `Draft · awaiting posting`
+- **2 accepted pricing terms** — `19baf6ca…` (weekly) and `2a23f980…` (monthly)
+- **2 enrolment agreements** — `43ef5615…`, `fa3767f8…`
+- **2 OCM assignment rows** — `79f8011d…`, `cf044308…`
+
+The **configuration** created this run is NOT residue and should be rebuilt: the two authored rates,
+and the v161 layout.
+
+## K · Findings carried forward
+
+`RECURRING_GENERATED_AMOUNT_IGNORES_ACCEPTED_TERM` · `RECURRING_PREVIEW_IGNORES_CADENCE` ·
+`WEEKLY_RUN_HAS_NO_OPERATOR_CADENCE` · `RERUN_COUNT_DOES_NOT_DISTINGUISH_EXISTING`
+
+`RECURRING_TERMS_OPERATOR_REACHABILITY_GAP` and `RECURRING_TERMS_ASSIGNMENT_ABSENT` are **CLOSED**.
