@@ -1691,29 +1691,54 @@ function ScheduleEditor({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    /*
+     * ── THE OPTIONS BELONG TO THIS ASSIGNMENT, NOT TO THE HOUSEHOLD ────────────────────────────
+     *
+     * MEASURED on the mounted product: editing Certa's assignment offered
+     *
+     *     Best match — Certa Certhouse: $185.00/weekly
+     *     Certb Certhouse: $1,450.00/monthly
+     *
+     * while Certa's own `applicable` list contained exactly ONE option. The list was built from
+     * `enrollments`, which is one row per assignment across the whole OPPORTUNITY, ranked so the
+     * matching child floated to the top — every sibling's price stayed selectable underneath, and
+     * the ranking was done by substring-matching the child's display name.
+     *
+     * Choosing the sibling's rate was worse than confusing. `POST /assignment-quote` resolves
+     * `view.applicable.find(o => o.sourceId === selected) ?? view.recommended`, so a rate that is
+     * not applicable to THIS assignment silently becomes the recommendation — the operator's
+     * explicit choice discarded without a word, on a control that sets a family's price.
+     *
+     * The canonical per-assignment view already answers this: `assignments[]` carries
+     * `customerMemberId`, the recommendation and every applicable option. Match the child exactly,
+     * and offer that assignment's options labelled by the OPTION rather than by a child's name —
+     * the operator is pricing one child and does not need to be told which one in every row.
+     *
+     * No fallback to the legacy shape. `FinancialConfigEnrollment` carries no member id, so the
+     * only way to guess is the name match that caused this; offering nothing is better than
+     * offering a price that belongs to somebody else.
+     */
     useEffect(() => {
         if (!opportunityId) return;
         let cancelled = false;
         loadFinancialConfig(opportunityId)
-            .catch(() => null)
             .then((payload) => {
-                if (cancelled || !payload?.enrollments?.length) return;
-                const childName = child.name.trim().toLowerCase();
-                const ranked = [...payload.enrollments].sort((a, b) => {
-                    const aHit =
-                        childName && a.childLabel.trim().toLowerCase().includes(childName) ? 0 : 1;
-                    const bHit =
-                        childName && b.childLabel.trim().toLowerCase().includes(childName) ? 0 : 1;
-                    return aHit - bHit;
-                });
-                const opts: Array<{ id: string; label: string }> = [];
-                for (const row of ranked) {
-                    if (!row.resolvedRate) continue;
-                    opts.push({
-                        id: row.resolvedRate.rateId,
-                        label: `${row.childLabel}: ${row.resolvedRate.rateLabel}`,
-                    });
-                }
+                if (cancelled) return;
+                const view = (payload?.assignments ?? []).find((v) => v.customerMemberId === child.id);
+                if (!view) return;
+                const recommendedId = view.recommended?.sourceId ?? null;
+                const opts = [...view.applicable]
+                    // The recommendation first; the rest keep the resolver's own order.
+                    .sort((a, b) =>
+                        (a.sourceId === recommendedId ? 0 : 1) - (b.sourceId === recommendedId ? 0 : 1),
+                    )
+                    .map((o) => ({
+                        id: o.sourceId,
+                        label:
+                            o.sourceId === recommendedId ?
+                                `Recommended — ${o.variantLabel}: ${o.amountLabel}`
+                            :   `${o.variantLabel}: ${o.amountLabel}`,
+                    }));
                 if (opts.length) setRateOptions(opts);
             })
             .catch(() => {
@@ -1961,7 +1986,7 @@ function ScheduleEditor({
                                 htmlFor={`assignment-tuition-embed-${child.id}`}
                                 style={{ fontSize: 11, fontWeight: 650, color: T.slate }}
                             >
-                                Tuition / quote amount
+                                Tuition — {child.name}
                             </label>
                             <select
                                 id={`assignment-tuition-embed-${child.id}`}
@@ -1980,16 +2005,22 @@ function ScheduleEditor({
                                     maxWidth: "100%",
                                 }}
                             >
-                                <option value="">Select best match to lock in…</option>
-                                {rateOptions.map((r, idx) => (
+                                <option value="">Select a plan to lock in…</option>
+                                {/*
+                                 * The label already says which option is the recommendation, because
+                                 * only the resolver knows — an index prefix asserted it from list
+                                 * position, which is true only while a recommendation exists.
+                                 */}
+                                {rateOptions.map((r) => (
                                     <option key={r.id} value={r.id}>
-                                        {idx === 0 ? `Best match — ${r.label}` : r.label}
+                                        {r.label}
                                     </option>
                                 ))}
                             </select>
                             <div style={{ fontSize: 10.5, color: T.mid40 }}>
-                                Best match uses room, program, and schedule. Select a plan to lock it
-                                onto the enrollment opportunity.
+                                The recommendation uses room, program, and schedule. Every option
+                                here applies to this assignment; selecting one locks it onto the
+                                enrollment opportunity.
                             </div>
                         </div>
                     ) : undefined

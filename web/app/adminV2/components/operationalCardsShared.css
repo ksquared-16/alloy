@@ -2783,8 +2783,6 @@
  * introduced to hold them, and each stays visually owned by the column it belongs to.
  */
 .alloy-os-billing__zone-action {
-  align-items: center;
-  gap: 10px;
   /*
    * ── ANCHORED TO ITS COLUMN, NOT FLOATING IN IT ─────────────────────────────────────────────
    *
@@ -2881,15 +2879,15 @@
   color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 78%, #04303f);
 }
 /*
- * Navigation sits at the right edge OF THE COMMAND ROW, not on a row of its own. As a full-width
- * grid child it cost the card a margin, a line box and a row for one quiet link; `margin-left:
- * auto` buys the same lower-right edge for no height at all.
+ * Navigation holds its own row beneath both commands, at the card's lower-right edge — the
+ * commands are a row above it. Sharing the command row reclaimed height but put a quiet link on
+ * the same baseline as a filled button, which reads as one group rather than two ranks.
  */
 .alloy-os-billing__nav {
-  display: inline-flex;
-  align-items: center;
-  margin-left: auto;
-  min-width: 0;
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
 }
 /*
  * ── THE POSITION LINES STATE THEMSELVES ON ONE LINE ────────────────────────────────────────────

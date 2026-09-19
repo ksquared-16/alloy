@@ -2036,14 +2036,12 @@ describe("F47 · the compact commands stay inside the card", () => {
             /alloy-os-billing__nav[\s\S]{0,260}<CardLink onClick=\{onDetails/,
         );
         /*
-         * NAVIGATION COSTS NO ROW. Details shares the payment command's row and takes the right
-         * edge from `margin-left: auto`; as a full-width grid child it bought a margin, a line box
-         * and a whole row of card height for one quiet link.
+         * NAVIGATION KEEPS ITS OWN ROW, BENEATH THE COMMANDS. It was briefly moved onto the
+         * payment command's row to reclaim height; the mounted read was that a quiet link on the
+         * same baseline as a filled button reads as one group rather than two ranks, so the
+         * commands are a row above the navigation again. The height that mattered came from the
+         * scheduled-this-period footer, which stays gone.
          */
-        const actionRow = right.slice(right.indexOf("alloy-os-billing__zone-action"));
-        expect(actionRow, "Details rides the command row").toMatch(
-            /alloy-os-billing__zone-action[\s\S]{0,700}alloy-os-billing__nav/,
-        );
         const css = read("app/adminV2/components/operationalCardsShared.css");
         /*
          * Each command is anchored to its column by a rule of that column's width — not a footer.
@@ -2054,12 +2052,9 @@ describe("F47 · the compact commands stay inside the card", () => {
         const action = css.slice(css.indexOf(".alloy-os-billing__zone-action {"));
         expect(action.slice(0, action.indexOf("\n}")), "the row carries its own rule").toContain("border-top:");
         const nav = css.slice(css.indexOf(".alloy-os-billing__nav {"));
-        expect(nav.slice(0, nav.indexOf("}")), "the edge comes from auto margin, not a row").toMatch(
-            /margin-left: auto/,
-        );
-        expect(nav.slice(0, nav.indexOf("}")), "and it is no longer a full-width grid child").not.toMatch(
-            /grid-column/,
-        );
+        const navRule = nav.slice(0, nav.indexOf("}"));
+        expect(navRule, "navigation spans its own row").toMatch(/grid-column: 1 \/ -1/);
+        expect(navRule, "at the lower-right edge").toMatch(/justify-content: flex-end/);
 
         /*
          * THE SCHEDULED FOOTER IS GONE. "$370.00 scheduled this period" sat full-width under the

@@ -274,39 +274,38 @@ export default function FinancialsCard({
                                 />
                             ) : null}
                         </div>
-                        {/*
-                         * Payment belongs to the payment position, so it sits at the foot of it.
-                         *
-                         * ── NAVIGATION IS NOT A COMMAND, AND NO LONGER COSTS A ROW ───────────
-                         *
-                         * Details keeps the link grammar the other two do not have — quiet Bend
-                         * Pine, an arrow, no underline — and it keeps the card's lower-right edge.
-                         * What it no longer keeps is a row of its own: it sat below both columns
-                         * as a full-width grid child, so a single quiet link bought 6px of margin,
-                         * a line box, and the whole card's height in exchange for nothing the
-                         * right edge of this row does not already say.
-                         *
-                         * `margin-left: auto` is what holds the edge. Rank still reads from
-                         * position — far right, past the command — and from treatment.
-                         */}
-                        {onPayNow || onDetails ? (
+                        {/* Payment belongs to the payment position, so it sits at the foot of it. */}
+                        {onPayNow ? (
                             <div className="alloy-os-billing__zone-action">
-                                {onPayNow ? (
-                                    <Action primary onClick={onPayNow} data-financials-command="payment">
-                                        Payment
-                                    </Action>
-                                ) : null}
-                                {onDetails ? (
-                                    <span className="alloy-os-billing__nav">
-                                        <CardLink onClick={onDetails} testId="details" nav pending={detailsPending}>
-                                            Details
-                                        </CardLink>
-                                    </span>
-                                ) : null}
+                                <Action primary onClick={onPayNow} data-financials-command="payment">
+                                    Payment
+                                </Action>
                             </div>
                         ) : null}
                     </section>
                     </div>
+                    {/*
+                     * ── NAVIGATION IS NOT A COMMAND ───────────────────────────────────────────
+                     *
+                     * Payment and Add mutate money and sit with the stories they belong to.
+                     * Details does neither: it is the way through to the account. It keeps the same
+                     * link grammar as the other two — Bend Pine, arrow, no underline — because
+                     * three different treatments on one small card read as three unrelated
+                     * systems.
+                     *
+                     * IT KEEPS ITS OWN ROW, BENEATH THE COMMANDS. It was briefly moved onto the
+                     * payment command's row to reclaim the height; Kelly's read of the mounted
+                     * result was that the commands should be a row above the navigation, so the
+                     * rank is legible from the separation rather than from a margin. The height
+                     * that mattered came from the scheduled-this-period footer, which stays gone.
+                     */}
+                    {onDetails ? (
+                        <div className="alloy-os-billing__nav">
+                            <CardLink onClick={onDetails} testId="details" nav pending={detailsPending}>
+                                Details
+                            </CardLink>
+                        </div>
+                    ) : null}
                 </div>
             </UniversalCard>
         </div>
