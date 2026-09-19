@@ -42,6 +42,7 @@ type ChargeLifecycleRow = {
     amount_cents: number;
     occurs_on: string | null;
     billable_on: string | null;
+    due_date: string | null;
     charge_template_id: string | null;
     metadata: Record<string, unknown> | null;
 };
@@ -160,7 +161,7 @@ async function findExistingByResolutionKey(
 ): Promise<ChargeLifecycleRow | null> {
     const { data, error } = await supabase
         .from(TABLE)
-        .select("id, status, amount_cents, occurs_on, billable_on, charge_template_id, metadata")
+        .select("id, status, amount_cents, occurs_on, billable_on, due_date, charge_template_id, metadata")
         .eq("org_id", orgId)
         .eq("billable_source_type", source.type)
         .eq("billable_source_id", source.id);
@@ -225,7 +226,23 @@ export async function previewTemplateCharge(
         wouldWrite = "create";
     } else if (existing.status !== "draft") {
         wouldWrite = "skipped_posted";
-    } else if (existing.amount_cents !== intent.amountCents || existing.billable_on !== intent.billableOn) {
+    } else if (
+        existing.amount_cents !== intent.amountCents
+        || existing.billable_on !== intent.billableOn
+        /*
+         * THE DUE DATE IS PART OF THE INTENT, SO IT IS PART OF CONVERGENCE.
+         *
+         * Only amount and billable date were compared, so a tenant who authored due-date terms
+         * after a draft already stood never saw them reach it: the rerun answered `unchanged` and
+         * the charge kept reading "No configured terms" forever. Measured on the certification
+         * tenant, whose due-date policies begin 2026-09-18 while the September obligations invoice
+         * on 2026-09-01.
+         *
+         * Guarded on a resolved date so an organisation with NO due-date policy keeps today's
+         * behaviour exactly — a null intent never rewrites a date a charge already carries.
+         */
+        || (intent.dueDate != null && existing.due_date !== intent.dueDate)
+    ) {
         wouldWrite = "recalculate";
     } else {
         wouldWrite = "unchanged";
