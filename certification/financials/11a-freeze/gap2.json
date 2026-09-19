@@ -1,0 +1,26 @@
+{
+  "exec": {
+    "found": true,
+    "active": [
+      "proration",
+      "billing cadence",
+      "due",
+      "posting review",
+      "deposit"
+    ],
+    "inert": [],
+    "panel": "Financial execution policies / How this organisation runs billing: proration, billing cadence, when payment is due, posting review and deposits. These are resolved by charge generation and the charge lifecycle — distinct from the commercial discount rules above. / Financial Policies / How should the organization handle money rules — proration, fees, refunds, deposits? / New policy / Read-only / Policies are scoped, effective-dated configuration. They are consumed later by resolution and posting, but configuring a policy does not post money. / Resolved (org default) / What resolves at org scope today. A more specific Location / Service / Rate Plan policy overrides it. / Proration / no policy "
+  },
+  "results": [
+    {
+      "id": "J3 financial execution policies reachable",
+      "ok": true,
+      "observed": "5/5: proration, billing cadence, due, posting review, deposit"
+    },
+    {
+      "id": "J4 inert policy types remain withheld",
+      "ok": true,
+      "observed": "none named"
+    }
+  ]
+}

@@ -1,0 +1,330 @@
+{
+  "mergeSha": "c1945a04a407974d0e4687f1db61f7b4c06c69e6",
+  "buildInfo": {
+    "gitSha": "c1945a04a407974d0e4687f1db61f7b4c06c69e6",
+    "gitBranch": "staging",
+    "gitMessage": "Thread 11A — restore the approved Financials presentation and end the orphan payment band (#1070)\n\n* diag(financials): reproduce the three QA-stop regressions and name their causes\n\nREPRODUCED BEFORE ANY MUTATION, as the instruction requires. Evidence and\nprobes committed so the conclusions can be checked rather than believed.\n\nA — COMPACT. Reproduced verbatim: \"FINANCIALS / Responsibility -$55.13 /\nCurrent balance -$55.13 / Payment Add Details\". Measured at the DOM:\n\n    RENDERED_VARIANT          FinancialsCompactCard (SPARSE)\n    data-universal-card-density  compact\n    data-universal-card-span     1\n    zone heads                []          (approved anatomy absent)\n\nCause is VARIANT SELECTION, and it is configuration rather than code.\nPLACEMENT_VARIANTS.financials offers exactly two authorable variants:\n\n    \"Summary\"  density standard, 8 columns -> the RICH approved anatomy\n    \"Compact\"  density compact,  4 columns -> the sparse card\n\nThe surface is published on the variant NAMED \"Compact\". The trap is ",
+    "vercelEnv": "preview",
+    "vercelUrl": "workwithalloy-omaylnpxv-kellys-projects-2fc9d5eb.vercel.app",
+    "vercelDeploymentId": "dpl_D5ucVFyzkTFW6CZutAsKpJVKZrcB",
+    "nodeEnv": "production",
+    "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+  },
+  "panel": {
+    "tuitionCount": 1,
+    "accepted": [
+      "$1,450.00/monthly",
+      "$185.00/weekly"
+    ],
+    "children": [
+      "Certb Certhouse",
+      "Certa Certhouse"
+    ],
+    "financials": "FINANCIALS\n\nCURRENT PERIOD\n\nSeptember 2026\n\nCHARGES\n\nTuition\n$1,450.00\nFee\n$150.00\nConsumable fee\n$36.00\n\nDISCOUNTS & CREDITS\n\nCredit\n-$260.06\nAdjustment\n$146.71\nDiscount\n-$145.00\nNET OBLIGATION\n$37.87\nAdd\n\nDUE\n\n$607.00\n\nNothing past due\n\nBalance\n-$37.13\nPaid\n$75.00\nUnassigned\n$132.00\nAvailable\n$125.00\nPayment\nDetails\n→",
+    "richBody": true
+  },
+  "deep": {
+    "stats": [
+      "CURRENT BALANCE",
+      "DUE",
+      "PAST DUE",
+      "RESPONSIBILITY",
+      "PAID",
+      "AVAILABLE PREPAID"
+    ],
+    "lenses": [],
+    "filters": [],
+    "bandsAnywhere": 1,
+    "bandInCard": true,
+    "invoice": null,
+    "due": null,
+    "billingPeriod": null,
+    "accountingPeriod": null,
+    "available": null,
+    "balance": "Balance $0.00 OCTOBER 2026 Balance $80.00 SEPTEMBER 202",
+    "responsibility": true,
+    "discountConcept": true,
+    "provenance": true
+  },
+  "dates": {
+    "invoice": "Invoice date Sep 1, 2026 Due date Sep 11, 2026 Accounti",
+    "due": "Due date Sep 11, 2026 Accounting period Not posted to a",
+    "billing": "Billing period September 2026 Invoice date Sep 1, 2026",
+    "accounting": "Accounting period Not posted to a period yet GL account",
+    "gross": "Gross charge $1,450.00 Reductions -$145.00 Net obligati",
+    "reductions": "Reductions -$145.00 Net obligation $1,305.00 Manage res",
+    "net": "Net obligation $1,305.00 Manage responsibility → 1 res"
+  },
+  "previews": {
+    "weekly": {
+      "summary": "5 to bill, 5 not due, 0 refused for weekly 2026-09",
+      "changes": [
+        "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD",
+        "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD",
+        "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD",
+        "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD",
+        "79f8011d-a236-4054-bee7-af10f1dbc632 · 185.00 USD",
+        "cf044308-3ee4-47ab-a8fb-205eb172aa48 · cadence_not_billed_by_this_run",
+        "cf044308-3ee4-47ab-a8fb-205eb172aa48 · cadence_not_billed_by_this_run",
+        "cf044308-3ee4-47ab-a8fb-205eb172aa48 · cadence_not_billed_by_this_run",
+        "cf044308-3ee4-47ab-a8fb-205eb172aa48 · cadence_not_billed_by_this_run",
+        "cf044308-3ee4-47ab-a8fb-205eb172aa48 · cadence_not_billed_by_this_run"
+      ],
+      "after": {
+        "period_key": "2026-09",
+        "cadence_key": "weekly",
+        "service_period": {
+          "start": "2026-09-01",
+          "end": "2026-09-30"
+        },
+        "counts": {
+          "generated": 5,
+          "unchanged": 0,
+          "notDue": 5,
+          "refused": 0,
+          "alreadyPosted": 0,
+          "errors": 0
+        },
+        "total_amount_cents": 92500,
+        "refused_outcomes": [],
+        "not_due_outcomes": [
+          {
+            "kind": "not_due",
+            "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+            "periodKey": "2026-09-01~2026-09-07",
+            "periodLabel": "Sep 1–7, 2026",
+            "reason": "cadence_not_billed_by_this_run"
+          },
+          {
+            "kind": "not_due",
+            "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+            "periodKey": "2026-09-08~2026-09-14",
+            "periodLabel": "Sep 8–14, 2026",
+            "reason": "cadence_not_billed_by_this_run"
+          },
+          {
+            "kind": "not_due",
+            "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+            "periodKey": "2026-09-15~2026-09-21",
+            "periodLabel": "Sep 15–21, 2026",
+            "reason": "cadence_not_billed_by_this_run"
+          },
+          {
+            "kind": "not_due",
+            "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+            "periodKey": "2026-09-22~2026-09-28",
+            "periodLabel": "Sep 22–28, 2026",
+            "reason": "cadence_not_billed_by_this_run"
+          },
+          {
+            "kind": "not_due",
+            "assignmentId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+            "periodKey": "2026-09-29~2026-10-05",
+            "periodLabel": "Sep 29–Oct 5, 2026",
+            "reason": "cadence_not_billed_by_this_run"
+          }
+        ],
+        "error_outcomes": [],
+        "already_posted_outcomes": []
+      }
+    },
+    "monthly": {
+      "summary": "1 to bill, 1 not due, 0 refused for monthly 2026-09",
+      "changes": [
+        "79f8011d-a236-4054-bee7-af10f1dbc632 · cadence_not_billed_by_this_run",
+        "cf044308-3ee4-47ab-a8fb-205eb172aa48 · 1450.00 USD"
+      ],
+      "after": {
+        "period_key": "2026-09",
+        "cadence_key": "monthly",
+        "service_period": {
+          "start": "2026-09-01",
+          "end": "2026-09-30"
+        },
+        "counts": {
+          "generated": 1,
+          "unchanged": 0,
+          "notDue": 1,
+          "refused": 0,
+          "alreadyPosted": 0,
+          "errors": 0
+        },
+        "total_amount_cents": 145000,
+        "refused_outcomes": [],
+        "not_due_outcomes": [
+          {
+            "kind": "not_due",
+            "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+            "periodKey": "2026-09",
+            "periodLabel": "September 2026",
+            "reason": "cadence_not_billed_by_this_run"
+          }
+        ],
+        "error_outcomes": [],
+        "already_posted_outcomes": []
+      }
+    },
+    "discount": {
+      "summary": "0 obligations would be reduced by $0.00 for 2026-09 · 7 unchanged, 0 already posted, 0 not eligible, 0 refused",
+      "changes": [
+        "discount · {\"basis\":\"percentage\",\"value\":10,\"applies_to\":\"all\"}"
+      ],
+      "after": {
+        "period_key": "2026-09",
+        "service_period": {
+          "start": "2026-09-01",
+          "end": "2026-09-30"
+        },
+        "counts": {
+          "applied": 0,
+          "unchanged": 7,
+          "alreadyPosted": 0,
+          "notEligible": 0,
+          "refused": 0
+        },
+        "total_reduction_cents": 0,
+        "refused_outcomes": [],
+        "not_eligible_outcomes": []
+      }
+    }
+  },
+  "layout": {
+    "version": 161,
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety",
+      "billing_preview"
+    ]
+  },
+  "policy": {
+    "active": [],
+    "inert": [],
+    "count": 11
+  },
+  "results": [
+    {
+      "id": "D0 build identity re-confirmed",
+      "ok": true,
+      "observed": "c1945a04a · staging · preview"
+    },
+    {
+      "id": "A1 Billing Preview mounts exactly once",
+      "ok": true,
+      "observed": "1 card(s)"
+    },
+    {
+      "id": "A2 correct child / commercial context",
+      "ok": true,
+      "observed": "Certb Certhouse · Certa Certhouse"
+    },
+    {
+      "id": "A3 accepted Weekly $185.00 visible",
+      "ok": true,
+      "observed": "$1,450.00/monthly $185.00/weekly"
+    },
+    {
+      "id": "A4 accepted Monthly $1,450.00 visible",
+      "ok": true,
+      "observed": "$1,450.00/monthly $185.00/weekly"
+    },
+    {
+      "id": "B1 approved rich presentation, no regression",
+      "ok": true,
+      "observed": "richBody=true zones=Current period/Charges/Net obligation/Due"
+    },
+    {
+      "id": "B2 financial position renders",
+      "ok": true,
+      "observed": "FINANCIALS / CURRENT PERIOD / September 2026 / CHARGES"
+    },
+    {
+      "id": "C1 Details opens with its ledger",
+      "ok": true,
+      "observed": "6 stats: CURRENT BALANCE · DUE · PAST DUE · RESPONSIBILITY"
+    },
+    {
+      "id": "C2 lenses and filters present",
+      "ok": false,
+      "observed": "lenses=[] filters=[]"
+    },
+    {
+      "id": "C3 no orphan payment band",
+      "ok": true,
+      "observed": "bands=1 ownedByCard=true"
+    },
+    {
+      "id": "H1 responsibility presentation intact",
+      "ok": true,
+      "observed": "stated on the surface"
+    },
+    {
+      "id": "I1 prepaid reads without netting the balance",
+      "ok": true,
+      "observed": "no Available line | Balance $0.00 OCTOBER 2026 Balance $80.00 SEPTEMBER 202"
+    },
+    {
+      "id": "F2 discount concept and provenance readable",
+      "ok": true,
+      "observed": "concept=true basis=true"
+    },
+    {
+      "id": "G1 Invoice date and Due date are independent",
+      "ok": true,
+      "observed": "Invoice date Sep 1, 2026 Due date Sep 11, 2026 Accounti | Due date Sep 11, 2026 Accounting period Not posted to a"
+    },
+    {
+      "id": "G2 Billing and Accounting period stay distinct",
+      "ok": true,
+      "observed": "Billing period September 2026 Invoice date Sep 1, 2026 | Accounting period Not posted to a period yet GL account"
+    },
+    {
+      "id": "F1 gross / reduction / net on a generated specimen",
+      "ok": true,
+      "observed": "Gross charge $1,450.00 Reductions -$145.00 Net obligati | Reductions -$145.00 Net obligation $1,305.00 Manage res | Net obligation $1,305.00 Manage responsibility → 1 res"
+    },
+    {
+      "id": "E1 generation authority is cadence-specific",
+      "ok": true,
+      "observed": "200 · 5 to bill, 5 not due, 0 refused for weekly 2026-09"
+    },
+    {
+      "id": "E2 the two cadences plan differently",
+      "ok": true,
+      "observed": "weekly: 5 to bill, 5 not due, 0 refused for weekly 2026-09 || monthly: 1 to bill, 1 not due, 0 refused for monthly 2026-09"
+    },
+    {
+      "id": "E3 accepted-price authority intact",
+      "ok": true,
+      "observed": "weekly=92500 monthly=145000"
+    },
+    {
+      "id": "F3 discount authority states money",
+      "ok": true,
+      "observed": "200 · 0 obligations would be reduced by $0.00 for 2026-09 · 7 unchanged, 0 already posted, 0 not eligible, 0 refused"
+    },
+    {
+      "id": "K1 published layout is v161",
+      "ok": true,
+      "observed": "v161"
+    },
+    {
+      "id": "K2 billing_preview is in the explicit layout",
+      "ok": true,
+      "observed": "business_process, financials, children, household, attendance, health_safety, billing_preview"
+    },
+    {
+      "id": "J3 financial execution policies reachable",
+      "ok": false,
+      "observed": "0/5: "
+    },
+    {
+      "id": "J4 inert policy types remain withheld",
+      "ok": true,
+      "observed": "none offered"
+    }
+  ]
+}
