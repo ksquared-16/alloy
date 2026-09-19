@@ -41,7 +41,13 @@ export type FocusPanelCommitCriticalInput = {
  * which had no participantScope — so those cards stayed reserved and remounted only when the
  * drawer settled, ~3.5s later, to learn what the answer already carried.
  */
-    resolvedParticipant: { participationId: string; customerMemberId: string } | null;
+    /*
+     * OPTIONAL, and that is the safe default rather than a convenience: absent means the answer
+     * resolved no participant — zero candidates, or an ambiguous set — and the participant-scoped
+     * cards must then reserve exactly as they do today. A required field would force every caller
+     * to state something, and the first thing a caller invents when forced is a fallback.
+     */
+    resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
     /** R2 — the subject grain resolved by the answer. Forwarded to the builder; never derived here. */
     subjectGrain: { grain: OperationalGrain; subjectType: OperationalSubjectType } | null;
 };
