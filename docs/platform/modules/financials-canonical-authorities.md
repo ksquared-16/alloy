@@ -372,6 +372,48 @@ tenant's own policy decides. `category_not_discountable` is reported separately 
 `category_not_covered`, because "this kind of charge cannot be discounted" and "your policy does not
 cover this" are different conversations with an operator.
 
+## 5.2 A policy that does not apply to one family — the commercial policy exception
+
+A configured discount that should not reach ONE family used to be inexpressible. Deleting the
+policy took it from everyone; never configuring it took it from the tenant. The third thing is an
+**exception**: a dated, reasoned statement that one configured policy does not apply to one
+commercial relationship.
+
+```
+commercial_policy_exceptions
+    org_id
+    policy_id                          the configured policy, by its own id
+    opportunity_customer_member_id     the commercial relationship — the same through-line
+                                       enrollment_pricing_terms is scoped to
+    customer_member_id                 read from the assignment, never from the caller
+    effective_start / effective_end    a window, inclusive at both ends
+    reason                             NOT NULL, and non-empty by CHECK
+    supersedes_exception_id / superseded_at
+```
+
+**What it is not.** Not a per-assignment `discount_enabled` boolean. A switch has no reason, so
+nobody can say why six months on; no dates, so it silently rewrites what was true last period; and
+it would make the assignment a second place commercial policy is decided, which is how a surface
+and a ledger come to disagree. The command refuses `amount_cents`, `percent`, `discount_enabled`,
+`enabled`, `customer_member_id` and `org_id` in its payload rather than ignoring them.
+
+**One authority, both consumers.** `commercialPolicyExceptionService` answers exactly one question
+— which policies this relationship is excluded from on a date — and hands the ids to
+`resolveFinancialReductions`, which was EXTENDED rather than forked. Both the Assignment forecast
+(`forecastAssignmentReductions`) and the application path (`applyFinancialReductions`) call the
+same service and the same resolver, so a forecast cannot promise a discount the ledger withholds.
+
+**The exclusion says so.** An excluded policy resolves to `excluded_by_exception`, never
+`no_policy_configured`. The distinction is operational: an operator told the second goes looking
+for configuration that exists and is correct.
+
+**History is never rewritten.** An exception governs eligibility over a window. A reduction already
+posted stays posted. Ending one sets `effective_end` and records who ended it; re-excepting
+supersedes by succession, so what was in force at a past date remains answerable.
+
+**Writers.** `billing.except_commercial_policy` and `billing.end_commercial_policy_exception`, both
+`fin.write`, both subject `opportunity_customer_member`. No surface writes the table.
+
 ## 6.1 The prepaid position — unapplied is not available
 
 **Owner:** `lib/financials/prepaid/availableFunds.ts`. A projection over existing money; it computes
@@ -490,6 +532,18 @@ There **is** a recurring billing engine. Do not write a second scheduler or gene
 | → responsibility | `financial_responsibility_arrangements` (§7) |
 | → settlement | `childcarePaymentService` + `payment_allocations` (§6) |
 | → journal attribution | `financial_journal_entries` + `financialJournalService` (§3) |
+
+**THE ENGINE IS NOT A CLOCK.** Two things are routinely conflated and must not be:
+
+| | Status |
+|---|---|
+| **Recurring billing engine** — accepted terms, cadence, period, due/not-due, the amount, idempotency, and generation | **Implemented and certified.** An operator triggers it: `billing.generate_tuition`, behind a preview that is a promise about the run that follows it. |
+| **Automatic periodic billing execution** — the month turning over and the run happening with nobody present | **Not built, and deliberately not built here.** It depends on **Governed Scheduled Work V1** (§14). |
+
+Nothing in the product fires recurring tuition on a schedule today, and no copy may imply it does.
+Operator-triggered generation is the certified V1, and it is a complete capability rather than a
+stand-in: the operator names the billing frequency and the period, previews the run, and confirms
+it. What is missing is the wakeup, not the billing.
 
 **Generation does not re-price from the catalog.** The accepted term is the money. A generator
 pricing from today's catalog would bill a family a rate they never agreed to, and would let a
@@ -850,7 +904,16 @@ surface that needed its own writer would be a second financial authority wearing
 | **Focus Panel Details** | Deep account truth and charge-grain administration — the ledger, lenses, filters, responsibility, reductions, corrections | a second account workspace |
 | **Financials Workspace → Accounts** | The wider operational account workspace, across households | a second ledger, a second charge writer |
 | **/organization/financials** | Financial and commercial CONFIGURATION — tuition plans, billing frequencies, catalog, policies, accounting calendar, GL | transactional money |
-| **Assignment Tuition card** (`billing_preview`) | What this child's assignment costs, and the acceptance of recurring commercial terms | pricing. It renders Commercial Execution's answer and records a decision; it computes no amount |
+| **Assignment** (`scheduling`, child grain) | What this child's assignment costs and what was agreed — the recommendation and the other authored options, canonical Accept, governed Override, the persisted accepted-term read-back, review-not-reprice, Billing Frequency, the current and next Billing Period, responsibility, and the discount forecast with its exceptions | pricing. It renders Commercial Execution's answer and records a decision; it computes no amount |
+| **Assignment Tuition card** (`billing_preview`) — **RETIRED from normal composition, Financials 11B** | Nothing, by default. It remains in the library and a tenant may still place it | being re-added as the home of tuition. Tuition is part of an Assignment, not an independent operational concept |
+
+**Why Billing Preview retired.** It was placed when tuition had nowhere else to live. Assignment
+now owns every job it was placed for, and three of its four remaining jobs moved with the decision:
+the tied-set explanation, the no-match reason, and the rejected-with-reason diagnostics are all in
+Assignment's tuition section. The fourth — a household-wide pricing overview across every
+assignment at once — is the one capability lost, and it was a reading convenience rather than an
+operator act. Nothing underneath was deleted: `buildAssignmentTuitionView`, the pricing resolver,
+`enrollment.pricing.accept` / `.override` and the rejection semantics are unchanged.
 
 **Shared command authority.** Every financial mutation on every one of these surfaces goes through
 `FINANCIAL_TRANSACTION_ACTIONS` → one executor → `/api/admin/actions/execute`. The workspace
@@ -888,7 +951,44 @@ no card and protects every Focus Panel card, including ones added later.
 
 ---
 
-## 13. Deferred — Payments is the next program
+## 13. `BILLING_SCHEDULER_PLATFORM_PREREQUISITE` — Governed Scheduled Work V1
+
+Financials needs work to happen when nobody is looking. So do Payments and, in time, other
+domains. The platform prerequisite for all of them is one shared capability —
+**GOVERNED SCHEDULED WORK V1** — and its contract is generic:
+
+```
+CLOCK → DUE WORK → CLAIM / LEASE → REGISTERED DOMAIN HANDLER → EXECUTE
+      → RECORD OUTCOME → RETRY / RECOVER → CONVERGE
+```
+
+**The scheduler knows no economics.** It knows when to wake something and how to run it exactly
+once; it does not know what a billing period is, what a late fee costs, or whether a card may be
+charged.
+
+| Owner | Owns |
+|---|---|
+| **Financials** | what Billing work is due; Billing Period semantics; recurring generation; charge aging; late-fee economics; financial idempotency |
+| **Payments** | Autopay authorization; payer and method; collectible resolution; collection; payment recognition |
+| **Scheduled Work** | the clock; the wakeup; claim/lease; dispatch; execution mechanics; retry and recovery; outcome recording |
+
+### The three intended consumers
+
+| Handler | The scheduler's part | The domain's part |
+|---|---|---|
+| **Periodic billing** | wake the handler on the cadence | Financials determines what is due and runs canonical generation |
+| **Charge aging / late fees** | wake the handler | Financials determines age, policy, eligibility and consequence |
+| **Autopay** | wake the handler | Payments determines authorization, payer, method, collectible and collection |
+
+### Do not build
+
+**No billing cron, no autopay cron, no late-fee cron inside Financials**, and none inside Payments.
+A domain-specific scheduler is how two clocks, two lease models and two retry stories arrive — and
+the second one is always written under deadline. Converge on Governed Scheduled Work V1.
+
+---
+
+## 14. Deferred — Payments is the next program
 
 Payment method, autopay, provider, collection and deposit-lifecycle productization is the next major
 program. See **`docs/platform/modules/core-payments-contract.md`** for the boundary: what Payments

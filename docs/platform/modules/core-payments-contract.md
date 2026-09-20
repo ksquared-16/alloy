@@ -62,7 +62,21 @@ These exist, are certified, and are what Payments builds on. Do not re-derive th
   requires-action, failed, voided and unknown are all excluded, and the rule fails toward
   do-not-offer
 - **Ledger and GL** — concepts, categories, dates, periods and accounts
-- **Responsibility** — who owes, entirely separate from who paid
+- **Responsibility** — who owes, entirely separate from who paid. Two canonical grains, household
+  (`customer_member_id` null) and child, resolved by one shared specificity rule
+- **Charge writing** — every obligation is written through the canonical charge path; a surface
+  that wrote its own would be a second financial authority
+- **Reductions** — discounts, credits and adjustments, their eligibility intersection, their
+  provenance, and the commercial policy exception that excludes one policy for one relationship
+- **Prepaid position** — unapplied is not available, and available is not a balance
+- **Billing and commercial truth where consumed** — the accepted term is the money, Billing
+  Frequency is operator intent, and a Billing Period is DERIVED from the charge, not configured
+- **Accounting period** — attributed at write by the database; a CLOSED period defers rather than
+  refusing
+
+**Payments EXTENDS Core. It does not reimplement any of the above.** A Payments module that grows
+its own account, ledger, balance, payer truth, responsibility model, allocation model, prepaid
+model, GL mapping, charge writer or reduction engine has rebuilt Core badly and in parallel.
 
 **Two invariants Payments must not break:**
 
@@ -165,8 +179,19 @@ stored payment methods, autopay, held deposits and settlement reconciliation.
 Three Core deferrals are recorded in the Director QA catalog (`CORE_DEFERRALS`). Two of the three are
 Payments work:
 
-- **`DEPOSIT_OPERATOR_PRODUCTIZATION_GAP`** — the deposit policy type and model foundation exist and
-  are configurable. Taking, holding, applying and releasing a held deposit is Payments.
+- **`DEPOSIT_OPERATOR_PRODUCTIZATION_GAP`** — carried to Payments explicitly. The deposit policy
+  type and the deposit model foundation exist in Core and are configurable. The HELD-MONEY
+  LIFECYCLE — receive, hold, apply or release, refund, and the provider implications of each — is
+  Payments' to own. Payments W4 (`payment_holds`) is the first piece of it: money can now be
+  received and held without being available.
+
+  **PREPAID IS NOT A DEPOSIT, and the words must not be swapped.** Prepaid is unapplied money on a
+  family's account: received, canonically available, and applicable to any obligation. A deposit is
+  money taken for a PURPOSE and held against it — it has a reason, a release condition and a refund
+  path, and it is not available to settle whatever comes next. Core surfaces the prepaid position
+  and deliberately makes no deposit claim; a surface that labels available prepaid as a deposit has
+  told a family their money is committed when it is not, and one that treats a held deposit as
+  prepaid has spent money it was not allowed to spend.
 - **`SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED`** — fixed shares are operator-authorable today;
   percentage and remainder are enforced in the arrangement authority with no authoring surface.
   Whether this lands with Payments or later is a product decision, not a technical one.
@@ -179,12 +204,46 @@ Four Director QA scenarios are classified `PAYMENTS_PHASE` and are the acceptanc
 
 ---
 
+## 6.1 The shared dependency neither program may satisfy alone — Governed Scheduled Work V1
+
+Payments needs Autopay to happen when nobody is present. Financials needs periodic billing and
+charge aging to happen when nobody is present. **These are the same platform need, and it is not a
+Payments feature.**
+
+`BILLING_SCHEDULER_PLATFORM_PREREQUISITE` names it. The capability is **GOVERNED SCHEDULED WORK
+V1**, and its contract is generic:
+
+```
+CLOCK → DUE WORK → CLAIM / LEASE → REGISTERED DOMAIN HANDLER → EXECUTE
+      → RECORD OUTCOME → RETRY / RECOVER → CONVERGE
+```
+
+| Owner | Owns |
+|---|---|
+| **Scheduled Work** | the clock; the wakeup; claim/lease; dispatch; execution mechanics; retry and recovery; outcome recording |
+| **Financials** | what Billing work is due; Billing Period semantics; recurring generation; charge aging; late-fee economics; financial idempotency |
+| **Payments** | Autopay authorization; payer and method; collectible resolution; collection; payment recognition |
+
+The scheduler knows none of their economics. It knows when to wake a registered handler and how to
+run it exactly once.
+
+**DO NOT BUILD A PAYMENTS-SPECIFIC OR BILLING-SPECIFIC SCHEDULER.** No autopay cron, no billing
+cron, no late-fee cron. Two clocks, two lease models and two retry stories is the outcome, and the
+second is always written under deadline. Converge on Governed Scheduled Work V1.
+
+Until it exists: **operator-triggered generation is the certified capability**, and no copy in
+either program may imply recurring tuition or autopay fires on a schedule today.
+
+---
+
 ## 7. Human acceptance
 
 Core Financials is **mounted-certified and not humanly accepted**. That is deliberate: Kelly's
 acceptance is of the integrated Financials V1 product, which includes Payments. The Director QA
-catalog therefore stands at **Human PASS ZERO**, with 40 `CORE_RUNNABLE` scenarios waiting and 4
-`PAYMENTS_PHASE` scenarios that cannot yet be driven.
+catalog therefore stands at **Human PASS ZERO**. At the Financials 11B freeze (`CATALOG_VERSION`
+`2026-09-20.3`) it carries 44 `HUMAN_WALKTHROUGH` scenarios — the accounting period, which 11B
+productized, and the commercial policy exception, which 11B built, joined the runnable set, and
+`payment_method_on_file` became walkable with Payments W2.
 
 **Do not read "certified" as "accepted".** They are different words for different acts, and the
 catalog exists to keep them apart.
