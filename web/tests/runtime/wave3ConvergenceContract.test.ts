@@ -146,15 +146,62 @@ describe("CHILDREN — the canonical location, or genuinely nothing", () => {
     });
 
     it("G — a known location is carried, so it cannot degrade to the placeholder", () => {
-        expect(ANSWER).toContain("_location_label: wave3LeadLocation.locationLabel");
+        // Carried from the ONE resolved answer (see the LOCATION block) — the row label when
+        // the row has one, otherwise the canonical lookup.
+        expect(ANSWER).toContain("_location_label: wave3LocationLabel");
         expect(ANSWER).toContain("_location_id: wave3LeadLocation.locationId");
     });
 
     it("H — an absent location stays absent; no site is fabricated", () => {
         // Conditional spread: the key is omitted entirely when the resolver found nothing, rather
         // than binding an empty string that would render as a real (blank) site.
-        expect(ANSWER).toMatch(/\.\.\.\(wave3LeadLocation\.locationLabel \? \{ _location_label/);
+        expect(ANSWER).toMatch(/\.\.\.\(wave3LocationLabel \? \{ _location_label/);
         expect(ANSWER).not.toMatch(/_location_label:\s*["'`]/);
+    });
+});
+
+describe("LOCATION — one canonical answer, feeding both consumers", () => {
+    /*
+     * The last wave-3 dependency. Deployed measurement proved the document row carries
+     * `location_id` (a uuid) and no label: `_location_name` is CONSUMED in the document path but
+     * PRODUCED on the drawer's, where `opportunityEntityRecord` reads the locations row. So one
+     * authorized lookup was added — and it must stay ONE, feeding both the rail annotation and
+     * Children.
+     */
+    it("uses the canonical provider, not a hand-rolled locations read", () => {
+        expect(ANSWER).toContain("resolveLocationById(");
+        expect(ANSWER).toContain("canonicalLocationDisplay(");
+        expect(ANSWER).not.toMatch(/from\(["'`]locations["'`]\)/);
+    });
+
+    it("D/J — ONE resolved label feeds BOTH the rail annotation and Children", () => {
+        // Two lookups, or two different variables, would let the two cards disagree about the site.
+        expect(ANSWER).toContain("locationLabel: wave3LocationLabel");
+        expect(ANSWER).toContain("_location_label: wave3LocationLabel");
+        expect((ANSWER.match(/resolveLocationById\(/g) ?? []).length).toBe(1);
+    });
+
+    it("B — the uuid is never used as the visible label", () => {
+        expect(ANSWER).not.toMatch(/_location_label:\s*wave3LocationId/);
+        expect(ANSWER).not.toMatch(/locationLabel:\s*wave3LocationId/);
+    });
+
+    it("A — the lookup is actually performed when the row has an id but no label", () => {
+        expect(ANSWER).toMatch(/if \(!wave3LocationLabel && wave3LocationId\)/);
+    });
+
+    it("F/G — neither absence nor failure fabricates a label", () => {
+        // Conditional spread: no key at all rather than an empty string, which would render as a
+        // real blank site. And the catch assigns null — never a label, never "".
+        expect(ANSWER).toMatch(/\.\.\.\(wave3LocationLabel \? \{ _location_label/);
+        const guard = ANSWER.slice(ANSWER.indexOf("if (!wave3LocationLabel && wave3LocationId)"), ANSWER.indexOf("const wave3UpdatedAt"));
+        expect(guard).toContain("catch");
+        expect(guard).toMatch(/wave3LocationLabel = null;/);
+        expect(guard).not.toMatch(/wave3LocationLabel = ["'`]/);
+    });
+
+    it("H — the lookup is org-scoped at the document's own boundary", () => {
+        expect(ANSWER).toContain("resolveLocationById(req.supabase, req.orgId,");
     });
 });
 
