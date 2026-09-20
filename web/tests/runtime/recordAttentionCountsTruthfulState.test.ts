@@ -24,7 +24,17 @@ const CHIPS = codeOf(read("lib/adminV2/runtime/focusPanel/focusPanelDisplayLabel
 
 describe("(b) unknown is not zero", () => {
     it("the work count is nullable, and null means not yet known", () => {
-        expect(HOOK).toMatch(/work:\s*number\s*\|\s*null/);
+        /*
+         * Scoped to the EXPORTED TYPE. An unanchored match was satisfied by the `useState<{ work:
+         * number | null }>` generic further down, so reverting the public type to `number` left
+         * this gate green — the plant proved it.
+         */
+        const typeBlock = HOOK.slice(
+            HOOK.indexOf("export type RecordAttentionCounts"),
+            HOOK.indexOf("const EMPTY"),
+        );
+        expect(typeBlock.length).toBeGreaterThan(0);
+        expect(typeBlock).toMatch(/work:\s*number\s*\|\s*null;/);
     });
 
     it("the initial state is unknown, not zero", () => {
