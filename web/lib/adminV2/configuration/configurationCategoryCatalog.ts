@@ -14,6 +14,14 @@ export type EntityCategorySeed = { key: string; label: string; sort_order: numbe
 
 /** Entity-owned default categories — business organization per object type. */
 export const ENTITY_CATEGORY_SEEDS: Readonly<Record<SettingsHubEntityKey, readonly EntityCategorySeed[]>> = {
+    // Employment groups the facts of the working relationship. Deliberately NO
+    // "certifications" or "qualifications" seed: those have their own lifecycle
+    // (issued, expires, verified, renewed) and belong to a dedicated authority,
+    // not to a category that would invite them in as ordinary fields.
+    employment: [
+        { key: "employment", label: "Employment", sort_order: 10 },
+        { key: "custom", label: "Custom", sort_order: 900 },
+    ],
     person: [
         { key: "identity", label: "Identity", sort_order: 10 },
         { key: "contact", label: "Contact", sort_order: 20 },

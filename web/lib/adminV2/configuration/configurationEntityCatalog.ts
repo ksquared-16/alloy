@@ -88,6 +88,20 @@ const HUB_ENTITY_DEFINITIONS: readonly ConfigurationHubEntityDefinition[] = [
         primaryNavVisible: true,
         apiTypes: hubEntityApiTypes("location"),
     },
+    {
+        // Staff / Employment. The operator word is "Staff"; the canonical entity
+        // is the EMPLOYMENT relationship, and the label says both so nobody reads
+        // this as a second place to edit a person.
+        hubKey: "employment",
+        labelsKey: "employments",
+        canonicalSingularLabel: "Staff / Employment",
+        canonicalPluralLabel: "Staff / Employments",
+        description: SETTINGS_ENTITY_FIELD_EXPLANATIONS.employment,
+        surfacesLine: SETTINGS_ENTITY_SURFACES.employment,
+        icon: DATA_MODEL_ENTITY_ICONS.employment,
+        primaryNavVisible: true,
+        apiTypes: hubEntityApiTypes("employment"),
+    },
 ] as const;
 
 const HUB_BY_KEY = new Map(HUB_ENTITY_DEFINITIONS.map((d) => [d.hubKey, d]));

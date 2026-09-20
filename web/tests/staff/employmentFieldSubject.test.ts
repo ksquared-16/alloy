@@ -158,3 +158,110 @@ function stripComments(src: string): string {
 function stripImports(src: string): string {
     return src.replace(/^import[\s\S]*?;$/gm, "");
 }
+
+// ---------------------------------------------------------------------------
+// Revised Slice 2 — Employment is operator-authorable in the Data Model workspace.
+// ---------------------------------------------------------------------------
+
+describe("5. Employment is a supported Data Model entity", () => {
+    it("appears in the primary entity list an administrator picks from", async () => {
+        const { CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES } = await import(
+            "@/lib/fields/childcareFieldCatalogDoctrine"
+        );
+        expect(CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES).toContain("employment");
+    });
+
+    it("keeps every entity that was already there", async () => {
+        const { CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES } = await import(
+            "@/lib/fields/childcareFieldCatalogDoctrine"
+        );
+        for (const kept of ["person", "customer", "inquiry_child", "opportunity", "location"]) {
+            expect(CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES).toContain(kept);
+        }
+    });
+
+    it("carries an operator label that names Staff and Employment together", async () => {
+        const { configurationHubEntity } = await import(
+            "@/lib/adminV2/configuration/configurationEntityCatalog"
+        );
+        const def = configurationHubEntity("employment");
+        expect(def).toBeTruthy();
+        expect(def!.canonicalSingularLabel).toBe("Staff / Employment");
+        // The operator must not have to know the internal key.
+        expect(def!.canonicalSingularLabel).not.toBe("employment");
+    });
+
+    it("explains that the fact belongs to the working relationship, not the human", async () => {
+        const { SETTINGS_ENTITY_FIELD_EXPLANATIONS } = await import("@/lib/fields/computedFieldCatalog");
+        const copy = SETTINGS_ENTITY_FIELD_EXPLANATIONS.employment;
+        expect(copy).toMatch(/employment/i);
+        expect(copy).toMatch(/another organization|do not follow/i);
+        // and that it is NOT the neighbouring authorities
+        expect(copy).toMatch(/identity/i);
+        expect(copy).toMatch(/schedule|presence|access/i);
+    });
+
+    it("has an icon and category seeds, like every other entity", async () => {
+        const { DATA_MODEL_ENTITY_ICONS } = await import("@/lib/fields/dataModelWorkspaceIcons");
+        const { ENTITY_CATEGORY_SEEDS } = await import(
+            "@/lib/adminV2/configuration/configurationCategoryCatalog"
+        );
+        expect(DATA_MODEL_ENTITY_ICONS.employment).toBeTruthy();
+        expect(ENTITY_CATEGORY_SEEDS.employment.length).toBeGreaterThan(0);
+    });
+
+    it("seeds NO certification category — qualifications are not ordinary fields", async () => {
+        const { ENTITY_CATEGORY_SEEDS } = await import(
+            "@/lib/adminV2/configuration/configurationCategoryCatalog"
+        );
+        const keys = ENTITY_CATEGORY_SEEDS.employment.map((c) => c.key).join(" ");
+        expect(keys).not.toMatch(/certification|qualification|license|training/i);
+    });
+});
+
+describe("6. Employment has no configurable status domain, and that is deliberate", () => {
+    it("resolves no status domain rather than a fabricated one", async () => {
+        const { statusDomainForHubEntity } = await import(
+            "@/lib/dataModel/dataModelEntityStatusDomain"
+        );
+        // Employment status is a CHECK-constrained platform enum on `employments`,
+        // not tenant-authored status_definitions. Inventing a domain here would
+        // create a second, editable Employment status truth.
+        expect(statusDomainForHubEntity("employment")).toBeNull();
+    });
+
+    it("leaves every existing entity's status domain intact", async () => {
+        const { statusDomainForHubEntity } = await import(
+            "@/lib/dataModel/dataModelEntityStatusDomain"
+        );
+        for (const entity of ["person", "customer", "inquiry_child", "opportunity", "location"]) {
+            expect(statusDomainForHubEntity(entity)).not.toBeNull();
+        }
+    });
+
+    it("batches status loads without inventing an employment entity type", async () => {
+        const { statusEntityTypesForHubEntities } = await import(
+            "@/lib/dataModel/dataModelEntityStatusDomain"
+        );
+        const types = statusEntityTypesForHubEntities(["person", "employment"]);
+        expect(types).toContain("persons");
+        expect(types).not.toContain("employments");
+    });
+});
+
+describe("7. Employment's relationships are real, and exclude operational facts", () => {
+    it("relates to the Person it employs and its primary site", async () => {
+        const { relationshipsForHubEntity } = await import("@/lib/fields/entityRelationshipCatalog");
+        const ids = relationshipsForHubEntity("employment").map((r) => r.id);
+        expect(ids).toContain("employment_person");
+        expect(ids).toContain("employment_primary_location");
+    });
+
+    it("does not present schedule, presence or classroom assignment as Employment structure", async () => {
+        const { relationshipsForHubEntity } = await import("@/lib/fields/entityRelationshipCatalog");
+        const blob = JSON.stringify(relationshipsForHubEntity("employment")).toLowerCase();
+        for (const outside of ["schedule_assignment", "presence", "classroom", "operational_group"]) {
+            expect(blob).not.toContain(outside);
+        }
+    });
+});
