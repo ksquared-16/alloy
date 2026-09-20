@@ -1473,7 +1473,13 @@ function BillingConsequence({
                     {tuitionSelect ? "Tuition" : "Recurring tuition"}
                 </span>
             </div>
-            {tuitionSelect ? <div data-assignment-tuition-embed="true">{tuitionSelect}</div> : null}
+            {/*
+              * ONE MARKER, ONE NODE. This wrapper carried `data-assignment-tuition-embed` as well
+              * as the <select> inside it, so a probe reaching for "the embed" got whichever the
+              * DOM offered first — a div — and `s.options` was undefined. The region is named for
+              * what it is; the control keeps the marker that identifies the control.
+              */}
+            {tuitionSelect ? <div data-assignment-tuition-region="true">{tuitionSelect}</div> : null}
             {family ? (
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: T.forge }}>
                     <span>Family responsibility</span>

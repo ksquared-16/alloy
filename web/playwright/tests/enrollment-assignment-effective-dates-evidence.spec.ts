@@ -576,7 +576,7 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
         writeJson("quote-generate.json", { status: quoteRes.status(), quoteJson });
 
         // Prefer UI tuition embed when present (legacy Generate Quote button retired)
-        const tuitionEmbed = page.locator("[data-assignment-tuition-embed='true']").first();
+        const tuitionEmbed = page.locator("select[data-assignment-tuition-embed='true']").first();
         const genBtn = page.locator("[data-testid='assignment-generate-quote']").first();
         if ((await tuitionEmbed.count()) > 0) {
             await snap(page, "09-tuition-embed-ui");
@@ -590,11 +590,11 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
         await openFirstChildAssignments(page);
         await page.waitForTimeout(1500);
         await snap(page, "10-quote-after-reload");
-        const commercialText = await page.locator("[data-assignment-offer='true'], [data-assignment-tuition-embed='true'], [data-schedule-billing='true']").first().innerText().catch(() => "");
+        const commercialText = await page.locator("[data-assignment-offer='true'], [data-assignment-tuition-region='true'], [data-schedule-billing='true']").first().innerText().catch(() => "");
         const quotePersisted =
             /quote|\$|tuition|plan|Generated/i.test(commercialText)
             || Boolean(quoteJson.snapshot)
-            || (await page.locator("[data-assignment-field='quote'], [data-assignment-quote-label='true'], [data-assignment-tuition-embed='true']").count()) > 0;
+            || (await page.locator("[data-assignment-field='quote'], [data-assignment-quote-label='true'], [data-assignment-tuition-region='true']").count()) > 0;
 
         // Ledger consequence probe — opportunity billing/ledger endpoints if present
         const ledgerProbes: Array<{ url: string; status: number; snippet: string }> = [];
