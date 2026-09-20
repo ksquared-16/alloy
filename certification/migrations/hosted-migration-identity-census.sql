@@ -1,6 +1,8 @@
 -- Read-only census: the hosted migration ledger's VERSION IDENTITIES.
--- RE-MEASURED 2026-09-20T12:35Z after 20260921140000 (PR #1102) converged: preflight
--- gar_41245f173d708f found ledger row AND function present, head 20260921140000, total 460.
+-- RE-MEASURED 2026-09-20T12:5xZ AFTER the W3 merge (1e7c1745d). The previous reading was taken
+-- while staging was still 7e87fd71e, so hosted parity reported PASS against a tree that did not yet
+-- contain 20260922120000 — stale evidence refusing an apply, the mirror of stale evidence refusing
+-- a merge.
 --
 --
 --
