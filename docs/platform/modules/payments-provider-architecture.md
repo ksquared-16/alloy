@@ -8,8 +8,10 @@ supersedes: []
 # Payments — the provider boundary, and Stripe as Provider V1
 
 **Status:** Payments V1 · W1 (Provider Installation) implemented and certified. Stored payment
-methods, autopay, held deposits and settlement reconciliation are later workstreams and are **not**
-implemented — do not read this document as describing them.
+methods followed in **W2** and are now implemented — see
+[payments-payment-method-reference.md](payments-payment-method-reference.md); this document does not
+describe them. Autopay, held deposits and settlement reconciliation are later workstreams and are
+still **not** implemented.
 
 **Purpose:** say what Alloy owns, what a payment provider owns, and exactly where the line is — so a
 later lane extends the adapter instead of growing a second payments domain beside it.
@@ -197,6 +199,9 @@ leaves the old one exactly as it was.
 
 ## 9. Not implemented by W1
 
-Stored payment methods, autopay, held deposits, provider settlement reconciliation and bank
-reconciliation. `customer_payment_methods` remains the legacy table the architecture replaces in W2;
-nothing in W1 reads or writes it.
+Autopay, held deposits, provider settlement reconciliation and bank reconciliation.
+
+Stored payment methods were also on this list and **have since been built by W2**: `payment_methods`
+is the canonical replacement, and `customer_payment_methods` — the legacy table this section pointed
+at — was dropped once a census of the deployed database found it held no rows at all. Nothing in W1
+ever read or wrote it.

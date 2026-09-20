@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-09-20
+supersedes: []
+---
+
 # Payments V1 · W2 — the Payment Method Reference
 
 **Status:** implemented and certified. `PAYMENTS_V1_W2_PAYMENT_METHOD_REFERENCE_COMPLETE_CERTIFIED`.
