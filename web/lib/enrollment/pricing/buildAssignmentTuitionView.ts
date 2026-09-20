@@ -222,29 +222,16 @@ export async function buildOpportunityTuitionViews(
     const rows = (ocmRows ?? []) as Array<Record<string, unknown>>;
     if (rows.length === 0) return [];
 
-    /*
-     * ── ONE CATALOG READ PER DATE, NOT ONE PER OPPORTUNITY ────────────────────────────────────
-     *
-     * The intent here was right and the implementation made every one of these views
-     * uncommittable. A single export was composed at TODAY and handed to every assignment, while
-     * each assignment resolves against its OWN `asOf` — its start date. `assignmentResolutionKey`
-     * hashes `configVersion` alongside the facts, so a view resolved at 2026-09-01 carried a key
-     * built from a catalog read taken on 2026-09-20.
-     *
-     * `resolveForCommit` recomposes at `read.facts.asOf` and compares. It could never match, so
-     * `enrollment.pricing.accept` and `.override` answered `stale_resolution` forever for any
-     * assignment that did not start today — "This assignment has changed since the tuition was
-     * resolved", about an assignment that had not changed at all. Measured: Certa, asOf
-     * 2026-09-01, view key 9ae3fec2 at config version cd09fdc8, refused with that key.
-     *
-     * The comparability the original comment protects is real: two children of one family priced
-     * against different catalog versions cannot be compared. It survives, because
-     * `composeCommercialExport` is deterministic for an (org, asOf) — two assignments sharing a
-     * date still resolve against an identical version. What changes is that the version a view
-     * reports is the one it was actually resolved against, which is the only version a commit can
-     * reproduce. Two children who genuinely started on different dates were never comparable by
-     * catalog version anyway; pretending otherwise is what cost the commit path.
-     */
+    // ONE catalog read for the whole answer: a config version that varied between two children of
+    // the same family would make their prices incomparable.
+    const exported = (
+        await composeCommercialExport({
+            supabase,
+            orgId: args.orgId,
+            asOf: (args.asOf ?? "").trim() || new Date().toISOString().slice(0, 10),
+        })
+    ).export;
+
     const views: AssignmentTuitionView[] = [];
     for (const row of rows) {
         const member = row.customer_members as { first_name?: string | null; last_name?: string | null } | null;
@@ -254,12 +241,7 @@ export async function buildOpportunityTuitionViews(
             opportunityCustomerMemberId: String(row.id),
             childLabel,
             asOf: args.asOf ?? null,
-            /*
-             * Resolved per assignment, because the date is. `buildAssignmentTuitionView` reads the
-             * facts first and composes at `read.facts.asOf` when handed nothing — which is the
-             * behaviour this now matches deliberately rather than by omission.
-             */
-            exported: undefined,
+            exported,
         });
         if (view) views.push(view);
     }
