@@ -220,3 +220,175 @@ export async function attachQualificationEvidence(
     });
     if (error) throw new StaffQualificationError(/duplicate key/i.test(error.message) ? "conflict" : "db_error", error.message);
 }
+
+// ---------------------------------------------------------------------------
+// Configuration authoring — server-authoritative, org-scoped
+// ---------------------------------------------------------------------------
+
+export type UpsertQualificationTypeInput = {
+    orgId: string;
+    id?: string | null;
+    key?: string | null;
+    label: string;
+    description?: string | null;
+    category?: string | null;
+    expirationExpected?: boolean;
+    defaultValidityDays?: number | null;
+    evidenceRequiredDefault?: boolean;
+    isActive?: boolean;
+};
+
+/** Create or amend a qualification type. The KEY is immutable once set. */
+export async function upsertQualificationType(
+    supabase: SupabaseClient,
+    input: UpsertQualificationTypeInput,
+) {
+    const orgId = trim(input.orgId);
+    const label = trim(input.label);
+    if (!orgId || !label) {
+        throw new StaffQualificationError("invalid_input", "A qualification type needs a label.");
+    }
+    const patch: Record<string, unknown> = {
+        label,
+        description: trim(input.description),
+        category: trim(input.category),
+        updated_at: new Date().toISOString(),
+    };
+    if (input.expirationExpected !== undefined) patch.expiration_expected = !!input.expirationExpected;
+    if (input.evidenceRequiredDefault !== undefined) patch.evidence_required_default = !!input.evidenceRequiredDefault;
+    if (input.isActive !== undefined) patch.is_active = !!input.isActive;
+    if (input.defaultValidityDays !== undefined) {
+        const n = Number(input.defaultValidityDays);
+        if (input.defaultValidityDays !== null && (!Number.isFinite(n) || n <= 0)) {
+            throw new StaffQualificationError("invalid_input", "Default validity must be a positive number of days.");
+        }
+        patch.default_validity_days = input.defaultValidityDays === null ? null : n;
+    }
+
+    if (trim(input.id)) {
+        const { data, error } = await supabase
+            .from("staff_qualification_types")
+            .update(patch)
+            .eq("id", trim(input.id))
+            .eq("org_id", orgId)
+            .select("id")
+            .single();
+        if (error) throw new StaffQualificationError("db_error", error.message);
+        return data as unknown as { id: string };
+    }
+
+    // A new type derives its key from the label when the operator did not supply
+    // one. The key is the stable identity configuration is authored against; the
+    // label is presentation and a tenant may rename it.
+    const key = trim(input.key) ?? label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 63);
+    if (!/^[a-z][a-z0-9_]{1,62}$/.test(key)) {
+        throw new StaffQualificationError("invalid_input", "That label cannot be turned into a key; supply one explicitly.");
+    }
+    const { data, error } = await supabase
+        .from("staff_qualification_types")
+        .insert({ org_id: orgId, key, ...patch })
+        .select("id")
+        .single();
+    if (error) {
+        throw new StaffQualificationError(
+            /duplicate key/i.test(error.message) ? "conflict" : "db_error",
+            /duplicate key/i.test(error.message)
+                ? "A qualification type with that key already exists in this organization."
+                : error.message,
+        );
+    }
+    return data as unknown as { id: string };
+}
+
+export type UpsertQualificationRequirementInput = {
+    orgId: string;
+    id?: string | null;
+    qualificationTypeId: string;
+    scopeType: "organization" | "position" | "site" | "assignment_type";
+    scopeId?: string | null;
+    requirementLevel: string;
+    evidenceRequired?: boolean;
+    effectiveStart?: string | null;
+    effectiveEnd?: string | null;
+    isActive?: boolean;
+};
+
+const REQUIREMENT_LEVELS = ["off", "suggested", "recommended", "required", "enforced"];
+
+/**
+ * Create or amend a requirement contribution.
+ *
+ * The scope TARGET is verified to belong to this organization. That check is not
+ * decoration: a requirement naming another tenant's site would silently never
+ * apply, which is worse than an error because it looks configured.
+ */
+export async function upsertQualificationRequirement(
+    supabase: SupabaseClient,
+    input: UpsertQualificationRequirementInput,
+) {
+    const orgId = trim(input.orgId);
+    const typeId = trim(input.qualificationTypeId);
+    if (!orgId || !typeId) {
+        throw new StaffQualificationError("invalid_input", "A requirement needs an organization and a qualification type.");
+    }
+    if (!REQUIREMENT_LEVELS.includes(input.requirementLevel)) {
+        throw new StaffQualificationError("invalid_input", `Requirement level must be one of: ${REQUIREMENT_LEVELS.join(", ")}.`);
+    }
+    const scopeType = input.scopeType;
+    const scopeId = trim(input.scopeId);
+    if (scopeType === "organization" && scopeId) {
+        throw new StaffQualificationError("invalid_input", "An organization-wide requirement does not name a target.");
+    }
+    if (scopeType !== "organization" && !scopeId) {
+        throw new StaffQualificationError("invalid_input", "That scope needs a target.");
+    }
+
+    // The type must be ours.
+    const { data: type } = await supabase
+        .from("staff_qualification_types").select("id").eq("id", typeId).eq("org_id", orgId).maybeSingle();
+    if (!type) throw new StaffQualificationError("not_found", "That qualification type does not belong to this organization.");
+
+    // And so must the target.
+    if (scopeId) {
+        const table =
+            scopeType === "position" ? "employment_positions"
+            : scopeType === "site" ? "locations"
+            : "operational_assignment_types";
+        const { data: target } = await supabase.from(table).select("id").eq("id", scopeId).eq("org_id", orgId).maybeSingle();
+        if (!target) {
+            throw new StaffQualificationError("not_found", "That requirement target does not belong to this organization.");
+        }
+    }
+
+    const row: Record<string, unknown> = {
+        org_id: orgId,
+        qualification_type_id: typeId,
+        scope_type: scopeType,
+        scope_id: scopeId,
+        requirement_level: input.requirementLevel,
+        evidence_required: !!input.evidenceRequired,
+        effective_start: trim(input.effectiveStart),
+        effective_end: trim(input.effectiveEnd),
+        updated_at: new Date().toISOString(),
+    };
+    if (input.isActive !== undefined) row.is_active = !!input.isActive;
+
+    if (trim(input.id)) {
+        const { data, error } = await supabase
+            .from("staff_qualification_requirements").update(row)
+            .eq("id", trim(input.id)).eq("org_id", orgId).select("id").single();
+        if (error) throw new StaffQualificationError("db_error", error.message);
+        return data as unknown as { id: string };
+    }
+    const { data, error } = await supabase
+        .from("staff_qualification_requirements").insert(row).select("id").single();
+    if (error) {
+        throw new StaffQualificationError(
+            /duplicate key/i.test(error.message) ? "conflict" : "db_error",
+            /duplicate key/i.test(error.message)
+                ? "That qualification already has a requirement at this scope. Edit the existing one."
+                : error.message,
+        );
+    }
+    return data as unknown as { id: string };
+}

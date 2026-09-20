@@ -4429,6 +4429,24 @@
         "reason": "Member directory for the Access chapter."
       }
     },
+    "app/api/admin/staff-qualification-config/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Reads the organization's own qualification vocabulary and requirement policy. Org comes from the session and every row is filtered by it; the handler writes nothing. Configuration READS are not gated anywhere in this estate, and gating this one would invent a read boundary the product does not have."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "configuration.vocabulary.manage",
+        "helper": "requireOrganizationVocabularyCapability",
+        "reason": "Authors qualification TYPES - organization-wide operational vocabulary, which is the meaning this key was created for - and the requirement policy written against them. requireAdminOrOps resolves portal admission and no capability, so the capability check is what actually withholds this from a principal who was never granted it."
+      }
+    },
+    "app/api/admin/staff-qualifications/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Composed qualification state for ONE employment, as attendance/card is for one child. Org comes from the session, the employment is re-resolved against it so another tenant's employment answers not_found, and the handler writes nothing - every mutation goes through the registered staff_qualification.* commands, so this route cannot become a second write path."
+      }
+    },
     "app/api/admin/staff/directory/route.ts": {
       "GET": {
         "status": "pending"
