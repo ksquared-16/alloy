@@ -196,3 +196,39 @@ describe("recommended first, the rest behind a disclosure", () => {
         expect(eff.slice(0, 200), "an existing choice is never overwritten").toBeTruthy();
     });
 });
+
+describe("tuition can be settled without saving a schedule", () => {
+    const card = src(CARD);
+
+    it("offers its own commit", () => {
+        /*
+         * MEASURED: the only commit here saves the SCHEDULE and stays disabled until a new one is
+         * complete — days, a start, a room. An assignment already saved, whose term had gone
+         * stale, showed "Tuition needs review · choose the recommendation, another option, or
+         * override" and offered no way to choose anything.
+         */
+        expect(card).toContain("data-assignment-tuition-commit");
+        expect(card).toContain("void settleTuition()");
+    });
+
+    it("appears only when there is something to settle", () => {
+        const at = card.indexOf("const canSettleTuitionAlone");
+        const body = card.slice(at, card.indexOf("/* An override is a selection", at));
+        expect(body).toContain("acceptedIsStale === true");
+        expect(body, "or a selection that is not the accepted term").toContain("pricingView?.accepted?.source?.id");
+    });
+
+    it("an override cannot be committed without its reason", () => {
+        const at = card.indexOf("data-assignment-tuition-commit");
+        const btn = card.slice(Math.max(0, at - 500), at);
+        expect(btn).toContain("isOverridingSelection && !overrideReason.trim()");
+    });
+
+    it("settling tuition touches no schedule field", () => {
+        const at = card.indexOf("async function settleTuition");
+        const body = card.slice(at, card.indexOf("async function refreshPricingView", at));
+        for (const f of ["setDays(", "setStart(", "setRoomId(", "setArrive(", "setDepart("]) {
+            expect(body, `settleTuition must not ${f}`).not.toContain(f);
+        }
+    });
+});

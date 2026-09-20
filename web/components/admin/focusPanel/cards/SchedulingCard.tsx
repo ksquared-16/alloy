@@ -1746,6 +1746,17 @@ function ScheduleEditor({
         return pricingView.applicable.filter((o) => o.sourceId !== recId);
     }, [pricingView]);
 
+    /*
+     * Tuition can be settled on its own when there is something to settle: a selection that is
+     * not already the accepted term, or a term whose resolution has moved. Saving the schedule
+     * still settles it too — this is the path for an assignment that already exists.
+     */
+    const canSettleTuitionAlone =
+        child.kind === "child" &&
+        Boolean(pricingView) &&
+        Boolean(offeringId.trim()) &&
+        (pricingView?.acceptedIsStale === true || offeringId.trim() !== (pricingView?.accepted?.source?.id ?? ""));
+
     /* An override is a selection that differs from the resolver's recommendation — never a price. */
     const isOverridingSelection =
         Boolean(offeringId.trim()) &&
@@ -2371,6 +2382,36 @@ function ScheduleEditor({
                                         ? `Assignment saved · tuition needs attention — ${tuitionOutcome.detail}`
                                         : `Tuition ${tuitionOutcome.kind} · ${tuitionOutcome.label}`}
                                 </div>
+                            ) : null}
+
+                            {/*
+                              * ── TUITION IS ITS OWN ACT, AND NEEDS ITS OWN COMMIT ────────────
+                              *
+                              * MEASURED: the only commit on this surface saves the SCHEDULE, and
+                              * it is disabled until a new schedule is complete — days, a start, a
+                              * room. So an assignment already saved, whose term had gone stale,
+                              * showed "Tuition needs review · choose the recommendation, another
+                              * option, or override" and offered no way to choose anything. The
+                              * review was an instruction the surface could not carry out.
+                              *
+                              * Pricing acceptance was already a separate canonical act from the
+                              * schedule write; this gives it the separate control that follows
+                              * from that. It settles tuition alone and touches no schedule field.
+                              */}
+                            {canSettleTuitionAlone ? (
+                                <button
+                                    type="button"
+                                    disabled={busy || (isOverridingSelection && !overrideReason.trim())}
+                                    onClick={() => void settleTuition()}
+                                    data-assignment-tuition-commit={isOverridingSelection ? "override" : "accept"}
+                                    style={{
+                                        all: "unset", marginTop: 4, cursor: busy ? "default" : "pointer",
+                                        fontSize: 11, fontWeight: 650, color: T.pine, width: "fit-content",
+                                        opacity: busy || (isOverridingSelection && !overrideReason.trim()) ? 0.45 : 1,
+                                    }}
+                                >
+                                    {isOverridingSelection ? "Override tuition" : "Accept tuition"}
+                                </button>
                             ) : null}
 
                             {/*
