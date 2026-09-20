@@ -273,6 +273,31 @@ export function buildChildrenCardEvidence(
             trimOrNull(row.location_id)
             ?? trimOrNull((raw as { location_id?: unknown }).location_id)
             ?? trimOrNull(schedulingProjection?.child?.siteId);
+        /*
+         * UNKNOWN IS NOT INHERITED.
+         *
+         * `locationInherited` used to be `!childLocationId && Boolean(opportunitySiteId)` — absence
+         * read as "the child has no site of its own". At commit the answer does not carry each
+         * child's `location_id` at all, so the card asserted "Inherited from lead" for a child that
+         * DOES own a placement, and the drawer then removed the badge. Measured on deployed
+         * 6734f408f that removal was the single last authoritative mutation on the surface: a false
+         * claim, corrected ~1.6s later.
+         *
+         * Provenance is only knowable when something actually answered the question — the row or
+         * its raw form carried the key (even as null), or the scheduling projection resolved the
+         * child. Absent all three the qualifier is unknown and nothing is claimed.
+         *
+         * The VALUE is untouched: the effective site still falls back to the lead's label, because
+         * that is genuinely the site in effect. Only the provenance sentence is withheld.
+         */
+        const childLocationProvenanceKnown =
+            /*
+             * The RAW entry only — `mapRawInquiryChildrenToDrawerRows` materialises `location_id`
+             * on every mapped row whether or not the source carried it, so the mapped row cannot
+             * distinguish "answered null" from "never asked".
+             */
+            Object.prototype.hasOwnProperty.call((raw ?? {}) as object, "location_id")
+            || schedulingProjection?.child != null;
         // Site name for Location fields — never expose the UUID storage key as display truth.
         const location =
             trimOrNull(row.location_label)
@@ -424,7 +449,8 @@ export function buildChildrenCardEvidence(
             location,
             locationId: childLocationId ?? opportunitySiteId,
             locationOwnedId: childLocationId,
-            locationInherited: !childLocationId && Boolean(opportunitySiteId),
+            locationInherited:
+                childLocationProvenanceKnown && !childLocationId && Boolean(opportunitySiteId),
             programCategoryId:
                 trimOrNull(row.program_category_id)
                 ?? trimOrNull((raw as { program_category_id?: unknown }).program_category_id),
