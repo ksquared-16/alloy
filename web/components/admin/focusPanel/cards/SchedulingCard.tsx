@@ -1,6 +1,6 @@
 "use client";
 
-import { loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
+import { invalidateFinancialConfig, loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
 import type { AssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
 import { acceptedTermBillingPeriods } from "@/lib/financials/billingPeriod";
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
@@ -2222,17 +2222,25 @@ function ScheduleEditor({
         }
     }
 
-    /** Re-read the canonical view, so what is shown is what was persisted. */
+    /**
+     * Re-read the canonical view, so what is shown is what was persisted.
+     *
+     * ── THROUGH THE SEAM, NOT AROUND IT ──────────────────────────────────────────────────────
+     *
+     * This read its own `fetch` with `cache: "no-store"`, which got the freshness it needed by
+     * leaving the one-request-per-opportunity loader every other consumer shares. Two readers of
+     * one endpoint is how a panel comes to show two answers for the same family, and the extra
+     * request lands on every accept and override.
+     *
+     * Retiring the entry and loading through the loader gets the same freshness with one reader:
+     * the invalidation is exactly what a mutation is supposed to do to a cached configuration.
+     */
     async function refreshPricingView(): Promise<void> {
         if (!opportunityId) return;
         try {
-            const res = await fetch(`/api/admin/financial-config/opportunity/${opportunityId}`, {
-                credentials: "include",
-                cache: "no-store",
-            });
-            if (!res.ok) return;
-            const body = (await res.json()) as { assignments?: AssignmentTuitionView[] };
-            const view = (body.assignments ?? []).find((v) => v.customerMemberId === child.id);
+            invalidateFinancialConfig(opportunityId);
+            const body = await loadFinancialConfig(opportunityId);
+            const view = ((body.assignments ?? []) as AssignmentTuitionView[]).find((v) => v.customerMemberId === child.id);
             if (view) setPricingView(view);
         } catch {
             /* The card keeps the last canonical answer rather than inventing a fresher one. */

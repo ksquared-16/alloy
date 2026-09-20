@@ -48,8 +48,12 @@ describe("Focus Panel Summary — no published doc resolves the canonical compos
             ["business_process", 1, 6],
             ["household", 7, 6],
             ["children", 7, 6],
-            ["scheduling", 1, 6],
-            ["billing_preview", 7, 6],
+            /*
+             * Assignment takes the full row Billing Preview used to share, because that card is
+             * retired from normal composition (11B) and this one now carries what it was placed
+             * for. The list is the composition's, and it moved when the composition did.
+             */
+            ["scheduling", 1, 12],
             ["employment", 7, 6],
             ["attendance", 1, 12],
             ["financials", 1, 6],
@@ -83,7 +87,6 @@ describe("Focus Panel Summary — no published doc resolves the canonical compos
             "children",
             "scheduling",
             "attendance",
-            "billing_preview",
             // Employment reads near the end on a narrow surface: it answers a question about a
             // person the case happens to employ, never the enrollment work this panel exists for.
             "employment",
