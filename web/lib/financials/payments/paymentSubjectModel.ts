@@ -31,7 +31,7 @@
  * ── WHAT IS CANONICAL TODAY, AND WHAT IS NOT ───────────────────────────────────────────────────
  *
  * Canonical, and read here: the org's provider merchant and its readiness
- * (`payment_provider_merchants`), and any stored payment methods (`customer_payment_methods`).
+ * (`payment_provider_merchants`), and any stored payment methods (`payment_methods`).
  * Canonical elsewhere: the payment itself, its actual payer, its method, its applications, refunds.
  *
  * NOT canonical anywhere: AUTOPAY. There is no table, no column and no writer — it appears only in

@@ -92,7 +92,7 @@ export interface OwnershipRouting {
 
 /**
  * A protected banking credential. Alloy has NO canonical destination for any of these and must not
- * acquire one to satisfy a packet: `customer_payment_methods` stores a Stripe token plus brand and
+ * acquire one to satisfy a packet: `payment_methods` stores a provider reference plus brand and
  * last4, and the raw number never reaches Alloy at all — it goes to the provider.
  *
  * This is the strictest rule in the module. It is checked before everything else, it can never

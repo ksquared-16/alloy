@@ -683,7 +683,7 @@ export async function buildDemoCleanupCounts(
         (await countByIn(supabase, "customer_member_contacts", "customer_id", cust, orgId));
     counts.customer_tags = cust.length ? await countByInNoOrg(supabase, "customer_tags", "customer_id", cust) : 0;
     counts.customer_subscriptions = await countByIn(supabase, "customer_subscriptions", "customer_id", cust, orgId);
-    counts.customer_payment_methods = cust.length ? await countByInNoOrg(supabase, "customer_payment_methods", "customer_id", cust) : 0;
+    counts.payment_methods = cust.length ? await countByInNoOrg(supabase, "payment_methods", "customer_id", cust) : 0;
     counts.customer_members =
         members.length + (idsOnly ? 0 : await countRows(supabase, "customer_members", orgId, orDemo));
     counts.customer_persons =
