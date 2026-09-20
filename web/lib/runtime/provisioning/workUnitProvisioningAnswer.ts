@@ -1675,6 +1675,56 @@ export async function composeWorkUnitProvisioningAnswer(
         familyMembership.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId)!;
 
     /*
+     * THE SITE LOOKUP STARTS HERE AND IS AWAITED AT THE COMMIT BOUNDARY.
+     *
+     * It was a serial `await` in the bindings block at the very TAIL of composition — after
+     * presentation, the children shell, waitlist, inquiry and avatar had all finished. There was
+     * no remaining work to overlap with, so its whole wall landed on the document: measured
+     * 1,949ms -> 3,061ms, about +1,112ms, which is the regression this repair exists to remove.
+     *
+     * Started here it runs ALONGSIDE the children shell and the child-grain branches below, which
+     * is the same shape those already use ("started here, awaited at the commit boundary"). The
+     * inputs are authoritative at this point: `req.orgId` came from the route gate and the subject
+     * row is resolved, so concurrency cannot let the read outrun the request's authority.
+     *
+     * ONE promise, ONE resolved answer, consumed by both the rail annotation and Children. It is
+     * never awaited early and never published before it is authoritative.
+     */
+    /*
+     * The family row for a child surface, resolved from the membership set already in hand —
+     * `enriched` is not in scope this early, and reaching for it would mean moving a read rather
+     * than moving a wait. `familyMembership` carries the same opportunity rows, so the location id
+     * it yields is the same one the late binding resolves; the join below re-checks rather than
+     * assuming.
+     */
+    const wave3RecordEarly = ((childSubjectRow?.contextId != null
+        ? ((familyMembership.find(
+              (r) => String((r as Record<string, unknown>).id) === childSubjectRow.contextId,
+          ) ?? null) as Record<string, unknown> | null)
+        : null) ?? (subjectRow as Record<string, unknown> | null) ?? {}) as Record<string, unknown>;
+    const wave3EarlyLocation = resolveOpportunityLeadLocationFields(wave3RecordEarly);
+    const tWave3Location = now();
+    const wave3LocationPromise: Promise<string | null> =
+        wave3EarlyLocation.locationLabel
+            ? Promise.resolve(wave3EarlyLocation.locationLabel)
+            : wave3EarlyLocation.locationId
+              ? resolveLocationById(req.supabase, req.orgId, wave3EarlyLocation.locationId)
+                    .then((loc) => {
+                        markSpan("location_lookup_ms", tWave3Location);
+                        return loc ? canonicalLocationDisplay(loc) : null;
+                    })
+                    /*
+                     * An outage is not an answer. Null here means UNKNOWN, and the binding below
+                     * omits the key rather than writing a label — so nothing claims the record has
+                     * no site, and the drawer still corrects it later.
+                     */
+                    .catch(() => {
+                        markSpan("location_lookup_failed_ms", tWave3Location);
+                        return null;
+                    })
+              : Promise.resolve(null);
+
+    /*
      * THE AUTHORITATIVE CHILDREN ANSWER — started here, awaited at the commit boundary.
      *
      * Children was the last blocking area that genuinely required the second round trip. Its card
@@ -2069,17 +2119,27 @@ export async function composeWorkUnitProvisioningAnswer(
      * the row genuinely has no location — and the card's existing empty state is then correct.
      * Neither path ever writes an empty-string label, which would render as a real blank site.
      */
-    let wave3LocationLabel: string | null = wave3LeadLocation.locationLabel || null;
+    // JOIN. The lookup started beside the children shell; this is only the wait it did not already
+    // cover. `location_join_wait_ms` is what the join actually cost — the number to hold honest.
+    const tWave3LocationJoin = now();
     const wave3LocationId = wave3LeadLocation.locationId || null;
-    if (!wave3LocationLabel && wave3LocationId) {
+    /*
+     * The early start was keyed to the row available before the children branches ran. If the
+     * authoritative record resolved to a DIFFERENT location, the speculative answer is not this
+     * record's and must not be shown — so it is discarded and the canonical lookup runs for the
+     * real id. Same owner, same display rule; the speculation is an optimisation, never a source.
+     */
+    let wave3LocationLabel: string | null =
+        wave3EarlyLocation.locationId === wave3LocationId ? await wave3LocationPromise : null;
+    if (wave3LocationLabel == null && wave3LocationId && wave3EarlyLocation.locationId !== wave3LocationId) {
         try {
-            const canonicalLocation = await resolveLocationById(req.supabase, req.orgId, wave3LocationId);
-            wave3LocationLabel = canonicalLocation ? canonicalLocationDisplay(canonicalLocation) : null;
+            const late = await resolveLocationById(req.supabase, req.orgId, wave3LocationId);
+            wave3LocationLabel = late ? canonicalLocationDisplay(late) : null;
         } catch {
-            // Outage, not absence. Leave it unknown and let the drawer answer later.
             wave3LocationLabel = null;
         }
     }
+    markSpan("location_join_wait_ms", tWave3LocationJoin);
     const wave3UpdatedAt = strOrNull(wave3Record.updated_at);
     /*
      * IDENTITY, NOT A PERMISSION VERDICT. The Household contact renders as plain text until it has
