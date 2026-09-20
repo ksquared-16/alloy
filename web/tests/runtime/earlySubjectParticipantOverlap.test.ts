@@ -32,6 +32,18 @@ describe("the composer announces the subject early", () => {
         expect(fire).toBeLessThan(children);
     });
 
+    it("the announcement is guarded on the SUBJECT, not on a constant", () => {
+        /*
+         * A position-only assertion cannot see an announcement that never fires: replacing the
+         * guard with `if (false)` leaves the call exactly where it was. The guard itself is the
+         * live wire, so it is what gets pinned.
+         */
+        const at = ANSWER.indexOf("req.onSubjectResolved?.(");
+        const guard = ANSWER.slice(ANSWER.lastIndexOf("if (", at), at);
+        expect(guard).toContain("chosen.entityId");
+        expect(guard).not.toMatch(/if \(\s*(false|true)\s*\)/);
+    });
+
     it("announces only — composition never awaits the listener", () => {
         // A value returned into composition would let route-side work deadlock the answer.
         expect(ANSWER).not.toMatch(/await\s+req\.onSubjectResolved/);
