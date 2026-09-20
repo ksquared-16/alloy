@@ -22,6 +22,8 @@ type StaffEntry = {
     displayName: string;
     email: string | null;
     positionLabel: string | null;
+    employeeNumber: string | null;
+    badgeNumber: string | null;
     employmentType: string | null;
     primaryLocationLabel: string | null;
     employmentStatus: string;
@@ -148,6 +150,11 @@ export default function StaffDirectoryPage({ positions, sites, todayYmd }: Staff
                                 </a>
                                 <p className="truncate text-[11px] text-alloy-midnight/55">
                                     {[
+                                        // Employee Number earns its place in the list because it is
+                                        // how operators refer to staff to each other and on paper.
+                                        // Badge Number does not: it is scanned, not read aloud, and
+                                        // the detail card is where it belongs.
+                                        s.employeeNumber ? `No. ${s.employeeNumber}` : null,
                                         s.positionLabel,
                                         s.employmentType ? (TYPE_LABELS[s.employmentType] ?? s.employmentType) : null,
                                         s.primaryLocationLabel,
