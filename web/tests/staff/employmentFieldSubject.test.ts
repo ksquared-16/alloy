@@ -133,15 +133,18 @@ describe("4. Slice 2 creates no qualification authority", () => {
         }
     });
 
-    it("adds no qualification table to the migration set", () => {
-        const { readdirSync } = require("node:fs") as typeof import("node:fs");
-        const { resolve } = require("node:path") as typeof import("node:path");
-        const files = readdirSync(resolve(__dirname, "../../../supabase/migrations"));
-        // Scoped to STAFF qualification. `certification_reset_authority` predates
-        // this workstream and is unrelated, so a broad regex would fail forever
-        // on someone else's migration.
-        const qual = files.filter((f) => /(staff|employment).*(qualification|certification)/i.test(f));
-        expect(qual).toEqual([]);
+    it("keeps qualifications OUT of the employment field path, wherever they live", () => {
+        // Slice 2 asserted no qualification migration existed at all. Slice 3
+        // created that authority deliberately, so the original assertion would now
+        // fail for the right reason — which makes it the wrong assertion to keep.
+        //
+        // What Slice 2 actually owns is the BOUNDARY: a qualification must never be
+        // an ordinary Employment configurable field, whatever else exists. That is
+        // what is asserted now, and it survives Slice 3 rather than fighting it.
+        const reg = stripComments(readFileSyncUtf8("lib/employment/employmentFieldRegistry.ts"));
+        for (const concept of ["qualification", "certification", "cpr", "first_aid", "background_check"]) {
+            expect(reg.toLowerCase()).not.toContain(concept);
+        }
     });
 });
 
