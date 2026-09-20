@@ -24,6 +24,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CreditCard, Landmark, Plus, RefreshCw } from "lucide-react";
 
+import PaymentMethodSetupField from "@/components/operationalCards/PaymentMethodSetupField";
 import { executePaymentMethodCommand } from "@/lib/financials/payments/paymentMethodCommands";
 
 export type StoredMethod = {
@@ -130,10 +131,21 @@ export default function PaymentMethodsSection({
     );
 
     /*
-     * ADDING opens the provider's own collection. This begins it; the provider's browser component
-     * takes over from the client secret, and the canonical row is written only when the server has
-     * read the provider back. Nothing is stored because somebody clicked here.
+     * ADDING IS TWO STEPS, because the payer has to actually hand something over in between.
+     *
+     * `begin` opens the provider's own collection and creates NOTHING canonical. The payer then
+     * completes it in Stripe's own fields, and only after that does `complete` ask the server to
+     * read the provider back and write the canonical row. A control that began a setup and had
+     * nowhere to enter an instrument would be a control that opens onto nothing.
      */
+    const [pendingSetup, setPendingSetup] = useState<{
+        rail: "card" | "ach";
+        setupRef: string;
+        clientSecret: string;
+        providerCustomerRef: string;
+        disclosure: string | null;
+    } | null>(null);
+
     const startAdd = useCallback(
         async (rail: "card" | "ach") => {
             const out = await run(`add:${rail}`, "add", {
@@ -144,18 +156,39 @@ export default function PaymentMethodsSection({
                 payer_name: payerName ?? "",
                 payer_email: payerEmail ?? "",
             });
-            if (out.ok) {
-                const disclosure = out.detail.authorization_disclosure;
-                if (typeof disclosure === "string" && disclosure) {
-                    /* Rendered to the payer before they authorize — Stripe requires it for cloning. */
-                    setPendingDisclosure(disclosure);
-                }
+            if (!out.ok) return;
+            const clientSecret = String(out.detail.client_secret ?? "");
+            const setupRef = String(out.detail.setup_ref ?? "");
+            if (!clientSecret || !setupRef) {
+                setError("The provider did not return a usable session. Nothing has been saved.");
+                return;
             }
+            const disclosure = out.detail.authorization_disclosure;
+            setPendingSetup({
+                rail,
+                setupRef,
+                clientSecret,
+                providerCustomerRef: String(out.detail.provider_customer_ref ?? ""),
+                disclosure: typeof disclosure === "string" && disclosure ? disclosure : null,
+            });
         },
         [customerId, payerEntityId, payerName, payerEmail, run],
     );
 
-    const [pendingDisclosure, setPendingDisclosure] = useState<string | null>(null);
+    /* The payer finished at the provider. The SERVER decides what that actually produced. */
+    const finishAdd = useCallback(async () => {
+        if (!pendingSetup) return;
+        await run("add:complete", "add", {
+            stage: "complete",
+            customer_id: customerId,
+            rail: pendingSetup.rail,
+            setup_ref: pendingSetup.setupRef,
+            provider_customer_ref: pendingSetup.providerCustomerRef,
+            payer_entity_id: payerEntityId ?? "",
+            make_default: false,
+        });
+        setPendingSetup(null);
+    }, [pendingSetup, customerId, payerEntityId, run]);
 
     const live = (methods ?? []).filter((m) => m.usabilityState !== "revoked");
     const removed = (methods ?? []).filter((m) => m.usabilityState === "revoked");
@@ -171,7 +204,7 @@ export default function PaymentMethodsSection({
                         <button
                             type="button"
                             data-testid="payment-method-add-card"
-                            disabled={busy !== null}
+                            disabled={busy !== null || pendingSetup !== null}
                             onClick={() => void startAdd("card")}
                             className="inline-flex items-center gap-1 rounded-md border border-alloy-stone/40 px-2 py-1 text-xs text-alloy-midnight/80 hover:bg-alloy-cloud/50 disabled:opacity-50"
                         >
@@ -180,7 +213,7 @@ export default function PaymentMethodsSection({
                         <button
                             type="button"
                             data-testid="payment-method-add-bank"
-                            disabled={busy !== null}
+                            disabled={busy !== null || pendingSetup !== null}
                             onClick={() => void startAdd("ach")}
                             className="inline-flex items-center gap-1 rounded-md border border-alloy-stone/40 px-2 py-1 text-xs text-alloy-midnight/80 hover:bg-alloy-cloud/50 disabled:opacity-50"
                         >
@@ -199,13 +232,21 @@ export default function PaymentMethodsSection({
                 </p>
             ) : null}
 
-            {pendingDisclosure ? (
-                <p
-                    data-testid="payment-methods-authorization"
-                    className="rounded-lg border border-alloy-stone/30 bg-alloy-cloud/40 px-3 py-2 text-xs text-alloy-midnight/75"
-                >
-                    {pendingDisclosure}
-                </p>
+            {pendingSetup ? (
+                <PaymentMethodSetupField
+                    clientSecret={pendingSetup.clientSecret}
+                    rail={pendingSetup.rail}
+                    authorizationDisclosure={pendingSetup.disclosure}
+                    disabled={busy !== null}
+                    onResult={(r) => {
+                        if (r.status === "failed") {
+                            setError(r.message ?? "That could not be saved.");
+                            return;
+                        }
+                        void finishAdd();
+                    }}
+                    onCancel={() => setPendingSetup(null)}
+                />
             ) : null}
 
             {methods === null ? (
