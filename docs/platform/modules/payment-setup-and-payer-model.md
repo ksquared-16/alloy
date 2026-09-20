@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-09-15
+last_reviewed: 2026-09-20
 supersedes: []
 ---
 
@@ -92,6 +92,23 @@ operator can act on the second and can only be told about the first.
 
 Current answers with no merchant connected: Record payment `available`; card and bank debit
 `not_configured`; manage methods and autopay `unsupported`.
+
+### A rail needs the merchant before it needs itself
+
+Two readiness facts sit on a merchant and they answer different questions: `readiness` says whether
+it can take money **at all**, `ach_readiness` says whether it can take money **on the bank rail**.
+They were read independently, so a merchant Stripe had restricted — or one that had never finished
+onboarding — still offered a bank debit whenever its ACH capability happened to say `ready`.
+Collection refused it correctly, so no money was ever at risk; what was wrong was what the operator
+had been told, and a control that opens onto nothing is worse than an absent one.
+
+A rail is available only when **both** permit it, merchant-level readiness checked first — the same
+order the collection path enforces. `railCollectionAvailable` in `payments/providerMerchant.ts` is
+that rule, and both the account card and `resolvePaymentSetup` read it rather than the columns.
+
+When the merchant is the blocker, the bank rail reports the **merchant's** state and reason. Telling
+an operator "bank debit is not enabled" when the account cannot charge at all would send them to fix
+the wrong thing.
 
 ---
 

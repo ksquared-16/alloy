@@ -231,16 +231,31 @@ export async function resolvePaymentSetup(
     const recordPayment = { state: "available" as PaymentCapabilityState, reason: null };
 
     const card = merchantCapability(merchant?.readiness ?? null, "card");
-    const ach = merchant
-        ? achReadiness === "ready"
-            ? { state: "available" as PaymentCapabilityState, reason: null }
-            : {
-                  state: "not_configured" as PaymentCapabilityState,
-                  reason: achReadiness
-                      ? `The provider reports bank debit as ${achReadiness.replace(/_/g, " ")}.`
-                      : "Bank debit has not been enabled on this organisation's merchant account.",
-              }
-        : { state: "not_configured" as PaymentCapabilityState, reason: NO_MERCHANT };
+    /*
+     * ── A RAIL NEEDS THE MERCHANT BEFORE IT NEEDS ITSELF ────────────────────────────────────────
+     *
+     * `ach_readiness` answered this alone, which let a merchant that cannot accept a single charge
+     * report bank debit as `available` — its ACH capability said `ready` and nothing asked whether
+     * the account could collect at all. Collection refused it correctly; the operator had simply
+     * been told otherwise.
+     *
+     * So when merchant-level readiness does not permit collection, ACH reports the MERCHANT's state
+     * and the merchant's reason. That is the truthful answer: the blocker is the account, not the
+     * rail, and telling an operator "bank debit is not enabled" would send them to fix the wrong
+     * thing.
+     */
+    const ach = !merchant
+        ? { state: "not_configured" as PaymentCapabilityState, reason: NO_MERCHANT }
+        : card.state !== "available"
+            ? card
+            : achReadiness === "ready"
+                ? { state: "available" as PaymentCapabilityState, reason: null }
+                : {
+                      state: "not_configured" as PaymentCapabilityState,
+                      reason: achReadiness
+                          ? `The provider reports bank debit as ${achReadiness.replace(/_/g, " ")}.`
+                          : "Bank debit has not been enabled on this organisation's merchant account.",
+                  };
 
     return {
         recordPayment,

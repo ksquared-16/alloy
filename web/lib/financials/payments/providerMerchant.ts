@@ -60,6 +60,38 @@ export type MerchantRefusal = {
 export type MerchantResolution = { ok: true; merchant: CollectionMerchant } | MerchantRefusal;
 
 /**
+ * WHETHER A RAIL CAN ACTUALLY COLLECT — one rule, so a surface cannot offer what the server refuses.
+ *
+ * Two readiness facts sit on a merchant and they answer different questions:
+ *
+ *   `readiness`      can this merchant take money AT ALL (Stripe `charges_enabled`)
+ *   `ach_readiness`  can it take money on the BANK rail (`us_bank_account_ach_payments`)
+ *
+ * They are independent in the data and were read independently on the surface, which produced a
+ * merchant that could not accept a single charge still offering a bank debit — because its ACH
+ * capability happened to say `ready`. Collection refused it correctly, so no money was ever at
+ * risk; what was wrong was what the operator had been told. A control that opens onto nothing is
+ * worse than an absent one.
+ *
+ * So a rail is available only when BOTH permit it, and merchant-level readiness is checked FIRST —
+ * the same order `resolveCollectionMerchant` enforces, which is what makes the surface and the
+ * server agree by construction rather than by coincidence.
+ *
+ * Fail-closed throughout: an absent merchant, an unrecognised readiness and a null `ach_readiness`
+ * ("nobody has asked the provider") are all unavailable.
+ */
+export function railCollectionAvailable(
+    merchant: { readiness?: string | null; achReadiness?: string | null } | null | undefined,
+    rail: CollectionRail,
+): boolean {
+    if (!merchant) return false;
+    // Merchant-level first. Anything other than `ready` means it cannot take money on ANY rail.
+    if (merchant.readiness !== "ready") return false;
+    if (rail === "card") return true;
+    return merchant.achReadiness === "ready";
+}
+
+/**
  * The org's active merchant for a processor, or a refusal that says why.
  *
  * `orgId` MUST come from the authenticated session. It is the only tenancy input, and scoping the

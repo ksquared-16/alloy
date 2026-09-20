@@ -239,3 +239,69 @@ describe("payment capabilities", () => {
         expect(setup.takePaymentCard.state).toBe("not_configured");
     });
 });
+
+/**
+ * A RAIL NEEDS THE MERCHANT BEFORE IT NEEDS ITSELF (N2).
+ *
+ * `ach_readiness` answered "can this organisation take a bank debit" on its own, so a merchant
+ * Stripe had restricted — or one that had never finished onboarding — still reported bank debit as
+ * available, because its ACH capability happened to say `ready`. Collection refused it correctly,
+ * so no money was ever at risk. What was wrong was what the operator had been told, and a control
+ * that opens onto nothing is worse than an absent one.
+ *
+ * The rule now reads merchant-level readiness FIRST, in the same order `resolveCollectionMerchant`
+ * enforces on the server — and when the merchant is the blocker, ACH says so rather than blaming
+ * the rail and sending an operator to fix the wrong thing.
+ */
+describe("rail availability requires the merchant AND the rail", () => {
+    const merchantWith = (readiness: string | null, achReadiness: string | null): Row => ({
+        processor: "stripe",
+        readiness,
+        ach_readiness: achReadiness,
+        is_active: true,
+    });
+
+    it("offers a bank debit only when the merchant can collect and ACH is enabled", async () => {
+        const setup = await resolvePaymentSetup(fakeSupabase({ merchant: merchantWith("ready", "ready") }), ARGS);
+        expect(setup.takePaymentCard.state).toBe("available");
+        expect(setup.takePaymentAch.state).toBe("available");
+        expect(setup.takePaymentAch.reason).toBeNull();
+    });
+
+    it("refuses the bank rail when the merchant can collect but ACH is not enabled — and names the rail", async () => {
+        const setup = await resolvePaymentSetup(fakeSupabase({ merchant: merchantWith("ready", null) }), ARGS);
+        expect(setup.takePaymentCard.state).toBe("available");
+        expect(setup.takePaymentAch.state).toBe("not_configured");
+        expect(setup.takePaymentAch.reason).toMatch(/bank debit/i);
+    });
+
+    it("refuses the bank rail when onboarding is unfinished, even with ACH ready — and blames the merchant", async () => {
+        const setup = await resolvePaymentSetup(
+            fakeSupabase({ merchant: merchantWith("onboarding_incomplete", "ready") }),
+            ARGS,
+        );
+        expect(setup.takePaymentCard.state).toBe("pending");
+        expect(setup.takePaymentAch.state, "a merchant that cannot charge cannot charge on any rail").toBe("pending");
+        expect(setup.takePaymentAch.reason, "the blocker named is the account, not the rail").toMatch(/onboarding/i);
+    });
+
+    it("refuses the bank rail on a restricted merchant, even with ACH ready", async () => {
+        const setup = await resolvePaymentSetup(fakeSupabase({ merchant: merchantWith("restricted", "ready") }), ARGS);
+        expect(setup.takePaymentCard.state).toBe("failed");
+        expect(setup.takePaymentAch.state).toBe("failed");
+        expect(setup.takePaymentAch.reason).toMatch(/restricted/i);
+    });
+
+    it("fails closed on an unknown merchant readiness, and on no merchant at all", async () => {
+        const unknown = await resolvePaymentSetup(
+            fakeSupabase({ merchant: merchantWith("something_new_from_the_provider", "ready") }),
+            ARGS,
+        );
+        expect(unknown.takePaymentAch.state).not.toBe("available");
+
+        const none = await resolvePaymentSetup(fakeSupabase({ merchant: null }), ARGS);
+        expect(none.takePaymentCard.state).toBe("not_configured");
+        expect(none.takePaymentAch.state).toBe("not_configured");
+        expect(none.takePaymentAch.reason).toMatch(/no payment provider is connected/i);
+    });
+});
