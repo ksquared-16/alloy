@@ -31,6 +31,7 @@ export type PersonEmploymentPeriod = {
     primary_location_id: string | null;
     primary_location_label: string | null;
     external_employee_id: string | null;
+    badge_number: string | null;
     start_date: string;
     end_date: string | null;
     end_reason_key: string | null;
@@ -108,6 +109,7 @@ function toPeriod(
             ? (locationLabels.get(row.primary_location_id) ?? null)
             : null,
         external_employee_id: row.external_employee_id,
+        badge_number: row.badge_number,
         start_date: row.start_date,
         end_date: row.end_date,
         end_reason_key: row.end_reason_key,

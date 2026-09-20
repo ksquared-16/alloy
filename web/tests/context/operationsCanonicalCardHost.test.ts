@@ -227,6 +227,7 @@ describe("Employment is already canonical, and Operations renders that one", () 
             primary_location_id: "loc-riverside",
             primary_location_label: "Northwind — Riverside Campus",
             external_employee_id: null,
+            badge_number: null,
             start_date: "2026-01-05",
             end_date: null,
             end_reason_key: null,

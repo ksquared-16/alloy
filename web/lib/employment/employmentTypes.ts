@@ -69,6 +69,7 @@ export type EmploymentRow = {
     position_id: string | null;
     primary_location_id: string | null;
     external_employee_id: string | null;
+    badge_number: string | null;
     start_date: string;
     end_date: string | null;
     end_reason_key: string | null;
@@ -93,7 +94,7 @@ export type EmploymentPositionRow = {
 
 export const EMPLOYMENT_SELECT_COLUMNS =
     "id, org_id, person_id, employment_status, employment_type, position_id, primary_location_id, " +
-    "external_employee_id, start_date, end_date, end_reason_key, source_key, supersedes_employment_id, " +
+    "external_employee_id, badge_number, start_date, end_date, end_reason_key, source_key, supersedes_employment_id, " +
     "metadata, created_by, updated_by, created_at, updated_at";
 
 /**
