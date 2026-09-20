@@ -207,3 +207,91 @@ COMMENT ON TABLE public.staff_qualification_requirements IS
 CREATE INDEX IF NOT EXISTS staff_qualification_requirements_org_scope_idx
     ON public.staff_qualification_requirements (org_id, scope_type, scope_id)
     WHERE is_active;
+
+-- =============================================================================
+-- ROW LEVEL SECURITY
+--
+-- ── WHY THIS IS NOT OPTIONAL, MEASURED RATHER THAN ASSUMED ──
+--
+-- `pg_default_acl` on this schema carries
+--   postgres | public | r | {..., authenticated=r/postgres, ...}
+-- so EVERY table created in `public` is granted SELECT to `authenticated` the
+-- moment it exists, with no GRANT anywhere in this file. RLS is therefore the
+-- only thing standing between a new table and a cross-tenant read through
+-- PostgREST.
+--
+-- Without this block these four tables were physically readable, in full and
+-- across every organization, by any authenticated user of any tenant. That was
+-- measured on the certification stack after the first apply: RLS false on all
+-- four, zero policies, and `authenticated` holding SELECT. Of the 296
+-- authenticated-readable tables in `public`, 290 enable RLS — these four were
+-- four of the six that did not.
+--
+-- The posture copies `employments` and `documents` deliberately, because those
+-- are the tables a qualification hangs off and a boundary that disagreed with
+-- them would be the weaker of the two everywhere they meet:
+--   read   — owner / admin / ops / manager
+--   write  — owner / admin / ops
+--   service_role — unrestricted (it already bypasses RLS; the policy makes the
+--                  admin client's authority explicit rather than incidental)
+--
+-- Re-runnable by construction: ENABLE is idempotent and every policy is dropped
+-- before it is created, so this applies cleanly to a database that already
+-- carries the tables from an earlier run of this file.
+-- =============================================================================
+
+ALTER TABLE public.staff_qualification_types ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.staff_qualifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.staff_qualification_evidence ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.staff_qualification_requirements ENABLE ROW LEVEL SECURITY;
+
+DO $$
+DECLARE
+    t text;
+BEGIN
+    FOREACH t IN ARRAY ARRAY[
+        'staff_qualification_types',
+        'staff_qualifications',
+        'staff_qualification_evidence',
+        'staff_qualification_requirements'
+    ]
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', t || '_org_member_select', t);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', t || '_org_operator_insert', t);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', t || '_org_operator_update', t);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', t || '_org_operator_delete', t);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', t || '_service_all', t);
+
+        -- READ — the roles that may see a staff record may see its credentials.
+        EXECUTE format($f$
+            CREATE POLICY %I ON public.%I FOR SELECT TO authenticated
+            USING (has_org_role(org_id, ARRAY['owner','admin','ops','manager']))
+        $f$, t || '_org_member_select', t);
+
+        -- WRITE — narrower than read, exactly as employments is. A manager may
+        -- see that a certification expired; recording or verifying one is an
+        -- operator act.
+        EXECUTE format($f$
+            CREATE POLICY %I ON public.%I FOR INSERT TO authenticated
+            WITH CHECK (has_org_role(org_id, ARRAY['owner','admin','ops']))
+        $f$, t || '_org_operator_insert', t);
+
+        EXECUTE format($f$
+            CREATE POLICY %I ON public.%I FOR UPDATE TO authenticated
+            USING (has_org_role(org_id, ARRAY['owner','admin','ops']))
+            WITH CHECK (has_org_role(org_id, ARRAY['owner','admin','ops']))
+        $f$, t || '_org_operator_update', t);
+
+        EXECUTE format($f$
+            CREATE POLICY %I ON public.%I FOR DELETE TO authenticated
+            USING (has_org_role(org_id, ARRAY['owner','admin','ops']))
+        $f$, t || '_org_operator_delete', t);
+
+        EXECUTE format($f$
+            CREATE POLICY %I ON public.%I FOR ALL TO authenticated
+            USING (auth.role() = 'service_role')
+            WITH CHECK (auth.role() = 'service_role')
+        $f$, t || '_service_all', t);
+    END LOOP;
+END
+$$;
