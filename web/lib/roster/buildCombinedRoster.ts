@@ -47,7 +47,7 @@ import { summarizeStaffPresenceByDay } from "@/lib/staffPresence/staffPresenceFo
 import { listStaffPresenceForSiteDate } from "@/lib/staffPresence/staffPresenceService";
 import { loadOperationalExpectationInputs } from "@/lib/childcareOperational/expectations/loadOperationalExpectationInputs";
 import { loadExpectationAgeGroups } from "@/lib/childcareOperational/expectations/resolveExpectationAgeGroups";
-import { resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
+import { operationalGroupRooms, resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
 import { resolveCurrentWhereabouts } from "@/lib/roster/resolveCurrentWhereabouts";
 import {
     ATTENDANCE_SUBJECT_KINDS,
@@ -224,6 +224,11 @@ export async function buildCombinedRoster(
     const { orgId, siteLocationId, date } = input;
     const weekday = weekdayOf(date);
 
+    // EVERY unit, deliberately — this is a name lookup, not an option set. The
+    // attendance events folded below may legitimately name a shared space (a child
+    // on the playground) or a physical room, and a roster that could not name them
+    // would render a blank where a real location belongs. Narrowing this to
+    // operational groups is the one change that would break it.
     const rooms = await resolveRoomsForLocation(supabase, orgId, siteLocationId);
     const roomNameById = new Map(rooms.map((r) => [r.id, r.name?.trim() || "Room"]));
 
@@ -498,9 +503,19 @@ export async function buildCombinedRoster(
 
     const staffByRoomKey = new Map(staffSupply.cells.map((c) => [staffSupplyCellKey(c.roomLocationId, c.date), c]));
 
+    // A roster cell is a STAFFING row: occupancy, required staff, ratio breach.
+    // Those are facts about an operational GROUP, so only groups are seeded here —
+    // otherwise adding a physical room or a playground manufactures an empty cell
+    // that reports as a room awaiting ratio configuration, and inflates
+    // totals.roomsUnknown with locations that never had a staffing obligation.
+    //
+    // Seeding, not filtering: the two sources below still admit any location that
+    // genuinely has a child or a scheduled staff member today, so a child actually
+    // on the playground keeps a row. `rooms` above stays unnarrowed on purpose —
+    // it is the name lookup, and it must still be able to name that location.
     const roomIds = [
         ...new Set([
-            ...rooms.map((r) => r.id),
+            ...operationalGroupRooms(rooms).map((r) => r.id),
             ...childrenByRoom.keys(),
             ...staffSupply.cells
                 .map((c) => c.roomLocationId)
