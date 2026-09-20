@@ -118,6 +118,38 @@ export type RouteTimingMarks = {
          * acceptance gate, because the matching path must run the producers EXACTLY ONCE and no
          * duration can tell a reuse apart from a fast second run.
          */
+        /**
+         * THE WU-03 COUNT SEED (P0-7.6).
+         *
+         * The counts are the product's completion owner: measured deployed, WU-03's final
+         * authoritative mutation lands ~11ms after the browser's separate queue-view-totals
+         * request returns. The seed computes them inside the document instead, started from the
+         * composer's announcement so it overlaps the rest of composition.
+         *
+         * `join_wait_ms` is the honest price: whatever the document waited AFTER its own work
+         * finished. It is published separately from `page_total` precisely so relocating the
+         * latency cannot be mistaken for removing it.
+         */
+        work_view_totals_seed?: {
+            /** Compose start → the composer announced the configured count locations. */
+            announce_offset_ms: number | null;
+            /** The seed's own duration. */
+            seed_ms: number | null;
+            /** Compose start → seed settled. */
+            seed_end_offset_ms: number | null;
+            /** Compose start → composition settled. */
+            compose_end_offset_ms: number | null;
+            /** The part of the seed that ran while composition was still running. */
+            overlap_ms: number | null;
+            /** ADDED DOCUMENT WAIT: what was left after everything else finished. */
+            join_wait_ms: number | null;
+            /** resolved | seed_failed | no_announcement | a specific unavailable reason. */
+            outcome: string;
+            /** Distinct (work unit, queue key) lanes the seed evaluated. */
+            groups: number | null;
+            /** Count rows produced. Null when the seed did not resolve — never 0 for unavailable. */
+            totals: number | null;
+        };
         overlap?: {
             /** Compose start → the composer's subject announcement. */
             announce_offset_ms: number | null;

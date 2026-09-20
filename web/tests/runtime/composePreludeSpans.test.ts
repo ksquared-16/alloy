@@ -176,15 +176,52 @@ describe("the compose's own semantics are untouched", () => {
         const awaits = [...ROUTE_CODE.matchAll(/await\s+([A-Za-z_$][\w$.]*|\(async)/g)].map(
             (m) => m[1],
         );
+        /*
+         * EXTENDED for the WU-03 count seed, which is why this list is kept exact: it failed the
+         * moment the seed added awaits, and each one has to argue for itself here.
+         *
+         *   3 Promise.all           — scope constraints + viewer timezone, the only two facts the
+         *                             seed needs that the composer does not already hold. They are
+         *                             gate-derived, so the route must resolve them; concurrent
+         *                             with each other, and the whole listener runs BESIDE
+         *                             composition rather than after it.
+         *   4 resolveWorkViewTotalsSeed
+         *                           — the counts themselves, inside the announcement listener.
+         *   10 seedRef.run          — the join. It awaits work already in flight, and whatever it
+         *                             waits is published as `join_wait_ms`, the ADDED DOCUMENT
+         *                             WAIT, rather than disappearing into page_total.
+         *
+         * None of these is a new serial step ahead of the answer: 3 and 4 run inside a listener
+         * the composer fires mid-composition, and 10 is the join for that work.
+         */
         expect(awaits).toEqual([
             "resolveWorkUnitRouteIdentity",
             "composeWorkUnitProvisioningAnswer",
+            "Promise.all",
+            "resolveWorkViewTotalsSeed",
             "resolveSoleEnrollmentParticipantForOpportunity",
             "projectFocusPanelCardProducers",
             "earlyRef.run",
             "(async",
             "(async",
+            "seedRef.run",
         ]);
+        /*
+         * THE SEED MUST START FROM THE ANNOUNCEMENT, NOT FROM THE FINISHED ANSWER.
+         *
+         * If `resolveWorkViewTotalsSeed` were awaited after `composeWorkUnitProvisioningAnswer`
+         * returned, the document would simply pay the old ~1.6s count wall serially — the exact
+         * failure this slice exists to avoid, and one that every duration above would still look
+         * healthy under.
+         */
+        const listenerAt = ROUTE_CODE.indexOf("onWorkViewCountTargetsResolved:");
+        const seedCallAt = ROUTE_CODE.indexOf("await resolveWorkViewTotalsSeed(");
+        const composeAt = ROUTE_CODE.indexOf("await composeWorkUnitProvisioningAnswer(");
+        expect(listenerAt).toBeGreaterThan(-1);
+        expect(seedCallAt).toBeGreaterThan(listenerAt);
+        // The listener is an ARGUMENT to the compose call, so the seed sits inside it.
+        expect(seedCallAt).toBeGreaterThan(composeAt);
+        expect(ROUTE_CODE.indexOf("await seedRef.run")).toBeGreaterThan(seedCallAt);
         // The two IIFEs exist to COUNT, and for nothing else. An IIFE that wrapped real new work
         // would be a serial addition wearing a diagnostic's clothes.
         expect((ROUTE_CODE.match(/await \(async \(\) => \{/g) ?? []).length).toBe(2);

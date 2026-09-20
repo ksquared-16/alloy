@@ -58,8 +58,80 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
      *                              + JSON serialization
      */
     let drawerVmServerHeaders: Record<string, string | null> = {};
+    /*
+     * THE COMPLETION OWNER'S OWN SERVER DAG.
+     *
+     * /api/admin/queue-view-totals is what FIRST_ORDER_VISIBLE_COMPLETE now waits on — WU-03's final
+     * authoritative mutation lands ~11ms after it responds. Its Server-Timing header carries the
+     * phase decomposition; the request body carries the configured view set it was asked for, and
+     * the response carries which views answered vs stayed UNKNOWN.
+     *
+     * All three are captured because the phases alone cannot separate fixed setup from per-view
+     * cost, and because the configured view set is part of the specimen's identity: a count that got
+     * faster because a view left the configuration has not got faster.
+     */
+    let queueViewTotals: Record<string, unknown> | null = null;
     page.on("response", (r) => {
         const u = r.url();
+        if (/\/api\/admin\/queue-view-totals/.test(u)) {
+            const h = r.headers();
+            const req = r.request();
+            let requested: unknown = null;
+            try {
+                requested = JSON.parse(req.postData() || "null");
+            } catch {
+                requested = null;
+            }
+            const targets = Array.isArray((requested as { targets?: unknown[] })?.targets)
+                ? ((requested as { targets: Array<Record<string, unknown>> }).targets)
+                : [];
+            queueViewTotals = {
+                status: r.status(),
+                serverTiming: h["server-timing"] ?? null,
+                requestedTargetCount: targets.length,
+                requestedViewIds: targets.map((t) => String(t.workViewId ?? "")),
+                /*
+                 * THE GROUP KEY, not just the view id.
+                 *
+                 * The route groups by (workUnitId, queueKey) and memoizes access + department
+                 * metadata BY workUnitId. So five groups over ONE work unit resolve access once
+                 * and await it five times, while five groups over five work units resolve it five
+                 * times. `qvt_access` accumulates awaits and cannot tell those apart — only the
+                 * distinct work-unit count can, and it decides whether there is any duplication
+                 * inside this request at all.
+                 */
+                requestedTargets: targets.map((t) => ({
+                    w: String(t.workUnitId ?? ""),
+                    q: String(t.queueKey ?? ""),
+                    v: String(t.workViewId ?? ""),
+                })),
+                distinctWorkUnitIds: [...new Set(targets.map((t) => String(t.workUnitId ?? "")))],
+                distinctQueueKeys: [...new Set(targets.map((t) => String(t.queueKey ?? "")))],
+                distinctGroupKeys: [
+                    ...new Set(targets.map((t) => String(t.workUnitId ?? "") + "::" + String(t.queueKey ?? ""))),
+                ],
+                selectedSiteId: (requested as { selectedSiteId?: unknown })?.selectedSiteId ?? null,
+            };
+            void r
+                .json()
+                .then((j: { totals?: Array<{ workViewId?: string; count?: number | null; known?: boolean }> }) => {
+                    const totals = Array.isArray(j?.totals) ? j.totals : [];
+                    if (queueViewTotals) {
+                        queueViewTotals.returnedCount = totals.length;
+                        // `known:false` is UNKNOWN, which must never be read as a count of zero.
+                        queueViewTotals.knownCount = totals.filter((t) => t.known).length;
+                        queueViewTotals.unknownViewIds = totals
+                            .filter((t) => !t.known)
+                            .map((t) => String(t.workViewId ?? ""));
+                        queueViewTotals.counts = totals.map((t) => ({
+                            v: String(t.workViewId ?? ""),
+                            c: t.count ?? null,
+                            k: !!t.known,
+                        }));
+                    }
+                })
+                .catch(() => {});
+        }
         if (/\/api\/admin\/view-models\/drawer\/opportunity\//.test(u) && r.status() === 200) {
             const h = r.headers();
             drawerVmServerHeaders = {
@@ -446,6 +518,7 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         focusChain,
         drawerVmTiming,
         drawerVmServerHeaders,
+        queueViewTotals,
         retiredReadProbe: {
             eppEnrichmentHttp: requests.filter((r) => /effective-enrollment|epp/i.test(r.url)).length,
             tourEnrichmentHttp: requests.filter((r) => /tour-bookings|active-tour/i.test(r.url)).length,
@@ -465,6 +538,8 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         + `chain=${focusChain.diag ? "present" : "ABSENT"} flips=${(focusChain.diag as {flips?:unknown[]} | null)?.flips?.length ?? 0} `
         + `postMut=${postComplete} `
         + `api=${requests.length} marks=${marks ? "present" : "ABSENT"} rows=${dataProbe.rows} sections=${Object.keys(regions.presentSections).length} `
+        + `qvt=${(queueViewTotals as {serverTiming?:string}|null)?.serverTiming ?? "ABSENT"} `
+        + `qvtViews=${(queueViewTotals as {requestedTargetCount?:number}|null)?.requestedTargetCount ?? "-"} `
         + `valid=${out.valid} signedOut=${dataProbe.signedOut} auth=${correctness.authenticated} schemaErr=${correctness.schemaError} unavail=[${correctness.unavailableCards.join("|")}] `
         + `kpiSet=[${configIdentity.configuredKpiSlots.join("|")}] `
         + `cardSet=[${configIdentity.configuredCardSet.join("|")}] `
