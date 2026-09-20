@@ -358,6 +358,47 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         try { return await (await fetch("/api/build-info")).json(); } catch { return null; }
     });
 
+    /*
+     * FIRST-ORDER CORRECTNESS — because a faster wrong answer is a regression, not a win.
+     *
+     * The producer overlap starts the card producers from a SPECULATIVE subject and household
+     * announced before composition settles. The join is supposed to verify both against the
+     * canonical identities and discard the whole run on any mismatch. That guard is unit-gated,
+     * but only the deployed surface can show whether the cards actually still say the right thing.
+     *
+     * So every sample carries the first-order text of every configured card, plus the two failure
+     * shapes that a wrong identity or a lost authority would produce: a card that collapsed to
+     * "unavailable"/"forbidden", and a schema/records error. A timing taken on a surface in either
+     * state is not a measurement of the product.
+     */
+    const correctness = await page.evaluate(() => {
+        const norm = (t: string) => t.replace(/\s+/g, " ").trim();
+        const cards = [...document.querySelectorAll("article.alloy-os-ucard")].map((el) => {
+            const key =
+                el.getAttribute("data-universal-card-key") ||
+                el.closest("[data-universal-card-key]")?.getAttribute("data-universal-card-key") ||
+                "unidentified";
+            const text = norm((el as HTMLElement).innerText || "");
+            return {
+                key,
+                chars: text.length,
+                firstOrder: text.slice(0, 400),
+                unavailable: /\bunavailable\b|\bforbidden\b|not available|no access/i.test(text),
+                recordsUnavailable: /records unavailable|unable to load|could not load/i.test(text),
+            };
+        });
+        const body = norm(document.body.innerText || "");
+        return {
+            cards,
+            cardCount: cards.length,
+            unavailableCards: cards.filter((c) => c.unavailable).map((c) => c.key),
+            recordsUnavailableCards: cards.filter((c) => c.recordsUnavailable).map((c) => c.key),
+            // A PostgREST/schema failure surfaces as text on the page rather than a thrown error.
+            schemaError: /schema cache|PGRST\d+|column .* does not exist|relation .* does not exist/i.test(body),
+            authenticated: !/sign in to continue|please sign in|log in to continue/i.test(body.slice(0, 2000)),
+        };
+    });
+
     const out = {
         label: LABEL, url: URL_PATH, deployedSha: buildInfo?.gitSha ?? null,
         wall: {
@@ -371,7 +412,19 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         marks,
         dataProbe,
         regions,
-        valid: dataProbe.rows > 0 && !dataProbe.signedOut,
+        correctness,
+        /*
+         * A sample is valid only if the surface it measured was the real, authenticated,
+         * fully-answering product. Rows alone were enough while the only failure mode was an
+         * expired session; the overlap adds identity and authority failure modes that render a
+         * populated page which is nonetheless wrong.
+         */
+        valid:
+            dataProbe.rows > 0 &&
+            !dataProbe.signedOut &&
+            correctness.authenticated &&
+            !correctness.schemaError &&
+            correctness.recordsUnavailableCards.length === 0,
         apiRequestCount: requests.length,
         drawerBlocked,
         warmUpUrl: WARM_URL || null,
@@ -412,7 +465,7 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         + `chain=${focusChain.diag ? "present" : "ABSENT"} flips=${(focusChain.diag as {flips?:unknown[]} | null)?.flips?.length ?? 0} `
         + `postMut=${postComplete} `
         + `api=${requests.length} marks=${marks ? "present" : "ABSENT"} rows=${dataProbe.rows} sections=${Object.keys(regions.presentSections).length} `
-        + `valid=${out.valid} signedOut=${dataProbe.signedOut} `
+        + `valid=${out.valid} signedOut=${dataProbe.signedOut} auth=${correctness.authenticated} schemaErr=${correctness.schemaError} unavail=[${correctness.unavailableCards.join("|")}] `
         + `kpiSet=[${configIdentity.configuredKpiSlots.join("|")}] `
         + `cardSet=[${configIdentity.configuredCardSet.join("|")}] `
         + `kpis=${configIdentity.configuredKpiCount} cards=${configIdentity.configuredCardCount}`,
