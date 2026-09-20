@@ -218,6 +218,45 @@ groups by calendar month and a ledger that silently regrouped would restate hist
 One tiling, called twice: `assignmentBillingPeriods` is shared by generation **and preview**, so a
 preview cannot show four weeks and then create five.
 
+### 3.0.9 Discounts, the Add target, and prepaid
+
+**DISCOUNT POLICY** — the organisation's commercial rule, authored in
+`/organization/financials` → Policies and owned by `commercial_policies`.
+
+**DISCOUNT FORECAST** — a read-only prediction for one commercial relationship.
+`forecastAssignmentReductions` asks the three readers the application path asks — `readPolicies`,
+`resolveHouseholdEligibility`, `resolveFinancialReductions` — over the ACCEPTED tuition for the
+current period, and writes nothing: no reduction application, no charge, no adjustment, no ledger
+row. It decides no eligibility of its own, because a forecast that reasoned independently would be
+a second opinion about money and the first disagreement with the ledger would be unattributable.
+
+The forecast asks about a **calendar month** even when the commercial period is weekly: reductions
+resolve per month, and the month it names is the one the application path will resolve the same
+charge under. That is what makes the two answers comparable.
+
+**DISCOUNT EXCEPTION** — *not* an enable/disable Boolean. `discount_enabled = false` would say "no
+discounts here" about every policy at once, for all time, with nobody's name on it, and would
+silently suppress any policy authored later. An exception names one policy, one commercial
+relationship, an effective window, an operator and a reason, and supersedes rather than mutating.
+It is scoped by `opportunity_customer_member_id` — the same through-line an accepted pricing term
+uses — so no second "assignment id" concept exists for discounts.
+
+**UNIFIED ADD TARGET** — one control answering "who receives this charge": Household explicitly, or
+one or more children, mutually exclusive. An empty selection is **never** Household; that ambiguity
+is why Household is a value rather than the absence of ticks, and Confirm is unavailable until a
+target is chosen. Category grain still governs what is offered.
+
+A SUBJECT IS A CHILD, not an agreement. A child with a closed enrolment beside a live one has one
+entry in the target, carrying the active agreement as its billable source.
+
+**PREPAID** — posted, unapplied money, available to allocate. It is a separate account position
+from Current Balance and is never netted into it; zero is silence, never `$0.00`. The same
+canonical projection feeds Focus Panel Summary, Focus Panel Details and Financials → Accounts.
+
+**PREPAID IS NOT A DEPOSIT.** No surface may label it one. Held money has a lifecycle — taken,
+held, forfeited, refunded, applied — that this platform does not model, and calling available
+prepaid a deposit would promise it. `DEPOSIT_OPERATOR_PRODUCTIZATION_GAP` belongs to Payments.
+
 ### 3.1.3 The accounting period lifecycle
 
 **Owner:** `financial_accounting_calendars` + `financial_accounting_periods`;
