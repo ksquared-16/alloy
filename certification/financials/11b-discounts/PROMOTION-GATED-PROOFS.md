@@ -4,6 +4,10 @@
 **Candidate lineage:** `agent/financials-11a-regression-repair`
 **Migration:** `supabase/migrations/20260924120000_commercial_policy_exceptions.sql`
 
+**Reconciled with staging 2026-09-20** (`d1b8f1319`, Payments V1 W1–W4). The migration remains
+correctly ordered — it is the highest version in the tree, after `20260923120000_payment_holds.sql`
+— with no timestamp collision, no high-water skip, and no equivalent table from another program.
+
 ---
 
 ## Why this file exists
