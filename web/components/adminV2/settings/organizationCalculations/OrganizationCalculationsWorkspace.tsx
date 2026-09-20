@@ -49,10 +49,10 @@ import {
     type PivotBuilderDraft,
 } from "@/lib/organizationCalculations/pivotBuilder";
 import {
-import { buildRoomPickerOptions } from "@/lib/locations/roomPickerOptions";
     filterOperatorCalculations,
     isDeveloperCollectionMode,
 } from "@/lib/organizationCalculations/operatorCollectionFilter";
+import { buildRoomPickerOptions } from "@/lib/locations/roomPickerOptions";
 
 type CalcListItem = {
     id: string;

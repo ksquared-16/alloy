@@ -156,7 +156,6 @@ async function renderPanel(roomId: string, canMutate = true) {
                         throw new TopologyRefusalError(j.error ?? "failed", j.code ?? null);
                     }
                 }}
-                rows={[]}
                 rooms={rows.filter((r) => r.location_type === "unit")}
                 selectedRoomId={roomId}
                 onSelectRoom={() => {}}

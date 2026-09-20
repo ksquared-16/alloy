@@ -8,11 +8,11 @@ import {
     US_LOCATION_TIMEZONE_OPTIONS,
 } from "@/lib/locations/locationWorkspaceModel";
 import {
-import { formatCapacityCoverage } from "@/lib/locations/capacityAdoptionState";
     ConfigurationDetailCard,
     ConfigurationEmptyState,
     ConfigurationPrimaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import { formatCapacityCoverage } from "@/lib/locations/capacityAdoptionState";
 
 function metadataString(metadata: unknown, key: string): string {
     if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return "";

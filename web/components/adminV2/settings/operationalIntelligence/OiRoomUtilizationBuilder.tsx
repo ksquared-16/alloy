@@ -7,10 +7,10 @@
 
 import { useEffect, useState } from "react";
 import {
-import { buildRoomPickerOptions } from "@/lib/locations/roomPickerOptions";
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import { buildRoomPickerOptions } from "@/lib/locations/roomPickerOptions";
 
 type RoomOption = { id: string; label: string; siteLabel: string };
 

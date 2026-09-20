@@ -3,10 +3,10 @@
 import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import type {
-import { formatCapacityCoverage } from "@/lib/locations/capacityAdoptionState";
     LocationsCollectionModel,
     LocationWorkspaceTab,
 } from "@/lib/locations/locationWorkspaceModel";
+import { formatCapacityCoverage } from "@/lib/locations/capacityAdoptionState";
 
 export function locationsCollectionUsesBoundedScroll(locationCount: number): boolean {
     return locationCount >= 7;

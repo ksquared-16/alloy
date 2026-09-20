@@ -132,6 +132,7 @@ export default function LocationsConfigurationPage({
         createRoomUnit,
         patchLocation,
         patchProgramCategory,
+        refresh,
         refreshPrograms,
         roomCapacitySummaryForSite,
         programOptionsForSite,
