@@ -1,0 +1,193 @@
+/**
+ * WAVE-3 CONVERGENCE — the document owns first-order truth for three configured cards.
+ *
+ * Measured on deployed staging before this change: business_process, children and household made
+ * their first CORRECT visible statement ~2,974ms after the first card wave, and only once the
+ * drawer arrived. Withholding the drawer did not make them late — it left them WRONG: children
+ * read "—" for a site the document row already named, business_process read the generic card title
+ * with an empty timeline, and household showed a contact it could not act on.
+ *
+ * These gates hold the resulting contract. They are deliberately split between the two halves that
+ * can each break independently:
+ *
+ *   the COMPOSER must carry the values (it already read every one of them);
+ *   the COMMIT MODEL must project them (it previously hardcoded `stages: []`).
+ *
+ * WHY SOURCE ASSERTIONS. The composer is a ~2,000-line async function over a live Supabase client;
+ * standing up a fixture that reaches the binding block would test the fixture, not the contract.
+ * The decisions being pinned are single expressions — which resolver, which key, which argument —
+ * so the gates read those expressions. Where a decision IS drivable as a pure function, it is
+ * driven instead: see `focusPanelWorkModeModelFromProvisioningAnswer` below, which is exercised
+ * for real.
+ */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
+
+const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
+/** Comments stripped, so a negative assertion reads code and not the prose explaining it. */
+const codeOf = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+const ANSWER = codeOf(read("lib/runtime/provisioning/workUnitProvisioningAnswer.ts"));
+const MODEL = codeOf(read("lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer.ts"));
+const BODY = codeOf(read("components/admin/focusPanel/OpportunityFocusPanelBody.tsx"));
+
+/** A minimal commit input. Only the fields under test are meaningful. */
+const input = (over: Record<string, unknown> = {}) =>
+    ({
+        mode: "work",
+        subjectId: "opp-1",
+        title: "Specq household",
+        statusLabel: "Waitlist",
+        statusKey: "waitlist",
+        canMutate: false,
+        perspective: null,
+        stageWorkRuntime: null,
+        operationalProjection: null,
+        situation: { stageKey: "waitlist", stageLabel: "Waitlist", purpose: null },
+        primaryAction: null,
+        subjectIdentityTruth: null,
+        subjectGrain: null,
+        ...over,
+    }) as never;
+
+describe("BUSINESS_PROCESS — the configured rail is not a settlement fact", () => {
+    it("A — configured lifecycle stages are carried into the commit context", () => {
+        const stages = [
+            { key: "lead", label: "Lead" },
+            { key: "tour", label: "Tour", support: ["North Campus"] },
+            { key: "enrolled", label: "Enrolled" },
+        ];
+        const ctx = buildCommitCriticalOperationalContext(input({ businessProcessStages: stages }));
+        expect(ctx.businessProcess.stages).toHaveLength(3);
+        expect((ctx.businessProcess.stages as Array<{ key: string }>).map((s) => s.key)).toEqual([
+            "lead",
+            "tour",
+            "enrolled",
+        ]);
+    });
+
+    it("B — the configured process name is carried", () => {
+        const ctx = buildCommitCriticalOperationalContext(input({ businessProcessName: "Enrollment" }));
+        expect((ctx.businessProcess as { name?: string }).name).toBe("Enrollment");
+    });
+
+    it("C — the current stage comes from situation.stageKey, with no statusDefs lookup", () => {
+        const ctx = buildCommitCriticalOperationalContext(input());
+        expect(ctx.businessProcess.stageKey).toBe("waitlist");
+        // The composer must NOT have to read status definitions to answer the rail.
+        expect(ANSWER).toContain("statusDefs: []");
+        expect(ANSWER).not.toMatch(/from\(["'`]status_definitions["'`]\)/);
+    });
+
+    it("D — stage annotations survive the carry", () => {
+        const ctx = buildCommitCriticalOperationalContext(
+            input({ businessProcessStages: [{ key: "tour", label: "Tour", support: ["North Campus"] }] }),
+        );
+        const [stage] = ctx.businessProcess.stages as Array<{ support?: readonly string[] }>;
+        expect(stage.support).toEqual(["North Campus"]);
+    });
+
+    it("an unstaged context is still a real answer — empty rail, not a crash", () => {
+        expect(buildCommitCriticalOperationalContext(input()).businessProcess.stages).toEqual([]);
+        expect(
+            buildCommitCriticalOperationalContext(input({ businessProcessStages: null })).businessProcess.stages,
+        ).toEqual([]);
+    });
+
+    it("E — Recent activity is NOT promoted into the first-order commit contract", () => {
+        // It is a DropdownMenu trigger with a count — "zero rows on the card face" — so it stays
+        // drawer-owned enrichment. Promoting it would put an on-demand affordance on the
+        // completion path.
+        expect(ANSWER).not.toContain("businessProcessActivity");
+        expect(MODEL).not.toContain("businessProcessActivity");
+        expect(BODY).not.toContain("businessProcessActivity");
+    });
+
+    it("the rail is computed by the canonical pure builder, not re-derived", () => {
+        expect(ANSWER).toContain("buildOpportunityWorkspaceLifecycleRail(");
+        expect(ANSWER).toContain("businessProcessStages: wave3Rail?.stages ?? []");
+    });
+});
+
+describe("CHILDREN — the canonical location, or genuinely nothing", () => {
+    it("F/I — projected from the existing canonical resolver, and only that one", () => {
+        expect(ANSWER).toContain("resolveOpportunityLeadLocationFields(");
+        // No second location authority: the composer must not hand-roll the precedence chain.
+        expect(ANSWER).not.toMatch(/_location_label\s*\?\?\s*[\w.]*_location_name/);
+    });
+
+    it("G — a known location is carried, so it cannot degrade to the placeholder", () => {
+        expect(ANSWER).toContain("_location_label: wave3LeadLocation.locationLabel");
+        expect(ANSWER).toContain("_location_id: wave3LeadLocation.locationId");
+    });
+
+    it("H — an absent location stays absent; no site is fabricated", () => {
+        // Conditional spread: the key is omitted entirely when the resolver found nothing, rather
+        // than binding an empty string that would render as a real (blank) site.
+        expect(ANSWER).toMatch(/\.\.\.\(wave3LeadLocation\.locationLabel \? \{ _location_label/);
+        expect(ANSWER).not.toMatch(/_location_label:\s*["'`]/);
+    });
+});
+
+describe("HOUSEHOLD — identity may travel; authority may not", () => {
+    it("J — updated_at is the existing subject-row timestamp", () => {
+        expect(ANSWER).toContain("strOrNull(wave3Record.updated_at)");
+        expect(ANSWER).toContain("updated_at: wave3UpdatedAt");
+    });
+
+    it("K — primary contact identity survives", () => {
+        expect(ANSWER).toContain('"person.primary_contact_name": primaryContactName');
+    });
+
+    it("L — primary_person_id is carried, which is what the editable affordance requires", () => {
+        expect(ANSWER).toContain("strOrNull(wave3Record.primary_person_id)");
+        expect(ANSWER).toContain("primary_person_id: wave3PrimaryPersonId");
+    });
+
+    it("M/N — NO permission verdict is transported; authority stays request-time", () => {
+        // The bindings block must never carry an authorization answer. `canMutate` continues to
+        // reach the model as a request-evaluated input, which is a different thing entirely.
+        const bindings = ANSWER.slice(
+            ANSWER.indexOf("const subjectIdentityTruthBindings"),
+            ANSWER.indexOf("const childBindings"),
+        );
+        expect(bindings.length).toBeGreaterThan(50);
+        for (const forbidden of ["canEdit", "canMutate", "allowedLocationIds", "permissionKeys", "roleKeys"]) {
+            expect(bindings).not.toContain(forbidden);
+        }
+    });
+
+    it("canMutate still reaches the commit model as a request-time input", () => {
+        expect(MODEL).toContain("canMutate: input.canMutate");
+        const ctx = buildCommitCriticalOperationalContext(input({ canMutate: true }));
+        expect((ctx as { capabilities?: { canMutate?: boolean } }).capabilities?.canMutate).toBe(true);
+    });
+});
+
+describe("GENERAL — configuration remains the authority", () => {
+    it("O/P/Q — the convergence names no card membership", () => {
+        // Ownership rules may exist per card; MEMBERSHIP comes from the published layout. A
+        // hardcoded seven-card list here would make a configuration change silently wrong.
+        const block = ANSWER.slice(ANSWER.indexOf("const wave3Record"), ANSWER.indexOf("const primaryContactName"));
+        for (const card of ["business_process", "household", "children", "attendance", "health_safety"]) {
+            expect(block).not.toContain(`"${card}"`);
+        }
+    });
+
+    it("R — nothing freezes the drawer out of correcting these cards later", () => {
+        // The commit values are inputs to the same context the settled frame rebuilds; no branch
+        // may pin them against a later authoritative answer.
+        expect(MODEL).not.toMatch(/freeze|preventSettled|ignoreDrawer/i);
+    });
+
+    it("the carried values add no read — every one was already selected", () => {
+        const population = read("lib/runtime/provisioning/workUnitProcessPopulation.ts");
+        for (const col of ["updated_at", "primary_person_id", "location_id"]) {
+            expect(population).toContain(col);
+        }
+    });
+});
