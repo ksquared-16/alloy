@@ -1,0 +1,101 @@
+{
+  "oppId": "e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+  "assignments": [
+    {
+      "child": "Certb Certhouse",
+      "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+      "state": "recommended",
+      "facts": {
+        "programKey": "preschool",
+        "attendanceType": "full_time",
+        "daysPerWeek": null,
+        "locationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "payerType": "private_pay",
+        "cadenceKey": null,
+        "asOf": "2026-09-01"
+      },
+      "resolutionKey": "36c43ee3",
+      "recommended": {
+        "sourceId": "96a67825-18ac-4b53-a1e2-f4686c28e7c6",
+        "variantId": "d484dcc8-87e3-4e83-b02c-48e2846161d4",
+        "offeringId": "f7cf7d6c-2dee-4f2a-a745-1844424050e1",
+        "cadence": "monthly",
+        "amount": 145000,
+        "scope": "org_default",
+        "effective": "2026-07-01",
+        "label": "$1,450.00/monthly",
+        "variantLabel": ""
+      },
+      "applicable": [
+        {
+          "id": "96a67825-18ac-4b53-a1e2-f4686c28e7c6",
+          "amount": 145000,
+          "scope": "org_default",
+          "cadence": "monthly"
+        }
+      ],
+      "acceptedIsStale": true,
+      "accepted": {
+        "id": "2a23f980-26d3-499a-b5bb-394e5c657499",
+        "amount": 145000,
+        "cadence": "monthly",
+        "state": "accepted",
+        "source": {
+          "entity": "commercial_tuition_rates",
+          "id": "96a67825-18ac-4b53-a1e2-f4686c28e7c6"
+        }
+      }
+    },
+    {
+      "child": "Certa Certhouse",
+      "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+      "state": "recommended",
+      "facts": {
+        "programKey": "school_age",
+        "attendanceType": "custom",
+        "daysPerWeek": null,
+        "locationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "payerType": "private_pay",
+        "cadenceKey": null,
+        "asOf": "2026-09-01"
+      },
+      "resolutionKey": "9ae3fec2",
+      "recommended": {
+        "sourceId": "424c7a8a-5bd5-4c63-93f6-5591dc0afcd8",
+        "variantId": "ee157cff-3546-4172-b591-984b96fbec10",
+        "offeringId": "fe7bb68f-1b36-432c-ae0b-e478dbc9f582",
+        "cadence": "weekly",
+        "amount": 19500,
+        "scope": "location",
+        "effective": "2026-09-01",
+        "label": "$195.00/weekly",
+        "variantLabel": ""
+      },
+      "applicable": [
+        {
+          "id": "5532489d-eed3-4080-9477-f47a94fde1c6",
+          "amount": 18500,
+          "scope": "org_default",
+          "cadence": "weekly"
+        },
+        {
+          "id": "424c7a8a-5bd5-4c63-93f6-5591dc0afcd8",
+          "amount": 19500,
+          "scope": "location",
+          "cadence": "weekly"
+        }
+      ],
+      "acceptedIsStale": true,
+      "accepted": {
+        "id": "19baf6ca-aded-4afa-afcf-9a14f4f8273f",
+        "amount": 18500,
+        "cadence": "weekly",
+        "state": "accepted",
+        "source": {
+          "entity": "commercial_tuition_rates",
+          "id": "5532489d-eed3-4080-9477-f47a94fde1c6"
+        }
+      }
+    }
+  ]
+}

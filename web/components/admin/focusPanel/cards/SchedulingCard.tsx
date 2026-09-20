@@ -1711,6 +1711,8 @@ function ScheduleEditor({
     const [pricingView, setPricingView] = useState<AssignmentTuitionView | null>(null);
     /** Required by the override authority, and never defaulted to something plausible. */
     const [overrideReason, setOverrideReason] = useState("");
+    /** The disclosure. Closed by default: the recommendation is the answer most of the time. */
+    const [optionsExpanded, setOptionsExpanded] = useState(false);
 
     /** Derived from the persisted term, through the authority generation uses. */
     const acceptedPeriods = useMemo(
@@ -1727,6 +1729,23 @@ function ScheduleEditor({
                 : null,
         [pricingView],
     );
+    /*
+     * The recommendation is the default CHOICE, not a default price: the operator accepts it by
+     * saving, and the canonical action still decides. Only when nothing has been chosen — an
+     * existing accepted selection is never overwritten by a resolver answer.
+     */
+    useEffect(() => {
+        if (!pricingView?.recommended || offeringId.trim()) return;
+        setOfferingId(pricingView.recommended.sourceId);
+    }, [pricingView, offeringId]);
+
+    /** Everything applicable that is not the recommendation — the disclosure's whole content. */
+    const otherOptions = useMemo(() => {
+        if (!pricingView) return [];
+        const recId = pricingView.recommended?.sourceId ?? null;
+        return pricingView.applicable.filter((o) => o.sourceId !== recId);
+    }, [pricingView]);
+
     /* An override is a selection that differs from the resolver's recommendation — never a price. */
     const isOverridingSelection =
         Boolean(offeringId.trim()) &&
@@ -2209,7 +2228,41 @@ function ScheduleEditor({
                             >
                                 Tuition — {child.name}
                             </label>
+                            {/*
+                              * ── RECOMMENDED FIRST; THE REST BEHIND A DISCLOSURE ─────────────
+                              *
+                              * The resolver names one option or declines to. When it names one,
+                              * that is what the operator sees and what saving accepts — the other
+                              * legitimate options are a click away rather than a list to read.
+                              * When it declines, there is no "Recommended" heading to manufacture:
+                              * equally-configured options are the operator's choice to settle, and
+                              * `billing_preview` owns the fuller tied-set explanation.
+                              *
+                              * The disclosure is absent when there is nothing behind it.
+                              */}
+                            {pricingView?.recommended && !optionsExpanded ? (
+                                <div data-assignment-tuition-recommended={pricingView.recommended.sourceId}
+                                     style={{ fontSize: 12, color: T.forge, fontWeight: 600 }}>
+                                    Recommended · {pricingView.recommended.amountLabel}
+                                </div>
+                            ) : null}
+                            {pricingView && pricingView.state === "ambiguous" ? (
+                                <div data-assignment-tuition-ambiguous="true" style={{ fontSize: 11, color: T.ember }}>
+                                    {pricingView.tied.length} configured options apply equally — choose one.
+                                </div>
+                            ) : null}
+                            {pricingView?.recommended && !optionsExpanded && otherOptions.length > 0 ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setOptionsExpanded(true)}
+                                    data-assignment-tuition-expand="true"
+                                    style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 600, color: T.pine, width: "fit-content" }}
+                                >
+                                    Expand options ({otherOptions.length} other)
+                                </button>
+                            ) : null}
                             <select
+                                hidden={Boolean(pricingView?.recommended) && !optionsExpanded}
                                 id={`assignment-tuition-embed-${child.id}`}
                                 value={offeringId}
                                 data-assignment-tuition-plan={child.id}

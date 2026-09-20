@@ -151,3 +151,48 @@ describe("pricing is not responsibility", () => {
         expect(fn).not.toMatch(/configure_responsibility|arrangement|responsible_party/i);
     });
 });
+
+describe("recommended first, the rest behind a disclosure", () => {
+    const card = src(CARD);
+
+    it("states the recommendation the resolver named", () => {
+        expect(card).toContain("data-assignment-tuition-recommended");
+        expect(card).toContain("pricingView.recommended.amountLabel");
+    });
+
+    it("offers the disclosure only when something is behind it", () => {
+        const at = card.indexOf('data-assignment-tuition-expand="true"');
+        expect(at).toBeGreaterThan(-1);
+        const guard = card.slice(Math.max(0, at - 400), at);
+        expect(guard, "no empty disclosure").toContain("otherOptions.length > 0");
+    });
+
+    it("other options are everything applicable except the recommendation", () => {
+        const memo = card.slice(card.indexOf("const otherOptions = useMemo"));
+        const body = memo.slice(0, memo.indexOf("[pricingView]"));
+        expect(body).toContain("pricingView.applicable.filter");
+        expect(body).toContain("o.sourceId !== recId");
+    });
+
+    it("manufactures no Recommended heading when the resolver is ambiguous", () => {
+        /*
+         * `kind: "ambiguous"` is the configuration declining to say which applies. Labelling one
+         * of a tied set "Recommended" would answer a question the resolver refused to answer.
+         */
+        expect(card).toContain('data-assignment-tuition-ambiguous="true"');
+        expect(card).toContain("configured options apply equally");
+        /* Sliced to the element, not a character window — the style attribute sits between. */
+        const at = card.indexOf("data-assignment-tuition-recommended");
+        const el = card.slice(at, card.indexOf("</div>", at));
+        expect(el, "the heading states the recommendation").toContain("Recommended ·");
+        const guard = card.slice(Math.max(0, at - 260), at);
+        expect(guard, "and is gated on the resolver having named one").toContain("pricingView?.recommended");
+    });
+
+    it("accepting the recommendation needs no expansion", () => {
+        /* The default CHOICE is the resolver's answer; the action still decides. */
+        const eff = card.slice(card.indexOf("if (!pricingView?.recommended || offeringId.trim()) return;"));
+        expect(eff.slice(0, 200)).toContain("setOfferingId(pricingView.recommended.sourceId)");
+        expect(eff.slice(0, 200), "an existing choice is never overwritten").toBeTruthy();
+    });
+});
