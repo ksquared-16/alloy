@@ -192,10 +192,18 @@ function SidebarNav({
      * lensed or subject-scoped route seeds a different key, misses here, and degrades to the
      * canonical fallback — correct, just not free.
      *
-     * Safety does not rest on the key. The seed carries its own identity and the existing matcher
-     * accepts it only when org, host work unit, site scope and the configured view signature all
-     * agree, which is what makes a nav that OUTLIVES the route safe: a stale answer from the
-     * previous work unit cannot match, so it cannot suppress the fallback.
+     * WHAT MAKES A NAV THAT OUTLIVES THE ROUTE SAFE — precisely, because the tempting answer is
+     * wrong. The matcher checks org, host work unit, site scope and the configured view signature,
+     * but it checks the seed against facts THE CALLER SUPPLIES. The Work Unit surface supplies
+     * independent ones; this nav cannot, because the seed and the identity come out of the same
+     * peeked answer, so the org and host comparisons compare that answer to itself.
+     *
+     * Route binding therefore comes from the KEY, not the matcher: the peek is addressed with the
+     * CURRENT path's slug and re-runs when that slug changes, so a previous work unit's answer is
+     * never returned here, and a route with no fresh answer settles as a miss. The two checks that
+     * remain genuinely independent are the ones derived from the nav's own state — the configured
+     * view signature from its lifecycle cards, and the site scope from its workspace filter — and
+     * those are what stop a stale configuration or a filtered operator consuming the wrong counts.
      */
     const [peeked, setPeeked] = useState<{
         settled: boolean;
@@ -219,10 +227,11 @@ function SidebarNav({
             .then((answer) => {
                 if (cancelled) return;
                 /*
-                 * `orgId` and `workUnit` are resolved by the answer's own slug lookup, NOT copied
-                 * out of the seed. Reading the host work unit off `seed.identity` would make the
-                 * matcher's host check compare the seed to itself and always pass, which is a
-                 * weaker guard wearing the same name.
+                 * Read from the answer's own slug lookup rather than from `seed.identity`. That
+                 * does NOT make the matcher's host check independent — both come from this same
+                 * answer either way, as the gates record — but it keeps the seed from being the
+                 * sole source of the thing it is checked against, so the check degrades to a
+                 * consistency assertion on the answer instead of a literal self-comparison.
                  */
                 setPeeked({
                     settled: true,
