@@ -36,6 +36,7 @@ const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const codeOf = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
 const ROUTE = codeOf(read("app/api/admin/queue-view-totals/route.ts"));
+const CONTRACT = codeOf(read("lib/perf/queueRowsServerTiming.ts"));
 
 const PHASES = [
     "qvt_gate",
@@ -68,6 +69,24 @@ describe("every phase of the completion owner is measured", () => {
         // Restating by name is exactly how `financials` was dropped one level deeper.
         expect(ROUTE).toMatch(/metrics:\s*\{\s*\.\.\.span,\s*total:/);
         expect(ROUTE).toContain("counts,");
+    });
+
+    it("the contract type declares every phase and every count", () => {
+        /*
+         * A planted removal of `qvt_population?: number` left this suite GREEN — it was caught only
+         * by `tsc`, because the emit spreads an object and the suite does not typecheck. The header
+         * builder is the contract; a phase missing from it cannot be emitted at all, so the type is
+         * asserted here rather than left to a gate that does not run in this suite.
+         */
+        for (const phase of PHASES) {
+            expect(CONTRACT, `contract must declare ${phase}`).toMatch(
+                new RegExp(`${phase}\\?: number;`),
+            );
+            expect(CONTRACT, `${phase} must be ordered for emission`).toContain(`"${phase}"`);
+        }
+        for (const c of ["groups", "views", "child_views", "lane_views", "unknown_views"]) {
+            expect(CONTRACT, `contract must declare count ${c}`).toMatch(new RegExp(`${c}\\?: number;`));
+        }
     });
 
     it("total survives — the new spans are reported alongside, not instead", () => {
