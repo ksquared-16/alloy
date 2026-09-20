@@ -436,7 +436,10 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
      * of inviting a third guess.
      */
     const seedMatchDiagnostic = await page.evaluate(() => {
-        return (window as unknown as { __alloyWorkViewSeed?: unknown }).__alloyWorkViewSeed ?? null;
+        // An ARRAY now: one record per hook instance per phase. A single overwritten value could
+        // not say which of the two mounted instances issued the request.
+        const raw = (window as unknown as { __alloyWorkViewSeed?: unknown[] }).__alloyWorkViewSeed;
+        return Array.isArray(raw) ? raw : raw ?? null;
     });
 
     const seedReachedClient = await page.evaluate(() => {
