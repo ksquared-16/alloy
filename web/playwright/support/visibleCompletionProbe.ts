@@ -233,6 +233,39 @@ export function installVisibleCompletionProbe(): void {
      * like-for-like is excused, and only within a single batch — a replacement observed across two
      * batches is a genuinely later arrival and is deliberately left alone.
      */
+    /*
+     * STABLE PER-NODE IDENTITY, for one open question.
+     *
+     * The WU-07 "Work: 1" chip is appended TWICE, as two one-sided records in separate batches.
+     * Two readings fit equally: two compact-header INSTANCES each appending once, or one header
+     * appending twice. `cls` and `txt` are identical in both cases, so the existing record cannot
+     * tell them apart and neither can a reader. A WeakMap-assigned id can: same parent id twice
+     * means one header; two parent ids means two headers.
+     *
+     * Observation only — nothing is written to the DOM and no product behaviour depends on it.
+     */
+    const nodeIds = new WeakMap<Node, number>();
+    let nodeIdSeq = 0;
+    const nodeId = (n: Node | null | undefined): number | null => {
+        if (!n) return null;
+        let id = nodeIds.get(n);
+        if (id === undefined) { id = ++nodeIdSeq; nodeIds.set(n, id); }
+        return id;
+    };
+    /** Nearest ancestor (inclusive) carrying an attribute, and that attribute's value. */
+    const nearestAttr = (n: Node | null | undefined, attr: string): string | null => {
+        let el: Element | null = n
+            ? (n.nodeType === 1 ? (n as Element) : n.parentElement)
+            : null;
+        while (el) {
+            const v = el.getAttribute?.(attr);
+            if (v !== null && v !== undefined) return v || "(present)";
+            el = el.parentElement;
+        }
+        return null;
+    };
+    let batchSeq = 0;
+
     const identicalRerenderParents = (recs: MutationRecord[]): Set<Node> => {
         const byParent = new Map<Node, { added: Node[]; removed: Node[] }>();
         for (const r of recs) {
@@ -508,6 +541,7 @@ export function installVisibleCompletionProbe(): void {
         w.__p076!.last = now; w.__p076!.count++;
         // Once per batch, not once per record: the question is about the parent, not the record.
         const batchIdentical = identicalRerenderParents(recs ?? []);
+        const batchId = ++batchSeq;
         for (const r of recs ?? []) {
             const key = attribute(r.target);
             const t = now - w.__p076!.t0;
@@ -667,6 +701,23 @@ export function installVisibleCompletionProbe(): void {
                         : null,
                     removed: r.removedNodes?.length ?? 0,
                     card: cardKeysFor(judged[0])[0] ?? null,
+                    /*
+                     * IDENTITY — enough to tell two nodes apart without inferring.
+                     * `parentId` is the decisive field for the WU-07 duplicate: one id twice means
+                     * one header appending twice; two ids means two header instances.
+                     */
+                    batchId,
+                    parentId: nodeId(r.target),
+                    addedIds: Array.from(r.addedNodes ?? []).map((n) => nodeId(n)),
+                    removedIds: Array.from(r.removedNodes ?? []).map((n) => nodeId(n)),
+                    sectionId: nearestAttr(r.target, "data-alloy-section-id"),
+                    fpBoundary: nearestAttr(r.target, "data-focus-panel-boundary"),
+                    fpState: nearestAttr(r.target, "data-focus-panel-state"),
+                    subjectId: nearestAttr(r.target, "data-subject-id")
+                        ?? nearestAttr(r.target, "data-record-id")
+                        ?? nearestAttr(r.target, "data-opportunity-id"),
+                    componentId: nearestAttr(r.target, "data-component"),
+                    generation: (V2.__p076v2 as { latestGeneration?: string } | undefined)?.latestGeneration ?? null,
                 });
             }
         }

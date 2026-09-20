@@ -27,6 +27,8 @@ const ROUTE = codeOf(read("app/api/admin/metrics/resolve/route.ts"));
 const COMPOSE_ROUTE = codeOf(read("lib/runtime/provisioning/composeProvisioningAnswerForRoute.ts"));
 /** Raw (comments intact) — the import-graph gate must see real import lines only. */
 const ANSWER_RAW = read("lib/runtime/provisioning/workUnitProvisioningAnswer.ts");
+const PRESENT = codeOf(read("lib/runtime/provisioning/operationalPresentation.ts"));
+const PROBE = codeOf(read("playwright/support/visibleCompletionProbe.ts"));
 
 describe("A — the work starts before hydration, in the document", () => {
     it("the composer resolves the header KPIs through the route-injected resolver", () => {
@@ -53,8 +55,32 @@ describe("A — the work starts before hydration, in the document", () => {
         expect(importLines.some((l) => l.includes("oipWorkspaceWarmCache"))).toBe(false);
     });
 
-    it("it chains off the presentation branch, which already reads the key config", () => {
-        expect(ANSWER).toMatch(/headerKpiPromise[\s\S]{0,120}presentationPromise\s*\n?\s*\.then/);
+    it("it chains off the HEADER CONFIG read, not the whole presentation branch", () => {
+        /*
+         * Chaining off `presentationPromise` is what made #1091 miss. That branch also awaits the
+         * queue-row layout, the dominant read (~700ms vs ~335ms), so the KPI began ~1,000ms in,
+         * landed ~2,400-3,000ms and lost to the join at ~2,300-2,700ms — binding in 1 of 8 samples.
+         */
+        expect(ANSWER).toMatch(/headerKpiPromise[\s\S]{0,140}headerLayoutRecordsPromise\s*\n?\s*\.then/);
+        const chain = ANSWER.slice(ANSWER.indexOf("const headerKpiPromise"), ANSWER.indexOf("void headerKpiPromise"));
+        expect(chain, "must not wait for the full presentation branch").not.toContain("presentationPromise");
+    });
+
+    it("the header config is read ONCE and shared, not duplicated", () => {
+        const reads = ANSWER.split("listWorkUnitHeaderLayoutRecords(").length - 1;
+        expect(reads, "exactly one header-config read site").toBe(1);
+        // The presentation branch consumes the same promise rather than issuing its own.
+        const branch = ANSWER.slice(ANSWER.indexOf("const presentationPromise"), ANSWER.indexOf("return resolveOperationalPresentation"));
+        expect(branch).toContain("headerLayoutRecordsPromise");
+    });
+
+    it("both consumers derive the key set from the SAME exported function", () => {
+        // A second derivation could select a different published variant; the seed's key set would
+        // stop matching the client's and the seed would be silently ignored.
+        expect(ANSWER).toContain("resolveWorkUnitHeaderConfigFromRecords(");
+        expect(ANSWER).toContain("operationalKpiSlotsFromHeaderConfig(");
+        expect(PRESENT).toContain("resolveWorkUnitHeaderConfigFromRecords(");
+        expect(PRESENT).toContain("operationalKpiSlotsFromHeaderConfig(");
     });
 
     it("the client stops issuing the request when the document answered", () => {
@@ -85,8 +111,24 @@ describe("B — overlap, not relocation: the document is never blocked behind th
         expect(ms).toBeLessThanOrEqual(250);
     });
 
-    it("what the join cost is reported, not hidden", () => {
-        expect(ANSWER).toContain('markSpan("header_kpi_wait_ms"');
+    it("execution elapsed and join wait are DIFFERENT measurements", () => {
+        /*
+         * THE DEFECT THIS REPLACES. `header_kpi_wait_ms` was stamped at KPI execution start, so it
+         * reported 812-1,152ms and read like the join cost. It was elapsed-time-to-join. Conflating
+         * them hid the fact that mattered: the resolve started too late, the join was never
+         * expensive.
+         */
+        expect(ANSWER).toContain('markSpan("header_kpi_execution_elapsed_ms"');
+        expect(ANSWER).toContain('markSpan("header_kpi_join_wait_ms"');
+        expect(ANSWER, "the conflated metric is gone").not.toContain('markSpan("header_kpi_wait_ms"');
+    });
+
+    it("the join wait is measured FROM THE JOIN, not from execution start", () => {
+        const join = ANSWER.slice(ANSWER.indexOf("const tKpiJoinStart"), ANSWER.indexOf('markSpan("header_kpi_join_wait_ms"') + 60);
+        expect(join).toMatch(/const tKpiJoinStart = now\(\);[\s\S]*Promise\.race/);
+        expect(join).toContain('markSpan("header_kpi_join_wait_ms", tKpiJoinStart)');
+        // Stamping from tHeaderKpi here would reintroduce the exact conflation above.
+        expect(join).not.toContain('markSpan("header_kpi_join_wait_ms", tHeaderKpi)');
     });
 
     it("the race timer is cleared, so a pending timer cannot outlive the response", () => {
@@ -170,5 +212,40 @@ describe("F — a seed may only answer the scope it was resolved for", () => {
     it("a seed never overwrites a fresher live answer", () => {
         const fn = WARM.slice(WARM.indexOf("export function seedOipWarmCache"), WARM.indexOf("export function getOipWarmSnapshot"));
         expect(fn).toContain("if (isFresh(existing)) return;");
+    });
+});
+
+
+describe("G — the WU-07 identity capture can actually distinguish two nodes", () => {
+    /** Scoped to the late-record literal, so a mention elsewhere in the probe cannot satisfy these. */
+    const LATE_RECORD = (() => {
+        const start = PROBE.indexOf("(LATE.__p076late as unknown[]).push({");
+        return PROBE.slice(start, PROBE.indexOf("});", start) + 3);
+    })();
+
+    it("each late record carries element, parent and batch identity", () => {
+        expect(LATE_RECORD.length).toBeGreaterThan(0);
+        for (const field of ["batchId", "parentId", "addedIds", "removedIds"]) {
+            expect(LATE_RECORD, `late records must carry ${field}`).toMatch(new RegExp(`\\b${field}\\s*[,:]`));
+        }
+    });
+
+    it("it captures the surface and subject the node belongs to", () => {
+        for (const field of ["sectionId", "fpBoundary", "subjectId", "componentId", "generation"]) {
+            expect(LATE_RECORD, `late records must carry ${field}`).toMatch(new RegExp(`\\b${field}\\s*[,:]`));
+        }
+    });
+
+    it("node identity is stable per node, not per record", () => {
+        // A per-record counter would give two ids to one header and prove nothing.
+        expect(PROBE).toContain("const nodeIds = new WeakMap<Node, number>()");
+        expect(PROBE).toMatch(/if \(id === undefined\) \{ id = \+\+nodeIdSeq; nodeIds\.set\(n, id\); \}/);
+    });
+
+    it("the capture is observation only — it writes nothing to the DOM", () => {
+        const helper = PROBE.slice(PROBE.indexOf("const nodeIds ="), PROBE.indexOf("const identicalRerenderParents"));
+        for (const banned of ["setAttribute", "classList", "appendChild", "innerHTML"]) {
+            expect(helper, `identity capture must not ${banned}`).not.toContain(banned);
+        }
     });
 });
