@@ -16,6 +16,7 @@ import {
     buildOipWarmScopeKey,
     getOipWarmSnapshot,
     prefetchOipMetricsWarm,
+    seedOipWarmCache,
     subscribeOipWarmCache,
 } from "@/lib/metrics/oipWorkspaceWarmCache";
 import {
@@ -31,6 +32,13 @@ export type OperationalAnswersScope = {
     workUnitId?: string | null;
     /** Caller-memoized key set (identity feeds the effect scope key). */
     keys: readonly OipMetricKey[];
+    /**
+     * Values the document already resolved for this exact scope. When present the hook seeds the
+     * warm cache and issues NO request — that is the whole point, so the header KPI stops being a
+     * post-hydration serial edge. A seed whose `scopeKey` does not match this hook's scope is
+     * ignored, which is what keeps an org-wide seed from answering for a site-filtered operator.
+     */
+    seed?: { scopeKey: string; values: ResolvedMetricMap } | null;
 };
 
 export type OperationalAnswersResult = {
@@ -46,7 +54,7 @@ export type OperationalAnswersResult = {
 };
 
 export function useOperationalAnswers(scope: OperationalAnswersScope): OperationalAnswersResult {
-    const { siteId, workUnitId = null, keys } = scope;
+    const { siteId, workUnitId = null, keys, seed = null } = scope;
 
     const scopeKey = useMemo(
         () => buildOipWarmScopeKey({ siteId, workUnitId, keys }),
@@ -77,13 +85,22 @@ export function useOperationalAnswers(scope: OperationalAnswersScope): Operation
                 setSettled(true);
             }
         });
-        void prefetchOipMetricsWarm({ siteId, workUnitId, keys })
-            .then((data) => {
-                if (!cancelled) setResolved(data);
-            })
-            .finally(() => {
-                if (!cancelled) setSettled(true);
-            });
+        // A seed for THIS scope is already the answer: write it into the warm cache and issue
+        // nothing. Any other scope's seed is ignored rather than trusted.
+        const seeded = seed && seed.scopeKey === scopeKey ? seed.values : null;
+        if (seeded) {
+            seedOipWarmCache(scopeKey, seeded);
+            setResolved(getOipWarmSnapshot(scopeKey) ?? seeded);
+            setSettled(true);
+        } else {
+            void prefetchOipMetricsWarm({ siteId, workUnitId, keys })
+                .then((data) => {
+                    if (!cancelled) setResolved(data);
+                })
+                .finally(() => {
+                    if (!cancelled) setSettled(true);
+                });
+        }
         return () => {
             cancelled = true;
             unsubscribe();

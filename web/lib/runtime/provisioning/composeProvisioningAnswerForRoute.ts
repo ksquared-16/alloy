@@ -19,6 +19,7 @@ import {
     composeWorkUnitProvisioningAnswer,
     type ProvisioningAnswer,
 } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import { makeWorkUnitHeaderKpiResolver } from "@/lib/runtime/provisioning/workUnitHeaderKpiResolution";
 import { resolveWorkUnitRouteIdentity } from "@/lib/admin/resolveWorkUnitRouteIdentity";
 import { parseCardFocusAspect } from "@/lib/runtime/kernel/attentionCardFocus";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
@@ -111,6 +112,14 @@ export async function composeProvisioningAnswerForRoute(input: {
         // persisted. Without the actor the rows reach the queue with no image and fall back to
         // initials for children who do have a photo (R-019).
         documentActor: documentActor,
+        /*
+         * THE HEADER KPI RESOLVER, OWNED BY THE ROUTE.
+         *
+         * Injected rather than imported by the composer: its analytics gate reaches `next/headers`
+         * and the composer sits in a client-reachable graph, so a value import there fails the
+         * production build. Same ownership reason the drawer route runs its own producers.
+         */
+        resolveHeaderKpis: makeWorkUnitHeaderKpiResolver({ supabase, orgId: gate.orgId }),
         /*
          * THE SAME VERDICT THE BROWSER WOULD HAVE REACHED.
          *

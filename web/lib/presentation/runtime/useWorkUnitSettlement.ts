@@ -126,7 +126,24 @@ export function useWorkUnitSettlement(
         () => (kpiKeySig ? (kpiKeySig.split("|") as OipMetricKey[]) : []),
         [kpiKeySig],
     );
-    const { resolved: kpiValues, settled: kpiSettled } = useOperationalAnswers({ siteId, workUnitId, keys: kpiKeys });
+    /*
+     * The document resolved these during its own composition, so the header KPI is no longer a
+     * post-hydration request. The seed states the scope it was resolved for and the hook ignores
+     * it unless that matches exactly — an org-wide seed must not answer for a site-filtered
+     * operator. Absent or `forbidden`/`unavailable` seeds fall through to the existing fetch.
+     */
+    const kpiSeed = useMemo(() => {
+        // `settleable` is a union; only the operational answer carries a seed.
+        const s = settleable && "headerKpis" in settleable ? settleable.headerKpis : null;
+        if (!s || s.status !== "ok" || !s.scopeKey) return null;
+        return { scopeKey: s.scopeKey, values: s.values };
+    }, [settleable]);
+    const { resolved: kpiValues, settled: kpiSettled } = useOperationalAnswers({
+        siteId,
+        workUnitId,
+        keys: kpiKeys,
+        seed: kpiSeed,
+    });
 
     // ── WORK VIEW COUNTS + QUEUE TOTAL (U-S6). Targets come STRAIGHT from D1's resolved locators. ──
     const targets = useMemo<WorkViewTotalTarget[]>(() => {

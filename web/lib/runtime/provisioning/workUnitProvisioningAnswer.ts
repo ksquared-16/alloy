@@ -156,6 +156,17 @@ import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/f
  */
 import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import { attachOpportunityInquiryChildrenShell } from "@/lib/admin/opportunityEntityRecord";
+/*
+ * TYPE-ONLY, DELIBERATELY. The header KPI resolution runs the analytics authorization gate, which
+ * reaches `next/headers`; this composer is reachable from a client component, so a VALUE import
+ * here puts that module in the browser graph and the production build fails — which it did. The
+ * implementation is injected by the route instead (`req.resolveHeaderKpis`), exactly as the drawer
+ * route owns its producers for the same reason. A type import is erased at build.
+ */
+import type { WorkUnitHeaderKpiSeed } from "@/lib/runtime/provisioning/workUnitHeaderKpiResolution";
+
+/** Mirrors WORK_UNIT_HEADER_KPI_JOIN_GRACE_MS; kept here so the composer imports no value from it. */
+const WORK_UNIT_HEADER_KPI_JOIN_GRACE_MS = 150;
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
@@ -408,6 +419,12 @@ export type ProvisioningAnswer =
           settlement: SettlementLocators;
           /** B — resolved right-rail Actions, committed WITH the surface (count at commit, no flash). */
           actionsProjection: WorkUnitActionsProjection;
+          /**
+           * Header KPI values resolved during THIS composition, or null when they did not land
+           * inside the join grace. Null means "resolve as before" — never zero, never stale. The
+           * seed states the scope it was resolved for; a client on a different scope ignores it.
+           */
+          headerKpis: WorkUnitHeaderKpiSeed | null;
           timings: ProvisioningTimings;
       }
     | {
@@ -588,6 +605,16 @@ export type ProvisioningRequest = {
      * still valid — its rows simply carry no avatar and present initials.
      */
     documentActor?: DocumentActor | null;
+    /*
+     * INJECTED BY THE ROUTE. Resolves the header KPI values for the published key set during this
+     * composition. Injected rather than imported because its authorization gate reaches
+     * `next/headers` and this module is in a client-reachable graph. Absent (any non-route caller)
+     * simply means the client resolves them as before.
+     */
+    resolveHeaderKpis?: (args: {
+        workUnitId: string;
+        kpiSlots: ReadonlyArray<{ sourceKey?: string | null }>;
+    }) => Promise<WorkUnitHeaderKpiSeed | null>;
     /**
      * The actor's mutate access, resolved ONCE by the caller's route gate.
      *
@@ -1052,6 +1079,25 @@ export async function composeWorkUnitProvisioningAnswer(
     // Early-return safety (grain/records/subject fails never await it): keep the promise handled. The real
     // await at the assembly join re-sees any rejection so a genuine failure still surfaces 1:1.
     void presentationPromise.catch(() => {});
+
+    /*
+     * THE HEADER KPI ANSWER, STARTED AS SOON AS ITS CONFIG EXISTS.
+     *
+     * These three numerals are the Work Unit's COMPLETION OWNER. Measured on deployed staging the
+     * client hook that fetches them starts ~50ms AFTER the document lands and finishes ~1.2-1.9s
+     * later, holding V2.1 to ~5.6-5.8s while the cards themselves finish at ~4.74s. Nothing about
+     * the work needs hydration: org, work unit, site scope, the key set and the authorization
+     * bundle all exist here.
+     *
+     * It chains off the presentation branch because the KEY SET is published header config, which
+     * that branch already reads — so this adds no read of its own. It is deliberately NOT awaited
+     * inline: the join below takes what is ready and never blocks the document behind the rest.
+     */
+    const tHeaderKpi = now();
+    const headerKpiPromise: Promise<WorkUnitHeaderKpiSeed | null> = presentationPromise
+        .then((p) => req.resolveHeaderKpis?.({ workUnitId: workUnit.id, kpiSlots: p.header.kpiSlots }) ?? null)
+        .catch(() => null);
+    void headerKpiPromise.catch(() => {});
 
     // ── B: COMMIT-CRITICAL ACTIONS PROJECTION — resolve the right-rail action set CONCURRENTLY with the
     // presentation branch (it depends only on org + department + work unit, all known here). The SAME
@@ -2152,6 +2198,28 @@ export async function composeWorkUnitProvisioningAnswer(
             subjectGrain,
     });
 
+    /*
+     * JOIN WITH A BOUNDED GRACE — overlap, never relocation.
+     *
+     * By here the KPI work has had the whole records/projection/enrichment branch to run in. If it
+     * has landed, it travels and the client issues no request at all. If it has not, we wait only
+     * a small measured grace and then ship without it: the client's existing fetch is the fallback,
+     * so the worst case is today's behaviour, never a document blocked behind the KPI cost.
+     * `header_kpi_wait_ms` is what this join actually added — the number to hold honest.
+     */
+    const headerKpis = await (async (): Promise<WorkUnitHeaderKpiSeed | null> => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const grace = new Promise<null>((resolve) => {
+            timer = setTimeout(() => resolve(null), WORK_UNIT_HEADER_KPI_JOIN_GRACE_MS);
+        });
+        try {
+            return await Promise.race([headerKpiPromise, grace]);
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+    })();
+    markSpan("header_kpi_wait_ms", tHeaderKpi);
+
     const answer: ProvisioningAnswer = {
         terminal: "operational",
         orgId: req.orgId,
@@ -2242,6 +2310,11 @@ export async function composeWorkUnitProvisioningAnswer(
             return projected;
         })(),
         focusPanelSummaryDoc,
+        /*
+         * The header KPI answer, resolved during THIS composition. Absent (null) means it did not
+         * land inside the join grace, which the client reads as "fetch as before" — never as zero.
+         */
+        headerKpis,
         presentation,
         settlement,
         actionsProjection,
