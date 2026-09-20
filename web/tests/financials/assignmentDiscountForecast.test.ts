@@ -110,3 +110,24 @@ describe("the reasons are the domain's", () => {
         expect(card).toContain("data-forecast-reason");
     });
 });
+
+describe("the forecast asks about a month, because reductions are monthly", () => {
+    it("derives a YYYY-MM key even from a weekly commercial period", () => {
+        /*
+         * MEASURED: the route answered 500 "period_key must be YYYY-MM" for every weekly
+         * assignment. `billingPeriodBounds` takes a month, and reductions resolve per calendar
+         * month by the same doctrine that keeps `placeInBillingPeriod` monthly by default — while
+         * a weekly assignment's current commercial period is `2026-09-15~2026-09-21`.
+         */
+        const r = src(ROUTE);
+        expect(r).toContain('periods?.current.start');
+        expect(r).toContain('.slice(0, 7)');
+        expect(r, "never the interval key").not.toMatch(/periods\?\.current\.key/);
+    });
+
+    it("that month is the one the application path will use", () => {
+        const apply = src("lib/financials/reductions/applyFinancialReductions.ts");
+        expect(apply).toContain("billingPeriodBounds(periodKey)");
+        expect(src(FORECAST)).toContain("billingPeriodBounds(args.periodKey)");
+    });
+});

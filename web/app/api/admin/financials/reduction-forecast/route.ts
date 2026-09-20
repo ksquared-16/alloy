@@ -53,12 +53,23 @@ export async function GET(request: NextRequest) {
         const row = agreement as { id: string; customer_id: string | null; customer_member_id: string | null } | null;
         if (!row?.customer_id) return NextResponse.json({ ok: true, forecast: null, reason: "no_household" });
 
-        /* The period the forecast reasons about is the one the assignment is billing now. */
+        /*
+         * ── THE REDUCTION PERIOD IS MONTHLY, EVEN WHEN THE COMMERCIAL ONE IS NOT ──────────────
+         *
+         * `billingPeriodBounds` takes `YYYY-MM`, and reductions are resolved per calendar month
+         * by the same doctrine that keeps `placeInBillingPeriod` monthly by default. A weekly
+         * assignment's current commercial period is `2026-09-15~2026-09-21`, which is not that
+         * shape — passing it refused the whole forecast with "period_key must be YYYY-MM".
+         *
+         * So the forecast asks about the MONTH the current commercial period starts in. That is
+         * the month the application path will resolve the same charge under, which is the only
+         * reason the two can be expected to agree.
+         */
         const periods = acceptedTermBillingPeriods(
             { cadenceKey: accepted.cadenceKey, effectiveStart: accepted.effectiveStart, effectiveEnd: accepted.effectiveEnd },
             new Date().toISOString().slice(0, 10),
         );
-        const periodKey = periods?.current.key ?? new Date().toISOString().slice(0, 7);
+        const periodKey = (periods?.current.start ?? new Date().toISOString().slice(0, 10)).slice(0, 7);
 
         const forecast = await forecastAssignmentReductions(supabase, {
             orgId: ctx.orgId,
