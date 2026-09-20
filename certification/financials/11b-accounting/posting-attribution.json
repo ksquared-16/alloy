@@ -1,0 +1,20 @@
+{
+  "specimenRow": {
+    "chargeId": "18e860f9-8ce5-4645-9283-ca3ebcb9a4a9",
+    "text": "Certhouse Family · $1,450.00 · Tuition · Certb Certhouse · September 2026 · North Campus"
+  },
+  "before": {
+    "status": null,
+    "serviceDate": null,
+    "billingPeriod": null,
+    "invoiceDate": null,
+    "dueDate": null,
+    "accountingPeriod": null,
+    "grossCents": null,
+    "subject": null,
+    "reductions": null,
+    "responsibility": null,
+    "payments": null,
+    "raw": "{\"error\":404}"
+  }
+}
