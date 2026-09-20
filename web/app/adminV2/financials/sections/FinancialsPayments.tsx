@@ -35,8 +35,16 @@ import FinancialsAccountDetail from "@/app/adminV2/financials/FinancialsAccountD
 import { moneyExact, shortDate } from "@/app/adminV2/financials/financialsFormat";
 import type { FinancialsReadState } from "@/app/adminV2/financials/useFinancialsReads";
 import type { FinancialPaymentFlow, FinancialPaymentRow } from "@/lib/financials/workspace/resolveFinancialPaymentFlow";
+import NeedsRecognitionLens from "@/app/adminV2/financials/sections/NeedsRecognitionLens";
 
-type Lens = "unapplied" | "received";
+/*
+ * A THIRD LENS, NOT A THIRD WORKSPACE (Payments V1 · W3).
+ *
+ * "Needs recognition" is money the provider says it collected and Alloy has not recorded. It belongs
+ * beside Unapplied and Received because it is the same subject — money in — at an earlier stage, and
+ * because a Reconciliation workspace would invite every future provider-event browser to move in.
+ */
+type Lens = "unapplied" | "received" | "recognition";
 
 export default function FinancialsPayments({
     flow,
@@ -69,7 +77,7 @@ export default function FinancialsPayments({
                     role="tablist"
                     aria-label="Payment lens"
                 >
-                    {(["unapplied", "received"] as const).map((key) => (
+                    {(["unapplied", "received", "recognition"] as const).map((key) => (
                         <button
                             key={key}
                             type="button"
@@ -83,12 +91,14 @@ export default function FinancialsPayments({
                                     : "text-alloy-midnight/60 hover:bg-alloy-stone/[0.06]"
                             }`}
                         >
-                            {key === "unapplied" ? "Unapplied" : "Received"}
+                            {key === "unapplied" ? "Unapplied" : key === "received" ? "Received" : "Needs recognition"}
                         </button>
                     ))}
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto" data-financials-payments-list={lens}>
-                    {flow.loading && rows.length === 0 ? (
+                    {lens === "recognition" ? (
+                        <NeedsRecognitionLens scopeLabel={scopeLabel} />
+                    ) : flow.loading && rows.length === 0 ? (
                         <p className="px-3 py-4 text-xs text-alloy-midnight/50">Loading payments…</p>
                     ) : flow.error ? (
                         <p className="px-3 py-4 text-xs text-alloy-ember" data-financials-payments-error="true">
