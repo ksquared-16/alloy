@@ -35,7 +35,7 @@
  * and this must be bumped whenever a scenario's meaning changes. Adding a scenario counts; fixing a
  * typo does not.
  */
-export const CATALOG_VERSION = "2026-09-20.2";
+export const CATALOG_VERSION = "2026-09-20.3";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -881,17 +881,26 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "Open a POSTED charge's detail in the Accounts workspace and read the Posting block: Billing period, Accounting period, GL account.",
             "Confirm Billing period and Accounting period are shown as TWO SEPARATE facts and are not the same control. They may name the same month and still be different answers.",
             "Open a DRAFT charge's detail. Confirm the accounting period reads that it has not posted to a period yet, rather than showing a period it has not reached.",
-            "LIMIT TO RECORD, not to work around: there is no control to open or close a period. Confirm none is offered, and that the panel says so. Do not close a period in the database to test it.",
+            "Adopt a calendar if the organization has none: the panel offers it, and adopting materialises the twelve calendar-month periods in one act. Read them back before going on.",
+            "Close the earliest OPEN period from the panel. Read the preview FIRST: it states how many entries stay attributed to that period and where entries effective inside it will go afterwards. Confirm the preview appears before anything is closed.",
+            "Confirm a closed period DEFERS rather than refuses: post a charge effective inside the closed period and confirm it is attributed to the next open period and says where it came from — a reporting boundary must not be able to stop a family being charged.",
+            "LIMIT TO RECORD, not to work around: a closed period cannot be REOPENED. Confirm no control offers it. Do not reopen one in the database to test it.",
         ],
-        expectChanges: [],
+        expectChanges: [
+            "The period you closed reads Closed, and is no longer the one a new entry effective inside it is attributed to.",
+            "A calendar, and twelve periods, where the organization had none — if you adopted one.",
+        ],
         expectUnchanged: [
             "The accounting period on a posted charge — it was decided when the entry was written and nothing on these screens may move it.",
+            "Entries already attributed to the period you closed. Closing states a boundary; it does not re-attribute history.",
             "The billing period, which is derived from the charge's own dates and is unaffected by anything on the accounting calendar.",
         ],
         invariant: MONEY_INVARIANTS.ACCOUNTING_PERIOD_IS_ATTRIBUTED_AT_WRITE,
         failSymptoms: [
             "Any surface implying an entry's accounting period can be edited after the entry was written.",
-            "A closed period accepting a write.",
+            "A closed period REFUSING a charge outright while a later period is open — the doctrine is deferral, and a refusal here stops a family being billed for a reporting reason.",
+            "Closing a period without first stating what it will do.",
+            "Any control offering to reopen a closed period.",
             "This scenario being marked PASS on the strength of a database inspection.",
             "Billing period and accounting period presented as one field, or one used as a label for the other.",
             "A posted charge showing no accounting period, or a draft showing one.",
@@ -1156,6 +1165,60 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "A discount written against a discount or a credit row.",
         ],
     }),
+    /*
+     * ADDED BY FINANCIALS 11B. A configured discount that does not apply to ONE family was
+     * previously inexpressible: deleting the policy took it from everyone, and never configuring it
+     * took it from the tenant. The third thing — a dated, reasoned exclusion scoped to one
+     * commercial relationship — is what this walks.
+     */
+    S({
+        key: "discount_exception",
+        /* After the payments-era scenarios; the discount chain it belongs to sits at 45-47. */
+        order: 53,
+        title: "A discount policy that does not apply to one family, from a date, for a reason",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove an operator can exclude one configured discount policy for one assignment, must say why, sees the forecast change, and that money already posted is untouched.",
+        whyItMatters:
+            "An exception is a statement about APPLICABILITY, not about money: what the exclusion is worth is decided by eligibility when an obligation is evaluated, which is why the same authority answers the Assignment forecast and the ledger. The shape it must never take is a per-assignment on/off switch — a switch has no reason, so nobody can say why six months on; no dates, so it silently rewrites what was true last period; and it would make the assignment a second place commercial policy is decided, which is how a surface and a ledger come to disagree.",
+        requires: [
+            { kind: "account_state", check: "has_posted_obligation", describe: "an assignment with an accepted tuition term and a discount policy that applies to it" },
+        ],
+        navigate: [
+            "Workspace → the enrolled child's work unit → the children card's row action → the child's own panel → Assignment → the tuition section.",
+        ],
+        doThis: [
+            "Read the DISCOUNTS block BEFORE doing anything: note which policy is expected to apply and the figure beside it. Write both down.",
+            "Use Add exception beside that policy. Confirm the commit is refused while the reason is empty — an exception to commercial policy that cannot say why is not a decision.",
+            "Read the preview. Confirm it says the policy will not apply and that anything already posted is unaffected, and confirm it quotes NO figure.",
+            "Type a real reason and record the exception.",
+            "Read the DISCOUNTS block again. Confirm it now reads that the policy is excluded for this assignment, with your reason, and that the previously expected figure is gone.",
+            "Confirm it does NOT read that no discount policies are configured — the policy exists and is correct, and saying otherwise sends the next operator looking for configuration that is not missing.",
+            "Generate or preview the next period's tuition and confirm the excluded policy writes no reduction on the draft.",
+            "Open a charge that was POSTED BEFORE the exception. Confirm its reduction is exactly as it was.",
+            "End the exception. Confirm the policy may apply again to later obligations, and that the ended exception is still listed with its dates rather than disappearing.",
+            "LIMIT TO RECORD, not to work around: there is no toggle, no on/off, and nothing that deletes an exception. Confirm none is offered.",
+        ],
+        expectChanges: [
+            "The Assignment discount forecast, from an expected reduction to an excluded policy with a reason.",
+            "Draft obligations resolved after the exception starts — the excluded policy writes no reduction on them.",
+        ],
+        expectUnchanged: [
+            "Every reduction already posted. An exception changes what eligibility decides next; it never rewrites what was decided.",
+            "The accepted tuition. An exception is not a repricing, and the gross does not move.",
+            "Every other family. The exclusion is scoped to one commercial relationship, and the policy stays configured for everyone else.",
+        ],
+        invariant: MONEY_INVARIANTS.REDUCTION_IS_A_SECOND_CONSEQUENCE,
+        failSymptoms: [
+            "An on/off switch, a checkbox, or anything that reads as a setting this assignment owns.",
+            "The exclusion being recordable with no reason.",
+            "The forecast reading 'no discount policies configured' for an excluded policy.",
+            "A figure promised in the exception preview — the consequence is decided by eligibility, not here.",
+            "A posted reduction changing because an exception was recorded.",
+            "An ended or superseded exception disappearing rather than remaining answerable.",
+            "The exclusion reaching another child, another family, or another policy.",
+        ],
+    }),
     S({
         key: "recurring_due_date",
         order: 48,
@@ -1346,6 +1409,14 @@ export const SCENARIO_PROGRAM: Readonly<Record<string, ScenarioProgram>> = Objec
     prepaid_available_and_applied: "CORE_RUNNABLE",
     child_responsibility_and_partial: "CORE_RUNNABLE",
     organization_financial_configuration: "CORE_RUNNABLE",
+    /*
+     * PROMOTION-GATED AT THE MOMENT OF WRITING. The runtime is built and deterministically
+     * certified, and the table it reads does not exist on the deployed database until the 11B
+     * candidate is merged and its migration applied. Classified CORE_RUNNABLE because that is what
+     * it is in the product being frozen here; the mounted proof that makes it walkable is item A-K
+     * of certification/financials/11b-discounts/PROMOTION-GATED-PROOFS.md.
+     */
+    discount_exception: "CORE_RUNNABLE",
 
     // ── The next program ───────────────────────────────────────────────────────────────────
     card_collection: "PAYMENTS_PHASE",
@@ -1355,8 +1426,13 @@ export const SCENARIO_PROGRAM: Readonly<Record<string, ScenarioProgram>> = Objec
     /* Shipped by W2, and unlike the four above it is walkable rather than waiting on the program. */
     payment_method_on_file: "PAYMENTS_PHASE",
 
-    // ── Real, correct, and with no operator surface in Core ─────────────────────────────────
-    accounting_period: "DEFERRED_PRODUCTIZATION",
+    /*
+     * PRODUCTIZED BY FINANCIALS 11B. It was the last accepted "real, correct, no operator surface"
+     * deferral: the inspection half shipped in Repair Pass 5F and the lifecycle half — adopt and
+     * close, both behind `fin.write`, closing behind a preview — shipped in 11B. Reopening is still
+     * unsupported, and that is recorded in the scenario rather than deferring the whole capability.
+     */
+    accounting_period: "CORE_RUNNABLE",
 
     // ── Another program's acceptance, not this list's ───────────────────────────────────────
     subsidy_processing: "RETIRED",
