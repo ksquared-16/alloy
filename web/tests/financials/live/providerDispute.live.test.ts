@@ -23,6 +23,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readChargeBalance, recordAndApplyChildcarePayment } from "@/lib/financials/childcarePaymentService";
 import { recognizeProviderDispute } from "@/lib/financials/payments/providerDispute";
 import { handleStripeWebhook } from "@/lib/financials/payments/stripeWebhook";
+import { ensureAccountingPeriodCovers } from "./certEnvironment";
 
 function certEnv(): { url: string; serviceKey: string } | null {
     try {
@@ -338,6 +339,16 @@ describeWebhook("Thread 8C — dispute convergence through the real webhook", ()
     let createdMerchant = false;
 
     beforeAll(async () => {
+        /*
+         * A REPORTING PERIOD FOR THE MONEY THIS RUN MAKES.
+         *
+         * The journal refuses an entry it cannot attribute, and that refusal is correct — money
+         * posts, only its explanation is skipped. So a suite that asserts the journal has to give
+         * the tenant a period covering today, which is an environment fact and not a product one.
+         * Measured 2026-09-19: the active calendar's last 2026 period ended on the 16th, and every
+         * "journals exactly once" assertion went red while every money assertion passed.
+         */
+        await ensureAccountingPeriodCovers(supabase!, ORG, new Date().toISOString().slice(0, 10));
         const { data } = await supabase!
             .from("payment_provider_merchants")
             .select("provider_account_ref")

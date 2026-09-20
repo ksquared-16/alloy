@@ -73,6 +73,8 @@ import {
 import { applyCanonicalWorkViewSort } from "./canonicalWorkViewSort";
 import {
     resolveOperationalPresentation,
+    resolveWorkUnitHeaderConfigFromRecords,
+    operationalKpiSlotsFromHeaderConfig,
     listWorkUnitHeaderLayoutRecords,
     type OperationalPresentation,
 } from "./operationalPresentation";
@@ -1040,6 +1042,31 @@ export async function composeWorkUnitProvisioningAnswer(
     // enrichment branch below, and await it at the join. Still ONE atomic answer — internal read reordering.
     const tPres = now();
     const queueRowSurfaceId = queueRowSurfaceIdForDepartment(String(wuRow.department_id), deptRow?.metadata);
+    /*
+     * THE HEADER CONFIG READ, SPLIT OUT — ONE read, two consumers.
+     *
+     * It used to sit inside the presentation branch beside the queue-row layout read. Both run
+     * concurrently, but the queue-row read is the dominant cost (~700ms vs ~335ms) and the branch
+     * only resolves once BOTH have landed and composed. The KPI resolve chained off that, so it
+     * began ~1,000ms into composition, finished ~2,400-3,000ms, and missed the document's join at
+     * ~2,300-2,700ms — measured on #1091, binding in only 1 of 8 samples.
+     *
+     * Splitting it lets the KPI start when the header config alone is ready. This is the SAME read
+     * — `presentationPromise` awaits this promise rather than issuing its own — so the config read
+     * count is unchanged at one, and the derivation both consumers apply is the same exported
+     * function, so their key sets cannot diverge.
+     */
+    const tHeaderConfig = now();
+    const headerLayoutRecordsPromise = cachedConfigRead(`hdr:${req.orgId}:`, () =>
+        listWorkUnitHeaderLayoutRecords(req.supabase, req.orgId),
+    )
+        .then((r) => {
+            markSpan("header_config_ready_ms", tHeaderConfig);
+            return r;
+        })
+        .catch(() => null);
+    void headerLayoutRecordsPromise.catch(() => {});
+
     const presentationPromise = (async () => {
         // The queue-row layout and the header layout are INDEPENDENT DB reads — fetch them concurrently,
         // then compose (compose is in-memory). Collapses the two sequential ~700ms + ~335ms reads into one.
@@ -1057,9 +1084,8 @@ export async function composeWorkUnitProvisioningAnswer(
                     workViewId: activeView.id,
                 }),
             ),
-            cachedConfigRead(`hdr:${req.orgId}:`, () =>
-                listWorkUnitHeaderLayoutRecords(req.supabase, req.orgId),
-            ).catch(() => null),
+            // THE SAME read the KPI seed consumes — not a second one.
+            headerLayoutRecordsPromise,
         ]);
         return resolveOperationalPresentation({
             supabase: req.supabase,
@@ -1094,8 +1120,23 @@ export async function composeWorkUnitProvisioningAnswer(
      * inline: the join below takes what is ready and never blocks the document behind the rest.
      */
     const tHeaderKpi = now();
-    const headerKpiPromise: Promise<WorkUnitHeaderKpiSeed | null> = presentationPromise
-        .then((p) => req.resolveHeaderKpis?.({ workUnitId: workUnit.id, kpiSlots: p.header.kpiSlots }) ?? null)
+    const headerKpiPromise: Promise<WorkUnitHeaderKpiSeed | null> = headerLayoutRecordsPromise
+        .then((records) => {
+            // The SAME derivation the presentation branch applies, over the SAME records. A second
+            // derivation could pick a different published variant, and the seed's key set would
+            // stop matching the client's — which fails silently as "seed ignored", not as an error.
+            const { headerConfig } = resolveWorkUnitHeaderConfigFromRecords(records, {
+                businessProcessKey: process.key,
+                workViewId: activeView.id,
+            });
+            const kpiSlots = operationalKpiSlotsFromHeaderConfig(headerConfig);
+            markSpan("header_kpi_start_ms", tHeaderKpi);
+            return req.resolveHeaderKpis?.({ workUnitId: workUnit.id, kpiSlots }) ?? null;
+        })
+        .then((seed) => {
+            markSpan("header_kpi_execution_elapsed_ms", tHeaderKpi);
+            return seed;
+        })
         .catch(() => null);
     void headerKpiPromise.catch(() => {});
 
@@ -2207,6 +2248,19 @@ export async function composeWorkUnitProvisioningAnswer(
      * so the worst case is today's behaviour, never a document blocked behind the KPI cost.
      * `header_kpi_wait_ms` is what this join actually added — the number to hold honest.
      */
+    /*
+     * TWO DIFFERENT NUMBERS, MEASURED SEPARATELY.
+     *
+     * `header_kpi_wait_ms` previously started at KPI EXECUTION start, so it reported 812-1,152ms
+     * and read like the join cost. It was not: it was elapsed-time-to-join. The join's real cost is
+     * bounded by the grace, and conflating the two hid exactly the fact that needed seeing — that
+     * the resolve was starting too late, not that the join was expensive.
+     *
+     * `header_kpi_execution_elapsed_ms` is how long the resolve took (stamped where it completes).
+     * `header_kpi_join_wait_ms` is how long the DOCUMENT actually waited here, and is bounded by
+     * WORK_UNIT_HEADER_KPI_JOIN_GRACE_MS plus timer tolerance.
+     */
+    const tKpiJoinStart = now();
     const headerKpis = await (async (): Promise<WorkUnitHeaderKpiSeed | null> => {
         let timer: ReturnType<typeof setTimeout> | undefined;
         const grace = new Promise<null>((resolve) => {
@@ -2218,7 +2272,8 @@ export async function composeWorkUnitProvisioningAnswer(
             if (timer) clearTimeout(timer);
         }
     })();
-    markSpan("header_kpi_wait_ms", tHeaderKpi);
+    markSpan("header_kpi_join_wait_ms", tKpiJoinStart);
+    spans.header_kpi_seeded = headerKpis && headerKpis.status === "ok" ? 1 : 0;
 
     const answer: ProvisioningAnswer = {
         terminal: "operational",

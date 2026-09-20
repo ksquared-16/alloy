@@ -178,8 +178,7 @@ export async function resolveFinancialPositionCohort(
      * non-unique sort key can repeat or skip rows across page boundaries when many charges share a
      * service date, which is exactly what a month of generated tuition looks like.
      */
-    const PAGE = 1000;
-    const charges: Array<{
+    type PositionChargeRow = {
         id: string;
         billable_source_type: string;
         billable_source_id: string;
@@ -188,38 +187,34 @@ export async function resolveFinancialPositionCohort(
         status: string;
         service_date: string | null;
         posted_at: string | null;
-    }> = [];
-    let reachedEnd = false;
-    while (charges.length < scanCap) {
-        const want = Math.min(PAGE, scanCap - charges.length);
-        let chargeQuery = supabase
-            .from("charges")
-            .select("id, billable_source_type, billable_source_id, amount_cents, currency_code, status, service_date, posted_at")
-            .eq("org_id", args.orgId)
-            .eq("status", "posted")
-            .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
-            .order("service_date", { ascending: false, nullsFirst: false })
-            .order("id", { ascending: true });
-        if (args.serviceDateFrom) chargeQuery = chargeQuery.gte("service_date", args.serviceDateFrom);
-        if (args.serviceDateTo) chargeQuery = chargeQuery.lte("service_date", args.serviceDateTo);
-        if (args.postedFromIso) chargeQuery = chargeQuery.gte("posted_at", args.postedFromIso);
-        if (args.postedToIso) chargeQuery = chargeQuery.lte("posted_at", args.postedToIso);
-
-        const { data: pageRows, error } = await chargeQuery.range(charges.length, charges.length + want - 1);
-        if (error) throw new Error(`financial position read failed: ${error.message}`);
-        const batch = (pageRows ?? []) as typeof charges;
-        for (const row of batch) charges.push(row);
-        /* A short page is the end of the cohort. A full one may not be. */
-        if (batch.length < want) {
-            reachedEnd = true;
-            break;
-        }
-    }
+    };
     /*
-     * HONEST TRUNCATION. True only when the cap was actually reached AND the read did not run out
-     * of rows first — so a tenant with exactly `scanCap` charges is not reported as incomplete.
+     * ONE PAGING PRIMITIVE, shared with the account card.
+     *
+     * This loop was written here first and the Focus Panel card did not have one, which is how the
+     * two surfaces came to disagree about the same family. `readAllPages` is that loop, named and
+     * exported, so the workspace and the card page the same way by construction rather than by two
+     * people remembering the same thing.
      */
-    const truncated = !reachedEnd && charges.length >= scanCap;
+    const { rows: charges, truncated } = await readAllPages<PositionChargeRow>(
+        "financial position charges",
+        scanCap,
+        (fromIndex, toIndex) => {
+            let chargeQuery = supabase
+                .from("charges")
+                .select("id, billable_source_type, billable_source_id, amount_cents, currency_code, status, service_date, posted_at")
+                .eq("org_id", args.orgId)
+                .eq("status", "posted")
+                .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
+                .order("service_date", { ascending: false, nullsFirst: false })
+                .order("id", { ascending: true });
+            if (args.serviceDateFrom) chargeQuery = chargeQuery.gte("service_date", args.serviceDateFrom);
+            if (args.serviceDateTo) chargeQuery = chargeQuery.lte("service_date", args.serviceDateTo);
+            if (args.postedFromIso) chargeQuery = chargeQuery.gte("posted_at", args.postedFromIso);
+            if (args.postedToIso) chargeQuery = chargeQuery.lte("posted_at", args.postedToIso);
+            return chargeQuery.range(fromIndex, toIndex) as never;
+        },
+    );
 
     if (charges.length === 0) {
         return {
@@ -452,6 +447,65 @@ type AllocationFact = { id: string; assignedAmountCents: number; isUnassigned: b
  * longest column list in this file, so the bound holds as selects grow rather than only today.
  */
 export const ID_BATCH = 80;
+
+/**
+ * THE OTHER CEILING — the one that has no id list to blame.
+ *
+ * `readInBatches` solves the URI length problem: too many identifiers in one request. It does
+ * nothing about the second, quieter bound, because that one is not about the request at all.
+ * PostgREST answers at most `db-max-rows` rows to ANY single query, and on this deployment that is
+ * 1,000. A read whose COHORT is large — every charge on a long-lived account, every receipt an
+ * organisation has taken — is therefore answered with a page and no indication that it was one.
+ * No error, no header anyone read: the caller treats the page as the whole truth and computes a
+ * balance from part of a ledger.
+ *
+ * Measured on the certification tenant: an account holding 2,821 charges answered an unpaged read
+ * with exactly 1,000 of them, and the Focus Panel card and the Financials Workspace then disagreed
+ * about the same family's money — because only one of them paged.
+ *
+ * So the cohort is requested by `.range()` until it is complete or an EXPLICIT cap is reached, and
+ * the caller is told which happened. `truncated` means what it says: there is more than this scan
+ * was allowed to carry. What a caller must never receive is a short answer that looks whole.
+ *
+ * TWO RULES FOR CALLERS:
+ *
+ *   ORDER TOTALLY. Paging by range over a non-unique sort key can repeat or skip rows across page
+ *   boundaries. Every caller ends its order with a unique column — `id` — so the sequence is a
+ *   sequence and not a suggestion.
+ *
+ *   DECIDE WHAT TRUNCATION MEANS. An operational scan across an organisation may legitimately
+ *   report "there is more" (the workspace does). A single account's BALANCE may not: a number
+ *   computed from part of a ledger is wrong, not partial, so the account read fails visibly
+ *   instead.
+ */
+export const POSTGREST_MAX_ROWS = 1000;
+
+export async function readAllPages<T>(
+    label: string,
+    scanCap: number,
+    page: (fromIndex: number, toIndex: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<{ rows: T[]; truncated: boolean }> {
+    const rows: T[] = [];
+    let reachedEnd = false;
+    while (rows.length < scanCap) {
+        const want = Math.min(POSTGREST_MAX_ROWS, scanCap - rows.length);
+        const { data, error } = await page(rows.length, rows.length + want - 1);
+        // Same rule as `readInBatches`: a read that fails is an error, never a cheaper falsehood.
+        if (error) throw new Error(`${label} could not be read (${error.message.trim()})`);
+        const batch = (data ?? []) as T[];
+        for (const row of batch) rows.push(row);
+        /* A short page is the end of the cohort. A full one may not be. */
+        if (batch.length < want) {
+            reachedEnd = true;
+            break;
+        }
+    }
+    /*
+     * Honest truncation: true only when the cap was actually reached AND the read did not run out
+     * of rows first, so a cohort of exactly `scanCap` is not reported as incomplete.
+     */
+    return { rows, truncated: !reachedEnd && rows.length >= scanCap };
+}
 
 /*
  * NOT ONLY THE CHARGE-SCOPED FACTS. The first repair batched the four facts keyed by charge and
