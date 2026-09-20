@@ -122,3 +122,35 @@ describe("it stays compact", () => {
         expect(strip(cmd), "no token or chip vocabulary").not.toMatch(/chip|token|pill/i);
     });
 });
+
+describe("a subject is a child, not an agreement", () => {
+    /*
+     * MEASURED on the mounted product: two children, FOUR target checkboxes — all in one command
+     * host (`commandHosts: 1`), consecutive rows, every one visible and interactive. Not two
+     * hosts and not a depth artefact: `vm.subjects` mapped AGREEMENTS, so a child with a closed
+     * enrolment beside a live one became two subjects with the same name.
+     *
+     * The defect predates the unified control — the old "Applies to" select listed each child
+     * twice for the same reason — and every surface reading `vm.subjects` inherited it.
+     */
+    const vm = src("lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM.ts");
+
+    it("de-duplicates by member", () => {
+        expect(vm).toContain("const subjectByMember = new Map<");
+        expect(vm).toContain("subjectByMember.get(a.customer_member_id)");
+        expect(vm, "the list is built from the de-duplicated map").toContain("[...subjectByMember.values()].map");
+        expect(vm, "never straight from agreements").not.toMatch(/vm\.subjects = agreements\.map/);
+    });
+
+    it("prefers the agreement a new charge belongs to", () => {
+        const block = vm.slice(vm.indexOf("const subjectByMember"), vm.indexOf("vm.subjects = [..."));
+        expect(block).toContain("heldActive");
+        expect(block).toContain("thisActive");
+        expect(block, "an active agreement wins").toContain("if (!heldActive && thisActive)");
+    });
+
+    it("keeps the agreement alongside, because it is the billable source", () => {
+        expect(vm).toContain("agreementId: a.id");
+        expect(vm).toContain("agreementStatus: a.status");
+    });
+});

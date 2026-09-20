@@ -1223,8 +1223,34 @@ async function buildFinancialsCardVMInner(
     // `vm.payers` is filled from PERSISTED RESPONSIBILITY once the charges are known — see below.
     // The `payer` contact role is no longer what makes somebody a payer on this card.
     vm.payers = [];
-    // A household with no enrolment still HAS an account. Financials answers for it.
-    vm.subjects = agreements.map((a) => ({
+    /*
+     * ── ONE SUBJECT PER CHILD, NOT PER AGREEMENT ──────────────────────────────────────────────
+     *
+     * A household with no enrolment still HAS an account, and Financials answers for it. But this
+     * mapped AGREEMENTS, and a child with more than one — a closed enrolment beside a live one,
+     * or a second placement — became two subjects carrying the same name.
+     *
+     * MEASURED: two children, four entries. Every surface reading `vm.subjects` inherited it. The
+     * Add target rendered four checkboxes, and before the unified control the "Applies to" select
+     * listed each child twice. The defect predates the control; the control made it visible.
+     *
+     * A subject is a CHILD. The agreement carried alongside is the billable source, so an ACTIVE
+     * one is preferred where a child has several — an open agreement is what a new charge belongs
+     * to, and a closed one still owns its history without being what an operator bills against
+     * today. Insertion order is preserved so the list does not reshuffle.
+     */
+    const subjectByMember = new Map<string, { id: string; customer_member_id: string; status: string }>();
+    for (const a of agreements) {
+        const held = subjectByMember.get(a.customer_member_id);
+        if (!held) {
+            subjectByMember.set(a.customer_member_id, a);
+            continue;
+        }
+        const heldActive = (held.status ?? "").trim().toLowerCase() === "active";
+        const thisActive = (a.status ?? "").trim().toLowerCase() === "active";
+        if (!heldActive && thisActive) subjectByMember.set(a.customer_member_id, a);
+    }
+    vm.subjects = [...subjectByMember.values()].map((a) => ({
         customerMemberId: a.customer_member_id,
         agreementId: a.id,
         displayName: nameByMember.get(a.customer_member_id) ?? "Child",
