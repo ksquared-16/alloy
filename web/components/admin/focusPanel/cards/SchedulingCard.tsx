@@ -2017,15 +2017,53 @@ function ScheduleEditor({
                     cadence_key: option.cadenceKey,
                     /* Override requires its own reason; the action refuses without one. */
                     ...(isOverride ? { override_reason: overrideReason.trim() } : {}),
+                    /*
+                     * SUPERSEDE, WHEN THERE IS SOMETHING TO SUPERSEDE.
+                     *
+                     * A live term on the same effective date makes the service refuse with
+                     * `term_already_accepted` unless the caller says it means to replace it — and
+                     * that refusal is right: re-accepting the identical decision is idempotent,
+                     * but a DIFFERENT decision silently overwriting a standing agreement would
+                     * not be. Resolving a review is exactly the deliberate case, so the intent is
+                     * stated. The service supersedes by succession, closing the old term rather
+                     * than editing it, so history survives.
+                     */
+                    supersede: Boolean(view.accepted),
                 },
             }),
         });
         const json = (await res.json().catch(() => ({}))) as {
-            error?: string;
-            message?: string;
+            error?: unknown;
+            message?: unknown;
+            blockers?: Array<{ message?: string }>;
             result?: { term?: { state?: string; amount_cents?: number; cadence_key?: string } };
         };
-        if (!res.ok) return { ok: false, detail: json.error ?? json.message ?? `Refused (${res.status}).` };
+        if (!res.ok) {
+            /*
+             * THE REFUSAL HAS TO BE READABLE. `error` is a structured object on this runtime, so
+             * rendering it straight put "[object Object]" where the reason belonged — the
+             * operator was told tuition needed attention and not one word about why.
+             */
+            const say = (v: unknown): string | null => {
+                if (typeof v === "string" && v.trim()) return v.trim();
+                if (v && typeof v === "object") {
+                    const o = v as { message?: unknown; detail?: unknown; code?: unknown };
+                    return (
+                        (typeof o.message === "string" && o.message)
+                        || (typeof o.detail === "string" && o.detail)
+                        || (typeof o.code === "string" && o.code)
+                        || null
+                    );
+                }
+                return null;
+            };
+            const detail =
+                say(json.error)
+                ?? say(json.message)
+                ?? json.blockers?.map((b) => b.message).filter(Boolean).join("; ")
+                ?? `Refused (${res.status}).`;
+            return { ok: false, detail: detail || `Refused (${res.status}).` };
+        }
         const term = json.result?.term;
         return {
             ok: true,

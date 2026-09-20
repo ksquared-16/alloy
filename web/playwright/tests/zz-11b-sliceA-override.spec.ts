@@ -76,9 +76,11 @@ test("override the recommendation", async ({ page }) => {
     await page.waitForTimeout(1200);
     await page.screenshot({ path: `${OUT}/sliceA-override-form.png`, fullPage: true });
 
-    const commit = page.locator("[data-schedule-commit]").first();
+    /* Tuition has its own commit now: the schedule's stays disabled on an existing assignment. */
+    const commit = page.locator("[data-assignment-tuition-commit]").first();
+    out.commitKind = (await commit.count()) ? await commit.getAttribute("data-assignment-tuition-commit") : null;
     out.commitEnabled = (await commit.count()) ? await commit.isEnabled() : false;
-    log(`commit enabled: ${out.commitEnabled}`);
+    log(`tuition commit: ${out.commitKind} · enabled ${out.commitEnabled}`);
     if (out.commitEnabled) { await commit.click({ force: true }); await page.waitForTimeout(16_000); }
 
     out.outcomeUi = await page.evaluate(() => ({

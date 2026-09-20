@@ -232,3 +232,32 @@ describe("tuition can be settled without saving a schedule", () => {
         }
     });
 });
+
+describe("resolving a review supersedes rather than overwrites", () => {
+    const card = src(CARD);
+
+    it("states the intent to supersede only when a term stands", () => {
+        /*
+         * A live term on the same effective date makes the service refuse with
+         * `term_already_accepted` unless the caller says it means to replace it. That refusal is
+         * right: re-accepting the identical decision is idempotent, but a DIFFERENT decision
+         * silently overwriting a standing agreement would not be.
+         */
+        expect(card).toContain("supersede: Boolean(view.accepted)");
+    });
+
+    it("the service closes the old term rather than editing it", () => {
+        const svc = src("lib/enrollment/pricing/enrollmentPricingTermsService.ts");
+        expect(svc).toContain("supersedes_term_id: live?.id ?? null");
+        expect(svc).toMatch(/superseded_at: new Date\(\)\.toISOString\(\)/);
+    });
+
+    it("a refusal reaches the operator as words", () => {
+        /* `error` is a structured object here; rendering it straight printed "[object Object]". */
+        const fn = card.slice(card.indexOf("async function acceptAssignmentTuition"));
+        const body = fn.slice(0, fn.indexOf("async function settleTuition"));
+        expect(body).toContain("const say = (v: unknown)");
+        expect(body, "objects are unwrapped, not stringified").toContain("o.message");
+        expect(body).toContain("json.blockers?.map");
+    });
+});
