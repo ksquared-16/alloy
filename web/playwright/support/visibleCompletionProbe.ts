@@ -126,7 +126,28 @@ export function installVisibleCompletionProbe(): void {
             if (!rules || depth > 4) return;
             for (let i = 0; i < rules.length; i++) {
                 const rule = rules[i] as CSSStyleRule & { cssRules?: CSSRuleList };
-                const sel = typeof rule.selectorText === "string" ? rule.selectorText : "";
+                const rawSel = typeof rule.selectorText === "string" ? rule.selectorText : "";
+                /*
+                 * STRIP CSS ESCAPES BEFORE LOOKING FOR ATTRIBUTE SELECTORS.
+                 *
+                 * The harvester treated every "[" as the start of an attribute selector. Tailwind
+                 * arbitrary variants produce CLASS names containing escaped brackets — the live
+                 * sheet carries `.\[name\:redacted\]` — so "name" was harvested as a styled
+                 * attribute when nothing styles it at all.
+                 *
+                 * That single misparse made WU-04 the apparent owner of ~4.4s of "authoritative
+                 * visible state": the late mutation there is the removal of `name` from an INPUT,
+                 * and removing it was measured on the deployed page to produce ZERO computed-style
+                 * and ZERO geometry difference. An identity attribute was being scored as visible
+                 * truth.
+                 *
+                 * Removing each backslash-escaped character leaves genuine attribute selectors
+                 * intact (`input[name="x"]`, `[data-state="open"]` carry no escapes) while an
+                 * escaped class name collapses to a plain token with no bracket left to match.
+                 * This is a parsing repair, not a relaxation: no attribute that actually styles
+                 * the surface stops counting.
+                 */
+                const sel = rawSel.replace(/\\./g, "");
                 const re = /\[\s*([A-Za-z_:][-\w:.]*)/g;
                 let m: RegExpExecArray | null = re.exec(sel);
                 while (m !== null) { out.add(m[1].toLowerCase()); m = re.exec(sel); }
