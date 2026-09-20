@@ -59,6 +59,35 @@ export function countOpenWork(tasks: TaskLike[] | null | undefined): number {
     return tasks.filter((t) => (t.status ?? "").trim() === "open").length;
 }
 
+/**
+ * THE LISTING'S ANSWER, WITH "COULD NOT TELL" KEPT DISTINCT FROM "NONE".
+ *
+ * `countOpenWork(null)` returns 0, which is correct for its own job — it counts an array — and
+ * dangerous at this boundary, because the thing being counted is the RESULT OF A NETWORK READ.
+ * Passing an unavailable listing straight into it turns UNKNOWN into KNOWN_ZERO, and the operator
+ * is shown an authoritative "no work" for a record whose work nobody managed to read.
+ *
+ * The transport failures were already handled: a non-OK response and a thrown fetch both keep the
+ * last known value. The gap was a SUCCESSFUL response whose body carried no task array. `readJson`
+ * swallows a parse failure and returns `{}` (`res.json().catch(() => ({}))`), so an unparseable or
+ * shape-drifted 200 arrived here as `tasks: undefined` and counted as zero — the one path where a
+ * read that failed still produced a confident number.
+ *
+ * So the array itself is the evidence. Present means the listing answered and its length is the
+ * truth, zero included. Absent means unavailable, whatever the status code claimed.
+ *
+ * Returns `null` for UNKNOWN/UNAVAILABLE; the caller decides whether that means "keep the last
+ * known value" or "report nothing known". It must never mean zero.
+ */
+export function openWorkCountFromListing(
+    ok: boolean,
+    body: { tasks?: TaskLike[] } | null | undefined,
+): number | null {
+    if (!ok) return null;
+    if (!Array.isArray(body?.tasks)) return null;
+    return countOpenWork(body.tasks);
+}
+
 type ConversationLike = {
     primary_entity_id?: string | null;
     unread_count?: number | null;
@@ -105,12 +134,14 @@ export function useRecordAttentionCounts(entityId: string | null | undefined): R
         try {
             const res = await fetchOperationalTasks(id);
             const json = await readJson<{ tasks?: TaskLike[] }>(res);
-            if (!res.ok) {
-                // Refused or errored: stop loading, keep whatever was last known. Never zero.
+            // One decision, one place: a listing that did not answer yields null, never zero.
+            // Refused, errored or shape-drifted: keep whatever was last known.
+            const counted = openWorkCountFromListing(res.ok, json);
+            if (counted === null) {
                 setState((prev) => ({ work: prev.work, loading: false }));
                 return;
             }
-            setState({ work: countOpenWork(json.tasks), loading: false });
+            setState({ work: counted, loading: false });
         } catch {
             // A count that cannot be read stays at its last known value rather than reporting zero:
             // "no work" and "could not tell" must not look the same to an operator.
