@@ -104,7 +104,34 @@ export async function composeProvisioningAnswerForRoute(input: {
     const documentActorMs = timing ? performance.now() - tActor : 0;
 
     const tInner = mark();
+    /*
+     * THE PARTICIPANT READ, STARTED WHEN THE SUBJECT IS KNOWN RATHER THAN WHEN THE ANSWER IS DONE.
+     *
+     * This route has exactly three serial awaits — route identity ~170ms, composition ~742ms, card
+     * producers ~858ms — and measured on deployed d1b8f1319 they sum to the 2,022ms document wall.
+     * The producers' participant read needs only the SUBJECT, which composition resolves before it
+     * runs the ~616ms children shell, so queueing that read behind the finished answer spent real
+     * wall clock waiting for facts it did not need.
+     *
+     * The composer announces the subject; this starts the read and joins it below. If the
+     * announcement never fires the join falls back to the original inline read, so behaviour is
+     * unchanged on any path that does not reach a subject.
+     */
+    let earlyParticipant: Promise<Awaited<ReturnType<typeof resolveSoleEnrollmentParticipantForOpportunity>>> | null = null;
+    let earlyParticipantSubjectId: string | null = null;
+
     const answer = await composeWorkUnitProvisioningAnswer({
+        onSubjectResolved: ({ subjectId, orgId }) => {
+            if (earlyParticipant || !subjectId) return;
+            earlyParticipantSubjectId = subjectId;
+            // Failure is the join's problem, not composition's: settle it here so an unhandled
+            // rejection can never escape while the answer is still being assembled.
+            earlyParticipant = resolveSoleEnrollmentParticipantForOpportunity({
+                supabase,
+                orgId,
+                opportunityId: subjectId,
+            }).catch(() => null);
+        },
         supabase,
         orgId: gate.orgId,
         currentUserId: gate.userId ?? null,
@@ -173,14 +200,21 @@ export async function composeProvisioningAnswerForRoute(input: {
          * One read, through the existing owner, scoped to this org and this opportunity. It
          * refuses to guess: two enrolled children resolve to nothing rather than to the first.
          */
-        const resolvedParticipant =
-            answer.recordOfAttention?.id
-                ? await resolveSoleEnrollmentParticipantForOpportunity({
-                      supabase,
-                      orgId: gate.orgId,
-                      opportunityId: String(answer.recordOfAttention.id),
-                  })
-                : null;
+        const attentionId = answer.recordOfAttention?.id ? String(answer.recordOfAttention.id) : null;
+        /*
+         * JOIN. The early read was keyed to the subject composition announced; if the answer
+         * settled on a DIFFERENT record the speculative result is not this record's and must not
+         * be used, so it is discarded and the canonical read runs for the real id.
+         */
+        const resolvedParticipant = !attentionId
+            ? null
+            : earlyParticipant && earlyParticipantSubjectId === attentionId
+              ? await earlyParticipant
+              : await resolveSoleEnrollmentParticipantForOpportunity({
+                    supabase,
+                    orgId: gate.orgId,
+                    opportunityId: attentionId,
+                });
         /*
          * CARRIED TO THE BROWSER. The producers below consume this server-side; the browser needs
          * the same identity to decide that Attendance, Health and Children are mountable at all.

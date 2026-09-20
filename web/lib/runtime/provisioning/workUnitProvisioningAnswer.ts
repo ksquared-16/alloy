@@ -620,6 +620,23 @@ export type ProvisioningRequest = {
      * `next/headers` and this module is in a client-reachable graph. Absent (any non-route caller)
      * simply means the client resolves them as before.
      */
+    /**
+     * EARLY SUBJECT NOTIFICATION — the route starts its own subject-scoped reads sooner.
+     *
+     * `composeProvisioningAnswerForRoute` has exactly three serial awaits: route identity (~170ms),
+     * this composition (~742ms), then the card producers (~858ms). Measured on deployed d1b8f1319
+     * those sum to the 2,022ms document wall, and nothing the operator can read crosses the wire
+     * until the last of them finishes — even though the response itself opens at ~32ms.
+     *
+     * The producers' own participant read only needs the SUBJECT, which is resolved here, before
+     * the ~616ms children shell runs. Announcing it lets the route overlap that read with the rest
+     * of composition instead of queueing it behind the whole answer.
+     *
+     * Announcement only: no value is returned into composition, so the answer cannot come to depend
+     * on route-side work and the two cannot deadlock. A throwing listener must never fail the
+     * document, so the call site swallows.
+     */
+    onSubjectResolved?: (args: { subjectId: string; orgId: string }) => void;
     resolveHeaderKpis?: (args: {
         workUnitId: string;
         kpiSlots: ReadonlyArray<{ sourceKey?: string | null }>;
@@ -1663,6 +1680,18 @@ export async function composeWorkUnitProvisioningAnswer(
             "subject_unavailable",
             "the configured strategy resolved no subject from the evaluated page",
         );
+    }
+    /*
+     * The subject is known HERE — before the children shell, which is the single largest piece of
+     * the remaining composition. Anything the route can start from the subject alone should start
+     * now rather than after the answer is assembled.
+     */
+    if (chosen.entityId) {
+        try {
+            req.onSubjectResolved?.({ subjectId: String(chosen.entityId), orgId: req.orgId });
+        } catch {
+            // A listener is an optimisation. It may never cost the document its answer.
+        }
     }
     // ── U-P5/U-O4 current business state + U-O5 truthful primary action. ──
     const childSubjectRow = childRows?.find((r) => String(r.participationId ?? "") === chosen.entityId) ?? null;
