@@ -1,6 +1,15 @@
 -- =============================================================================
 -- COMMERCIAL POLICY EXCEPTIONS
 -- =============================================================================
+-- Versioned 20260924120000, after staging's latest (20260923120000_payment_holds).
+-- It was authored as 20260920140000 while staging sat 52 commits back; staging has
+-- since taken seven migrations dated 0919-0923. There is no version COLLISION and
+-- nothing structural to conflict with — the newer migrations do not alter
+-- `commercial_policies`, `opportunity_customer_members` or `orgs` — but a migration
+-- whose version sorts before four already-applied ones is a skip waiting to happen
+-- in any ledger that tracks a high-water mark. It has been applied nowhere, so
+-- correcting its own version costs nothing and removes the question.
+-- =============================================================================
 -- "This otherwise-valid commercial policy is intentionally excluded for this
 -- specific commercial relationship, for this effective window, by this
 -- operator, for this reason."
