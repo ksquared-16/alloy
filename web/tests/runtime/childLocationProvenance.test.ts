@@ -36,13 +36,49 @@ const ctx = (child: Record<string, unknown>): OperationalContext =>
         capabilities: { canMutate: false, maskedChannels: false },
     }) as unknown as OperationalContext;
 
-/** The canonical inquiry-child shape the normalizer consumes (display_name + member id). */
-const kid = (over: Record<string, unknown> = {}) => ({
-    id: "ch-1",
-    customer_member_id: "ocm-1",
-    display_name: "Specee",
-    ...over,
-});
+/*
+ * THE REAL COMMIT-TIME SHAPE, captured from deployed 02c6a583f and redacted to field shape only.
+ *
+ * The previous repair passed seven gates and five plants against a synthetic row whose
+ * `location_id` key was ABSENT, and then changed nothing in production — because the real payload
+ * carries the key with a null value. A green gate over the wrong payload shape is not
+ * certification, so the fixture is now the captured shape and the absent-key variant is gone.
+ */
+const REAL_COMMIT_CHILD = {
+    id: "3ce7389c-0000-0000-0000-000000000000",
+    customer_member_id: "a227e460-0000-0000-0000-000000000000",
+    person_id: null,
+    display_name: "Specee Redacted",
+    first_name: "Specee",
+    last_name: "Redacted",
+    dob: null,
+    age: null,
+    linked_on_inquiry: true,
+    ocm_id: "3ce7389c-0000-0000-0000-000000000000",
+    program_category_id: null,
+    program_key: null,
+    desired_program_label: null,
+    schedule_type: null,
+    desired_schedule_label: null,
+    outcome_status_key: "new_inquiry",
+    outcome_status_label: "New Lead",
+    fit_status: null,
+    notes: null,
+    start_date: null,
+    location_id: null,
+    location_label: null,
+    program_room_cohort_key: null,
+    program_room_cohort_label: null,
+    custom_fields: {},
+    metadata: { source: "create_lead_ingest" },
+    photo_url: null,
+    created_at: "2026-09-13T14:02:41.807662+00:00",
+    updated_at: null,
+    _participation_source: "ocm",
+    _operational_facts_source: "ocm",
+} as const;
+
+const kid = (over: Record<string, unknown> = {}) => ({ ...REAL_COMMIT_CHILD, ...over });
 
 const only = (c: OperationalContext) => {
     const kids = buildChildrenCardEvidence(c).children;
@@ -51,8 +87,12 @@ const only = (c: OperationalContext) => {
 };
 
 describe("child location provenance", () => {
-    it("A — UNKNOWN provenance does not claim inheritance", () => {
-        // No `location_id` key at all: nothing answered the question.
+    it("A/C — REAL commit shape (location_id present and null) claims NOTHING", () => {
+        /*
+         * This is the exact payload the deployed document produces. The key IS present and null,
+         * which is why the previous key-presence guard failed silently in production. Commit has
+         * no scheduling projection, so provenance is unknown and no badge is claimed.
+         */
         const child = only(ctx(kid()));
         expect(child.locationInherited).toBeFalsy();
     });
@@ -63,11 +103,29 @@ describe("child location provenance", () => {
         expect(only(ctx(kid())).location).toBe(LEAD_LABEL);
     });
 
-    it("B — KNOWN-absent own location does claim inheritance", () => {
-        // The key is present and empty: the product actually knows the child owns no site.
-        const child = only(ctx(kid({ location_id: null })));
+    it("B — once the projection has ANSWERED, an absent own site does claim inheritance", () => {
+        /*
+         * The scheduling projection is the authority that distinguishes the states — settlement
+         * drops the badge precisely because it appears. With it present and carrying no site, the
+         * child genuinely owns none, and the qualifier is truthful.
+         */
+        const c = ctx(kid());
+        (c.truth as Record<string, unknown>)._scheduling_projection = {
+            byMemberId: { [REAL_COMMIT_CHILD.customer_member_id]: { child: { siteId: null } } },
+        };
+        const child = only(c);
         expect(child.locationInherited).toBe(true);
         expect(child.location).toBe(LEAD_LABEL);
+    });
+
+    it("B2 — the projection answering with a site means OWNED, never inherited", () => {
+        const c = ctx(kid());
+        (c.truth as Record<string, unknown>)._scheduling_projection = {
+            byMemberId: {
+                [REAL_COMMIT_CHILD.customer_member_id]: { child: { siteId: "loc-own-9", siteName: "South Campus" } },
+            },
+        };
+        expect(only(c).locationInherited).toBeFalsy();
     });
 
     it("C — a child-owned location never claims inheritance", () => {
@@ -76,10 +134,12 @@ describe("child location provenance", () => {
         expect(child.location).toBe("South Campus");
     });
 
-    it("E — an empty-string location does not become inheritance by coercion", () => {
-        // Present-but-blank is still "answered": the child owns no site.
-        const child = only(ctx(kid({ location_id: "" })));
-        expect(child.locationInherited).toBe(true);
+    it("D — key presence alone never implies inheritance", () => {
+        // The failure mode, pinned: null, empty and whitespace all carry the key and none of them
+        // answers the provenance question at commit.
+        for (const v of [null, "", "   "]) {
+            expect(only(ctx(kid({ location_id: v }))).locationInherited, String(v)).toBeFalsy();
+        }
     });
 
     it("inheritance is never claimed when the lead itself has no site", () => {

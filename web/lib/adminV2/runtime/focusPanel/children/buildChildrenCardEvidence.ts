@@ -274,30 +274,29 @@ export function buildChildrenCardEvidence(
             ?? trimOrNull((raw as { location_id?: unknown }).location_id)
             ?? trimOrNull(schedulingProjection?.child?.siteId);
         /*
-         * UNKNOWN IS NOT INHERITED.
+         * UNKNOWN IS NOT INHERITED — AND KEY PRESENCE IS NOT KNOWLEDGE.
          *
-         * `locationInherited` used to be `!childLocationId && Boolean(opportunitySiteId)` — absence
-         * read as "the child has no site of its own". At commit the answer does not carry each
-         * child's `location_id` at all, so the card asserted "Inherited from lead" for a child that
-         * DOES own a placement, and the drawer then removed the badge. Measured on deployed
-         * 6734f408f that removal was the single last authoritative mutation on the surface: a false
-         * claim, corrected ~1.6s later.
+         * First attempt gated this on the raw entry CARRYING a `location_id` key, reasoning that a
+         * present key meant the question had been answered. Captured from the deployed commit
+         * payload, the entry reads:
          *
-         * Provenance is only knowable when something actually answered the question — the row or
-         * its raw form carried the key (even as null), or the scheduling projection resolved the
-         * child. Absent all three the qualifier is unknown and nothing is claimed.
+         *   "location_id": null, "location_label": null,
+         *   "_participation_source": "ocm", "_operational_facts_source": "ocm"
          *
-         * The VALUE is untouched: the effective site still falls back to the lead's label, because
-         * that is genuinely the site in effect. Only the provenance sentence is withheld.
+         * The key is present and null. So the guard evaluated true, the claim was made exactly as
+         * before, and the repair changed nothing in production while its synthetic gates stayed
+         * green. The fixture was the defect.
+         *
+         * What actually distinguishes the states is the SCHEDULING PROJECTION: `childLocationId`
+         * resolves `row.location_id ?? raw.location_id ?? schedulingProjection?.child?.siteId`,
+         * and settlement drops the badge precisely because that third source appears. OCM's null
+         * is therefore not the whole answer — it says "no OCM-owned site", not "no site".
+         *
+         * Commit can show the effective site but cannot classify its provenance, so it claims
+         * nothing. When the projection has answered, both states are truthful: a resolved site is
+         * OWNED, its absence is INHERITED.
          */
-        const childLocationProvenanceKnown =
-            /*
-             * The RAW entry only — `mapRawInquiryChildrenToDrawerRows` materialises `location_id`
-             * on every mapped row whether or not the source carried it, so the mapped row cannot
-             * distinguish "answered null" from "never asked".
-             */
-            Object.prototype.hasOwnProperty.call((raw ?? {}) as object, "location_id")
-            || schedulingProjection?.child != null;
+        const childLocationProvenanceKnown = schedulingProjection?.child != null;
         // Site name for Location fields — never expose the UUID storage key as display truth.
         const location =
             trimOrNull(row.location_label)
