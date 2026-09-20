@@ -142,7 +142,28 @@ export function useRecordAttentionCounts(entityId: string | null | undefined): R
         if (!id) return;
         const read = () => {
             const snap = getCommandCenterCacheSnapshot();
-            setUnread(countUnreadForEntity(snap?.conversations as ConversationLike[] | undefined, id));
+            const next = countUnreadForEntity(snap?.conversations as ConversationLike[] | undefined, id);
+            /*
+             * ONLY WHEN IT CHANGED.
+             *
+             * The command-center cache notifies subscribers whenever it settles, including with an
+             * unchanged snapshot, and that notify lands immediately after the work count commits.
+             * Writing the same number scheduled a state update that changed nothing. Returning
+             * `prev` from the updater lets React bail out instead.
+             *
+             * STATED CAREFULLY: this is NOT claimed to fix the duplicate Work-chip append. That
+             * defect is still unexplained — an earlier confident diagnosis (setWork/setLoading
+             * across the await) was wrong, and a local probe of this notify measures extra
+             * RENDERS, which is not the same thing as a DOM re-insertion: React performs one
+             * render before bailing out anyway, and a render whose memoised chip array is
+             * unchanged need not re-append anything. This guard stands on its own merit — do not
+             * write state that did not change — and the duplicate remains open.
+             *
+             * This is not memoisation around a correctness problem — `unread` and `work` are
+             * genuinely independent authorities (conversations vs operational tasks), so they keep
+             * separate state; what is fixed is writing a value that did not change.
+             */
+            setUnread((prev) => (prev === next ? prev : next));
         };
         read();
         const unsubscribe = subscribeCommandCenterCache(read);
