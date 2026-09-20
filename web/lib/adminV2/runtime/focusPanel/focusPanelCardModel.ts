@@ -153,6 +153,21 @@ export const FOCUS_PANEL_CARD_KEYS = [
      * of the one owner. `scheduling` stays a separate card answering a separate question.
      */
     "staff",
+    /**
+     * @grain person — the qualifications and certifications this employee holds, what needs
+     * attention, and which configured requirements apply to their work.
+     *
+     * A SEPARATE card from `staff`, not a section inside it, because it answers a separate
+     * question and its answer changes on a different clock: employment facts change when
+     * someone is hired, moved or ended; qualification standing changes by the passage of a
+     * date. Folding it in would have put an expiring credential behind an expander whose
+     * headline says "Active".
+     *
+     * It deliberately does NOT publish a global Staff Ready / Blocked verdict. That verdict
+     * spans more than qualifications and belongs to Staff Readiness; asserting it here would
+     * make this card the owner of a truth it can only see part of.
+     */
+    "staff_qualifications",
     "employment",
     /** @grain case — meaningful completed/committed outcomes (not Activity history) */
     "milestones",
