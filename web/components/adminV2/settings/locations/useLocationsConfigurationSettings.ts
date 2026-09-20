@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
+import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
+import { TopologyRefusalError } from "@/lib/locations/topologyRefusalError";
+import { presentRoomTopology } from "@/lib/locations/topologyPresentation";
 import {
     fetchOptionSetItemsBySetKey,
     mapOptionItemsToSelectOptions,
@@ -13,7 +16,10 @@ import {
     type LocationProgramCategoryRow,
 } from "@/lib/locations/locationProgramCategories";
 import type { SchedulePatternRow } from "@/lib/childcareOperational/fetchOperationalEnrollment";
-import { mergeLocationMetadataField } from "@/lib/adminV2/locationsHierarchyTablePresentation";
+import {
+    mergeLocationMetadataField,
+    withCanonicalUnitRole,
+} from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import type { LocationSiteCreateInput } from "@/components/adminV2/settings/locations/LocationSiteCreatePanel";
 import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
 import {
@@ -48,6 +54,14 @@ export type LocationRoomCreateInput = {
     label: string;
     is_active: boolean;
     metadata: Record<string, unknown>;
+    /** Canonical topology role the operator chose through the Type control. */
+    unit_role: CanonicalUnitRole;
+    /**
+     * The physical room the operator chose through Inside, or null for "directly
+     * at the site". The hook turns this into `parent_location_id`; the form never
+     * handles a raw parent id.
+     */
+    inside_location_id: string | null;
 };
 
 export type LocationProgramCreateInput = {
@@ -55,6 +69,31 @@ export type LocationProgramCreateInput = {
     is_active: boolean;
     metadata: Record<string, unknown>;
 };
+
+/**
+ * The POST body for a new room, from the operator's Type + Inside choices.
+ *
+ * Exported because this IS the create contract: the form expresses intent, this
+ * turns it into canonical topology, and the server decides legality. Keeping it
+ * a pure function lets the contract be proven against the real route rather than
+ * asserted about in prose.
+ *
+ * Role-aware parent, not a hard-coded site: a classroom the operator placed
+ * Inside a physical room is parented to THAT room.
+ */
+export function buildRoomCreatePayload(
+    siteId: string,
+    input: LocationRoomCreateInput
+): Record<string, unknown> {
+    return {
+        location_type: "unit",
+        unit_role: input.unit_role,
+        parent_location_id: input.inside_location_id ?? siteId,
+        label: input.label.trim() || "New room",
+        is_active: input.is_active,
+        metadata: input.metadata,
+    };
+}
 
 function isSite(row: LocationHierarchyRow): boolean {
     return String(row.location_type ?? "").trim() === "site";
@@ -74,7 +113,7 @@ export function useLocationsConfigurationSettings(options?: {
     const retainedLocationId = String(options?.retainedLocationId ?? "").trim() || null;
     const [section, setSection] = useState<LocationConfigSection>("locations");
     const [rows, setRows] = useState<LocationHierarchyRow[]>(() =>
-        orgId ? (peekLocationsCollection(orgId)?.rows ?? []) : [],
+        orgId ? (peekLocationsCollection(orgId)?.rows ?? []).map(withCanonicalUnitRole) : [],
     );
     const [programCategories, setProgramCategories] = useState<LocationProgramCategoryRow[]>(() =>
         orgId ? (peekLocationsCollection(orgId)?.programCategories ?? []) : [],
@@ -113,7 +152,9 @@ export function useLocationsConfigurationSettings(options?: {
             programCategories: LocationProgramCategoryRow[];
             schedulePatterns: SchedulePatternRow[];
         }) => {
-            setRows(snapshot.rows);
+            // Every row entering the model is folded once, so `unit_role` on a
+            // LocationHierarchyRow means the same thing wherever it came from.
+            setRows(snapshot.rows.map(withCanonicalUnitRole));
             setProgramCategories(snapshot.programCategories);
             setSchedulePatterns(snapshot.schedulePatterns);
             hasDataRef.current = snapshot.rows.length > 0 || snapshot.programCategories.length > 0;
@@ -235,13 +276,22 @@ export function useLocationsConfigurationSettings(options?: {
             return [];
         }
         if (section === "rooms") {
+            // Topology through the ONE presentation authority. The old expression
+            // looked the room's PARENT up in a sites-only map, which is right only
+            // for a room hanging straight off the site — a nested classroom's parent
+            // is a physical room, so it missed and the row rendered with no subtitle
+            // at all. Sorting used the same broken lookup, so those rooms also sorted
+            // under an empty key.
             return roomRows
-                .map((room) => ({
-                    id: room.id,
-                    title: (room.label ?? "").trim() || "Untitled room",
-                    subtitle: room.parent_location_id ? siteLabelById.get(room.parent_location_id) : undefined,
-                    sortSite: room.parent_location_id ? siteLabelById.get(room.parent_location_id) ?? "" : "",
-                }))
+                .map((room) => {
+                    const topology = presentRoomTopology(room, rows);
+                    return {
+                        id: room.id,
+                        title: (room.label ?? "").trim() || "Untitled room",
+                        subtitle: topology.subtitle || undefined,
+                        sortSite: topology.siteLabel ?? "",
+                    };
+                })
                 .sort((a, b) => a.sortSite.localeCompare(b.sortSite) || a.title.localeCompare(b.title));
         }
         return schedulePatterns
@@ -252,7 +302,7 @@ export function useLocationsConfigurationSettings(options?: {
                 sortSite: siteLabelById.get(pattern.site_location_id) ?? "",
             }))
             .sort((a, b) => a.sortSite.localeCompare(b.sortSite) || a.title.localeCompare(b.title));
-    }, [section, siteRows, programCategories, roomRows, schedulePatterns, siteLabelById]);
+    }, [section, siteRows, programCategories, roomRows, rows, schedulePatterns, siteLabelById]);
 
     // Deterministic selection projection (route → retained → none).
     // Locations landing: never auto-open the first location. Do not invent a default.
@@ -331,7 +381,9 @@ export function useLocationsConfigurationSettings(options?: {
             if (!newId || !mutationResponseContainsPatch(json as Record<string, unknown>, payload)) {
                 throw new Error("Location creation was not confirmed by the authoritative response.");
             }
-            setRows((prev) => (prev.some((row) => row.id === newId) ? prev : [...prev, json]));
+            setRows((prev) =>
+                prev.some((row) => row.id === newId) ? prev : [...prev, withCanonicalUnitRole(json)],
+            );
             bumpCollectionAfterMutation("location-site-created");
             window.dispatchEvent(
                 new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }),
@@ -343,26 +395,29 @@ export function useLocationsConfigurationSettings(options?: {
 
     const createRoomUnit = useCallback(
         async (siteId: string, input: LocationRoomCreateInput): Promise<string> => {
-            const payload = {
-                location_type: "unit",
-                parent_location_id: siteId,
-                label: input.label.trim() || "New room",
-                is_active: input.is_active,
-                metadata: input.metadata,
-            };
+            const payload = buildRoomCreatePayload(siteId, input);
             const res = await fetch("/api/admin/locations", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
                 body: JSON.stringify(payload),
             });
-            const json = (await res.json().catch(() => ({}))) as LocationHierarchyRow & { error?: string };
-            if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
+            const json = (await res.json().catch(() => ({}))) as LocationHierarchyRow & {
+                error?: string;
+                code?: string;
+            };
+            if (!res.ok) {
+                // Carry the NAMED code to the form. The form explains the refusal from
+                // the code; nothing downstream reads the server's English.
+                throw new TopologyRefusalError(json.error ?? `Failed (${res.status})`, json.code ?? null);
+            }
             const newId = String(json.id ?? "").trim();
             if (!newId || !mutationResponseContainsPatch(json as Record<string, unknown>, payload)) {
                 throw new Error("Room creation was not confirmed by the authoritative response.");
             }
-            setRows((prev) => (prev.some((row) => row.id === newId) ? prev : [...prev, json]));
+            setRows((prev) =>
+                prev.some((row) => row.id === newId) ? prev : [...prev, withCanonicalUnitRole(json)],
+            );
             bumpCollectionAfterMutation("location-room-created");
             window.dispatchEvent(
                 new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }),
@@ -415,15 +470,24 @@ export function useLocationsConfigurationSettings(options?: {
                 credentials: "include",
                 body: JSON.stringify(body),
             });
-            const json = (await res.json().catch(() => ({}))) as LocationHierarchyRow & { error?: string };
-            if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
+            const json = (await res.json().catch(() => ({}))) as LocationHierarchyRow & {
+                error?: string;
+                code?: string;
+            };
+            if (!res.ok) {
+                // Same contract as create: the NAMED code travels to the form, which
+                // explains the refusal from the code rather than the sentence.
+                throw new TopologyRefusalError(json.error ?? `Failed (${res.status})`, json.code ?? null);
+            }
             if (!json.id || !mutationResponseContainsPatch(json as Record<string, unknown>, body)) {
                 throw new Error("Location save was not confirmed by the authoritative response.");
             }
             // Apply the PATCH row into local state. Do not await a full hierarchy GET on the
             // save critical path — that was blocking "Saving…" for the entire org reload.
             setRows((prev) =>
-                prev.map((row) => (row.id === id ? { ...row, ...json, id: row.id } : row)),
+                prev.map((row) =>
+                    row.id === id ? withCanonicalUnitRole({ ...row, ...json, id: row.id }) : row,
+                ),
             );
             bumpCollectionAfterMutation("location-patched");
         },
@@ -509,6 +573,8 @@ export function useLocationsConfigurationSettings(options?: {
         error,
         setError,
         listItems,
+        /** Every site + room row, for surfaces that must resolve topology context. */
+        rows,
         siteRows,
         roomRows,
         programCategories,

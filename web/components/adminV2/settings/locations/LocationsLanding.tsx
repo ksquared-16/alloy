@@ -6,6 +6,7 @@ import type {
     LocationsCollectionModel,
     LocationWorkspaceTab,
 } from "@/lib/locations/locationWorkspaceModel";
+import { formatCapacityCoverage } from "@/lib/locations/capacityAdoptionState";
 
 export function locationsCollectionUsesBoundedScroll(locationCount: number): boolean {
     return locationCount >= 7;
@@ -33,7 +34,7 @@ export default function LocationsLanding({
     const activeLocations = collection.locations.filter((location) => location.isActive);
     const glanceRows = activeLocations.slice(0, 12);
     const totalProgramsOffered = collection.totalPrograms;
-    const totalCapacity = collection.totalConfiguredCapacity;
+    const capacityCoverage = collection.totalCapacityCoverage;
 
     return (
         <div className="flex w-full flex-col gap-3" data-testid="locations-landing">
@@ -83,11 +84,18 @@ export default function LocationsLanding({
                 </ConfigWorkspaceCard>
                 <ConfigWorkspaceCard compact className="h-full" testId="locations-landing-capacity-count">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/40">
-                        Total Capacity
+                        Capacity coverage
                     </p>
                     <p className="mt-1.5 text-lg font-semibold tracking-tight text-alloy-midnight">
-                        {totalCapacity == null ? "—" : totalCapacity}
+                        {capacityCoverage.total === 0 ?
+                            "—"
+                        :   `${capacityCoverage.confirmed}/${capacityCoverage.total}`}
                     </p>
+                    {capacityCoverage.needsReview > 0 ?
+                        <p className="config-typo-sublabel mt-0.5">
+                            {capacityCoverage.needsReview} need review
+                        </p>
+                    :   null}
                 </ConfigWorkspaceCard>
             </div>
 
@@ -140,8 +148,11 @@ export default function LocationsLanding({
                                         {[
                                             `${location.activeProgramCount} ${location.activeProgramCount === 1 ? "Program" : "Programs"}`,
                                             `${location.activeRoomCount} ${location.activeRoomCount === 1 ? "Room" : "Rooms"}`,
-                                            location.configuredCapacity != null ?
-                                                `Capacity ${location.configuredCapacity}`
+                                            // Coverage, not a seat sum: adding a physical
+                                            // room's seats to the classrooms inside it was
+                                            // never a capacity anyone could act on.
+                                            location.capacityCoverage.total > 0 ?
+                                                formatCapacityCoverage(location.capacityCoverage)
                                             :   null,
                                         ]
                                             .filter(Boolean)

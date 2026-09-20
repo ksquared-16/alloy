@@ -1,6 +1,13 @@
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
 import { readLocationMetadataPresentation } from "@/lib/admin/location/locationMetadataFields";
+import {
+    capacityCoverageCohort,
+    resolveRoomCapacityStanding,
+    summarizeSiteCapacityCoverage,
+    type SiteCapacityCoverage,
+} from "@/lib/locations/capacityAdoptionState";
+import type { ChildcareCapacityRuleRow } from "@/lib/childcareOperational/config/configRuleTypes";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 
 export const LOCATION_WORKSPACE_TABS = [
@@ -8,6 +15,7 @@ export const LOCATION_WORKSPACE_TABS = [
     { key: "programs", label: "Programs" },
     { key: "rooms", label: "Rooms" },
     { key: "schedule", label: "Scheduling" },
+    { key: "operational-rules", label: "Operational Rules" },
     { key: "tours", label: "Tours" },
     { key: "placement", label: "Placement" },
     { key: "access", label: "Access" },
@@ -60,7 +68,13 @@ export type LocationWorkspaceModel = {
     timezone: string | null;
     activeRoomCount: number;
     activeProgramCount: number;
-    configuredCapacity: number | null;
+    /**
+     * How far this site's rooms have got with canonical capacity. NOT a seat
+     * total — canonical doctrine defines no site aggregate, and the legacy sum it
+     * replaces added a physical room's seats to the seats of the classrooms
+     * inside it.
+     */
+    capacityCoverage: SiteCapacityCoverage;
     roomsNeedingCapacity: number;
     setupPercent: number;
     setupComplete: boolean;
@@ -120,7 +134,7 @@ export type LocationsCollectionLocationSummary = {
     setupComplete: boolean;
     activeRoomCount: number;
     activeProgramCount: number;
-    configuredCapacity: number | null;
+    capacityCoverage: SiteCapacityCoverage;
     topAttention: LocationWorkspaceAttentionItem | null;
 };
 
@@ -139,7 +153,8 @@ export type LocationsCollectionModel = {
     averageSetupPercent: number;
     totalCritical: number;
     totalImprove: number;
-    totalConfiguredCapacity: number | null;
+    /** Coverage across every location's cohort. Still never a seat total. */
+    totalCapacityCoverage: SiteCapacityCoverage;
     totalRooms: number;
     totalPrograms: number;
     locations: LocationsCollectionLocationSummary[];
@@ -188,6 +203,8 @@ function collectionSetupFromWorkspace(model: LocationWorkspaceModel): {
 }
 
 export function buildLocationsCollectionModel(params: {
+    /** Canonical capacity rules, for coverage. Absent means none are configured. */
+    capacityRules?: readonly ChildcareCapacityRuleRow[];
     sites: LocationHierarchyRow[];
     rooms: LocationHierarchyRow[];
     programs: LocationProgramCategoryRow[];
@@ -201,6 +218,7 @@ export function buildLocationsCollectionModel(params: {
             rooms: params.rooms,
             programs: params.programs,
             schedules: siteSchedules,
+            capacityRules: params.capacityRules,
         });
         actionableAttentionByLocation.set(
             site.id,
@@ -227,7 +245,7 @@ export function buildLocationsCollectionModel(params: {
             setupComplete: collectionSetup.setupComplete,
             activeRoomCount: workspace.activeRoomCount,
             activeProgramCount: workspace.activeProgramCount,
-            configuredCapacity: workspace.configuredCapacity,
+            capacityCoverage: workspace.capacityCoverage,
             topAttention,
         };
     });
@@ -240,9 +258,17 @@ export function buildLocationsCollectionModel(params: {
     });
 
     const active = locations.filter((location) => location.isActive);
-    const capacityValues = locations
-        .map((location) => location.configuredCapacity)
-        .filter((capacity): capacity is number => capacity != null && Number.isFinite(capacity));
+    // Coverage ADDS COUNTS OF ROOMS, never capacities. Summing seats across
+    // locations is the defect this convergence exists to remove.
+    const totalCapacityCoverage = locations.reduce<SiteCapacityCoverage>(
+        (acc, location) => ({
+            total: acc.total + location.capacityCoverage.total,
+            confirmed: acc.confirmed + location.capacityCoverage.confirmed,
+            needsReview: acc.needsReview + location.capacityCoverage.needsReview,
+            unset: acc.unset + location.capacityCoverage.unset,
+        }),
+        { total: 0, confirmed: 0, needsReview: 0, unset: 0 },
+    );
     const locationPriority = new Map(locations.map((location, index) => [location.id, index]));
     const seenAttention = new Set<string>();
     const attentionHighlights = locations
@@ -281,7 +307,7 @@ export function buildLocationsCollectionModel(params: {
         averageSetupPercent,
         totalCritical: locations.reduce((sum, location) => sum + location.criticalCount, 0),
         totalImprove: locations.reduce((sum, location) => sum + location.improveCount, 0),
-        totalConfiguredCapacity: capacityValues.length > 0 ? capacityValues.reduce((sum, value) => sum + value, 0) : null,
+        totalCapacityCoverage,
         totalRooms: locations.reduce((sum, location) => sum + location.activeRoomCount, 0),
         totalPrograms: locations.reduce((sum, location) => sum + location.activeProgramCount, 0),
         locations,
@@ -373,6 +399,8 @@ export function formatLocationAddress(
 }
 
 export function buildLocationWorkspaceModel(params: {
+    /** Canonical capacity rules, for coverage. Absent means none are configured. */
+    capacityRules?: readonly ChildcareCapacityRuleRow[];
     site: LocationHierarchyRow;
     rooms: LocationHierarchyRow[];
     programs: LocationProgramCategoryRow[];
@@ -389,14 +417,12 @@ export function buildLocationWorkspaceModel(params: {
     );
     const schedules = params.schedules.filter((schedule) => schedule.is_active);
     const roomPresentations = rooms.map((room) => readLocationMetadataPresentation(room.metadata));
-    const capacityValues = roomPresentations
-        .map((room) => (room.capacity == null ? null : Number(room.capacity)))
-        .filter((capacity): capacity is number => capacity != null && Number.isFinite(capacity) && capacity >= 0);
-    const roomsNeedingCapacity = roomPresentations.filter((room) => {
-        if (room.capacity == null) return true;
-        const capacity = Number(room.capacity);
-        return !Number.isFinite(capacity) || capacity < 0;
-    }).length;
+    // Capacity readiness is about whether the MEANING is settled, not whether a
+    // number is present. An untyped legacy value used to count as complete; it is
+    // now "needs review", because nobody has said what it measures.
+    const capacityCohort = capacityCoverageCohort(rooms);
+    const capacityCoverage = summarizeSiteCapacityCoverage(capacityCohort, params.capacityRules ?? []);
+    const roomsNeedingCapacity = capacityCoverage.needsReview + capacityCoverage.unset;
 
     const address = formatLocationAddress(site);
     const phone = readLocationMetadataString(site.metadata, "site_phone");
@@ -404,7 +430,9 @@ export function buildLocationWorkspaceModel(params: {
     const generalComplete = Boolean(String(site.label ?? "").trim() && address && timezone);
     const roomsComplete =
         rooms.length > 0 &&
-        roomPresentations.every((room) => Boolean(room.capacity && room.student_teacher_ratio && room.category));
+        capacityCoverage.needsReview === 0 &&
+        capacityCoverage.unset === 0 &&
+        roomPresentations.every((room) => Boolean(room.student_teacher_ratio && room.category));
     const setupItems: LocationWorkspaceSetupItem[] = [
         {
             key: "general",
@@ -512,7 +540,7 @@ export function buildLocationWorkspaceModel(params: {
         timezone,
         activeRoomCount: rooms.length,
         activeProgramCount: programs.length,
-        configuredCapacity: capacityValues.length > 0 ? capacityValues.reduce((sum, value) => sum + value, 0) : null,
+        capacityCoverage,
         roomsNeedingCapacity,
         setupPercent,
         setupComplete: setupPercent === 100,

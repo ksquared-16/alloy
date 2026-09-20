@@ -10,12 +10,18 @@ import {
 } from "@/lib/locations/locationConcernContract";
 
 describe("Location concern contract", () => {
-    it("registers all seven live Location concerns", () => {
+    it("registers every live Location concern, in operator order", () => {
+        // Eight since Slice 12. The object-centric rewrite (2c6f0f261) retired the
+        // section-first IA without re-homing Operational Rules, so canonical
+        // capacity, ratio, operating-window and schedule authoring had no operator
+        // path at all. It sits after Scheduling, where the operational
+        // configuration it governs already lives.
         expect(LOCATION_CONCERN_REGISTRY.map((c) => c.key)).toEqual([
             "overview",
             "programs",
             "rooms",
             "schedule",
+            "operational-rules",
             "tours",
             "placement",
             "access",
