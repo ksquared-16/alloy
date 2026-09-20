@@ -33,6 +33,7 @@
  * Identity alone is not operational: without current business state AND a truthful primary
  * action the answer does not claim `operational`.
  */
+import { canonicalLocationDisplay, resolveLocationById } from "@/lib/location/canonicalLocationProvider";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
 import { resolveOpportunityLeadLocationFields } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -2042,6 +2043,43 @@ export async function composeWorkUnitProvisioningAnswer(
         ?? (subjectRow as Record<string, unknown> | null)
         ?? {}) as Record<string, unknown>;
     const wave3LeadLocation = resolveOpportunityLeadLocationFields(wave3Record);
+    /*
+     * THE SITE LABEL — THE LAST WAVE-3 FIRST-ORDER DEPENDENCY.
+     *
+     * Deployed measurement of the previous slice: business_process and household converged, and
+     * the ENTIRE remaining late wave was four mutations carrying ONE fact — "North Campus". The
+     * Tour stage annotation gained it and Children swapped "— / Inherited from lead" for it, both
+     * from the drawer, both at ~5.2s.
+     *
+     * My previous classification of this field as "already present" was WRONG and the measurement
+     * caught it. `_location_name` is CONSUMED in the document path but PRODUCED on the drawer's:
+     * `opportunityEntityRecord` reads the locations row and derives the label there. The document
+     * row carries `location_id`, a uuid, and no label — so `resolveOpportunityLeadLocationFields`
+     * correctly returned empty and the conditional spread correctly omitted the key rather than
+     * fabricating a site.
+     *
+     * So this is the one authorized new read, and it is ONE read feeding BOTH consumers: the same
+     * resolved label becomes the rail's annotation and Children's location. `resolveLocationById`
+     * is the canonical provider — a single indexed lookup scoped to `org_id`, which is the
+     * authority this composer already holds. No permission verdict is transported and no second
+     * location owner is created; `canonicalLocationDisplay` is the platform's own label rule.
+     *
+     * FAILURE SEMANTICS. A THROW is an outage, not an answer: the label stays null and no key is
+     * written, so nothing claims the record has no site. A null RESULT is authoritative absence —
+     * the row genuinely has no location — and the card's existing empty state is then correct.
+     * Neither path ever writes an empty-string label, which would render as a real blank site.
+     */
+    let wave3LocationLabel: string | null = wave3LeadLocation.locationLabel || null;
+    const wave3LocationId = wave3LeadLocation.locationId || null;
+    if (!wave3LocationLabel && wave3LocationId) {
+        try {
+            const canonicalLocation = await resolveLocationById(req.supabase, req.orgId, wave3LocationId);
+            wave3LocationLabel = canonicalLocation ? canonicalLocationDisplay(canonicalLocation) : null;
+        } catch {
+            // Outage, not absence. Leave it unknown and let the drawer answer later.
+            wave3LocationLabel = null;
+        }
+    }
     const wave3UpdatedAt = strOrNull(wave3Record.updated_at);
     /*
      * IDENTITY, NOT A PERMISSION VERDICT. The Household contact renders as plain text until it has
@@ -2074,7 +2112,7 @@ export async function composeWorkUnitProvisioningAnswer(
         statusDefs: [],
         record: wave3Record,
         annotationLabels: {
-            locationLabel: wave3LeadLocation.locationLabel || null,
+            locationLabel: wave3LocationLabel,
             ownerLabel: null,
         },
     });
@@ -2148,7 +2186,7 @@ export async function composeWorkUnitProvisioningAnswer(
         ...(primaryContactPhone ? { "person.primary_phone": primaryContactPhone } : {}),
         ...(primaryContactEmail ? { "person.primary_email": primaryContactEmail } : {}),
         // Wave-3 first-order truth (see above): all already read, none newly queried.
-        ...(wave3LeadLocation.locationLabel ? { _location_label: wave3LeadLocation.locationLabel } : {}),
+        ...(wave3LocationLabel ? { _location_label: wave3LocationLabel } : {}),
         ...(wave3LeadLocation.locationId ? { _location_id: wave3LeadLocation.locationId } : {}),
         ...(wave3UpdatedAt ? { updated_at: wave3UpdatedAt } : {}),
         ...(wave3PrimaryPersonId ? { primary_person_id: wave3PrimaryPersonId } : {}),
