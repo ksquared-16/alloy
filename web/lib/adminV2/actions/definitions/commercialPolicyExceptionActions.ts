@@ -172,7 +172,17 @@ const exceptAction: RegisteredAction = {
             actorUserId: ctx.userId ?? null,
         });
         if (!result.ok) {
-            const status = result.code === "reason_required" || result.code === "dates_out_of_order" ? 400 : 409;
+            /*
+             * The environment not having the table is not the operator's mistake, and not a
+             * conflict with anything — it is the feature being unavailable here, which is what
+             * 503 means. Saying 409 would invite them to try a different input.
+             */
+            const status =
+                result.code === "schema_absent"
+                    ? 503
+                    : result.code === "reason_required" || result.code === "dates_out_of_order"
+                      ? 400
+                      : 409;
             return { ok: false, correlationId, status, error: result.message, blockers: [{ code: result.code, message: result.message }] };
         }
         return {

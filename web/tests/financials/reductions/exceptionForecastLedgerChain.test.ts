@@ -262,3 +262,57 @@ describe("the ledger writes the identity it was given", () => {
         expect(src).toContain("excludedPolicyIds");
     });
 });
+
+describe("the table is not in every environment yet", () => {
+    /**
+     * The migration is committed but unapplied on the deployed database, which takes migrations
+     * from merged lineage only. Until promotion, every read of this table there answers "relation
+     * does not exist".
+     *
+     * Absorbing that one error keeps the discount forecast working on a runtime where no exception
+     * can exist. Absorbing ANY error would be the `resolveChargeDetail` defect again: a bare catch
+     * turned a broken query into "not posted to a period yet" on every charge in the product.
+     */
+    function failingDb(error: { code?: string; message: string }) {
+        return {
+            from(table: string) {
+                const chain: Record<string, unknown> = {};
+                const self = () => chain;
+                chain.select = self; chain.eq = self; chain.in = self; chain.is = self;
+                chain.not = self; chain.order = self; chain.gte = self; chain.lte = self;
+                chain.then = (resolve: (v: unknown) => unknown) =>
+                    resolve(
+                        table === "commercial_policy_exceptions"
+                            ? { data: null, error }
+                            : {
+                                  data: table === "commercial_policies" ? [SIBLING_POLICY] : table === "child_enrollment_agreements" ? AGREEMENTS : [],
+                                  error: null,
+                              },
+                    );
+                return chain;
+            },
+        } as never;
+    }
+
+    it.each([
+        ["42P01", 'relation "commercial_policy_exceptions" does not exist'],
+        ["PGRST205", "Could not find the table 'public.commercial_policy_exceptions' in the schema cache"],
+    ])("still forecasts the discount when the table is absent (%s)", async (code, message) => {
+        const forecast = await forecastAssignmentReductions(failingDb({ code, message }), forecastArgs);
+        expect(forecast.outcomes[0]!.kind, "the section must not go dark where no exception can exist").toBe("expected");
+    });
+
+    /*
+     * ANY OTHER FAILURE STILL FAILS CLOSED. "No exceptions" read off a broken query would silently
+     * grant a discount somebody deliberately withheld — the exact harm this feature exists to stop.
+     */
+    it.each([
+        ["42501", "permission denied for table commercial_policy_exceptions"],
+        ["57014", "canceling statement due to statement timeout"],
+        [undefined, "connection terminated unexpectedly"],
+    ])("refuses to guess when the read fails for any other reason (%s)", async (code, message) => {
+        await expect(forecastAssignmentReductions(failingDb({ code, message }), forecastArgs)).rejects.toThrow(
+            /could not be read/,
+        );
+    });
+});

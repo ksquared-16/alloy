@@ -196,9 +196,28 @@ describe("§11 · integrity", () => {
         expect(svc).toContain('code: "dates_out_of_order"');
     });
 
+    /*
+     * A FAILED READ IS NEVER REPORTED AS NO EXCEPTIONS — with exactly one exemption, which is the
+     * table not existing in this environment yet. That exemption is narrow by construction: only
+     * `schemaAbsent` may return the empty answer, and it recognises two error signatures. The
+     * behaviour of both halves is certified in exceptionForecastLedgerChain.test.ts; this holds
+     * the SHAPE still, so a later edit cannot widen the exemption to a bare catch.
+     */
     it("a failed read is never reported as no exceptions", () => {
-        const fn = svc.slice(svc.indexOf("export async function readExcludedPolicyIds"));
-        expect(fn.slice(0, 900)).toContain("throw new Error");
+        const fn = svc.slice(svc.indexOf("export async function readLiveExceptions"));
+        const body = fn.slice(0, 900);
+        expect(body).toContain("throw new Error");
+        /* The empty answer is reachable only through the named recogniser. */
+        expect(body).toContain("if (schemaAbsent(error)) return { schemaPresent: false, exceptions: [] };");
+        expect(body, "no bare catch swallowing whatever went wrong").not.toMatch(/catch\s*\{/);
+    });
+
+    it("recognises the absent table by code, not by guessing at prose", () => {
+        const fn = svc.slice(svc.indexOf("function schemaAbsent"), svc.indexOf("export type ExceptionReadResult"));
+        expect(fn).toContain('"42P01"');
+        expect(fn).toContain('"PGRST205"');
+        /* A message match alone would absorb any error whose text happened to fit. */
+        expect(fn).toContain("error.code");
     });
 });
 

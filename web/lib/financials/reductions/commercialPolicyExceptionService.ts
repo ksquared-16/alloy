@@ -49,6 +49,8 @@ export type ExceptionRefusalCode =
     | "dates_out_of_order"
     | "assignment_not_found"
     | "policy_not_found"
+    /* The table is not in this environment yet. Not the operator's mistake, and not a bug. */
+    | "schema_absent"
     | "db_error";
 
 export type ExceptionResult =
@@ -112,21 +114,63 @@ export function exceptionAppliesOn(exception: CommercialPolicyException, onDate:
  * closed: a read that could not run must not be reported as "no exceptions", which would silently
  * grant a discount somebody deliberately withheld.
  */
+/**
+ * ── THE TABLE DOES NOT EXIST YET, AND THAT IS NOT A READ FAILURE ──────────────────────────────
+ *
+ * The migration is committed but unapplied on the deployed database, which takes migrations from
+ * merged lineage only. Until it is promoted, every read here answers "relation does not exist".
+ *
+ * Treating that as an error would take the whole discount forecast down for every assignment on a
+ * runtime where no exception can possibly exist — a regression in working behaviour, caused by a
+ * feature that is not there yet. Treating EVERY error that way would be worse: a read that failed
+ * for any other reason, reported as "no exceptions", silently grants a discount somebody
+ * deliberately withheld.
+ *
+ * So exactly one error is absorbed — the schema's absence — and the absorbing is REPORTED, never
+ * silent. Everything else still fails closed.
+ */
+function schemaAbsent(error: { code?: string; message?: string } | null): boolean {
+    if (!error) return false;
+    /* Postgres `undefined_table`; PostgREST's own "table not found in schema cache". */
+    if (error.code === "42P01" || error.code === "PGRST205") return true;
+    const message = (error.message ?? "").toLowerCase();
+    return message.includes(TABLE) && (message.includes("does not exist") || message.includes("could not find the table"));
+}
+
+/** What a read of this relationship's exceptions found — including whether it could look. */
+export type ExceptionReadResult = {
+    /** False only when the table itself is absent. Any other failure throws instead. */
+    schemaPresent: boolean;
+    exceptions: CommercialPolicyException[];
+};
+
 export async function readExcludedPolicyIds(
     supabase: SupabaseClient,
     args: { orgId: string; opportunityCustomerMemberId: string; onDate: string },
 ): Promise<string[]> {
+    const { exceptions } = await readLiveExceptions(supabase, args);
+    return exceptions.filter((e) => exceptionAppliesOn(e, args.onDate)).map((e) => e.policyId);
+}
+
+/** The live rows on a relationship, and whether the table was there to be read at all. */
+export async function readLiveExceptions(
+    supabase: SupabaseClient,
+    args: { orgId: string; opportunityCustomerMemberId: string },
+): Promise<ExceptionReadResult> {
     const { data, error } = await supabase
         .from(TABLE)
         .select(COLUMNS)
         .eq("org_id", args.orgId)
         .eq("opportunity_customer_member_id", args.opportunityCustomerMemberId)
         .is("superseded_at", null);
-    if (error) throw new Error(`commercial policy exceptions could not be read (${error.message.trim()})`);
-    return ((data ?? []) as unknown as Array<Record<string, unknown>>)
-        .map(toException)
-        .filter((e) => exceptionAppliesOn(e, args.onDate))
-        .map((e) => e.policyId);
+    if (error) {
+        if (schemaAbsent(error)) return { schemaPresent: false, exceptions: [] };
+        throw new Error(`commercial policy exceptions could not be read (${error.message.trim()})`);
+    }
+    return {
+        schemaPresent: true,
+        exceptions: ((data ?? []) as unknown as Array<Record<string, unknown>>).map(toException),
+    };
 }
 
 /** Every exception on a relationship, newest first — live and superseded, because history is the point. */
@@ -140,7 +184,10 @@ export async function readExceptionHistory(
         .eq("org_id", args.orgId)
         .eq("opportunity_customer_member_id", args.opportunityCustomerMemberId)
         .order("effective_start", { ascending: false });
-    if (error) throw new Error(`commercial policy exceptions could not be read (${error.message.trim()})`);
+    if (error) {
+        if (schemaAbsent(error)) return [];
+        throw new Error(`commercial policy exceptions could not be read (${error.message.trim()})`);
+    }
     return ((data ?? []) as unknown as Array<Record<string, unknown>>).map(toException);
 }
 
@@ -231,7 +278,11 @@ export async function createPolicyException(
         })
         .select(COLUMNS)
         .single();
-    if (insertError) return { ok: false, code: "db_error", message: insertError.message };
+    if (insertError) {
+        return schemaAbsent(insertError)
+            ? { ok: false, code: "schema_absent", message: "Policy exceptions are not available in this environment yet." }
+            : { ok: false, code: "db_error", message: insertError.message };
+    }
 
     if (live) {
         const { error: supersedeError } = await supabase

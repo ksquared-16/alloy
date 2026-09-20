@@ -38,6 +38,20 @@ proven binding by a planted defect that failed it and a restore that returned it
 This proves the runtime is **correct**. It does not prove it **runs** — the deployed table, the
 physical constraints, and every mounted interaction below remain unobserved.
 
+### The candidate is safe to deploy before the table exists
+
+An unmountable feature must not take working behaviour down with it. On a runtime without the
+table, every read answers "relation does not exist"; if that were treated as a read failure, the
+discount forecast would 500 for **every** assignment. So exactly two error signatures — Postgres
+`42P01` and PostgREST `PGRST205` — are absorbed as "no exceptions can exist here", and authoring
+refuses with a named `schema_absent` (HTTP 503) rather than a raw database message.
+
+Every other failure still throws. "No exceptions" read off a broken query would silently grant a
+discount somebody deliberately withheld — which is the harm this feature exists to prevent, and is
+the `resolveChargeDetail` defect from earlier in this thread, where a bare `catch {}` made every
+charge in the product read "Not posted to a period yet". Both halves are certified, each by a
+planted defect: absorbing too little, and absorbing everything.
+
 ---
 
 ## The gate: A–K
