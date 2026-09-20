@@ -204,11 +204,16 @@ export function adaptFinancialsVmToFinancialsCard(input: {
              * household's stored methods, and returns null when there is genuinely nothing
              * established to say. Silence still means unknown; it simply is not the only answer.
              *
-             * HEALTHY MEANS A METHOD IS ON FILE, which is what this line reports. It is deliberately
-             * not autopay — see the payment band below.
+             * HEALTHY MEANS A USABLE METHOD IS ON FILE, which is what this line reports. It is
+             * deliberately not autopay — see the payment band below.
+             *
+             * It asks `methodSummary` rather than counting `methodsOnFile`, because that list now
+             * INCLUDES revoked methods so a surface can say "removed" rather than silently dropping
+             * them. Counting its length would report a household whose only card was removed as
+             * healthy — and a bank account still awaiting verification as ready to charge.
              */
             paymentLine: vm.paymentSetup ?? null,
-            paymentHealthy: (vm.paymentCapabilities?.methodsOnFile.length ?? 0) > 0,
+            paymentHealthy: vm.paymentCapabilities?.methodSummary.hasUsableMethod === true,
         },
         subjects: vm.subjects.map((s) => s.displayName).filter((n): n is string => Boolean(n)),
         period: {

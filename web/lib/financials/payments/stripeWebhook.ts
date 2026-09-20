@@ -24,6 +24,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { postProviderConfirmedCollection, type AttemptForPosting } from "./canonicalPosting";
 import { mapStripeStatus } from "./collectionAttempt";
 import { resolveOrgForConnectedAccount } from "./providerMerchant";
+import { applyProviderMethodUpdate } from "./paymentMethodService";
 import { applyProviderAccountUpdate, runtimeExpectsLivemode } from "./providerInstallation";
 import { recognizeProviderDispute } from "./providerDispute";
 import { mapStripeRefundStatus, recognizeProviderRefund } from "./refundCollection";
@@ -105,6 +106,74 @@ export function verifyStripeSignature(
     return { ok: false, reason: "signature did not match" };
 }
 
+
+/** The platform-account event family W2 models. Kept beside the two helpers that read it. */
+const PLATFORM_METHOD_EVENTS = new Set([
+    "payment_method.automatically_updated",
+    "payment_method.updated",
+    "payment_method.detached",
+    "setup_intent.succeeded",
+    "setup_intent.setup_failed",
+    "mandate.updated",
+]);
+
+/**
+ * WHICH stored method an event is about — the only thing read out of the payload.
+ *
+ * Three shapes: a `payment_method.*` event IS the method, a `setup_intent.*` event NAMES one, and a
+ * mandate names one too. Nothing else in the body is treated as authority; the reference is a
+ * lookup key into Alloy's own table, not a claim about ownership.
+ */
+function platformMethodRef(eventType: string, object: Record<string, unknown>): string | null {
+    if (eventType.startsWith("payment_method.")) {
+        const id = object.id != null ? String(object.id).trim() : "";
+        return id || null;
+    }
+    const pm = object.payment_method;
+    if (typeof pm === "string") return pm.trim() || null;
+    if (pm && typeof pm === "object") {
+        const id = (pm as { id?: unknown }).id;
+        return id != null ? String(id).trim() || null : null;
+    }
+    return null;
+}
+
+/**
+ * What the event means for the two lifecycles — and `null` where it means nothing.
+ *
+ * A card auto-updated by the network changes display only, so both are null and the display patch
+ * does the work. A completed verification is the case that matters most: a bank account that was
+ * `pending` and unusable becomes usable here, without an operator doing anything, which is exactly
+ * what a delayed verification should do.
+ */
+function methodEventIntent(
+    eventType: string,
+    object: Record<string, unknown>,
+): { usability: "usable" | "blocked" | "expired" | "revoked" | null; verification: "unverified" | "pending" | "verified" | "failed" | null } {
+    switch (eventType) {
+        case "setup_intent.succeeded":
+            return { usability: "usable", verification: "verified" };
+        case "setup_intent.setup_failed":
+            return { usability: "blocked", verification: "failed" };
+        case "payment_method.detached":
+            /*
+             * Detached at the provider means it can no longer be charged. If ALLOY detached it, the
+             * row is already revoked and the service leaves it alone; this is for the other case.
+             */
+            return { usability: "blocked", verification: null };
+        case "mandate.updated": {
+            /* An ACH dispute invalidates the mandate, and Stripe says such a mandate cannot be reused. */
+            const status = String((object.status ?? "") as string).trim();
+            return status && status !== "active"
+                ? { usability: "blocked", verification: null }
+                : { usability: null, verification: null };
+        }
+        default:
+            /* `payment_method.updated` / `automatically_updated`: display only. */
+            return { usability: null, verification: null };
+    }
+}
+
 /** The PaymentIntent lifecycle this slice models. Anything else is stored and left alone. */
 const SUPPORTED = new Set([
     /*
@@ -113,6 +182,18 @@ const SUPPORTED = new Set([
      * accounts created through either Accounts API, which is why W1 needed no new event family.
      */
     "account.updated",
+    /*
+     * Payments W2. These arrive on the PLATFORM account, not on a connected one, because that is
+     * where a payer's stored instrument lives. They are handled before the connected-account gate
+     * below, and their tenancy comes from the canonical method binding instead of the merchant
+     * binding — same principle, different table.
+     */
+    "payment_method.automatically_updated",
+    "payment_method.updated",
+    "payment_method.detached",
+    "setup_intent.succeeded",
+    "setup_intent.setup_failed",
+    "mandate.updated",
     "payment_intent.created",
     "payment_intent.requires_action",
     "payment_intent.processing",
@@ -264,6 +345,55 @@ export async function handleStripeWebhook(
         // Kept, not discarded: an unmodelled type is exactly what someone will need to investigate,
         // and dropping it would leave no trace that Stripe ever said anything.
         return await finish("unsupported", `event type ${eventType} is not modelled by this slice`);
+    }
+
+    /*
+     * ── 3·W2. A STORED PAYMENT METHOD CHANGED, ON THE PLATFORM ───────────────────────────────────
+     *
+     * These deliveries carry NO connected account, because the payer's instrument is held by the
+     * platform — that is the whole point of the W2 handle model. So they are answered here, above
+     * the connected-account gate, which would otherwise call every one of them `unattributed`.
+     *
+     * Tenancy is still never guessed. It comes from Alloy's own table: the provider reference is
+     * looked up in `payment_methods`, and a reference nobody has stored fails closed exactly as an
+     * unknown connected account does. Event metadata is not consulted for it.
+     *
+     * And these events may move DISPLAY and USABILITY only. They cannot change whose method it is,
+     * which account may use it, or which rail it is — the service refuses, and the database's
+     * immutability trigger refuses underneath it.
+     */
+    if (PLATFORM_METHOD_EVENTS.has(eventType)) {
+        const methodObject = ((event.data as Record<string, unknown> | undefined)?.object ?? {}) as Record<string, unknown>;
+        const methodRef = platformMethodRef(eventType, methodObject);
+        if (!methodRef) {
+            return await finish("unattributed", "event names no stored payment method; refusing to guess one");
+        }
+
+        const intent = methodEventIntent(eventType, methodObject);
+        const applied = await applyProviderMethodUpdate(supabase, {
+            providerMethodRef: methodRef,
+            processor: "stripe",
+            methodObject: eventType.startsWith("payment_method.") ? methodObject : null,
+            usability: intent.usability,
+            verification: intent.verification,
+        });
+
+        if (!applied.ok) {
+            return await finish(
+                applied.reason === "unbound" ? "unattributed" : "rejected",
+                applied.reason === "unbound"
+                    ? "no stored payment method names that provider reference; failing closed"
+                    : `stored payment method could not be updated: ${applied.message}`,
+            );
+        }
+        const method = applied.method;
+        return await finish(
+            applied.changed ? "applied" : "duplicate",
+            applied.changed
+                ? `stored method is now ${method?.verificationState ?? "?"} / ${method?.usabilityState ?? "?"}`
+                : "stored method already reflected this state",
+            method?.orgId ? { org_id: method.orgId } : {},
+        );
     }
 
     // ── 3. TENANCY FROM THE MERCHANT BINDING, NEVER FROM THE PAYLOAD ─────────────────────────────

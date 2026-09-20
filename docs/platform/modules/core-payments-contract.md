@@ -101,7 +101,8 @@ Owns, in Alloy's own vocabulary:
 - provider installation association (which provider this organisation uses)
 - merchant / payment account association
 - payer
-- payment method **reference** (a durable handle, not a card)
+- payment method **reference** (a durable handle, not a card) — implemented in W2 as
+  `payment_methods`; see [payments-payment-method-reference.md](payments-payment-method-reference.md)
 - collection intent / request
 - payment attempt
 - payment

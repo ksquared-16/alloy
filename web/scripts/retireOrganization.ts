@@ -352,14 +352,12 @@ async function deleteCrmGraph(supabase: SupabaseAdmin, orgId: string, ids: Resol
         (await deleteByIn(supabase, "customer_member_contacts", "customer_id", cust, orgId));
     deleted.customer_tags = await deleteByIn(supabase, "customer_tags", "customer_id", cust, undefined, "*");
     deleted.customer_subscriptions = await deleteByIn(supabase, "customer_subscriptions", "customer_id", cust, orgId);
-    deleted.customer_payment_methods = await deleteByIn(
-        supabase,
-        "customer_payment_methods",
-        "customer_id",
-        cust,
-        undefined,
-        "*"
-    );
+    /*
+     * Payments V1 · W2 retired `customer_payment_methods` and made `payment_methods` canonical.
+     * The new table is org-scoped and its org_id is ON DELETE RESTRICT, so retiring an organisation
+     * FAILS unless its stored methods go first — the old table had no org column to scope by at all.
+     */
+    deleted.payment_methods = await deleteOrgRows(supabase, "payment_methods", orgId);
     deleted.customer_members = await deleteByIn(supabase, "customer_members", "customer_id", cust, orgId);
     deleted.customer_persons = await deleteByIn(supabase, "customer_persons", "customer_id", cust, orgId);
     deleted.contacts = await deleteOrgRows(supabase, "contacts", orgId);

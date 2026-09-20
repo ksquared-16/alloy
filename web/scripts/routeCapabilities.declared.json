@@ -2316,6 +2316,14 @@
         "reason": "Payments W1. Reading whether this organization can accept payments is an ordinary Financials read; connecting, refreshing and disconnecting are registered actions behind fin.provider because they decide where money settles."
       }
     },
+    "app/api/admin/financials/payment-methods/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Payments W2. Reading what a family has on file is an ordinary Financials read; adding, defaulting and removing a method are registered actions behind fin.write. The route returns brand, last four, expiry, rail and state and holds no credential to expose."
+      }
+    },
     "app/api/admin/financials/responsibility-candidates/route.ts": {
       "GET": {
         "status": "declared",

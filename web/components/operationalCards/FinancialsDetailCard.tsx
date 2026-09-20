@@ -22,6 +22,7 @@ import {
     type AccountLens,
 } from "@/lib/financials/workspace/accountLenses";
 import type { FinancialsEvidence, FinancialsLedgerPeriod } from "@/lib/cardLab/cardLabTypes";
+import PaymentMethodsSection from "@/components/operationalCards/PaymentMethodsSection";
 
 /**
  * Billing detail — what "Billing details →" opens.
@@ -63,6 +64,7 @@ export default function FinancialsDetailCard({
     hydrating = false,
     ledgerPending = false,
     paymentBand,
+    paymentMethodsAccount,
     lens: lensProp,
     onLensChange,
     expandedPeriods,
@@ -105,6 +107,20 @@ export default function FinancialsDetailCard({
      * mechanism, no z-index exception and no second scrim.
      */
     paymentBand?: ReactNode;
+    /**
+     * THE ACCOUNT WHOSE STORED METHODS THIS CARD ADMINISTERS (Payments W2).
+     *
+     * Absent in the lab and wherever the host has no account context, in which case the section is
+     * not rendered at all rather than rendered empty — "no payment method on file" is a claim, and
+     * a card with no account cannot make it.
+     */
+    paymentMethodsAccount?: {
+        customerId: string;
+        payerEntityId?: string | null;
+        payerName?: string | null;
+        payerEmail?: string | null;
+        canManage?: boolean;
+    } | null;
     onAddCharge?: () => void;
     onManagePayment?: () => void;
     /** Correct WHICH obligation a receipt answered. Absent in the lab, where controls are inert. */
@@ -722,6 +738,25 @@ export default function FinancialsDetailCard({
                 {onManagePayment ? (
                     <div className="alloy-os-fdetail__utility">
                         <FooterAction onClick={onManagePayment}>Manage payment →</FooterAction>
+                    </div>
+                ) : null}
+
+                {/*
+                  * PAYMENT METHODS — the thing "Manage payment" above was always meant to lead to.
+                  *
+                  * That control has rendered with `onClick={undefined}` for as long as it has
+                  * existed, because nothing owned payers, methods or autopay. W2 owns methods, so
+                  * they are presented here directly rather than behind a button that goes nowhere.
+                  */}
+                {paymentMethodsAccount?.customerId ? (
+                    <div className="alloy-os-fdetail__methods" data-financials-payment-methods="detail">
+                        <PaymentMethodsSection
+                            customerId={paymentMethodsAccount.customerId}
+                            payerEntityId={paymentMethodsAccount.payerEntityId ?? null}
+                            payerName={paymentMethodsAccount.payerName ?? null}
+                            payerEmail={paymentMethodsAccount.payerEmail ?? null}
+                            canManage={paymentMethodsAccount.canManage ?? true}
+                        />
                     </div>
                 ) : null}
 
