@@ -56,3 +56,28 @@ Focus Panel composition — requires an authenticated deployed session and has *
 
 §22 (physical schema proof) and §23 (A–K mounted) depend on §21. No item of A–K is claimed, and no
 Human QA scenario is marked PASS.
+
+---
+
+## §8 — deployed Financials smoke, on build `6c1b84fdc`
+
+| Surface | Answer |
+|---|---|
+| Focus Panel composition | 7 cards: business_process, financials, children, household, attendance, health_safety, assignment_tuition. **`billing_preview` absent** — the retirement holds on the deployed build |
+| Assignment commercial setup | tuition select present; accepted "Recommended · $195.00/weekly"; **Billing Frequency weekly · current period Sep 15–21, 2026 · next Sep 22–28, 2026** |
+| Discount forecast + exception | forecast section present; the live exception rendered with its reason; rejected-option diagnostics present (1) |
+| Accounts | 11 rows, **Manage responsibility** offered, 5 lenses: all, charges, credits, funding, payments |
+| Accounting calendar read | `/api/admin/financials/accounting-calendar` → 200, keys `ok, calendars, periods, today` |
+| Accounts read | `/api/admin/financials/accounts` → 200 |
+| Organization → Financials | 7 chapters: Tuition, Catalog, Policies, Payments, Accounting, Simulator, Funding. No horizontal overflow |
+
+**Two things this smoke did NOT observe, and does not claim:**
+
+- The **accounting calendar panel itself** (`[data-accounting-calendar]`) did not match. The
+  Accounting chapter is present; the panel within it was not confirmed rendered, because the probe
+  did not open the chapter. Recorded as unobserved, not as absent.
+- **Recurring-generation preview** and **Prepaid** were not driven. The routes and surfaces that
+  carry them answered, but neither was exercised as an operator act.
+
+No Human QA scenario is marked PASS. The catalog stands at `2026-09-20.3` with 44
+`HUMAN_WALKTHROUGH` scenarios and Human PASS **ZERO**.
