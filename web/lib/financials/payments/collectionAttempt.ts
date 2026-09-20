@@ -94,6 +94,31 @@ export type CreateCardCollectionResult =
  * the family's card. The day is included for the same reason Thread 8's own key includes it: paying
  * the same amount against the same charge tomorrow is a real second payment, not a retry.
  */
+/**
+ * The ACCOUNT a charge settles against, whichever way its billable source names it.
+ *
+ * Returns "" only when the source genuinely cannot be mapped to an account — in which case the
+ * stored-method scope check has nothing to compare and the method's own org scope is the boundary
+ * that remains. That is a narrower guarantee, and it is why this resolves rather than guesses.
+ */
+async function resolveChargeAccount(
+    supabase: SupabaseClient,
+    orgId: string,
+    source: { billable_source_type: string; billable_source_id: string },
+): Promise<string> {
+    if (source.billable_source_type === "customer") return t(source.billable_source_id);
+    if (source.billable_source_type === "enrollment_agreement") {
+        const { data } = await supabase
+            .from("child_enrollment_agreements")
+            .select("customer_id")
+            .eq("org_id", orgId)
+            .eq("id", source.billable_source_id)
+            .maybeSingle();
+        return t((data as { customer_id?: unknown } | null)?.customer_id);
+    }
+    return "";
+}
+
 export function deriveIntentKey(input: {
     chargeId: string;
     amountCents: number;
@@ -302,10 +327,20 @@ export async function createCardCollection(
     let storedMethod: PaymentMethodRecord | null = null;
     let clonedMethodRef: string | null = null;
     if (t(input.paymentMethodId)) {
+        /*
+         * WHICH ACCOUNT THIS OBLIGATION BELONGS TO — resolved, not assumed.
+         *
+         * A charge's billable source is a `customer` for household-level obligations and an
+         * `enrollment_agreement` for a child's. Only the first names the account directly, and an
+         * earlier draft of this treated the second as "no account", which silently skipped the scope
+         * check on the SHAPE production actually uses most. The agreement carries `customer_id`, so
+         * it is looked up rather than given up on.
+         */
+        const accountCustomerId = await resolveChargeAccount(supabase, input.orgId, source);
         const resolution = await resolveCollectionMethod(supabase, {
             orgId: input.orgId,
             methodId: t(input.paymentMethodId),
-            customerId: source.billable_source_type === "customer" ? source.billable_source_id : "",
+            customerId: accountCustomerId,
         });
         if (!resolution.ok) {
             return {
