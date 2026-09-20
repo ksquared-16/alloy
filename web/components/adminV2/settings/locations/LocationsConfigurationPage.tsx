@@ -74,6 +74,7 @@ import { invalidateLocationsCollection } from "@/lib/locations/locationsCollecti
 import { invalidateProgramsCollection } from "@/lib/programs/programsCollectionCache";
 import { formatWeekdaySelection } from "@/lib/childcareOperational/fetchOperationalEnrollment";
 import { formatSchedulePatternSummary } from "@/lib/locations/schedulePatternPresentation";
+import { operationalEnrollmentClientTodayYmd } from "@/lib/childcareOperational/fetchOperationalEnrollmentMutations";
 
 export default function LocationsConfigurationPage({
     initialLocationId = null,
@@ -643,7 +644,7 @@ export default function LocationsConfigurationPage({
                         excludeLocationId: selectedRoom?.id ?? null,
                     })}
                     capacityRules={capacityRules}
-                    todayYmd={new Date().toISOString().slice(0, 10)}
+                    todayYmd={operationalEnrollmentClientTodayYmd()}
                     onCapacityChanged={async () => {
                         await refreshCapacityRules();
                         await refresh({ force: true });

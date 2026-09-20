@@ -407,3 +407,49 @@ describe("19. there is no bulk path", () => {
         expect(body!.room_location_id).toBe("tod1");
     });
 });
+
+describe("20. the adopted rule is effective on the day the operator confirmed it", () => {
+    /**
+     * Mounted QA found this: the operator confirmed a legacy value, the rule was
+     * written effective 2026-09-20, and the room then reported "No capacity
+     * resolves for this room yet."
+     *
+     * The rule was real — asking the resolver for 2026-09-20 returned
+     * licensed=10, binding=10, limitingFactor=licensed. It was simply in the
+     * future, because the page computed the effective date in UTC while
+     * resolved-capacity asks resolveOperationalEnrollmentTodayYmd(), which is
+     * the ORG's calendar day. West of UTC that diverges every evening, so for
+     * those hours every adoption silently produced an invisible rule.
+     *
+     * The lock is on the date AUTHORITY, not on a formatted string: a test that
+     * pinned today's date would pass tomorrow for the wrong reason.
+     */
+    const pageSrc = () => {
+        const { readFileSync } = require("node:fs");
+        const { resolve } = require("node:path");
+        const src = readFileSync(
+            resolve(__dirname, "../..", "components/adminV2/settings/locations/LocationsConfigurationPage.tsx"),
+            "utf8",
+        ) as string;
+        // Strip imports: naming the helper on an import line must not satisfy this.
+        return src.replace(/^import[\s\S]*?;$/gm, "");
+    };
+
+    it("the room capacity surface takes its today from the operational calendar, never from UTC", () => {
+        const body = pageSrc();
+        expect(body).toMatch(/todayYmd=\{operationalEnrollmentClientTodayYmd\(\)\}/);
+        expect(body).not.toMatch(/todayYmd=\{new Date\(\)\.toISOString\(\)/);
+    });
+
+    it("no surface in the room capacity path derives a calendar day from toISOString", () => {
+        const { readFileSync } = require("node:fs");
+        const { resolve } = require("node:path");
+        for (const rel of [
+            "components/adminV2/settings/locations/RoomCapacitySection.tsx",
+            "lib/locations/capacityAdoptionRequest.ts",
+        ]) {
+            const src = readFileSync(resolve(__dirname, "../..", rel), "utf8") as string;
+            expect(src.replace(/^import[\s\S]*?;$/gm, "")).not.toMatch(/toISOString\(\)\.slice\(0,\s*10\)/);
+        }
+    });
+});
