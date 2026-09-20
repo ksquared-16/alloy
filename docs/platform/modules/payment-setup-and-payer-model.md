@@ -130,17 +130,34 @@ longer.
 
 ---
 
-## 5. Manage payment — what it means, and why it is not offered
+## 5. Manage payment — offered since W2
 
-Scope, if it existed: view payment setup; add / remove / replace payment methods; choose a default;
-configure autopay; show provider readiness.
+Scope: view payment setup; add / remove / replace payment methods; choose a default; configure
+autopay; show provider readiness.
 
-**Every write in that list requires provider tokenisation**, because Alloy never handles card
-details. With no test-mode merchant on this tenant there is nothing to tokenise against, so
-`manageMethods` is `unsupported` and **no control is offered**. A control that opens onto nothing is
-worse than an absent one: it tells an operator a capability exists.
+**This section previously said none of it was offered**, and that was truthful: every write in the
+list requires provider tokenisation, Alloy had no canonical table for a stored method and no writer
+for one, so `manageMethods` reported `unsupported` and no control was shown. A control that opens onto
+nothing is worse than an absent one.
 
-The *readable* half — what this organisation can and cannot do, and why — is surfaced in the
+Payments V1 · W1 gave the organisation a merchant, and **W2 gave the payer a stored method** —
+`payment_methods`, three registered actions behind `fin.write`, and administration in Focus Panel →
+Financials → Details. So `manageMethods` now resolves from canonical state rather than reporting an
+absent capability:
+
+- no merchant → `not_configured` (an operator can act on this)
+- a merchant → `available`, whether or not any method is on file yet
+
+Having no method on file is an empty list, not an incapacity.
+
+**Autopay is still not offered, and that part of this section stands.** `resolvePaymentSetup` reports
+it `unsupported` until W5, which is truthful: there is no arrangement table, no scheduler and no
+toggle.
+
+See [payments-payment-method-reference.md](payments-payment-method-reference.md) for ownership,
+the platform-handle model, the mandate rule and the default semantics.
+
+The *readable* half — what this organisation can and cannot do, and why — remains surfaced in the
 Payments lens of the account workspace, where money in is the subject.
 
 ---
