@@ -84,6 +84,20 @@ export default function AddChargeCommand({
          * grain — each ticked child receives their own independent obligation at the full amount,
          * and nothing here creates a shared or household row.
          */
+        /**
+         * The one target control. When present it replaces the anchor select and the "Also bill"
+         * checkboxes; the GRAIN model beneath is unchanged — a household charge still names no
+         * child, and children are still independent obligations.
+         */
+        unifiedTarget?: {
+            householdOffered: boolean;
+            householdSelected: boolean;
+            onSelectHousehold: () => void;
+            children: Array<{ id: string; label: string }>;
+            selectedChildIds: string[];
+            onToggleChild: (id: string) => void;
+            perChildLabel: string | null;
+        };
         alsoChildren?: {
             options: Array<{ id: string; label: string }>;
             selectedIds: string[];
@@ -188,25 +202,86 @@ export default function AddChargeCommand({
             {/* Applies to = the financial SUBJECT. Charge to = financial RESPONSIBILITY.
                 Two dimensions, two inputs, never collapsed. Both are governed by the template. */}
             <SectionHead ruled={false}>Charge</SectionHead>
-            <Field label="Applies to" required={t.requiresSubject}>
-                {controls && controls.subjects.length > 1 ? (
-                    <select
-                        className="alloy-os-addcharge__select"
-                        data-addcharge-subject
-                        value={controls.selectedSubjectId ?? ""}
-                        onChange={(e) => controls.onSelectSubject(e.target.value)}
-                    >
-                        {controls.subjects.map((s) => (
-                            <option key={s.id} value={s.id}>
-                                {s.label}
-                            </option>
+            {/*
+             * ── ONE TARGET, TWO CONCEPTS UNDERNEATH ──────────────────────────────────────────
+             *
+             * "Applies to" and "Also bill" were two controls for one question — who receives this
+             * charge — and an operator had to understand the GRAIN model to use them: pick an
+             * anchor here, then widen there. The model is right and the presentation was not.
+             *
+             * So one control, and the same model beneath it: Household stays an explicit option,
+             * children are a multi-select, and the two are mutually exclusive. Selecting Household
+             * clears every child; selecting a child clears Household. What is never allowed is an
+             * empty selection meaning Household — that is the ambiguity the grain model forbids,
+             * and it is why the household option is a radio with a value rather than the absence
+             * of ticks.
+             *
+             * Category grain still governs what is offered: the household option only appears when
+             * `categoryPermitsHouseholdGrain`, the children only when `categoryPermitsChildGrain`.
+             * A control that offers a choice the write path refuses is worse than one that does not.
+             */}
+            {controls && controls.unifiedTarget ? (
+                <Field label="Applies to" required={t.requiresSubject}>
+                    <div className="alloy-os-addcharge__children" data-addcharge-target>
+                        {controls.unifiedTarget.householdOffered ? (
+                            <label className="alloy-os-addcharge__child">
+                                <input
+                                    type="radio"
+                                    name="addcharge-target"
+                                    data-addcharge-target-household
+                                    checked={controls.unifiedTarget.householdSelected}
+                                    onChange={() => controls.unifiedTarget!.onSelectHousehold()}
+                                />
+                                <span>Household</span>
+                            </label>
+                        ) : null}
+                        {controls.unifiedTarget.children.map((c) => (
+                            <label key={c.id} className="alloy-os-addcharge__child">
+                                <input
+                                    type="checkbox"
+                                    data-addcharge-child={c.id}
+                                    checked={controls.unifiedTarget!.selectedChildIds.includes(c.id)}
+                                    onChange={() => controls.unifiedTarget!.onToggleChild(c.id)}
+                                />
+                                <span>{c.label}</span>
+                            </label>
                         ))}
-                    </select>
-                ) : (
-                    <Value>{specimen.subject}</Value>
-                )}
-            </Field>
-            {controls?.alsoChildren && controls.alsoChildren.options.length > 0 ? (
+                    </div>
+                    {/*
+                     * COLLAPSED TO ONE LINE. The count and the per-child total are the two numbers
+                     * an operator checks before committing money, and neither is a chip row.
+                     */}
+                    <p className="alloy-os-addcharge__childsum" data-addcharge-targetsum>
+                        {controls.unifiedTarget.householdSelected
+                            ? "Household · one charge for the account"
+                            : controls.unifiedTarget.selectedChildIds.length === 0
+                              ? "Choose who receives this charge"
+                              : controls.unifiedTarget.selectedChildIds.length === 1
+                                ? `${controls.unifiedTarget.children.find((c) => c.id === controls.unifiedTarget!.selectedChildIds[0])?.label ?? "1 child"}`
+                                : `${controls.unifiedTarget.perChildLabel ? `${controls.unifiedTarget.perChildLabel} per child · ` : ""}${controls.unifiedTarget.selectedChildIds.length} children selected · each receives their own charge`}
+                    </p>
+                </Field>
+            ) : (
+                <Field label="Applies to" required={t.requiresSubject}>
+                    {controls && controls.subjects.length > 1 ? (
+                        <select
+                            className="alloy-os-addcharge__select"
+                            data-addcharge-subject
+                            value={controls.selectedSubjectId ?? ""}
+                            onChange={(e) => controls.onSelectSubject(e.target.value)}
+                        >
+                            {controls.subjects.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                    {s.label}
+                                </option>
+                            ))}
+                        </select>
+                    ) : (
+                        <Value>{specimen.subject}</Value>
+                    )}
+                </Field>
+            )}
+            {controls?.alsoChildren && controls.alsoChildren.options.length > 0 && !controls.unifiedTarget ? (
                 <Field label="Also bill">
                     {/*
                      * ── PER CHILD, STATED SO IT CANNOT BE MISREAD ────────────────────────────
@@ -383,8 +458,24 @@ export default function AddChargeCommand({
                 </p>
             ) : null}
 
+            {/*
+             * AN EMPTY TARGET IS NOT A HOUSEHOLD CHARGE. With the unified control, neither
+             * Household nor any child selected is a state the operator can reach — by unticking
+             * the last child — and committing from it would have to invent a subject. Confirm is
+             * unavailable instead, which is the refusal stated before the money rather than after.
+             */}
             <ActionRow>
-                <Action primary onClick={controls?.onSubmit}>
+                <Action
+                    primary
+                    disabled={
+                        controls?.unifiedTarget
+                            ? !controls.unifiedTarget.householdSelected
+                              && controls.unifiedTarget.selectedChildIds.length === 0
+                            : undefined
+                    }
+                    data-addcharge-submit
+                    onClick={controls?.onSubmit}
+                >
                     {controls?.running ? "Adding…" : "Add charge"}
                 </Action>
                 <Action onClick={controls?.onCancel}>Cancel</Action>

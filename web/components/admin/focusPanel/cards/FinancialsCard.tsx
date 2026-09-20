@@ -3070,6 +3070,64 @@ export default function FinancialsCard({
                              * account fee cannot become a child's, and a child's tuition cannot
                              * become the household's.
                              */
+                            /*
+                             * ── ONE CONTROL, THE SAME GRAIN MODEL ────────────────────────────
+                             *
+                             * `subjectFilter` is still the anchor and `extraChildIds` still the
+                             * widening; nothing about the payload, the writer or per-child
+                             * obligation identity changes. What changes is that the operator sees
+                             * one question instead of two, and mutual exclusion is enforced in
+                             * the handlers rather than left to them to understand:
+                             *
+                             *   Household  → anchor "all", extras cleared
+                             *   a child    → anchor that child, the rest as extras
+                             *   last child untucked → anchor "all" would mean HOUSEHOLD, which an
+                             *                         empty selection must never mean, so the
+                             *                         anchor is parked on the child just removed
+                             *                         and the summary asks for a choice.
+                             */
+                            unifiedTarget:
+                                selected && categoryPermitsChildGrain(selected.categoryKey ?? "") && vm.subjects.length > 0
+                                    ? {
+                                          householdOffered: categoryPermitsHouseholdGrain(selected.categoryKey ?? ""),
+                                          householdSelected: subjectFilter === "all",
+                                          onSelectHousehold: () => {
+                                              setSubjectFilter("all");
+                                              setExtraChildIds([]);
+                                          },
+                                          children: vm.subjects.map((sub) => ({
+                                              id: sub.customerMemberId,
+                                              label: sub.displayName,
+                                          })),
+                                          selectedChildIds: subjectFilter === "all" ? [] : selectedChildIds,
+                                          onToggleChild: (id: string) => {
+                                              if (subjectFilter === "all") {
+                                                  /* Picking a child is leaving the household grain. */
+                                                  setSubjectFilter(id);
+                                                  setExtraChildIds([]);
+                                                  return;
+                                              }
+                                              if (id === subjectFilter) {
+                                                  /* Untucking the anchor promotes the next extra, or leaves none chosen. */
+                                                  const [next, ...rest] = extraChildIds;
+                                                  if (next) {
+                                                      setSubjectFilter(next);
+                                                      setExtraChildIds(rest);
+                                                  } else {
+                                                      /* No child left. NOT "all" — an empty
+                                                         selection must never become Household. */
+                                                      setSubjectFilter("");
+                                                      setExtraChildIds([]);
+                                                  }
+                                                  return;
+                                              }
+                                              setExtraChildIds((prev) =>
+                                                  prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                                              );
+                                          },
+                                          perChildLabel: chargeAmount || selected.amount || null,
+                                      }
+                                    : undefined,
                             subjects: [
                                 ...(categoryPermitsHouseholdGrain(selected.categoryKey ?? "")
                                     ? [{ id: "all", label: "Household" }]
