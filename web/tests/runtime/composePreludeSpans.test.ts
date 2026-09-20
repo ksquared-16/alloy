@@ -147,13 +147,50 @@ describe("the compose's own semantics are untouched", () => {
          *
          * The list stays exact so the next addition has to argue for itself too.
          */
-        const awaits = [...ROUTE_CODE.matchAll(/await (\w+)/g)].map((m) => m[1]);
+        /*
+         * RE-ANCHORED, AND THE GATE WAS FOUND RED ON DEPLOYED STAGING.
+         *
+         * Slice 12F's producer overlap added `await earlyRef.run` and did not update this list, so
+         * this gate has been failing on staging since that merge. It went unnoticed because no
+         * REQUIRED CI check runs the general vitest suite — which is precisely the argument for
+         * keeping the list exact rather than loosening it.
+         *
+         * It is also widened. The old pattern was `await (\w+)`, which sees only awaits on a bare
+         * identifier: the two counted fallbacks this slice introduced are `await (async () => …)()`
+         * and were invisible to it. A gate that cannot see a new await cannot make it argue for
+         * itself, so every await is captured now and the IIFEs are named.
+         *
+         * The list, and why each one is allowed to exist:
+         *   1 route identity        — the gate and the slug→unit read; nothing can precede it.
+         *   2 composition           — the answer itself.
+         *   3 participant (early)   — INSIDE the subject announcement, so it runs BESIDE 2.
+         *   4 producers   (early)   — likewise; this is the overlap.
+         *   5 earlyRef.run          — the join; it awaits work already in flight, not new work.
+         *   6 participant fallback  — canonical re-read, only on a discarded speculation.
+         *   7 producer fallback     — likewise. 6 and 7 are IIFEs ONLY so they can count
+         *                             themselves for the overlap diagnostic.
+         *
+         * Awaits 3 and 4 are not serial additions to the critical path: they are the two that
+         * moved off it. 6 and 7 do not run at all on the matching path.
+         */
+        const awaits = [...ROUTE_CODE.matchAll(/await\s+([A-Za-z_$][\w$.]*|\(async)/g)].map(
+            (m) => m[1],
+        );
         expect(awaits).toEqual([
             "resolveWorkUnitRouteIdentity",
             "composeWorkUnitProvisioningAnswer",
             "resolveSoleEnrollmentParticipantForOpportunity",
             "projectFocusPanelCardProducers",
+            "earlyRef.run",
+            "(async",
+            "(async",
         ]);
+        // The two IIFEs exist to COUNT, and for nothing else. An IIFE that wrapped real new work
+        // would be a serial addition wearing a diagnostic's clothes.
+        expect((ROUTE_CODE.match(/await \(async \(\) => \{/g) ?? []).length).toBe(2);
+        for (const m of ROUTE_CODE.matchAll(/await \(async \(\) => \{([\s\S]{0,200}?)return /g)) {
+            expect(m[1]).toMatch(/overlapDiag\.(producer_invocations|participant_reads) \+= 1;/);
+        }
     });
 
     it("the document actor is still derived from the same gate, just measured", () => {

@@ -83,8 +83,28 @@ describe("speculation is verified, never assumed", () => {
     });
 
     it("G/H — mismatch discards the WHOLE run and falls back canonically", () => {
-        // Participant and cards travel together; keeping half would mix identities.
-        expect(ROUTE).toMatch(/earlyRunUsable\s*\n?\s*\?\s*early!\.cards\s*\n?\s*:\s*await projectFocusPanelCardProducers\(\{/);
+        /*
+         * Participant and cards travel together; keeping half would mix identities.
+         *
+         * RE-ANCHORED for Slice 12F, which wrapped the fallback call so it can count itself. The
+         * gate used to pin `: await projectFocusPanelCardProducers({` as one adjacent string, which
+         * described the formatting rather than the behaviour. It now reads the false branch of the
+         * ternary and asserts what that branch must and must not do — which also catches a fallback
+         * that quietly reuses the discarded run, something the old adjacency never could.
+         */
+        const cardsTernary = (() => {
+            const at = ROUTE.indexOf("cards: earlyRunUsable");
+            expect(at).toBeGreaterThan(-1);
+            return ROUTE.slice(at, ROUTE.indexOf("\n        };", at));
+        })();
+        const falseBranch = cardsTernary.slice(cardsTernary.indexOf("\n", cardsTernary.indexOf("early!.cards")));
+        expect(cardsTernary).toContain("early!.cards");
+        expect(falseBranch).toContain("projectFocusPanelCardProducers(");
+        // The discarded run must not leak back in through the branch that exists to replace it.
+        expect(falseBranch).not.toContain("early!");
+        // The fallback answers for the CANONICAL identities, not the speculative ones.
+        expect(falseBranch).toContain("context: commitContext");
+        expect(falseBranch).toContain("financialSubjectId: canonicalFinancialSubjectId");
         expect(ROUTE).toMatch(/earlySubjectMatches\s*\n?\s*\?\s*early!\.participant/);
     });
 
@@ -110,7 +130,19 @@ describe("single execution and isolation", () => {
     });
 
     it("L — a failing early run cannot break composition", () => {
-        expect(ROUTE).toMatch(/\)\(\)\.catch\(\(\) => null\)/);
+        /*
+         * RE-ANCHORED for Slice 12F, which gave the catch a body so a FAILED speculation can be
+         * told apart from one that never started. The intent is unchanged and the gate is stricter:
+         * it now checks that the handler resolves to null and rethrows nothing, rather than that
+         * the source happens to read `.catch(() => null)`.
+         */
+        const at = ROUTE.indexOf("earlyRef.run = (async ()");
+        expect(at).toBeGreaterThan(-1);
+        const handler = ROUTE.slice(ROUTE.indexOf(")().catch(", at), ROUTE.indexOf("\n        },", at));
+        expect(handler.startsWith(")().catch(")).toBe(true);
+        expect(handler).toContain("null");
+        // A handler that rethrows, or re-rejects, puts the failure back on composition's path.
+        expect(handler).not.toMatch(/\bthrow\b|Promise\.reject/);
     });
 
     it("K — the early run does not mutate the answer", () => {

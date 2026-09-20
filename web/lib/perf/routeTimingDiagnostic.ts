@@ -106,6 +106,46 @@ export type RouteTimingMarks = {
         /** Null when the answer was not operational, so the producers step genuinely did not run. */
         card_producers_ms: number | null;
         /**
+         * THE PRODUCER-OVERLAP SPANS (P0-7.6 / Slice 12F).
+         *
+         * `inner_compose_ms` and `card_producers_ms` describe two ADJACENT blocks, which was the
+         * whole truth while the producers ran after composition. They now run BESIDE it, so
+         * `card_producers_ms` is only the residual join and the producers' real start and duration
+         * have no other observer. Without these, a shrunken join block reads as "the producers got
+         * faster" when nothing about them changed except when they were started.
+         *
+         * `overlap_ms` + `tail_ms` reconstruct the producer wall. `producer_invocations` is the
+         * acceptance gate, because the matching path must run the producers EXACTLY ONCE and no
+         * duration can tell a reuse apart from a fast second run.
+         */
+        overlap?: {
+            /** Compose start → the composer's subject announcement. */
+            announce_offset_ms: number | null;
+            /** The speculative participant read. */
+            participant_ms: number | null;
+            /** The speculative producer run. */
+            producers_ms: number | null;
+            /** Announcement → speculative run settled. */
+            early_total_ms: number | null;
+            /** Compose start → speculative run settled. */
+            early_end_offset_ms: number | null;
+            /** Compose start → composition settled (the same quantity as `inner_compose_ms`). */
+            compose_end_offset_ms: number | null;
+            /** The part of the speculative run that ran while composition was still running. */
+            overlap_ms: number | null;
+            /** What was left of the speculative run after composition finished. Clamped at 0. */
+            tail_ms: number | null;
+            /**
+             * Which branch the join took: `used`, `subject_mismatch`, `customer_mismatch`,
+             * `early_failed`, `no_announcement` or `not_operational`. Each implies a different
+             * repair, so they are never collapsed into a single "not used".
+             */
+            outcome: string;
+            /** MUST be 1 on the matching path. 2 means the early and canonical runs both executed. */
+            producer_invocations: number;
+            participant_reads: number;
+        };
+        /**
          * INSIDE the card producers, which Slice 12D measured as the dominant wait (median 2,791 ms).
          *
          * These run CONCURRENTLY under `Promise.allSettled`, so they DO NOT SUM — `card_producers_ms`
