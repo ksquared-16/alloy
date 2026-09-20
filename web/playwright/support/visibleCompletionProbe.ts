@@ -664,8 +664,17 @@ export function installVisibleCompletionProbe(): void {
              * while the metric says 10,123ms, and the difference is unexplainable rather than
              * absent. The interesting mutations are the LAST ones, so drop from the front.
              */
-            if (t > 4000) {
-                if ((LATE.__p076late as unknown[]).length >= 200) {
+            /*
+             * THE WINDOW HAS TO COVER THE TAIL BEING INVESTIGATED.
+             *
+             * This opened at 4,000ms and held 200 records. WU-09's authoritative tail starts at
+             * its FIRST paint (~2,478ms measured) and runs to ~5,610ms, emitting on the order of a
+             * thousand mutations — so the old window missed the first ~1.5 seconds outright and
+             * the ring then discarded most of what remained. Attribution needs the whole tail, not
+             * its final burst.
+             */
+            if (t > 1500) {
+                if ((LATE.__p076late as unknown[]).length >= 2000) {
                     (LATE.__p076late as unknown[]).shift();
                 }
                 const el = (r.target.nodeType === 1 ? r.target : r.target.parentElement) as Element | null;
