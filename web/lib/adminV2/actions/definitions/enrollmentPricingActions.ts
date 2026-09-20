@@ -57,6 +57,7 @@ function refuse(result: Extract<PricingCommitResult, { ok: false }>, correlation
                 || result.code === "term_already_accepted"
                 || result.code === "no_recommendation"
                 || result.code === "override_matches_recommendation"
+                || result.code === "cadence_not_billable"
               ? 409
               : result.code === "override_reason_required" || result.code === "assignment_not_found"
                 ? 400

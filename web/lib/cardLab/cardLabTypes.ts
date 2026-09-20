@@ -424,6 +424,7 @@ export type FinancialsEvidence = {
     /** Subjects a charge may be for. Household is always present; children when they exist. */
     subjects: string[];
     period: FinancialsPeriod;
+    /** `age` is the DURATION alone ("1 day"); the surface supplies the words "past due". */
     pastDue: { amount: string; oldest: string; age: string; note: string | null } | null;
     ledger: LedgerEntry[];
     payers: FinancialsPayer[];
@@ -433,7 +434,6 @@ export type FinancialsEvidence = {
         nextChargeLabel: string | null;
     };
     /** Quiet context line on the summary card — never a ledger reproduction. */
-    historyLine: string;
     /** Detail-only: forward-looking facts, and only where authoritative. */
     upcoming: { label: string; value: string; unowned?: boolean }[];
     /**

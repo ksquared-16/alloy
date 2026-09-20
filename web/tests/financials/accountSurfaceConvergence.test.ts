@@ -811,24 +811,45 @@ describe("F17 · the accounting period has a surface", () => {
         expect(panel, "a tenant with no calendar is told so, not shown an empty table")
             .toContain("accounting-calendar-absent");
         /*
-         * NO CLOSE BUTTON, and the panel says why. Closing a period is what makes a month final,
-         * it has no governed action, and a control here would either bypass the journal enforcement
-         * or pretend. The limit is stated rather than quietly absent.
+         * ── SUPERSEDED DOCTRINE, REWRITTEN TO THE NEW FACT ────────────────────────────────────
+         *
+         * This asserted there was NO close control and that the route was read-only, and it was
+         * right when written: closing had no authority anywhere, so a button here would have
+         * bypassed the journal enforcement or pretended, and the panel said so through
+         * `accounting-period-lifecycle-note`.
+         *
+         * Financials 11B built that authority. `POST /api/admin/financials/accounting-calendar`
+         * adopts a calendar and closes a period behind `fin.write`, previewing first, and the
+         * panel offers both. The old assertions now forbid the product, so they are replaced by
+         * what must be true INSTEAD — not deleted, and not loosened to pass.
+         *
+         * (I introduced the close control in the accounting slice and did not run this suite,
+         * so this red arrived one run late.)
          */
-        expect(panel).toContain("accounting-period-lifecycle-note");
+        expect(panel, "adoption is offered where absence is reported").toContain("accounting-calendar-adopt");
+        expect(panel, "and a period can be closed").toContain("accounting-period-close-");
+        expect(panel, "behind a preview").toContain("accounting-close-preview");
         /*
-         * Scoped to the CALENDAR panel: the GL mapping panel in the same file legitimately writes,
-         * and an assertion over the whole file would have been read as "this file never writes",
-         * which is neither true nor the claim being made.
+         * Stripped: three comments in this file say there is no reopen, and a naive match fails
+         * on the documentation of the very fact it is checking — the fourth lock in this thread
+         * to catch a comment instead of a statement.
          */
+        expect(
+            panel.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, ""),
+            "no reopen control: no authority exists",
+        ).not.toMatch(/reopen/i);
+
         const calendarPanel = panel.slice(panel.indexOf("function AccountingCalendarPanel"));
-        expect(calendarPanel, "nothing in the calendar panel writes a period").not.toMatch(
-            /method:\s*"(POST|PATCH|PUT|DELETE)"/,
+        expect(calendarPanel, "the browser still writes no table directly").not.toMatch(
+            /from\("financial_accounting_(periods|calendars)"\)/,
+        );
+        expect(calendarPanel, "it goes through the governed route").toContain(
+            "/api/admin/financials/accounting-calendar",
         );
 
         const route = read("app/api/admin/financials/accounting-calendar/route.ts");
-        expect(route, "read-only, and gated like every Financials read").toContain("assertFinancialsReadAllowed");
-        expect(route).not.toMatch(/export async function (POST|PUT|PATCH|DELETE)/);
+        expect(route, "the read is gated like every Financials read").toContain("assertFinancialsReadAllowed");
+        expect(route, "and the write like every Financials mutation").toContain("assertFinancialsWriteAllowed");
     });
 
     it("puts both periods and the GL account on the transaction's own detail", () => {
@@ -2013,18 +2034,58 @@ describe("F46 · Reverse and Adjust use the canonical command shell", () => {
 });
 
 describe("F47 · the compact commands stay inside the card", () => {
+    it("says the past-due judgement once", () => {
+        /*
+         * MEASURED on the mounted card: "$75.00 past due · 1 day past due" — the same verdict
+         * twice on a `white-space: nowrap` line, so the second half rendered as "1 day pas…".
+         * The adapter now states the duration alone and the sentence supplies the words.
+         */
+        const compact = code("components/operationalCards/FinancialsCard.tsx");
+        expect(compact, "one verdict, after the duration").toContain("{pastDue.amount} · {pastDue.age} past due");
+        const adapter = code("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts");
+        const ageLine = adapter.slice(adapter.indexOf("age: `${pastDue.agingDays}"));
+        expect(ageLine.slice(0, ageLine.indexOf("\n")), "the field carries no verdict").not.toMatch(/past due/);
+    });
+
     it("puts each action with the story it belongs to", () => {
         const compact = code("components/operationalCards/FinancialsCard.tsx");
         const left = compact.slice(compact.indexOf('zone-head">Current period'), compact.indexOf("alloy-os-billing__collect"));
         expect(left, "Add sits with the obligation story").toMatch(/<Action onClick=\{onAddCharge\}/);
-        const right = compact.slice(compact.indexOf("alloy-os-billing__collect"), compact.indexOf("alloy-os-billing__nav"));
+        const right = compact.slice(compact.indexOf("alloy-os-billing__collect"));
         expect(right, "Payment sits with the payment position").toMatch(/<Action primary onClick=\{onPayNow\}/);
         expect(compact, "and navigation has the card's own edge").toMatch(
             /alloy-os-billing__nav[\s\S]{0,260}<CardLink onClick=\{onDetails/,
         );
+        /*
+         * NAVIGATION KEEPS ITS OWN ROW, BENEATH THE COMMANDS. It was briefly moved onto the
+         * payment command's row to reclaim height; the mounted read was that a quiet link on the
+         * same baseline as a filled button reads as one group rather than two ranks, so the
+         * commands are a row above the navigation again. The height that mattered came from the
+         * scheduled-this-period footer, which stays gone.
+         */
         const css = read("app/adminV2/components/operationalCardsShared.css");
-        /* Each command is anchored to its column by a rule of that column's width — not a footer. */
-        expect(css).toMatch(/\.alloy-os-billing__zone-action \{[\s\S]{0,700}border-top:/);
+        /*
+         * Each command is anchored to its column by a rule of that column's width — not a footer.
+         * Asserted against the RULE BODY rather than a character window: the window was incidental
+         * to how long the rule's comment happened to be, and two new declarations broke it while
+         * the border it exists to protect was untouched.
+         */
+        const action = css.slice(css.indexOf(".alloy-os-billing__zone-action {"));
+        expect(action.slice(0, action.indexOf("\n}")), "the row carries its own rule").toContain("border-top:");
+        const nav = css.slice(css.indexOf(".alloy-os-billing__nav {"));
+        const navRule = nav.slice(0, nav.indexOf("}"));
+        expect(navRule, "navigation spans its own row").toMatch(/grid-column: 1 \/ -1/);
+        expect(navRule, "at the lower-right edge").toMatch(/justify-content: flex-end/);
+
+        /*
+         * THE SCHEDULED FOOTER IS GONE. "$370.00 scheduled this period" sat full-width under the
+         * whole card, repeating a period fact the Current period column already explains, and paid
+         * for it with a rule, 9px of margin and a line box. Nothing reads `historyLine` now, so
+         * nothing computes it either.
+         */
+        expect(compact, "no scheduled-this-period footer").not.toContain("alloy-os-billing__history");
+        expect(compact).not.toContain("historyLine");
+        expect(css, "and its rule went with it").not.toContain(".alloy-os-billing__history");
     });
 
     it("keeps the column gap from eating the figure", () => {

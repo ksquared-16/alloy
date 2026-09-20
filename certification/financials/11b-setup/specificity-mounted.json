@@ -1,0 +1,91 @@
+{
+  "modal": {
+    "accountRows": [
+      {
+        "customerId": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "label": "Certhouse Family"
+      },
+      {
+        "customerId": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+        "label": "Kurzman Family"
+      },
+      {
+        "customerId": "fd000000-0000-4000-8000-0000000c0001",
+        "label": "Alvarez Household (demo)"
+      },
+      {
+        "customerId": "fd000000-0000-4000-8000-0000000c0002",
+        "label": "Brennan Household (demo)"
+      },
+      {
+        "customerId": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+        "label": "Certfree Family"
+      },
+      {
+        "customerId": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+        "label": "Certopp Family"
+      },
+      {
+        "customerId": "fd000000-0000-4000-8000-0000000c0003",
+        "label": "Chen Household (demo)"
+      },
+      {
+        "customerId": "610a1496-7b96-4d1a-bf49-5cf193b31a6d",
+        "label": "Disposable0913 Family"
+      },
+      {
+        "customerId": "fd000000-0000-4000-8000-0000000c0004",
+        "label": "Okafor Household (demo)"
+      },
+      {
+        "customerId": "50b19065-51fd-41e4-83c9-07ba787759f0",
+        "label": "Specq0913 Family"
+      },
+      {
+        "customerId": "84ad457f-d129-4b50-95d7-0efb194c1830",
+        "label": "Tourb0913 Family"
+      }
+    ],
+    "sections": []
+  },
+  "detail": {
+    "filterSlot": true,
+    "responsibleFilter": true,
+    "subjectFilter": true,
+    "ledgerRows": [
+      {
+        "key": "362146e2-dea9-4573-ae23-da8c1bd2c2ba",
+        "text": "Dec 1, 2026 · One-time charge · Certb Certhouse · 4090 · Other Income · $40.00 · scheduled · Not allocated · Field trip"
+      },
+      {
+        "key": "1bfb2795-58dd-4c84-a04c-212917150ab9",
+        "text": "Oct 1, 2026 · One-time charge · Certa Certhouse · 4090 · Other Income · $40.00 · $0.00 outstanding · posted · Not alloca"
+      },
+      {
+        "key": "34d1fd8c-bdab-4a82-9fcc-83068c90f711",
+        "text": "Oct 1, 2026 · One-time charge · Certb Certhouse · 4090 · Other Income · $40.00 · posted · Not allocated · Field trip"
+      },
+      {
+        "key": "c40a88bc-3158-4602-9a0f-cd4f1e5b4885",
+        "text": "Sep 29, 2026 · Tuition · Certa Certhouse · 4000 · Tuition Revenue · $185.00 · scheduled · Not allocated · Monthly tuitio"
+      },
+      {
+        "key": "867b46fc-943e-405b-a555-422e54a1e891",
+        "text": "Sep 25, 2026 · Consumable fee · Certa Certhouse · 4030 · Supply Fees · $18.00 · posted · Not allocated · Materials"
+      },
+      {
+        "key": "a4c9e47c-3735-4e44-98a0-fd8787cd2417",
+        "text": "Sep 25, 2026 · Consumable fee · Certb Certhouse · 4030 · Supply Fees · $18.00 · posted · Not allocated · Materials"
+      },
+      {
+        "key": "ef44f450-277d-478d-9ef5-be6fd10c7d90",
+        "text": "Sep 22, 2026 · Tuition · Certa Certhouse · 4000 · Tuition Revenue · $185.00 · scheduled · Not allocated · Monthly tuitio"
+      },
+      {
+        "key": "2279460a-0b4e-4d31-9d86-3a00a4d4daf4",
+        "text": "Sep 18, 2026 · Fee · Household · 4010 · Registration Fees · $75.00 · posted · Cert Certhouse · $57.00 unassigned · Regis"
+      }
+    ]
+  },
+  "errors": []
+}

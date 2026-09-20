@@ -1,0 +1,25 @@
+{
+  "periods": [
+    {
+      "current": "2026-09",
+      "next": "2026-10",
+      "text": "Billing period September 2026 · next October 2026"
+    },
+    {
+      "current": "2026-09-15~2026-09-21",
+      "next": "2026-09-22~2026-09-28",
+      "text": "Billing period Sep 15–21, 2026 · next Sep 22–28, 2026"
+    }
+  ],
+  "assignments": [
+    {
+      "child": "Certb Certhouse",
+      "accepted": "accepted"
+    },
+    {
+      "child": "Certa Certhouse",
+      "accepted": "accepted"
+    }
+  ],
+  "card": "TUITION\n\n2 of 2 agreed\n\nCertb Certhouse\nProgram · preschool\nAttendance · full_time\nSchedule · — days a week\nEffective · 2026-09-01\n\n$1,450.00/monthly accepted, effective 2026-09-01\n\nBilling period September 2026 · next October 2026\n\nRecommended\n\n$1,450.00/monthly\nProgram · Preschool\nAttendance · full_time\nSchedule · any\nBilled · monthly\nOrganisation default\nEffective 2026-07-01\nAccept tuition\nCerta Certhouse\nProgram · school_age\nAttendance · custom\nSchedule · — days a week\nEffective · 2026-09-01\n\n$185.00/weekly accepted, effective 2026-09-01\n\nBilling period Sep 15–21, 2026 · next Sep 22–28, 2026\n\nRecommended\n\n$185.00/weekly\nProgram · Before & After\nAttendance · custom\nSchedule · any\nBilled · weekly\nOrganisation default\nEffective 2026-09-01\nAccept tuition\nDetails →"
+}

@@ -62,7 +62,9 @@ describe("the Manage Responsibility panel", () => {
      */
     it("writes the scope the operator chose, defaulting to the household", () => {
         expect(panel, "the scope is stated, not inherited from the open charge")
-            .toContain('arrangementMemberId: scope === "child" ? customerMemberId : null');
+            .toContain("arrangementMemberId: effectiveMemberId");
+        /* And both branches of that value are stated — the member select, or the scope choice. */
+        expect(panel).toMatch(/effectiveMemberId = administering[\s\S]{0,200}scope === "child" \? customerMemberId : null/);
         expect(panel, "and the payload carries exactly that").toContain("customer_member_id: args.arrangementMemberId");
         expect(panel, "household remains the default").toMatch(/useState<"household" \| "child">\("household"\)/);
     });

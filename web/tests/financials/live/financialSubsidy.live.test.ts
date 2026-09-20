@@ -679,10 +679,12 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
          */
         const todayYmd = today.toISOString().slice(0, 10);
         const { data: covering } = await supabase
-            .from("financial_accounting_periods").select("id")
+            .from("financial_accounting_periods").select("id, period_key")
             .eq("org_id", ORG).eq("status", "open")
             .lte("starts_on", todayYmd).gte("ends_on", todayYmd)
             .limit(1).maybeSingle();
+        /* The key the calendar says covers today — asserted below, rather than assumed. */
+        let expectedPeriodKey = (covering as { period_key?: string } | null)?.period_key ?? "FY-CERT-SUBSIDY";
         if (!covering) {
             const { error: periodError } = await supabase.from("financial_accounting_periods").upsert({
                 id: `${S}00000000f002`, org_id: ORG, calendar_id: calendarId, period_key: "FY-CERT-SUBSIDY",
@@ -692,6 +694,7 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
                 status: "open",
             });
             expect(periodError, periodError?.message).toBeNull();
+            expectedPeriodKey = "FY-CERT-SUBSIDY";
         }
 
         const { paymentId } = await agencyPayment(EXPECTED, chargeId, "pay:cert-journal");
@@ -703,8 +706,16 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
             .eq("org_id", ORG).eq("source_id", paymentId);
         const rows = (journal ?? []) as Array<Record<string, unknown>>;
         expect(rows.length, "agency money reports into the journal like any other receipt").toBeGreaterThan(0);
-        // The key is the PERIOD'S, not the month's — attribution Thread 5 owns and agency money obeys
-        // exactly like any other receipt.
-        expect(rows[0]!.accounting_period_key).toBe("FY-CERT-SUBSIDY");
+        /*
+         * The key is the PERIOD'S, not the month's — attribution Thread 5 owns and agency money
+         * obeys exactly like any other receipt.
+         *
+         * ASKED OF THE CALENDAR, NOT HARD-CODED. This pinned "FY-CERT-SUBSIDY", which was the
+         * period covering today when it was written and stopped being so on 2026-09-17, when the
+         * next period on the same calendar began. The suite then failed for having aged, which
+         * says nothing about agency money. What it means to prove is that the entry landed in the
+         * period the calendar says covers the day it arrived — whichever that is.
+         */
+        expect(rows[0]!.accounting_period_key).toBe(expectedPeriodKey);
     }, 420_000);
 });
