@@ -300,6 +300,31 @@ describe("no second architecture", () => {
         expect(block).toMatch(/fresh:\s*true/);
     });
 
+    it("THE SEED IS MATCHED WHEN THE QUESTION EXISTS, NOT AT THE FIRST RENDER", () => {
+        /*
+         * CAUGHT BY DEPLOYED MEASUREMENT, missed by every unit gate here.
+         *
+         * The seed reached the browser with a correct identity and the client fetched anyway.
+         * `targets` derive from the committed snapshot's Settlement locators, so on the FIRST
+         * render they are empty: the signature compared "" against seven configured views,
+         * rejected, and the one-shot ref was already spent. The seed was structurally unusable.
+         *
+         * Every gate in this file passed because each supplies targets up front — they test the
+         * matcher, which was correct, not the moment it is consulted. So the guard is asserted
+         * here: the decision waits for a non-empty `targetsKey`, and the skip flag is NOT
+         * initialised from the first render, where it would read `undefined` and lose the skip.
+         */
+        const at = HOOK.indexOf("matchWorkViewTotalsSeed({");
+        expect(at).toBeGreaterThan(-1);
+        const guard = HOOK.slice(Math.max(0, at - 260), at);
+        expect(guard).toMatch(/totalsSeedRef\.current === undefined && targetsKey/);
+        // The skip flag must be set from the DECISION, not from the first render.
+        expect(HOOK).toMatch(/const skipFreshFetchRef = useRef\(false\)/);
+        expect(HOOK).not.toMatch(/useRef\(totalsSeedRef\.current\?\.fresh === true\)/);
+        // ...and it is still one-shot, which is what stops a stale seed overwriting a live answer.
+        expect(HOOK).toContain("seedAppliedRef");
+    });
+
     it("a rejected seed falls through to the existing canonical path", () => {
         // Rejection must not disable fetching; it must behave exactly as before the seed existed.
         const at = HOOK.indexOf("matchWorkViewTotalsSeed(");
