@@ -18,6 +18,7 @@
  *
  * Requires: cert stack up, STRIPE_SECRET_KEY in the trusted-secrets slot.
  */
+import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
@@ -25,10 +26,12 @@ import { resolve } from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { handleStripeWebhook } from "@/lib/financials/payments/stripeWebhook";
 import {
     completeAddPaymentMethod,
     materializeMethodForMerchant,
     readAccountMethods,
+    readMethod,
     revokePaymentMethod,
     setDefaultPaymentMethod,
     type PaymentMethodRecord,
@@ -80,6 +83,23 @@ const ACTOR = "00000000-0000-4000-8000-0000000000aa";
 
 const supabase: SupabaseClient | null = env ? createClient(env.url, env.serviceKey) : null;
 const runnable = Boolean(supabase && secret);
+
+function webhookSecret(): string | null {
+    if (process.env.STRIPE_WEBHOOK_SECRET) return process.env.STRIPE_WEBHOOK_SECRET;
+    try {
+        const p = resolve(homedir(), ".local/state/alloy-dev/gateway/vacilando/trusted-secrets/stripe-test.env");
+        const line = readFileSync(p, "utf8").split("\n").find((l) => l.startsWith("STRIPE_WEBHOOK_SECRET="));
+        return line?.slice("STRIPE_WEBHOOK_SECRET=".length).trim() || null;
+    } catch {
+        return null;
+    }
+}
+const whsec = webhookSecret();
+
+function signed(body: string, secret: string): string {
+    const t = Math.floor(Date.now() / 1000);
+    return `t=${t},v1=${createHmac("sha256", secret).update(`${t}.${body}`).digest("hex")}`;
+}
 
 /** A real card PaymentMethod on the platform, from Stripe's own test instrument. */
 async function platformCardMethod(customerRef: string): Promise<string> {
@@ -405,5 +425,92 @@ describe.runIf(runnable)("the payment method reference — live, against the dat
         expect(serialized).not.toMatch(/account_number/i);
         expect(serialized).not.toMatch(/cvc|cvv/i);
         expect(serialized, "no full card number in any field").not.toMatch(/\b4242424242424242\b/);
+    }, 90_000);
+
+    /**
+     * VERIFICATION COMPLETING IS THE CASE THAT MATTERS MOST, and it arrives as an EVENT.
+     *
+     * A bank account awaiting microdeposits is stored `pending` / `blocked`. Nobody in Alloy will
+     * ever click anything to change that — the provider says so, days later, and the method has to
+     * become usable on its own. This drives the real signed webhook path end to end.
+     */
+    it("a completed verification makes a pending bank method usable, through the signed webhook", async () => {
+        if (!whsec) return; /* No webhook secret in this runtime; the hermetic suite covers the mapping. */
+
+        const ref = `pm_verify_${Date.now()}`;
+        const pending = await seedMethod({
+            rail: "ach",
+            provider_method_ref: ref,
+            display_brand: "TEST BANK",
+            display_last4: "6789",
+            verification_state: "pending",
+            usability_state: "blocked",
+            mandate_ref: "mandate_verify",
+            mandate_accepted_at: new Date().toISOString(),
+        });
+
+        const body = JSON.stringify({
+            id: `evt_verify_${Date.now()}`,
+            type: "setup_intent.succeeded",
+            data: { object: { id: "seti_verify", object: "setup_intent", payment_method: ref } },
+        });
+        const result = await handleStripeWebhook(supabase!, body, signed(body, whsec), whsec);
+        expect(result.outcome, result.detail).toBe("applied");
+
+        const after = await readMethod(supabase!, { orgId: ORG, methodId: pending.id });
+        expect(after?.verificationState).toBe("verified");
+        expect(after?.usabilityState, "the family can now be charged without anyone intervening").toBe("usable");
+        expect(after?.verifiedAt).toBeTruthy();
+
+        /* And the event changed nothing about WHOSE method it is. */
+        expect(after?.payerEntityId).toBe(PAYER);
+        expect(after?.customerId).toBe(CUSTOMER);
+        expect(after?.rail).toBe("ach");
+    }, 60_000);
+
+    /**
+     * THE PROMISE THE WHOLE HANDLE MODEL EXISTS TO KEEP.
+     *
+     * An organisation replaces its merchant. Every family's stored card must still work, without one
+     * of them re-entering anything — which is only true because the durable handle is on the platform
+     * and the connected-account object is derived per collection.
+     */
+    it("a canonical method survives merchant replacement and works with the NEW merchant", async () => {
+        const customer = await createPlatformCustomer(defaultStripeFormCall, {
+            email: "w2-cert-replace@example.invalid",
+            name: "W2 replacement payer",
+            alloyPayerId: PAYER,
+        });
+        expect(customer.ok).toBe(true);
+        if (!customer.ok) return;
+        const platformMethodRef = await platformCardMethod(customer.customerRef);
+
+        const { data: row } = await supabase!.from("payment_methods").insert({
+            org_id: ORG, payer_entity_type: "person", payer_entity_id: PAYER, customer_id: CUSTOMER,
+            rail: "card", processor: "stripe",
+            provider_customer_ref: customer.customerRef, provider_method_ref: platformMethodRef,
+            display_brand: "visa", display_last4: "4242",
+            verification_state: "verified", usability_state: "usable", created_by: ACTOR,
+        }).select("id").single();
+        const methodId = String((row as { id: string }).id);
+
+        const before = await readMethod(supabase!, { orgId: ORG, methodId });
+
+        /*
+         * The organisation's merchant changes. W2 stores no merchant on the method at all, so
+         * "replacement" is simply: derive the connected-account object for a DIFFERENT account ref.
+         * Here the same governed account stands in for the new merchant — what is being proved is
+         * that the canonical row is not a function of any merchant.
+         */
+        const materialized = await materializeMethodForMerchant(before as never, connectedAccountRef);
+        expect(materialized.ok, !materialized.ok ? materialized.message : "").toBe(true);
+
+        const after = await readMethod(supabase!, { orgId: ORG, methodId });
+        expect(after?.providerMethodRef, "the canonical row still names the same durable handle").toBe(before?.providerMethodRef);
+        expect(after?.usabilityState).toBe("usable");
+        /* Nothing on the row names a merchant, which is why replacement cannot invalidate it. */
+        const { data: raw } = await supabase!.from("payment_methods").select("*").eq("id", methodId).single();
+        expect(Object.keys(raw as Record<string, unknown>)).not.toContain("merchant_id");
+        expect(JSON.stringify(raw)).not.toContain(connectedAccountRef);
     }, 90_000);
 });

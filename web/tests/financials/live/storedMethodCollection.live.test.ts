@@ -281,6 +281,32 @@ describe.runIf(runnable)("stored-method collection — live", () => {
         expect(out.reason).toBe("method_rail_mismatch");
     }, 60_000);
 
+    /**
+     * PAYER IS NOT RESPONSIBILITY, and using someone's card records the first without moving the
+     * second. The method is owned by PAYER; the obligation belongs to the account.
+     */
+    it("records the method's owner as the payer, without touching who is responsible", async () => {
+        const chargeId = await postCharge(13_000);
+
+        const out = await createCardCollection(supabase!, {
+            orgId: ORG, chargeId, requestedAmountCents: 13_000, actorUserId: ACTOR, paymentMethodId: storedMethodId,
+        });
+        expect(out.ok, !out.ok ? out.message : "").toBe(true);
+        if (!out.ok) return;
+
+        const { data: attempt } = await supabase!
+            .from("payment_collection_attempts")
+            .select("payer_person_id, billable_source_type, billable_source_id")
+            .eq("id", out.attemptId)
+            .single();
+        const row = attempt as { payer_person_id: string | null; billable_source_type: string; billable_source_id: string };
+
+        expect(row.payer_person_id, "the person whose card it was is recorded as the payer").toBe(PAYER);
+        /* And the obligation still belongs to the ACCOUNT, not to the payer. */
+        expect(row.billable_source_type).toBe("customer");
+        expect(row.billable_source_id).toBe(CUSTOMER);
+    }, 120_000);
+
     it("the stored method itself is unchanged by collecting with it", async () => {
         const before = await readMethod(supabase!, { orgId: ORG, methodId: storedMethodId });
         const chargeId = await postCharge(5_000);

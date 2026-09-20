@@ -403,7 +403,19 @@ export async function createCardCollection(
             billable_source_type: source.billable_source_type,
             billable_source_id: source.billable_source_id,
             charge_id: input.chargeId,
-            payer_person_id: input.payerPersonId ?? null,
+            /*
+             * WHO ACTUALLY PAID. When a stored method is used and the caller named no payer, the
+             * payer is the person whose instrument it was — that is the whole point of recording
+             * ownership on the method. It is evidence, not authority: it never rewrites who is
+             * RESPONSIBLE for the obligation, which is exactly the distinction this program keeps.
+             *
+             * A caller who names a payer wins, and an agency-owned method contributes nothing here
+             * because `payer_person_id` is a person.
+             */
+            payer_person_id:
+                t(input.payerPersonId)
+                || (storedMethod?.payerEntityType === "person" ? storedMethod.payerEntityId : null)
+                || null,
             currency,
             requested_amount_cents: input.requestedAmountCents,
             intent_key: intentKey,
