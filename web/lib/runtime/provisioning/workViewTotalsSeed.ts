@@ -117,7 +117,12 @@ export async function resolveWorkViewTotalsSeed(input: {
     departmentId: string;
     recordScopeConstraints: Parameters<typeof evaluateWorkViewTotalsForGroup>[0]["recordScopeConstraints"];
     recordScopeImpossible: boolean;
-    viewerDisplayTimeZone: string;
+    /*
+     * The viewer timezone META (`{ iana, source, cacheHit }`), not a string — the shape
+     * `fetchEffectiveUserDisplayTimezoneCached` returns and `getWorkUnitQueueItems` consumes.
+     * Derived from the evaluator so the two can never disagree about it.
+     */
+    viewerDisplayTimeZone: Parameters<typeof evaluateWorkViewTotalsForGroup>[0]["viewerDisplayTimeZone"];
 }): Promise<WorkViewTotalsSeed> {
     try {
         if (!input.countTargets.length) {

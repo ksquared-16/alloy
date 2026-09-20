@@ -303,7 +303,20 @@ export type FocusPanelSummaryDocProjection = {
     doc?: LayoutDoc | null;
 };
 
-export type ProvisioningAnswer =
+/**
+ * The configured Work View counts, resolved server-side so WU-03 needs no second round trip.
+ *
+ * Carried on EVERY terminal, not just the operational one: a non-operational answer still renders
+ * the pill strip's reserved geometry, and the route assigns this without narrowing. Absent or
+ * `unavailable` means the client issues its canonical fallback exactly as before — an absent seed
+ * is NOT an authoritative empty, and never a zero.
+ */
+export type ProvisioningAnswerCountSeed = {
+    workViewTotalsSeed?: import("./workViewTotalsSeed").WorkViewTotalsSeed | null;
+};
+
+export type ProvisioningAnswer = ProvisioningAnswerCountSeed &
+    (
     | {
           terminal: "operational";
           /** U-P1 authorization + canonical identifiers. */
@@ -412,13 +425,7 @@ export type ProvisioningAnswer =
        * drawer settled, ~3.5s later, to learn what the answer already carried.
        */
       resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
-      /**
-       * The configured Work View counts, resolved server-side so WU-03 needs no second round trip.
-       *
-       * Absent or `unavailable` means the client issues its canonical fallback request exactly as
-       * before — an absent seed is NOT an authoritative empty, and never a zero.
-       */
-      workViewTotalsSeed?: import("./workViewTotalsSeed").WorkViewTotalsSeed | null;
+
           /** A — the published Summary composition for the committed scope (see {@link FocusPanelSummaryDocProjection}). */
           focusPanelSummaryDoc: FocusPanelSummaryDocProjection | null;
           /**
@@ -542,7 +549,7 @@ export type ProvisioningAnswer =
      * membership is what forces every consumer to decide, via exhaustiveness, what it renders when no
      * cohort is selected.
      */
-    | ContextualFocusAnswer;
+    | ContextualFocusAnswer);
 
 export type ProvisioningErrorCode =
     | "unauthorized"

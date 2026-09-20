@@ -111,7 +111,12 @@ export async function evaluateWorkViewTotalsForGroup(args: {
     prerequisite: WorkViewTotalsPrerequisite;
     recordScopeConstraints: Parameters<typeof loadWorkUnitProcessPopulation>[0]["scope"];
     recordScopeImpossible: boolean;
-    viewerDisplayTimeZone: string;
+    /*
+     * The viewer timezone META, not a string. `fetchEffectiveUserDisplayTimezoneCached` returns
+     * `{ iana, source, cacheHit }` and `getWorkUnitQueueItems` consumes that shape; typing it as a
+     * string compiled against neither caller and was caught only by tsc.
+     */
+    viewerDisplayTimeZone: Parameters<typeof getWorkUnitQueueItems>[0]["viewerDisplayTimeZone"];
     spans: WorkViewTotalsSpans;
 }): Promise<WorkViewTotalRow[]> {
     const {
