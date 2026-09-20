@@ -33,14 +33,23 @@ import {
 import { ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH } from "@/lib/adminV2/opportunityDrawerTaskEvents";
 
 export type RecordAttentionCounts = {
-    /** Open operational work on this record — manual and Business Process alike. */
-    work: number;
+    /**
+     * Open operational work on this record — manual and Business Process alike.
+     *
+     * NULL MEANS NOT YET KNOWN, and that is the whole point of the type. This was `number`
+     * initialised to 0, so "the request has not answered" and "there is authoritatively no work"
+     * rendered identically: the chip is absent in both cases, and the operator cannot tell "nothing
+     * is waiting on me" from "we have not looked yet". This file's own header says the two must not
+     * look the same; its initial state said otherwise.
+     */
+    work: number | null;
     /** Unread inbound messages on this record's conversations, for the viewing operator. */
     unread: number;
     loading: boolean;
 };
 
-const EMPTY: RecordAttentionCounts = { work: 0, unread: 0, loading: false };
+/** No record selected: nothing is known, and nothing is claimed. */
+const EMPTY: RecordAttentionCounts = { work: null, unread: 0, loading: false };
 
 type TaskLike = { status?: string | null };
 
@@ -70,9 +79,24 @@ export function countUnreadForEntity(
 }
 
 export function useRecordAttentionCounts(entityId: string | null | undefined): RecordAttentionCounts {
-    const [work, setWork] = useState(0);
+    /*
+     * ONE RESPONSE, ONE STATE COMMIT.
+     *
+     * `work` and `loading` were separate useState calls set on either side of an await —
+     * `setWork(n)` inside the load, `setLoading(false)` in its `.finally()`. Across the await those
+     * are different turns, so one response produced TWO renders about 1ms apart. Measured on
+     * deployed staging that is exactly what the Work chip did: the same node, same parent, appended
+     * in two adjacent observer batches (168/169, 173/174), which the metric scored as a
+     * post-complete authoritative structure change.
+     *
+     * Holding them in ONE object means the response commits once and the chip is inserted once.
+     */
+    const [state, setState] = useState<{ work: number | null; loading: boolean }>({
+        work: null,
+        loading: false,
+    });
+    const { work, loading } = state;
     const [unread, setUnread] = useState(0);
-    const [loading, setLoading] = useState(false);
 
     const id = entityId?.trim() || "";
 
@@ -81,22 +105,29 @@ export function useRecordAttentionCounts(entityId: string | null | undefined): R
         try {
             const res = await fetchOperationalTasks(id);
             const json = await readJson<{ tasks?: TaskLike[] }>(res);
-            if (!res.ok) return;
-            setWork(countOpenWork(json.tasks));
+            if (!res.ok) {
+                // Refused or errored: stop loading, keep whatever was last known. Never zero.
+                setState((prev) => ({ work: prev.work, loading: false }));
+                return;
+            }
+            setState({ work: countOpenWork(json.tasks), loading: false });
         } catch {
             // A count that cannot be read stays at its last known value rather than reporting zero:
             // "no work" and "could not tell" must not look the same to an operator.
+            setState((prev) => ({ work: prev.work, loading: false }));
         }
     }, [id]);
 
     useEffect(() => {
         if (!id) {
-            setWork(0);
+            setState({ work: null, loading: false });
             setUnread(0);
             return;
         }
-        setLoading(true);
-        void loadWork().finally(() => setLoading(false));
+        // The load commits work AND loading together, so `.finally(setLoading(false))` — the second
+        // render — is deliberately gone.
+        setState((prev) => ({ work: prev.work, loading: true }));
+        void loadWork();
     }, [id, loadWork]);
 
     // Any authoritative write to this record's work re-reads the count.
