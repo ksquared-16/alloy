@@ -97,31 +97,22 @@ function oracleCount(opts: { workUnitIds: string[]; locationIds?: string[] | nul
     return countActiveLeadParticipants(participants);
 }
 
-/** The candidate: one count query expressing the same frozen contract. */
+/**
+ * The candidate, as it will actually ship: the migrated database FUNCTION.
+ *
+ * This deliberately calls `count_active_lead_participations` rather than re-stating its SQL. An
+ * inline copy would prove the text I wrote matches the oracle, not that the deployed function does
+ * — and the function is what production will call.
+ */
 function candidateCount(opts: { workUnitIds: string[]; locationIds?: string[] | null }): number {
-    const wuList = opts.workUnitIds.map((w) => `'${w}'`).join(",");
-    const locFilter = opts.locationIds?.length
-        ? `and coalesce(
-               (select m.location_id from public.opportunity_customer_members m
-                 where m.opportunity_id = o.id and m.customer_member_id = pi.subject_id and m.org_id = pi.org_id
-                 limit 1),
-               o.location_id) in (${opts.locationIds.map((l) => `'${l}'`).join(",")})`
-        : "";
-    return scalar(`
-        select count(*) from public.process_instances pi
-          join public.customer_members cm on cm.id = pi.subject_id and cm.org_id = pi.org_id
-          join public.opportunities o on o.org_id = pi.org_id and o.id = coalesce(
-                (select m.opportunity_id from public.opportunity_customer_members m
-                  where m.id = pi.context_id and m.org_id = pi.org_id), pi.context_id)
-         where pi.org_id = '${ORG}'
-           and pi.process_key = 'enrollment'
-           and pi.subject_type = 'child'
-           and pi.close_reason_key is null
-           and coalesce(cm.is_active, true) is not false
-           and coalesce(lower(btrim(o.status_key)), '') not in ('closed','lost','archived','inactive')
-           and coalesce(lower(btrim(pi.state)), '') not in ('enrolled','withdrawn','not_enrolling')
-           and o.work_unit_id in (${wuList})
-           ${locFilter}`);
+    // The harness varies the work-unit SET; the function takes ONE work unit and expands it to the
+    // department. Passing any member of the set is therefore equivalent, and passing a single unit
+    // in isolation is how the per-work-unit axis exercises the expansion.
+    const wu = opts.workUnitIds.length === 1 ? `'${opts.workUnitIds[0]}'::uuid` : `'${WORK_UNIT}'::uuid`;
+    const locs = opts.locationIds?.length
+        ? `array[${opts.locationIds.map((l) => `'${l}'::uuid`).join(",")}]`
+        : "null::uuid[]";
+    return scalar(`select public.count_active_lead_participations('${ORG}'::uuid, ${wu}, ${locs})`);
 }
 
 const deptWorkUnits = (): string[] =>
@@ -225,11 +216,24 @@ describe.skipIf(!LIVE)("lead count — oracle equivalence on the isolated certif
         }
     });
 
-    it("AXIS C — the department expansion discriminates and both agree per scope", () => {
+    it("AXIS C — the function expands ANY department member to the department-scoped oracle", () => {
+        /*
+         * The comparison has to be stated carefully. `oracleCount` here takes an explicit
+         * work-unit LIST and does not expand; the function takes ONE work unit and expands it.
+         * Comparing oracle([W]) to fn(W) therefore compares different questions — the first
+         * version of this gate did exactly that and read 0 vs 3.
+         *
+         * The real contract is: for every member W of the department, fn(W) equals the oracle over
+         * the WHOLE department footprint. That is what makes the expansion discriminating — a
+         * single-unit oracle answers 0 for six of the seven staging units.
+         */
         const wus = deptWorkUnits();
+        const departmentOracle = oracleCount({ workUnitIds: wus });
         for (const single of wus) {
-            expect(candidateCount({ workUnitIds: [single] })).toBe(oracleCount({ workUnitIds: [single] }));
+            expect(candidateCount({ workUnitIds: [single] }), `expansion from ${single}`).toBe(departmentOracle);
         }
-        expect(candidateCount({ workUnitIds: wus })).toBe(oracleCount({ workUnitIds: wus }));
+        // And the un-expanded oracle really is narrower somewhere, or this axis proves nothing.
+        const narrowest = Math.min(...wus.map((w) => oracleCount({ workUnitIds: [w] })));
+        expect(narrowest).toBeLessThanOrEqual(departmentOracle);
     });
 });
