@@ -1,0 +1,41 @@
+{
+  "trusted_host_action_id": "tha_b65c65e8023e6b",
+  "query_hash": "124021915aee6c2a9e82c67db8baa54ba02bb47fa5f552b94619ea318f34429f",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T12:33:13.352Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_b65c65e8023e6b",
+    "query_hash": "124021915aee6c2a9e82c67db8baa54ba02bb47fa5f552b94619ea318f34429f",
+    "authorization_id": "grnt_533dcb0711ad49f6",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T12:33:14.879Z",
+    "question_ids": [
+      "preflight"
+    ],
+    "questions": {
+      "preflight": {
+        "question_id": "preflight",
+        "row_count": null,
+        "rows": [
+          {
+            "ledger_has_20260921140000": 1,
+            "function_exists": true,
+            "function_any_signature": 1,
+            "ledger_head": "20260921140000",
+            "ledger_total": 460,
+            "newer_than_target": 0,
+            "database_identity": "postgres@2600:1f13:838:6e21:288f:4aa6:65bf:f446/128"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

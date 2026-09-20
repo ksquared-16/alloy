@@ -1,5 +1,6 @@
 -- Read-only census: the hosted migration ledger's VERSION IDENTITIES.
--- RE-MEASURED 2026-09-20T12:30Z — waiting on foreign migration 20260921140000 (PR #1102).
+-- RE-MEASURED 2026-09-20T12:35Z after 20260921140000 (PR #1102) converged: preflight
+-- gar_41245f173d708f found ledger row AND function present, head 20260921140000, total 460.
 --
 --
 --
