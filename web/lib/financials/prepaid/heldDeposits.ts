@@ -362,3 +362,111 @@ export async function disposeHold(
     if (!hold) return { ok: false, reason: "write_failed", message: "the held deposit could not be re-read" };
     return { ok: true, hold, disposedCents: args.amountCents };
 }
+
+/**
+ * HELD MONEY BECOMING AN ORDINARY ALLOCATION.
+ *
+ * The lifecycle is RECEIVED → HELD → APPLY, and the apply half is not W4's to invent: it is
+ * `applyPaymentToCharge`, the same authority every other application uses. The result is an ordinary
+ * `payment_allocations` row with no deposit flavour on it at all.
+ *
+ * ── THE ORDER IS DELIBERATE, AND IT IS THE SAFE ONE ──
+ *
+ * Two writes cannot share a transaction through this client, so one of them happens first. Recording
+ * the disposition first would briefly RAISE available money — the hold would be gone and the
+ * allocation not yet made — and another operation could take it in between.
+ *
+ * Allocating first cannot do that. During the window the money is already committed to the
+ * obligation, and a concurrent hold attempt computes an unapplied remainder that has ALREADY been
+ * reduced, so it refuses more strictly rather than less. The worst case is a disposition that fails
+ * after a successful allocation, which leaves held money overstated and visible — an operator sees a
+ * hold that is too large, which is recoverable. The other order risks money being spent twice, which
+ * is not.
+ */
+export async function applyHeldFunds(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        holdId: string;
+        chargeId: string;
+        amountCents: number;
+        actorUserId?: string | null;
+        notes?: string | null;
+    },
+    allocate: (input: {
+        orgId: string;
+        paymentId: string;
+        chargeId: string;
+        amountCents: number;
+        actorUserId?: string | null;
+        notes?: string | null;
+    }) => Promise<{ allocationId: string; appliedCents: number }>,
+): Promise<DisposeResult> {
+    const orgId = t(args.orgId);
+    const holdId = t(args.holdId);
+    if (!orgId || !holdId) return { ok: false, reason: "hold_not_found", message: "No held deposit was named." };
+    if (!Number.isInteger(args.amountCents) || args.amountCents <= 0) {
+        return { ok: false, reason: "invalid_amount", message: "An amount must be a positive whole number of cents." };
+    }
+
+    const { data: holdRow } = await supabase
+        .from("payment_holds")
+        .select("id, payment_id")
+        .eq("org_id", orgId)
+        .eq("id", holdId)
+        .maybeSingle();
+    const found = holdRow as { id: string; payment_id: string } | null;
+    if (!found) {
+        return { ok: false, reason: "hold_not_found", message: "That held deposit is not in this organization." };
+    }
+
+    /* Bound checked here too, so an allocation is not made against money that is not still held. */
+    const before = (await readHoldsForPayments(supabase, { orgId, paymentIds: [found.payment_id] }))
+        .find((h) => h.id === holdId);
+    if (!before || before.remainingCents < args.amountCents) {
+        return {
+            ok: false,
+            reason: "exceeds_remaining",
+            message: "That is more than is still held on this deposit.",
+        };
+    }
+
+    const allocated = await allocate({
+        orgId,
+        paymentId: found.payment_id,
+        chargeId: t(args.chargeId),
+        amountCents: args.amountCents,
+        actorUserId: args.actorUserId ?? null,
+        notes: args.notes ?? null,
+    });
+
+    return await disposeHold(supabase, {
+        orgId,
+        holdId,
+        kind: "applied",
+        amountCents: allocated.appliedCents,
+        allocationId: allocated.allocationId,
+        reason: args.notes ?? null,
+        actorUserId: args.actorUserId ?? null,
+    });
+}
+
+/**
+ * Whether held money may be refunded, by the terms it was taken under.
+ *
+ * Separated from the refund itself so the refusal can be produced at ELIGIBILITY — before any
+ * provider call — exactly as W3's full-only bank rule is. A non-refundable deposit reaching Stripe
+ * and failing there would have told the family a refund was under way first.
+ */
+export function heldRefundEligibility(hold: HeldDeposit, amountCents: number): { ok: true } | { ok: false; message: string } {
+    if (!hold.refundable) {
+        return {
+            ok: false,
+            message: "This deposit was taken as non-refundable, so it cannot be refunded.",
+        };
+    }
+    if (amountCents > hold.remainingCents) {
+        return { ok: false, message: "That is more than is still held on this deposit." };
+    }
+    return { ok: true };
+}
