@@ -41,19 +41,31 @@
   },
   "dismissal": {
     "cardGone": true,
-    "detailStillOpen": false,
-    "activeLens": null,
-    "rows": 0
+    "detailStillOpen": true,
+    "activeLens": "",
+    "rows": 78
   },
   "responsive": {
     "1280": {
-      "missing": true
+      "gearVisible": true,
+      "sameRowAsFilter": true,
+      "gearInsideSlot": true,
+      "slotClipped": false,
+      "gearPx": 26
     },
     "1440": {
-      "missing": true
+      "gearVisible": true,
+      "sameRowAsFilter": true,
+      "gearInsideSlot": true,
+      "slotClipped": false,
+      "gearPx": 26
     },
     "1680": {
-      "missing": true
+      "gearVisible": true,
+      "sameRowAsFilter": true,
+      "gearInsideSlot": true,
+      "slotClipped": false,
+      "gearPx": 26
     }
   }
 }
