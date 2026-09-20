@@ -243,3 +243,66 @@ describe("the operator surface offers the lifecycle the authority supports, and 
         expect(panel).toContain("/api/admin/financials/accounting-calendar");
     });
 });
+
+describe("a deferral is visible, not swallowed", () => {
+    const detail = src("lib/financials/workspace/resolveChargeDetail.ts");
+    const ui = src("app/adminV2/financials/FinancialsChargeDetail.tsx");
+
+    it("the resolver reads the trigger's own stamp", () => {
+        expect(detail).toContain("accounting_period_deferred === true");
+        expect(detail).toContain("accounting_period_deferred_from_date");
+    });
+
+    it("the original effective date survives as the deferred-from date", () => {
+        /* The entry keeps `effective_on`; the stamp names the date whose period was closed. */
+        const block = detail.slice(detail.indexOf("meta.accounting_period_deferred === true"));
+        expect(block.slice(0, 300)).toContain("journal?.effective_on");
+    });
+
+    it("an ordinary posting carries no deferral", () => {
+        expect(detail).toContain("let accountingDeferredFrom: string | null = null;");
+    });
+
+    it("the surface distinguishes the two", () => {
+        expect(ui).toContain('testId="accounting-deferred-from"');
+        expect(ui).toContain("that period was closed");
+        expect(ui, "and only when there was one").toContain("detail.accountingDeferredFrom ?");
+    });
+
+    it("the charge detail and the journal name one period", () => {
+        /* The detail does not compute a period; it reads the one the entry was attributed to. */
+        expect(detail).toContain('.from("financial_journal_entries")');
+        expect(detail).toContain("accounting_period_id");
+        expect(detail, "no local attribution").not.toMatch(/findPeriodForDate|calendarMonthPeriods/);
+    });
+});
+
+describe("the two periods are derived independently", () => {
+    /*
+     * A PLANTED DEFECT THAT ESCAPED. Replacing the charge detail's billing period with the
+     * accounting period passed every lock above: they all asserted that accounting attribution
+     * was read correctly, and none asserted that the COMMERCIAL period was still derived by the
+     * commercial authority. A charge effective in closed September would then have reported its
+     * billing period as October — the exact conflation this whole thread exists to prevent.
+     */
+    const detail = src("lib/financials/workspace/resolveChargeDetail.ts");
+
+    it("the billing period comes from the billing authority", () => {
+        expect(detail).toContain("placeInBillingPeriod(charge");
+        expect(detail).toContain('from "@/lib/financials/billingPeriod"');
+    });
+
+    it("and never from the accounting period", () => {
+        const at = detail.indexOf("const billing = ");
+        expect(at, "the billing period is derived").toBeGreaterThan(-1);
+        const line = detail.slice(at, detail.indexOf("\n", at));
+        expect(line, "not borrowed from accounting").not.toMatch(/accountingPeriod|accounting_period/);
+    });
+
+    it("the accounting period is never derived from the charge's own dates", () => {
+        /* It is READ from the entry the database attributed, never recomputed here. */
+        const at = detail.indexOf("let accountingPeriod");
+        const block = detail.slice(at, detail.indexOf("templateLabel", at) > at ? detail.indexOf("glAccount", at) : detail.length);
+        expect(block).not.toMatch(/placeInBillingPeriod|billingPeriodFor/);
+    });
+});

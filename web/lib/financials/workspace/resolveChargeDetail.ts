@@ -141,6 +141,11 @@ export type ChargeDetail = {
     billingPeriodKey: string | null;
     billingPeriodLabel: string | null;
     accountingPeriod: { key: string; label: string | null; status: string; startsOn: string; endsOn: string } | null;
+    /**
+     * Set when the entry's own period was CLOSED and attribution deferred to a later open one —
+     * the date it was effective on. Null for an ordinary posting, so the two are distinguishable.
+     */
+    accountingDeferredFrom: string | null;
     glAccount: { code: string; name: string | null } | null;
 
     /*
@@ -299,16 +304,36 @@ export async function resolveChargeDetail(
     }
 
     let accountingPeriod: ChargeDetail["accountingPeriod"] = null;
+    /** The effective date whose own period was closed, when attribution was deferred. */
+    let accountingDeferredFrom: string | null = null;
     try {
         const { data: entry } = await supabase
             .from("financial_journal_entries")
-            .select("accounting_period_id")
+            .select("accounting_period_id, effective_on, metadata")
             .eq("org_id", args.orgId)
             .eq("charge_id", chargeId)
             .not("accounting_period_id", "is", null)
             .limit(1)
             .maybeSingle();
-        const periodId = t((entry as { accounting_period_id?: unknown } | null)?.accounting_period_id);
+        const journal = entry as {
+            accounting_period_id?: unknown;
+            effective_on?: unknown;
+            metadata?: Record<string, unknown> | null;
+        } | null;
+        const periodId = t(journal?.accounting_period_id);
+        /*
+         * ── WHY IT LANDED WHERE IT DID ────────────────────────────────────────────────────────
+         *
+         * A closed accounting period does not refuse a posting — it defers it to the next open
+         * period and stamps the entry with where it came from. Without reading that stamp, an
+         * entry effective in September and reporting in October looks identical to one that was
+         * always an October entry, and the operator has no way to tell a deferral from an
+         * ordinary posting. The trigger records it; this is the read that makes it visible.
+         */
+        const meta = (journal?.metadata ?? {}) as Record<string, unknown>;
+        if (meta.accounting_period_deferred === true) {
+            accountingDeferredFrom = t(meta.accounting_period_deferred_from_date) || t(journal?.effective_on) || null;
+        }
         if (periodId) {
             const { data: period } = await supabase
                 .from("financial_accounting_periods")
@@ -439,6 +464,7 @@ export async function resolveChargeDetail(
         billingPeriodKey: billing.key,
         billingPeriodLabel: billing.key ? billingPeriodLabel(billing.key) : null,
         accountingPeriod,
+        accountingDeferredFrom,
         glAccount,
         customerId,
         customerMemberId,
