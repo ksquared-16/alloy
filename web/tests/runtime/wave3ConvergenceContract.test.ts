@@ -209,7 +209,12 @@ describe("LOCATION — one canonical answer, feeding both consumers", () => {
     });
 
     it("H — the result is not cached or persisted outside the request", () => {
-        const block = ANSWER.slice(ANSWER.indexOf("const wave3LocationPromise"), ANSWER.indexOf("const wave3RecordEarly") + 4000);
+        // Anchored FORWARD from the creation site. Slicing to an earlier declaration yields an
+        // empty string and the assertions below pass against nothing — a mistake this suite has
+        // made before.
+        const start = ANSWER.indexOf("const wave3RecordEarly");
+        const block = ANSWER.slice(start, ANSWER.indexOf("Promise.resolve(null)", start));
+        expect(block.length).toBeGreaterThan(200);
         for (const forbidden of ["globalThis", "cacheLocation", "locationCache", "setCached"]) {
             expect(block).not.toContain(forbidden);
         }
@@ -225,6 +230,9 @@ describe("LOCATION — one canonical answer, feeding both consumers", () => {
         expect(ANSWER).toMatch(/wave3EarlyLocation\.locationLabel\s*\n?\s*\? Promise\.resolve\(wave3EarlyLocation\.locationLabel\)/);
         expect(ANSWER).toMatch(/: wave3EarlyLocation\.locationId/);
         expect(ANSWER).toContain("resolveLocationById(req.supabase, req.orgId, wave3EarlyLocation.locationId)");
+        // The label must come from the platform's display rule, not from a field read off the row.
+        const promiseBody = ANSWER.slice(ANSWER.indexOf("const wave3LocationPromise"), ANSWER.indexOf("Promise.resolve(null)"));
+        expect(promiseBody).toContain("canonicalLocationDisplay(loc)");
     });
 
     it("F/G — neither absence nor failure fabricates a label", () => {
@@ -234,7 +242,10 @@ describe("LOCATION — one canonical answer, feeding both consumers", () => {
         expect(ANSWER).toMatch(/\.\.\.\(wave3LocationLabel \? \{ _location_label/);
         const promise = ANSWER.slice(ANSWER.indexOf("const wave3LocationPromise"), ANSWER.indexOf("Promise.resolve(null)"));
         expect(promise).toContain("catch");
-        expect(promise).not.toMatch(/return ["'`][^"'`]/);
+        // An empty string is the dangerous case: it is falsy enough to skip the spread but would
+        // be a "label" anywhere it leaked. `return "";` has nothing after the quote, so a pattern
+        // requiring a following character misses it — this one does not.
+        expect(promise).not.toMatch(/return\s*["'`]/);
         const join = ANSWER.slice(ANSWER.indexOf("const tWave3LocationJoin"), ANSWER.indexOf("const wave3UpdatedAt"));
         expect(join).toContain("catch");
         expect(join).toMatch(/wave3LocationLabel = null;/);
