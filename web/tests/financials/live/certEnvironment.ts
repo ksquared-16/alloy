@@ -162,3 +162,58 @@ export async function restoreMerchantReadiness(
         .eq("org_id", orgId)
         .eq("is_active", true);
 }
+
+/**
+ * THE GOVERNED TEST MERCHANT — chosen by what it can do, not by where it happens to sit in a list.
+ *
+ * Seven live suites bound themselves to `accounts?limit=1`: the FIRST account the platform lists.
+ * That was never a statement about which merchant they wanted; it was a statement about list order,
+ * and it held only while exactly one connected account existed. Payments W1 creates accounts — that
+ * is the capability under test — and the first one it made displaced the governed merchant for every
+ * other suite, which then bound to an un-onboarded account and failed with
+ * `onboarding_incomplete` across seven files at once.
+ *
+ * The rule these suites actually need is "a merchant that can charge", so that is now the rule. It
+ * is also stable: a freshly created account is never `charges_enabled`, so no amount of provider
+ * certification can displace the governed one again.
+ */
+export async function governedTestAccount(secret: string): Promise<Record<string, unknown>> {
+    const res = await fetch("https://api.stripe.com/v1/accounts?limit=100", {
+        headers: { Authorization: `Bearer ${secret}` },
+    });
+    const body = (await res.json()) as { data?: Array<Record<string, unknown>> };
+    const accounts = body.data ?? [];
+    const charging = accounts.find((a) => a.charges_enabled === true);
+    const chosen = charging ?? accounts[0];
+    if (!chosen) throw new Error("no connected account exists on this platform to certify against");
+    return chosen;
+}
+
+/**
+ * A NON-ONBOARDED ACCOUNT THIS SUITE OWNS, REUSED ACROSS RUNS.
+ *
+ * Provider certification needs an account that has NOT finished setup, and a platform cannot delete
+ * a connected account whose owner holds the full dashboard — which is the approved model — so every
+ * run that mints one leaves it behind for good. Minting per run would grow the platform's account
+ * list without bound.
+ *
+ * So the pool is found by display name and reused. One account, many runs, and a run that finds none
+ * creates exactly one.
+ */
+export async function certificationPoolAccount(
+    secret: string,
+    poolName: string,
+    create: () => Promise<string>,
+): Promise<string> {
+    const res = await fetch("https://api.stripe.com/v1/accounts?limit=100", {
+        headers: { Authorization: `Bearer ${secret}` },
+    });
+    const body = (await res.json()) as { data?: Array<Record<string, unknown>> };
+    const existing = (body.data ?? []).find(
+        (a) => typeof a.business_profile === "object"
+            && a.charges_enabled !== true
+            && String((a as { settings?: { dashboard?: { display_name?: string } } }).settings?.dashboard?.display_name ?? "") === poolName,
+    );
+    if (existing && typeof existing.id === "string") return existing.id;
+    return await create();
+}

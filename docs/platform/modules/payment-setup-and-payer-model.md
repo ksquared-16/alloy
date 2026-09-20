@@ -180,12 +180,19 @@ not exist. The table lands with tokenisation, not before it.
 
 ## 7. The provider boundary
 
-Deferred until approved test-mode merchant infrastructure exists:
+**Updated at Payments V1 · W1.** The first three of these were built and certified by Threads 8B/8C
+and were unreachable only because nothing in the product could connect a merchant. W1 built that act,
+so they are now reachable by any organisation that completes provider setup:
 
-* card collection execution;
-* ACH initiation and settlement;
-* provider returns and disputes;
-* payment-method tokenisation, and therefore autopay enrolment.
+* card collection execution — **implemented and certified**;
+* ACH initiation and settlement — **implemented and certified**;
+* provider returns and disputes — **implemented and certified**;
+* payment-method tokenisation, and therefore autopay enrolment — **still deferred**, to W2 and W5.
+
+Connecting a provider is `/organization/financials` → Payments, behind `fin.provider`. See
+`payments-provider-architecture.md`.
+
+Originally deferred until approved test-mode merchant infrastructure exists:
 
 What is **not** deferred, and must never be: recording cash, cheque and money order; naming the
 actual payer; applying, reversing and refunding; and telling the truth about which of the above this
