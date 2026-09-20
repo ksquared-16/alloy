@@ -151,18 +151,29 @@ describe("the preview states the consequence, and invents no close blockers", ()
 });
 
 describe("the write authority is governed, and asks the existing grant", () => {
-    const actions = src("lib/adminV2/actions/definitions/accountingPeriodActions.ts");
+    const actions = src("app/api/admin/financials/accounting-calendar/route.ts");
 
-    it("close and adopt are registered actions", () => {
-        expect(actions).toContain('"billing.close_accounting_period"');
-        expect(actions).toContain('"billing.adopt_accounting_calendar"');
-        expect(src("lib/adminV2/actions/actionRegistry.ts")).toContain("accountingPeriodActions");
+    it("adopt and close are governed by the write route", () => {
+        /*
+         * These were registered actions and could not be invoked: the action runtime resolves
+         * every invocation against a real record, and these acts are ORG-scoped. Mounted, it
+         * answered "Unsupported entity_type". A registered action nothing can invoke reads as
+         * governed capability and is not one, so it was removed rather than left in place.
+         */
+        expect(actions).toContain('op === "adopt"');
+        expect(actions).toContain('op === "close"');
+        expect(actions).toContain('op === "preview_close"');
     });
 
     it("uses the existing financial write grant, not a new role check", () => {
-        expect(actions).toContain('ACCOUNTING_PERIOD_PERMISSION = "fin.write"');
-        expect(actions).toContain("resolveActorPermissionGrants");
+        expect(actions).toContain("assertFinancialsWriteAllowed");
         expect(actions, "no ad-hoc admission check").not.toMatch(/requireAdminOrOps|isAdmin\b/);
+    });
+
+    it("re-checks before closing, so a client cannot skip the preview", () => {
+        const close = actions.slice(actions.indexOf('if (op === "close")'));
+        expect(close.slice(0, 800)).toContain("previewClosePeriod");
+        expect(close.slice(0, 800)).toContain("already_closed");
     });
 
     it("periods are materialised from the one generator, not authored twice", () => {
@@ -196,7 +207,7 @@ describe("the operator surface offers the lifecycle the authority supports, and 
     it("offers adoption where the absence is reported", () => {
         const absent = panel.slice(panel.indexOf('data-testid="accounting-calendar-absent"'));
         expect(absent.slice(0, 1800)).toContain('data-testid="accounting-calendar-adopt"');
-        expect(absent.slice(0, 1800)).toContain("billing.adopt_accounting_calendar");
+        expect(absent.slice(0, 1800)).toContain('op: "adopt"');
     });
 
     it("closes through preview then confirm", () => {
@@ -205,7 +216,7 @@ describe("the operator surface offers the lifecycle the authority supports, and 
         /* The row's testid is a template literal, so an indexOf on a quoted attribute finds nothing. */
         const at = panel.indexOf("accounting-period-close-");
         expect(at, "the row close control exists").toBeGreaterThan(-1);
-        expect(panel.slice(at, at + 1200), "the row previews first").toContain('"preview"');
+        expect(panel.slice(at, at + 1200), "the row previews first").toContain('op: "preview_close"');
     });
 
     it("renders the action's own words, not a second opinion about accounting health", () => {
@@ -221,14 +232,14 @@ describe("the operator surface offers the lifecycle the authority supports, and 
 
     it("offers no reopen, because no reopen authority exists", () => {
         expect(strip(panel)).not.toMatch(/reopen/i);
-        expect(strip(src("lib/adminV2/actions/definitions/accountingPeriodActions.ts"))).not.toMatch(/reopen/i);
+        expect(strip(src("app/api/admin/financials/accounting-calendar/route.ts"))).not.toMatch(/reopen/i);
         expect(strip(src("lib/financials/accounting/accountingCalendarService.ts"))).not.toMatch(/reopen/i);
     });
 
     it("writes no table from the browser", () => {
-        expect(panel, "everything goes through the action runtime").not.toMatch(
+        expect(panel, "the browser writes no table").not.toMatch(
             /from\("financial_accounting_(periods|calendars)"\)/,
         );
-        expect(panel).toContain("/api/admin/actions/execute");
+        expect(panel).toContain("/api/admin/financials/accounting-calendar");
     });
 });

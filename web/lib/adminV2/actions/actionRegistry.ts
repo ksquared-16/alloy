@@ -41,7 +41,6 @@ import {
 } from "@/lib/adminV2/actions/definitions/staffPresenceActions";
 import { childAttendanceActions } from "@/lib/adminV2/actions/definitions/childAttendanceActions";
 import { serviceDayExceptionActions } from "@/lib/adminV2/actions/definitions/serviceDayExceptionActions";
-import { accountingPeriodActions } from "@/lib/adminV2/actions/definitions/accountingPeriodActions";
 import { enrollmentPricingActions } from "@/lib/adminV2/actions/definitions/enrollmentPricingActions";
 import { financialChargeActions } from "@/lib/adminV2/actions/definitions/financialChargeActions";
 import { financialReductionActions } from "@/lib/adminV2/actions/definitions/financialReductionActions";
@@ -77,7 +76,6 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     // Child attendance: five operator intents over the existing invariant-owning services.
     ...childAttendanceActions,
     ...serviceDayExceptionActions,
-    ...accountingPeriodActions,
     ...enrollmentPricingActions,
     ...financialChargeActions,
     ...tuitionGenerationActions,

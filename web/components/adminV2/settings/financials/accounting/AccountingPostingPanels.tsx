@@ -227,15 +227,17 @@ function AccountingCalendarPanel() {
     const [nonce, setNonce] = useState(0);
     const [actionError, setActionError] = useState<string | null>(null);
 
-    const runAction = useCallback(async (actionKey: string, payload: Record<string, unknown>, mode: "preview" | "execute") => {
-        const res = await fetch("/api/admin/actions/execute", {
+    /*
+     * The write half lives on the accounting-calendar route, not the action runtime: these acts
+     * are org-scoped and  resolves every invocation against a real record.
+     * See the route for why a registered action was removed rather than kept unreachable.
+     */
+    const callCalendar = useCallback(async (payload: Record<string, unknown>) => {
+        const res = await fetch("/api/admin/financials/accounting-calendar", {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                action_key: actionKey, entity_type: "person", entity_id: "",
-                mode, confirmation: { confirmed: mode === "execute" }, payload,
-            }),
+            body: JSON.stringify(payload),
         });
         const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
         if (!res.ok) {
@@ -289,6 +291,16 @@ function AccountingCalendarPanel() {
                 </p>
             </header>
 
+            {/*
+              * THE ACTION ERROR RENDERS IN EVERY BRANCH. It was placed inside the has-a-calendar
+              * branch, so a failed Adopt — which can only happen when there is NO calendar — had
+              * nowhere to appear: the operator clicked, nothing changed, and nothing said why.
+              */}
+            {actionError ? (
+                <p className="mt-3 text-[12px] text-alloy-ember" role="alert" data-testid="accounting-action-error">
+                    {actionError}
+                </p>
+            ) : null}
             {error ? (
                 <p className="mt-3 text-[12px] text-alloy-ember" role="alert" data-testid="accounting-calendar-error">
                     {error}
@@ -315,7 +327,7 @@ function AccountingCalendarPanel() {
                                 setBusy("adopt");
                                 setActionError(null);
                                 try {
-                                    await runAction("billing.adopt_accounting_calendar", { start_year: Number((today || "").slice(0, 4)) || undefined }, "execute");
+                                    await callCalendar({ op: "adopt", start_year: Number((today || "").slice(0, 4)) || undefined });
                                     setNonce((n) => n + 1);
                                 } catch (e) {
                                     setActionError(e instanceof Error ? e.message : "The calendar could not be adopted.");
@@ -342,12 +354,6 @@ function AccountingCalendarPanel() {
                         />
                     </dl>
 
-                    {actionError ? (
-                        <p className="mt-3 text-[12px] text-alloy-ember" role="alert" data-testid="accounting-action-error">
-                            {actionError}
-                        </p>
-                    ) : null}
-
                     {/*
                       * PREVIEW, THEN CONFIRM. Closing is what makes a month's figures final, so
                       * the operator reads what the action itself says will happen — how many
@@ -372,7 +378,7 @@ function AccountingCalendarPanel() {
                                             setBusy(closing.id);
                                             setActionError(null);
                                             try {
-                                                await runAction("billing.close_accounting_period", { period_id: closing.id }, "execute");
+                                                await callCalendar({ op: "close", period_id: closing.id });
                                                 setClosing(null);
                                                 /* Committed truth is re-read; the row is not edited to look closed. */
                                                 setNonce((n) => n + 1);
@@ -462,14 +468,26 @@ function AccountingCalendarPanel() {
                                                                 setBusy(p.id);
                                                                 setActionError(null);
                                                                 try {
-                                                                    const json = await runAction("billing.close_accounting_period", { period_id: p.id }, "preview");
-                                                                    const pv = ((json.data as Record<string, unknown> | undefined)?.execution_result as Record<string, unknown> | undefined)?.preview as
-                                                                        { summary?: string; changes?: string[] } | undefined;
+                                                                    const json = await callCalendar({ op: "preview_close", period_id: p.id });
+                                                                    const pv = json.preview as {
+                                                                        label?: string | null; periodKey?: string; startsOn?: string; endsOn?: string;
+                                                                        status?: string; attributedEntries?: number;
+                                                                        defersTo?: { periodKey: string } | null;
+                                                                        blockers?: { message: string }[];
+                                                                    } | undefined;
+                                                                    const name = pv?.label ?? pv?.periodKey ?? periodName(p);
                                                                     setClosing({
                                                                         id: p.id,
-                                                                        name: periodName(p),
-                                                                        summary: pv?.summary ?? `Close ${periodName(p)}`,
-                                                                        changes: pv?.changes ?? [],
+                                                                        name,
+                                                                        summary: (pv?.blockers?.length ?? 0) > 0 ? `Cannot close ${name}` : `Ready to close ${name}`,
+                                                                        changes: [
+                                                                            `${pv?.startsOn} to ${pv?.endsOn} · currently ${pv?.status}`,
+                                                                            `${pv?.attributedEntries ?? 0} posted ${(pv?.attributedEntries ?? 0) === 1 ? "entry stays" : "entries stay"} attributed here`,
+                                                                            pv?.defersTo
+                                                                                ? `Later entries effective in it will post to ${pv.defersTo.periodKey}`
+                                                                                : "No later open period — such entries would be refused",
+                                                                            ...(pv?.blockers ?? []).map((b) => b.message),
+                                                                        ],
                                                                     });
                                                                 } catch (e) {
                                                                     setActionError(e instanceof Error ? e.message : "The period could not be previewed.");
