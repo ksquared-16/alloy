@@ -114,3 +114,11 @@ the append-only path.
 No other gate in this document depended on that selector. A, B, C, D, E, F, G, H, I, J and K stand
 as recorded — each was measured against the authority or against its own surface, not against this
 key. What is withdrawn is the composition claim alone.
+
+## The retirement, actually performed
+
+The withdrawal above stands: the original absence proof was invalid. The retirement has since been
+carried out for real, through the append-only publication path — published `entity_layouts`
+**v163 → v164**, with `billing_preview` removed from **both** `sections` and
+`metadata.focusPanelLayout`, publication integrity clean in both directions, and the household
+entry point measured by the RENDERED identity (`assignment_tuition`) as **absent**.

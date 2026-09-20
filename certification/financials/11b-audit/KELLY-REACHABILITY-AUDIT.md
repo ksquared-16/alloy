@@ -214,3 +214,64 @@ excluded Kelly's next-period discount. Superseding it with a closed past window 
 2. **Prepaid is never named.** The Financials card shows `Available $125.00`; the word *prepaid*
    appears nowhere.
 3. **The Policies tile does not say "Discounts"** — the chapter behind it does.
+
+---
+
+# FINAL: THE RETIREMENT IS DONE, AND WHAT WAS LEFT WAS SMALLER THAN I SAID
+
+## The standalone Tuition card is retired — published, not just coded
+
+The tenant rendered from published `entity_layouts` **v163**, which is why a code-level retirement
+never moved it. Retired through the canonical append-only path — v163 was **not** edited; the
+published row was forked to a draft, patched, and published as **v164**.
+
+Both authoritative projections lost the placement together:
+
+| | v163 | v164 |
+|---|---|---|
+| `sections` | …, scheduling, milestones, **billing_preview** | …, scheduling, milestones |
+| `metadata.focusPanelLayout.grid.areas` | …, health_safety, **billing_preview** | …, health_safety |
+
+Publication integrity, checked on the published result in both directions:
+
+```
+visible sections without placement : []
+placements without visible section : []
+```
+
+**Mounted, from Kelly's entry point, by the RENDERED identity:**
+
+```
+entry cards : business_process · financials · children · household · attendance · health_safety
+assignment_tuition present : false
+```
+
+The underlying capability is untouched: the component, its `billing_preview` route and
+`buildAssignmentTuitionView` all remain, so a tenant may still place the card.
+
+## The Assignment now carries everything, reached by clicking a child
+
+```
+accepted amount    $195.00/weekly
+billing frequency  weekly · current period Sep 15–21, 2026 · next Sep 22–28, 2026
+responsibility     present
+discounts          "discount · $18.50 expected to apply · Add exception"
+diagnostics        present
+certification residue in the ACTIVE state : none
+```
+
+## §8 needed no repair either — the tile already names discounts
+
+The Policies tile reads, **before opening**:
+
+> **Policies** — How operational events affect financial execution. · **Discount and deposit
+> rules** · Commercial policy eligibility · Organization-scoped policy authoring · *Open Policies*
+
+So an operator hunting for "Discounts" can see the word on the tile. My audit said otherwise; that
+was a third thing I got wrong, and it is withdrawn like the other two.
+
+## What genuinely remains, and it is cosmetic
+
+Ended exceptions still render as history on the Assignment — including rows whose reason begins
+*"Retired: certification scaffolding…"*, which is my wording rather than the product's. The ACTIVE
+state is clean and correct; this is historical noise in a list, not a wrong answer.

@@ -101,3 +101,36 @@ describe("available prepaid is named, and named consistently", () => {
         expect(detail, "held keeps its own line").toMatch(/Held|held/);
     });
 });
+
+describe("the standalone Tuition card is retired, and the capability is not", () => {
+    /*
+     * RETIREMENT IS A COMPOSITION DECISION. The code default lost the placement, and the tenant's
+     * published layout lost it too (v163 → v164, both `sections` and `metadata.focusPanelLayout`).
+     * What must NOT happen is the component or its authorities disappearing with it — a tenant may
+     * still place the card, and Assignment consumes the same pricing read model either way.
+     */
+    it("is absent from the code-owned default composition", () => {
+        const vis = src("lib/adminV2/runtime/focusPanel/focusPanelCardVisibility.ts");
+        const comp = src("lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition.ts");
+        expect(vis, "not in the enrolment default").not.toMatch(/"billing_preview"/);
+        expect(comp, "and not placed in any code-owned grid").not.toMatch(/key: "billing_preview"/);
+    });
+
+    it("keeps the component, its route and the pricing authorities", () => {
+        const renderer = src("components/admin/focusPanel/FocusPanelCardRenderer.tsx");
+        expect(renderer, "a tenant that places it still gets a card").toContain("AssignmentTuitionCard");
+        expect(renderer).toMatch(/model\.key === "billing_preview"/);
+        /* The read model Assignment itself depends on. */
+        expect(src("lib/enrollment/pricing/buildAssignmentTuitionView.ts").length, "the pricing read model survives").toBeGreaterThan(0);
+    });
+
+    /*
+     * ASSIGNMENT IS WHERE TUITION LIVES NOW, so it must stay composed at the grain where pricing
+     * is decided. Removing one card must not have removed the one that replaced it.
+     */
+    it("leaves Assignment composed at the child grain", () => {
+        const registry = src("lib/adminV2/runtime/focusPanel/focusPanelCardRegistry.ts");
+        expect(registry).toMatch(/key: "scheduling"[\s\S]{0,160}grains: \[[^\]]*"child"/);
+        expect(src("lib/adminV2/runtime/focusPanel/focusPanelCardVisibility.ts")).toContain('"scheduling"');
+    });
+});
