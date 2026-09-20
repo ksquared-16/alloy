@@ -107,6 +107,31 @@ describe("BUSINESS_PROCESS — the configured rail is not a settlement fact", ()
         expect(BODY).not.toContain("businessProcessActivity");
     });
 
+    it("B2 — the process name comes from the configured process, never a literal", () => {
+        /*
+         * Gate B drives the MODEL with an explicit name, so it cannot see the COMPOSER hardcoding
+         * one. A plant substituting the generic "Business Process" for `wave3ProcessName` walked
+         * straight through until this was added.
+         */
+        expect(ANSWER).toContain("businessProcessName: wave3ProcessName");
+        expect(ANSWER).not.toMatch(/businessProcessName:\s*["'`]/);
+    });
+
+    it("D2 — the record reaches the rail builder, or annotations are silently lost", () => {
+        /*
+         * Same blind spot as B2: gate D supplies `support` directly to the model. The annotations
+         * are resolved inside the rail builder FROM THE RECORD, so passing `record: null` produces
+         * a rail with stages and no annotations — visibly poorer, and previously ungated.
+         */
+        const call = ANSWER.slice(
+            ANSWER.indexOf("buildOpportunityWorkspaceLifecycleRail({"),
+            ANSWER.indexOf("const wave3ProcessName"),
+        );
+        expect(call.length).toBeGreaterThan(50);
+        expect(call).toContain("record: wave3Record");
+        expect(call).not.toMatch(/record:\s*null/);
+    });
+
     it("the rail is computed by the canonical pure builder, not re-derived", () => {
         expect(ANSWER).toContain("buildOpportunityWorkspaceLifecycleRail(");
         expect(ANSWER).toContain("businessProcessStages: wave3Rail?.stages ?? []");
