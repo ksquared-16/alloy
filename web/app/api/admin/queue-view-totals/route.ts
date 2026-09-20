@@ -8,26 +8,13 @@ import {
 } from "@/lib/admin/accessScope";
 import { resolveQueueRecordScopeConstraints } from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import { fetchEffectiveUserDisplayTimezoneCached } from "@/lib/admin/timezoneContract";
-import { getWorkUnitQueueItems } from "@/lib/queues/QueueService";
-import { WORK_VIEW_QUEUE_FILTER_FETCH_CAP } from "@/lib/lifecycle/operationalProjection";
-import {
-    fetchDepartmentMetadataForWorkUnit,
-    savedWorkViewsFromDepartmentMetadata,
-} from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
-import { aggregateWorkViewTotals } from "@/lib/queues/aggregateWorkViewTotals";
-import {
-    activeLifecycleProcess,
-    activeStagesForProcess,
-    lifecycleBuilderFromDepartmentMetadata,
-} from "@/lib/lifecycle/lifecycleBuilderConfig";
-import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
-import { resolveLensRowGrain } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
-import { countChildGrainMembersForLens } from "@/lib/runtime/provisioning/childGrainMembership";
-import { loadWorkUnitProcessPopulation } from "@/lib/runtime/provisioning/workUnitProcessPopulation";
-import { attachEffectiveEnrollmentStagesToOpportunityRows } from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
-import { attachActiveTourFactsToOpportunityRows } from "@/lib/tours/queue/attachActiveTourFactsToOpportunityRows";
+import { fetchDepartmentMetadataForWorkUnit } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import { mapWithConcurrencyLimit } from "@/lib/workspace/mapWithConcurrencyLimit";
 import { buildQueueRowsServerTimingHeader } from "@/lib/perf/queueRowsServerTiming";
+import {
+    emptyWorkViewTotalsSpans,
+    evaluateWorkViewTotalsForGroup,
+} from "@/lib/queues/evaluateWorkViewTotalsForGroup";
 
 /**
  * POST /api/admin/queue-view-totals — grouped canonical Work View totals (Trust Closure).
@@ -79,13 +66,10 @@ export async function POST(request: NextRequest) {
         qvt_gate: 0,
         qvt_scope: 0,
         qvt_access: 0,
-        qvt_child_counts: 0,
-        qvt_population: 0,
-        qvt_epp: 0,
-        qvt_tours: 0,
-        qvt_aggregate: 0,
     };
-    const counts = { groups: 0, views: 0, child_views: 0, lane_views: 0, unknown_views: 0 };
+    // Cardinalities the ROUTE owns. The per-view splits come from the evaluator, which is the only
+    // thing that knows how each configured view resolved.
+    const counts = { groups: 0 };
     const tGate = Date.now();
     const gate = await loadAdminRouteGate();
     span.qvt_gate = Date.now() - tGate;
@@ -156,6 +140,7 @@ export async function POST(request: NextRequest) {
     type TotalOut = { workUnitId: string; queueKey: string; workViewId: string; count: number | null; known: boolean };
 
     counts.groups = groups.size;
+    const evalSpans = emptyWorkViewTotalsSpans();
     const perGroup = await mapWithConcurrencyLimit([...groups.values()], 4, async (group): Promise<TotalOut[]> => {
         const unknownAll = (): TotalOut[] =>
             [...group.viewIds].map((workViewId) => ({
@@ -165,207 +150,39 @@ export async function POST(request: NextRequest) {
                 count: null,
                 known: false,
             }));
+        /*
+         * ACQUISITION STAYS HERE; EVALUATION MOVED.
+         *
+         * This endpoint owns its own prerequisite: it has no document to inherit one from. The
+         * document path resolves the same two facts from route identity it has already read, and
+         * both hand them to the SAME evaluator, so the counting predicate has exactly one
+         * implementation and cannot drift between the two callers.
+         *
+         * The acquisition keeps the original failure contract: anything thrown while resolving
+         * access or metadata degrades this lane to UNKNOWN for its views — never to zero, and
+         * never to a number borrowed from another lane.
+         */
+        let accessible = false;
+        let departmentMetadata: unknown = null;
+        const tAccess = Date.now();
         try {
-            const tAccess = Date.now();
-            if (!(await workUnitAccessible(group.workUnitId))) return unknownAll();
-            const metadata = await deptMetadata(group.workUnitId);
-            span.qvt_access += Date.now() - tAccess;
-            const savedViews = savedWorkViewsFromDepartmentMetadata(metadata);
-            const requestedViews = savedViews.filter((v) => group.viewIds.has(v.id));
-
-            // ── A CHILD LENS IS COUNTED BY ITS OWN MEMBERSHIP, NOT BY THE OPPORTUNITY LANE. ──
-            //
-            // Everything below counts the base lane — `opportunities` — and for a stage-INDEPENDENT
-            // lens `isWorkViewCatchAll` then returns the lane's exact all-records total. On "All
-            // Children in Enrollment" that produced EIGHT (the family cases in scope) beneath THIRTEEN
-            // child rows: two honest answers to two different questions, one printed under the other.
-            //
-            // A child lens is counted by the SAME projection that produced its rows
-            // (`countChildGrainMembersForLens` → the provider → the Enrollment Definition's liveness
-            // gate), so rows and count cannot drift — there is nothing to drift between.
-            const bpProcess = activeLifecycleProcess(lifecycleBuilderFromDepartmentMetadata(metadata));
-            const stages = bpProcess ? activeStagesForProcess(bpProcess) : [];
-            const childViews: WorkViewConfigV1Stored[] = [];
-            const laneViews: WorkViewConfigV1Stored[] = [];
-            const unknownViews: WorkViewConfigV1Stored[] = [];
-            for (const v of requestedViews) {
-                const grain = resolveLensRowGrain(v, stages);
-                // Grain must resolve the same way for pills and rows. Ambiguous / refused lenses
-                // must NOT fall through to lane population counts (pill=1 / rows=0).
-                if (!grain.ok) {
-                    unknownViews.push(v);
-                } else if (grain.grain === "child") {
-                    childViews.push(v);
-                } else {
-                    laneViews.push(v);
-                }
-            }
-
-            counts.views += requestedViews.length;
-            counts.child_views += childViews.length;
-            counts.lane_views += laneViews.length;
-            counts.unknown_views += unknownViews.length;
-
-            const unknownTotals = new Map<string, TotalOut>();
-            for (const view of unknownViews) {
-                unknownTotals.set(view.id, {
-                    workUnitId: group.workUnitId,
-                    queueKey: group.queueKey,
-                    workViewId: view.id,
-                    count: null,
-                    known: false,
-                });
-            }
-
-            /**
-             * CONCURRENT, not serial. `countChildGrainMembersForLens` deliberately counts by running
-             * the full membership projection — a cheaper `count(*)` would be a second definition of
-             * membership, which is what produced 13-vs-8 — so each view here costs a whole
-             * projection. Awaiting them one at a time multiplied that by the number of child lenses:
-             * this endpoint measured 3.1-3.8s on a work unit with six work views.
-             *
-             * Each view keeps its OWN try/catch, so one lens that fails still yields UNKNOWN for
-             * itself and never a family number borrowed from another lens. Same queries, same
-             * results, same per-view failure semantics — just not one at a time.
-             */
-            const childTotals = new Map<string, TotalOut>();
-            const tChild = Date.now();
-            const childCounted = await Promise.all(
-                childViews.map(async (view) => {
-                    const base = { workUnitId: group.workUnitId, queueKey: group.queueKey, workViewId: view.id };
-                    try {
-                        const count = await countChildGrainMembersForLens({
-                            supabase,
-                            orgId: gate.orgId,
-                            workUnitId: group.workUnitId,
-                            view,
-                        });
-                        return { id: view.id, total: { ...base, count, known: true } as TotalOut };
-                    } catch {
-                        // UNKNOWN, never a family number. A wrong count is worse than an absent one —
-                        // the client keeps its prior value and shows none, rather than captioning
-                        // child rows with a count of something else.
-                        return { id: view.id, total: { ...base, count: null, known: false } as TotalOut };
-                    }
-                }),
-            );
-            span.qvt_child_counts += Date.now() - tChild;
-            for (const { id, total } of childCounted) childTotals.set(id, total);
-
-            // Every requested view is a child lens (or unknown) → the opportunity lane is never read.
-            if (laneViews.length === 0) {
-                return [...group.viewIds].map(
-                    (workViewId) =>
-                        childTotals.get(workViewId) ??
-                        unknownTotals.get(workViewId) ?? {
-                            workUnitId: group.workUnitId,
-                            queueKey: group.queueKey,
-                            workViewId,
-                            count: null,
-                            known: false,
-                        },
-                );
-            }
-            // ── A WORK VIEW IS COUNTED OVER THE PROCESS POPULATION, NOT AN EXECUTION LANE. ──
-            //
-            // The lane path below (`getWorkUnitQueueItems(queueKey)`) counts a status-filtered SLICE of
-            // the process. `findAllRecordsQueueKey` hands back `primary_total_queue` without checking
-            // whether it is filtered, so on Firefly the "all records" lane IS `lifecycle_lead`, whose
-            // allowlist is `case_status in (open, new_inquiry, new)`. A family sitting at
-            // `tour_scheduled` is invisible to it — so "All Leads" (an include-all view) counted 7
-            // while the answer rendered 8, and every stage-scoped family view undercounted the same way.
-            //
-            // Where the Work Unit is governed by a Business Process, its population is knowable
-            // directly and is exactly what the provisioning answer publishes rows from. Counting over
-            // THAT makes rows and counts one answer, for every view, with the SAME predicate evaluator
-            // (`computeOperationalProjection`) applied on top — predicates are unchanged; only the
-            // population they run over stops being a worklist.
-            //
-            // Work units with no Business Process (no stages) keep the lane path untouched.
-            let totals: Record<string, { count: number; known: boolean }>;
-            if (stages.length > 0) {
-                const tPop = Date.now();
-                const population = await loadWorkUnitProcessPopulation({
-                    supabase,
-                    orgId: gate.orgId,
-                    workUnitId: group.workUnitId,
-                    scope: recordScopeConstraints,
-                    scopeImpossible: recordScopeImpossible,
-                });
-                span.qvt_population += Date.now() - tPop;
-                // EPP before Work View totals — same keys as D1 provisioning rows.
-                const tEpp = Date.now();
-                const baseWithEpp = await attachEffectiveEnrollmentStagesToOpportunityRows({
-                    supabase,
-                    orgId: gate.orgId,
-                    rows: population.rows,
-                    allowedLocationIds: recordScopeConstraints?.locationIds ?? null,
-                    logLabel: "queue-view-totals",
-                });
-                span.qvt_epp += Date.now() - tEpp;
-                const tTours = Date.now();
-                const baseWithTourFacts = await attachActiveTourFactsToOpportunityRows({
-                    supabase,
-                    orgId: gate.orgId,
-                    rows: baseWithEpp,
-                    logLabel: "queue-view-totals",
-                });
-                span.qvt_tours += Date.now() - tTours;
-                const tAgg = Date.now();
-                totals = aggregateWorkViewTotals({
-                    baseRows: baseWithTourFacts,
-                    workViews: laneViews,
-                    // An include-all view is the population itself. There is no separate "lane total" to
-                    // prefer — preferring one is what substituted a worklist for the process.
-                    exactLaneTotal: population.truncated ? null : population.rows.length,
-                    baseTruncated: population.truncated,
-                });
-                span.qvt_aggregate += Date.now() - tAgg;
-            } else {
-                // ONE base-lane fetch (exact all-records count + up to the cap of rows) for the whole
-                // group. COUNT-ONLY: the base-query operational fields carry the Work-View predicates —
-                // a total must never materialize presentation rows (persons/customers/household/
-                // activity/tasks/comms). Deployed defect fixed: this was `queue_list` (full enrichment).
-                const { result } = await getWorkUnitQueueItems({
-                    orgId: gate.orgId,
-                    workUnitId: group.workUnitId,
-                    queueKey: group.queueKey,
-                    limit: WORK_VIEW_QUEUE_FILTER_FETCH_CAP,
-                    offset: 0,
-                    countAccuracy: undefined,
-                    omitTotalCount: false,
-                    recordScopeImpossible,
-                    recordScopeConstraints,
-                    viewerDisplayTimeZone,
-                    attentionBucketKey: null,
-                    rowEnrichment: "count_only",
-                });
-                const items = Array.isArray(result.items) ? result.items : [];
-                totals = aggregateWorkViewTotals({
-                    baseRows: items as Record<string, unknown>[],
-                    workViews: laneViews,
-                    exactLaneTotal: typeof result.total === "number" ? result.total : null,
-                    baseTruncated: items.length >= WORK_VIEW_QUEUE_FILTER_FETCH_CAP,
-                });
-            }
-            return [...group.viewIds].map((workViewId) => {
-                const child = childTotals.get(workViewId);
-                if (child) return child;
-                const unknown = unknownTotals.get(workViewId);
-                if (unknown) return unknown;
-                const t = totals[workViewId];
-                return {
-                    workUnitId: group.workUnitId,
-                    queueKey: group.queueKey,
-                    workViewId,
-                    count: t ? t.count : null,
-                    known: t ? t.known : false,
-                };
-            });
+            accessible = await workUnitAccessible(group.workUnitId);
+            departmentMetadata = accessible ? await deptMetadata(group.workUnitId) : null;
         } catch {
-            // A single failing lane degrades to unknown for its views; the client keeps prior counts.
+            span.qvt_access += Date.now() - tAccess;
             return unknownAll();
         }
+        span.qvt_access += Date.now() - tAccess;
+        return evaluateWorkViewTotalsForGroup({
+            supabase,
+            orgId: gate.orgId,
+            group,
+            prerequisite: { accessible, departmentMetadata },
+            recordScopeConstraints,
+            recordScopeImpossible,
+            viewerDisplayTimeZone,
+            spans: evalSpans,
+        });
     });
 
     const totals = perGroup.flat();
@@ -374,8 +191,26 @@ export async function POST(request: NextRequest) {
         {
             headers: {
                 "Server-Timing": buildQueueRowsServerTimingHeader({
-                    metrics: { ...span, total: Date.now() - t0 },
-                    counts,
+                    /*
+                     * BOTH accumulators are SPREAD. Restating field names is how `financials` was
+                     * dropped to null on every deployed sample while nineteen local gates passed.
+                     */
+                    metrics: {
+                        ...span,
+                        qvt_child_counts: evalSpans.child_counts,
+                        qvt_population: evalSpans.population,
+                        qvt_epp: evalSpans.epp,
+                        qvt_tours: evalSpans.tours,
+                        qvt_aggregate: evalSpans.aggregate,
+                        total: Date.now() - t0,
+                    },
+                    counts: {
+                        ...counts,
+                        views: evalSpans.views,
+                        child_views: evalSpans.child_views,
+                        lane_views: evalSpans.lane_views,
+                        unknown_views: evalSpans.unknown_views,
+                    },
                 }),
             },
         },

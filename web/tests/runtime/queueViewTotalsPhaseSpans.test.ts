@@ -35,7 +35,19 @@ const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 /** Comments state intent; only code may satisfy a gate. */
 const codeOf = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
-const ROUTE = codeOf(read("app/api/admin/queue-view-totals/route.ts"));
+const ROUTE_ONLY = codeOf(read("app/api/admin/queue-view-totals/route.ts"));
+const EVALUATOR = codeOf(read("lib/queues/evaluateWorkViewTotalsForGroup.ts"));
+/*
+ * RE-ANCHORED for the document seed.
+ *
+ * Group evaluation moved into the canonical evaluator so the seed and the endpoint share one
+ * predicate; the route kept only what it alone owns — the gate, the scope prep, and its OWN
+ * prerequisite acquisition. Every phase must still be measured and still reach the header, so the
+ * gates read the pair. Where a gate is about the ROUTE specifically (the emission, the acquisition
+ * clock, the concurrency limit) it reads ROUTE_ONLY, so moving something out of the route cannot
+ * silently satisfy it.
+ */
+const ROUTE = ROUTE_ONLY + EVALUATOR;
 const CONTRACT = codeOf(read("lib/perf/queueRowsServerTiming.ts"));
 
 const PHASES = [
@@ -50,9 +62,12 @@ const PHASES = [
 ] as const;
 
 describe("every phase of the completion owner is measured", () => {
-    it("the route records all eight phases", () => {
-        for (const phase of PHASES) {
-            expect(ROUTE, `route must measure ${phase}`).toContain(`span.${phase}`);
+    it("all eight phases are measured across the route and its evaluator", () => {
+        for (const phase of ["qvt_gate", "qvt_scope", "qvt_access"]) {
+            expect(ROUTE_ONLY, `route must measure ${phase}`).toContain(`span.${phase}`);
+        }
+        for (const phase of ["child_counts", "population", "epp", "tours", "aggregate"]) {
+            expect(EVALUATOR, `evaluator must measure ${phase}`).toContain(`spans.${phase}`);
         }
     });
 
@@ -67,8 +82,9 @@ describe("every phase of the completion owner is measured", () => {
 
     it("the emit spreads the accumulator rather than restating field names", () => {
         // Restating by name is exactly how `financials` was dropped one level deeper.
-        expect(ROUTE).toMatch(/metrics:\s*\{\s*\.\.\.span,\s*total:/);
-        expect(ROUTE).toContain("counts,");
+        // BOTH accumulators spread: the route's own span and the evaluator's.
+        expect(ROUTE_ONLY).toMatch(/metrics:\s*\{\s*\.\.\.span,/);
+        expect(ROUTE_ONLY).toMatch(/counts:\s*\{\s*\.\.\.counts,/);
     });
 
     it("the contract type declares every phase and every count", () => {
@@ -100,13 +116,17 @@ describe("phases inside the concurrent group map accumulate", () => {
      * whichever group finished last and silently discard the rest — a number that looks like a
      * measurement and is one group's worth of a multi-group request.
      */
-    const PER_GROUP = ["qvt_access", "qvt_child_counts", "qvt_population", "qvt_epp", "qvt_tours", "qvt_aggregate"];
+    it("the route's own per-group phase accumulates", () => {
+        // Access acquisition stayed in the route; it runs per group and must sum, not overwrite.
+        expect(ROUTE_ONLY).toContain("span.qvt_access +=");
+        expect(ROUTE_ONLY).not.toMatch(/span\.qvt_access\s*=\s*Date/);
+    });
 
-    it("every per-group phase uses += and never a bare assignment", () => {
-        for (const phase of PER_GROUP) {
-            expect(ROUTE, `${phase} must accumulate`).toContain(`span.${phase} +=`);
-            expect(ROUTE, `${phase} must not be overwritten per group`).not.toMatch(
-                new RegExp(`span\\.${phase}\\s*=\\s*Date`),
+    it("every evaluator phase accumulates into the shared span object", () => {
+        for (const phase of ["child_counts", "population", "epp", "tours", "aggregate"]) {
+            expect(EVALUATOR, `${phase} must accumulate`).toContain(`spans.${phase} +=`);
+            expect(EVALUATOR, `${phase} must not be overwritten per group`).not.toMatch(
+                new RegExp(`spans\\.${phase}\\s*=\\s*Date`),
             );
         }
     });
@@ -120,9 +140,11 @@ describe("phases inside the concurrent group map accumulate", () => {
 });
 
 describe("the cardinalities separate fixed setup from per-view cost", () => {
-    it("the route counts groups and each grain of view", () => {
-        for (const c of ["groups", "views", "child_views", "lane_views", "unknown_views"]) {
-            expect(ROUTE, `route must count ${c}`).toContain(`counts.${c}`);
+    it("groups are counted by the route, view grains by the evaluator", () => {
+        // Only the evaluator knows how each configured view resolved; only the route knows the lanes.
+        expect(ROUTE_ONLY).toContain("counts.groups");
+        for (const c of ["views", "child_views", "lane_views", "unknown_views"]) {
+            expect(EVALUATOR, `evaluator must count ${c}`).toContain(`spans.${c}`);
         }
     });
 
@@ -149,10 +171,10 @@ describe("the cardinalities separate fixed setup from per-view cost", () => {
 
     it("the grain split is counted where the split is decided", () => {
         // Counting anywhere else could disagree with the branch that actually ran.
-        const at = ROUTE.indexOf("counts.child_views += childViews.length");
+        const at = EVALUATOR.indexOf("spans.child_views += childViews.length");
         expect(at).toBeGreaterThan(-1);
-        expect(ROUTE.indexOf("const childViews")).toBeLessThan(at);
-        expect(ROUTE).toContain("counts.unknown_views += unknownViews.length");
+        expect(EVALUATOR.indexOf("const childViews")).toBeLessThan(at);
+        expect(EVALUATOR).toContain("spans.unknown_views += unknownViews.length");
     });
 });
 
@@ -169,13 +191,13 @@ describe("the instrument does not change the route", () => {
     });
 
     it("the concurrency limit and per-view failure isolation are untouched", () => {
-        expect(ROUTE).toContain("mapWithConcurrencyLimit([...groups.values()], 4,");
+        expect(ROUTE_ONLY).toContain("mapWithConcurrencyLimit([...groups.values()], 4,");
         // One lens failing must still yield UNKNOWN for itself, never a number from another lens.
         expect(ROUTE).toContain("count: null, known: false");
     });
 
     it("no identifier reaches the header", () => {
-        const emit = ROUTE.slice(ROUTE.indexOf("buildQueueRowsServerTimingHeader({"));
+        const emit = ROUTE_ONLY.slice(ROUTE_ONLY.indexOf("buildQueueRowsServerTimingHeader({"));
         for (const forbidden of ["orgId", "workUnitId", "workViewId", "userId", "selectedSiteId"]) {
             expect(emit, `header must not carry ${forbidden}`).not.toContain(forbidden);
         }
