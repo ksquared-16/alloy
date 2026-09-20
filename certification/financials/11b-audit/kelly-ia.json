@@ -1,0 +1,74 @@
+{
+  "landing": {
+    "chapters": [
+      {
+        "name": "Tuition",
+        "present": true,
+        "tag": "H3",
+        "clickableAncestor": null,
+        "cursor": "auto"
+      },
+      {
+        "name": "Catalog",
+        "present": true,
+        "tag": "H3",
+        "clickableAncestor": null,
+        "cursor": "auto"
+      },
+      {
+        "name": "Policies",
+        "present": true,
+        "tag": "H3",
+        "clickableAncestor": null,
+        "cursor": "auto"
+      },
+      {
+        "name": "Payments",
+        "present": true,
+        "tag": "H3",
+        "clickableAncestor": null,
+        "cursor": "auto"
+      },
+      {
+        "name": "Accounting",
+        "present": true,
+        "tag": "H3",
+        "clickableAncestor": null,
+        "cursor": "auto"
+      },
+      {
+        "name": "Simulator",
+        "present": true,
+        "tag": "H3",
+        "clickableAncestor": null,
+        "cursor": "auto"
+      },
+      {
+        "name": "Funding",
+        "present": true,
+        "tag": "H3",
+        "clickableAncestor": null,
+        "cursor": "auto"
+      }
+    ],
+    "totalLinks": 19,
+    "hrefsMentioningChapter": [],
+    "fullText": "⌘K QS Organization financials Financials Organization›Financials Choose the financial area you need to configure. Tuition Tuition Plans, enrollment commitments, organization pricing, and location overrides. Organization tuition defaults Location overrides and inheritance Cadence-based rates and day-band pricing Open Tuition Catalog Fees, optional services, and other chargeable offerings outside recurring tuition. Fees, add-ons, and deposits Commercial products for Programs Categories and location/program scoping Open Catalog Policies How operational events affect financial execution. Discount and deposit rules Commercial policy eligibility Organization-scoped policy authoring Open Policies Payments Connect a payment provider so this organization can accept card and bank payments. Connect a payment provider Card and bank payment readiness Provider status and disconnection Open Payments Accounting GL Codes, revenue mappings, and where tuition and fees post. Revenue categories GL account relationships Mapping review for commercial charges Open Accounting Simulator Preview how commercial execution resolves for a Program and schedule. Preview commercial execution Program · offering · schedule · cadence Utility workspace — not a config collection Open Simulator Funding Who pays remains owned by Processing — this chapter documents the boundary. Payment responsibility boundary Owned by Processing — not Financials config Documents who-pays separation from price Open Funding BOS Operational Intelligence Reset Pin Close Attention · No urgent issues Here are some ways I can help ▾ Explain this configuration Summarize the active state and working changes Review configuration attention Identify setup, publication, or assignment issues Review unpublished changes Explain what remains private to Organization / commands · ↵ to send · ⇧↵ new line BOS uses AI. Review for accuracy."
+  },
+  "child": {
+    "fullTextLength": 4192,
+    "words": {
+      "responsibility": true,
+      "discount": true,
+      "prepaid": false,
+      "available": true,
+      "billingFrequency": true,
+      "billingPeriod": true
+    },
+    "schedulingCardPresent": true,
+    "schedulingText": "ASSIGNMENTS CC Certa Certhouse 4/12/2021 (5y5m) New schedule DAYS M T W T F S S Use a schedule pattern DAILY HOURS 🕒 – 🕒 ROOM Select a room Select Site · Site EFFECTIVE Start End Open-ended Ongoing — no end date; ends later via a change. TUITION Tuition — Certa Certhouse Recommended · $195.00/weekly 1 option did not apply Expand options (1 other) The recommendation uses room, program, and schedule. Every option here applies to this assignment; selecting one locks it onto the enrollment opportunity. Overridden $185.00 / weekly · from 2026-09-01 · Family kept the organisation rate agreed at enrolment. Billing frequency weekly · current period Sep 15–21, 2026 · next Sep 22–28, 2026 DISCOUNTS ",
+    "discountForecastPresent": true,
+    "manageResponsibilityPresent": false,
+    "financialsCardText": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $1,450.00 Fee $150.00 Consumable fee $36.00 DISCOUNTS & CREDITS Credit -$260.06 Adjustment $146.71 Discount -$145.00 NET OBLIGATION $1,487.87 Add DUE $1,912.00 $1,450.00 · 9 days past due Balance $1,412.87 Paid $75.00 Unassigned $132.00 Available $125.00 Payment Details →"
+  }
+}

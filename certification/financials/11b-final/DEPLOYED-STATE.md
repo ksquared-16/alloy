@@ -63,7 +63,7 @@ Human QA scenario is marked PASS.
 
 | Surface | Answer |
 |---|---|
-| Focus Panel composition | 7 cards: business_process, financials, children, household, attendance, health_safety, assignment_tuition. **`billing_preview` absent** — the retirement holds on the deployed build |
+| Focus Panel composition | 7 cards: business_process, financials, children, household, attendance, health_safety, assignment_tuition. ~~**`billing_preview` absent** — the retirement holds~~ **← WITHDRAWN, see the correction at the foot of this file. The rendered key is `assignment_tuition` and the card IS composed.** |
 | Assignment commercial setup | tuition select present; accepted "Recommended · $195.00/weekly"; **Billing Frequency weekly · current period Sep 15–21, 2026 · next Sep 22–28, 2026** |
 | Discount forecast + exception | forecast section present; the live exception rendered with its reason; rejected-option diagnostics present (1) |
 | Accounts | 11 rows, **Manage responsibility** offered, 5 lenses: all, charges, credits, funding, payments |
@@ -81,3 +81,44 @@ Human QA scenario is marked PASS.
 
 No Human QA scenario is marked PASS. The catalog stands at `2026-09-20.3` with 44
 `HUMAN_WALKTHROUGH` scenarios and Human PASS **ZERO**.
+
+---
+
+## CORRECTION — the `billing_preview absent` claim is WITHDRAWN
+
+This document previously recorded that `billing_preview` was absent from normal Focus Panel
+composition on the deployed build. **That claim was false and is withdrawn.**
+
+The probe asserted:
+
+```js
+billingPreviewRendered: Boolean(document.querySelector("[data-universal-card-key='billing_preview']"))
+```
+
+`billing_preview` is the REGISTRY key. `AssignmentTuitionCard` — the component that key routes to —
+emits `data-universal-card-key="assignment_tuition"`. The selector therefore **cannot match under
+any circumstances**, and returned `false` whether the card rendered or not. It proved nothing.
+
+Re-measured with the rendered identity, on the same tenant:
+
+```
+[data-universal-card-key='assignment_tuition']  →  PRESENT on the household panel AND the child panel
+rendered title                                  →  "TUITION · 2 of 2 agreed · …"
+published tenant layout                         →  still composes billing_preview
+```
+
+**The retired card is still composed.** Retiring it from the code-owned default composition does
+not move a tenant that renders from a published layout; that requires a new publication through
+the append-only path.
+
+No other gate in this document depended on that selector. A, B, C, D, E, F, G, H, I, J and K stand
+as recorded — each was measured against the authority or against its own surface, not against this
+key. What is withdrawn is the composition claim alone.
+
+## The retirement, actually performed
+
+The withdrawal above stands: the original absence proof was invalid. The retirement has since been
+carried out for real, through the append-only publication path — published `entity_layouts`
+**v163 → v164**, with `billing_preview` removed from **both** `sections` and
+`metadata.focusPanelLayout`, publication integrity clean in both directions, and the household
+entry point measured by the RENDERED identity (`assignment_tuition`) as **absent**.

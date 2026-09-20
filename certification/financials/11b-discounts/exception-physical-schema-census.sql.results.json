@@ -1,21 +1,21 @@
 {
-  "trusted_host_action_id": "tha_68b5246d3c7cc7",
+  "trusted_host_action_id": "tha_9858ba7c99e087",
   "query_hash": "b51e1d94f54fd4f0ab3737df28dac8589f096f0ec75577ef060a395d69722216",
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-09-20T19:26:42.364Z",
+    "executed_at": "2026-09-20T20:26:07.435Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_68b5246d3c7cc7",
+    "trusted_host_action_id": "tha_9858ba7c99e087",
     "query_hash": "b51e1d94f54fd4f0ab3737df28dac8589f096f0ec75577ef060a395d69722216",
-    "authorization_id": "grnt_ac85e051b65d4f50",
+    "authorization_id": "grnt_da0112b7c2384421",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
   },
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-20T19:26:43.685Z",
+    "census_run_at": "2026-09-20T20:26:09.039Z",
     "question_ids": [
       "columns_present",
       "fk_policy_restricts_delete",
