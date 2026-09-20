@@ -8,6 +8,7 @@ export const LOCATION_WORKSPACE_TABS = [
     { key: "programs", label: "Programs" },
     { key: "rooms", label: "Rooms" },
     { key: "schedule", label: "Scheduling" },
+    { key: "operational-rules", label: "Operational Rules" },
     { key: "tours", label: "Tours" },
     { key: "placement", label: "Placement" },
     { key: "access", label: "Access" },

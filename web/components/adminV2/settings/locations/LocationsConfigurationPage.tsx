@@ -23,6 +23,7 @@ import {
 import LocationAddProgramPanel from "@/components/adminV2/settings/locations/LocationAddProgramPanel";
 import LocationProgramsOfferedPanel from "@/components/adminV2/settings/locations/LocationProgramsOfferedPanel";
 import LocationRoomCreatePanel from "@/components/adminV2/settings/locations/LocationRoomCreatePanel";
+import LocationOperationalRulesPanel from "@/components/adminV2/settings/locations/LocationOperationalRulesPanel";
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
 import LocationSchedulePatternCreatePanel from "@/components/adminV2/settings/locations/LocationSchedulePatternCreatePanel";
 import LocationScheduleTemplateDetailPanel from "@/components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel";
@@ -796,6 +797,23 @@ export default function LocationsConfigurationPage({
                         await patchLocation(selectedSite.id, { metadata });
                     }}
                     patternsPanel={patternsPanel}
+                />
+            );
+        }
+        if (activeTab === "operational-rules") {
+            // The canonical authoring destination for typed capacity, ratio,
+            // operating-window and schedule rules. It was left unmounted by the
+            // object-centric rewrite (2c6f0f261), which retired the section-first
+            // IA without re-homing this concern — so the capability existed with
+            // no operator path to it at all.
+            //
+            // Scoped to the selected site: the panel's resolved preview and site
+            // list follow the workspace you are standing in, rather than the
+            // org-wide list the old section-first surface showed.
+            return (
+                <LocationOperationalRulesPanel
+                    siteLabelById={new Map([[selectedSite.id, model?.displayName ?? selectedSite.label ?? "Location"]])}
+                    canMutate={canMutate}
                 />
             );
         }
