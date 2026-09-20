@@ -261,3 +261,41 @@ describe("resolving a review supersedes rather than overwrites", () => {
         expect(body).toContain("json.blockers?.map");
     });
 });
+
+describe("a view's key is reproducible by the commit that checks it", () => {
+    it("each assignment resolves against its own date's catalog read", () => {
+        /*
+         * THE DEFECT. `buildOpportunityTuitionViews` composed ONE export at today and handed it to
+         * every assignment, while each resolves against its own `asOf` — its start date.
+         * `assignmentResolutionKey` hashes `configVersion` with the facts, so a view resolved at
+         * 2026-09-01 carried a key built from a catalog read taken on 2026-09-20.
+         *
+         * `resolveForCommit` recomposes at `read.facts.asOf` and compares, so it could never
+         * match: accept and override answered `stale_resolution` forever for any assignment that
+         * did not start today — "This assignment has changed since the tuition was resolved",
+         * about an assignment that had not changed at all.
+         *
+         * Measured: Certa, asOf 2026-09-01, view key 9ae3fec2 at config version cd09fdc8, refused
+         * with that exact key by the action's own preview.
+         */
+        const src2 = readFileSync(join(ROOT, "lib/enrollment/pricing/buildAssignmentTuitionView.ts"), "utf8");
+        const at = src2.indexOf("export async function buildOpportunityTuitionViews");
+        const fn = src2.slice(at);
+        expect(fn, "no opportunity-wide export composed at today").not.toMatch(
+            /composeCommercialExport\([\s\S]{0,200}new Date\(\)/,
+        );
+        expect(fn, "each view composes against its own facts").toContain("exported: undefined");
+    });
+
+    it("the single-assignment path still composes at the facts' own date", () => {
+        const src2 = readFileSync(join(ROOT, "lib/enrollment/pricing/buildAssignmentTuitionView.ts"), "utf8");
+        expect(src2).toContain("asOf: read.facts.asOf");
+    });
+
+    it("the key hashes the config version, which is why this matters", () => {
+        const res = readFileSync(join(ROOT, "lib/commercial/execution/evaluate/resolveOptions.ts"), "utf8");
+        const key = res.slice(res.indexOf("export function assignmentResolutionKey"));
+        expect(key.slice(0, 700)).toContain("`v:${configVersion}`");
+        expect(key.slice(0, 700)).toContain("`asOf:${facts.asOf}`");
+    });
+});
