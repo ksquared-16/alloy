@@ -1,12 +1,12 @@
 {
   "build": "deployed",
   "buildInfo": {
-    "gitSha": "6c1b84fdc814a1cc1e62797a690c9ef6ceb4f1d5",
+    "gitSha": "e29c223a8014e8dfccc5a013179fefcd793b9368",
     "gitBranch": "staging",
-    "gitMessage": "Merge pull request #1111 from ksquared-16/agent/financials-11a-regression-repair\n\nFinancials 11B — commercial policy exceptions, Assignment owns tuition, accounting period lifecycle",
+    "gitMessage": "Merge pull request #1113 from ksquared-16/agent/financials-11a-regression-repair\n\nFinancials 11B — exception lifecycle repair (A-K closure)",
     "vercelEnv": "preview",
-    "vercelUrl": "workwithalloy-npvem86az-kellys-projects-2fc9d5eb.vercel.app",
-    "vercelDeploymentId": "dpl_EH1ss9b5cj2s1KbUfSHHcpUcwuzx",
+    "vercelUrl": "workwithalloy-mg4g7mde1-kellys-projects-2fc9d5eb.vercel.app",
+    "vercelDeploymentId": "dpl_AiNurCNXYJ3aUdYXd5fKwGs8fRkX",
     "nodeEnv": "production",
     "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
   },
@@ -20,7 +20,7 @@
     "periodRowCount": 25,
     "closeControls": 11,
     "adoptOffered": false,
-    "lifecycleNote": "Opening and closing a period is not yet an action in Alloy. Posting into a closed period is already refused, and a period that has posted activity cannot have its dates changed.",
+    "lifecycleNote": "Closing a period is final — reopening one is not an action in Alloy. Posting into a closed period is already refused, and a period that has posted activity cannot have its dates changed.",
     "mentionsCurrent": true,
     "mentionsOpenClosed": true,
     "headings": [
