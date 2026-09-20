@@ -37,7 +37,7 @@
   "commitEnabled": true,
   "outcomeUi": {
     "outcome": "needs_attention",
-    "outcomeText": "Assignment saved · tuition needs attention — [object Object]"
+    "outcomeText": "Assignment saved · tuition needs attention — This assignment has changed since the tuition was resolved. Resolve it again before accepting, so the price matches the assignment as it now stands."
   },
   "actions": [
     "{\"action_key\":\"enrollment.pricing.override\",\"entity_type\":\"opportunity_customer_member\",\"entity_id\":\"79f8011d-a236-4054-bee7-af10f1dbc632\",\"mode\":\"execute\",\"confirmation\":{\"confirmed\":true},\"payload\":{\"opportunity_customer_member_id\":\"79f8011d-a236-4054-bee7-af10f1dbc632\",\"resolution_key\":\"9ae3fec2\""
