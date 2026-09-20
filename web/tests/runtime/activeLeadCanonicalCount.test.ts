@@ -86,8 +86,12 @@ describe("failure semantics: unavailable is never zero", () => {
 
 describe("the migrated function encodes the frozen contract", () => {
     it("is SECURITY INVOKER, not a privilege", () => {
-        expect(MIGRATION_SQL).toContain("SECURITY INVOKER");
-        expect(MIGRATION_SQL).not.toContain("SECURITY DEFINER");
+        const fnDef = MIGRATION_SQL.slice(
+            MIGRATION_SQL.indexOf("CREATE OR REPLACE FUNCTION"),
+            MIGRATION_SQL.indexOf("AS $$"),
+        );
+        expect(fnDef).toContain("SECURITY INVOKER");
+        expect(fnDef).not.toContain("SECURITY DEFINER");
     });
 
     it("counts participations, never distinct members or opportunities", () => {
@@ -107,6 +111,23 @@ describe("the migrated function encodes the frozen contract", () => {
         ]) {
             expect(MIGRATION, `frozen rule missing: ${rule}`).toContain(rule);
         }
+    });
+
+    it("a NULL state COUNTS — the predicate must not require a state", () => {
+        /*
+         * 277 staging participations have a NULL state and the oracle counts every one. The
+         * COALESCE(..., '') is what lets NULL through; a `state IS NOT NULL` guard would silently
+         * drop them. This gate exists because a plant that added exactly that guard stayed green
+         * against the earlier assertion, which only checked the terminal-state list was present.
+         */
+        expect(MIGRATION_SQL).toMatch(/COALESCE\(lower\(btrim\(pi\.state\)\), ''\) NOT IN/);
+        expect(MIGRATION_SQL).not.toMatch(/pi\.state IS NOT NULL/);
+    });
+
+    it("the count is not gated on a state being present at all", () => {
+        const where = MIGRATION_SQL.slice(MIGRATION_SQL.indexOf("WHERE pi.org_id"), MIGRATION_SQL.indexOf("COMMENT ON FUNCTION"));
+        expect(where.length).toBeGreaterThan(0);
+        expect(where).not.toMatch(/pi\.state\s+IS NOT NULL/);
     });
 
     it("resolves BOTH context anchors", () => {
