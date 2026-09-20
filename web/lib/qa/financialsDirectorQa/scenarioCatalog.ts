@@ -690,7 +690,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "Most families pay by card. The product must start the collection, recognise what the processor says, and represent a failure as a failure.",
         dispositionReason:
-            "NO PAYMENT PROVIDER IS CONFIGURED ON THIS TENANT. The canonical account read reports takePaymentCard as not_configured, because no active merchant row exists for this organisation, so there is no merchant to collect against and no test-mode credential to use. Deferred rather than out of scope: the product has payment.collect_card, and this becomes a walkthrough as soon as a test-mode merchant exists. Real card details must never be used.",
+            "PROVIDER CONFIGURATION NOW EXISTS — the reason this was deferred no longer holds. Payments V1 W1 built the operator act: /organization/financials -> Payments connects a provider, and the certification tenant's account read reports takePaymentCard available with a ready merchant. What remains is this scenario's own walkthrough, which has not been driven by a human. Do not mark it PASS because configuration exists. Real card details must never be used.",
         requires: [],
         navigate: [],
         doThis: [],
@@ -708,7 +708,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "ACH is not instant. Treating initiation as settlement would show money the business does not have yet, and a return days later would arrive as a surprise.",
         dispositionReason:
-            "NOT AVAILABLE ON THIS TENANT: the canonical account read reports achAvailable false and takePaymentAch as not_configured. There is nothing to initiate and nothing to await. Deferred, with the settlement distinction recorded here so it is not lost.",
+            "AVAILABLE NOW, AND UNWALKED. Measured on the certification tenant after Payments V1 W1: the account read reports achAvailable true and takePaymentAch available, because the connected merchant carries the bank rail. The settlement distinction this scenario exists to prove — initiation is not settlement — still requires a human walkthrough, which has not happened.",
         requires: [],
         navigate: [],
         doThis: [],
@@ -726,7 +726,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "One is a bank reversing itself; the other is a decision a person made and must answer for. Showing them as the same event destroys the audit trail for both.",
         dispositionReason:
-            "Depends on the same absent provider configuration as card and ACH. The operator-refund half IS covered, as scenario 19.",
+            "The provider configuration it depended on now exists (Payments V1 W1), and provider returns are certified at the service layer. What is unwalked is the operator-facing half: seeing a return render as Returned rather than Refunded. The operator-refund half IS covered, as scenario 19.",
         requires: [],
         navigate: [],
         doThis: [],

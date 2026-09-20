@@ -19,6 +19,7 @@ import {
     ConfigurationShell,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace";
+import PaymentsProviderChapter from "@/components/adminV2/settings/financials/PaymentsProviderChapter";
 import {
     FINANCIALS_WORKSPACE_CHAPTER_META,
     FINANCIALS_WORKSPACE_CHAPTERS,
@@ -181,6 +182,10 @@ export default function FinancialsWorkspaceSurface({
                          * the note on `AccountingPostingPanels`.
                          */}
                         <AccountingPostingPanels />
+                    </div>
+                : chapter === "payments" ?
+                    <div data-testid="financials-chapter-payments-host">
+                        <PaymentsProviderChapter />
                     </div>
                 : chapter === "policies" ?
                     <div data-testid="financials-chapter-policies">

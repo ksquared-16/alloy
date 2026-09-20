@@ -80,6 +80,9 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "payment.collect_card",
     "payment.reverse_application",
     "payment.apply_to_charge",
+    "provider.connect",
+    "provider.refresh_readiness",
+    "provider.disconnect",
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
@@ -646,6 +649,72 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
     // go and get it. It creates no receipt — a canonical payment appears only when the provider
     // confirms and Thread 8 recognises it, which is why the capability is a collection and not a
     // payment.
+    /*
+     * BECOMING A MERCHANT — organisation-grain configuration, not a payment.
+     *
+     * These three decide WHERE a family's money settles; every other financial capability decides
+     * what happens to money once that is already chosen. That is why they carry `fin.provider` rather
+     * than `fin.write`, and why they are configuration rather than an operator's daily work.
+     */
+    def({
+        capabilityKey: "provider.connect",
+        canonicalCommandKey: "provider.connect",
+        operatorLabel: "Connect payment provider",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "provider.connect",
+        implementationStatus: "production",
+        reason:
+            "Creates the organisation's own provider account and records the canonical merchant "
+            + "association, then hands the operator the provider's hosted setup. Idempotent: an "
+            + "unfinished merchant is RESUMED rather than duplicated, and a ready one is refused. "
+            + "Alloy never sees or stores the provider's identity verification data.",
+    }),
+    def({
+        capabilityKey: "provider.refresh_readiness",
+        canonicalCommandKey: "provider.refresh_readiness",
+        operatorLabel: "Refresh provider status",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "provider.refresh_readiness",
+        implementationStatus: "production",
+        reason:
+            "Asks the provider what this organisation can currently accept and records the answer "
+            + "through the single readiness write authority. Returning from provider setup proves "
+            + "nothing on its own, so this is what the return calls.",
+    }),
+    def({
+        capabilityKey: "provider.disconnect",
+        canonicalCommandKey: "provider.disconnect",
+        operatorLabel: "Disconnect payment provider",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        // The capability vocabulary is not the action's: an action says "destructive", a capability
+        // says how hard the confirmation is. Withdrawing an organisation's ability to take payments
+        // earns a strong one.
+        confirmationPolicy: "strong_confirm",
+        registeredActionKey: "provider.disconnect",
+        implementationStatus: "production",
+        reason:
+            "Withdraws the merchant association from FUTURE collection. Deletes nothing: not the "
+            + "provider's account, which belongs to the organisation, and not the payments, attempts "
+            + "or provider evidence already recorded. Historical rows keep naming the account that "
+            + "actually collected them.",
+    }),
     def({
         capabilityKey: "payment.collect_card",
         canonicalCommandKey: "payment.collect_card",

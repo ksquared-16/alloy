@@ -22,7 +22,7 @@ import { createCardCollection } from "@/lib/financials/payments/collectionAttemp
 import { readinessFromStripeAccount } from "@/lib/financials/payments/providerMerchant";
 import { requestProviderRefund } from "@/lib/financials/payments/refundCollection";
 import { handleStripeWebhook } from "@/lib/financials/payments/stripeWebhook";
-import { ensureAccountingPeriodCovers, restoreMerchantReadiness } from "./certEnvironment";
+import { ensureAccountingPeriodCovers, restoreMerchantReadiness, governedTestAccount } from "./certEnvironment";
 
 function readTrusted(key: string): string | null {
     if (process.env[key]) return process.env[key] as string;
@@ -179,8 +179,7 @@ describeLive("Slice G — Stripe refunds become canonical reversals, once", () =
          * "journals exactly once" assertion went red while every money assertion passed.
          */
         await ensureAccountingPeriodCovers(client, ORG, new Date().toISOString().slice(0, 10));
-        const res = await fetch("https://api.stripe.com/v1/accounts?limit=1", { headers: { Authorization: `Bearer ${secret}` } });
-        const acct = ((await res.json()) as { data: Array<Record<string, unknown>> }).data[0];
+        const acct = await governedTestAccount(secret!);
         connectedAccount = String(acct.id);
         await client.from("payment_provider_merchants").upsert({
             org_id: ORG, processor: "stripe", provider_account_ref: connectedAccount,

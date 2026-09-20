@@ -22,6 +22,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createCardCollection, deriveIntentKey } from "@/lib/financials/payments/collectionAttempt";
 import { readinessFromStripeAccount } from "@/lib/financials/payments/providerMerchant";
 import { recordAndApplyChildcarePayment, readChargeBalance } from "@/lib/financials/childcarePaymentService";
+import { governedTestAccount } from "./certEnvironment";
 
 function certEnv(): { url: string; serviceKey: string } | null {
     const fromProcess = {
@@ -108,8 +109,8 @@ describeLive("Slice D — card collection creation, live", () => {
         await client.from("payment_collection_attempts").delete().in("org_id", [ORG, OTHER_ORG]);
         await client.from("payment_provider_merchants").delete().in("org_id", [ORG, OTHER_ORG]);
 
-        const list = await stripeGet("accounts?limit=1");
-        const acct = ((list.body.data ?? []) as Array<Record<string, unknown>>)[0];
+        // The merchant that can actually charge — never "whichever the platform lists first".
+        const acct = await governedTestAccount(secret!);
         connectedAccount = String(acct.id);
         await client.from("payment_provider_merchants").insert({
             org_id: ORG, processor: "stripe", provider_account_ref: connectedAccount,
