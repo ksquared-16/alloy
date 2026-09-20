@@ -91,7 +91,17 @@ describe("the route overlaps the participant read", () => {
     });
 
     it("keeps one authorization boundary — the route gate's org for the canonical read", () => {
-        expect(ROUTE).toContain("orgId: gate.orgId");
+        /*
+         * Scoped to the FALLBACK READ itself. Asserting that "gate.orgId" appears somewhere in the
+         * file survives swapping it at the one call site that matters, which a plant proved.
+         */
+        const at = ROUTE.indexOf(": await resolveSoleEnrollmentParticipantForOpportunity({");
+        expect(at).toBeGreaterThan(-1);
+        const call = ROUTE.slice(at, ROUTE.indexOf("})", at));
+        // Enumerate the bindings rather than pattern-match around them: `\s*` matching zero
+        // characters made an earlier negative lookahead fire on the correct code.
+        const orgBindings = call.match(/orgId:\s*[^,\n]+/g) ?? [];
+        expect(orgBindings).toEqual(["orgId: gate.orgId"]);
         expect(ROUTE).not.toMatch(/persist|cacheParticipant|globalThis/);
     });
 });
