@@ -51,6 +51,8 @@ export type ExceptionRefusalCode =
     | "policy_not_found"
     /* The table is not in this environment yet. Not the operator's mistake, and not a bug. */
     | "schema_absent"
+    /* The live slot for this policy, relationship and start date is already taken. */
+    | "exception_already_exists"
     | "db_error";
 
 export type ExceptionResult =
@@ -100,6 +102,28 @@ function toException(row: Record<string, unknown>): CommercialPolicyException {
  * is never in force whatever its dates say: supersession is how history is kept, not how it is
  * ended twice.
  */
+/**
+ * IS THIS EXCEPTION STILL THE CURRENT, ENDABLE RECORD — as of today?
+ *
+ * ── WHY THIS IS NOT `exceptionAppliesOn` ─────────────────────────────────────────────────────
+ *
+ * They answer different questions and the answers legitimately differ:
+ *
+ *   exceptionAppliesOn(e, periodStart)  "did this govern the period being evaluated?"
+ *   exceptionIsLiveOn(e, today)         "is this still in force, and still endable?"
+ *
+ * An exception ended today, whose window began on the 1st, GOVERNED a period starting on the 1st
+ * and is NOT live now. The Assignment surface asked the first question to decide whether to offer
+ * "End exception", and so offered to end something already ended. A forecast is about a period; a
+ * management control is about now.
+ */
+export function exceptionIsLiveOn(exception: CommercialPolicyException, today: string): boolean {
+    if (exception.supersededAt) return false;
+    if (exception.effectiveEnd && exception.effectiveEnd < today) return false;
+    /* An exception that has not started yet is still the current record, and still endable. */
+    return true;
+}
+
 export function exceptionAppliesOn(exception: CommercialPolicyException, onDate: string): boolean {
     if (exception.supersededAt) return false;
     if (exception.effectiveStart > onDate) return false;
@@ -129,6 +153,23 @@ export function exceptionAppliesOn(exception: CommercialPolicyException, onDate:
  * So exactly one error is absorbed — the schema's absence — and the absorbing is REPORTED, never
  * silent. Everything else still fails closed.
  */
+/**
+ * The live-row unique index rejected the write.
+ *
+ * Read from the error's CODE and constraint identity, never from its prose: `23505` is
+ * `unique_violation` and the constraint names itself. Matching on the message text would break the
+ * day Postgres rewords it, and would also catch violations of a different constraint.
+ */
+function liveSlotTaken(error: { code?: string; message?: string; details?: string } | null): boolean {
+    if (!error) return false;
+    if (error.code !== "23505") return false;
+    const where = `${error.message ?? ""} ${error.details ?? ""}`;
+    return where.includes(LIVE_INDEX);
+}
+
+/** The index the live slot is enforced by. Named once so the refusal and the schema agree. */
+const LIVE_INDEX = "ux_commercial_policy_exceptions_live";
+
 function schemaAbsent(error: { code?: string; message?: string } | null): boolean {
     if (!error) return false;
     /* Postgres `undefined_table`; PostgREST's own "table not found in schema cache". */
@@ -263,6 +304,32 @@ export async function createPolicyException(
     if (liveError) return { ok: false, code: "db_error", message: liveError.message };
     const live = ((liveRows ?? []) as unknown as Array<Record<string, unknown>>).map(toException)[0] ?? null;
 
+    /*
+     * ── SUPERSEDE FIRST, THEN INSERT ─────────────────────────────────────────────────────────
+     *
+     * This inserted first and superseded afterwards, and the live-row unique index is on
+     * (org_id, policy_id, opportunity_customer_member_id, effective_start) WHERE superseded_at IS
+     * NULL — so the insert collided with the row it was about to replace, and re-authoring the
+     * same policy for the same assignment on the same date could never succeed. The operator path
+     * that hit it is the ordinary one: the surface always authors `effective_start: today`, so
+     * ending an exception and reconsidering the same day was refused.
+     *
+     * The order is the fix, not the index. Superseding first is also what the act MEANS: the new
+     * decision replaces the old one, and the old one stops being the current record at that
+     * moment rather than a statement later.
+     *
+     * If the insert then fails, the supersession is undone below — a superseded row with no
+     * replacement would be a live slot silently emptied by a failed write.
+     */
+    if (live) {
+        const { error: supersedeError } = await supabase
+            .from(TABLE)
+            .update({ superseded_at: new Date().toISOString() })
+            .eq("org_id", args.orgId)
+            .eq("id", live.id);
+        if (supersedeError) return { ok: false, code: "db_error", message: supersedeError.message };
+    }
+
     const { data: inserted, error: insertError } = await supabase
         .from(TABLE)
         .insert({
@@ -279,19 +346,30 @@ export async function createPolicyException(
         .select(COLUMNS)
         .single();
     if (insertError) {
-        return schemaAbsent(insertError)
-            ? { ok: false, code: "schema_absent", message: "Policy exceptions are not available in this environment yet." }
-            : { ok: false, code: "db_error", message: insertError.message };
+        /* Put the superseded row back: nothing replaced it, so it is still the current record. */
+        if (live) {
+            await supabase.from(TABLE).update({ superseded_at: null })
+                .eq("org_id", args.orgId).eq("id", live.id);
+        }
+        if (schemaAbsent(insertError)) {
+            return { ok: false, code: "schema_absent", message: "Policy exceptions are not available in this environment yet." };
+        }
+        /*
+         * A RACE, NOT A MISTAKE. Two operators (or a double submit) reached the same policy,
+         * relationship and start date at once; one of them won. The operator is told what to do
+         * about it, because "duplicate key value violates unique constraint" is not an
+         * instruction.
+         */
+        if (liveSlotTaken(insertError)) {
+            return {
+                ok: false,
+                code: "exception_already_exists",
+                message: "An exception for this policy and assignment already starts on that date. Reload to see the one on record, then end it or choose a different start date.",
+            };
+        }
+        return { ok: false, code: "db_error", message: insertError.message };
     }
 
-    if (live) {
-        const { error: supersedeError } = await supabase
-            .from(TABLE)
-            .update({ superseded_at: new Date().toISOString() })
-            .eq("org_id", args.orgId)
-            .eq("id", live.id);
-        if (supersedeError) return { ok: false, code: "db_error", message: supersedeError.message };
-    }
     return { ok: true, exception: toException(inserted as unknown as Record<string, unknown>), superseded: live?.id ?? null };
 }
 

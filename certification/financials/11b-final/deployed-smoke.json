@@ -1,0 +1,73 @@
+{
+  "build": "6c1b84fdc",
+  "base": "https://staging.workwithalloy.com",
+  "focusPanelComposition": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety",
+      "assignment_tuition"
+    ],
+    "billingPreviewRendered": false,
+    "financialsCard": true
+  },
+  "assignment": {
+    "tuitionSelect": true,
+    "accepted": "Recommended · $195.00/weekly",
+    "billingFrequency": "Billing frequency weekly · current period Sep 15–21, 2026 · next Sep 22–28, 2026",
+    "discountForecast": true,
+    "addException": false,
+    "exceptionsListed": [
+      "discount · excluded for this assignment until 2026-09-20 — 11B promotion proof — excluded for the whole periodEnd except"
+    ],
+    "rejectedDiagnostics": "1"
+  },
+  "routes": {
+    "accountingCalendar": {
+      "status": 200,
+      "ok": true,
+      "keys": [
+        "ok",
+        "calendars",
+        "periods",
+        "today"
+      ],
+      "error": null
+    },
+    "accounts": {
+      "status": 200,
+      "ok": true,
+      "keys": [
+        "data"
+      ],
+      "error": null
+    }
+  },
+  "accounts": {
+    "rows": 11,
+    "manageResponsibility": true,
+    "lenses": [
+      "all",
+      "charges",
+      "credits",
+      "funding",
+      "payments"
+    ]
+  },
+  "organization": {
+    "chapters": [
+      "Tuition",
+      "Catalog",
+      "Policies",
+      "Payments",
+      "Accounting",
+      "Simulator",
+      "Funding"
+    ],
+    "accountingCalendarPanel": false,
+    "horizontalOverflow": false
+  }
+}

@@ -517,16 +517,21 @@ function AccountingCalendarPanel() {
                     )}
 
                     {/*
-                     * WHY THERE IS NO CLOSE BUTTON, SAID OUT LOUD.
+                     * THE LIMIT THAT IS STILL REAL, SAID OUT LOUD.
                      *
-                     * Closing a period is what makes a month final and it has no governed action in
-                     * this platform yet. A control here would either bypass the journal enforcement
-                     * that guards it, or pretend to do something it cannot. Stating the limit is the
-                     * honest version, and it is the same limit the Director QA scenario records.
+                     * This said "opening and closing a period is not yet an action in Alloy" — the
+                     * honest sentence for as long as it was true, and left standing when 11B built
+                     * `billing.close_accounting_period`. The deployed smoke found it sitting
+                     * directly beneath eleven working Close controls, which is worse than saying
+                     * nothing: an operator reads it and does not press the button that works.
+                     *
+                     * What has NOT been built is reopening, so that is what the note records now.
+                     * The other two sentences were always about enforcement, not about controls,
+                     * and are unchanged.
                      */}
                     <p className="mt-3 text-[11px] text-alloy-midnight/50" data-testid="accounting-period-lifecycle-note">
-                        Opening and closing a period is not yet an action in Alloy. Posting into a closed period is
-                        already refused, and a period that has posted activity cannot have its dates changed.
+                        Closing a period is final — reopening one is not an action in Alloy. Posting into a closed
+                        period is already refused, and a period that has posted activity cannot have its dates changed.
                     </p>
                 </>
             )}

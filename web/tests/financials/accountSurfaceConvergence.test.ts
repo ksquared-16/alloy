@@ -830,14 +830,22 @@ describe("F17 · the accounting period has a surface", () => {
         expect(panel, "and a period can be closed").toContain("accounting-period-close-");
         expect(panel, "behind a preview").toContain("accounting-close-preview");
         /*
-         * Stripped: three comments in this file say there is no reopen, and a naive match fails
-         * on the documentation of the very fact it is checking — the fourth lock in this thread
-         * to catch a comment instead of a statement.
+         * NO REOPEN CONTROL — and that is different from never saying the word.
+         *
+         * This matched the whole stripped source against /reopen/i, which was right while the
+         * panel was silent about it. The panel now NAMES the limit ("reopening one is not an
+         * action in Alloy"), because it previously carried the opposite claim — that closing was
+         * unavailable — directly beneath eleven working Close controls. Matching the word made
+         * telling the operator the truth fail the lock.
+         *
+         * The rule is about a CONTROL and an OPERATION, so that is what is asserted: no reopen
+         * op reaches the governed route, and nothing interactive offers one.
          */
-        expect(
-            panel.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, ""),
-            "no reopen control: no authority exists",
-        ).not.toMatch(/reopen/i);
+        const bodyOnly = panel.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+        expect(bodyOnly, "no reopen operation: no authority exists").not.toMatch(/op:\s*["']reopen/i);
+        expect(bodyOnly, "and nothing interactive offers one").not.toMatch(/data-testid=[^>]*reopen/i);
+        expect(bodyOnly, "naming the limit is allowed, and is the honest thing")
+            .toMatch(/reopening one is not an action/i);
 
         const calendarPanel = panel.slice(panel.indexOf("function AccountingCalendarPanel"));
         expect(calendarPanel, "the browser still writes no table directly").not.toMatch(

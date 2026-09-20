@@ -8,12 +8,21 @@ alone.
 
 | | |
 |---|---|
-| Final Financials candidate | `__CANDIDATE_SHA__` (`agent/financials-11a-regression-repair`) |
+| Final Financials candidate | `0a565cf79` (`agent/financials-11a-regression-repair`) |
 | Reconciled against staging | `d1b8f1319` — Payments V1 W1–W4 |
-| Merge SHA | `__MERGE_SHA__` |
-| Deployed SHA | `__DEPLOYED_SHA__` |
+| Merge SHA | `6c1b84fdc814a1cc1e62797a690c9ef6ceb4f1d5` (PR 1111) |
+| Deployed SHA | `6c1b84fdc814a1cc1e62797a690c9ef6ceb4f1d5` — `/api/build-info` on staging.workwithalloy.com, branch `staging`, nodeEnv production |
 | QA catalog version | `2026-09-20.3` — 44 `HUMAN_WALKTHROUGH` scenarios |
-| Human QA PASS | **ZERO.** Engineering certification only. |
+| Deployed database | `ikaxilmwmrmbagoidedu` (`alloy_deployed_primary`, fingerprint `b15dad2c6d030ed4`) |
+| Human QA PASS | **ZERO.** Engineering certification only, and INCOMPLETE — see below. |
+
+## Status: 11B is NOT closed
+
+The candidate is merged and deployed and the exception schema is physically proved on the deployed
+database. **Three defects found by the A–K gate remain open**, all in the exception's end/re-author
+path, and they are why `FINANCIALS_11B_PRODUCTIZATION_COMPLETE_DEPLOYED_CERTIFIED` was withheld.
+See `AK-RESULT.md`. Nothing below depends on them — the authority, the identity chain and the
+doctrine Payments inherits are all proved — but Payments should not read 11B as finished.
 
 ## What Payments inherits — and must not reimplement
 

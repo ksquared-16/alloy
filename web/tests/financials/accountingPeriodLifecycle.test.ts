@@ -230,10 +230,27 @@ describe("the operator surface offers the lifecycle the authority supports, and 
         expect(strip(panel), "no local status rewrite").not.toMatch(/setPeriods\([\s\S]{0,80}status: "closed"/);
     });
 
+    /*
+     * NO REOPEN AUTHORITY, AND NO REOPEN CONTROL — but the surface may SAY so.
+     *
+     * The word match was right while the panel said nothing about reopening. It now names the
+     * limit, because it previously carried the opposite claim — that closing was not an action —
+     * beneath eleven working Close controls. So the authority halves keep the strict word match
+     * (nothing in the route or the service should mention it at all), and the surface half
+     * asserts the absence of an operation and a control instead.
+     */
     it("offers no reopen, because no reopen authority exists", () => {
-        expect(strip(panel)).not.toMatch(/reopen/i);
+        const body = strip(panel);
+        expect(body, "no reopen operation reaches the route").not.toMatch(/op:\s*["']reopen/i);
+        expect(body, "and nothing interactive offers one").not.toMatch(/data-testid=[^>]*reopen/i);
         expect(strip(src("app/api/admin/financials/accounting-calendar/route.ts"))).not.toMatch(/reopen/i);
         expect(strip(src("lib/financials/accounting/accountingCalendarService.ts"))).not.toMatch(/reopen/i);
+    });
+
+    /* And the note must not deny the capability standing next to it. */
+    it("does not tell the operator that closing is unavailable", () => {
+        expect(panel, "the Close control is offered").toContain("accounting-period-close-");
+        expect(strip(panel), "so the copy must not say otherwise").not.toMatch(/closing a period is not yet an action/i);
     });
 
     it("writes no table from the browser", () => {

@@ -1,0 +1,48 @@
+{
+  "ids": {
+    "dataTuitionAssignment": [
+      "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+      "79f8011d-a236-4054-bee7-af10f1dbc632"
+    ],
+    "acceptAssignment": []
+  },
+  "answers": [
+    {
+      "id": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+      "status": 200,
+      "exceptions": [],
+      "firstOutcome": {
+        "kind": "expected",
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "policyKind": "discount",
+        "label": "discount",
+        "amountCents": -14500,
+        "explanation": "discount · 10% of $1450.00"
+      }
+    },
+    {
+      "id": "79f8011d-a236-4054-bee7-af10f1dbc632",
+      "status": 200,
+      "exceptions": [
+        {
+          "id": "67b2d2b9-3078-41d9-a68b-b8e5da613c07",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "discount",
+          "effectiveStart": "2026-09-20",
+          "effectiveEnd": null,
+          "reason": "11B promotion proof — board waived this policy for this family",
+          "appliesNow": false,
+          "superseded": false
+        }
+      ],
+      "firstOutcome": {
+        "kind": "expected",
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "policyKind": "discount",
+        "label": "discount",
+        "amountCents": -1850,
+        "explanation": "discount · 10% of $185.00"
+      }
+    }
+  ]
+}
