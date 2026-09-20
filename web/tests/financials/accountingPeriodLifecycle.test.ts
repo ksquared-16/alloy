@@ -188,3 +188,47 @@ describe("accounting is not billing", () => {
         expect(svc).not.toMatch(/responsibility|arrangement|reduction|discount/i);
     });
 });
+
+describe("the operator surface offers the lifecycle the authority supports, and no more", () => {
+    const panel = src("components/adminV2/settings/financials/accounting/AccountingPostingPanels.tsx");
+    const strip = (x: string) => x.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+
+    it("offers adoption where the absence is reported", () => {
+        const absent = panel.slice(panel.indexOf('data-testid="accounting-calendar-absent"'));
+        expect(absent.slice(0, 1800)).toContain('data-testid="accounting-calendar-adopt"');
+        expect(absent.slice(0, 1800)).toContain("billing.adopt_accounting_calendar");
+    });
+
+    it("closes through preview then confirm", () => {
+        expect(panel).toContain('data-testid="accounting-close-preview"');
+        expect(panel).toContain('data-testid="accounting-close-confirm"');
+        /* The row's testid is a template literal, so an indexOf on a quoted attribute finds nothing. */
+        const at = panel.indexOf("accounting-period-close-");
+        expect(at, "the row close control exists").toBeGreaterThan(-1);
+        expect(panel.slice(at, at + 1200), "the row previews first").toContain('"preview"');
+    });
+
+    it("renders the action's own words, not a second opinion about accounting health", () => {
+        expect(panel).toContain("closing.summary");
+        expect(panel).toContain("closing.changes.map");
+    });
+
+    it("re-reads persisted truth rather than editing the row", () => {
+        expect(panel).toContain("setNonce((n) => n + 1)");
+        expect(panel, "the effect re-runs on the nonce").toContain("}, [nonce]);");
+        expect(strip(panel), "no local status rewrite").not.toMatch(/setPeriods\([\s\S]{0,80}status: "closed"/);
+    });
+
+    it("offers no reopen, because no reopen authority exists", () => {
+        expect(strip(panel)).not.toMatch(/reopen/i);
+        expect(strip(src("lib/adminV2/actions/definitions/accountingPeriodActions.ts"))).not.toMatch(/reopen/i);
+        expect(strip(src("lib/financials/accounting/accountingCalendarService.ts"))).not.toMatch(/reopen/i);
+    });
+
+    it("writes no table from the browser", () => {
+        expect(panel, "everything goes through the action runtime").not.toMatch(
+            /from\("financial_accounting_(periods|calendars)"\)/,
+        );
+        expect(panel).toContain("/api/admin/actions/execute");
+    });
+});
