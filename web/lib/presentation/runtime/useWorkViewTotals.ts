@@ -180,6 +180,12 @@ export function useWorkViewTotalsState(args: {
      * only used when its identity matches exactly — org, host work unit, site scope and the
      * configured view signature — and a rejection simply falls through to the existing behaviour.
      */
+    /*
+     * TWO INSTANCES OF THIS HOOK ARE MOUNTED — Settlement and the workspace surface runtime — and
+     * a single overwritten global cannot say which one issued the request. The deployed matcher
+     * reported ok:true while a request still went out, which is only readable per instance.
+     */
+    const instanceIdRef = useRef<string>(Math.random().toString(36).slice(2, 8));
     const seededAdoptRef = useRef(false);
     const seedMatchRef = useRef<ReturnType<typeof matchWorkViewTotalsSeed> | null>(null);
     /*
@@ -216,7 +222,12 @@ export function useWorkViewTotalsState(args: {
          * Diagnostic only — read by the probe, never by the product, and it carries no counts.
          */
         try {
-            (window as unknown as { __alloyWorkViewSeed?: unknown }).__alloyWorkViewSeed = {
+            const w = window as unknown as { __alloyWorkViewSeed?: unknown[] };
+            if (!Array.isArray(w.__alloyWorkViewSeed)) w.__alloyWorkViewSeed = [];
+            w.__alloyWorkViewSeed.push({
+                instance: instanceIdRef.current,
+                phase: "match",
+                targetCount: parsedTargets.length,
                 ok: match.ok,
                 reason: match.ok ? null : match.reason,
                 clientViewIds: parsedTargets.map((t) => t.viewId),
@@ -227,7 +238,7 @@ export function useWorkViewTotalsState(args: {
                 seedStatus: documentSeed?.status ?? null,
                 seedIdentity:
                     documentSeed && documentSeed.status === "resolved" ? documentSeed.identity : null,
-            };
+            });
         } catch {
             /* a diagnostic may never cost the surface its counts */
         }
@@ -292,10 +303,28 @@ export function useWorkViewTotalsState(args: {
 
         // Fresh cached totals seeded this navigation — do not re-issue the fan-out. (Stale/absent
         // seeds fall through and revalidate.) One-shot: later scope changes always refetch.
+        const noteFetchDecision = (decision: string) => {
+            try {
+                const w = window as unknown as { __alloyWorkViewSeed?: unknown[] };
+                if (!Array.isArray(w.__alloyWorkViewSeed)) w.__alloyWorkViewSeed = [];
+                w.__alloyWorkViewSeed.push({
+                    instance: instanceIdRef.current,
+                    phase: "fetch",
+                    decision,
+                    scopeKey,
+                    targetCount: parsedTargets.length,
+                    seedPresent: !!documentSeed,
+                });
+            } catch {
+                /* diagnostics are never load-bearing */
+            }
+        };
         if (skipFreshFetchRef.current) {
             skipFreshFetchRef.current = false;
+            noteFetchDecision("skipped_seeded");
             return;
         }
+        noteFetchDecision("fetching");
 
         let cancelled = false;
 
