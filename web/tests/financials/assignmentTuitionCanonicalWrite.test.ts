@@ -261,3 +261,33 @@ describe("resolving a review supersedes rather than overwrites", () => {
         expect(body).toContain("json.blockers?.map");
     });
 });
+
+describe("the commit re-resolves the way the view did", () => {
+    it("sends no cadence filter, because the view had none", () => {
+        /*
+         * THE REAL CAUSE, after a wrong diagnosis. `assignmentResolutionKey` hashes
+         * `cad:${facts.cadenceKey}` along with the config version and the other facts. The view a
+         * choice comes from resolves with NO cadence constraint — `facts.cadenceKey` is null — so
+         * sending the chosen option's cadence made the service re-resolve against DIFFERENT facts,
+         * produce a different key, and answer `stale_resolution` for every accept and override:
+         * "This assignment has changed since the tuition was resolved", about an assignment that
+         * had not changed at all.
+         *
+         * I first blamed the opportunity-wide catalog export and changed it. The measured config
+         * version did not move, which disproved it, and that change was reverted rather than left
+         * in as an unjustified edit to a certified path.
+         */
+        const card = src(CARD);
+        const fn = card.slice(card.indexOf("async function acceptAssignmentTuition"));
+        const payload = fn.slice(fn.indexOf("payload: {"), fn.indexOf("}),", fn.indexOf("payload: {")));
+        expect(payload, "the resolution the operator saw").toContain("resolution_key: view.resolutionKey");
+        expect(payload, "and no fact the view did not resolve under").not.toMatch(/cadence_key:/);
+    });
+
+    it("the key hashes the cadence, which is why sending one was fatal", () => {
+        const res = readFileSync(join(ROOT, "lib/commercial/execution/evaluate/resolveOptions.ts"), "utf8");
+        const key = res.slice(res.indexOf("export function assignmentResolutionKey"), res.indexOf("/** Days a week"));
+        expect(key).toContain("cad:${facts.cadenceKey");
+        expect(key).toContain("v:${configVersion}");
+    });
+});

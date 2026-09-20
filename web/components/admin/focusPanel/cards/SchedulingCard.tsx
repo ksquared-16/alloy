@@ -2014,7 +2014,19 @@ function ScheduleEditor({
                     opportunity_customer_member_id: view.opportunityCustomerMemberId,
                     resolution_key: view.resolutionKey,
                     selected_source_id: option.sourceId,
-                    cadence_key: option.cadenceKey,
+                    /*
+                     * NO CADENCE FILTER. `assignmentResolutionKey` hashes `cad:${facts.cadenceKey}`,
+                     * and the view this choice came from resolved with NO cadence constraint —
+                     * `facts.cadenceKey` was null. Sending the chosen option's cadence made the
+                     * service re-resolve against different facts, producing a different key, and
+                     * every accept and override answered `stale_resolution`: "This assignment has
+                     * changed since the tuition was resolved", about an assignment that had not
+                     * changed. The commit must re-resolve the way the view did, or the key it is
+                     * checking against is meaningless.
+                     *
+                     * The cadence is not lost: it comes from the selected option's own rate, which
+                     * is where the term takes it from anyway.
+                     */
                     /* Override requires its own reason; the action refuses without one. */
                     ...(isOverride ? { override_reason: overrideReason.trim() } : {}),
                     /*
