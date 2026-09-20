@@ -28,7 +28,9 @@ export type RefundRefusalReason =
     | "merchant_unavailable"
     | "invalid_amount"
     | "exceeds_refundable"
-    | "currency_mismatch";
+    | "currency_mismatch"
+    /* W3 — a bank payment can only be given back in full. */
+    | "partial_ach_refund";
 
 export type RequestRefundInput = {
     /** From the authenticated session. The only tenancy input. */
@@ -149,11 +151,14 @@ export async function requestProviderRefund(
     // platform: money goes back to where it came from.
     const { data: attemptRow } = await supabase
         .from("payment_collection_attempts")
-        .select("id, provider_account_ref, currency")
+        /* `rail` is W3's refund authority: the ORIGINAL collection's rail, from canonical provenance. */
+        .select("id, provider_account_ref, currency, rail")
         .eq("org_id", input.orgId)
         .eq("canonical_payment_id", payment.id)
         .maybeSingle();
-    const attempt = attemptRow as { id: string; provider_account_ref: string; currency: string } | null;
+    const attempt = attemptRow as {
+        id: string; provider_account_ref: string; currency: string; rail: string | null;
+    } | null;
     if (!attempt) {
         return {
             ok: false,
@@ -169,6 +174,32 @@ export async function requestProviderRefund(
     if (!Number.isInteger(amountCents) || amountCents <= 0) {
         return { ok: false, reason: "invalid_amount", message: "A refund must be a positive whole number of cents." };
     }
+    /*
+     * ── A BANK PAYMENT COMES BACK WHOLE, OR NOT AT ALL (W3) ─────────────────────────────────────
+     *
+     * Refused HERE, at eligibility, before the provider is called. Stripe would refuse a partial ACH
+     * refund itself, but only after Alloy had told the operator the refund was under way — and a
+     * failure that arrives after the promise is a worse product than a refusal that arrives instead
+     * of one.
+     *
+     * The rail comes from the ORIGINAL collection attempt, which is canonical provenance. It is
+     * deliberately NOT read from `payments.payment_method`, which is operator-entered text on manual
+     * rails and would let a typo decide whether a refund is allowed.
+     *
+     * The sentence is Alloy's, not the provider's. "Stripe doesn't support partial ACH refunds" tells
+     * an operator to go and argue with a vendor they have no relationship with; the product rule is
+     * that a bank payment is returned in full.
+     */
+    if (attempt.rail === "ach" && amountCents !== payment.amount_cents) {
+        return {
+            ok: false,
+            reason: "partial_ach_refund",
+            message:
+                `A bank payment can only be refunded in full. Refund the whole ${payment.amount_cents} cents, `
+                + "or record a separate adjustment for the difference.",
+        };
+    }
+
     if (amountCents > refundable) {
         return {
             ok: false,

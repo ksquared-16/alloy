@@ -2324,6 +2324,14 @@
         "reason": "Payments W2. Reading what a family has on file is an ordinary Financials read; adding, defaulting and removing a method are registered actions behind fin.write. The route returns brand, last four, expiry, rail and state and holds no credential to expose."
       }
     },
+    "app/api/admin/financials/needs-recognition/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Payments W3. Seeing which provider-confirmed collections Alloy has not recognized is an ordinary Financials read; recognizing one is a registered action behind fin.write. The route exposes no provider reference as row identity."
+      }
+    },
     "app/api/admin/financials/responsibility-candidates/route.ts": {
       "GET": {
         "status": "declared",

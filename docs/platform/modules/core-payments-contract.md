@@ -104,7 +104,8 @@ Owns, in Alloy's own vocabulary:
 - payment method **reference** (a durable handle, not a card) — implemented in W2 as
   `payment_methods`; see [payments-payment-method-reference.md](payments-payment-method-reference.md)
 - collection intent / request
-- payment attempt
+- payment attempt — carries method provenance and an expected-settlement projection since W3; see
+  [payments-collection-completion.md](payments-collection-completion.md)
 - payment
 - allocation
 - refund / return
