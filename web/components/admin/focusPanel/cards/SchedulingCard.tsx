@@ -2398,7 +2398,7 @@ function ScheduleEditor({
                               * legitimate options are a click away rather than a list to read.
                               * When it declines, there is no "Recommended" heading to manufacture:
                               * equally-configured options are the operator's choice to settle, and
-                              * `billing_preview` owns the fuller tied-set explanation.
+                              * the tied set is named here rather than deferred to another card.
                               *
                               * The disclosure is absent when there is nothing behind it.
                               */}
@@ -2411,7 +2411,54 @@ function ScheduleEditor({
                             {pricingView && pricingView.state === "ambiguous" ? (
                                 <div data-assignment-tuition-ambiguous="true" style={{ fontSize: 11, color: T.ember }}>
                                     {pricingView.tied.length} configured options apply equally — choose one.
+                                    {pricingView.tied.length > 0 ? (
+                                        <span data-assignment-tuition-tied="true" style={{ display: "block", color: T.slate, fontWeight: 400 }}>
+                                            {pricingView.tied.map((o) => o.amountLabel).join(" · ")}
+                                        </span>
+                                    ) : null}
                                 </div>
+                            ) : null}
+
+                            {/*
+                              * ── WHY NOTHING APPLIES ──────────────────────────────────────────
+                              *
+                              * An assignment with no priceable option is the state an operator is
+                              * most likely to misread as a broken screen. The resolution already
+                              * carries its own reason, and this states it — a surface that renders
+                              * an empty option list and says nothing has told the operator that
+                              * tuition is missing, which is a different and wrong claim.
+                              */}
+                            {pricingView && pricingView.state === "no_match" ? (
+                                <div data-assignment-tuition-no-match={pricingView.noMatchReason ?? "unknown"}
+                                     style={{ fontSize: 11, color: T.ember }}>
+                                    No authored tuition applies to this assignment
+                                    {pricingView.noMatchReason ? ` — ${pricingView.noMatchReason.replace(/_/g, " ")}` : ""}.
+                                </div>
+                            ) : null}
+
+                            {/*
+                              * ── WHAT WAS CONSIDERED AND REJECTED, AND WHY ────────────────────
+                              *
+                              * The diagnostic that used to live on the standalone card. It answers
+                              * the question an operator asks next — "there IS a rate for this
+                              * program, why isn't it here?" — with the resolution's own reason for
+                              * each option it set aside. Quiet and closed by default: it matters
+                              * when the answer is surprising, and not before.
+                              */}
+                            {pricingView && pricingView.rejected.length > 0 ? (
+                                <details data-assignment-tuition-rejected={String(pricingView.rejected.length)}
+                                         style={{ fontSize: 11, color: T.mid40 }}>
+                                    <summary style={{ cursor: "pointer" }}>
+                                        {pricingView.rejected.length} option{pricingView.rejected.length === 1 ? "" : "s"} did not apply
+                                    </summary>
+                                    <ul style={{ margin: "4px 0 0", paddingLeft: 16 }}>
+                                        {pricingView.rejected.map((r) => (
+                                            <li key={r.sourceId} data-assignment-tuition-rejected-reason={r.reason}>
+                                                {r.detail || r.reason.replace(/_/g, " ")}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </details>
                             ) : null}
                             {pricingView?.recommended && !optionsExpanded && otherOptions.length > 0 ? (
                                 <button

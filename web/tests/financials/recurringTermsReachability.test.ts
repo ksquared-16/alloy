@@ -36,9 +36,34 @@ describe("THE GATE — the pricing card reaches the child", () => {
         expect(declarationAppliesToGrain(undefined, "child"), "an undeclared card is still case-only").toBe(false);
     });
 
-    /* It was always meant to be visible on an enrolment; only the grain kept it away. */
-    it("stays in the enrolment default composition", () => {
-        expect(ENROLLMENT_DEFAULT_VISIBLE_CARD_KEYS).toContain("billing_preview");
+    /*
+     * ── THE REACH MOVED, AND THE REACH IS WHAT THIS GUARDS ───────────────────────────────────
+     *
+     * This asserted that `billing_preview` stayed in the enrolment default composition, which was
+     * the right lock while that card was the only way to reach recurring terms. Financials 11B
+     * settled the product question the other way: tuition is part of an Assignment, not an
+     * independent operational concept, and Assignment now owns Accept, Override, the options, the
+     * accepted-term read-back, Billing Frequency, the periods, responsibility and the discount
+     * forecast. The card is retired to the library, not deleted, and a tenant may still place it.
+     *
+     * So the requirement is unchanged and the lock now states it where it is actually met: an
+     * operator must be able to reach a child's recurring tuition terms from the default
+     * composition. That is `scheduling`, at the child grain.
+     */
+    it("keeps recurring terms reachable from the default composition, through Assignment", () => {
+        expect(ENROLLMENT_DEFAULT_VISIBLE_CARD_KEYS, "Assignment is composed by default").toContain("scheduling");
+        expect(cardGrains("scheduling"), "and at the grain where pricing is decided").toContain("child");
+        /*
+         * The retirement is deliberate, and stated — so re-adding the card by accident is a
+         * decision someone has to make again rather than a drift nobody notices.
+         */
+        expect(ENROLLMENT_DEFAULT_VISIBLE_CARD_KEYS, "billing_preview is retired to the library")
+            .not.toContain("billing_preview");
+    });
+
+    /* Retired from composition is not deleted: every authority it consumed is still registered. */
+    it("keeps the card and its authorities available to a tenant that places it", () => {
+        expect(cardGrains("billing_preview"), "the card still declares its grains").toContain("child");
     });
 
     /*

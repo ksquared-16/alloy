@@ -90,18 +90,17 @@ export const FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION: readonly SummaryCompositio
         encodedDensity: "standard",
     },
     {
+        /*
+         * ASSIGNMENT TAKES THE WHOLE ROW IT USED TO SHARE. Billing Preview sat at 7/6 beside it
+         * and is retired from normal composition (Financials 11B): tuition is part of an
+         * Assignment, not an independent operational concept, and this card now carries what that
+         * card was placed for. Leaving the half-row empty would be the layout still describing the
+         * old product.
+         */
         key: "scheduling",
         tier: "reference",
         visibility: "visible",
-        area: { colStart: 1, colSpan: 6, rowStart: 8, rowSpan: 2 },
-        encodedSpan: 1,
-        encodedDensity: "compact",
-    },
-    {
-        key: "billing_preview",
-        tier: "context",
-        visibility: "visible",
-        area: { colStart: 7, colSpan: 6, rowStart: 8, rowSpan: 2 },
+        area: { colStart: 1, colSpan: 12, rowStart: 8, rowSpan: 2 },
         encodedSpan: 1,
         encodedDensity: "compact",
     },
@@ -305,25 +304,11 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
         key: "financials",
         tier: "work",
         visibility: "visible",
-        area: { colStart: 1, colSpan: 8, rowStart: 3, rowSpan: 2 },
+        area: { colStart: 1, colSpan: 12, rowStart: 3, rowSpan: 2 },
         encodedSpan: 1,
         // `standard` IS the V5 summary. The compact density is a different placement — supporting
         // financial context inside another process — and states the balance without the breakdown.
         encodedDensity: "standard",
-    },
-    {
-        /*
-         * The 4/12 companion, and a genuine one rather than filler. Billing Preview answers "is
-         * billing CONFIGURED?" while Financials answers "what is owed?" — the readiness of the
-         * arrangement beside the state of the account, which is the pairing an operator actually
-         * reads together.
-         */
-        key: "billing_preview",
-        tier: "context",
-        visibility: "visible",
-        area: { colStart: 9, colSpan: 4, rowStart: 3, rowSpan: 2 },
-        encodedSpan: 1,
-        encodedDensity: "compact",
     },
     {
         /*
