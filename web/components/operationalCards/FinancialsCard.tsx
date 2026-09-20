@@ -273,6 +273,20 @@ export default function FinancialsCard({
                                     testId="available-prepaid"
                                 />
                             ) : null}
+                            {/*
+                              * HELD IS A SEPARATE LINE, NEVER MERGED INTO AVAILABLE (W4).
+                              *
+                              * Money the organisation is holding is not money an operator may spend.
+                              * One combined figure would offer a family's deposit for allocation,
+                              * which is the mistake this whole distinction exists to prevent.
+                              */}
+                            {period.heldFunds ? (
+                                <Line
+                                    label="Held"
+                                    value={period.heldFunds}
+                                    testId="held-funds"
+                                />
+                            ) : null}
                         </div>
                         {/* Payment belongs to the payment position, so it sits at the foot of it. */}
                         {onPayNow ? (
