@@ -311,6 +311,16 @@ export function useWorkViewTotalsState(args: {
                     instance: instanceIdRef.current,
                     phase: "fetch",
                     decision,
+                    /*
+                     * THE OWNER, NAMED RATHER THAN NARROWED.
+                     *
+                     * Two rounds of elimination have proved the matcher correct and located an
+                     * unwired instance, but not which component mounts it: the DOM shows no
+                     * workspace surface, PresentationRuntime returns null for work-unit, and the
+                     * request fires at ~5.6s in isolation. Each further inference costs a deploy.
+                     * A stack at the decision point names the mounting component outright.
+                     */
+                    stack: (new Error().stack || "").split("\n").slice(1, 9).join(" | ").slice(0, 900),
                     scopeKey,
                     targetCount: parsedTargets.length,
                     seedPresent: !!documentSeed,
