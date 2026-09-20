@@ -179,3 +179,32 @@ describe("§6 · the surface asks the lifecycle question", () => {
         expect(route).toContain("isLiveNow: exceptionIsLiveOn(e, todayYmd)");
     });
 });
+
+describe("§18 · the panel does not deny the capability it offers", () => {
+    /**
+     * Found by the deployed smoke: the accounting calendar rendered eleven working Close controls
+     * with a note beneath them saying "opening and closing a period is not yet an action in
+     * Alloy". True when it was written, false once 11B shipped
+     * `billing.close_accounting_period`, and worse than silence — an operator reads it and does
+     * not press the button that works.
+     *
+     * The lock is the RULE, not the sentence: a surface that offers a control must not carry copy
+     * denying that control exists. What is still missing — reopening — is what the note records.
+     */
+    const panel = src("components/adminV2/settings/financials/accounting/AccountingPostingPanels.tsx");
+
+    it("offers Close and does not say closing is unavailable", () => {
+        expect(panel, "the control 11B built is still offered").toContain("accounting-period-close-");
+        const note = panel.slice(panel.indexOf('data-testid="accounting-period-lifecycle-note"'));
+        const text = note.slice(0, 500);
+        expect(text, "the note must not deny the button beside it").not.toMatch(/closing a period is not yet an action/i);
+        expect(text, "and must record the limit that IS real").toMatch(/reopening one is not an action/i);
+    });
+
+    /* The enforcement sentences were never about controls, and must survive the correction. */
+    it("keeps the two enforcement facts", () => {
+        const note = panel.slice(panel.indexOf('data-testid="accounting-period-lifecycle-note"'), panel.indexOf('data-testid="accounting-period-lifecycle-note"') + 500);
+        expect(note).toMatch(/posting into a closed\s+period is already refused/i);
+        expect(note).toMatch(/cannot have its dates changed/i);
+    });
+});
