@@ -8,9 +8,9 @@ alone.
 
 | | |
 |---|---|
-| Final Financials candidate | `__CANDIDATE_SHA__` (`agent/financials-11a-regression-repair`) |
+| Final Financials candidate | `0a565cf79` (`agent/financials-11a-regression-repair`) |
 | Reconciled against staging | `d1b8f1319` — Payments V1 W1–W4 |
-| Merge SHA | `__MERGE_SHA__` |
+| Merge SHA | `6c1b84fdc814a1cc1e62797a690c9ef6ceb4f1d5` (PR 1111) |
 | Deployed SHA | `__DEPLOYED_SHA__` |
 | QA catalog version | `2026-09-20.3` — 44 `HUMAN_WALKTHROUGH` scenarios |
 | Human QA PASS | **ZERO.** Engineering certification only. |

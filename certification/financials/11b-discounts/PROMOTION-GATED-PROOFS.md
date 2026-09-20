@@ -1,6 +1,10 @@
 # Commercial policy exceptions — proofs that cannot exist before promotion
 
-**Status:** `DISCOUNT_EXCEPTION_IMPLEMENTED_CERTIFIED_AWAITING_PROMOTION_MOUNTED_PROOF`
+**Status:** `DISCOUNT_EXCEPTION_MERGED_AWAITING_DEPLOYED_SCHEMA_PROOF`
+
+**PR 1111 merged as `6c1b84fdc` on 2026-09-20.** The reason items A–K were impossible is gone: the
+migration is now in staging lineage, so `database.apply_migration` can reach it. The items
+themselves are still unproven, and none of them may be marked PASS from local certification.
 **Candidate lineage:** `agent/financials-11a-regression-repair`
 **Migration:** `supabase/migrations/20260924120000_commercial_policy_exceptions.sql`
 
