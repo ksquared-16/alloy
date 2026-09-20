@@ -3133,6 +3133,12 @@
                 "status": "pending"
             }
         },
+        "app/api/admin/operational-config/resolved-capacity/route.ts": {
+            "GET": {
+                "status": "none",
+                "reason": "Composed capacity resolution for ONE room, as attendance/card is for one child. Gated by getAdminContextCached with the org taken from the session, and the room is re-resolved against ctx.orgId before anything is read, so a room in another tenant answers not_found rather than a resolution. It WRITES NOTHING: the handler loads the rule bundle and hands it to resolveOperationalCapacity, a pure function, so this is a read-like GET in the enrollment-status-transition/preflight sense. No capacity catalog capability exists to declare - the sibling read operational-config-rules GET and the four operational-config mutations are all still pending W-15 - and inventing one here would claim an enforcement this handler does not perform and would tighten a read the product does not gate. The room detail surface consumes this instead of recomputing binding capacity in the browser, which is the point of the endpoint."
+            }
+        },
         "app/api/admin/operational-config/schedule-rules/route.ts": {
             "POST": {
                 "status": "pending"
