@@ -24,6 +24,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { postProviderConfirmedCollection, type AttemptForPosting } from "./canonicalPosting";
 import { mapStripeStatus } from "./collectionAttempt";
 import { resolveOrgForConnectedAccount } from "./providerMerchant";
+import { applyProviderAccountUpdate, runtimeExpectsLivemode } from "./providerInstallation";
 import { recognizeProviderDispute } from "./providerDispute";
 import { mapStripeRefundStatus, recognizeProviderRefund } from "./refundCollection";
 
@@ -106,6 +107,12 @@ export function verifyStripeSignature(
 
 /** The PaymentIntent lifecycle this slice models. Anything else is stored and left alone. */
 const SUPPORTED = new Set([
+    /*
+     * Payments W1. The provider telling us what a merchant can now do — the only event that changes
+     * an organisation's ABILITY to take money rather than the fate of one payment. It fires for
+     * accounts created through either Accounts API, which is why W1 needed no new event family.
+     */
+    "account.updated",
     "payment_intent.created",
     "payment_intent.requires_action",
     "payment_intent.processing",
@@ -224,6 +231,35 @@ export async function handleStripeWebhook(
         return { status: 200, outcome, detail, ...(extra.org_id ? { orgId: String(extra.org_id) } : {}) };
     };
 
+    /*
+     * ── 2b. THE TWO WORLDS MUST NOT TOUCH (Payments W1) ──────────────────────────────────────────
+     *
+     * A production Connect endpoint receives BOTH live and test deliveries — Stripe says so, because
+     * a platform performs both under one application. The event states which it is; this runtime
+     * states which it is by the key it collects with. A disagreement is never a thing to reconcile:
+     * a test event must not move live merchant state, and a live event must not move test state.
+     *
+     * THE ISOLATION ITSELF IS THE MERCHANT BINDING: a test account and a live account are different
+     * objects with different ids, and only one of them can be bound to an organisation here. This
+     * check is the second line — it makes a mismatch LOUD rather than merely improbable, and keeps
+     * the evidence, because an event arriving in the wrong world is what somebody will need to see.
+     *
+     * It is deliberately narrow. A delivery that makes NO livemode claim is not a delivery in the
+     * wrong world; it is a synthesised one, which the hermetic suites use to prove ordering and
+     * idempotency without touching Stripe. Real Stripe deliveries always carry the field. And a
+     * runtime with no provider key cannot state its own world, so it makes no claim to compare —
+     * refusing there would fail every hermetic case to defend against nothing the binding does not
+     * already prevent.
+     */
+    const runtimeLivemode = runtimeExpectsLivemode();
+    const claimsLivemode = typeof event.livemode === "boolean";
+    if (claimsLivemode && runtimeLivemode !== null && event.livemode !== runtimeLivemode) {
+        return await finish(
+            "rejected",
+            `event livemode ${String(event.livemode)} does not match this runtime; refusing to cross environments`,
+        );
+    }
+
     if (!SUPPORTED.has(eventType)) {
         // Kept, not discarded: an unmodelled type is exactly what someone will need to investigate,
         // and dropping it would leave no trace that Stripe ever said anything.
@@ -241,6 +277,55 @@ export async function handleStripeWebhook(
         return await finish(
             "unattributed",
             "connected account is not bound to any organization; failing closed",
+        );
+    }
+
+    /*
+     * ── 4·W1. THE MERCHANT'S OWN STATE CHANGED ───────────────────────────────────────────────────
+     *
+     * Everything else in this handler is about the fate of one payment. This is about whether the
+     * organisation can take payments AT ALL — onboarding finished, a capability turned on, Stripe
+     * restricted the account.
+     *
+     * The event body is NOT the source. It names the account; the account is then re-read from the
+     * provider and mapped by the one readiness mapper, so a partial or truncated payload cannot set
+     * a merchant `ready`. Tenancy came from the merchant binding above, never from metadata.
+     */
+    if (eventType === "account.updated") {
+        const { data: merchantRow } = await supabase
+            .from("payment_provider_merchants")
+            .select("id, provider_account_ref")
+            .eq("org_id", orgId)
+            .eq("processor", "stripe")
+            .eq("provider_account_ref", connectedAccountRef)
+            .eq("is_active", true)
+            .maybeSingle();
+        const merchant = merchantRow as { id: string; provider_account_ref: string } | null;
+        if (!merchant) {
+            /*
+             * A RACE, not a common case. Tenancy resolution above ALREADY requires an active
+             * merchant, so a withdrawn association is answered `unattributed` before reaching here —
+             * which is the right answer and is what the live suite asserts. This guard exists for the
+             * gap between those two reads: an operator who disconnects while a delivery is in flight
+             * must not have their merchant revived by it.
+             */
+            return await finish(
+                "stale",
+                "connected account is no longer the organization's active merchant; readiness not updated",
+                { org_id: orgId },
+            );
+        }
+        const applied = await applyProviderAccountUpdate(supabase, {
+            merchantId: merchant.id,
+            providerAccountRef: merchant.provider_account_ref,
+        });
+        if (!applied.ok) {
+            return await finish("rejected", `provider readiness could not be read: ${applied.message}`, { org_id: orgId });
+        }
+        return await finish(
+            "applied",
+            `merchant readiness is now ${applied.readiness}, bank ${applied.achReadiness}`,
+            { org_id: orgId },
         );
     }
 
