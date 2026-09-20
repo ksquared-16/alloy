@@ -827,6 +827,7 @@ export default function LocationsConfigurationPage({
             return (
                 <LocationOperationalRulesPanel
                     siteLabelById={new Map([[selectedSite.id, model?.displayName ?? selectedSite.label ?? "Location"]])}
+                    siteId={selectedSite.id}
                     canMutate={canMutate}
                 />
             );
