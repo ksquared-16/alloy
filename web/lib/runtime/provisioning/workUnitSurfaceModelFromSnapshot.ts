@@ -29,6 +29,7 @@ import type {
     QueueRowModel,
     WorkViewLinkModel,
 } from "@/lib/presentation/runtime/types";
+import { isKnownOipMetricKey } from "@/lib/metrics/registry";
 import { queueRowModelFromQueueItem } from "@/lib/presentation/runtime/types";
 import { mapQueueRowSurfaceToCompactConfig, type CompactRowSlots } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 import {
@@ -43,7 +44,7 @@ import { resolveQueueRowSubjectFocus } from "@/lib/presentation/runtime/resolveQ
 import type { WorkspaceHeaderKpiVm, WorkspaceHeaderPresentationModel } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import type { ProcessCardIcon, ProcessCardAccent } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import { provisioningErrorKind, type LensSetEntry, type ProvisioningAnswer } from "./workUnitProvisioningAnswer";
-import type { OperationalPresentation } from "./operationalPresentation";
+import type { OperationalKpiSlot, OperationalPresentation } from "./operationalPresentation";
 
 /**
  * P2-B — resolve the applicable published row variant for one row's context. Returns the variant's
@@ -100,23 +101,63 @@ function resolveRowVariantPresentation(
 }
 
 /**
- * U-P7 header composition → the presentation model, with KPI VALUES RESERVED.
- * `pending: true` is the whole Settlement contract in one flag: the slot is laid out now; D5 fills it.
+ * ONE CONFIGURED HEADER SLOT → ITS RESERVED VIEW MODEL.
+ *
+ * Exported because it is the whole of the answerability decision, and the configuration-driven
+ * contract requires that decision to be gated against real configuration specimens rather than
+ * against a second hardcoded copy of today's key set living in a test.
  */
-function headerFromPresentation(p: OperationalPresentation): WorkspaceHeaderPresentationModel {
-    const kpis: WorkspaceHeaderKpiVm[] = p.header.kpiSlots.map((s) => ({
+export function headerKpiVmFromConfiguredSlot(s: OperationalKpiSlot): WorkspaceHeaderKpiVm {
+    /*
+     * A CONFIGURED KEY THIS BUILD CANNOT ANSWER IS UNAVAILABLE, NOT PENDING.
+     *
+     * The header metric set is configuration, not architecture: it is whatever the published
+     * header layout names. So configuration can legitimately name a key this build's registry
+     * does not define — a metric added to the layout ahead of the code, or one retired from the
+     * registry while a tenant still publishes it.
+     *
+     * Both key-set derivations filter with `isKnownOipMetricKey` BEFORE the request
+     * (`workUnitHeaderKpiKeysFromSlots` for the server seed, `kpiKeySig` for the client), so an
+     * unsupported key is never asked for. The SLOT survives regardless, because it comes from
+     * the layout. `mergeWorkUnitSettlement` then finds no resolved item for it and returns the
+     * slot untouched — leaving `pending: true` set here forever.
+     *
+     * That is a loading placeholder that never terminates, under a KPI region that reports
+     * `resolved` (or `empty`, when every configured key is unsupported) because both are
+     * computed over the FILTERED key set. The operator waits on a slot nothing will ever fill,
+     * and the visible-completion measurement is flattered rather than failed: an unsupported
+     * metric costs 0ms and never settles.
+     *
+     * `pending: false` with the no-data glyph is this type's own documented terminal state —
+     * "once resolved (even to genuine no-data) … the real value, including a real '—', shows".
+     * Unsupported is a real answer: this build cannot compute that metric. It is not zero, it
+     * does not silently vanish from a configured layout, and it does not reserve geometry
+     * forever. The metrics routes already answer unknown keys truthfully via
+     * `findUnknownMetricKeys`; this is the same truth on the path that never reaches them.
+  */
+    const configuredKey = s.sourceKey?.trim() || null;
+    const answerable = configuredKey != null && isKnownOipMetricKey(configuredKey);
+    return {
         slot: s.slot,
         label: s.label,
         icon: (s.icon ?? "chart") as ProcessCardIcon,
         accent: (s.accent ?? null) as ProcessCardAccent | null,
         // Reserved geometry — NOT a value. The renderer shows its stable placeholder because
         // `pending` is true; it never renders a "—" that later flips to a number.
-        formattedValue: "",
+        formattedValue: answerable ? "" : "—",
         status: "",
         sourceKey: s.sourceKey,
         drillHref: null,
-        pending: true,
-    }));
+        pending: answerable,
+    };
+}
+
+/**
+ * U-P7 header composition → the presentation model, with KPI VALUES RESERVED.
+ * `pending: true` is the whole Settlement contract in one flag: the slot is laid out now; D5 fills it.
+ */
+function headerFromPresentation(p: OperationalPresentation): WorkspaceHeaderPresentationModel {
+    const kpis: WorkspaceHeaderKpiVm[] = p.header.kpiSlots.map(headerKpiVmFromConfiguredSlot);
     return {
         title: p.header.title,
         subtitle: p.header.subtitle,

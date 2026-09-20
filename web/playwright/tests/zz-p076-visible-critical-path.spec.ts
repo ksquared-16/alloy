@@ -261,6 +261,50 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         return { mutations: R, presentSections: present, lateMutations: late };
     });
 
+    /*
+     * CONFIGURATION IDENTITY — the other half of a specimen's identity.
+     *
+     * The header metric set and the Focus Panel card set are PUBLISHED CONFIGURATION, not
+     * architecture. Today's deployment happens to publish three KPI slots and seven cards; the
+     * code-owned default visible set names eight, and staging renders seven because v162 dropped
+     * `billing_preview` from the layout. So "seven cards" was never a property of this build.
+     *
+     * That makes a code SHA an incomplete identity for a performance sample. Two runs of the same
+     * SHA against different published configuration are measuring different products, and
+     * comparing them as equivalent would attribute a configuration change to a code change — or
+     * hide a regression behind a shrunken surface. A sample that got faster because a card left
+     * the layout has not got faster.
+     *
+     * Nothing here changes product DOM: the KPI row already publishes its variant attribute and
+     * every card section already publishes `data-alloy-section-id`. This reads what is on screen
+     * and records it beside the SHA, so a specimen states the configuration it answered for.
+     */
+    const configIdentity = await page.evaluate(() => {
+        const row = document.querySelector(
+            "[data-work-unit-header-kpis], [data-workspace-header-kpis]",
+        );
+        const kpiLabels = row
+            ? [...row.querySelectorAll('[role="listitem"]')].map((el) =>
+                  (el as HTMLElement).innerText.replace(/\s+/g, " ").trim().slice(0, 40),
+              )
+            : [];
+        const cards = [...document.querySelectorAll("article.alloy-os-ucard")].map((el) => {
+            const section = el.closest("[data-alloy-section-id]");
+            return (
+                section?.getAttribute("data-alloy-section-id") ||
+                section?.getAttribute("data-alloy-section-name") ||
+                "unidentified"
+            );
+        });
+        return {
+            // ORDERED, because reordering is a configuration change even when the set is identical.
+            configuredKpiSlots: kpiLabels,
+            configuredKpiCount: kpiLabels.length,
+            configuredCardSet: cards,
+            configuredCardCount: cards.length,
+        };
+    });
+
     const dataProbe = await page.evaluate(() => {
         const txt = document.body.innerText || "";
         const rows = document.querySelectorAll(
@@ -333,6 +377,7 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
          * causal contradiction. Resource timing answers on the page's own clock, so these entries
          * are the ones any causal claim must be built from.
          */
+        configIdentity,
         apiTimingBrowserClock,
         focusChain,
         drawerVmTiming,
@@ -356,6 +401,9 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         + `chain=${focusChain.diag ? "present" : "ABSENT"} flips=${(focusChain.diag as {flips?:unknown[]} | null)?.flips?.length ?? 0} `
         + `postMut=${postComplete} `
         + `api=${requests.length} marks=${marks ? "present" : "ABSENT"} rows=${dataProbe.rows} sections=${Object.keys(regions.presentSections).length} `
-        + `valid=${out.valid} signedOut=${dataProbe.signedOut}`,
+        + `valid=${out.valid} signedOut=${dataProbe.signedOut} `
+        + `kpiSet=[${configIdentity.configuredKpiSlots.join("|")}] `
+        + `cardSet=[${configIdentity.configuredCardSet.join("|")}] `
+        + `kpis=${configIdentity.configuredKpiCount} cards=${configIdentity.configuredCardCount}`,
     );
 });
