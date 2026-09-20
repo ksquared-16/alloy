@@ -35,7 +35,7 @@
  * and this must be bumped whenever a scenario's meaning changes. Adding a scenario counts; fixing a
  * typo does not.
  */
-export const CATALOG_VERSION = "2026-09-19.1";
+export const CATALOG_VERSION = "2026-09-20.1";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -811,9 +811,9 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         purpose:
             "Confirm an operator can see the accounting calendar, which period is open, and which accounting period a posted charge was attributed to — and that it is visibly a different thing from the billing period.",
         whyItMatters:
-            "The accounting period is what a finance team closes a month against, and closing it is the act that makes a month's figures final. The platform already enforces it — `financial_accounting_calendars` and `financial_accounting_periods` are canonical, and the `attribute_financial_journal_entry` BEFORE INSERT trigger decides each entry's period and refuses a write into a closed one — so the enforcement is real. What does not exist is any way for a human being to look at it.",
+            "The accounting period is what a finance team closes a month against, and closing it is the act that makes a month's figures final. The platform already enforces it — `financial_accounting_calendars` and `financial_accounting_periods` are canonical, and the `attribute_financial_journal_entry` BEFORE INSERT trigger decides each entry's period — so the enforcement is real. What it does with a CLOSED period is defer, not refuse: an entry effective inside one is attributed to the earliest later OPEN period and stamped with where it came from, because a reporting boundary must not be able to stop a family being charged. It refuses only when there is no later open period to defer to.",
         dispositionReason:
-            "The INSPECTION half is productized as of Repair Pass 5F and is walked through below. The LIFECYCLE half is not: opening and closing a period has no governed action anywhere in the platform, so a tester can see a period's open/closed status and cannot change it. That limit is recorded rather than hidden — see the final step — and it is the one thing this scenario cannot accept.",
+            "The INSPECTION half was productized in Repair Pass 5F. The LIFECYCLE half is productized as of Financials 11B: `billing.adopt_accounting_calendar` materialises a calendar-month calendar and its twelve periods, and `billing.close_accounting_period` closes one behind a preview that states how many entries stay attributed and where later ones will defer. Both require `fin.write`. Reopening is NOT supported in V1 and no control offers it.",
         requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "a posted charge whose period can be read" }],
         navigate: [
             "Organization → Financials → Accounting: the GL codes list, then the Accounting calendar panel beneath it.",
