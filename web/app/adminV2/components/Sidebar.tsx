@@ -27,6 +27,11 @@ import {
     peekOperatorLifecycleLandingCards,
 } from "@/lib/admin/loadOperatorLifecycleLandingClient";
 import { warmOperatorWorkUnitNavEntry } from "@/lib/admin/warmOperatorWorkUnitNavEntry";
+import {
+    peekFreshProvisioning,
+    provisioningAnswerUrl,
+} from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
+import type { WorkViewTotalsSeed } from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
 import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { requestWorkspaceReturn } from "@/lib/experience/surfaceHost/workspaceReturnIntent";
@@ -50,6 +55,16 @@ import SidebarConfigurationModeNav from "@/app/adminV2/components/SidebarConfigu
 import { readInboxUnreadCountCache } from "@/lib/adminV2/inboxNavUnreadCache";
 import { readOperationalTasksNavCountsCache } from "@/lib/adminV2/operationalTasksNavCountsCache";
 import { composeShellNavigationSurfaceViewModel } from "@/lib/adminV2/runtime/surface/shellNavigationSurfaceViewModel";
+
+/*
+ * A stable identity so a miss re-renders nothing: React bails out when the state reference is
+ * unchanged, and this nav re-peeks on every route change.
+ */
+const NO_PEEK = { settled: false, seed: null, orgId: null, hostWorkUnitId: null } as const;
+const PEEK_MISS = { settled: true, seed: null, orgId: null, hostWorkUnitId: null } as const;
+/** Stable empty list: a new array each render would re-key the totals hook every time. */
+const EMPTY_TARGETS: WorkViewTotalTarget[] = [];
+
 
 const WORKSPACE = CANONICAL_OPERATOR_BASE;
 const ORGANIZATION_HREF = CANONICAL_ADMIN_CONFIG_LANDING;
@@ -150,10 +165,109 @@ function SidebarNav({
     // Canonical Work View counts — the SAME source the Workspace tile list and Work Unit pill
     // strip resolve from (`useWorkViewTotals`: the view's `work_view_id` evaluated at its
     // canonical location — host work unit + base lane). Left-nav count == tile count == pill
-    // count for the same view by construction. Fetches DEDUPE via `dedupeAdminFetch`, so calling
-    // the hook here does not double-fetch what the WS/WU surfaces already request.
+    // count for the same view by construction.
+    //
+    // This once read "Fetches DEDUPE via `dedupeAdminFetch`, so calling the hook here does not
+    // double-fetch what the WS/WU surfaces already request." That is NO LONGER TRUE and the note
+    // below records what replaced it: dedupe only ever hid this call behind someone else's
+    // request, and it stopped hiding it the moment that request went away.
 
+    /*
+     * THE WORK VIEW COUNTS THE DOCUMENT ALREADY RESOLVED.
+     *
+     * This nav asks the same question the Work Unit surface asks, and its comment above records
+     * the assumption that made that free: "Fetches DEDUPE via `dedupeAdminFetch`, so calling the
+     * hook here does not double-fetch what the WS/WU surfaces already request." That held only
+     * while the surface issued a request. Once the document seed retired it, this nav became the
+     * sole requester — measured deployed, one /api/admin/queue-view-totals per navigation costing
+     * ~1.5s of server work, issued ~5.6s in, well after first-order finality.
+     *
+     * So it OBSERVES the surface's answer rather than asking again. `peekFreshProvisioning` reads
+     * the same cache entry under the same key with the same TTL and does NOT delete it —
+     * `consumeFreshProvisioning` is consume-once and belongs to the route's owner. A nav that
+     * consumed would steal the answer and force the surface to refetch, which is a documented
+     * 4.7s regression.
+     *
+     * The BASE key is peeked deliberately: that is what the page seeds on an unlensed route. A
+     * lensed or subject-scoped route seeds a different key, misses here, and degrades to the
+     * canonical fallback — correct, just not free.
+     *
+     * WHAT MAKES A NAV THAT OUTLIVES THE ROUTE SAFE — precisely, because the tempting answer is
+     * wrong. The matcher checks org, host work unit, site scope and the configured view signature,
+     * but it checks the seed against facts THE CALLER SUPPLIES. The Work Unit surface supplies
+     * independent ones; this nav cannot, because the seed and the identity come out of the same
+     * peeked answer, so the org and host comparisons compare that answer to itself.
+     *
+     * Route binding therefore comes from the KEY, not the matcher: the peek is addressed with the
+     * CURRENT path's slug and re-runs when that slug changes, so a previous work unit's answer is
+     * never returned here, and a route with no fresh answer settles as a miss. The two checks that
+     * remain genuinely independent are the ones derived from the nav's own state — the configured
+     * view signature from its lifecycle cards, and the site scope from its workspace filter — and
+     * those are what stop a stale configuration or a filtered operator consuming the wrong counts.
+     */
+    const [peeked, setPeeked] = useState<{
+        settled: boolean;
+        seed: WorkViewTotalsSeed | null;
+        orgId: string | null;
+        hostWorkUnitId: string | null;
+    }>(NO_PEEK);
+    useEffect(() => {
+        if (!workUnitSlug) {
+            // Left the Work Unit route: drop the observation rather than carry it forward.
+            setPeeked(PEEK_MISS);
+            return;
+        }
+        const promise = peekFreshProvisioning(provisioningAnswerUrl(workUnitSlug));
+        if (!promise) {
+            setPeeked(PEEK_MISS);
+            return;
+        }
+        let cancelled = false;
+        void promise
+            .then((answer) => {
+                if (cancelled) return;
+                /*
+                 * Read from the answer's own slug lookup rather than from `seed.identity`. That
+                 * does NOT make the matcher's host check independent — both come from this same
+                 * answer either way, as the gates record — but it keeps the seed from being the
+                 * sole source of the thing it is checked against, so the check degrades to a
+                 * consistency assertion on the answer instead of a literal self-comparison.
+                 */
+                setPeeked({
+                    settled: true,
+                    seed:
+                        answer && "workViewTotalsSeed" in answer
+                            ? (answer.workViewTotalsSeed ?? null)
+                            : null,
+                    orgId: answer && "orgId" in answer ? (answer.orgId ?? null) : null,
+                    hostWorkUnitId:
+                        answer && "workUnit" in answer ? (answer.workUnit?.id ?? null) : null,
+                });
+            })
+            .catch(() => {
+                // An answer that rejects is not an answer; the fallback fetch is the correct path.
+                if (!cancelled) setPeeked(PEEK_MISS);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [workUnitSlug]);
+    const peekSettled = peeked.settled;
+
+    /*
+     * Targets are WITHHELD until the peek above has settled, and that ordering is the whole repair.
+     *
+     * The totals hook decides ONCE whether a seed answers its question, on the first render where
+     * targets exist. The peek cannot resolve before then — effects run after commit and the cached
+     * answer is delivered through a promise — so publishing targets first would spend that one
+     * decision on a seed that had not arrived yet, record "no_seed", and fetch. That is the exact
+     * defect a deployed measurement already caught once on the surface instance.
+     *
+     * Settling is not the same as hitting: a miss settles immediately and the badges fall through
+     * to the canonical fetch. This delays the question by one render, never the answer.
+     */
     const workViewTotalTargets = useMemo<WorkViewTotalTarget[]>(() => {
+        if (!peekSettled) return EMPTY_TARGETS;
         const seen = new Set<string>();
         const out: WorkViewTotalTarget[] = [];
         for (const card of lifecycleCards) {
@@ -169,12 +283,17 @@ function SidebarNav({
             }
         }
         return out;
-    }, [lifecycleCards]);
+    }, [lifecycleCards, peekSettled]);
+
 
     const workViewTotals = useWorkViewTotals({
+        ownerLabel: "sidebar",
         targets: workViewTotalTargets,
         selectedSiteId,
         enabled: lifecycleCards.length > 0,
+        documentSeed: peeked.seed,
+        seedOrgId: peeked.orgId,
+        seedHostWorkUnitId: peeked.hostWorkUnitId,
     });
 
     // ShellNavigationSurfaceViewModel — the persistent left nav is mounted ABOVE the route (in
