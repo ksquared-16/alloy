@@ -257,13 +257,15 @@ describe("21-24. the prerequisite changed nothing else", () => {
         expect(read("lib/locations/topologyPresentation.ts")).toContain("presentRoomTopology");
     });
 
-    it("24. no legacy capacity adoption UI was built in this slice", () => {
-        const roomDetail = read("components/adminV2/settings/locations/LocationRoomDetailPanel.tsx");
-        expect(roomDetail).not.toContain("Confirm capacity");
-        expect(roomDetail).not.toContain("capacityAdoptionState");
-        expect(roomDetail).not.toContain("resolved-capacity");
-        const site = read("components/adminV2/settings/locations/LocationSiteDetailPanel.tsx");
-        expect(site).toContain("Capacity summary");
-        expect(site).not.toContain("Capacity coverage");
+    it("24. the prerequisite itself introduced no capacity product change", () => {
+        // SUPERSEDED by the Slice 11 resumption, deliberately. This pinned the
+        // prerequisite as capacity-neutral, which it was; the Site surface has
+        // since moved from a seat sum to coverage, so pinning "Capacity summary"
+        // would now pin the defect. What this still owns is that the RESTORED
+        // CONCERN did not smuggle capacity product behaviour into itself.
+        const panel = read("components/adminV2/settings/locations/LocationOperationalRulesPanel.tsx");
+        expect(panel).not.toContain("capacityAdoptionState");
+        expect(panel).not.toContain("buildLegacyCapacityAdoptionBody");
+        expect(panel).not.toContain("Confirm capacity");
     });
 });

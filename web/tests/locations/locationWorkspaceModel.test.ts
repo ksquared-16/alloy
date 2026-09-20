@@ -80,13 +80,18 @@ describe("location workspace model", () => {
             },
         });
 
-        expect(model.configuredCapacity).toBe(30);
+        // 30 was the legacy seat sum. There is no canonical site seat total, and a
+        // legacy number whose KIND nobody confirmed cannot mean a site is complete —
+        // both rooms now read as needing review, and setup is no longer complete.
+        expect(model.capacityCoverage).toEqual({ total: 2, confirmed: 0, needsReview: 2, unset: 0 });
         expect(model.activeRoomCount).toBe(2);
         expect(model.activeProgramCount).toBe(2);
-        expect(model.setupComplete).toBe(true);
-        expect(model.criticalCount).toBe(0);
-        expect(model.recommendedCount).toBe(0);
-        expect(model.attention).toEqual([]);
+        expect(model.setupComplete).toBe(false);
+        // The operator consequence of §15, stated rather than smoothed over: a site
+        // that read as fully set up now shows capacity work, because its rooms carry
+        // numbers whose meaning nobody has confirmed.
+        expect(model.criticalCount).toBe(1);
+        expect(model.attention.map((a) => a.key)).toContain("room-capacity");
     });
 
     it("keeps unknown capacity unknown and identifies partial setup", () => {
@@ -104,8 +109,10 @@ describe("location workspace model", () => {
             schedules: [],
         });
 
-        expect(model.configuredCapacity).toBe(10);
-        expect(model.roomsNeedingCapacity).toBe(1);
+        // One room carries an unconfirmed legacy value, one carries nothing; neither
+        // has a confirmed meaning, so both are outstanding.
+        expect(model.capacityCoverage).toEqual({ total: 2, confirmed: 0, needsReview: 1, unset: 1 });
+        expect(model.roomsNeedingCapacity).toBe(2);
         expect(model.attention).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ key: "room-capacity", grade: "fix" }),
@@ -131,7 +138,7 @@ describe("location workspace model", () => {
             schedules: [],
         });
 
-        expect(model.configuredCapacity).toBeNull();
+        expect(model.capacityCoverage).toEqual({ total: 0, confirmed: 0, needsReview: 0, unset: 0 });
         expect(model.address).toBeNull();
         expect(model.phone).toBeNull();
         expect(model.timezone).toBeNull();
@@ -154,14 +161,18 @@ describe("location workspace model", () => {
             // tours/placement/access omitted → null/unknown
         });
 
-        expect(model.setupPercent).toBe(100);
-        expect(model.setupComplete).toBe(true);
+        // Was 100 while an unconfirmed legacy number counted as configured capacity.
+        expect(model.setupPercent).toBe(75);
+        // Same consequence: rooms carrying unconfirmed legacy capacity leave the
+        // site incomplete until someone says what those numbers mean.
+        expect(model.setupComplete).toBe(false);
         expect(model.setupItems.filter((item) => item.complete === null).map((item) => item.key)).toEqual([
             "tours",
             "placement",
             "access",
         ]);
-        expect(model.recommendedCount).toBe(0);
+        // The new capacity-review item is a recommendation, not a blocker.
+        expect(model.recommendedCount).toBe(1);
     });
 
     it("keeps selected location, tab, and nested item URL-addressable", () => {
@@ -200,18 +211,30 @@ describe("location workspace model", () => {
         expect(collection.activeLocationCount).toBe(2);
         expect(collection.totalRooms).toBe(1);
         expect(collection.totalPrograms).toBe(1);
-        expect(collection.totalConfiguredCapacity).toBe(12);
+        // Coverage adds COUNTS OF ROOMS across locations, never capacities.
+        expect(collection.totalCapacityCoverage.total).toBe(1);
+        expect(collection.totalCapacityCoverage.confirmed + collection.totalCapacityCoverage.needsReview + collection.totalCapacityCoverage.unset).toBe(1);
+        expect(JSON.stringify(collection.totalCapacityCoverage)).not.toContain("12");
         expect(collection.locations[0]?.id).toBe("site-2");
         expect(collection.locations[0]?.criticalCount).toBeGreaterThan(0);
         expect(collection.attentionHighlights.map((highlight) => highlight.item.key)).toEqual([
             "timezone",
             "rooms",
+            "room-capacity",
             "programs",
             "schedule",
         ]);
-        expect(collection.attentionHighlights.every((highlight) => highlight.locationId === "site-2")).toBe(true);
+        // site-1 used to have nothing outstanding. It now surfaces capacity review,
+        // because its room carries a number whose meaning was never confirmed —
+        // which is the whole point of the readiness change.
+        expect(new Set(collection.attentionHighlights.map((h) => h.locationId))).toEqual(
+            new Set(["site-1", "site-2"]),
+        );
+        expect(
+            collection.attentionHighlights.filter((h) => h.locationId === "site-1").map((h) => h.item.key),
+        ).toEqual(["room-capacity"]);
         expect(collection.locations[0]?.topAttention?.key).toBe("timezone");
-        expect(collection.locations.find((location) => location.id === "site-1")?.setupComplete).toBe(true);
+        expect(collection.locations.find((location) => location.id === "site-1")?.setupComplete).toBe(false);
     });
 
     it("builds a priority-ordered cross-location queue without collapsing distinct work", () => {

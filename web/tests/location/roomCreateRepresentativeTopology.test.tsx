@@ -116,6 +116,7 @@ async function addRoomThroughTheProduct(steps: {
                 programOptions={[]}
                 schedulePatterns={[]}
                 insideOptions={eligibleInsideOptions(asHierarchyRows(), SITE)}
+                acceptsLegacyCapacity
                 onCancel={() => {}}
                 onCreate={async (input) => { captured = input; }}
             />,

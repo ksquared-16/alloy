@@ -231,6 +231,30 @@ export type SiteCapacityCoverage = {
  *
  * The caller chooses the cohort; this counts it.
  */
+/**
+ * The rooms a capacity coverage figure is ABOUT.
+ *
+ * Active units whose effective role is physical_space or operational_group. A
+ * physical room carries licensed and physical seats; a classroom carries the
+ * operational and ratio-bearing ones. A SHARED SPACE carries neither — a child
+ * may be on the playground without belonging to it, placement cannot target it
+ * and ratio does not apply — so counting it would report work that is not
+ * outstanding and can never be done.
+ *
+ * Inactive rooms are excluded, matching how the legacy summary already scoped
+ * "across active rooms": a retired room is not missing configuration.
+ */
+export function capacityCoverageCohort(
+    rooms: readonly LocationHierarchyRow[]
+): LocationHierarchyRow[] {
+    return rooms.filter((room) => {
+        if (room.is_active === false) return false;
+        if (String(room.location_type ?? "").trim() !== "unit") return false;
+        const role = room.unit_role ?? "operational_group";
+        return role === "physical_space" || role === "operational_group";
+    });
+}
+
 export function summarizeSiteCapacityCoverage(
     rooms: readonly LocationHierarchyRow[],
     allRules: readonly ChildcareCapacityRuleRow[]
@@ -245,4 +269,46 @@ export function summarizeSiteCapacityCoverage(
         else unset += 1;
     }
     return { total: rooms.length, confirmed, needsReview, unset };
+}
+
+/**
+ * Compact coverage line for a configuration surface.
+ *
+ * Deliberately not a number of seats. Canonical doctrine defines no site-level
+ * seat aggregate — capacity is room-scoped, kind-specific, effective-dated and
+ * binding per operational context — so the honest thing a site can report is how
+ * far its rooms have got.
+ */
+export function formatCapacityCoverage(coverage: SiteCapacityCoverage): string {
+    if (coverage.total === 0) return "No rooms yet";
+    const parts: string[] = [];
+    if (coverage.confirmed > 0) parts.push(`${coverage.confirmed} confirmed`);
+    if (coverage.needsReview > 0) parts.push(`${coverage.needsReview} need review`);
+    if (coverage.unset > 0) parts.push(`${coverage.unset} unset`);
+    return parts.join(" · ") || "No capacity configured yet";
+}
+
+/**
+ * May Add Room still capture an untyped legacy capacity for this site?
+ *
+ * The debt stop. While a site has NO canonical capacity rules, the legacy field
+ * is the only capture path its operators have ever had, and removing it would
+ * leave them unable to record capacity at all — the Slice 9 census found exactly
+ * that estate: legacy everywhere, canonical nowhere.
+ *
+ * Once the site has even one canonical rule, its operators have demonstrably
+ * reached the canonical path, and every further untyped number is new debt
+ * someone will later have to review. So the field stops writing there.
+ *
+ * Readiness is judged per SITE rather than per org or by a flag day, because
+ * adoption happens a campus at a time.
+ */
+export function siteAcceptsLegacyCapacityCapture(
+    siteRooms: readonly LocationHierarchyRow[],
+    allRules: readonly ChildcareCapacityRuleRow[]
+): boolean {
+    const roomIds = new Set(siteRooms.map((r) => r.id));
+    return !allRules.some(
+        (rule) => rule.scope_type === "room" && rule.room_location_id != null && roomIds.has(rule.room_location_id)
+    );
 }

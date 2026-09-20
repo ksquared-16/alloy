@@ -39,6 +39,8 @@ async function renderPanel(overrides: Partial<PanelProps> = {}) {
                 programOptions={[]}
                 schedulePatterns={[]}
                 insideOptions={INSIDE}
+                acceptsLegacyCapacity
+
                 onCancel={() => {}}
                 onCreate={onCreate}
                 {...overrides}
