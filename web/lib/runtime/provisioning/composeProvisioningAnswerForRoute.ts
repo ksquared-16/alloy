@@ -128,6 +128,34 @@ export async function composeProvisioningAnswerForRoute(input: {
      * control-flow analysis cannot see, so a plain binding narrows to `null` at the join.
      */
     const earlyRef: { run: Promise<EarlyProducerRun | null> | null } = { run: null };
+    /*
+     * THE OVERLAP'S OWN INSTRUMENT — because the existing spans structurally cannot see it.
+     *
+     * `inner_compose_ms` and `card_producers_ms` measure two ADJACENT blocks. That was a complete
+     * description while the producers ran after composition; they now run BESIDE it, so
+     * `card_producers_ms` measures only whatever is left at the join, and the producers' real
+     * start, duration and overlap have no observer at all. Reporting the shrunken join block as
+     * "the producers got faster" would be the same class of error as calling `compose_wall_ms` a
+     * prelude: a precise number for something other than the thing named.
+     *
+     * Counters, not only clocks. The acceptance condition for the matching path is ONE producer
+     * invocation, and no duration can tell a reuse apart from a second run that happened to be
+     * quick. Diagnostics only, behind the same flag, never load-bearing.
+     */
+    const overlapDiag = {
+        announce_offset_ms: null as number | null,
+        participant_ms: null as number | null,
+        producers_ms: null as number | null,
+        early_total_ms: null as number | null,
+        early_end_offset_ms: null as number | null,
+        compose_end_offset_ms: null as number | null,
+        overlap_ms: null as number | null,
+        tail_ms: null as number | null,
+        outcome: "no_announcement",
+        early_rejected: false,
+        producer_invocations: 0,
+        participant_reads: 0,
+    };
 
     const answer = await composeWorkUnitProvisioningAnswer({
         onSubjectResolved: ({ subjectId, orgId, customerId }) => {
@@ -138,12 +166,21 @@ export async function composeProvisioningAnswerForRoute(input: {
              * an unhandled rejection can never escape while composition is still assembling; the
              * join treats null as "no speculation" and falls back canonically.
              */
+            const tAnnounce = mark();
+            overlapDiag.announce_offset_ms = timing ? Math.round(tAnnounce - tInner) : null;
             earlyRef.run = (async (): Promise<EarlyProducerRun> => {
+                const tEarlyParticipant = mark();
+                overlapDiag.participant_reads += 1;
                 const participant = await resolveSoleEnrollmentParticipantForOpportunity({
                     supabase,
                     orgId,
                     opportunityId: subjectId,
                 });
+                if (timing) {
+                    overlapDiag.participant_ms = Math.round(performance.now() - tEarlyParticipant);
+                }
+                const tEarlyProducers = mark();
+                overlapDiag.producer_invocations += 1;
                 const cards = await projectFocusPanelCardProducers({
                     supabase,
                     orgId,
@@ -164,8 +201,19 @@ export async function composeProvisioningAnswerForRoute(input: {
                     },
                     financialSubjectId: customerId,
                 });
+                if (timing) {
+                    const tEarlyEnd = performance.now();
+                    overlapDiag.producers_ms = Math.round(tEarlyEnd - tEarlyProducers);
+                    overlapDiag.early_total_ms = Math.round(tEarlyEnd - tAnnounce);
+                    overlapDiag.early_end_offset_ms = Math.round(tEarlyEnd - tInner);
+                }
                 return { subjectId, financialSubjectId: customerId, participant, cards };
-            })().catch(() => null);
+            })().catch(() => {
+                // Recorded, not swallowed: a speculative run that FAILED and one that never
+                // started both produce `null`, and they call for different repairs.
+                overlapDiag.early_rejected = true;
+                return null;
+            });
         },
         supabase,
         orgId: gate.orgId,
@@ -204,6 +252,7 @@ export async function composeProvisioningAnswerForRoute(input: {
         summaryConfigHeldIds: input.summaryConfigHeldIds ?? [],
     });
     const innerComposeMs = timing ? performance.now() - tInner : 0;
+    overlapDiag.compose_end_offset_ms = timing ? Math.round(innerComposeMs) : null;
     let cardProducersMs: number | null = null;
 
     /*
@@ -259,11 +308,14 @@ export async function composeProvisioningAnswerForRoute(input: {
         const resolvedParticipant = earlySubjectMatches
             ? early!.participant
             : attentionId
-              ? await resolveSoleEnrollmentParticipantForOpportunity({
-                    supabase,
-                    orgId: gate.orgId,
-                    opportunityId: attentionId,
-                })
+              ? await (async () => {
+                    overlapDiag.participant_reads += 1;
+                    return resolveSoleEnrollmentParticipantForOpportunity({
+                        supabase,
+                        orgId: gate.orgId,
+                        opportunityId: attentionId,
+                    });
+                })()
               : null;
         answer.resolvedParticipant = resolvedParticipant;
         const commitContext = buildCommitCriticalOperationalContext({
@@ -308,16 +360,67 @@ export async function composeProvisioningAnswerForRoute(input: {
             ...answer.focusPanelOperationalProjection,
             cards: earlyRunUsable
                 ? early!.cards
-                : await projectFocusPanelCardProducers({
-                      supabase,
-                      orgId: gate.orgId,
-                      // The route's OWN resolved authority — same canonical bundle as the endpoint.
-                      access: gate.access,
-                      context: commitContext,
-                      financialSubjectId: canonicalFinancialSubjectId,
-                  }),
+                : await (async () => {
+                      overlapDiag.producer_invocations += 1;
+                      return projectFocusPanelCardProducers({
+                          supabase,
+                          orgId: gate.orgId,
+                          // The route's OWN resolved authority — the same canonical bundle the
+                          // endpoint uses.
+                          access: gate.access,
+                          context: commitContext,
+                          financialSubjectId: canonicalFinancialSubjectId,
+                      });
+                  })(),
         };
         cardProducersMs = timing ? performance.now() - tProducers : 0;
+        /*
+         * THE OUTCOME, NAMED BY THE JOIN THAT ACTUALLY DECIDED IT.
+         *
+         * The branches stay distinct because each implies a different repair: a subject mismatch
+         * means the announcement fired on the wrong record, a customer mismatch means child-grain
+         * household fallback moved underneath the speculation, and `early_failed` means the
+         * speculative chain threw. Collapsing them into "not used" would hide which is happening,
+         * and only one of the three would be worth fixing.
+         */
+        overlapDiag.outcome = !earlyRef.run
+            ? "no_announcement"
+            : overlapDiag.early_rejected || !early
+              ? "early_failed"
+              : !earlySubjectMatches
+                ? "subject_mismatch"
+                : !earlyRunUsable
+                  ? "customer_mismatch"
+                  : "used";
+        if (
+            timing &&
+            overlapDiag.early_end_offset_ms != null &&
+            overlapDiag.announce_offset_ms != null
+        ) {
+            const composeEnd = overlapDiag.compose_end_offset_ms ?? 0;
+            /*
+             * Overlap is the part of the early run that ran WHILE composition was still running —
+             * announcement to whichever ended first. The tail is whatever ran after composition
+             * finished, clamped at zero: a run that finished early has no tail, not a negative one.
+             */
+            overlapDiag.overlap_ms = Math.max(
+                0,
+                Math.round(
+                    Math.min(overlapDiag.early_end_offset_ms, composeEnd) -
+                        overlapDiag.announce_offset_ms,
+                ),
+            );
+            overlapDiag.tail_ms = Math.max(
+                0,
+                Math.round(overlapDiag.early_end_offset_ms - composeEnd),
+            );
+        }
+    }
+
+    if (cardProducersMs == null) {
+        // The producers genuinely did not run, so no overlap branch was ever reachable. Reporting
+        // "no_announcement" here would name a missing announcement that was never due.
+        overlapDiag.outcome = "not_operational";
     }
 
     if (timing) {
@@ -344,6 +447,19 @@ export async function composeProvisioningAnswerForRoute(input: {
                     document_actor_ms: Math.round(documentActorMs),
                     inner_compose_ms: Math.round(innerComposeMs),
                     card_producers_ms: cardProducersMs == null ? null : Math.round(cardProducersMs),
+                    overlap: {
+                        announce_offset_ms: overlapDiag.announce_offset_ms,
+                        participant_ms: overlapDiag.participant_ms,
+                        producers_ms: overlapDiag.producers_ms,
+                        early_total_ms: overlapDiag.early_total_ms,
+                        early_end_offset_ms: overlapDiag.early_end_offset_ms,
+                        compose_end_offset_ms: overlapDiag.compose_end_offset_ms,
+                        overlap_ms: overlapDiag.overlap_ms,
+                        tail_ms: overlapDiag.tail_ms,
+                        outcome: overlapDiag.outcome,
+                        producer_invocations: overlapDiag.producer_invocations,
+                        participant_reads: overlapDiag.participant_reads,
+                    },
                 },
             });
         } catch {
