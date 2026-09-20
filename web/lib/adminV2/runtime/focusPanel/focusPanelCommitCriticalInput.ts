@@ -28,6 +28,10 @@ export type FocusPanelCommitCriticalInput = {
      */
     actionAbsence: { code: string; message: string } | null;
     subjectIdentityTruth: SubjectIdentityTruth | null;
+    /** Configured lifecycle rail, resolved server-side by the canonical pure builder. */
+    businessProcessStages?: ReadonlyArray<{ key: string; label: string; support?: readonly string[] }> | null;
+    /** Configured process name ("Enrollment"), not the generic card title. */
+    businessProcessName?: string | null;
 /**
  * THE AUTHORITATIVE PARTICIPATION, resolved once on the server and carried to the browser.
  *
