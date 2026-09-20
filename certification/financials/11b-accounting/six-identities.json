@@ -8,8 +8,14 @@
   "invoiceDate": "2026-09-01",
   "dueDate": "2026-09-11",
   "payments": null,
-  "accountingPeriod": null,
-  "accountingDeferredFrom": null,
+  "accountingPeriod": {
+    "key": "FY2026-P10",
+    "label": "October 2026",
+    "status": "open",
+    "startsOn": "2026-10-01",
+    "endsOn": "2026-10-31"
+  },
+  "accountingDeferredFrom": "2026-09-01",
   "reductions": null,
   "responsibility": {
     "allocatedCents": 0,
