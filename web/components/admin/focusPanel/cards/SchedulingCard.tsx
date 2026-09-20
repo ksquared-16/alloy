@@ -1,6 +1,8 @@
 "use client";
 
 import { loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
+import type { AssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
+import { acceptedTermBillingPeriods } from "@/lib/financials/billingPeriod";
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { CalendarDays, Clock, DoorOpen, CalendarRange, Wallet } from "lucide-react";
@@ -1695,6 +1697,46 @@ function ScheduleEditor({
     const [offeringId, setOfferingId] = useState(() => tuitionPlanIdFromTruth(truth, child.id));
     const [rateOptions, setRateOptions] = useState<Array<{ id: string; label: string }>>([]);
     /*
+     * ── THE CANONICAL VIEW, NOT JUST ITS LABELS ───────────────────────────────────────────────
+     *
+     * The options were rendered from `assignments[]` and the rest of it thrown away. Accepting a
+     * term needs what that view already carries and nothing else can supply: the assignment's own
+     * `opportunityCustomerMemberId` (the action's subject) and the `resolutionKey` the operator
+     * was actually shown — the service refuses a commit whose resolution has moved on, and that
+     * refusal only works if the key travels with the choice.
+     *
+     * It also carries `accepted`, which is how the surface renders PERSISTED truth rather than
+     * the dropdown's own value.
+     */
+    const [pricingView, setPricingView] = useState<AssignmentTuitionView | null>(null);
+    /** Required by the override authority, and never defaulted to something plausible. */
+    const [overrideReason, setOverrideReason] = useState("");
+
+    /** Derived from the persisted term, through the authority generation uses. */
+    const acceptedPeriods = useMemo(
+        () =>
+            pricingView?.accepted
+                ? acceptedTermBillingPeriods(
+                      {
+                          cadenceKey: pricingView.accepted.cadenceKey,
+                          effectiveStart: pricingView.accepted.effectiveStart,
+                          effectiveEnd: pricingView.accepted.effectiveEnd,
+                      },
+                      new Date().toISOString().slice(0, 10),
+                  )
+                : null,
+        [pricingView],
+    );
+    /* An override is a selection that differs from the resolver's recommendation — never a price. */
+    const isOverridingSelection =
+        Boolean(offeringId.trim()) &&
+        pricingView?.recommended != null &&
+        offeringId.trim() !== pricingView.recommended.sourceId;
+    /** What the canonical write said. Never optimistic: absent until an action answered. */
+    const [tuitionOutcome, setTuitionOutcome] = useState<
+        { kind: "accepted" | "overridden"; label: string } | { kind: "needs_attention"; detail: string } | null
+    >(null);
+    /*
      * ── RESPONSIBILITY, THE SAME AUTHORITY FINANCIALS USES ────────────────────────────────────
      *
      * Assignment is where a commercial relationship is set up, so it is where an operator expects
@@ -1749,6 +1791,7 @@ function ScheduleEditor({
                 if (cancelled) return;
                 const view = (payload?.assignments ?? []).find((v) => v.customerMemberId === child.id);
                 if (!view) return;
+                setPricingView(view);
                 const recommendedId = view.recommended?.sourceId ?? null;
                 const opts = [...view.applicable]
                     // The recommendation first; the rest keep the resolver's own order.
@@ -1895,6 +1938,126 @@ function ScheduleEditor({
         (!createAsSecondary || Boolean(assignmentTypeLabel)) &&
         (!roomRequired || Boolean(roomId));
 
+    /**
+     * ── THE CANONICAL COMMERCIAL TERM ─────────────────────────────────────────────────────────
+     *
+     * This is what the snapshot below is NOT. `POST /assignment-quote` records an ESTIMATE on the
+     * process instance and drives workflow projection; it writes no `enrollment_pricing_terms`
+     * row and never did. What a family has agreed is an effective-dated term, and the only two
+     * writers of one are `enrollment.pricing.accept` and `.override`.
+     *
+     * So the Assignment surface asks the same registered action the AssignmentTuitionCard asks.
+     * There is no second writer, no assignment-owned price column, and no amount in this payload:
+     * the service re-reads the assignment from its owners and takes the money from the catalog.
+     * A browser-authored figure has nowhere to go here, deliberately.
+     *
+     * `resolutionKey` travels with the choice because the service refuses a commit whose
+     * resolution has moved since the operator looked — the whole point of which is lost if the
+     * caller sends a fresh one.
+     */
+    async function acceptAssignmentTuition(): Promise<
+        { ok: true; state: string; label: string } | { ok: false; detail: string }
+    > {
+        const view = pricingView;
+        const selected = offeringId.trim();
+        if (!view || !selected) return { ok: false, detail: "No tuition option was selected." };
+        const option = view.applicable.find((o) => o.sourceId === selected);
+        /*
+         * AN UNKNOWN SELECTION IS A REFUSAL, NOT A FALLBACK. The snapshot route resolves an
+         * unmatched id to the recommendation, which silently discards what the operator chose;
+         * the canonical path must never do that.
+         */
+        if (!option) return { ok: false, detail: "That tuition option no longer applies to this assignment." };
+        const isOverride = view.recommended != null && option.sourceId !== view.recommended.sourceId;
+
+        const res = await fetch("/api/admin/actions/execute", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                action_key: isOverride ? "enrollment.pricing.override" : "enrollment.pricing.accept",
+                entity_type: "opportunity_customer_member",
+                entity_id: view.opportunityCustomerMemberId,
+                mode: "execute",
+                confirmation: { confirmed: true },
+                payload: {
+                    opportunity_customer_member_id: view.opportunityCustomerMemberId,
+                    resolution_key: view.resolutionKey,
+                    selected_source_id: option.sourceId,
+                    cadence_key: option.cadenceKey,
+                    /* Override requires its own reason; the action refuses without one. */
+                    ...(isOverride ? { override_reason: overrideReason.trim() } : {}),
+                },
+            }),
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+            error?: string;
+            message?: string;
+            result?: { term?: { state?: string; amount_cents?: number; cadence_key?: string } };
+        };
+        if (!res.ok) return { ok: false, detail: json.error ?? json.message ?? `Refused (${res.status}).` };
+        const term = json.result?.term;
+        return {
+            ok: true,
+            state: term?.state ?? (isOverride ? "overridden" : "accepted"),
+            label: term?.amount_cents != null ? `${(term.amount_cents / 100).toFixed(2)} ${term.cadence_key ?? ""}`.trim() : option.amountLabel,
+        };
+    }
+
+    /**
+     * ── TWO CANONICAL ACTS, REPORTED SEPARATELY ───────────────────────────────────────────────
+     *
+     * The assignment exists by the time this runs, and it stays existing. Tuition acceptance is
+     * its own act against its own authority and can refuse for reasons that say nothing about the
+     * schedule — a resolution that moved, an option withdrawn, a cadence the platform cannot
+     * bill. Rolling the assignment back to keep the pair atomic would destroy real work to
+     * preserve a tidiness the domain never claimed.
+     *
+     * So a failure here is REPORTED, not raised: the operator is told the assignment was created
+     * and tuition needs attention, and the missing step is the only thing to retry. Retrying
+     * converges through the service's own idempotency — a live term for the same assignment on
+     * the same effective date is recognised rather than duplicated — so no workflow-level
+     * idempotency authority is invented here.
+     */
+    async function settleTuition(): Promise<void> {
+        if (!offeringId.trim() || child.kind !== "child") return;
+        try {
+            const outcome = await acceptAssignmentTuition();
+            if (outcome.ok) {
+                setTuitionOutcome({
+                    kind: outcome.state === "overridden" ? "overridden" : "accepted",
+                    label: outcome.label,
+                });
+                /* Persisted truth is re-read; the dropdown's value is not the answer. */
+                await refreshPricingView();
+            } else {
+                setTuitionOutcome({ kind: "needs_attention", detail: outcome.detail });
+            }
+        } catch (e) {
+            setTuitionOutcome({
+                kind: "needs_attention",
+                detail: e instanceof Error ? e.message : "Tuition could not be accepted.",
+            });
+        }
+    }
+
+    /** Re-read the canonical view, so what is shown is what was persisted. */
+    async function refreshPricingView(): Promise<void> {
+        if (!opportunityId) return;
+        try {
+            const res = await fetch(`/api/admin/financial-config/opportunity/${opportunityId}`, {
+                credentials: "include",
+                cache: "no-store",
+            });
+            if (!res.ok) return;
+            const body = (await res.json()) as { assignments?: AssignmentTuitionView[] };
+            const view = (body.assignments ?? []).find((v) => v.customerMemberId === child.id);
+            if (view) setPricingView(view);
+        } catch {
+            /* The card keeps the last canonical answer rather than inventing a fresher one. */
+        }
+    }
+
     async function persistAssignmentQuote(): Promise<void> {
         // Child enrichment, on a case. A tuition quote is a commercial fact about a family's
         // enrollment; a staff assignment produces none, and there is no opportunity to hang one on.
@@ -1944,6 +2107,7 @@ function ScheduleEditor({
                 await persistAssignmentQuote().catch(() => {
                     /* schedule write succeeded — quote is opportunistic on opportunity */
                 });
+                await settleTuition();
                 await onSaved();
                 return;
             }
@@ -1986,6 +2150,7 @@ function ScheduleEditor({
             await persistAssignmentQuote().catch(() => {
                 /* schedule write succeeded — quote is opportunistic on opportunity */
             });
+            await settleTuition();
             await onSaved();
         } catch (e) {
             setError((e as Error).message);
@@ -2078,6 +2243,104 @@ function ScheduleEditor({
                                 here applies to this assignment; selecting one locks it onto the
                                 enrollment opportunity.
                             </div>
+
+                            {/*
+                              * ── WHAT IS ACTUALLY AGREED, FROM THE PERSISTED TERM ────────────
+                              *
+                              * Not the dropdown's value, which is a selection and not an
+                              * agreement. This reads `accepted` off the canonical view, which is
+                              * the same row recurring generation bills from — so if the two ever
+                              * disagreed, this line would be the one that changed.
+                              */}
+                            {pricingView?.accepted ? (
+                                <div
+                                    style={{ fontSize: 11, color: T.slate, marginTop: 2 }}
+                                    data-assignment-accepted-term={pricingView.accepted.state}
+                                    data-assignment-accepted-cadence={pricingView.accepted.cadenceKey}
+                                >
+                                    <strong style={{ fontWeight: 650 }}>
+                                        {pricingView.accepted.state === "overridden" ? "Overridden" : "Accepted"}
+                                    </strong>{" "}
+                                    {(pricingView.accepted.amountCents / 100).toLocaleString(undefined, {
+                                        style: "currency",
+                                        currency: pricingView.accepted.currencyCode || "USD",
+                                    })}
+                                    {" / "}
+                                    {pricingView.accepted.cadenceKey}
+                                    {" · from "}
+                                    {pricingView.accepted.effectiveStart}
+                                    {pricingView.accepted.overrideReason ? ` · ${pricingView.accepted.overrideReason}` : ""}
+                                </div>
+                            ) : null}
+
+                            {/*
+                              * ── THE ASSIGNMENT SAYS WHICH PERIODS IT WILL BE BILLED IN ──────
+                              *
+                              * Derived, never stored and never configured: the accepted cadence
+                              * and the agreement anchor decide it, through the one authority that
+                              * decides it for generation too. No accepted term means no period —
+                              * an invented one would be a promise about money nobody has agreed.
+                              */}
+                            {acceptedPeriods ? (
+                                <div
+                                    style={{ fontSize: 11, color: T.mid40, marginTop: 2 }}
+                                    data-assignment-billing-frequency={pricingView?.accepted?.cadenceKey ?? ""}
+                                    data-assignment-billing-period={acceptedPeriods.current.key}
+                                    data-assignment-next-billing-period={acceptedPeriods.next.key}
+                                >
+                                    Billing frequency {pricingView?.accepted?.cadenceKey} · current period{" "}
+                                    {acceptedPeriods.current.label} · next {acceptedPeriods.next.label}
+                                </div>
+                            ) : null}
+
+                            {/*
+                              * ── THE STALE-TERM REVIEW STATE ─────────────────────────────────
+                              *
+                              * The accepted term records the resolution it was agreed under. When
+                              * the assignment has moved since, the surface says so and changes
+                              * nothing: repricing silently would replace a commercial agreement
+                              * with an inference. The operator accepts or overrides explicitly.
+                              */}
+                            {pricingView?.acceptedIsStale ? (
+                                <div style={{ fontSize: 11, color: T.ember, marginTop: 2 }} data-assignment-tuition-review="true">
+                                    Tuition needs review — this assignment has changed since the price was agreed.
+                                    Choose the recommendation, another option, or override.
+                                </div>
+                            ) : null}
+
+                            {/* The canonical write's own answer, success or refusal. */}
+                            {tuitionOutcome ? (
+                                <div
+                                    style={{ fontSize: 11, marginTop: 2, color: tuitionOutcome.kind === "needs_attention" ? T.ember : T.pine }}
+                                    data-assignment-tuition-outcome={tuitionOutcome.kind}
+                                >
+                                    {tuitionOutcome.kind === "needs_attention"
+                                        ? `Assignment saved · tuition needs attention — ${tuitionOutcome.detail}`
+                                        : `Tuition ${tuitionOutcome.kind} · ${tuitionOutcome.label}`}
+                                </div>
+                            ) : null}
+
+                            {/*
+                              * OVERRIDE IS GOVERNED SELECTION, NOT FREE-FORM MONEY. The reason is
+                              * required by the authority, so it is asked for here rather than
+                              * defaulted to something plausible — and only when the operator has
+                              * actually chosen something other than the recommendation.
+                              */}
+                            {isOverridingSelection ? (
+                                <label style={{ fontSize: 10.5, color: T.slate, marginTop: 2, display: "block" }}>
+                                    Why this rather than the recommendation
+                                    <input
+                                        value={overrideReason}
+                                        onChange={(e) => setOverrideReason(e.target.value)}
+                                        data-assignment-override-reason="true"
+                                        placeholder="Required to override"
+                                        style={{
+                                            marginTop: 2, padding: "5px 7px", fontSize: 12, width: "100%",
+                                            borderRadius: 6, border: `1px solid ${T.border}`, color: T.forge, background: "#fff",
+                                        }}
+                                    />
+                                </label>
+                            ) : null}
 
                             {/*
                               * ── WHO WILL OWE IT ─────────────────────────────────────────────
