@@ -19,6 +19,10 @@ alone.
 
 ## Status: 11B is CLOSED — engineering certification
 
+```
+FINANCIALS_11B_PRODUCTIZATION_COMPLETE_DEPLOYED_CERTIFIED
+```
+
 All eleven A–K gates PASS on the deployed build; see `AK-RESULT.md`. Three exception-lifecycle
 defects and one stale accounting-panel claim were found by the gate and repaired before closure.
 
@@ -59,6 +63,15 @@ it — a reason, a release condition, a refund path — and it is not available 
 comes next. `DEPOSIT_OPERATOR_PRODUCTIZATION_GAP` is carried to Payments explicitly: Core has the
 deposit policy type and the model foundation; Payments owns receive, hold, apply/release, refund
 and the provider implications. W4's `payment_holds` is the first piece.
+
+**RESPONSIBILITY ANSWERS WHO OWES. THE PAYER ANSWERS WHO PAYS, OR WHO PAID.**
+
+They are different questions about the same obligation and Payments will be tempted to collapse
+them, because the answer is so often the same person. It is not always: a grandparent pays a bill
+the parents owe, an agency remits against a family's balance, one guardian settles what both are
+responsible for. Settling an obligation with somebody else's money moves no part of who owes it —
+that is the first of the two invariants above, and it is the one a collection flow is most likely
+to break.
 
 **RESPONSIBILITY** has two canonical grains — household (`customer_member_id` null) and child —
 resolved by one shared specificity rule. Configuring it moves no money.

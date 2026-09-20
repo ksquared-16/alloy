@@ -59,3 +59,20 @@ still guards the genuine race.
 | historical period inside an ended window | still reports as governed |
 | ended, current management state | not live, not endable |
 | superseded row | neither applicable nor live |
+
+---
+
+## The boundary this document does NOT cross
+
+```
+ENGINEERING        complete · deployed · certified
+HUMAN ACCEPTANCE   not begun
+```
+
+Every gate above is an engineering proof. **No scenario in the Director QA catalog has been walked
+by a human, and none is marked PASS** — the catalog stands at `2026-09-20.3` with **44
+HUMAN_WALKTHROUGH scenarios and 0 passed**.
+
+`CORE_FINANCIALS_QA_COMPLETE_CERTIFIED` is **not** claimed here and must not be inferred from
+anything in this file. An agent proving the product behaves correctly and Kelly accepting the
+product are two different acts, and the catalog exists to keep them apart.
