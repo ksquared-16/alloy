@@ -1,0 +1,68 @@
+{
+  "buildInfo": {
+    "gitSha": "5f6065aa7b5479bdb48c8883fd25f0310c9bbf99",
+    "gitBranch": "staging",
+    "gitMessage": "Merge pull request #1118 from ksquared-16/agent/financials-11a-regression-repair\n\nFinancials 11B — Human-QA readiness: name available prepaid, lock reachability, correct the record",
+    "vercelEnv": "preview",
+    "vercelUrl": "workwithalloy-1hd7ujphe-kellys-projects-2fc9d5eb.vercel.app",
+    "vercelDeploymentId": "dpl_9JTgz4xxrXq6jPuyrrQDFkKikYYj",
+    "nodeEnv": "production",
+    "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+  },
+  "entry": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety"
+    ],
+    "standaloneTuitionByRenderedIdentity": false,
+    "registryKeyPresent": false
+  },
+  "prepaidOnSummary": {
+    "cardPresent": true,
+    "availablePrepaidNamed": true,
+    "bareAvailableStillShown": false,
+    "prepaidAmount": "125.00",
+    "balance": "1,412.87",
+    "heldPreserved": "held-not-on-summary",
+    "depositPreserved": "deposit-not-on-summary",
+    "text": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $1,450.00 Fee $150.00 Consumable fee $36.00 DISCOUNTS & CREDITS Credit -$260.06 Adjustment $146.71 Discount -$145.00 NET OBLIGATION $1,487.87 Add DUE $1,912.00 $1,450.00 · 9 days past due Balance $1,412.87 Paid $75.00 Unassigned $132.00 Available prepaid $125.00 Payment Details →"
+  },
+  "childAffordance": {
+    "present": true,
+    "accessibleName": "custom→"
+  },
+  "childPanel": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety",
+      "scheduling"
+    ],
+    "standaloneTuitionByRenderedIdentity": false,
+    "registryKeyPresent": false
+  },
+  "assignment": {
+    "assignmentCardPresent": true,
+    "tuition": true,
+    "acceptedAmount": "$195.00/weekly",
+    "billingFrequency": "Billing frequency weekly · current period Sep 15–21, 2026 · next Sep 22–28, 2026 DISCOUNTS discount · $18.50 expected to apply Add except",
+    "currentPeriod": true,
+    "nextPeriod": true,
+    "responsibility": true,
+    "discountsBlock": true,
+    "discountForecast": "$18.50 expected to apply",
+    "addExceptionAffordance": true,
+    "diagnostics": true,
+    "activeResidue": false,
+    "liveExceptions": 1,
+    "endedExceptions": 1,
+    "text": "ASSIGNMENTS CC Certa Certhouse 4/12/2021 (5y5m) New schedule DAYS M T W T F S S Use a schedule pattern DAILY HOURS 🕒 – 🕒 ROOM Select a room Select Site · Site EFFECTIVE Start End Open-ended Ongoing — no end date; ends later via a change. TUITION Tuition — Certa Certhouse Recommended · $195.00/weekly 1 option did not apply Expand options (1 other) The recommendation uses room, program, and schedule. Every option here applies to this assignment; selecting one locks it onto the enrollment opportunity. Overridden $185.00 / weekly · from 2026-09-01 · Family kept the organisation rate agreed at enrolment. Billing frequency weekly · current period Sep 15–21, 2026 · next Sep 22–28, 2026 DISCOUNTS discount · $18.50 expected to apply Add exception discount · ended 2026-08-31 — Retired: certification scaffolding, superseded so the walkthrough starts clean Ended Accept tuition Who owes this — set responsibility Create Assignment — configure the minimum. Cancel Create Assignment"
+  }
+}

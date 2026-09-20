@@ -1,0 +1,21 @@
+{
+  "dom": {
+    "live": [
+      {
+        "attr": "false",
+        "tag": "DIV",
+        "text": "discount · ended 2026-08-31 — Retired: certification scaffolding, superseded so the walkthrough starts clean Ended"
+      }
+    ],
+    "ended": [
+      {
+        "attr": "true",
+        "tag": "SPAN",
+        "text": "Ended"
+      }
+    ]
+  },
+  "api": {
+    "status": 400
+  }
+}
