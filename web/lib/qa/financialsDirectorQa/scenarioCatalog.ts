@@ -750,11 +750,14 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "This is how a family stops re-entering a card every month, and how an operator answers \"which card are we charging?\" on the phone. Getting removal wrong is worse than not having the feature: a deleted method would take the reference out from under every payment that named it, and a silently promoted replacement would move a family's money to an instrument nobody chose.",
         dispositionReason:
             "WALKABLE NOW. Payments V1 W2 built the canonical Payment Method Reference, mounted it in Focus Panel -> Financials -> Details, and certified the lifecycle against the real provider — including that a platform method clones onto the connected merchant. What has NOT happened is a human driving it end to end in a browser, which is what this scenario is for. Use Stripe test instruments only; real card or bank details must never be used.",
-        requires: [
-            "A connected payment provider on this organization (Settings -> Financials -> Payments shows Ready).",
-            "A family with at least one posted, unpaid charge.",
-        ],
+        /*
+         * The closed precondition set has no "provider is connected" check, and inventing one would
+         * add a financial predicate to satisfy a QA entry. The posted obligation IS checkable, and
+         * the provider requirement is stated in the navigation instead, where a human reads it.
+         */
+        requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "the family owes something to collect against" }],
         navigate: [
+            "Confirm this organization has a connected provider first: Settings -> Financials -> Payments must read Ready.",
             "Open the family in the Focus Panel.",
             "Open the Financials card, then Details.",
             "Find the Payment methods section beneath the ledger.",
