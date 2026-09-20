@@ -148,9 +148,15 @@ describe("5-10. every classroom-question path is converged", () => {
 // ---------------------------------------------------------------------------
 describe("the combined roster stays an ALL-LOCATIONS name lookup", () => {
     it("still resolves every unit, because attendance may name a shared space", () => {
+        // This originally also asserted the file never mentions operationalGroupRooms,
+        // which read the doctrine one level too broadly. The FETCH and the NAME LOOKUP
+        // stay wide — that is what lets a roster name a child on the playground. The
+        // staffing-cell SEED must narrow, or creating a playground invents a staffing
+        // row for it. Mounted QA found exactly that: nine cells for seven classrooms.
         const src = read("lib/roster/buildCombinedRoster.ts");
         expect(src).toContain("resolveRoomsForLocation(supabase, orgId, siteLocationId)");
-        expect(src).not.toContain("operationalGroupRooms");
+        expect(src).toContain("const roomNameById = new Map(rooms.map(");
+        // The picker adapters remain out of this file; it is not an option set.
         expect(src).not.toContain("assignableClassrooms");
         expect(src).not.toContain("placeableRooms");
     });
@@ -304,5 +310,44 @@ describe("the picker's existing active filter is preserved", () => {
         expect(read("components/admin/focusPanel/cards/SchedulingCard.tsx")).toContain(
             "seedRooms.filter((r) => r.active !== false)",
         );
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The daily roster seeds staffing rows from groups only.
+// ---------------------------------------------------------------------------
+describe("a roster cell is a staffing row, so only an operational group seeds one", () => {
+    /**
+     * Mounted QA found this. Creating "Room 1" (physical space) and "Playground"
+     * (shared space) at North Campus produced NINE roster cells for seven
+     * classrooms: the playground and the physical shell each got a staffing row
+     * reporting `no_ratio_configuration`, and totals.roomsUnknown read 9.
+     *
+     * Slice 7 looked at this file and deliberately left `rooms` unnarrowed,
+     * because it is the NAME lookup and a child on the playground must still be
+     * nameable. That reasoning was right about line 233 and wrong about the same
+     * variable seeding roomIds further down.
+     *
+     * So the seed narrows and the name lookup does not. The union that builds
+     * roomIds still admits any location with a real child or a scheduled staff
+     * member, which is what keeps a genuinely occupied shared space on the board.
+     */
+    const roster = () => read("lib/roster/buildCombinedRoster.ts");
+
+    it("seeds the cell list from operational groups, not from every unit", () => {
+        const src = roster().replace(/^import[\s\S]*?;$/gm, "");
+        expect(src).toMatch(/\.\.\.operationalGroupRooms\(rooms\)\.map\(\(r\) => r\.id\)/);
+        expect(src).not.toMatch(/const roomIds = \[\s*\.\.\.new Set\(\[\s*\.\.\.rooms\.map\(\(r\) => r\.id\)/);
+    });
+
+    it("keeps the name lookup wide, so a shared space can still be named", () => {
+        const src = roster().replace(/^import[\s\S]*?;$/gm, "");
+        expect(src).toMatch(/const roomNameById = new Map\(rooms\.map\(/);
+    });
+
+    it("still admits a location that genuinely has a child or scheduled staff", () => {
+        const src = roster().replace(/^import[\s\S]*?;$/gm, "");
+        expect(src).toMatch(/\.\.\.childrenByRoom\.keys\(\)/);
+        expect(src).toMatch(/staffSupply\.cells[\s\S]{0,120}roomLocationId/);
     });
 });
