@@ -5,6 +5,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
+    BriefcaseBusiness,
     Baby,
     Building2,
     Calendar,
@@ -44,6 +45,7 @@ export const DATA_MODEL_ENTITY_ICONS: Readonly<Record<SettingsHubEntityKey, Luci
     inquiry_child: Baby,
     opportunity: ClipboardList,
     location: MapPin,
+    employment: BriefcaseBusiness,
 };
 
 export type DataModelUsageSurfaceId =

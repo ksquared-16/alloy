@@ -14,8 +14,22 @@ import {
 } from "@/lib/admin/statusCategoryRegistry";
 import type { SettingsHubEntityKey } from "@/lib/fields/fieldCatalogForSettings";
 
-/** `status_definitions.entity_type` whose rows are authoritative for each hub entity. */
-const STATUS_ENTITY_TYPE_BY_HUB: Readonly<Record<SettingsHubEntityKey, string>> = {
+/**
+ * `status_definitions.entity_type` whose rows are authoritative for each hub entity.
+ *
+ * PARTIAL ON PURPOSE. Not every entity in the Data Model has a CONFIGURABLE status
+ * vocabulary, and an entity without one must not be handed a fabricated domain for
+ * structural symmetry. Employment is the case that made this explicit: its status
+ * (`pending_start | active | ending | ended | canceled`) is a CHECK-constrained
+ * platform enum on `employments`, not tenant-authored `status_definitions`, so
+ * listing it here would invent a second, editable Employment status truth beside
+ * the real one.
+ *
+ * The resolver already returns null and every caller already handles null — only
+ * this map's exhaustiveness was forcing parity. Making it Partial is the whole
+ * repair, and it is reusable by the next entity in the same position.
+ */
+const STATUS_ENTITY_TYPE_BY_HUB: Readonly<Partial<Record<SettingsHubEntityKey, string>>> = {
     person: "persons",
     customer: "customers",
     inquiry_child: "opportunity_customer_members",

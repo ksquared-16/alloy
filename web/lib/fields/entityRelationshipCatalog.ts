@@ -229,12 +229,46 @@ const LOCATION_RELATIONSHIPS: EntityRelationshipDefinition[] = [
     },
 ];
 
+/**
+ * Employment's real relationships, not placeholders. An employment is the edge
+ * between one person and one organization; its optional primary location is the
+ * home site, which is stable employment context rather than the time-bound
+ * room staffing that `schedule_assignments` owns.
+ */
+const EMPLOYMENT_RELATIONSHIPS: EntityRelationshipDefinition[] = [
+    {
+        id: "employment_person",
+        label: "Person",
+        connection_label: "Employs",
+        meaning: "The human this employment belongs to. Identity stays on the person and never moves here.",
+        target_label: "Person",
+        target: "person",
+        cardinality: "1",
+        required: true,
+        where_used: ["Staff records", "Focus panel"],
+        kind: "platform",
+    },
+    {
+        id: "employment_primary_location",
+        label: "Primary site",
+        connection_label: "Based at",
+        meaning: "Stable home site for the employment. Time-bound room staffing is not this.",
+        target_label: "Location",
+        target: "location",
+        cardinality: "0..1",
+        required: false,
+        where_used: ["Staff records"],
+        kind: "platform",
+    },
+];
+
 export const ENTITY_RELATIONSHIPS_BY_HUB: Readonly<Record<SettingsHubEntityKey, readonly EntityRelationshipDefinition[]>> = {
     inquiry_child: CHILD_RELATIONSHIPS,
     person: PERSON_RELATIONSHIPS,
     customer: FAMILY_RELATIONSHIPS,
     opportunity: LEAD_RELATIONSHIPS,
     location: LOCATION_RELATIONSHIPS,
+    employment: EMPLOYMENT_RELATIONSHIPS,
 };
 
 export function relationshipsForHubEntity(entity: SettingsHubEntityKey): readonly EntityRelationshipDefinition[] {

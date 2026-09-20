@@ -31,7 +31,8 @@ export type ComputedFieldSettingsEntity =
     | "customer"
     | "inquiry_child"
     | "opportunity"
-    | "location";
+    | "location"
+    | "employment";
 
 export type ComputedFieldDefinition = {
     refKey: string;
@@ -662,6 +663,8 @@ export const SETTINGS_ENTITY_FIELD_EXPLANATIONS: Readonly<Record<ComputedFieldSe
         "Lead fields describe enrollment pipeline state — stage, work, next steps, tour timing, and readiness signals used across queues, focus panels, and business processes.",
     location:
         "Location fields describe site capacity, placement availability, and operational signals used across enrollment, placement, and scheduling workflows.",
+    employment:
+        "Staff fields describe a person\u2019s employment with this organization \u2014 the facts that belong to the working relationship rather than to the human. They do not follow a person to another organization, and they are separate from identity, site assignment, schedule, presence and access.",
 };
 
 export const SETTINGS_ENTITY_SURFACES: Readonly<Record<ComputedFieldSettingsEntity, string>> = {
@@ -669,5 +672,6 @@ export const SETTINGS_ENTITY_SURFACES: Readonly<Record<ComputedFieldSettingsEnti
     customer: "Family records, lead queues, focus panels, and communications",
     inquiry_child: "Child profiles, enrollment forms, lead drawers, and queues",
     opportunity: "Lead queues, focus panels, business processes, and record drawers",
+    employment: "Staff records and the Employment card on a person\u2019s focus panel",
     location: "Site settings, placement workflows, and enrollment configuration",
 };

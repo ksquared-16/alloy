@@ -30,7 +30,15 @@ export const EMPLOYMENT_NATIVE_FIELD_KEYS = [
     "employment_type",
     "position_id",
     "primary_location_id",
+    // Employee Number. The physical column is historical; the operator label is
+    // "Employee Number" and the value is org-unique by database invariant.
     "external_employee_id",
+    // Badge Number. Added by Staff V2 Slice 1 (20260925120000) and reserved HERE
+    // in Slice 2, because Slice 1 created the column without closing this door:
+    // until now an administrator could define a custom `badge_number` employment
+    // field that would sit beside the native one, competing for the same business
+    // fact while enforcing none of its uniqueness.
+    "badge_number",
     "start_date",
     "end_date",
     "end_reason_key",
