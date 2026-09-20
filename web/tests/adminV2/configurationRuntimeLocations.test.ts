@@ -92,7 +92,10 @@ describe("Configuration Runtime — Locations", () => {
         expect(landing).toContain("locations-landing-summary");
         expect(landing).toContain("Active Locations");
         expect(landing).toContain("Programs Offered");
-        expect(landing).toContain("Total Capacity");
+        // The landing card stopped reporting a summed seat count: capacity kinds are
+        // never additive, so the portfolio reports COVERAGE of the rooms instead.
+        expect(landing).toContain("Capacity coverage");
+        expect(landing).not.toContain("Total Capacity");
         expect(landing).toContain("Locations at a glance");
         expect(landing).toContain("locations-list-card");
         expect(landing).toContain("locations-row-");
@@ -246,9 +249,24 @@ describe("Configuration Runtime — Locations", () => {
         expect(settings).toContain("mutationResponseContainsPatch");
         expect(settings).toContain("Program save was not confirmed by the authoritative response.");
         expect(settings).toContain("Room creation was not confirmed by the authoritative response.");
-        expect(locationsRoute).toContain("parent_location_id is required for room units");
-        expect(locationsRoute).toContain("Parent location must be a site in this organization");
-        expect(locationsRoute).toContain("parent_location_id,");
+        // Topology legality used to be asserted here by grepping the route for its
+        // own error strings. Two of those strings were already stale — Topology V1
+        // widened "must be a site" to "a site or a physical space" without updating
+        // this expectation — and Slice 3 removed the route-local rules altogether:
+        // the route now delegates to the canonical mutation authority, so there are
+        // no route-owned topology strings left to grep for.
+        //
+        // What that assertion was reaching for is now covered as EFFECT, against the
+        // real handlers, in tests/location/topologyMutationAuthority.test.ts:
+        // a room with no parent is refused (parent_required), an illegal parent is
+        // refused (invalid_parent_type / invalid_parent_role), and POST and PATCH
+        // reach the same verdict on the same resulting topology.
+        //
+        // What belongs HERE is the structural fact this suite owns: the route must
+        // not grow a second topology opinion.
+        expect(locationsRoute).toContain("assertTopologyMutationSafe");
+        expect(locationsRoute).not.toContain("Parent location must be a site");
+        expect(locationsRoute).not.toContain("A room may only be nested inside a physical space");
         expect(roomCreate).toContain("locations-room-create-save");
         expect(roomCreate).toContain("writeRoomProgramsAndScheduleMetadata");
         expect(roomCreate).toContain("locations-room-create-schedule-pattern");

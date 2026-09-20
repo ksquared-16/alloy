@@ -20,6 +20,7 @@ import { createCardCollection } from "@/lib/financials/payments/collectionAttemp
 import { collectionLifecycle, lifecycleLabel } from "@/lib/financials/payments/collectionLifecycle";
 import { postProviderConfirmedCollection } from "@/lib/financials/payments/canonicalPosting";
 import { achReadinessFromStripeAccount } from "@/lib/financials/payments/providerMerchant";
+import { governedTestAccount } from "./certEnvironment";
 
 function readTrusted(key: string): string | null {
     if (process.env[key]) return process.env[key] as string;
@@ -145,8 +146,8 @@ describeLive("Thread 8C — ACH collection", () => {
         await client.from("payment_collection_attempts").delete().eq("org_id", ORG);
         await client.from("payment_provider_merchants").delete().eq("org_id", ORG);
 
-        const list = await stripeGet("accounts?limit=1");
-        const acct = (list.body.data ?? [])[0] as Record<string, unknown>;
+        // The merchant that can actually charge — never "whichever the platform lists first".
+        const acct = await governedTestAccount(secret!);
         connectedAccount = String(acct.id);
         await client.from("payment_provider_merchants").insert({
             org_id: ORG, processor: "stripe", provider_account_ref: connectedAccount,

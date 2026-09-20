@@ -19,9 +19,12 @@ import {
     composeWorkUnitProvisioningAnswer,
     type ProvisioningAnswer,
 } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import { makeWorkUnitHeaderKpiResolver } from "@/lib/runtime/provisioning/workUnitHeaderKpiResolution";
 import { resolveWorkUnitRouteIdentity } from "@/lib/admin/resolveWorkUnitRouteIdentity";
 import { parseCardFocusAspect } from "@/lib/runtime/kernel/attentionCardFocus";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
+import { resolveFinancialSubjectId } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
+import { resolveSoleEnrollmentParticipantForOpportunity } from "@/lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity";
 import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 import { collectedRouteTiming, recordRouteTiming, routeTimingEnabled } from "@/lib/perf/routeTimingDiagnostic";
@@ -110,6 +113,14 @@ export async function composeProvisioningAnswerForRoute(input: {
         // initials for children who do have a photo (R-019).
         documentActor: documentActor,
         /*
+         * THE HEADER KPI RESOLVER, OWNED BY THE ROUTE.
+         *
+         * Injected rather than imported by the composer: its analytics gate reaches `next/headers`
+         * and the composer sits in a client-reachable graph, so a value import there fails the
+         * production build. Same ownership reason the drawer route runs its own producers.
+         */
+        resolveHeaderKpis: makeWorkUnitHeaderKpiResolver({ supabase, orgId: gate.orgId }),
+        /*
          * THE SAME VERDICT THE BROWSER WOULD HAVE REACHED.
          *
          * `useAdminAuth` computes `hasPortalAdminMutateAccess(roleKeys)` from this same gate, and the
@@ -150,14 +161,33 @@ export async function composeProvisioningAnswerForRoute(input: {
      */
     const tProducers = mark();
     if (answer.terminal === "operational" && answer.focusPanelOperationalProjection) {
-        answer.focusPanelOperationalProjection = {
-            ...answer.focusPanelOperationalProjection,
-            cards: await projectFocusPanelCardProducers({
-                supabase,
-                orgId: gate.orgId,
-                // The route's OWN resolved authority — same canonical bundle as the endpoint.
-                access: gate.access,
-                context: buildCommitCriticalOperationalContext({
+        /*
+         * THE PARTICIPANT, RESOLVED HERE SO THE PRODUCERS BELOW CAN ANSWER.
+         *
+         * These producers already ran on this path; measured on deployed 50f2601be they cost 674ms
+         * and produced Financials ONLY, because `attendance_ms` and `health_ms` were null on every
+         * sample — no authoritative participantScope existed at commit, so both returned
+         * `unavailable` and the browser had to wait for a second round trip to learn a fact the
+         * database already held.
+         *
+         * One read, through the existing owner, scoped to this org and this opportunity. It
+         * refuses to guess: two enrolled children resolve to nothing rather than to the first.
+         */
+        const resolvedParticipant =
+            answer.recordOfAttention?.id
+                ? await resolveSoleEnrollmentParticipantForOpportunity({
+                      supabase,
+                      orgId: gate.orgId,
+                      opportunityId: String(answer.recordOfAttention.id),
+                  })
+                : null;
+        /*
+         * CARRIED TO THE BROWSER. The producers below consume this server-side; the browser needs
+         * the same identity to decide that Attendance, Health and Children are mountable at all.
+         * Without it the answer ships their CONTENT and the client still reserves their cells.
+         */
+        answer.resolvedParticipant = resolvedParticipant;
+        const commitContext = buildCommitCriticalOperationalContext({
                     mode: "work",
                     subjectId: answer.recordOfAttention?.id ?? "",
                     title: "",
@@ -178,7 +208,30 @@ export async function composeProvisioningAnswerForRoute(input: {
                         : null,
                     subjectIdentityTruth: answer.subjectIdentityTruth ?? null,
                     subjectGrain: answer.subjectGrain,
-                }),
+                    resolvedParticipant,
+        });
+        answer.focusPanelOperationalProjection = {
+            ...answer.focusPanelOperationalProjection,
+            cards: await projectFocusPanelCardProducers({
+                supabase,
+                orgId: gate.orgId,
+                // The route's OWN resolved authority — same canonical bundle as the endpoint.
+                access: gate.access,
+                context: commitContext,
+                /*
+                 * The commit frame states it from its own context, exactly as the producers used to
+                 * derive it internally. Same function, same key precedence — the settled frame now
+                 * states it too, from the composer's truth, so neither frame derives it privately.
+                 */
+                financialSubjectId: (() => {
+                    // Same promise as the settled frame: a malformed truth costs Financials, not
+                    // the commit answer.
+                    try {
+                        return resolveFinancialSubjectId(commitContext);
+                    } catch {
+                        return null;
+                    }
+                })(),
             }),
         };
         cardProducersMs = timing ? performance.now() - tProducers : 0;

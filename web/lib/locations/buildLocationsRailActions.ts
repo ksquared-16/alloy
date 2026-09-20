@@ -58,7 +58,7 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
                 onClick: args.onEditLocation,
             });
         }
-        if (args.roomsNeedingCapacity > 0 || args.model.configuredCapacity == null) {
+        if (args.roomsNeedingCapacity > 0) {
             actions.push({
                 id: "configure-capacity",
                 label: "Set room capacity",
@@ -154,7 +154,7 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
 
     if (args.activeTab === "rooms") {
         const actions: LocationsRailAction[] = [];
-        if (args.roomsNeedingCapacity > 0 || args.model.configuredCapacity == null) {
+        if (args.roomsNeedingCapacity > 0) {
             actions.push({
                 id: "configure-capacity",
                 label: "Set room capacity",

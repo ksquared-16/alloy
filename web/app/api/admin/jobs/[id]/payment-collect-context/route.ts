@@ -143,50 +143,23 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                 payment_method_brand?: string | null;
                 payment_method_last4?: string | null;
             };
-            let payment_method_brand = c.payment_method_brand ?? null;
-            let payment_method_last4 = c.payment_method_last4 ?? null;
-            const defPm = c.default_payment_method_id?.trim() || null;
-            const missingCardMeta =
-                !payment_method_brand ||
-                !String(payment_method_brand).trim() ||
-                !payment_method_last4 ||
-                !String(payment_method_last4).trim();
-            if (missingCardMeta) {
-                const { data: pmRows, error: pmErr } = await supabase
-                    .from("customer_payment_methods")
-                    .select(
-                        "payment_method_brand, payment_method_last4, brand, last4, stripe_payment_method_id, is_default"
-                    )
-                    .eq("customer_id", customerId);
-                if (pmErr) {
-                    console.warn("[payment-collect-context] customer_payment_methods lookup skipped:", pmErr.message);
-                }
-                if (!pmErr && pmRows && pmRows.length > 0) {
-                    type Pm = {
-                        payment_method_brand?: string | null;
-                        payment_method_last4?: string | null;
-                        brand?: string | null;
-                        last4?: string | null;
-                        stripe_payment_method_id?: string | null;
-                        is_default?: boolean | null;
-                    };
-                    const list = pmRows as Pm[];
-                    const match =
-                        (defPm ? list.find((p) => String(p.stripe_payment_method_id ?? "").trim() === defPm) : null) ??
-                        list.find((p) => p.is_default === true) ??
-                        list[0];
-                    if (match) {
-                        const b = match.payment_method_brand ?? match.brand ?? null;
-                        const l4 = match.payment_method_last4 ?? match.last4 ?? null;
-                        if (!payment_method_brand || !String(payment_method_brand).trim()) {
-                            payment_method_brand = b ?? payment_method_brand;
-                        }
-                        if (!payment_method_last4 || !String(payment_method_last4).trim()) {
-                            payment_method_last4 = l4 ?? payment_method_last4;
-                        }
-                    }
-                }
-            }
+            /*
+             * THE CARD METADATA ON THE CUSTOMER RECORD IS THE ONLY SOURCE NOW.
+             *
+             * This used to fall back to `customer_payment_methods` when brand or last four were
+             * missing. That table was retired by Payments V1 · W2: its only writer
+             * (`persistBookingPaymentMethod`) had zero callers, and a census of the deployed primary
+             * database found ZERO rows in it. The fallback could therefore only ever have read rows
+             * that nothing produced.
+             *
+             * Stored methods are now canonical in `payment_methods`, which is payer-owned and
+             * account-scoped. This route serves the Jobs/Booking vertical, whose payment-method model
+             * W2 does not convert, so it reads what it has always genuinely had rather than borrowing
+             * a childcare account's methods.
+             */
+            const payment_method_brand = c.payment_method_brand ?? null;
+            const payment_method_last4 = c.payment_method_last4 ?? null;
+
             customer = {
                 id: c.id,
                 stripe_customer_id: c.stripe_customer_id ?? null,

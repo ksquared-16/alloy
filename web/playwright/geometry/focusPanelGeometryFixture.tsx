@@ -19,6 +19,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
+import { COMPOSER_GRID_GAP_PX } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import type { FocusPanelGridArea } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 
 type Scenario = { areas: FocusPanelGridArea[]; heights: Record<string, number> };
@@ -63,6 +64,96 @@ export const SCENARIOS: Record<string, Scenario> = {
     },
 
     /*
+     * ── AUTHORED ORDER WINS OVER DENSITY ──
+     *
+     * Both cards span all twelve columns, so they must stack. The SECOND-authored card is much
+     * taller, which is precisely the case a packer optimising for total height would reorder.
+     * Operator intent outranks packing density: this is an operational canvas, not a mosaic.
+     */
+    authoredOrder: {
+        areas: [area("first", 1, 12, 1, 1), area("second", 1, 12, 2, 1)],
+        heights: { first: 120, second: 400 },
+    },
+
+    /*
+     * ── A. 8 / 4 WITH UNEQUAL HEIGHTS, AND A THIRD CARD IN THE LEFT COLUMNS ──
+     *
+     * The shape the whole change exists for. `leftNext` occupies columns 1-8 only, so it must
+     * begin after `left` (200) and must NOT wait for `right` (400). Under the retired equal-band
+     * model both top cards were drawn 400 tall and `leftNext` started below 400.
+     */
+    flow_8_4: {
+        areas: [area("left", 1, 8, 1, 1), area("right", 9, 4, 2, 1), area("leftNext", 1, 8, 3, 1)],
+        heights: { left: 200, right: 400, leftNext: 150 },
+    },
+
+    /* ── B. 6 / 6, each column flowing independently ── */
+    flow_6_6: {
+        areas: [
+            area("a1", 1, 6, 1, 1), area("b1", 7, 6, 2, 1),
+            area("a2", 1, 6, 3, 1), area("b2", 7, 6, 4, 1),
+        ],
+        heights: { a1: 200, b1: 380, a2: 120, b2: 90 },
+    },
+
+    /* ── C. two stacked left against one tall right ── */
+    stackedVsTall: {
+        areas: [area("upper", 1, 6, 1, 1), area("lower", 1, 6, 2, 1), area("tall", 7, 6, 3, 1)],
+        heights: { upper: 180, lower: 260, tall: 500 },
+    },
+
+    /* ── D. a later card spanning BOTH column groups must clear the taller one ── */
+    spanningAfterSplit: {
+        areas: [area("l", 1, 6, 1, 1), area("r", 7, 6, 2, 1), area("full", 1, 12, 3, 1)],
+        heights: { l: 200, r: 400, full: 100 },
+    },
+
+    /* ── E. 4 / 4 / 4 — three independent vertical tracks ── */
+    threeTracks: {
+        areas: [
+            area("t1", 1, 4, 1, 1), area("t2", 5, 4, 2, 1), area("t3", 9, 4, 3, 1),
+            area("t1b", 1, 4, 4, 1), area("t2b", 5, 4, 5, 1), area("t3b", 9, 4, 6, 1),
+        ],
+        heights: { t1: 150, t2: 300, t3: 220, t1b: 80, t2b: 80, t3b: 80 },
+    },
+
+    /*
+     * ── F. an 8-column card after three 4-column cards of different heights ──
+     *
+     * `wide` spans 1-8, so it clears t1 and t2 and is NOT held by t3 in columns 9-12.
+     */
+    spanEightAfterFours: {
+        areas: [
+            area("t1", 1, 4, 1, 1), area("t2", 5, 4, 2, 1), area("t3", 9, 4, 3, 1),
+            area("wide", 1, 8, 4, 1),
+        ],
+        heights: { t1: 150, t2: 300, t3: 220, wide: 100 },
+    },
+
+    /*
+     * ── THE REAL PUBLISHED COMPOSITION — mandatory regression fixture ──
+     *
+     * Spans read from deployed `d0870c58c`. Health occupies columns 1-3 and Household columns
+     * 9-12: they share NO column, and under the retired model Health was drawn at Household's
+     * height (178px of content in a 419px card). Content heights here are chosen to reproduce
+     * that relationship, not to reproduce absolute pixels.
+     */
+    realComposition: {
+        areas: [
+            area("business_process", 1, 8, 1, 2),
+            area("financials", 9, 4, 2, 1),
+            area("children", 1, 8, 3, 1),
+            area("household", 9, 4, 4, 4),
+            area("health_safety", 1, 3, 6, 1),
+            area("attendance", 4, 9, 8, 2),
+        ],
+        heights: {
+            business_process: 160, financials: 340, children: 470,
+            household: 350, health_safety: 110, attendance: 60,
+        },
+    },
+
+    /*
      * The discriminating negative control: two bands that must NOT be equalised.
      *
      * An implementation that equalised everything — or that let a band span rows no card
@@ -81,6 +172,8 @@ declare global {
             setScenario: (name: string) => Promise<void>;
             setHeight: (card: string, px: number) => Promise<void>;
             settle: (maxFrames?: number) => Promise<{ settled: boolean; frames: number }>;
+            gap: () => number;
+            canvas: () => { left: number; width: number };
             geometry: () => Record<string, CardGeometry>;
             counts: () => { resize: number; mutation: number };
         };
@@ -201,6 +294,13 @@ if (host) {
         setScenario: async () => {},
         setHeight: async () => {},
         settle,
+        gap: () => COMPOSER_GRID_GAP_PX,
+        canvas: () => {
+            // The element the engine measures its content width from — the column math's origin.
+            const el = document.querySelector("[data-fp-grid-area]")?.parentElement;
+            const r = el ? el.getBoundingClientRect() : { left: 0, width: 0 };
+            return { left: +r.left.toFixed(2), width: +r.width.toFixed(2) };
+        },
         geometry: geometryOf,
         counts: () => ({ ...window.__obs }),
     };

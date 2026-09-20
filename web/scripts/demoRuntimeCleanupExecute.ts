@@ -382,7 +382,8 @@ async function executeDeletes(
         (await deleteByIn(supabase, "customer_member_contacts", "customer_id", cust, orgId));
     deleted.customer_tags = await deleteByIn(supabase, "customer_tags", "customer_id", cust, undefined, "*");
     deleted.customer_subscriptions = await deleteByIn(supabase, "customer_subscriptions", "customer_id", cust, orgId);
-    deleted.customer_payment_methods = await deleteByIn(supabase, "customer_payment_methods", "customer_id", cust, undefined, "*");
+    /* Payments V1 · W2: the canonical, org-scoped stored methods replaced customer_payment_methods. */
+    deleted.payment_methods = await deleteByIn(supabase, "payment_methods", "customer_id", cust, orgId);
 
     deleted.customer_members = await deleteByIn(supabase, "customer_members", "customer_id", cust, orgId);
     if (!idsOnly) {

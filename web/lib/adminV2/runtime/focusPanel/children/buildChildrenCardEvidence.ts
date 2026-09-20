@@ -273,6 +273,30 @@ export function buildChildrenCardEvidence(
             trimOrNull(row.location_id)
             ?? trimOrNull((raw as { location_id?: unknown }).location_id)
             ?? trimOrNull(schedulingProjection?.child?.siteId);
+        /*
+         * UNKNOWN IS NOT INHERITED — AND KEY PRESENCE IS NOT KNOWLEDGE.
+         *
+         * First attempt gated this on the raw entry CARRYING a `location_id` key, reasoning that a
+         * present key meant the question had been answered. Captured from the deployed commit
+         * payload, the entry reads:
+         *
+         *   "location_id": null, "location_label": null,
+         *   "_participation_source": "ocm", "_operational_facts_source": "ocm"
+         *
+         * The key is present and null. So the guard evaluated true, the claim was made exactly as
+         * before, and the repair changed nothing in production while its synthetic gates stayed
+         * green. The fixture was the defect.
+         *
+         * What actually distinguishes the states is the SCHEDULING PROJECTION: `childLocationId`
+         * resolves `row.location_id ?? raw.location_id ?? schedulingProjection?.child?.siteId`,
+         * and settlement drops the badge precisely because that third source appears. OCM's null
+         * is therefore not the whole answer — it says "no OCM-owned site", not "no site".
+         *
+         * Commit can show the effective site but cannot classify its provenance, so it claims
+         * nothing. When the projection has answered, both states are truthful: a resolved site is
+         * OWNED, its absence is INHERITED.
+         */
+        const childLocationProvenanceKnown = schedulingProjection?.child != null;
         // Site name for Location fields — never expose the UUID storage key as display truth.
         const location =
             trimOrNull(row.location_label)
@@ -424,7 +448,8 @@ export function buildChildrenCardEvidence(
             location,
             locationId: childLocationId ?? opportunitySiteId,
             locationOwnedId: childLocationId,
-            locationInherited: !childLocationId && Boolean(opportunitySiteId),
+            locationInherited:
+                childLocationProvenanceKnown && !childLocationId && Boolean(opportunitySiteId),
             programCategoryId:
                 trimOrNull(row.program_category_id)
                 ?? trimOrNull((raw as { program_category_id?: unknown }).program_category_id),

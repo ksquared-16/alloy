@@ -945,8 +945,8 @@ async function main(): Promise<void> {
     counts.customer_subscriptions = await optionalCount("customer_subscriptions", "count", "customer_id", () =>
         customerIds.length ? countByIn(supabase, "customer_subscriptions", "customer_id", customerIds, orgId) : Promise.resolve(0)
     );
-    counts.customer_payment_methods = await optionalCount("customer_payment_methods", "count", "customer_id", () =>
-        customerIds.length ? countByInNoOrg(supabase, "customer_payment_methods", "customer_id", customerIds) : Promise.resolve(0)
+    counts.payment_methods = await optionalCount("payment_methods", "count", "customer_id", () =>
+        customerIds.length ? countByInNoOrg(supabase, "payment_methods", "customer_id", customerIds) : Promise.resolve(0)
     );
     counts.customer_member_contacts = await countCustomerMemberContactsScope(supabase, orgId, customerIds, memberIds);
 
@@ -988,7 +988,7 @@ async function main(): Promise<void> {
         "opportunities",
         "customer_tags",
         "customer_subscriptions",
-        "customer_payment_methods",
+        "payment_methods",
         "customer_member_contacts",
         "customer_members",
         "customer_persons",
@@ -1062,8 +1062,8 @@ async function main(): Promise<void> {
     deleted.customer_subscriptions = await optionalDelete("customer_subscriptions", "delete", "customer_id", () =>
         customerIds.length ? deleteByInColumn(supabase, "customer_subscriptions", "customer_id", customerIds, orgId) : Promise.resolve(0)
     );
-    deleted.customer_payment_methods = await optionalDelete("customer_payment_methods", "delete", "customer_id", () =>
-        customerIds.length ? deleteByInColumnNoOrg(supabase, "customer_payment_methods", "customer_id", customerIds, "*") : Promise.resolve(0)
+    deleted.payment_methods = await optionalDelete("payment_methods", "delete", "customer_id", () =>
+        customerIds.length ? deleteByInColumnNoOrg(supabase, "payment_methods", "customer_id", customerIds, "*") : Promise.resolve(0)
     );
     deleted.customer_member_contacts = 0;
     for (const part of chunk(memberIds, 200)) {

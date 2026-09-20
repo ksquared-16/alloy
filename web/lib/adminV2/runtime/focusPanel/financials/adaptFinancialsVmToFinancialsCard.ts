@@ -210,11 +210,16 @@ export function adaptFinancialsVmToFinancialsCard(input: {
              * household's stored methods, and returns null when there is genuinely nothing
              * established to say. Silence still means unknown; it simply is not the only answer.
              *
-             * HEALTHY MEANS A METHOD IS ON FILE, which is what this line reports. It is deliberately
-             * not autopay — see the payment band below.
+             * HEALTHY MEANS A USABLE METHOD IS ON FILE, which is what this line reports. It is
+             * deliberately not autopay — see the payment band below.
+             *
+             * It asks `methodSummary` rather than counting `methodsOnFile`, because that list now
+             * INCLUDES revoked methods so a surface can say "removed" rather than silently dropping
+             * them. Counting its length would report a household whose only card was removed as
+             * healthy — and a bank account still awaiting verification as ready to charge.
              */
             paymentLine: vm.paymentSetup ?? null,
-            paymentHealthy: (vm.paymentCapabilities?.methodsOnFile.length ?? 0) > 0,
+            paymentHealthy: vm.paymentCapabilities?.methodSummary.hasUsableMethod === true,
         },
         subjects: vm.subjects.map((s) => s.displayName).filter((n): n is string => Boolean(n)),
         period: {
@@ -288,6 +293,21 @@ export function adaptFinancialsVmToFinancialsCard(input: {
              */
             availablePrepaid:
                 (vm.prepaid?.availableCents ?? 0) > 0 ? money(vm.prepaid!.availableCents, currency) : null,
+            /*
+             * HELD MONEY IS ITS OWN FIGURE (Payments V1 · W4), and never merged into the one above.
+             *
+             * "$200 available prepaid" and "$500 held" are different facts about a family: the first
+             * is money an operator may spend on an obligation right now, the second is money the
+             * organisation is holding and may not. One combined number would offer the deposit.
+             *
+             * It is also NOT netted into Current Balance — a family that owes $500 and has $500 held
+             * still owes $500. Zero stays silent, like every other metric in this strip, and
+             * `heldSupported` guards the difference between "nothing held" and "cannot tell".
+             */
+            heldFunds:
+                vm.prepaid?.heldSupported && (vm.prepaid?.heldCents ?? 0) > 0
+                    ? money(vm.prepaid!.heldCents, currency)
+                    : null,
             dueLabel,
         },
         pastDue,
@@ -634,6 +654,7 @@ export function hydratingFinancialsEvidence(): FinancialsEvidence {
             currentBalance: dash,
             dueNow: dash,
             availablePrepaid: null,
+            heldFunds: null,
             dueLabel: "",
         },
         /*

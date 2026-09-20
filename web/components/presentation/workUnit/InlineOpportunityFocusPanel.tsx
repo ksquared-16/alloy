@@ -734,6 +734,7 @@ export function InlineOpportunityFocusPanel() {
                       // or still settling.
                       actionAbsence: operational.actionAbsence,
                       subjectIdentityTruth: operational.subjectIdentityTruth,
+                      resolvedParticipant: operational.resolvedParticipant ?? null,
                       // R2 — the answer's resolved grain, carried by the single subject owner.
                       // The panel forwards it; it never decides it.
                       subjectGrain: operational.subjectGrain,
@@ -749,6 +750,7 @@ export function InlineOpportunityFocusPanel() {
             operational.action,
             operational.actionAbsence,
             operational.subjectIdentityTruth,
+            operational.resolvedParticipant,
             operational.subjectGrain,
         ],
     );

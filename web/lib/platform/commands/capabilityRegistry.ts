@@ -82,6 +82,15 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "payment.collect_card",
     "payment.reverse_application",
     "payment.apply_to_charge",
+    "provider.connect",
+    "provider.refresh_readiness",
+    "provider.disconnect",
+    "payment_method.add",
+    "payment_method.set_default",
+    "payment_method.revoke",
+    "payment.recognize",
+    "deposit.hold",
+    "deposit.release",
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
@@ -687,6 +696,208 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
     // go and get it. It creates no receipt — a canonical payment appears only when the provider
     // confirms and Thread 8 recognises it, which is why the capability is a collection and not a
     // payment.
+    /*
+     * BECOMING A MERCHANT — organisation-grain configuration, not a payment.
+     *
+     * These three decide WHERE a family's money settles; every other financial capability decides
+     * what happens to money once that is already chosen. That is why they carry `fin.provider` rather
+     * than `fin.write`, and why they are configuration rather than an operator's daily work.
+     */
+    def({
+        capabilityKey: "provider.connect",
+        canonicalCommandKey: "provider.connect",
+        operatorLabel: "Connect payment provider",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "provider.connect",
+        implementationStatus: "production",
+        reason:
+            "Creates the organisation's own provider account and records the canonical merchant "
+            + "association, then hands the operator the provider's hosted setup. Idempotent: an "
+            + "unfinished merchant is RESUMED rather than duplicated, and a ready one is refused. "
+            + "Alloy never sees or stores the provider's identity verification data.",
+    }),
+    def({
+        capabilityKey: "provider.refresh_readiness",
+        canonicalCommandKey: "provider.refresh_readiness",
+        operatorLabel: "Refresh provider status",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "provider.refresh_readiness",
+        implementationStatus: "production",
+        reason:
+            "Asks the provider what this organisation can currently accept and records the answer "
+            + "through the single readiness write authority. Returning from provider setup proves "
+            + "nothing on its own, so this is what the return calls.",
+    }),
+    def({
+        capabilityKey: "provider.disconnect",
+        canonicalCommandKey: "provider.disconnect",
+        operatorLabel: "Disconnect payment provider",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        // The capability vocabulary is not the action's: an action says "destructive", a capability
+        // says how hard the confirmation is. Withdrawing an organisation's ability to take payments
+        // earns a strong one.
+        confirmationPolicy: "strong_confirm",
+        registeredActionKey: "provider.disconnect",
+        implementationStatus: "production",
+        reason:
+            "Withdraws the merchant association from FUTURE collection. Deletes nothing: not the "
+            + "provider's account, which belongs to the organisation, and not the payments, attempts "
+            + "or provider evidence already recorded. Historical rows keep naming the account that "
+            + "actually collected them.",
+    }),
+    /*
+     * ── PAYMENT METHOD ADMINISTRATION — `fin.write`, and deliberately not `fin.provider` ──
+     *
+     * The provider capabilities above decide WHERE an organisation's money settles. These three
+     * decide which instrument one family pays with, once that is already chosen. That is ordinary
+     * front-desk work, so they carry the key `ops` already holds.
+     */
+    def({
+        capabilityKey: "payment_method.add",
+        canonicalCommandKey: "payment_method.add",
+        operatorLabel: "Add payment method",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment_method.add",
+        implementationStatus: "production",
+        reason:
+            "Opens the provider's own secure collection for a card or bank account, then persists a "
+            + "canonical reference read back from the provider on the server. Nothing is stored "
+            + "until an instrument actually exists, and a bank account awaiting verification is "
+            + "recorded as pending rather than offered as usable. Alloy never receives a card "
+            + "number, a CVC, or an account and routing number.",
+    }),
+    def({
+        capabilityKey: "payment_method.set_default",
+        canonicalCommandKey: "payment_method.set_default",
+        operatorLabel: "Set as default",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment_method.set_default",
+        implementationStatus: "production",
+        reason:
+            "Moves the default within one account and one rail, atomically in the database, so the "
+            + "account is never briefly left with two defaults or none. Card and bank defaults are "
+            + "independent, and a method that cannot be used cannot be made the default.",
+    }),
+    def({
+        capabilityKey: "payment_method.revoke",
+        canonicalCommandKey: "payment_method.revoke",
+        operatorLabel: "Remove payment method",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        // The action says "destructive"; the capability says how hard the confirmation is.
+        confirmationPolicy: "strong_confirm",
+        registeredActionKey: "payment_method.revoke",
+        implementationStatus: "production",
+        reason:
+            "Withdraws a stored instrument from FUTURE collection. Deletes nothing: payments already "
+            + "made with it keep naming it. Any default status is removed and nothing is promoted in "
+            + "its place, because a family's money must not silently move to a method nobody chose.",
+    }),
+    /*
+     * ── RECOGNITION IS THE COLLECTING AUTHORITY FINISHING ITS OWN WORK ──
+     *
+     * It carries `fin.write` rather than a key of its own because it decides nothing new: the money
+     * already moved, the organisation already authorised the collection, and this only completes
+     * Alloy's record of it.
+     */
+    def({
+        capabilityKey: "payment.recognize",
+        canonicalCommandKey: "payment.recognize",
+        operatorLabel: "Recognize payment",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment.recognize",
+        implementationStatus: "production",
+        reason:
+            "Re-invokes the single canonical recognition boundary for a collection the provider "
+            + "already settled but Alloy never recorded. Verifies settlement against the PROVIDER "
+            + "rather than Alloy's cached state, and is idempotent: an attempt already recognised "
+            + "returns its existing receipt instead of minting a second one. It cannot create a "
+            + "payment directly, invent provider success, or rewrite amount, payer or responsibility.",
+    }),
+    /*
+     * ── HELD DEPOSITS — `fin.adjust`, because they decide what may be SPENT, not what is OWED ──
+     *
+     * Holding moves no money and changes no balance. What it changes is whether an operator may
+     * settle an obligation with a particular receipt, which is the authority `fin.adjust` exists to
+     * separate from ordinary billing. There is deliberately no `fin.deposit`.
+     */
+    def({
+        capabilityKey: "deposit.hold",
+        canonicalCommandKey: "deposit.hold",
+        operatorLabel: "Hold funds",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "deposit.hold",
+        implementationStatus: "production",
+        reason:
+            "Restricts part of an existing canonical Payment so it is not offered as available "
+            + "prepaid money. Creates no receipt, allocation, journal entry or obligation delta, and "
+            + "does not move Current Balance. The refundable terms are SNAPSHOT at creation, so a "
+            + "later policy change cannot retroactively alter what the family was told.",
+    }),
+    def({
+        capabilityKey: "deposit.release",
+        canonicalCommandKey: "deposit.release",
+        operatorLabel: "Release funds",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "deposit.release",
+        implementationStatus: "production",
+        reason:
+            "Stops restricting held money so it becomes ordinary available prepaid money. It is not "
+            + "a refund, not an application and not a change to responsibility. The hold is an "
+            + "immutable lot: a partial release appends a disposition and what was originally held "
+            + "remains on the record.",
+    }),
     def({
         capabilityKey: "payment.collect_card",
         canonicalCommandKey: "payment.collect_card",

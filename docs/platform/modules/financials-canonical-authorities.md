@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-09-19
+last_reviewed: 2026-09-20
 supersedes: []
 ---
 
@@ -727,6 +727,25 @@ to `partially_paid` / `paid`: a stored status would be a second answer to "how m
 the first reversal would make the two disagree. The applications are the record.
 
 `unresolvedVarianceCents` sits **beside** the collectible figure and is never folded into it.
+
+### The cohort must be complete, or the card must say it cannot answer
+
+Every figure above is computed over the account's charges and receipts, so the read that produces
+them is part of the authority. PostgREST answers at most 1,000 rows to any single query and reports
+nothing when it truncates, so an unpaged read of a long-lived account returned a page and the card
+presented a balance derived from part of a ledger. Measured on the certification tenant: 2,821
+charges on the account, 1,000 read, and the Financials Workspace — which already paged — reporting
+a different figure for the same family.
+
+**One primitive pages both surfaces.** `readAllPages` (beside `readInBatches` in
+`resolveFinancialPosition.ts`) walks the cohort by `.range()` until it is complete or an explicit
+cap is reached, and every caller orders by a unique column so paging cannot repeat or skip a row.
+
+**A balance may not be partial.** The workspace answers an operational question across an
+organisation and may legitimately report "there is more than this scan carried". An account's
+balance may not: a number derived from part of a ledger is wrong, not incomplete. Reaching the
+account read's cap is therefore an **unavailability** — the card says it cannot answer — and never a
+smaller number offered as the position.
 
 ---
 

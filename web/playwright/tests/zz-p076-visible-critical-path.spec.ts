@@ -46,9 +46,28 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
      * need to add a parallel timing system to discover what is already measured and shipped.
      */
     let drawerVmTiming: unknown = null;
+    /*
+     * THE ROUTE'S OWN TOTAL, WHICH THE COMPOSER'S PHASES DO NOT COVER.
+     *
+     * compose_ms accounts for a median 2,203ms of a 3,685ms wall — 41% of the endpoint is spent
+     * OUTSIDE the composer and that is where all the run-to-run variance lives. The route already
+     * ships X-Alloy-Server-Duration (whole handler) beside X-Alloy-Drawer-VM-Compose-Ms, so the
+     * split into route overhead and network transfer needs no new server instrumentation at all:
+     *   wall - serverDuration  = network + queueing
+     *   serverDuration - compose = gate + assertRowOrg + participant resolve + card producers
+     *                              + JSON serialization
+     */
+    let drawerVmServerHeaders: Record<string, string | null> = {};
     page.on("response", (r) => {
         const u = r.url();
         if (/\/api\/admin\/view-models\/drawer\/opportunity\//.test(u) && r.status() === 200) {
+            const h = r.headers();
+            drawerVmServerHeaders = {
+                serverDurationMs: h["x-alloy-server-duration"] ?? null,
+                composeMs: h["x-alloy-drawer-vm-compose-ms"] ?? null,
+                structureSettled: h["x-alloy-drawer-vm-structure-settled"] ?? null,
+                routePhases: h["x-alloy-drawer-vm-route-phases"] ?? null,
+            };
             void r
                 .json()
                 .then((j: { timing?: unknown }) => {
@@ -72,6 +91,49 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
      * reported as such.
      */
     await page.addInitScript(installVisibleCompletionProbe);
+
+    /*
+     * OPTIONAL WARM-UP NAVIGATION — the normal operator path, not a manufactured cache hit.
+     *
+     * The product warms the drawer VM from exactly two events: a lens/pill switch, and a
+     * /workspace-surface load. A direct navigation to a work-unit URL performs NEITHER, which is
+     * why every cold sample missed the cache — NOT_STARTED, not eviction. An operator who lands on
+     * /workspace and then opens a Work Unit takes a different path, and this measures that path
+     * WITHOUT touching the product: visit the warm-up URL, let its idle prewarm run, then navigate
+     * and measure the second navigation exactly as before.
+     *
+     * The probe re-installs per document, so every timestamp below is relative to the MEASURED
+     * navigation, not the warm-up.
+     */
+    const WARM_URL = process.env.P076_WARM_URL || "";
+    let warmRequests = 0;
+    if (WARM_URL) {
+        const seen = (r: { url(): string }) => {
+            if (/\/api\/admin\/view-models\/drawer\/opportunity\//.test(r.url())) warmRequests++;
+        };
+        page.on("request", seen);
+        await page.goto(WARM_URL, { waitUntil: "domcontentloaded", timeout: 120_000 });
+        // The workspace prewarm fires on an idle callback (up to ~2.5s), so give it room to finish
+        // rather than racing it — a warm sample that did not warm proves nothing.
+        await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
+        await page.waitForTimeout(Number(process.env.P076_WARM_SETTLE_MS || 6000));
+        page.off("request", seen);
+    }
+
+    /*
+     * THE OWNERSHIP PROOF: withhold the drawer response entirely.
+     *
+     * If first-order truth is genuinely document-owned, every blocking area except Children —
+     * which is deliberately still drawer-owned — must reach authoritative finality without the
+     * drawer ever answering. Nothing else demonstrates that as directly as never sending it.
+     */
+    let drawerBlocked = 0;
+    if (process.env.P076_BLOCK_DRAWER === "1") {
+        await page.route(/\/api\/admin\/view-models\/drawer\/opportunity\//, (route) => {
+            drawerBlocked++;
+            return route.abort();
+        });
+    }
 
     const nav0 = Date.now();
     await page.goto(URL_PATH, { waitUntil: "domcontentloaded", timeout: 120_000 });
@@ -107,38 +169,74 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
      * it is a timestamp of something that happened, not of the observer giving up. Running this
      * spec at two windows is therefore a falsifiable test of the metric itself.
      */
+    const apiTimingBrowserClock = await page.evaluate(() =>
+        performance.getEntriesByType("resource")
+            .filter((e) => /\/api\//.test(e.name))
+            .map((e) => {
+                const r = e as PerformanceResourceTiming;
+                return {
+                    url: r.name.replace(/^https?:\/\/[^/]+/, ""),
+                    startMs: Math.round(r.startTime),
+                    endMs: Math.round(r.responseEnd),
+                };
+            })
+            .sort((a, b) => a.endMs - b.endMs));
+
     const v2 = await page.evaluate(() => {
         const V2 = window as unknown as {
             __p076v2?: {
                 lastBlockingAuthoritativeMs: number;
+                finalAuthoritativeMs: number;
                 perSection: Record<string, {
                     firstMs: number; lastMs: number; lastVisibleMs: number;
                     data: number; structure: number; anim: number;
                     imageExpected: boolean; imageFinalMs: number;
+                    contentMs: number; structureMs: number; visibleStateMs: number;
+                    finalAuthMs: number; identicalRerenders: number; diagnosticWrites: number;
                 }>;
                 kinds: Record<string, number>;
+                kinds21: Record<string, number>;
                 blockingSeen: string[];
                 latestGeneration: string | null;
                 staleGenerationSuppressed: number;
                 placeholderSuppressed: number;
+                styledAttrCount: number;
                 perCard: Record<string, { firstMs: number; lastMs: number; auth: number; anim: number }>;
             };
         };
         const s = V2.__p076v2;
         if (!s) return null;
         return {
+            /*
+             * BOTH NUMBERS FROM ONE SAMPLE. V2.1 corrects a measurement defect, so the only
+             * honest comparison is the two rules run over the SAME mutations — re-measuring
+             * would fold run-to-run variance into a delta that is not a product change at all.
+             */
             visibleCompleteV2Ms: s.lastBlockingAuthoritativeMs,
+            visibleCompleteV21Ms: s.finalAuthoritativeMs,
+            measurementCorrectionMs: s.lastBlockingAuthoritativeMs - s.finalAuthoritativeMs,
             blockingSectionsSeen: s.blockingSeen.slice().sort(),
             // The visible DAG: which blocking region finished last, and what it was doing.
             perSection: Object.fromEntries(
-                Object.entries(s.perSection).sort((a, b) => b[1].lastMs - a[1].lastMs),
+                Object.entries(s.perSection).sort((a, b) => b[1].finalAuthMs - a[1].finalAuthMs),
             ),
             mutationKinds: s.kinds,
+            mutationKinds21: s.kinds21,
+            // WHO OWNS COMPLETION under each rule. The question section 15 asks directly.
+            completionOwnerV2: Object.entries(s.perSection)
+                .sort((a, b) => b[1].lastMs - a[1].lastMs)[0]?.[0] ?? null,
+            completionOwnerV21: Object.entries(s.perSection)
+                .sort((a, b) => b[1].finalAuthMs - a[1].finalAuthMs)[0]?.[0] ?? null,
+            falseAuthoritativeRemoved: Object.values(s.perSection)
+                .reduce((n, x) => n + x.identicalRerenders + x.diagnosticWrites, 0),
             // Did the finality rules actually fire on the real surface, or is this path simply
             // free of reserved geometry and stale generations? Reporting the counts answers it;
             // an absent field would have been read as "zero" without ever being measured.
             placeholderSuppressed: s.placeholderSuppressed,
             staleGenerationSuppressed: s.staleGenerationSuppressed,
+            // Zero here means the stylesheets were unreadable and the semantic rule degraded to
+            // "nothing is styled" — a correction that is not one. Never read a sample without it.
+            styledAttrCount: s.styledAttrCount,
             latestGeneration: s.latestGeneration,
             // Per-area paint timeline, ordered latest-final first: which area finishes last.
             perCard: Object.fromEntries(Object.entries(s.perCard).sort((a, b) => b[1].lastMs - a[1].lastMs)),
@@ -163,6 +261,61 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         return { mutations: R, presentSections: present, lateMutations: late };
     });
 
+    /*
+     * CONFIGURATION IDENTITY — the other half of a specimen's identity.
+     *
+     * The header metric set and the Focus Panel card set are PUBLISHED CONFIGURATION, not
+     * architecture. Today's deployment happens to publish three KPI slots and seven cards; the
+     * code-owned default visible set names eight, and staging renders seven because v162 dropped
+     * `billing_preview` from the layout. So "seven cards" was never a property of this build.
+     *
+     * That makes a code SHA an incomplete identity for a performance sample. Two runs of the same
+     * SHA against different published configuration are measuring different products, and
+     * comparing them as equivalent would attribute a configuration change to a code change — or
+     * hide a regression behind a shrunken surface. A sample that got faster because a card left
+     * the layout has not got faster.
+     *
+     * Nothing here changes product DOM: the KPI row already publishes its variant attribute and
+     * every card section already publishes `data-alloy-section-id`. This reads what is on screen
+     * and records it beside the SHA, so a specimen states the configuration it answered for.
+     */
+    const configIdentity = await page.evaluate(() => {
+        const row = document.querySelector(
+            "[data-work-unit-header-kpis], [data-workspace-header-kpis]",
+        );
+        const kpiLabels = row
+            ? [...row.querySelectorAll('[role="listitem"]')].map((el) =>
+                  (el as HTMLElement).innerText.replace(/\s+/g, " ").trim().slice(0, 40),
+              )
+            : [];
+        /*
+         * THE CARD'S OWN IDENTITY, NOT ITS CONTAINER'S.
+         *
+         * This asked each card for `closest("[data-alloy-section-id]")`, which is the enclosing
+         * WORK UNIT SECTION — and all seven cards sit inside WU-09. So the "ordered card set"
+         * recorded WU-09 seven times: a value that looks like a card set, changes when the section
+         * changes, and is identical for every possible configuration. It could not have detected a
+         * card being added, removed or reordered, which is the entire reason it exists.
+         *
+         * `data-universal-card-key` is the canonical per-card identity the product already emits
+         * (UniversalCard, FocusPanelCardRenderer and the individual card components all set it),
+         * so no new DOM identity is invented here.
+         */
+        const cards = [...document.querySelectorAll("article.alloy-os-ucard")].map(
+            (el) =>
+                el.getAttribute("data-universal-card-key") ||
+                el.closest("[data-universal-card-key]")?.getAttribute("data-universal-card-key") ||
+                "unidentified",
+        );
+        return {
+            // ORDERED, because reordering is a configuration change even when the set is identical.
+            configuredKpiSlots: kpiLabels,
+            configuredKpiCount: kpiLabels.length,
+            configuredCardSet: cards,
+            configuredCardCount: cards.length,
+        };
+    });
+
     const dataProbe = await page.evaluate(() => {
         const txt = document.body.innerText || "";
         const rows = document.querySelectorAll(
@@ -176,11 +329,14 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         };
     });
 
-    /* The fingerprints of what actually mutated late — the evidence for the long pole. */
-    const lateMutations = await page.evaluate(() => {
-        const L = window as unknown as { __p076late?: unknown[] };
-        return (L.__p076late ?? []).slice(-40);
-    });
+    /*
+     * ONE LATE-MUTATION AUTHORITY.
+     *
+     * A second read used to publish `.slice(-40)` of the SAME buffer at the top level. Being the
+     * LAST 40 it began after the completion burst on every sample, so the two arrays disagreed
+     * about whether the completing mutations existed at all — and the truncated one was the one
+     * read first. `regions.lateMutations` carries the whole buffer and is now the only copy.
+     */
 
     /*
      * The Summary readiness chain — the direct causal evidence. Recorded by the product's OWN
@@ -217,11 +373,26 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         regions,
         valid: dataProbe.rows > 0 && !dataProbe.signedOut,
         apiRequestCount: requests.length,
+        drawerBlocked,
+        warmUpUrl: WARM_URL || null,
+        warmUpDrawerVmRequests: warmRequests,
         apiRequests: requests,
         apiResponses: responses,
-        lateMutations,
+        /*
+         * THE SAME CLOCK AS EVERYTHING ELSE.
+         *
+         * `apiRequests`/`apiResponses` above are stamped with Date.now() in the NODE driver, from a
+         * t0 taken before page.goto. The probe and the readiness chain stamp performance.now() in
+         * the PAGE, whose origin is navigationStart. Comparing them made the drawer VM response
+         * look like it landed AFTER the completion it causes — an origin offset reported as a
+         * causal contradiction. Resource timing answers on the page's own clock, so these entries
+         * are the ones any causal claim must be built from.
+         */
+        configIdentity,
+        apiTimingBrowserClock,
         focusChain,
         drawerVmTiming,
+        drawerVmServerHeaders,
         retiredReadProbe: {
             eppEnrichmentHttp: requests.filter((r) => /effective-enrollment|epp/i.test(r.url)).length,
             tourEnrichmentHttp: requests.filter((r) => /tour-bookings|active-tour/i.test(r.url)).length,
@@ -232,11 +403,18 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
     console.log(
         `[p076] ${LABEL} sha=${out.deployedSha?.slice(0, 9)} doc=${domMs}ms `
         + `V1(quiet=${QUIET_MS})=${visibleCompleteMs}ms V2=${v2?.visibleCompleteV2Ms}ms `
+        + `V2.1=${v2?.visibleCompleteV21Ms}ms correction=${v2?.measurementCorrectionMs}ms `
+        + `ownerV2=${v2?.completionOwnerV2} ownerV21=${v2?.completionOwnerV21} `
+        + `falseAuth=${v2?.falseAuthoritativeRemoved} `
+        + `styledAttrs=${v2?.styledAttrCount} `
         + `lastBlocking=${Object.keys(v2?.perSection ?? {})[0] ?? "none"} `
         + `blockingSeen=${v2?.blockingSectionsSeen.length ?? 0} `
         + `chain=${focusChain.diag ? "present" : "ABSENT"} flips=${(focusChain.diag as {flips?:unknown[]} | null)?.flips?.length ?? 0} `
         + `postMut=${postComplete} `
         + `api=${requests.length} marks=${marks ? "present" : "ABSENT"} rows=${dataProbe.rows} sections=${Object.keys(regions.presentSections).length} `
-        + `valid=${out.valid} signedOut=${dataProbe.signedOut}`,
+        + `valid=${out.valid} signedOut=${dataProbe.signedOut} `
+        + `kpiSet=[${configIdentity.configuredKpiSlots.join("|")}] `
+        + `cardSet=[${configIdentity.configuredCardSet.join("|")}] `
+        + `kpis=${configIdentity.configuredKpiCount} cards=${configIdentity.configuredCardCount}`,
     );
 });

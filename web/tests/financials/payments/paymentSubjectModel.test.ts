@@ -155,14 +155,36 @@ describe("payment capabilities", () => {
 
     it("separates unsupported from not configured", async () => {
         const setup = await resolvePaymentSetup(fakeSupabase({ merchant: null }), ARGS);
-        /* Alloy has no implementation at all for these two. */
+        /*
+         * Alloy has no implementation at all for autopay, and says so. That is still the only
+         * `unsupported` capability, and it stays one until W5.
+         */
         expect(setup.autopay.state).toBe("unsupported");
-        expect(setup.manageMethods.state).toBe("unsupported");
+        expect(setup.autopay.reason, "and the reason is about Alloy, not about the family")
+            .toMatch(/no autopay model/i);
+
+        /*
+         * MANAGING METHODS MOVED SIDES, and that is the point of W2.
+         *
+         * It reported `unsupported` truthfully for as long as Alloy had no canonical table and no
+         * writer. It has both now, so an organisation with no merchant is `not_configured` — a
+         * state an operator can ACT on — rather than told Alloy cannot do this at all.
+         */
+        expect(setup.manageMethods.state).toBe("not_configured");
+
         /* Alloy HAS an implementation for these; this organisation has not set it up. */
         expect(setup.takePaymentCard.state).toBe("not_configured");
         expect(setup.takePaymentAch.state).toBe("not_configured");
-        expect(setup.autopay.reason, "and the reason is about Alloy, not about the family")
-            .toMatch(/no autopay model/i);
+    });
+
+    it("managing methods becomes available once the organisation has a merchant", async () => {
+        const setup = await resolvePaymentSetup(
+            fakeSupabase({ merchant: { processor: "stripe", readiness: "ready", ach_readiness: "ready" } }),
+            ARGS,
+        );
+        /* Having NO method on file is not an incapacity — it is an empty list. */
+        expect(setup.manageMethods.state).toBe("available");
+        expect(setup.methodSummary.hasUsableMethod).toBe(false);
     });
 
     it("reports a ready merchant as available, and a restricted one as failed", async () => {
@@ -223,19 +245,124 @@ describe("payment capabilities", () => {
             fakeSupabase({
                 merchant: { processor: "stripe", readiness: "ready", ach_readiness: null },
                 methods: [
-                    { id: "m1", brand: "Amex", last4: "0005", is_default: false },
-                    { id: "m2", brand: "Visa", last4: "4242", is_default: true },
+                    { id: "m1", display_brand: "Amex", display_last4: "0005", is_default: false, rail: "card", usability_state: "usable", verification_state: "verified" },
+                    { id: "m2", display_brand: "Visa", display_last4: "4242", is_default: true, rail: "card", usability_state: "usable", verification_state: "verified" },
                 ],
             }),
             ARGS,
         );
         expect(setup.summaryLine).toBe("Visa •••• 4242");
         expect(setup.methodsOnFile).toHaveLength(2);
+        expect(setup.methodSummary.defaultCardId).toBe("m2");
+        expect(setup.methodSummary.usableRails).toEqual(["card"]);
+    });
+
+    /**
+     * A REMOVED METHOD IS NOT A METHOD ON FILE.
+     *
+     * `methodsOnFile` deliberately still lists it, so a surface can say "removed" rather than
+     * silently dropping it — which means anything asking "do they have one" must ask the summary.
+     */
+    it("a household whose only card was removed has no usable method", async () => {
+        const setup = await resolvePaymentSetup(
+            fakeSupabase({
+                merchant: { processor: "stripe", readiness: "ready", ach_readiness: null },
+                methods: [
+                    { id: "m1", display_brand: "Visa", display_last4: "4242", is_default: false, rail: "card", usability_state: "revoked", verification_state: "verified" },
+                ],
+            }),
+            ARGS,
+        );
+        expect(setup.methodsOnFile).toHaveLength(1);
+        expect(setup.methodSummary.hasUsableMethod).toBe(false);
+        expect(setup.summaryLine).toBe("No payment method on file");
+    });
+
+    /** A bank account awaiting a deposit is more informative than silence, and is not usable. */
+    it("a bank account awaiting verification is said out loud and is not usable", async () => {
+        const setup = await resolvePaymentSetup(
+            fakeSupabase({
+                merchant: { processor: "stripe", readiness: "ready", ach_readiness: "ready" },
+                methods: [
+                    { id: "m1", display_brand: "TEST BANK", display_last4: "6789", is_default: false, rail: "ach", usability_state: "blocked", verification_state: "pending" },
+                ],
+            }),
+            ARGS,
+        );
+        expect(setup.methodSummary.hasUsableMethod).toBe(false);
+        expect(setup.methodSummary.awaitingVerification).toBe(1);
+        expect(setup.summaryLine).toBe("Bank account awaiting verification");
     });
 
     it("never reports a merchant read failure as a configured merchant", async () => {
         const setup = await resolvePaymentSetup(fakeSupabase({ merchantError: "timeout" }), ARGS);
         expect(setup.merchant).toBeNull();
         expect(setup.takePaymentCard.state).toBe("not_configured");
+    });
+});
+
+/**
+ * A RAIL NEEDS THE MERCHANT BEFORE IT NEEDS ITSELF (N2).
+ *
+ * `ach_readiness` answered "can this organisation take a bank debit" on its own, so a merchant
+ * Stripe had restricted — or one that had never finished onboarding — still reported bank debit as
+ * available, because its ACH capability happened to say `ready`. Collection refused it correctly,
+ * so no money was ever at risk. What was wrong was what the operator had been told, and a control
+ * that opens onto nothing is worse than an absent one.
+ *
+ * The rule now reads merchant-level readiness FIRST, in the same order `resolveCollectionMerchant`
+ * enforces on the server — and when the merchant is the blocker, ACH says so rather than blaming
+ * the rail and sending an operator to fix the wrong thing.
+ */
+describe("rail availability requires the merchant AND the rail", () => {
+    const merchantWith = (readiness: string | null, achReadiness: string | null): Row => ({
+        processor: "stripe",
+        readiness,
+        ach_readiness: achReadiness,
+        is_active: true,
+    });
+
+    it("offers a bank debit only when the merchant can collect and ACH is enabled", async () => {
+        const setup = await resolvePaymentSetup(fakeSupabase({ merchant: merchantWith("ready", "ready") }), ARGS);
+        expect(setup.takePaymentCard.state).toBe("available");
+        expect(setup.takePaymentAch.state).toBe("available");
+        expect(setup.takePaymentAch.reason).toBeNull();
+    });
+
+    it("refuses the bank rail when the merchant can collect but ACH is not enabled — and names the rail", async () => {
+        const setup = await resolvePaymentSetup(fakeSupabase({ merchant: merchantWith("ready", null) }), ARGS);
+        expect(setup.takePaymentCard.state).toBe("available");
+        expect(setup.takePaymentAch.state).toBe("not_configured");
+        expect(setup.takePaymentAch.reason).toMatch(/bank debit/i);
+    });
+
+    it("refuses the bank rail when onboarding is unfinished, even with ACH ready — and blames the merchant", async () => {
+        const setup = await resolvePaymentSetup(
+            fakeSupabase({ merchant: merchantWith("onboarding_incomplete", "ready") }),
+            ARGS,
+        );
+        expect(setup.takePaymentCard.state).toBe("pending");
+        expect(setup.takePaymentAch.state, "a merchant that cannot charge cannot charge on any rail").toBe("pending");
+        expect(setup.takePaymentAch.reason, "the blocker named is the account, not the rail").toMatch(/onboarding/i);
+    });
+
+    it("refuses the bank rail on a restricted merchant, even with ACH ready", async () => {
+        const setup = await resolvePaymentSetup(fakeSupabase({ merchant: merchantWith("restricted", "ready") }), ARGS);
+        expect(setup.takePaymentCard.state).toBe("failed");
+        expect(setup.takePaymentAch.state).toBe("failed");
+        expect(setup.takePaymentAch.reason).toMatch(/restricted/i);
+    });
+
+    it("fails closed on an unknown merchant readiness, and on no merchant at all", async () => {
+        const unknown = await resolvePaymentSetup(
+            fakeSupabase({ merchant: merchantWith("something_new_from_the_provider", "ready") }),
+            ARGS,
+        );
+        expect(unknown.takePaymentAch.state).not.toBe("available");
+
+        const none = await resolvePaymentSetup(fakeSupabase({ merchant: null }), ARGS);
+        expect(none.takePaymentCard.state).toBe("not_configured");
+        expect(none.takePaymentAch.state).toBe("not_configured");
+        expect(none.takePaymentAch.reason).toMatch(/no payment provider is connected/i);
     });
 });

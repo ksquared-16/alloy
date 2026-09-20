@@ -1,0 +1,41 @@
+{
+  "trusted_host_action_id": "tha_f3abfc99acea02",
+  "query_hash": "01197dd7aacdce1ab2432b856b40783fc10dbbf7bc340a1fe1aab3700f0804fd",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T04:15:07.073Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_f3abfc99acea02",
+    "query_hash": "01197dd7aacdce1ab2432b856b40783fc10dbbf7bc340a1fe1aab3700f0804fd",
+    "authorization_id": "grnt_096cc4eb1739412f",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T04:15:08.745Z",
+    "question_ids": [
+      "cpm_age",
+      "cpm_total"
+    ],
+    "questions": {
+      "cpm_age": {
+        "question_id": "cpm_age",
+        "row_count": null,
+        "rows": [
+          "none .. none"
+        ]
+      },
+      "cpm_total": {
+        "question_id": "cpm_total",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      }
+    },
+    "row_count": 2
+  }
+}

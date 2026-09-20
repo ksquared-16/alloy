@@ -52,6 +52,11 @@ const SECTION_CAPABILITIES: Record<FinancialsWorkspaceChapter, readonly string[]
         "Commercial policy eligibility",
         "Organization-scoped policy authoring",
     ],
+    payments: [
+        "Connect a payment provider",
+        "Card and bank payment readiness",
+        "Provider status and disconnection",
+    ],
     accounting: [
         "Revenue categories",
         "GL account relationships",
@@ -73,6 +78,7 @@ const SECTION_KIND: Record<FinancialsWorkspaceChapter, FinancialsLandingSectionT
     tuition: "configuration",
     catalog: "configuration",
     policies: "configuration",
+    payments: "configuration",
     accounting: "configuration",
     simulator: "utility",
     funding: "boundary",
@@ -82,6 +88,7 @@ const SECTION_POSTURE: Record<FinancialsWorkspaceChapter, string> = {
     tuition: "Rate configuration",
     catalog: "Billable catalog",
     policies: "Rules",
+    payments: "Provider setup",
     accounting: "Mappings",
     simulator: "Preview utility",
     funding: "Processing boundary",

@@ -3739,6 +3739,12 @@ export default function FinancialsCard({
                 ) : null}
 
                 <FinancialsDetailCard
+                    /*
+                     * PAYMENT METHODS (Payments W2) — administered here, in Details, beside the
+                     * ledger. Passed only when the household is actually resolved: a card with no
+                     * account cannot truthfully say "no payment method on file".
+                     */
+                    paymentMethodsAccount={customerId ? { customerId } : null}
                     onMovePayment={openMovePayment}
                     onApplyPayment={openApplyPayment}
                     /* Only offered where an enrolment exists: the action is scoped to an agreement. */

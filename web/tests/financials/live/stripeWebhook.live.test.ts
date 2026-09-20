@@ -24,6 +24,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readChargeBalance } from "@/lib/financials/childcarePaymentService";
 import { handleStripeWebhook } from "@/lib/financials/payments/stripeWebhook";
 import { readinessFromStripeAccount } from "@/lib/financials/payments/providerMerchant";
+import { governedTestAccount } from "./certEnvironment";
 
 function readTrusted(key: string): string | null {
     if (process.env[key]) return process.env[key] as string;
@@ -137,10 +138,7 @@ describeLive("Slice E — the webhook boundary, live", () => {
         await client.from("payment_collection_attempts").delete().eq("org_id", ORG);
         await client.from("payment_provider_merchants").delete().eq("org_id", ORG);
 
-        const res = await fetch("https://api.stripe.com/v1/accounts?limit=1", {
-            headers: { Authorization: `Bearer ${secret}` },
-        });
-        const acct = ((await res.json()) as { data: Array<Record<string, unknown>> }).data[0];
+        const acct = await governedTestAccount(secret!);
         connectedAccount = String(acct.id);
         await client.from("payment_provider_merchants").insert({
             org_id: ORG, processor: "stripe", provider_account_ref: connectedAccount,
@@ -156,7 +154,8 @@ describeLive("Slice E — the webhook boundary, live", () => {
     });
 
     it("refuses an unsigned request, a forged one, and a stale-timestamped one", async () => {
-        const body = eventBody({ id: "evt_forged_1", type: "payment_intent.succeeded", account: connectedAccount, piId: "pi_x", status: "succeeded" });
+        const forgedId = `evt_forged_${Math.random().toString(36).slice(2)}`;
+        const body = eventBody({ id: forgedId, type: "payment_intent.succeeded", account: connectedAccount, piId: "pi_x", status: "succeeded" });
 
         expect((await post(body, null)).outcome).toBe("rejected");
         expect((await post(body, "t=1,v1=deadbeef")).outcome).toBe("rejected");
@@ -168,7 +167,7 @@ describeLive("Slice E — the webhook boundary, live", () => {
         expect(stale.detail).toMatch(/tolerance/);
 
         // And none of them left evidence claiming to be real.
-        const { data } = await supabase!.from("payment_provider_events").select("id").eq("provider_event_id", "evt_forged_1");
+        const { data } = await supabase!.from("payment_provider_events").select("id").eq("provider_event_id", forgedId);
         expect((data ?? []).length, "a refused request is not recorded as an event").toBe(0);
     });
 

@@ -259,7 +259,22 @@ describe("authority and grain are preserved", () => {
             join(process.cwd(), "lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity.ts"),
             "utf8",
         );
-        expect(src.match(/\.from\(/g)?.length ?? 0).toBe(1);
+        /*
+         * ONE LOOKUP PER RESOLUTION, asserted per resolver rather than per file.
+         *
+         * This counted `.from(` across the module, which said "one lookup" only while the module
+         * held one resolver. It now holds two — the drawer asks "which member is THIS named
+         * participation?" and the document asks "does this opportunity have exactly ONE member?" —
+         * and exactly one of them runs on any given request. A file-level count would either fail
+         * this legitimate addition or, if bumped to 2, stop noticing a resolver that grew a second
+         * read. So the invariant is checked where it actually lives.
+         */
+        const bodies = src
+            .split(/export async function /)
+            .slice(1)
+            .map((b) => b.match(/\.from\(/g)?.length ?? 0);
+        expect(bodies.length).toBeGreaterThan(0);
+        for (const n of bodies) expect(n).toBe(1);
         for (const forbidden of ["useState", "useEffect", "Cache", "setTimeout", "localStorage"]) {
             expect(src).not.toContain(forbidden);
         }

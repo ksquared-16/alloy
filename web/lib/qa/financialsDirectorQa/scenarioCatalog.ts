@@ -690,7 +690,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "Most families pay by card. The product must start the collection, recognise what the processor says, and represent a failure as a failure.",
         dispositionReason:
-            "NO PAYMENT PROVIDER IS CONFIGURED ON THIS TENANT. The canonical account read reports takePaymentCard as not_configured, because no active merchant row exists for this organisation, so there is no merchant to collect against and no test-mode credential to use. Deferred rather than out of scope: the product has payment.collect_card, and this becomes a walkthrough as soon as a test-mode merchant exists. Real card details must never be used.",
+            "PROVIDER CONFIGURATION NOW EXISTS — the reason this was deferred no longer holds. Payments V1 W1 built the operator act: /organization/financials -> Payments connects a provider, and the certification tenant's account read reports takePaymentCard available with a ready merchant. What remains is this scenario's own walkthrough, which has not been driven by a human. Do not mark it PASS because configuration exists. Real card details must never be used.",
         requires: [],
         navigate: [],
         doThis: [],
@@ -708,7 +708,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "ACH is not instant. Treating initiation as settlement would show money the business does not have yet, and a return days later would arrive as a surprise.",
         dispositionReason:
-            "NOT AVAILABLE ON THIS TENANT: the canonical account read reports achAvailable false and takePaymentAch as not_configured. There is nothing to initiate and nothing to await. Deferred, with the settlement distinction recorded here so it is not lost.",
+            "AVAILABLE NOW, AND UNWALKED. Measured on the certification tenant after Payments V1 W1: the account read reports achAvailable true and takePaymentAch available, because the connected merchant carries the bank rail. The settlement distinction this scenario exists to prove — initiation is not settlement — still requires a human walkthrough, which has not happened.",
         requires: [],
         navigate: [],
         doThis: [],
@@ -726,7 +726,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "One is a bank reversing itself; the other is a decision a person made and must answer for. Showing them as the same event destroys the audit trail for both.",
         dispositionReason:
-            "Depends on the same absent provider configuration as card and ACH. The operator-refund half IS covered, as scenario 19.",
+            "The provider configuration it depended on now exists (Payments V1 W1), and provider returns are certified at the service layer. What is unwalked is the operator-facing half: seeing a return render as Returned rather than Refunded. The operator-refund half IS covered, as scenario 19.",
         requires: [],
         navigate: [],
         doThis: [],
@@ -734,6 +734,61 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         expectUnchanged: [],
         invariant: MONEY_INVARIANTS.PROVIDER_RETURN_IS_NOT_A_REFUND,
         failSymptoms: [],
+    }),
+    /*
+     * ADDED BY PAYMENTS V1 · W2. The catalog was silent about stored methods because, until W2,
+     * Alloy had no canonical table for one and no writer — `manageMethods` reported `unsupported`
+     * and there was genuinely nothing for a human to walk. There is now.
+     */
+    S({
+        key: "payment_method_on_file",
+        order: 52,
+        title: "Putting a payment method on file, and taking it off",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Save a card or bank account for a family, choose the default, and remove one without losing payment history.",
+        whyItMatters:
+            "This is how a family stops re-entering a card every month, and how an operator answers \"which card are we charging?\" on the phone. Getting removal wrong is worse than not having the feature: a deleted method would take the reference out from under every payment that named it, and a silently promoted replacement would move a family's money to an instrument nobody chose.",
+        dispositionReason:
+            "WALKABLE NOW. Payments V1 W2 built the canonical Payment Method Reference, mounted it in Focus Panel -> Financials -> Details, and certified the lifecycle against the real provider — including that a platform method clones onto the connected merchant. What has NOT happened is a human driving it end to end in a browser, which is what this scenario is for. Use Stripe test instruments only; real card or bank details must never be used.",
+        /*
+         * The closed precondition set has no "provider is connected" check, and inventing one would
+         * add a financial predicate to satisfy a QA entry. The posted obligation IS checkable, and
+         * the provider requirement is stated in the navigation instead, where a human reads it.
+         */
+        requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "the family owes something to collect against" }],
+        navigate: [
+            "Confirm this organization has a connected provider first: Settings -> Financials -> Payments must read Ready.",
+            "Open the family in the Focus Panel.",
+            "Open the Financials card, then Details.",
+            "Find the Payment methods section beneath the ledger.",
+        ],
+        doThis: [
+            "Choose Add card and complete the provider's own fields with a test card.",
+            "Add a second card, then use Set as default on it.",
+            "Add a bank account and read the authorization text shown above the submit.",
+            "Remove the default card and confirm.",
+        ],
+        expectChanges: [
+            "The first card appears with its brand, last four and expiry, and reads Ready.",
+            "Setting the second card as default moves Default onto it and off the first, with no moment where both or neither shows it.",
+            "The bank account appears separately; if the bank needs deposits to verify, it reads Verification required and is NOT offered as ready.",
+            "The bank default and the card default are independent of each other.",
+            "After removal the card is gone from the live list and the section says a removed method is kept for payment history.",
+        ],
+        expectUnchanged: [
+            "The ledger, the balance, and every figure on the account.",
+            "Who is responsible for paying — adding someone else's card never moves responsibility.",
+            "Any payment already made with the removed card still names it.",
+        ],
+        invariant: MONEY_INVARIANTS.PAYER_IS_HISTORY,
+        failSymptoms: [
+            "A full card number, a CVC, or a routing number appearing anywhere on the surface.",
+            "A bank account awaiting verification offered as ready to charge.",
+            "Two defaults for the same rail, or a default silently appearing on another card after you removed one.",
+            "Remove deleting the row outright, so a past payment no longer names the method it used.",
+            "Raw provider words on the surface — PaymentMethod, SetupIntent, us_bank_account, mandate, or an id beginning pm_.",
+            "Add payment method opening a panel with nowhere to type the details.",
+        ],
     }),
     S({
         key: "subsidy_processing",
@@ -1297,6 +1352,8 @@ export const SCENARIO_PROGRAM: Readonly<Record<string, ScenarioProgram>> = Objec
     ach_processing: "PAYMENTS_PHASE",
     provider_return: "PAYMENTS_PHASE",
     refund: "PAYMENTS_PHASE",
+    /* Shipped by W2, and unlike the four above it is walkable rather than waiting on the program. */
+    payment_method_on_file: "PAYMENTS_PHASE",
 
     // ── Real, correct, and with no operator surface in Core ─────────────────────────────────
     accounting_period: "DEFERRED_PRODUCTIZATION",

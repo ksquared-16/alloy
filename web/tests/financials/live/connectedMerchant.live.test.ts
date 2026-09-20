@@ -136,13 +136,15 @@ describeLive("Slice C — the collecting merchant, live against Postgres and Str
         const client = supabase!;
         await clearMerchants(client);
 
-        // Real provider evidence: whichever connected account this test-mode platform actually has.
-        const list = await stripeGet("accounts?limit=1");
+        // Real provider evidence: the connected account on this test-mode platform that can CHARGE.
+        // Choosing by capability rather than by list position is what keeps provider certification —
+        // which creates un-onboarded accounts on purpose — from displacing the governed merchant.
+        const list = await stripeGet("accounts?limit=100");
         expect(list.status, "the application key can enumerate connected accounts").toBe(200);
         const accounts = (list.body.data ?? []) as Array<Record<string, unknown>>;
         expect(accounts.length, "the test platform has at least one connected account").toBeGreaterThan(0);
 
-        const account = accounts[0];
+        const account = accounts.find((a) => a.charges_enabled === true) ?? accounts[0];
         const accountRef = String(account.id);
         expect(accountRef.startsWith("acct_")).toBe(true);
         // Test mode is proven by the KEY, not by the payload: a Stripe list envelope has no

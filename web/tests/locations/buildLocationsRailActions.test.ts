@@ -10,7 +10,7 @@ function model(overrides: Partial<LocationWorkspaceModel> = {}): LocationWorkspa
         timezone: "America/Los_Angeles",
         activeRoomCount: 2,
         activeProgramCount: 1,
-        configuredCapacity: 24,
+        capacityCoverage: { total: 2, confirmed: 2, needsReview: 0, unset: 0 },
         roomsNeedingCapacity: 0,
         setupPercent: 80,
         setupComplete: false,
@@ -44,7 +44,11 @@ describe("buildLocationsRailActions", () => {
         const actions = buildLocationsRailActions({
             activeTab: "overview",
             canMutate: true,
-            model: model({ timezone: null, roomsNeedingCapacity: 1, configuredCapacity: null }),
+            model: model({
+                timezone: null,
+                roomsNeedingCapacity: 1,
+                capacityCoverage: { total: 2, confirmed: 0, needsReview: 1, unset: 1 },
+            }),
             selectedSite: true,
             scheduleCount: 0,
             roomCount: 2,

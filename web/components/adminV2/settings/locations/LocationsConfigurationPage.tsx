@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
+import { eligibleInsideOptions } from "@/lib/locations/roomTypeVocabulary";
+import { useLocationOperationalRules } from "@/components/adminV2/settings/locations/useLocationOperationalRules";
+import { siteAcceptsLegacyCapacityCapture } from "@/lib/locations/capacityAdoptionState";
 import { CalendarDays, MapPin } from "lucide-react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
@@ -22,6 +25,7 @@ import {
 import LocationAddProgramPanel from "@/components/adminV2/settings/locations/LocationAddProgramPanel";
 import LocationProgramsOfferedPanel from "@/components/adminV2/settings/locations/LocationProgramsOfferedPanel";
 import LocationRoomCreatePanel from "@/components/adminV2/settings/locations/LocationRoomCreatePanel";
+import LocationOperationalRulesPanel from "@/components/adminV2/settings/locations/LocationOperationalRulesPanel";
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
 import LocationSchedulePatternCreatePanel from "@/components/adminV2/settings/locations/LocationSchedulePatternCreatePanel";
 import LocationScheduleTemplateDetailPanel from "@/components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel";
@@ -70,6 +74,7 @@ import { invalidateLocationsCollection } from "@/lib/locations/locationsCollecti
 import { invalidateProgramsCollection } from "@/lib/programs/programsCollectionCache";
 import { formatWeekdaySelection } from "@/lib/childcareOperational/fetchOperationalEnrollment";
 import { formatSchedulePatternSummary } from "@/lib/locations/schedulePatternPresentation";
+import { operationalEnrollmentClientTodayYmd } from "@/lib/childcareOperational/fetchOperationalEnrollmentMutations";
 
 export default function LocationsConfigurationPage({
     initialLocationId = null,
@@ -121,12 +126,14 @@ export default function LocationsConfigurationPage({
         roomRows,
         programCategories,
         schedulePatterns,
+        rows: topologyRows,
         siteLabelById,
         selectedSite,
         createSiteLocation,
         createRoomUnit,
         patchLocation,
         patchProgramCategory,
+        refresh,
         refreshPrograms,
         roomCapacitySummaryForSite,
         programOptionsForSite,
@@ -286,6 +293,9 @@ export default function LocationsConfigurationPage({
         warmLocationSchedulingDayTypes(orgId);
     }, [orgId, selectedSiteId]);
 
+    // Canonical capacity rules drive coverage, room capacity standing and the
+    // Add Room debt stop. One org-scoped read, shared by every surface below.
+    const { capacityRules, refresh: refreshCapacityRules } = useLocationOperationalRules();
     const ownedConcernSetup = selectedSite ? ownedConcernSetupByLocation[selectedSite.id] : undefined;
     const model =
         selectedSite ?
@@ -294,6 +304,7 @@ export default function LocationsConfigurationPage({
                 rooms: selectedRooms,
                 programs: selectedPrograms,
                 schedules: selectedSchedules,
+                capacityRules,
                 ownedConcernSetup: {
                     ...ownedConcernSetup,
                     placement: selectedRooms.some((room) => room.is_active !== false),
@@ -304,12 +315,13 @@ export default function LocationsConfigurationPage({
     const locationsCollection = useMemo(
         () =>
             buildLocationsCollectionModel({
+                capacityRules,
                 sites: siteRows,
                 rooms: roomRows,
                 programs: programCategories,
                 schedules: schedulePatterns,
             }),
-        [programCategories, roomRows, schedulePatterns, siteRows],
+        [capacityRules, programCategories, roomRows, schedulePatterns, siteRows],
     );
 
     const openLocation = (locationId: string, tab: LocationWorkspaceTab = "overview") => {
@@ -451,9 +463,9 @@ export default function LocationsConfigurationPage({
                 .map((program) => program.label.trim())
                 .filter(Boolean),
             activeRoomCount: model?.activeRoomCount ?? 0,
-            configuredCapacity: model?.configuredCapacity ?? null,
+            capacityCoverage: model?.capacityCoverage ?? { total: 0, confirmed: 0, needsReview: 0, unset: 0 },
         }),
-        [model?.activeRoomCount, model?.configuredCapacity, selectedPrograms, selectedSchedules],
+        [model?.activeRoomCount, model?.capacityCoverage, selectedPrograms, selectedSchedules],
     );
 
     const railActions = useMemo(
@@ -522,7 +534,7 @@ export default function LocationsConfigurationPage({
                     </button>
                     <LocationSiteDetailPanel
                         site={selectedSite}
-                        capacitySummary={roomCapacitySummaryForSite(selectedSite.id)}
+                        capacityCoverage={model?.capacityCoverage ?? { total: 0, confirmed: 0, needsReview: 0, unset: 0 }}
                         canMutate={canMutate}
                         onSave={patchLocation}
                     />
@@ -626,6 +638,17 @@ export default function LocationsConfigurationPage({
                 <LocationRoomDetailPanel
                     room={selectedRoom}
                     siteLabel={model?.displayName ?? ""}
+                    topologyRows={topologyRows}
+                    siteId={selectedSite.id}
+                    insideOptions={eligibleInsideOptions(roomRows, selectedSite.id, {
+                        excludeLocationId: selectedRoom?.id ?? null,
+                    })}
+                    capacityRules={capacityRules}
+                    todayYmd={operationalEnrollmentClientTodayYmd()}
+                    onCapacityChanged={async () => {
+                        await refreshCapacityRules();
+                        await refresh({ force: true });
+                    }}
                     programOptions={programOptionsForSite(selectedSite.id)}
                     schedulePatterns={selectedSchedules}
                     canMutate={canMutate}
@@ -643,6 +666,8 @@ export default function LocationsConfigurationPage({
                                 siteLabel={model?.displayName ?? ""}
                                 programOptions={programOptionsForSite(selectedSite.id)}
                                 schedulePatterns={selectedSchedules}
+                                insideOptions={eligibleInsideOptions(roomRows, selectedSite.id)}
+                                acceptsLegacyCapacity={siteAcceptsLegacyCapacityCapture(selectedRooms, capacityRules)}
                                 onCancel={() => setCreatingRoom(false)}
                                 onCreate={async (input) => {
                                     const newId = await createRoomUnit(selectedSite.id, input);
@@ -788,6 +813,24 @@ export default function LocationsConfigurationPage({
                         await patchLocation(selectedSite.id, { metadata });
                     }}
                     patternsPanel={patternsPanel}
+                />
+            );
+        }
+        if (activeTab === "operational-rules") {
+            // The canonical authoring destination for typed capacity, ratio,
+            // operating-window and schedule rules. It was left unmounted by the
+            // object-centric rewrite (2c6f0f261), which retired the section-first
+            // IA without re-homing this concern — so the capability existed with
+            // no operator path to it at all.
+            //
+            // Scoped to the selected site: the panel's resolved preview and site
+            // list follow the workspace you are standing in, rather than the
+            // org-wide list the old section-first surface showed.
+            return (
+                <LocationOperationalRulesPanel
+                    siteLabelById={new Map([[selectedSite.id, model?.displayName ?? selectedSite.label ?? "Location"]])}
+                    siteId={selectedSite.id}
+                    canMutate={canMutate}
                 />
             );
         }

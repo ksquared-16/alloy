@@ -365,6 +365,9 @@ export function ProvisionedWorkUnitSurface() {
                     workIntentRuntime={op ? op.focusPanelStageWork?.work_intent_runtime ?? null : null}
                     // A — commit-critical subject identity truth (domain-declared bindings; renders identity cards meaningful at commit).
                     subjectIdentityTruth={op ? op.subjectIdentityTruth ?? null : null}
+                    // The participation the ANSWER resolved — identity only, carried so the browser
+                    // can mount the participant-scoped cards from truth it already has.
+                    resolvedParticipant={op ? op.resolvedParticipant ?? null : null}
                     // R2 — the subject grain the ANSWER resolved. Threaded from the committed snapshot so
                     // the panel never infers what the subject is. A contextual answer resolves it too
                     // (from the subject's entity class rather than a lens's Row Grain), so it is carried

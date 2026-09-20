@@ -20,6 +20,7 @@ import { organizationCalculationLibraryHref } from "@/lib/admin/canonicalAdminRo
 import { capacityRecipeFromProductTypeLabel } from "@/lib/adminV2/settings/operationalIntelligence/oiCapacityRecipeCopy";
 import type { OiOrgCalcHealth, OiOrgCalcMeasurement, OiOrgCalcObservation } from "@/lib/metrics/oiOrgCalcMeasurements";
 import { formatOiOrgCalcTargetLabel } from "@/lib/metrics/oiOrgCalcTargetFormat";
+import { buildRoomPickerOptions } from "@/lib/locations/roomPickerOptions";
 
 type RoomOption = { id: string; label: string; siteLabel: string };
 type Tab = "overview" | "history" | "settings";
@@ -121,14 +122,7 @@ export default function OiOrgCalcMeasurementPanel({
             };
             if (!res.ok) return;
             const locs = json.locations ?? [];
-            const byId = new Map(locs.map((l) => [l.id, l]));
-            const opts = locs
-                .filter((l) => String(l.location_type ?? "").toLowerCase() === "unit")
-                .map((l) => ({
-                    id: l.id,
-                    label: String(l.label ?? "").trim() || "Untitled room",
-                    siteLabel: String(byId.get(l.parent_location_id ?? "")?.label ?? "").trim() || "Site",
-                }));
+            const opts = buildRoomPickerOptions(locs);
             setRooms(opts);
             if (opts[0]) setRoomId(opts[0].id);
         })();

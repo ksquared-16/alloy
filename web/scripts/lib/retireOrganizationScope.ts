@@ -148,7 +148,7 @@ export const RETIRE_ORG_TAIL_DELETE_ORDER = [
     "customer_member_contact_roles",
     "customer_tags",
     "customer_subscriptions",
-    "customer_payment_methods",
+    "payment_methods",
     "customer_members",
     "customer_persons",
     "contacts",

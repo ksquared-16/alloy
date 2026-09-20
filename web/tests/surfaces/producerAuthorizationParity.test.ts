@@ -21,6 +21,7 @@
  * network tab.
  */
 
+import { resolveFinancialSubjectIdFromTruth } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -76,6 +77,7 @@ async function producerHealth(opts: {
         supabase: stubSupabase() as never,
         orgId: opts.orgId ?? ORG,
         context: context(opts.memberId === undefined ? MEMBER : opts.memberId),
+        financialSubjectId: resolveFinancialSubjectIdFromTruth(((context(opts.memberId === undefined ? MEMBER : opts.memberId)) as { truth?: Record<string, unknown> }).truth ?? {}),
         access: access(opts.permissionKeys),
     });
     return results.health;
@@ -175,6 +177,7 @@ describe("the root Health producer cannot broaden the endpoint's authorization",
             supabase: exploding as never,
             orgId: ORG,
             context: context(MEMBER),
+            financialSubjectId: resolveFinancialSubjectIdFromTruth(((context(MEMBER)) as { truth?: Record<string, unknown> }).truth ?? {}),
             access: access([HEALTH_VIEW_PERMISSION]),
         });
         // Attendance is asked for from the same broken store; the point is that BOTH report their own
@@ -219,6 +222,7 @@ describe("the root Health producer cannot broaden the endpoint's authorization",
             supabase: stubSupabase() as never,
             orgId: ORG,
             context: withForgedContext,
+            financialSubjectId: resolveFinancialSubjectIdFromTruth(((withForgedContext) as { truth?: Record<string, unknown> }).truth ?? {}),
             access: access([]), // the REAL caller holds nothing
         });
         expect(results.health.state).toBe("forbidden");
@@ -344,6 +348,7 @@ describe("the root Financials producer cannot broaden its endpoint's authorizati
             supabase: supabaseGranting(keys) as never,
             orgId: ORG,
             context: financialsContext,
+            financialSubjectId: resolveFinancialSubjectIdFromTruth(((financialsContext) as { truth?: Record<string, unknown> }).truth ?? {}),
             access: access(keys),
         });
         return results.financials;
@@ -387,6 +392,7 @@ describe("the root Financials producer cannot broaden its endpoint's authorizati
             supabase: watched as never,
             orgId: ORG,
             context: financialsContext,
+            financialSubjectId: resolveFinancialSubjectIdFromTruth(((financialsContext) as { truth?: Record<string, unknown> }).truth ?? {}),
             access: access([]),
         });
         expect(results.financials.state).toBe("forbidden");
@@ -398,6 +404,7 @@ describe("the root Financials producer cannot broaden its endpoint's authorizati
             supabase: supabaseGranting([FINANCIALS_READ_PERMISSION_KEY]) as never,
             orgId: ORG,
             context: { participantScope: null, truth: {} } as never,
+            financialSubjectId: resolveFinancialSubjectIdFromTruth((({ participantScope: null, truth: {} } as never) as { truth?: Record<string, unknown> }).truth ?? {}),
             access: access([FINANCIALS_READ_PERMISSION_KEY]),
         });
         expect(results.financials.state).toBe("unavailable");
@@ -437,6 +444,7 @@ describe("the root Financials producer cannot broaden its endpoint's authorizati
             supabase: broken as never,
             orgId: ORG,
             context: financialsContext,
+            financialSubjectId: resolveFinancialSubjectIdFromTruth(((financialsContext) as { truth?: Record<string, unknown> }).truth ?? {}),
             access: access([FINANCIALS_READ_PERMISSION_KEY]),
         });
         expect(results.financials.state).not.toBe("ready");

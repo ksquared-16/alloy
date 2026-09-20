@@ -231,44 +231,25 @@ export async function resolveOperationalPresentation(args: {
     const { supabase, orgId, fallbackTitle } = args;
 
     // ── HEADER: the ONE applicability resolver selects the published variant. Never a fetch. ──
-    let headerConfig: WorkUnitHeaderSurfaceConfig = DEFAULT_WORK_UNIT_HEADER_SURFACE_CONFIG;
-    let headerSource: "published" | "builtin_default" = "builtin_default";
-    try {
-        const records = args.headerLayoutRecords ?? await listWorkUnitHeaderLayoutRecords(supabase, orgId);
-        const headerRecords = records.filter((r) => r.layoutKey === WORK_UNIT_HEADER_LAYOUT_KEY);
-        // One owner: `resolveSurfaceVariant` (published-only, deterministic, Work-View/Business-Process
-        // aware). For an org-global header every candidate is a wildcard, so it returns the highest
-        // published version — identical to the former filter+sort — while making authored BP/Work-View
-        // variants apply automatically. The former ad-hoc org-global lookup is deleted.
-        const resolution = resolveSurfaceVariant(
-            {
-                businessProcessKey: args.businessProcessKey ?? "",
-                workViewId: args.workViewId ?? null,
-                entityType: WORKSPACE_ENTITY_TYPE,
-                surface: WORKSPACE_SURFACE,
-            },
-            headerRecords.map(headerRecordToVariantCandidate),
-        );
-        const winner = resolution ? headerRecords.find((r) => r.id === resolution.candidate.layoutId) : null;
-        if (winner) {
-            headerConfig = workUnitHeaderConfigFromLayoutDoc(winner.doc);
-            headerSource = "published";
+    /*
+     * The read stays inside a fallback boundary. Extracting the derivation initially left this
+     * await bare, and a failing configuration store propagated out of the whole presentation —
+     * the regression suite caught it immediately ("configuration unavailability is NOT an
+     * operational error — the default composes"). U-P7 must never be why a Work Unit cannot commit.
+     */
+    const records = await (async () => {
+        try {
+            return args.headerLayoutRecords ?? (await listWorkUnitHeaderLayoutRecords(supabase, orgId));
+        } catch {
+            return null;
         }
-    } catch {
-        // Configuration unavailable is NOT an operational error: the canonical default composes a
-        // complete, correct header. U-P7 must never be the reason a Work Unit cannot commit.
-    }
-
+    })();
+    const { headerConfig, headerSource } = resolveWorkUnitHeaderConfigFromRecords(records, {
+        businessProcessKey: args.businessProcessKey,
+        workViewId: args.workViewId,
+    });
     // Geometry only — the KPI *values* are U-S5 and are deliberately unrepresentable here.
-    const kpiSlots: OperationalKpiSlot[] = (headerConfig.kpis ?? [])
-        .filter((k) => k.enabled !== false)
-        .map((k) => ({
-            slot: k.slot,
-            label: (k as { label?: string | null }).label?.trim() || "",
-            icon: ((k as { icon?: unknown }).icon as string | null) ?? null,
-            accent: ((k as { accent?: unknown }).accent as string | null) ?? null,
-            sourceKey: ((k as { sourceKey?: unknown }).sourceKey as string | null) ?? null,
-        }));
+    const kpiSlots: OperationalKpiSlot[] = operationalKpiSlotsFromHeaderConfig(headerConfig);
 
     const header: OperationalHeaderComposition = {
         title: headerConfig.title?.trim() || fallbackTitle,
@@ -312,4 +293,63 @@ export function rowVariantFromQueueDefinition(queueDefinition: unknown): string 
     const ui = (queueDefinition as { ui?: { row_preview?: { variant?: unknown } } } | null)?.ui;
     const v = ui?.row_preview?.variant;
     return typeof v === "string" ? v : "basic";
+}
+
+
+/**
+ * THE HEADER CONFIG, RESOLVED FROM RECORDS ALREADY READ — pure, no I/O.
+ *
+ * Extracted because the document now needs the published KPI KEY SET before the rest of the
+ * presentation composes. The header-config read is one of two concurrent reads in that branch; the
+ * queue-row layout beside it is the dominant cost (~700ms vs ~335ms), so waiting for the whole
+ * branch delayed the KPI resolve by roughly 700ms and it consistently missed the document's join.
+ *
+ * Both consumers call THIS function over THE SAME records from THE SAME read. That is deliberate:
+ * a second derivation could select a different published variant and the seed's key set would stop
+ * matching the client's, which fails silently as "seed ignored" rather than as an error.
+ *
+ * Configuration unavailable is NOT an operational error — the canonical default composes a
+ * complete, correct header, and U-P7 must never be why a Work Unit cannot commit.
+ */
+export function resolveWorkUnitHeaderConfigFromRecords(
+    records: readonly EntityLayoutRecord[] | null | undefined,
+    axes: { businessProcessKey?: string | null; workViewId?: string | null },
+): { headerConfig: WorkUnitHeaderSurfaceConfig; headerSource: "published" | "builtin_default" } {
+    try {
+        const headerRecords = (records ?? []).filter((r) => r.layoutKey === WORK_UNIT_HEADER_LAYOUT_KEY);
+        // One owner: `resolveSurfaceVariant` (published-only, deterministic, Work-View/Business-Process
+        // aware). For an org-global header every candidate is a wildcard, so it returns the highest
+        // published version, while making authored BP/Work-View variants apply automatically.
+        const resolution = resolveSurfaceVariant(
+            {
+                businessProcessKey: axes.businessProcessKey ?? "",
+                workViewId: axes.workViewId ?? null,
+                entityType: WORKSPACE_ENTITY_TYPE,
+                surface: WORKSPACE_SURFACE,
+            },
+            headerRecords.map(headerRecordToVariantCandidate),
+        );
+        const winner = resolution ? headerRecords.find((r) => r.id === resolution.candidate.layoutId) : null;
+        if (winner) {
+            return { headerConfig: workUnitHeaderConfigFromLayoutDoc(winner.doc), headerSource: "published" };
+        }
+    } catch {
+        // fall through to the canonical default
+    }
+    return { headerConfig: DEFAULT_WORK_UNIT_HEADER_SURFACE_CONFIG, headerSource: "builtin_default" };
+}
+
+/** The published KPI slots, geometry only — values are U-S5 and unrepresentable here. */
+export function operationalKpiSlotsFromHeaderConfig(
+    headerConfig: WorkUnitHeaderSurfaceConfig,
+): OperationalKpiSlot[] {
+    return (headerConfig.kpis ?? [])
+        .filter((k) => k.enabled !== false)
+        .map((k) => ({
+            slot: k.slot,
+            label: (k as { label?: string | null }).label?.trim() || "",
+            icon: ((k as { icon?: unknown }).icon as string | null) ?? null,
+            accent: ((k as { accent?: unknown }).accent as string | null) ?? null,
+            sourceKey: ((k as { sourceKey?: unknown }).sourceKey as string | null) ?? null,
+        }));
 }

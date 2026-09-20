@@ -31,7 +31,7 @@
  * ── WHAT IS CANONICAL TODAY, AND WHAT IS NOT ───────────────────────────────────────────────────
  *
  * Canonical, and read here: the org's provider merchant and its readiness
- * (`payment_provider_merchants`), and any stored payment methods (`customer_payment_methods`).
+ * (`payment_provider_merchants`), and any stored payment methods (`payment_methods`).
  * Canonical elsewhere: the payment itself, its actual payer, its method, its applications, refunds.
  *
  * NOT canonical anywhere: AUTOPAY. There is no table, no column and no writer — it appears only in
@@ -82,8 +82,39 @@ export type PaymentSetupState = {
     /** Adding, removing or replacing a stored payment method. */
     manageMethods: { state: PaymentCapabilityState; reason: string | null };
     autopay: { state: PaymentCapabilityState; reason: string | null };
-    /** Methods already on file for this household, if any. Identifiers only; never a secret. */
-    methodsOnFile: Array<{ id: string; brand: string | null; last4: string | null; isDefault: boolean }>;
+    /**
+     * Methods already on file for this household, if any. Identifiers and safe display only; never
+     * a secret, and never a provider reference.
+     *
+     * Revoked methods are INCLUDED, carrying `usabilityState: "revoked"`. A surface that wants only
+     * the live ones filters; a surface that drops them silently cannot tell an operator who just
+     * removed a card that anything happened.
+     */
+    methodsOnFile: Array<{
+        id: string;
+        brand: string | null;
+        last4: string | null;
+        isDefault: boolean;
+        rail: "card" | "ach";
+        usabilityState: "usable" | "blocked" | "expired" | "revoked";
+        verificationState: "unverified" | "pending" | "verified" | "failed";
+        expMonth: number | null;
+        expYear: number | null;
+    }>;
+    /**
+     * The four questions an operator surface asks about stored methods, answered once here rather
+     * than re-derived by every caller.
+     */
+    methodSummary: {
+        hasUsableMethod: boolean;
+        usableRails: Array<"card" | "ach">;
+        defaultCardId: string | null;
+        defaultAchId: string | null;
+        /** A bank account the payer has added but the provider has not finished verifying. */
+        awaitingVerification: number;
+        /** Expired or blocked — on file, but it will not collect until it is replaced. */
+        needsReplacement: number;
+    };
     /** The org's merchant, as the provider last answered. Null when no merchant row exists. */
     merchant: { processor: string; readiness: string; achReadiness: string | null } | null;
     /**
@@ -183,10 +214,6 @@ const UNSUPPORTED_AUTOPAY =
     "Alloy has no autopay model yet — no table, no column and no writer, so nothing about this "
     + "account can be true or false. It is not switched off; it does not exist.";
 
-const UNSUPPORTED_MANAGE_METHODS =
-    "Storing a payment method needs provider tokenisation, which is not configured for this "
-    + "organisation. Card details are never handled by Alloy.";
-
 export async function resolvePaymentSetup(
     supabase: SupabaseClient,
     args: { orgId: string; customerId: string | null },
@@ -205,12 +232,25 @@ export async function resolvePaymentSetup(
                   .maybeSingle()
                   .then((r) => (r.error ? null : (r.data as Record<string, unknown> | null)))
             : Promise.resolve(null),
-        customerId
+        /*
+         * ── THE CANONICAL METHOD READ ──────────────────────────────────────────────────────────
+         *
+         * This used to read `customer_payment_methods` filtered by customer ALONE — no org column
+         * existed to filter on, so the read was cross-tenant by construction. W2's table carries
+         * `org_id`, and this read now names it. That is not a tightening of an existing check; it
+         * is the first time this question could be asked safely at all.
+         */
+        customerId && orgId
             ? supabase
-                  .from("customer_payment_methods")
-                  .select("id, brand, last4, is_default")
+                  .from("payment_methods")
+                  .select(
+                      "id, display_brand, display_last4, display_exp_month, display_exp_year, "
+                      + "is_default, rail, usability_state, verification_state",
+                  )
+                  .eq("org_id", orgId)
                   .eq("customer_id", customerId)
-                  .then((r) => (r.error ? [] : ((r.data ?? []) as Array<Record<string, unknown>>)))
+                  .order("created_at", { ascending: false })
+                  .then((r) => (r.error ? [] : ((r.data ?? []) as unknown as Array<Record<string, unknown>>)))
             : Promise.resolve([] as Array<Record<string, unknown>>),
     ]);
 
@@ -222,35 +262,82 @@ export async function resolvePaymentSetup(
 
     const methodsOnFile = methodRows.map((m) => ({
         id: t(m.id),
-        brand: t(m.brand) || null,
-        last4: t(m.last4) || null,
+        brand: t(m.display_brand) || null,
+        last4: t(m.display_last4) || null,
         isDefault: m.is_default === true,
+        rail: (t(m.rail) === "ach" ? "ach" : "card") as "card" | "ach",
+        usabilityState: (t(m.usability_state) || "usable") as PaymentSetupState["methodsOnFile"][number]["usabilityState"],
+        verificationState: (t(m.verification_state) || "unverified") as PaymentSetupState["methodsOnFile"][number]["verificationState"],
+        expMonth: m.display_exp_month != null ? Number(m.display_exp_month) : null,
+        expYear: m.display_exp_year != null ? Number(m.display_exp_year) : null,
     }));
+
+    const usable = methodsOnFile.filter((m) => m.usabilityState === "usable");
+    const methodSummary = {
+        hasUsableMethod: usable.length > 0,
+        usableRails: (["card", "ach"] as const).filter((r) => usable.some((m) => m.rail === r)),
+        defaultCardId: usable.find((m) => m.isDefault && m.rail === "card")?.id ?? null,
+        defaultAchId: usable.find((m) => m.isDefault && m.rail === "ach")?.id ?? null,
+        awaitingVerification: methodsOnFile.filter(
+            (m) => m.verificationState === "pending" && m.usabilityState !== "revoked",
+        ).length,
+        needsReplacement: methodsOnFile.filter(
+            (m) => m.usabilityState === "expired" || m.usabilityState === "blocked",
+        ).length,
+    };
 
     /* Cash, cheque and money order need no merchant. This is the capability that is always there. */
     const recordPayment = { state: "available" as PaymentCapabilityState, reason: null };
 
     const card = merchantCapability(merchant?.readiness ?? null, "card");
-    const ach = merchant
-        ? achReadiness === "ready"
-            ? { state: "available" as PaymentCapabilityState, reason: null }
-            : {
-                  state: "not_configured" as PaymentCapabilityState,
-                  reason: achReadiness
-                      ? `The provider reports bank debit as ${achReadiness.replace(/_/g, " ")}.`
-                      : "Bank debit has not been enabled on this organisation's merchant account.",
-              }
-        : { state: "not_configured" as PaymentCapabilityState, reason: NO_MERCHANT };
+    /*
+     * ── A RAIL NEEDS THE MERCHANT BEFORE IT NEEDS ITSELF ────────────────────────────────────────
+     *
+     * `ach_readiness` answered this alone, which let a merchant that cannot accept a single charge
+     * report bank debit as `available` — its ACH capability said `ready` and nothing asked whether
+     * the account could collect at all. Collection refused it correctly; the operator had simply
+     * been told otherwise.
+     *
+     * So when merchant-level readiness does not permit collection, ACH reports the MERCHANT's state
+     * and the merchant's reason. That is the truthful answer: the blocker is the account, not the
+     * rail, and telling an operator "bank debit is not enabled" would send them to fix the wrong
+     * thing.
+     */
+    const ach = !merchant
+        ? { state: "not_configured" as PaymentCapabilityState, reason: NO_MERCHANT }
+        : card.state !== "available"
+            ? card
+            : achReadiness === "ready"
+                ? { state: "available" as PaymentCapabilityState, reason: null }
+                : {
+                      state: "not_configured" as PaymentCapabilityState,
+                      reason: achReadiness
+                          ? `The provider reports bank debit as ${achReadiness.replace(/_/g, " ")}.`
+                          : "Bank debit has not been enabled on this organisation's merchant account.",
+                  };
 
     return {
         recordPayment,
         takePaymentCard: card,
         takePaymentAch: ach,
-        manageMethods: { state: "unsupported", reason: UNSUPPORTED_MANAGE_METHODS },
+        /*
+         * ── MANAGING METHODS IS NO LONGER UNSUPPORTED ──────────────────────────────────────────
+         *
+         * It reported `unsupported` truthfully for as long as Alloy had no canonical table and no
+         * writer. W2 gives it both, so the honest answer is now the ORGANISATION's: storing a method
+         * needs provider tokenisation, which needs a connected merchant. With one, this is
+         * `available` whether or not any method exists yet — having none is not an incapacity.
+         */
+        manageMethods: merchant
+            ? card.state === "available" || card.state === "pending"
+                ? { state: "available" as PaymentCapabilityState, reason: null }
+                : card
+            : { state: "not_configured" as PaymentCapabilityState, reason: NO_MERCHANT },
         autopay: { state: "unsupported", reason: UNSUPPORTED_AUTOPAY },
         methodsOnFile,
+        methodSummary,
         merchant,
-        summaryLine: summarise(methodsOnFile, card.state),
+        summaryLine: summarise(methodsOnFile, methodSummary, card.state),
     };
 }
 
@@ -283,15 +370,27 @@ function merchantCapability(readiness: string | null, _rail: "card"): { state: P
  */
 function summarise(
     methods: PaymentSetupState["methodsOnFile"],
+    summary: PaymentSetupState["methodSummary"],
     cardState: PaymentCapabilityState,
 ): string | null {
-    const preferred = methods.find((m) => m.isDefault) ?? methods[0];
+    /*
+     * A COMPACT SURFACE GETS ONE TRUE SENTENCE, and the order matters.
+     *
+     * A usable method is the answer whenever there is one. Otherwise a method awaiting verification
+     * is more informative than silence — the family HAS given their bank details and somebody is
+     * waiting on a deposit, which is a different situation from having done nothing.
+     */
+    const usable = methods.filter((m) => m.usabilityState === "usable");
+    const preferred = usable.find((m) => m.isDefault) ?? usable[0];
     if (preferred) {
         const label = [preferred.brand, preferred.last4 ? `•••• ${preferred.last4}` : null]
             .filter(Boolean)
             .join(" ");
-        return label || "A payment method is on file";
+        if (label) return label;
+        return preferred.rail === "ach" ? "Bank account on file" : "Card on file";
     }
+    if (summary.awaitingVerification > 0) return "Bank account awaiting verification";
+    if (summary.needsReplacement > 0) return "Payment method needs attention";
     if (cardState === "available") return "No payment method on file";
     return null;
 }

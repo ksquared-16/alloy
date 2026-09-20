@@ -32,7 +32,7 @@ import { buildHealthSafetyCardVM } from "@/lib/adminV2/runtime/focusPanel/health
 import type { HealthSafetyCardVM } from "@/lib/adminV2/runtime/focusPanel/healthSafety/buildHealthSafetyCardVM";
 import { buildFinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 import type { FinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
-import { resolveFinancialSubjectId } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
+
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 import { recordProducerSpans, producerClock } from "@/lib/perf/routeTimingDiagnostic";
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
@@ -93,7 +93,30 @@ type FinancialsProducerOutcome = { gateOk: boolean; vm: FinancialsCardVM | null 
 export async function projectFocusPanelCardProducers(input: {
     supabase: SupabaseClient;
     orgId: string;
-    context: OperationalContext;
+    /*
+     * ONLY `participantScope` — the producers below read `customerMemberId` and `displayName` and
+     * nothing else on the context, and this type now says so.
+     *
+     * Stated as a Pick rather than the whole context because the drawer route starts these
+     * producers as soon as the composer publishes those two fields, before the full operational
+     * context exists. A wider parameter would have required casting the early contract to something
+     * it is not, which is the kind of hole that survives review and then decides behaviour.
+     */
+    context: {
+        participantScope?: Pick<
+            NonNullable<OperationalContext["participantScope"]>,
+            "customerMemberId" | "displayName"
+        > | null;
+    };
+    /**
+     * WHOSE MONEY — resolved by the caller, not dug out of a context here.
+     *
+     * This used to be `resolveFinancialSubjectId(context)`, which reached into `context.truth`. That
+     * transitive read is why these producers appeared to need only two fields when they actually
+     * needed the record as well. Naming it as an input is what lets the drawer route start them
+     * before the view model exists, and it keeps the key precedence in its one owner.
+     */
+    financialSubjectId: string | null;
     /**
      * THE AUTHENTICATED CALLER'S RESOLVED AUTHORITY — the route's own, never the browser's.
      *
@@ -145,11 +168,7 @@ export async function projectFocusPanelCardProducers(input: {
          * be unreachable" is the reason to catch it rather than the reason not to: the cost is one
          * card reporting no account, and the alternative cost is the whole Focus Panel.
          */
-        try {
-            return resolveFinancialSubjectId(context);
-        } catch {
-            return null;
-        }
+        return input.financialSubjectId;
     })();
 
     /*

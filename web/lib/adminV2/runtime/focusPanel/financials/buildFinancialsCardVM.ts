@@ -32,9 +32,11 @@
  * than invented. Payer SPLITS belong to Processing and are not modelled here at all.
  */
 
-import { readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
+import { readAllPages, readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
+import { railCollectionAvailable } from "@/lib/financials/payments/providerMerchant";
 import { resolveHouseholdPaymentViews, type PaymentView } from "@/lib/financials/paymentApplicationView";
 import { resolveAccountPrepaidPosition } from "@/lib/financials/prepaid/availableFunds";
+import { heldCentsFor, readHoldsForPayments, type HeldDeposit } from "@/lib/financials/prepaid/heldDeposits";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
@@ -475,6 +477,10 @@ export type FinancialsCardVM = {
      * prepaid money. A surface must not render that as "$0 held" — an absent capability is not a
      * zero measurement, and claiming it would let an operator spend a refundable deposit believing
      * none was held.
+     *
+     * Since W4 the authority reports `true`, so a zero IS a measurement. The false branch remains
+     * because the empty VM below still uses it: a card that has not read yet has not measured
+     * anything, and that is the same claim.
      */
     prepaid: {
         availableCents: number;
@@ -482,6 +488,14 @@ export type FinancialsCardVM = {
         heldCents: number;
         heldSupported: boolean;
     };
+    /**
+     * The held deposits behind `prepaid.heldCents` (Payments V1 · W4).
+     *
+     * Summary needs only the total; DETAILS owns administration and needs the lots — what was
+     * originally held, what became of it, under which terms, and since when. Empty until a hold
+     * exists, which is why Summary can render from the total alone.
+     */
+    heldDeposits: HeldDeposit[];
     collectible: {
         outstandingCents: number;
         expectedSubsidyCents: number;
@@ -496,6 +510,21 @@ export type FinancialsCardVM = {
 
 /** No id can equal this, so an empty source list selects nothing rather than everything. */
 const NO_SOURCE_SENTINEL = "00000000-0000-0000-0000-000000000000";
+
+/*
+ * THE EXPLICIT BOUNDS, stated rather than inherited from a server default.
+ *
+ * These are not the PostgREST page size — `readAllPages` pages past that. They are the point at
+ * which this reader refuses to answer at all, because beyond them a single account's balance would
+ * cost an unbounded number of round trips. They are deliberately far above any real childcare
+ * account: the largest on the certification tenant holds 2,821 charges after months of generated
+ * tuition, and a bound is only useful if reaching it means something has gone wrong rather than
+ * something has grown.
+ *
+ * Reaching one is reported as an unavailability, never as a smaller number.
+ */
+const ACCOUNT_CHARGE_SCAN_CAP = 25_000;
+const ACCOUNT_PAYMENT_SCAN_CAP = 25_000;
 
 function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
@@ -527,6 +556,7 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
         expectedFunding: [],
         prepaid: { availableCents: 0, pendingCents: 0, heldCents: 0, heldSupported: false },
+        heldDeposits: [],
         collectible: {
             outstandingCents: 0,
             expectedSubsidyCents: 0,
@@ -835,22 +865,43 @@ async function readAccountPayments(
                 .eq("status", "active")
                 .in("charge_id", batch) as never,
         ).then((data) => ({ data, error: null })),
-        supabase
-            .from("payments")
-            .select(
-                "id, direction, refunds_payment_id, reversal_origin, amount_cents, currency, status, payment_method, "
-                + "processor, received_at, posted_at, reference_number, notes",
-            )
-            .eq("org_id", orgId)
-            /*
-             * The TYPE as well as the id. A billable source id is only unique within its kind, and
-             * an account read that matched on the id alone would claim a job payment that happened
-             * to share a uuid. The applications read below is what picks up a job-era payment
-             * legitimately applied to one of this account's charges.
-             */
-            .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
-            .in("billable_source_id", sourceIds)
-            .order("received_at", { ascending: false }),
+        /*
+         * PAGED, for the reason the charges read is: an account's receipts are a cohort, not a
+         * page, and a receipt the server did not return reads here as money the family never paid.
+         * `received_at` is not unique — a day of recorded cheques shares a timestamp — so the order
+         * ends in `id` or paging could drop one.
+         */
+        readAllPages<Record<string, unknown>>(
+            "account payments",
+            ACCOUNT_PAYMENT_SCAN_CAP,
+            (fromIndex, toIndex) =>
+                supabase
+                    .from("payments")
+                    .select(
+                        "id, direction, refunds_payment_id, reversal_origin, amount_cents, currency, status, payment_method, "
+                        + "processor, received_at, posted_at, reference_number, notes",
+                    )
+                    .eq("org_id", orgId)
+                    /*
+                     * The TYPE as well as the id. A billable source id is only unique within its kind, and
+                     * an account read that matched on the id alone would claim a job payment that happened
+                     * to share a uuid. The applications read below is what picks up a job-era payment
+                     * legitimately applied to one of this account's charges.
+                     */
+                    .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
+                    .in("billable_source_id", sourceIds)
+                    .order("received_at", { ascending: false })
+                    .order("id", { ascending: true })
+                    .range(fromIndex, toIndex) as never,
+        ).then(({ rows, truncated }) => {
+            if (truncated) {
+                throw new Error(
+                    `this account holds more than ${ACCOUNT_PAYMENT_SCAN_CAP.toLocaleString()} receipts, `
+                    + "which is more than one balance read may carry",
+                );
+            }
+            return { data: rows, error: null as { message: string } | null };
+        }),
     ]);
 
     /*
@@ -883,12 +934,21 @@ async function readAccountPayments(
         ),
     ];
     if (unknownPaymentIds.length) {
-        const { data: extra } = await supabase
-            .from("payments")
-            .select("id, status")
-            .eq("org_id", orgId)
-            .in("id", unknownPaymentIds);
-        for (const r of (extra ?? []) as unknown as Array<Record<string, unknown>>) {
+        /*
+         * Batched for the same reason the applications read is: this id list comes from the
+         * applications and grows with the account, and an over-long URI would be discarded exactly
+         * where a payment's status decides whether it counts.
+         */
+        const extra = await readInBatches<Record<string, unknown>>(
+            "statuses of payments named by applications",
+            unknownPaymentIds,
+            (batch) => supabase
+                .from("payments")
+                .select("id, status")
+                .eq("org_id", orgId)
+                .in("id", batch) as never,
+        );
+        for (const r of extra as unknown as Array<Record<string, unknown>>) {
             statusByPaymentId.set(t(r.id), t(r.status).toLowerCase());
         }
     }
@@ -1068,7 +1128,8 @@ async function buildFinancialsCardVMInner(
         .time("merchant_ms", () =>
             supabase
                 .from("payment_provider_merchants")
-                .select("ach_readiness")
+                /* BOTH readiness facts: the rail rule needs merchant-level readiness first. */
+                .select("readiness, ach_readiness")
                 .eq("org_id", args.orgId)
                 .eq("processor", "stripe")
                 .eq("is_active", true)
@@ -1155,15 +1216,53 @@ async function buildFinancialsCardVMInner(
          * and what the household itself owes — the pre-enrolment fees that have no agreement to hang
          * off. `billable_source_type` already carries the distinction; nothing new is invented here.
          */
+        /*
+         * PAGED, because a long-lived account outgrows one PostgREST response.
+         *
+         * This read asked for an account's whole charge history in one query and got the server's
+         * first 1,000 rows — silently, with no error and nothing on screen to say so. The balance,
+         * past due and collectible below were then computed from part of a ledger. Measured on the
+         * certification tenant: 2,821 charges on the account, 1,000 read, and the Financials
+         * Workspace — which already paged — reporting a different figure for the same family.
+         *
+         * `readAllPages` is the Workspace's own loop, so both surfaces now walk the cohort the same
+         * way. The order ends in `id` because paging over a non-unique key can repeat or skip rows
+         * across page boundaries, and a repeated charge is money counted twice.
+         */
         clock.time("charges_ms", () =>
-            supabase
-                .from("charges")
-                .select(
-                    "id, billable_source_type, billable_source_id, source_charge_id, charge_category, charge_type, status, amount_cents, currency_code, charge_template_id, "
-                    + "service_date, occurs_on, billable_on, due_date, posted_at, voided_at, description, metadata, created_at",
-                )
-                .eq("org_id", args.orgId)
-                .in("billable_source_id", billableSourceIds.length ? billableSourceIds : [NO_SOURCE_SENTINEL]),
+            readAllPages<Record<string, unknown>>(
+                "account charges",
+                ACCOUNT_CHARGE_SCAN_CAP,
+                (fromIndex, toIndex) =>
+                    supabase
+                        .from("charges")
+                        .select(
+                            "id, billable_source_type, billable_source_id, source_charge_id, charge_category, charge_type, status, amount_cents, currency_code, charge_template_id, "
+                            + "service_date, occurs_on, billable_on, due_date, posted_at, voided_at, description, metadata, created_at",
+                        )
+                        .eq("org_id", args.orgId)
+                        .in("billable_source_id", billableSourceIds.length ? billableSourceIds : [NO_SOURCE_SENTINEL])
+                        .order("id", { ascending: true })
+                        .range(fromIndex, toIndex) as never,
+            ).then(({ rows, truncated }) =>
+                /*
+                 * A BALANCE IS NOT ALLOWED TO BE PARTIAL. The workspace may report "there is more
+                 * than this scan carried" because it answers an operational question across an
+                 * organisation. This answers one family's account, where a number derived from part
+                 * of the ledger is not incomplete — it is wrong. So the cap failing is an
+                 * unavailability, which the card already knows how to say.
+                 */
+                truncated
+                    ? {
+                          data: null,
+                          error: {
+                              message:
+                                  `this account holds more than ${ACCOUNT_CHARGE_SCAN_CAP.toLocaleString()} charges, `
+                                  + "which is more than one balance read may carry",
+                          },
+                      }
+                    : { data: rows, error: null },
+            ),
         ).catch((e: unknown) => ({ data: null, error: { message: e instanceof Error ? e.message : String(e) } })),
         configRead,
     ]);
@@ -1641,7 +1740,28 @@ async function buildFinancialsCardVMInner(
              * itself would be a second answer to "what may this family spend", and it would get the
              * PENDING case wrong — which is the one that can offer money that never arrives.
              */
-            vm.prepaid = resolveAccountPrepaidPosition(views);
+            /*
+             * HELD MONEY (Payments V1 · W4), read here and passed IN.
+             *
+             * `availableFunds` sums what canonical authorities report and computes no money of its
+             * own, so it is told how much of each receipt is restricted rather than reading it. A
+             * failed holds read leaves the map empty, which reports held money as zero — the
+             * conservative direction is arguable either way, and this one is chosen because the
+             * alternative is refusing to show a family's prepaid position at all because a
+             * restriction could not be counted. The holds themselves travel to Details separately.
+             */
+            const holds = await readHoldsForPayments(supabase, {
+                orgId: args.orgId,
+                paymentIds: views.map((v) => v.paymentId),
+            });
+            const heldByPayment: Record<string, number> = {};
+            for (const v of views) {
+                const held = heldCentsFor(v.paymentId, holds);
+                if (held > 0) heldByPayment[v.paymentId] = held;
+            }
+            vm.prepaid = resolveAccountPrepaidPosition(views, heldByPayment);
+            /* Details owns held-money administration and needs the lots, not just the total. */
+            vm.heldDeposits = holds.filter((h) => h.remainingCents > 0 || h.dispositions.length > 0);
         }
     } catch (e) {
         /*
@@ -1766,7 +1886,21 @@ async function buildFinancialsCardVMInner(
      * about this merchant".
      */
     const { data: merchantRow } = await merchantRead;
-    vm.achAvailable = (merchantRow as { ach_readiness: string | null } | null)?.ach_readiness === "ready";
+    /*
+     * BOTH readiness facts, through the one rule.
+     *
+     * This read `ach_readiness === "ready"` alone, so a merchant that could not accept a single
+     * charge — onboarding unfinished, or restricted by Stripe — still offered the bank rail on the
+     * card. `railCollectionAvailable` asks merchant-level readiness first, in the same order the
+     * collection path does.
+     */
+    const merchantReadiness = merchantRow as { readiness: string | null; ach_readiness: string | null } | null;
+    vm.achAvailable = railCollectionAvailable(
+        merchantReadiness
+            ? { readiness: merchantReadiness.readiness, achReadiness: merchantReadiness.ach_readiness }
+            : null,
+        "ach",
+    );
 
     /*
      * ── PAYMENT SETUP, AND WHO COULD HAVE PAID — derived, where a literal used to sit ───────────

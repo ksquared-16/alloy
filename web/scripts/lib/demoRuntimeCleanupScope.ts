@@ -194,7 +194,7 @@ export const DEMO_CLEANUP_TABLE_ORDER = [
     "customer_member_contacts",
     "customer_tags",
     "customer_subscriptions",
-    "customer_payment_methods",
+    "payment_methods",
     "customer_members",
     "customer_persons",
     "contacts",

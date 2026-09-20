@@ -19,7 +19,7 @@
  * The measured chain, from the deployed build, is recorded in `p09a-chain.json`.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const CSS = readFileSync(join(process.cwd(), "app/adminV2/components/alloyOsRuntime.css"), "utf8");
@@ -133,10 +133,27 @@ describe("no height is named, so any solved H propagates", () => {
             .toMatch(/align-items:\s*stretch/);                          // 3. cell -> card
     });
 
-    it("the solver itself is untouched — it was never the defect", () => {
-        const solver = readFileSync(
-            join(process.cwd(), "lib/adminV2/runtime/focusPanel/composition/focusPanelRowHeights.ts"), "utf8");
-        expect(solver).toContain("if (band.areas.some((area) => !intrinsic.has(area.card))) continue;");
+    it("THE EQUALISING SOLVER IS GONE, AND MAY NOT COME BACK", () => {
+        /*
+         * This used to assert that the band solver was "untouched — it was never the defect".
+         * That was true of the propagation repair and is no longer the contract: cross-column
+         * height equalisation was retired outright (card-format doctrine §6), because a card in
+         * columns 1-3 was being drawn at the height of a card in columns 9-12.
+         *
+         * A deleted module cannot be asserted about, so what is locked here is its ABSENCE —
+         * including the import graph, so it cannot be quietly reintroduced beside the engine.
+         */
+        for (const gone of ["focusPanelRowHeights.ts", "focusPanelVisualBands.ts"]) {
+            expect(
+                existsSync(join(process.cwd(), "lib/adminV2/runtime/focusPanel/composition", gone)),
+                `${gone} was retired; reintroducing it re-opens cross-column equalisation`,
+            ).toBe(false);
+        }
+        const stack = readFileSync(
+            join(process.cwd(), "components/admin/focusPanel/useColumnAwareStack.ts"), "utf8");
+        // The placement authority must hand the engine MEASUREMENTS, never a substituted height.
+        expect(stack).toMatch(/resolveColumnAwareLayout\(\{\s*layout,\s*heights:\s*intrinsic/);
+        expect(stack).not.toMatch(/import .*solveRowHeights/);
     });
 });
 
@@ -263,14 +280,15 @@ describe("the painted card consumes the band — the last hop", () => {
         expect(BP).not.toMatch(/h-full|height:\s*["']100%|minHeight/);
     });
 
-    it("the solver and the cell-stretch rule are untouched by this repair", () => {
-        // Contract one and contract two keep their own owners. This slice changed neither.
+    it("the cell-stretch rule is untouched by this repair, and still has a job to do", () => {
+        /*
+         * The solver half of this assertion went with the solver. The cell-stretch half stands:
+         * the wrapper is now the card's OWN intrinsic height rather than an equalised band, so
+         * the chain must still deliver that height to the painted article — the propagation is
+         * what makes "painted height == intrinsic height" true rather than merely intended.
+         */
         expect(winningAlignItemsForSolvedGridCell().value).toBe("stretch");
-        const solver = readFileSync(
-            join(process.cwd(), "lib/adminV2/runtime/focusPanel/composition/focusPanelRowHeights.ts"),
-            "utf8",
-        );
-        expect(solver).not.toContain("alloy-os-process");
+        expect(ruleFor(CHAIN)).toMatch(/display:\s*flex/);
     });
 
     it("a browser gate owns the rectangle, and it identifies the card by PAINT, not by selector", () => {

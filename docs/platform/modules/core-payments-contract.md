@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-09-19
+last_reviewed: 2026-09-20
 supersedes: []
 ---
 
@@ -101,9 +101,11 @@ Owns, in Alloy's own vocabulary:
 - provider installation association (which provider this organisation uses)
 - merchant / payment account association
 - payer
-- payment method **reference** (a durable handle, not a card)
+- payment method **reference** (a durable handle, not a card) — implemented in W2 as
+  `payment_methods`; see [payments-payment-method-reference.md](payments-payment-method-reference.md)
 - collection intent / request
-- payment attempt
+- payment attempt — carries method provenance and an expected-settlement projection since W3; see
+  [payments-collection-completion.md](payments-collection-completion.md)
 - payment
 - allocation
 - refund / return
@@ -140,16 +142,21 @@ GL. Payments configuration belongs beside those, not in a second settings area.
 
 Expected future chapters, **not implemented in Core**:
 
-- Connect provider (Stripe)
-- merchant / account connection status
-- provider capabilities
-- payment methods enabled
-- ACH and card configuration
-- autopay configuration
-- deposit configuration
-- provider health
+- ~~Connect provider (Stripe)~~ — **IMPLEMENTED by Payments V1 · W1**
+- ~~merchant / account connection status~~ — **W1**
+- ~~provider capabilities~~ — **W1**, as card and bank readiness
+- ~~ACH and card configuration~~ — **W1**, as rail readiness
+- ~~provider health~~ — **W1**
+- payment methods enabled — W2
+- autopay configuration — W5
+- deposit configuration — W4
 
-Core establishes only the boundary: this is where those go, and they configure the fourth layer.
+Core established the boundary; W1 built the chapter. `/organization/financials` → **Payments** now
+owns connecting a provider, its card and bank readiness, refreshing that state and disconnecting.
+See **`payments-provider-architecture.md`** for the provider tier and the Stripe V1 adapter.
+
+Everything W1 did NOT build is still unbuilt, and the product says so rather than implying otherwise:
+stored payment methods, autopay, held deposits and settlement reconciliation.
 
 ---
 

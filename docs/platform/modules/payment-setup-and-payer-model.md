@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-09-15
+last_reviewed: 2026-09-20
 supersedes: []
 ---
 
@@ -93,6 +93,23 @@ operator can act on the second and can only be told about the first.
 Current answers with no merchant connected: Record payment `available`; card and bank debit
 `not_configured`; manage methods and autopay `unsupported`.
 
+### A rail needs the merchant before it needs itself
+
+Two readiness facts sit on a merchant and they answer different questions: `readiness` says whether
+it can take money **at all**, `ach_readiness` says whether it can take money **on the bank rail**.
+They were read independently, so a merchant Stripe had restricted — or one that had never finished
+onboarding — still offered a bank debit whenever its ACH capability happened to say `ready`.
+Collection refused it correctly, so no money was ever at risk; what was wrong was what the operator
+had been told, and a control that opens onto nothing is worse than an absent one.
+
+A rail is available only when **both** permit it, merchant-level readiness checked first — the same
+order the collection path enforces. `railCollectionAvailable` in `payments/providerMerchant.ts` is
+that rule, and both the account card and `resolvePaymentSetup` read it rather than the columns.
+
+When the merchant is the blocker, the bank rail reports the **merchant's** state and reason. Telling
+an operator "bank debit is not enabled" when the account cannot charge at all would send them to fix
+the wrong thing.
+
 ---
 
 ## 4. Record payment vs Take payment
@@ -113,17 +130,34 @@ longer.
 
 ---
 
-## 5. Manage payment — what it means, and why it is not offered
+## 5. Manage payment — offered since W2
 
-Scope, if it existed: view payment setup; add / remove / replace payment methods; choose a default;
-configure autopay; show provider readiness.
+Scope: view payment setup; add / remove / replace payment methods; choose a default; configure
+autopay; show provider readiness.
 
-**Every write in that list requires provider tokenisation**, because Alloy never handles card
-details. With no test-mode merchant on this tenant there is nothing to tokenise against, so
-`manageMethods` is `unsupported` and **no control is offered**. A control that opens onto nothing is
-worse than an absent one: it tells an operator a capability exists.
+**This section previously said none of it was offered**, and that was truthful: every write in the
+list requires provider tokenisation, Alloy had no canonical table for a stored method and no writer
+for one, so `manageMethods` reported `unsupported` and no control was shown. A control that opens onto
+nothing is worse than an absent one.
 
-The *readable* half — what this organisation can and cannot do, and why — is surfaced in the
+Payments V1 · W1 gave the organisation a merchant, and **W2 gave the payer a stored method** —
+`payment_methods`, three registered actions behind `fin.write`, and administration in Focus Panel →
+Financials → Details. So `manageMethods` now resolves from canonical state rather than reporting an
+absent capability:
+
+- no merchant → `not_configured` (an operator can act on this)
+- a merchant → `available`, whether or not any method is on file yet
+
+Having no method on file is an empty list, not an incapacity.
+
+**Autopay is still not offered, and that part of this section stands.** `resolvePaymentSetup` reports
+it `unsupported` until W5, which is truthful: there is no arrangement table, no scheduler and no
+toggle.
+
+See [payments-payment-method-reference.md](payments-payment-method-reference.md) for ownership,
+the platform-handle model, the mandate rule and the default semantics.
+
+The *readable* half — what this organisation can and cannot do, and why — remains surfaced in the
 Payments lens of the account workspace, where money in is the subject.
 
 ---
@@ -163,12 +197,19 @@ not exist. The table lands with tokenisation, not before it.
 
 ## 7. The provider boundary
 
-Deferred until approved test-mode merchant infrastructure exists:
+**Updated at Payments V1 · W1.** The first three of these were built and certified by Threads 8B/8C
+and were unreachable only because nothing in the product could connect a merchant. W1 built that act,
+so they are now reachable by any organisation that completes provider setup:
 
-* card collection execution;
-* ACH initiation and settlement;
-* provider returns and disputes;
-* payment-method tokenisation, and therefore autopay enrolment.
+* card collection execution — **implemented and certified**;
+* ACH initiation and settlement — **implemented and certified**;
+* provider returns and disputes — **implemented and certified**;
+* payment-method tokenisation, and therefore autopay enrolment — **still deferred**, to W2 and W5.
+
+Connecting a provider is `/organization/financials` → Payments, behind `fin.provider`. See
+`payments-provider-architecture.md`.
+
+Originally deferred until approved test-mode merchant infrastructure exists:
 
 What is **not** deferred, and must never be: recording cash, cheque and money order; naming the
 actual payer; applying, reversing and refunding; and telling the truth about which of the above this

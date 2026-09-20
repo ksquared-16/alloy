@@ -455,11 +455,14 @@ export async function GET(request: NextRequest) {
             const programs = ((programRows ?? []) as { key: string; label: string | null; is_active: boolean }[])
                 .filter((p) => p.is_active)
                 .map((p) => ({ key: p.key, label: p.label?.trim() || p.key }));
-            const { loadSiteOperationalRooms } = await import(
+            const { loadSiteOperationalRooms, assignableClassrooms } = await import(
                 "@/lib/operationalAssignments/loadSiteOperationalRooms"
             );
-            const operationalRooms = await loadSiteOperationalRooms(supabase, ctx.orgId, siteLocationId).catch(
-                () => []
+            // The Scheduling room picker asks WHICH CLASSROOM, so it may offer only
+            // operational groups. A physical room is the licensed shell and a shared
+            // space is somewhere a child may be without belonging to it.
+            const operationalRooms = assignableClassrooms(
+                await loadSiteOperationalRooms(supabase, ctx.orgId, siteLocationId).catch(() => [])
             );
             return NextResponse.json({
                 view,
