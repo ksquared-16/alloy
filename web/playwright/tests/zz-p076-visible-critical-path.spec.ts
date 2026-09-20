@@ -430,6 +430,15 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
      * crossed and the identity match rejected it — and they need opposite repairs. Searching the
      * serialized document for the key separates them before any theory is formed.
      */
+    /*
+     * The client's OWN verdict on the seed, with both sides of every compared field. Two deploys
+     * have shown the seed present and the client fetching anyway; this names the mismatch instead
+     * of inviting a third guess.
+     */
+    const seedMatchDiagnostic = await page.evaluate(() => {
+        return (window as unknown as { __alloyWorkViewSeed?: unknown }).__alloyWorkViewSeed ?? null;
+    });
+
     const seedReachedClient = await page.evaluate(() => {
         const html = document.documentElement.innerHTML;
         const idx = html.indexOf("workViewTotalsSeed");
@@ -514,6 +523,7 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         queueViewTotalsRequestCount: requests.filter((r) => /\/api\/admin\/queue-view-totals/.test(r.url))
             .length,
         seedReachedClient,
+        seedMatchDiagnostic,
         correctness,
         /*
          * A sample is valid only if the surface it measured was the real, authenticated,
