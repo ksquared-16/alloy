@@ -56,6 +56,8 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "enrollment.requirement_exception.revoke",
     "billing.generate_tuition",
     "billing.apply_discounts",
+    "billing.except_commercial_policy",
+    "billing.end_commercial_policy_exception",
     "billing.adjust_account",
     "billing.reverse_adjustment",
     "billing.configure_responsibility",
@@ -243,6 +245,45 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             "Records the recommended tuition as an effective-dated pricing term on the assignment. "
             + "The server re-reads the assignment and re-resolves before writing, so a resolution "
             + "that has gone stale is refused rather than committed.",
+    }),
+    // ── Commercial policy exceptions ───────────────────────────────────────
+    // Not a discount and not a switch. The operator says a policy does not apply to one
+    // relationship, from a date, because of something; what that costs is decided later, by
+    // eligibility, when an obligation is actually evaluated.
+    def({
+        capabilityKey: "billing.except_commercial_policy",
+        canonicalCommandKey: "billing.except_commercial_policy",
+        operatorLabel: "Exclude this policy",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.except_commercial_policy",
+        implementationStatus: "production",
+        reason:
+            "Records an effective-dated exception against a commercial policy for one assignment, "
+            + "with a required reason. It writes no charge and no reduction: later eligibility reads "
+            + "it, so obligations already posted keep the terms they were posted under.",
+    }),
+    def({
+        capabilityKey: "billing.end_commercial_policy_exception",
+        canonicalCommandKey: "billing.end_commercial_policy_exception",
+        operatorLabel: "End this exception",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.end_commercial_policy_exception",
+        implementationStatus: "production",
+        reason:
+            "Closes an exception with an end date so the policy may apply again to later "
+            + "obligations. The exception is kept, never deleted — the record says when it stopped.",
     }),
     def({
         capabilityKey: "enrollment.pricing.override",

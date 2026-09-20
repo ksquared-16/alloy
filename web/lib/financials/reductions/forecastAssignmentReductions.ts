@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { readPolicies } from "@/lib/commercial/execution/export/readCommercialConfig";
 import { billingPeriodBounds } from "@/lib/financials/reductions/reductionPeriod";
+import { readExcludedPolicyIds } from "@/lib/financials/reductions/commercialPolicyExceptionService";
 import { resolveHouseholdEligibility } from "@/lib/financials/reductions/resolveReductionEligibility";
 import {
     resolveFinancialReductions,
@@ -56,6 +57,8 @@ export async function forecastAssignmentReductions(
         customerId: string;
         customerMemberId: string;
         enrollmentAgreementId: string;
+        /** The commercial relationship an exception is scoped by. */
+        opportunityCustomerMemberId?: string | null;
         /** The accepted tuition for one period. A forecast against nothing is not a forecast. */
         grossCents: number;
         currencyCode: string;
@@ -104,6 +107,19 @@ export async function forecastAssignmentReductions(
         employeeHousehold: household.employeeHousehold,
     };
 
+    /*
+     * WHAT THIS RELATIONSHIP IS EXCEPTED FROM. Read here and handed to the resolver rather than
+     * filtered out beforehand, so the answer is "excluded by exception" and not "no policy
+     * configured" — an operator told the second would go looking for configuration that exists.
+     */
+    const excludedPolicyIds = args.opportunityCustomerMemberId
+        ? await readExcludedPolicyIds(supabase, {
+              orgId: args.orgId,
+              opportunityCustomerMemberId: args.opportunityCustomerMemberId,
+              onDate: period.start,
+          })
+        : [];
+
     const decision = resolveFinancialReductions({
         gross: {
             /*
@@ -122,6 +138,7 @@ export async function forecastAssignmentReductions(
         },
         policies,
         facts,
+        excludedPolicyIds,
     });
 
     if (decision.kind === "applied") {

@@ -193,6 +193,12 @@ const REDUCTION_REASON_LABEL: Record<string, string> = {
     category_not_covered: "Not eligible — tuition is not covered by a policy",
     category_not_discountable: "Not eligible — this charge category cannot be discounted",
     no_accepted_gross: "No accepted tuition to forecast against",
+    /*
+     * Not "no discount" and not "off". Somebody decided this policy does not apply HERE, and the
+     * surface says so in those words so the operator goes looking for the decision, not for
+     * missing configuration.
+     */
+    excluded_by_exception: "Excluded for this assignment",
 };
 
 const WEEKDAYS = [
@@ -1739,22 +1745,75 @@ function ScheduleEditor({
         grossCents: number; currencyCode: string; periodKey: string; totalCents: number; netCents: number;
         outcomes: Array<Record<string, unknown>>;
     } | null>(null);
+    /*
+     * ── WHAT SOMEBODY DECIDED DOES NOT APPLY HERE ─────────────────────────────────────────────
+     *
+     * Read beside the forecast, from the same route, in the same breath. An operator looking at a
+     * discount that is not applying needs the decision and its reason, or the surface has told
+     * them a policy is missing when in fact a person excluded it.
+     */
+    type AssignmentException = {
+        id: string; policyId: string; policyLabel: string; effectiveStart: string;
+        effectiveEnd: string | null; reason: string; appliesNow: boolean; superseded: boolean;
+    };
+    const [exceptions, setExceptions] = useState<AssignmentException[]>([]);
+    /** Bumped after an exception is authored, so the forecast is re-read rather than guessed at. */
+    const [forecastNonce, setForecastNonce] = useState(0);
 
     useEffect(() => {
         const ocm = pricingView?.opportunityCustomerMemberId;
-        if (!ocm || !pricingView?.accepted) { setForecast(null); return; }
+        if (!ocm || !pricingView?.accepted) { setForecast(null); setExceptions([]); return; }
         let cancelled = false;
         void fetch(`/api/admin/financials/reduction-forecast?opportunity_customer_member_id=${encodeURIComponent(ocm)}`, {
             credentials: "include",
         })
             .then((r) => (r.ok ? r.json() : null))
-            .then((b: { forecast?: typeof forecast } | null) => { if (!cancelled) setForecast(b?.forecast ?? null); })
+            .then((b: { forecast?: typeof forecast; exceptions?: AssignmentException[] } | null) => {
+                if (cancelled) return;
+                setForecast(b?.forecast ?? null);
+                setExceptions(b?.exceptions ?? []);
+            })
             .catch(() => {
                 /* The section states the price without claiming anything about discounts. */
-                if (!cancelled) setForecast(null);
+                if (!cancelled) { setForecast(null); setExceptions([]); }
             });
         return () => { cancelled = true; };
-    }, [pricingView]);
+    }, [pricingView, forecastNonce]);
+
+    /*
+     * ── AUTHORING AN EXCEPTION ────────────────────────────────────────────────────────────────
+     *
+     * Deliberately not a toggle. The draft exists so the operator states a reason and sees what
+     * the decision will MEAN before it is recorded; there is no switch to flip, and no amount to
+     * type, because the consequence belongs to eligibility when an obligation is evaluated.
+     */
+    const [exceptionDraft, setExceptionDraft] = useState<{ policyId: string; policyLabel: string; reason: string } | null>(null);
+    const [exceptionBusy, setExceptionBusy] = useState(false);
+    const [exceptionError, setExceptionError] = useState<string | null>(null);
+
+    async function commitException(op: "create" | "end", payload: Record<string, unknown>): Promise<void> {
+        const ocm = pricingView?.opportunityCustomerMemberId;
+        if (!ocm) return;
+        setExceptionBusy(true);
+        setExceptionError(null);
+        try {
+            await executeAssignmentAction({
+                action_key: op === "create" ? "billing.except_commercial_policy" : "billing.end_commercial_policy_exception",
+                entity_type: "opportunity_customer_member",
+                entity_id: ocm,
+                mode: "execute",
+                confirmation: { confirmed: true },
+                payload,
+            });
+            setExceptionDraft(null);
+            /* Re-read rather than patch local state: the forecast is the authority on the effect. */
+            setForecastNonce((n) => n + 1);
+        } catch (e) {
+            setExceptionError((e as Error).message);
+        } finally {
+            setExceptionBusy(false);
+        }
+    }
 
     /** Derived from the persisted term, through the authority generation uses. */
     const acceptedPeriods = useMemo(
@@ -2462,7 +2521,7 @@ function ScheduleEditor({
                               * Read-only. This writes no reduction and no charge; the ledger is
                               * still where a discount becomes real.
                               */}
-                            {forecast && forecast.outcomes.length > 0 ? (
+                            {forecast && (forecast.outcomes.length > 0 || exceptions.length > 0) ? (
                                 <div style={{ marginTop: 4 }} data-assignment-discount-forecast="true">
                                     <div style={{ fontSize: 10, fontWeight: 650, letterSpacing: "0.04em", color: T.mid40 }}>
                                         DISCOUNTS
@@ -2471,15 +2530,34 @@ function ScheduleEditor({
                                         const kind = String(o.kind);
                                         if (kind === "expected") {
                                             const cents = Number(o.amountCents ?? 0);
+                                            const policyId = String(o.policyId ?? "");
+                                            const label = String(o.label ?? "Discount");
                                             return (
-                                                <div key={i} style={{ fontSize: 11, color: T.slate }} data-forecast-outcome="expected"
-                                                     data-forecast-policy={String(o.policyId ?? "")}>
-                                                    {String(o.label ?? "Discount")} ·{" "}
-                                                    {(Math.abs(cents) / 100).toLocaleString(undefined, {
-                                                        style: "currency",
-                                                        currency: forecast.currencyCode || "USD",
-                                                    })}{" "}
-                                                    expected to apply
+                                                <div key={i} style={{ fontSize: 11, color: T.slate, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "baseline" }}
+                                                     data-forecast-outcome="expected" data-forecast-policy={policyId}>
+                                                    <span>
+                                                        {label} ·{" "}
+                                                        {(Math.abs(cents) / 100).toLocaleString(undefined, {
+                                                            style: "currency",
+                                                            currency: forecast.currencyCode || "USD",
+                                                        })}{" "}
+                                                        expected to apply
+                                                    </span>
+                                                    {/*
+                                                      * THE EXCEPTIONAL ACTION, KEPT QUIET. It sits beside the
+                                                      * policy it acts on rather than in a picker, so the operator
+                                                      * never has to identify the policy a second time — and it is
+                                                      * a link, not a toggle, because excepting a family from
+                                                      * commercial policy is a decision someone makes, not a
+                                                      * setting this assignment owns.
+                                                      */}
+                                                    {policyId && !exceptionDraft ? (
+                                                        <button type="button" data-add-policy-exception={policyId}
+                                                                onClick={() => { setExceptionError(null); setExceptionDraft({ policyId, policyLabel: label, reason: "" }); }}
+                                                                style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: T.blue, textDecoration: "underline", cursor: "pointer" }}>
+                                                            Add exception
+                                                        </button>
+                                                    ) : null}
                                                 </div>
                                             );
                                         }
@@ -2491,6 +2569,84 @@ function ScheduleEditor({
                                             </div>
                                         );
                                     })}
+
+                                    {/*
+                                      * ── WHAT IS EXCLUDED, AND WHY ───────────────────────────
+                                      *
+                                      * The decision is shown with the reason its author gave. An
+                                      * exception that has not started yet, or has ended, is still
+                                      * listed — as history, dated — because the question an
+                                      * operator asks here is "what did we agree", and hiding the
+                                      * ones not in force today answers a narrower one.
+                                      */}
+                                    {exceptions.filter((e) => !e.superseded).map((e) => (
+                                        <div key={e.id} style={{ fontSize: 11, color: e.appliesNow ? T.slate : T.mid40, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "baseline" }}
+                                             data-policy-exception={e.policyId} data-exception-applies={String(e.appliesNow)}>
+                                            <span>
+                                                {e.policyLabel} · {e.appliesNow ? "excluded for this assignment" : `excluded from ${e.effectiveStart}`}
+                                                {e.effectiveEnd ? ` until ${e.effectiveEnd}` : ""} — {e.reason}
+                                            </span>
+                                            {e.appliesNow ? (
+                                                <button type="button" data-end-policy-exception={e.id} disabled={exceptionBusy}
+                                                        onClick={() => void commitException("end", { exception_id: e.id })}
+                                                        style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: T.blue, textDecoration: "underline", cursor: "pointer" }}>
+                                                    End exception
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                    ))}
+
+                                    {/*
+                                      * ── THE DRAFT: SAY WHY, THEN SEE WHAT IT MEANS ──────────
+                                      *
+                                      * Reason first and required — the action refuses without one,
+                                      * so the surface must not pretend otherwise. What follows the
+                                      * reason is a statement about APPLICABILITY and deliberately
+                                      * quotes no figure: what the exclusion is worth is decided by
+                                      * eligibility when a real obligation is evaluated, and a
+                                      * number promised here is the one the operator would
+                                      * remember.
+                                      */}
+                                    {exceptionDraft ? (
+                                        <div style={{ marginTop: 6, padding: 8, background: T.stone, borderRadius: 6 }} data-policy-exception-draft={exceptionDraft.policyId}>
+                                            <div style={{ fontSize: 11, color: T.ink, fontWeight: 600 }}>
+                                                Exclude {exceptionDraft.policyLabel} from this assignment
+                                            </div>
+                                            <label style={{ display: "block", fontSize: 10, color: T.mid40, marginTop: 6 }} htmlFor="policy-exception-reason">
+                                                WHY (REQUIRED)
+                                            </label>
+                                            <input id="policy-exception-reason" data-policy-exception-reason="true" value={exceptionDraft.reason}
+                                                   onChange={(ev) => setExceptionDraft({ ...exceptionDraft, reason: ev.target.value })}
+                                                   placeholder="The decision, and who made it"
+                                                   style={{ width: "100%", fontSize: 11, padding: "4px 6px", border: `1px solid ${T.border}`, borderRadius: 4 }} />
+                                            <div style={{ fontSize: 11, color: T.slate, marginTop: 6 }} data-policy-exception-preview="true">
+                                                This policy will not apply to obligations for this assignment from today onward.
+                                                Anything already posted keeps the terms it was posted under.
+                                            </div>
+                                            {exceptionError ? (
+                                                <div style={{ fontSize: 11, color: T.ember, marginTop: 6 }} data-policy-exception-error="true">{exceptionError}</div>
+                                            ) : null}
+                                            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                                <button type="button" data-policy-exception-confirm="true"
+                                                        disabled={exceptionBusy || exceptionDraft.reason.trim().length === 0}
+                                                        onClick={() => void commitException("create", {
+                                                            policy_id: exceptionDraft.policyId,
+                                                            reason: exceptionDraft.reason.trim(),
+                                                            effective_start: new Date().toISOString().slice(0, 10),
+                                                        })}
+                                                        style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, border: "none", background: T.forge, color: "#fff",
+                                                                 cursor: exceptionBusy || !exceptionDraft.reason.trim() ? "not-allowed" : "pointer",
+                                                                 opacity: exceptionBusy || !exceptionDraft.reason.trim() ? 0.5 : 1 }}>
+                                                    {exceptionBusy ? "Recording…" : "Record exception"}
+                                                </button>
+                                                <button type="button" data-policy-exception-cancel="true" disabled={exceptionBusy}
+                                                        onClick={() => { setExceptionDraft(null); setExceptionError(null); }}
+                                                        style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, border: `1px solid ${T.border}`, background: "#fff", color: T.slate, cursor: "pointer" }}>
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : null}
                                 </div>
                             ) : null}
 
