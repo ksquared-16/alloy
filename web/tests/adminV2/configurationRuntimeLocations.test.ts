@@ -92,7 +92,10 @@ describe("Configuration Runtime — Locations", () => {
         expect(landing).toContain("locations-landing-summary");
         expect(landing).toContain("Active Locations");
         expect(landing).toContain("Programs Offered");
-        expect(landing).toContain("Total Capacity");
+        // The landing card stopped reporting a summed seat count: capacity kinds are
+        // never additive, so the portfolio reports COVERAGE of the rooms instead.
+        expect(landing).toContain("Capacity coverage");
+        expect(landing).not.toContain("Total Capacity");
         expect(landing).toContain("Locations at a glance");
         expect(landing).toContain("locations-list-card");
         expect(landing).toContain("locations-row-");
