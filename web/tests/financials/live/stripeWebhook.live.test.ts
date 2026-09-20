@@ -156,7 +156,8 @@ describeLive("Slice E — the webhook boundary, live", () => {
     });
 
     it("refuses an unsigned request, a forged one, and a stale-timestamped one", async () => {
-        const body = eventBody({ id: "evt_forged_1", type: "payment_intent.succeeded", account: connectedAccount, piId: "pi_x", status: "succeeded" });
+        const forgedId = `evt_forged_${Math.random().toString(36).slice(2)}`;
+        const body = eventBody({ id: forgedId, type: "payment_intent.succeeded", account: connectedAccount, piId: "pi_x", status: "succeeded" });
 
         expect((await post(body, null)).outcome).toBe("rejected");
         expect((await post(body, "t=1,v1=deadbeef")).outcome).toBe("rejected");
@@ -168,7 +169,7 @@ describeLive("Slice E — the webhook boundary, live", () => {
         expect(stale.detail).toMatch(/tolerance/);
 
         // And none of them left evidence claiming to be real.
-        const { data } = await supabase!.from("payment_provider_events").select("id").eq("provider_event_id", "evt_forged_1");
+        const { data } = await supabase!.from("payment_provider_events").select("id").eq("provider_event_id", forgedId);
         expect((data ?? []).length, "a refused request is not recorded as an event").toBe(0);
     });
 
