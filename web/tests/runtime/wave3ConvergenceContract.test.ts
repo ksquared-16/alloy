@@ -175,10 +175,49 @@ describe("LOCATION — one canonical answer, feeding both consumers", () => {
     });
 
     it("D/J — ONE resolved label feeds BOTH the rail annotation and Children", () => {
-        // Two lookups, or two different variables, would let the two cards disagree about the site.
+        // Two different variables would let the two cards disagree about the site.
         expect(ANSWER).toContain("locationLabel: wave3LocationLabel");
         expect(ANSWER).toContain("_location_label: wave3LocationLabel");
-        expect((ANSWER.match(/resolveLocationById\(/g) ?? []).length).toBe(1);
+    });
+
+    it("the lookup runs CONCURRENTLY, not as a tail await", () => {
+        /*
+         * The regression: a serial await in the bindings block, after presentation, the children
+         * shell, waitlist, inquiry and avatar had all finished — no work left to overlap, so the
+         * whole wall landed on the document (1,949ms -> 3,061ms). The promise must be created
+         * beside the children shell and joined later.
+         */
+        const start = ANSWER.indexOf("const wave3LocationPromise");
+        const join = ANSWER.indexOf("await wave3LocationPromise");
+        expect(start).toBeGreaterThan(-1);
+        expect(join).toBeGreaterThan(start);
+        // Not awaited where it is created.
+        const creation = ANSWER.slice(start, ANSWER.indexOf(";", ANSWER.indexOf("Promise.resolve(null)", start)));
+        expect(creation).not.toContain("await resolveLocationById");
+    });
+
+    it("the speculative start is never a SOURCE — a different authoritative id discards it", () => {
+        // The early start is keyed to the row available before the children branches ran. If the
+        // authoritative record resolved elsewhere, that answer is not this record's.
+        expect(ANSWER).toContain("wave3EarlyLocation.locationId === wave3LocationId");
+    });
+
+    it("concurrency cannot outrun authorization — org identity is the gate's, already resolved", () => {
+        const start = ANSWER.indexOf("const wave3LocationPromise");
+        const creation = ANSWER.slice(start, start + 600);
+        expect(creation).toContain("req.orgId");
+    });
+
+    it("H — the result is not cached or persisted outside the request", () => {
+        // Anchored FORWARD from the creation site. Slicing to an earlier declaration yields an
+        // empty string and the assertions below pass against nothing — a mistake this suite has
+        // made before.
+        const start = ANSWER.indexOf("const wave3RecordEarly");
+        const block = ANSWER.slice(start, ANSWER.indexOf("Promise.resolve(null)", start));
+        expect(block.length).toBeGreaterThan(200);
+        for (const forbidden of ["globalThis", "cacheLocation", "locationCache", "setCached"]) {
+            expect(block).not.toContain(forbidden);
+        }
     });
 
     it("B — the uuid is never used as the visible label", () => {
@@ -187,17 +226,30 @@ describe("LOCATION — one canonical answer, feeding both consumers", () => {
     });
 
     it("A — the lookup is actually performed when the row has an id but no label", () => {
-        expect(ANSWER).toMatch(/if \(!wave3LocationLabel && wave3LocationId\)/);
+        // Row label wins when present; otherwise the canonical lookup runs. Neither branch guesses.
+        expect(ANSWER).toMatch(/wave3EarlyLocation\.locationLabel\s*\n?\s*\? Promise\.resolve\(wave3EarlyLocation\.locationLabel\)/);
+        expect(ANSWER).toMatch(/: wave3EarlyLocation\.locationId/);
+        expect(ANSWER).toContain("resolveLocationById(req.supabase, req.orgId, wave3EarlyLocation.locationId)");
+        // The label must come from the platform's display rule, not from a field read off the row.
+        const promiseBody = ANSWER.slice(ANSWER.indexOf("const wave3LocationPromise"), ANSWER.indexOf("Promise.resolve(null)"));
+        expect(promiseBody).toContain("canonicalLocationDisplay(loc)");
     });
 
     it("F/G — neither absence nor failure fabricates a label", () => {
         // Conditional spread: no key at all rather than an empty string, which would render as a
-        // real blank site. And the catch assigns null — never a label, never "".
+        // real blank site. Both the concurrent catch and the late fallback yield null, never a
+        // label and never "" — an outage stays UNKNOWN and the drawer still corrects it.
         expect(ANSWER).toMatch(/\.\.\.\(wave3LocationLabel \? \{ _location_label/);
-        const guard = ANSWER.slice(ANSWER.indexOf("if (!wave3LocationLabel && wave3LocationId)"), ANSWER.indexOf("const wave3UpdatedAt"));
-        expect(guard).toContain("catch");
-        expect(guard).toMatch(/wave3LocationLabel = null;/);
-        expect(guard).not.toMatch(/wave3LocationLabel = ["'`]/);
+        const promise = ANSWER.slice(ANSWER.indexOf("const wave3LocationPromise"), ANSWER.indexOf("Promise.resolve(null)"));
+        expect(promise).toContain("catch");
+        // An empty string is the dangerous case: it is falsy enough to skip the spread but would
+        // be a "label" anywhere it leaked. `return "";` has nothing after the quote, so a pattern
+        // requiring a following character misses it — this one does not.
+        expect(promise).not.toMatch(/return\s*["'`]/);
+        const join = ANSWER.slice(ANSWER.indexOf("const tWave3LocationJoin"), ANSWER.indexOf("const wave3UpdatedAt"));
+        expect(join).toContain("catch");
+        expect(join).toMatch(/wave3LocationLabel = null;/);
+        expect(join).not.toMatch(/wave3LocationLabel = ["'`][^"'`]/);
     });
 
     it("H — the lookup is org-scoped at the document's own boundary", () => {
