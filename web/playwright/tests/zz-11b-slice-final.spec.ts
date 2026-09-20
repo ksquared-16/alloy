@@ -64,9 +64,12 @@ test("forecast, target, prepaid", async ({ page }) => {
     });
     log(`\nPREPAID · Accounts: ${JSON.stringify(out.accounts)}`);
 
-    const add = page.getByRole("button", { name: /^Add$/ }).first();
-    log(`Add control: ${await add.count()}`);
-    if (await add.count()) { await add.click({ force: true }); await page.waitForTimeout(9000); }
+    /* Add Charge is hosted by the Focus Panel financials card, not the Accounts workspace. */
+    await page.goto("/workspace/work-unit/enrolled-children", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(14_000);
+    const add = page.locator("[data-universal-card-key='financials']").getByRole("button", { name: /^Add$/ }).first();
+    log(`Add control on the card: ${await add.count()}`);
+    if (await add.count()) { await add.click({ force: true }); await page.waitForTimeout(10_000); }
     out.target = await page.evaluate(() => {
         const t = document.querySelector("[data-addcharge-target]") as HTMLElement | null;
         const sum = document.querySelector("[data-addcharge-targetsum]") as HTMLElement | null;
@@ -85,5 +88,11 @@ test("forecast, target, prepaid", async ({ page }) => {
     });
     log(`\nUNIFIED TARGET: ${JSON.stringify(out.target, null, 1)}`);
     await page.screenshot({ path: `${OUT}/slice-add-target.png`, fullPage: true });
+    out.details = await page.evaluate(() => {
+        const t = document.body.innerText || "";
+        const m = /AVAILABLE PREPAID\s*\n?\s*(\$[\d,]+\.\d{2})/i.exec(t) ?? /AVAILABLE\s*\n?\s*(\$[\d,]+\.\d{2})/i.exec(t);
+        return { value: m ? m[1] : null };
+    });
+    log(`\nPREPAID · Details(from card context): ${JSON.stringify(out.details)}`);
     writeFileSync(`${OUT}/slice-final.json`, JSON.stringify(out, null, 2));
 });
