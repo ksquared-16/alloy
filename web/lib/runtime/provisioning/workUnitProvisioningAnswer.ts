@@ -312,7 +312,7 @@ export type FocusPanelSummaryDocProjection = {
  * is NOT an authoritative empty, and never a zero.
  */
 export type ProvisioningAnswerCountSeed = {
-    workViewTotalsSeed?: import("./workViewTotalsSeed").WorkViewTotalsSeed | null;
+    workViewTotalsSeed?: import("./workViewTotalsSeedContract").WorkViewTotalsSeed | null;
 };
 
 export type ProvisioningAnswer = ProvisioningAnswerCountSeed &

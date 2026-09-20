@@ -26,8 +26,15 @@
  * did before the seed existed. Returning a REASON rather than a boolean keeps that distinction
  * legible in tests and in the deployed sample set.
  */
-import { buildConfiguredViewSignature } from "@/lib/runtime/provisioning/workViewTotalsSeed";
-import type { WorkViewTotalsSeed } from "@/lib/runtime/provisioning/workViewTotalsSeed";
+/*
+ * THE CONTRACT MODULE, never the resolver. Importing `buildConfiguredViewSignature` from the
+ * server-only resolver is a VALUE edge, and it pulled the whole Supabase graph into the client
+ * bundle: "'server-only' cannot be imported from a Client Component module."
+ */
+import {
+    buildConfiguredViewSignature,
+    type WorkViewTotalsSeed,
+} from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
 import { workViewTotalKey } from "./useWorkViewTotals";
 
 export type WorkViewTotalsSeedMatch =

@@ -39,13 +39,23 @@ import "server-only";
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { evaluateWorkViewTotalsForGroup } from "@/lib/queues/evaluateWorkViewTotalsForGroup";
+/*
+ * The crossable half lives in the CONTRACT module. Importing the signature helper from here into
+ * the client matcher is what pulled `server-only` into the browser bundle the first time.
+ */
 import {
+    buildConfiguredViewSignature,
     emptyWorkViewTotalsSpans,
-    evaluateWorkViewTotalsForGroup,
-    type WorkViewTotalRow,
-    type WorkViewTotalsSpans,
-} from "@/lib/queues/evaluateWorkViewTotalsForGroup";
+    type WorkViewTotalsSeed,
+} from "./workViewTotalsSeedContract";
 import type { SettlementCountTarget } from "./settlementLocators";
+
+export type {
+    WorkViewTotalsSeed,
+    WorkViewTotalsSeedIdentity,
+} from "./workViewTotalsSeedContract";
+export { buildConfiguredViewSignature } from "./workViewTotalsSeedContract";
 
 /** A department work-unit row as the composer already holds it. No read happens here. */
 export type SeedWorkUnitRow = {
@@ -54,46 +64,8 @@ export type SeedWorkUnitRow = {
     department_id?: string | null;
 };
 
-/**
- * What a client must match before it may use this seed.
- *
- * `configuredViewSignature` is built from view IDENTITIES, sorted, so a reorder produces the SAME
- * signature (reordering does not change any count) while an add, a remove or a rename produces a
- * different one. Binding by array position would let configuration N satisfy N+1 whenever the
- * cardinality happened to match.
- */
-export type WorkViewTotalsSeedIdentity = {
-    orgId: string;
-    /** The surface work unit the document answered for. */
-    hostWorkUnitId: string;
-    /**
-     * The site/location scope the counts were computed under. The document composes with no
-     * workspace site filter, so this is null; a site-filtered operator MUST NOT consume it.
-     */
-    selectedSiteId: string | null;
-    /** Sorted configured Work View identities, joined. Identity, never position. */
-    configuredViewSignature: string;
-};
 
-export type WorkViewTotalsSeed = {
-    status: "resolved";
-    identity: WorkViewTotalsSeedIdentity;
-    /** One row per configured view that had a canonical count location. */
-    totals: WorkViewTotalRow[];
-    spans: WorkViewTotalsSpans;
-} | {
-    /**
-     * The seed could not answer. The client issues its canonical fallback request — exactly as it
-     * did before this existed. UNAVAILABLE IS NEVER ZERO and never an empty totals list presented
-     * as authoritative, which is why the unresolved shape carries no `totals` at all.
-     */
-    status: "unavailable";
-    reason: string;
-};
 
-export function buildConfiguredViewSignature(viewIds: readonly string[]): string {
-    return [...new Set(viewIds.map((v) => v.trim()).filter(Boolean))].sort().join(",");
-}
 
 /**
  * Resolve the configured Work View counts from prerequisites the composer already owns.

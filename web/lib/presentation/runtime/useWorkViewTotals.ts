@@ -34,7 +34,7 @@ import {
 import type { QueueItemsResult } from "@/lib/queues/types";
 import { queueTotalCountFromQueueItemsResult } from "./types";
 import { matchWorkViewTotalsSeed } from "./matchWorkViewTotalsSeed";
-import type { WorkViewTotalsSeed } from "@/lib/runtime/provisioning/workViewTotalsSeed";
+import type { WorkViewTotalsSeed } from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
 import {
     applyWorkViewTotalsFetchResult,
     buildWorkViewPopulationKey,

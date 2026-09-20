@@ -27,6 +27,11 @@ import "server-only";
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type {
+    WorkViewTotalRow as WorkViewTotalRowContract,
+    WorkViewTotalsSpans as WorkViewTotalsSpansContract,
+} from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
+
 import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import {
     activeLifecycleProcess,
@@ -64,45 +69,10 @@ export type WorkViewTotalsPrerequisite = {
     departmentMetadata: unknown | null;
 };
 
-export type WorkViewTotalRow = {
-    workUnitId: string;
-    queueKey: string;
-    workViewId: string;
-    count: number | null;
-    known: boolean;
-};
+export type { WorkViewTotalRow, WorkViewTotalsSpans } from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
+export { emptyWorkViewTotalsSpans } from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
 
-/**
- * Accumulated spans and cardinalities.
- *
- * When the caller runs groups concurrently these are SUMS OF CONCURRENT WORK and do not add to the
- * caller's wall. The caller states that where it emits them.
- */
-export type WorkViewTotalsSpans = {
-    child_counts: number;
-    population: number;
-    epp: number;
-    tours: number;
-    aggregate: number;
-    views: number;
-    child_views: number;
-    lane_views: number;
-    unknown_views: number;
-};
 
-export function emptyWorkViewTotalsSpans(): WorkViewTotalsSpans {
-    return {
-        child_counts: 0,
-        population: 0,
-        epp: 0,
-        tours: 0,
-        aggregate: 0,
-        views: 0,
-        child_views: 0,
-        lane_views: 0,
-        unknown_views: 0,
-    };
-}
 
 export async function evaluateWorkViewTotalsForGroup(args: {
     supabase: SupabaseClient;
@@ -117,8 +87,8 @@ export async function evaluateWorkViewTotalsForGroup(args: {
      * string compiled against neither caller and was caught only by tsc.
      */
     viewerDisplayTimeZone: Parameters<typeof getWorkUnitQueueItems>[0]["viewerDisplayTimeZone"];
-    spans: WorkViewTotalsSpans;
-}): Promise<WorkViewTotalRow[]> {
+    spans: WorkViewTotalsSpansContract;
+}): Promise<WorkViewTotalRowContract[]> {
     const {
         supabase,
         orgId,
@@ -129,7 +99,7 @@ export async function evaluateWorkViewTotalsForGroup(args: {
         viewerDisplayTimeZone,
         spans,
     } = args;
-    type TotalOut = WorkViewTotalRow;
+    type TotalOut = WorkViewTotalRowContract;
         const unknownAll = (): TotalOut[] =>
             [...group.viewIds].map((workViewId) => ({
                 workUnitId: group.workUnitId,

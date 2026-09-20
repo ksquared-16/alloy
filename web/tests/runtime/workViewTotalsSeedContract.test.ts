@@ -32,8 +32,10 @@ import {
     matchWorkViewTotalsSeed,
     type WorkViewTotalsSeedRejection,
 } from "@/lib/presentation/runtime/matchWorkViewTotalsSeed";
-import { buildConfiguredViewSignature } from "@/lib/runtime/provisioning/workViewTotalsSeed";
-import type { WorkViewTotalsSeed } from "@/lib/runtime/provisioning/workViewTotalsSeed";
+import {
+    buildConfiguredViewSignature,
+    type WorkViewTotalsSeed,
+} from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 /** Comments state intent; only code may satisfy a gate. */
@@ -45,6 +47,7 @@ const ROUTE = codeOf(read("lib/runtime/provisioning/composeProvisioningAnswerFor
 const COMPOSER = codeOf(read("lib/runtime/provisioning/workUnitProvisioningAnswer.ts"));
 const HOOK = codeOf(read("lib/presentation/runtime/useWorkViewTotals.ts"));
 const MATCHER = codeOf(read("lib/presentation/runtime/matchWorkViewTotalsSeed.ts"));
+const CONTRACT = codeOf(read("lib/runtime/provisioning/workViewTotalsSeedContract.ts"));
 
 /*
  * FIXTURES ARE CONFIGURATION-DERIVED. Nothing here encodes today's seven views, their order, or
@@ -303,6 +306,50 @@ describe("no second architecture", () => {
         expect(at).toBeGreaterThan(-1);
         const block = HOOK.slice(at, at + 900);
         expect(block).toContain("peekWorkUnitSurfaceTotalsCache");
+    });
+});
+
+describe("contracts may cross to the browser, server implementations may not", () => {
+    /*
+     * CAUGHT BY THE PRODUCTION BUILD, not by any gate.
+     *
+     * The client matcher first imported `buildConfiguredViewSignature` as a VALUE from the
+     * server-only resolver. A type-only import would have been erased and cost nothing; a value
+     * import is a real module edge, and it pulled the Supabase graph into the client bundle:
+     *
+     *     'server-only' cannot be imported from a Client Component module.
+     *
+     * typecheck and typecheck:tests both passed. Only `next build` saw it. These gates make the
+     * boundary checkable without a full build.
+     */
+    it("the contract module is importable from the browser", () => {
+        expect(CONTRACT).not.toContain('import "server-only"');
+        expect(CONTRACT).not.toMatch(/@supabase\/supabase-js|createAdminClient|from\(\s*["']/);
+    });
+
+    it("the client matcher imports ONLY the contract, never the resolver", () => {
+        expect(MATCHER).toContain("workViewTotalsSeedContract");
+        // The resolver is `server-only`; any edge to it — value or otherwise — breaks the build.
+        expect(MATCHER).not.toMatch(/from "@\/lib\/runtime\/provisioning\/workViewTotalsSeed"/);
+        expect(MATCHER).not.toContain("@/lib/queues/evaluateWorkViewTotalsForGroup");
+    });
+
+    it("the client hook takes the seed TYPE from the contract", () => {
+        expect(HOOK).toContain("workViewTotalsSeedContract");
+        expect(HOOK).not.toMatch(/from "@\/lib\/runtime\/provisioning\/workViewTotalsSeed"/);
+    });
+
+    it("the server resolver and evaluator remain server-only", () => {
+        // The implementations must NOT become importable just because the contract split exists.
+        expect(SEED).toContain('import "server-only"');
+        expect(EVALUATOR).toContain('import "server-only"');
+    });
+
+    it("the signature has ONE derivation, shared by both sides", () => {
+        // Two copies could drift, and a drifted signature silently rejects every seed.
+        expect(CONTRACT).toContain("export function buildConfiguredViewSignature");
+        expect(MATCHER).not.toContain("function buildConfiguredViewSignature");
+        expect(SEED).not.toContain("export function buildConfiguredViewSignature(viewIds");
     });
 });
 
